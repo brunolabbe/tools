@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>MSE player</title>
+  </head>
+  <body>
+    <h1>MSE player</h1>
+    <!-- The whole point of this fixture: the <video> element ends up carrying a
+         blob: URL, so scraping the DOM yields nothing usable. Only the network
+         trace shows the real manifest. -->
+    <video id="v" width="640" height="360" muted playsinline controls></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var MASTER = "/media/mse/master.m3u8";
+        var VARIANT = "/media/mse/v1080.m3u8";
+        var SEGMENTS = [
+          "/media/mse/init.mp4",
+          "/media/mse/seg-00001.m4s",
+          "/media/mse/seg-00002.m4s",
+        ];
+        var video = document.getElementById("v");
+        var status = document.getElementById("status");
+        var mediaSource = new MediaSource();
+        var fetching = false;
+
+        function announceSource() {
+          var scheme = String(video.src || "none").split(":")[0];
+          // The probe reads document.title, so the test can assert from the
+          // outside that the DOM only ever exposed a blob: URL.
+          document.title = "MSE player [" + scheme + "]";
+          status.textContent = "video.src scheme: " + scheme;
+        }
+
+        function appendInto(buffers) {
+          try {
+            var sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E"');
+            sourceBuffer.appendBuffer(buffers[0]);
+          } catch (error) {
+            // The fixture segments are not real media. Appending is not the
+            // point; the requests crossing the network are.
+          }
+        }
+
+        function loadEverything() {
+          if (fetching) return;
+          fetching = true;
+          fetch(MASTER)
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch(VARIANT);
+            })
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return Promise.all(
+                SEGMENTS.map(function (url) {
+                  return fetch(url).then(function (r) {
+                    return r.arrayBuffer();
+                  });
+                }),
+              );
+            })
+            .then(function (buffers) {
+              appendInto(buffers);
+              status.textContent += " · segments fetched";
+            })
+            .catch(function () {});
+        }
+
+        mediaSource.addEventListener("sourceopen", function () {
+          announceSource();
+          loadEverything();
+        });
+        video.addEventListener("play", loadEverything);
+        video.src = URL.createObjectURL(mediaSource);
+        announceSource();
+      })();
+    </script>
+  </body>
+</html>

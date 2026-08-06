@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>DASH lecture capture</title>
+    <meta property="og:title" content="DASH lecture capture" />
+  </head>
+  <body>
+    <h1>DASH lecture capture</h1>
+    <video id="v" width="640" height="360" muted playsinline controls></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        // Extensionless, signed and query-only — exactly the shape that defeats
+        // extension-based matching. Only the Content-Type identifies it.
+        var MANIFEST = "/media/dash/stream?token=abc123&expires=4102444800";
+        var video = document.getElementById("v");
+        var started = false;
+
+        function start() {
+          if (started) return;
+          started = true;
+          fetch(MANIFEST)
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/dash/video-init.mp4");
+            })
+            .then(function () {
+              return fetch("/media/dash/video-00001.m4s");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+
+        video.addEventListener("play", start);
+      })();
+    </script>
+  </body>
+</html>

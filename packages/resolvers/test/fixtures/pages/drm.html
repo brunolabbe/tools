@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Protected feature film</title>
+  </head>
+  <body>
+    <h1>Protected feature film</h1>
+    <video id="v" width="640" height="360" muted playsinline controls></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        // A manifest request as well, so the test proves DRM outranks a
+        // perfectly good stream rather than merely filling a gap.
+        fetch("/media/hls/master.m3u8").catch(function () {});
+
+        var config = [
+          {
+            initDataTypes: ["cenc"],
+            videoCapabilities: [{ contentType: 'video/mp4; codecs="avc1.42E01E"' }],
+          },
+        ];
+        try {
+          navigator
+            .requestMediaKeySystemAccess("com.widevine.alpha", config)
+            .then(function () {
+              document.getElementById("status").textContent = "eme granted";
+            })
+            .catch(function () {
+              // Headless Chromium ships no CDM, so this rejects. The probe hooks
+              // the call itself, not its outcome.
+              document.getElementById("status").textContent = "eme requested";
+            });
+        } catch (error) {
+          document.getElementById("status").textContent = "eme threw";
+        }
+      })();
+    </script>
+  </body>
+</html>

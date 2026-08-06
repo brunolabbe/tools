@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Embedded player</title>
+  </head>
+  <body style="margin: 0">
+    <video id="v" width="640" height="360" muted playsinline></video>
+    <button class="vjs-big-play-button" aria-label="Play">▶</button>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          fetch("/media/embed/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/embed/v720.m3u8");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        document.querySelector(".vjs-big-play-button").addEventListener("click", start);
+      })();
+    </script>
+  </body>
+</html>

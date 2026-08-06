@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Quarterly all-hands recording</title>
+    <meta property="og:title" content="Quarterly all-hands recording" />
+    <meta property="og:image" content="/media/poster.png" />
+    <style>
+      #consent {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        color: #fff;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      #player {
+        margin-top: 40vh;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- The banner covers the whole viewport on purpose: the play button below
+         is genuinely unclickable until it is dismissed, so this page fails
+         unless consent handling works. -->
+    <div id="consent">
+      <p>We and our 812 partners use cookies.</p>
+      <button id="onetrust-accept-btn-handler">Accept all</button>
+    </div>
+
+    <h1>Quarterly all-hands recording</h1>
+    <div id="player">
+      <video
+        id="v"
+        width="640"
+        height="360"
+        muted
+        playsinline
+        controls
+        poster="/media/poster.png"
+      ></video>
+      <button id="play" aria-label="Play video">Play</button>
+    </div>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          document.getElementById("status").textContent = "loading";
+          fetch("/media/hls/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/hls/v720.m3u8");
+            })
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/hls/init.mp4");
+            })
+            .then(function () {
+              return fetch("/media/hls/seg-00001.m4s");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        document.getElementById("consent").addEventListener("click", function (event) {
+          if (event.target && event.target.id === "onetrust-accept-btn-handler") {
+            document.getElementById("consent").remove();
+          }
+        });
+        document.getElementById("play").addEventListener("click", start);
+      })();
+    </script>
+  </body>
+</html>

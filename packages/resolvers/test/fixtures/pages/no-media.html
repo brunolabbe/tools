@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Release notes 4.2</title>
+    <meta property="og:title" content="Release notes 4.2" />
+  </head>
+  <body>
+    <h1>Release notes 4.2</h1>
+    <p>Nothing here plays. This page exists to prove the sniffer says so plainly.</p>
+    <img src="/media/poster.png" alt="A decorative image, not a video" />
+    <script>
+      (function () {
+        // A stylesheet-ish fetch, to make sure ordinary page traffic is not
+        // mistaken for media.
+        fetch("/media/notes.json").catch(function () {});
+      })();
+    </script>
+  </body>
+</html>
