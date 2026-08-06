@@ -70,8 +70,9 @@ Everything below assumes Plan B.
 
 ## Phases
 
-Phase 0 is done. Phases 1–3 are the parallel block — that is where you get
-leverage from running several agents at once.
+Phases 0 and 1 are done — see [04-STATUS.md](./04-STATUS.md) for current state
+and the next actions. Phase 1 was the parallel block, where running several
+agents at once paid off.
 
 ### Phase 0 — Foundations ✅ _complete_
 
@@ -81,7 +82,12 @@ Monorepo, TypeScript project references, oxlint + oxfmt, and
 This exists so the parallel agents in Phase 1 code against a fixed contract
 instead of negotiating interfaces with each other mid-flight.
 
-### Phase 1 — Parallel build ⟶ **4 agents at once**
+### Phase 1 — Parallel build ✅ _complete_
+
+Delivered by four concurrent agents; 330 tests, `npm run check` green. M1 is
+proven, M2 is deferred to WP-5 (nothing composes the registry yet, by design).
+See [04-STATUS.md](./04-STATUS.md) for what shipped, the decisions taken, and
+the approved contract changes that must land before WP-5 starts.
 
 | WP       | Package              | Deliverable                                            |
 | -------- | -------------------- | ------------------------------------------------------ |
