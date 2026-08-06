@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MPD
+  xmlns="urn:mpeg:dash:schema:mpd:2011"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd"
+  profiles="urn:mpeg:dash:profile:isoff-live:2011"
+  type="static"
+  mediaPresentationDuration="PT10M34.6S"
+  minBufferTime="PT10.0S">
+  <BaseURL>https://cdn.example.com/vod/tears-of-steel/</BaseURL>
+  <Period id="1" duration="PT10M34.6S">
+    <AdaptationSet
+      id="1"
+      group="1"
+      contentType="video"
+      par="16:9"
+      mimeType="video/mp4"
+      segmentAlignment="true"
+      startWithSAP="1"
+      subsegmentAlignment="true"
+      subsegmentStartsWithSAP="1">
+      <SegmentTemplate timescale="1000" duration="4000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/segment-$Number$.m4s" startNumber="1"/>
+      <Representation id="video-avc1-1" bandwidth="401000" codecs="avc1.4D401E" width="640" height="360" frameRate="24" sar="1:1"/>
+      <Representation id="video-avc1-2" bandwidth="751000" codecs="avc1.4D401F" width="1280" height="720" frameRate="24" sar="1:1"/>
+      <Representation id="video-avc1-3" bandwidth="2100000" codecs="avc1.640028" width="1920" height="1080" frameRate="24" sar="1:1"/>
+      <Representation id="video-avc1-4" bandwidth="4200000" codecs="avc1.640028" width="1920" height="1080" frameRate="24" sar="1:1"/>
+    </AdaptationSet>
+    <AdaptationSet
+      id="2"
+      group="2"
+      contentType="audio"
+      lang="en"
+      mimeType="audio/mp4"
+      segmentAlignment="true"
+      startWithSAP="1">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+      <SegmentTemplate timescale="1000" duration="4000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/segment-$Number$.m4s" startNumber="1"/>
+      <Representation id="audio-en-aac-128" bandwidth="128000" codecs="mp4a.40.2" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      </Representation>
+      <Representation id="audio-en-aac-64" bandwidth="64000" codecs="mp4a.40.5" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

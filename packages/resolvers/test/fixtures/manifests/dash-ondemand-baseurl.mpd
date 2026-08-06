@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD
+  xmlns="urn:mpeg:dash:schema:mpd:2011"
+  profiles="urn:mpeg:dash:profile:isoff-on-demand:2011"
+  type="static"
+  mediaPresentationDuration="PT9M56.46S"
+  minBufferTime="PT2.0S">
+  <BaseURL>https://media.example.org/assets/sintel/</BaseURL>
+  <Period duration="PT9M56.46S">
+    <AdaptationSet mimeType="video/mp4" contentType="video" subsegmentAlignment="true" subsegmentStartsWithSAP="1" par="16:9">
+      <Representation id="1" bandwidth="1254758" codecs="avc1.42c01f" width="1280" height="544" frameRate="24" sar="1:1">
+        <BaseURL>sintel_1280x544_1250k.mp4</BaseURL>
+        <SegmentBase indexRange="861-3612" indexRangeExact="true">
+          <Initialization range="0-860"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="2" bandwidth="628905" codecs="avc1.42c01e" width="854" height="364" frameRate="24" sar="1:1">
+        <BaseURL>sintel_854x364_625k.mp4</BaseURL>
+        <SegmentBase indexRange="861-3612" indexRangeExact="true">
+          <Initialization range="0-860"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet mimeType="audio/mp4" contentType="audio" lang="en" subsegmentAlignment="true" subsegmentStartsWithSAP="1">
+      <Representation id="a1" bandwidth="127236" codecs="mp4a.40.2" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <BaseURL>sintel_audio_128k.m4a</BaseURL>
+        <SegmentBase indexRange="700-2200" indexRangeExact="true">
+          <Initialization range="0-699"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet mimeType="application/ttml+xml" contentType="text" lang="de">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
+      <Representation id="sub-de" bandwidth="1000">
+        <BaseURL>sintel_de.ttml</BaseURL>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

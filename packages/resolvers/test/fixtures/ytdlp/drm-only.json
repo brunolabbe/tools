@@ -1,0 +1,35 @@
+{
+  "id": "protected-asset-1",
+  "title": "A licensed feature",
+  "duration": 5400,
+  "webpage_url": "https://vod.example.com/watch/protected-asset-1",
+  "is_live": false,
+  "has_drm": true,
+  "formats": [
+    {
+      "format_id": "dash-video=3000000",
+      "ext": "mp4",
+      "protocol": "http_dash_segments",
+      "url": "https://vod.example.com/dash/protected-asset-1.mpd",
+      "vcodec": "avc1.640028",
+      "acodec": "none",
+      "width": 1920,
+      "height": 1080,
+      "tbr": 3000,
+      "has_drm": true
+    },
+    {
+      "format_id": "dash-audio=128000",
+      "ext": "m4a",
+      "protocol": "http_dash_segments",
+      "url": "https://vod.example.com/dash/protected-asset-1.mpd",
+      "vcodec": "none",
+      "acodec": "mp4a.40.2",
+      "abr": 128,
+      "tbr": 128,
+      "has_drm": true
+    }
+  ],
+  "subtitles": {},
+  "automatic_captions": {}
+}

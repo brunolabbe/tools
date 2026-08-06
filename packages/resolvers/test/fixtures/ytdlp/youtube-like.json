@@ -1,0 +1,159 @@
+{
+  "id": "aqz-KE-bpKQ",
+  "title": "Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film",
+  "duration": 635,
+  "thumbnail": "https://i.ytimg.com/vi/aqz-KE-bpKQ/maxresdefault.jpg",
+  "webpage_url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+  "extractor": "youtube",
+  "is_live": false,
+  "live_status": "not_live",
+  "http_headers": {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Sec-Fetch-Mode": "navigate"
+  },
+  "formats": [
+    {
+      "format_id": "sb0",
+      "format_note": "storyboard",
+      "ext": "mhtml",
+      "protocol": "mhtml",
+      "url": "https://i.ytimg.com/sb/aqz-KE-bpKQ/storyboard3_L2/M0.jpg",
+      "vcodec": "none",
+      "acodec": "none",
+      "width": 160,
+      "height": 90
+    },
+    {
+      "format_id": "140",
+      "format_note": "medium",
+      "ext": "m4a",
+      "protocol": "https",
+      "url": "https://rr3---sn-example.googlevideo.com/videoplayback?itag=140&mime=audio%2Fmp4&expire=1772294400",
+      "acodec": "mp4a.40.2",
+      "vcodec": "none",
+      "abr": 129.482,
+      "tbr": 129.482,
+      "filesize": 10275264,
+      "container": "m4a_dash",
+      "language": "en",
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Referer": "https://www.youtube.com/"
+      }
+    },
+    {
+      "format_id": "251",
+      "format_note": "medium",
+      "ext": "webm",
+      "protocol": "https",
+      "url": "https://rr3---sn-example.googlevideo.com/videoplayback?itag=251&mime=audio%2Fwebm&expire=1772294400",
+      "acodec": "opus",
+      "vcodec": "none",
+      "abr": 141.63,
+      "tbr": 141.63,
+      "filesize": 11238910,
+      "container": "webm_dash",
+      "language": "en"
+    },
+    {
+      "format_id": "137",
+      "format_note": "1080p",
+      "ext": "mp4",
+      "protocol": "https",
+      "url": "https://rr3---sn-example.googlevideo.com/videoplayback?itag=137&mime=video%2Fmp4&expire=1772294400",
+      "vcodec": "avc1.640028",
+      "acodec": "none",
+      "width": 1920,
+      "height": 1080,
+      "fps": 60,
+      "vbr": 4406.128,
+      "tbr": 4406.128,
+      "filesize": 349605888,
+      "container": "mp4_dash"
+    },
+    {
+      "format_id": "248",
+      "format_note": "1080p",
+      "ext": "webm",
+      "protocol": "https",
+      "url": "https://rr3---sn-example.googlevideo.com/videoplayback?itag=248&mime=video%2Fwebm&expire=1772294400",
+      "vcodec": "vp09.00.40.08",
+      "acodec": "none",
+      "width": 1920,
+      "height": 1080,
+      "fps": 60,
+      "vbr": 3521.44,
+      "tbr": 3521.44,
+      "filesize_approx": 279441408,
+      "container": "webm_dash"
+    },
+    {
+      "format_id": "18",
+      "format_note": "360p",
+      "ext": "mp4",
+      "protocol": "https",
+      "url": "https://rr3---sn-example.googlevideo.com/videoplayback?itag=18&mime=video%2Fmp4&expire=1772294400",
+      "vcodec": "avc1.42001E",
+      "acodec": "mp4a.40.2",
+      "width": 640,
+      "height": 360,
+      "fps": 30,
+      "abr": 96,
+      "vbr": 522.1,
+      "tbr": 618.1,
+      "filesize_approx": 49048576
+    },
+    {
+      "format_id": "96",
+      "format_note": "1080p",
+      "ext": "mp4",
+      "protocol": "m3u8_native",
+      "manifest_url": "https://manifest.googlevideo.com/api/manifest/hls_variant/expire/1772294400/file/index.m3u8",
+      "url": "https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/1772294400/itag/96/index.m3u8",
+      "vcodec": "avc1.640028",
+      "acodec": "mp4a.40.2",
+      "width": 1920,
+      "height": 1080,
+      "fps": 60,
+      "tbr": 4666.503
+    }
+  ],
+  "subtitles": {
+    "en": [
+      {
+        "ext": "vtt",
+        "url": "https://www.youtube.com/api/timedtext?lang=en&fmt=vtt",
+        "name": "English"
+      },
+      {
+        "ext": "srv3",
+        "url": "https://www.youtube.com/api/timedtext?lang=en&fmt=srv3",
+        "name": "English"
+      }
+    ],
+    "fr": [
+      {
+        "ext": "vtt",
+        "url": "https://www.youtube.com/api/timedtext?lang=fr&fmt=vtt",
+        "name": "French"
+      }
+    ]
+  },
+  "automatic_captions": {
+    "en": [
+      {
+        "ext": "vtt",
+        "url": "https://www.youtube.com/api/timedtext?lang=en&fmt=vtt&kind=asr",
+        "name": "English (auto-generated)"
+      }
+    ],
+    "es": [
+      {
+        "ext": "vtt",
+        "url": "https://www.youtube.com/api/timedtext?tlang=es&fmt=vtt&kind=asr",
+        "name": "Spanish (auto-generated)"
+      }
+    ]
+  }
+}

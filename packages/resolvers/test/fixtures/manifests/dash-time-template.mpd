@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD
+  xmlns="urn:mpeg:dash:schema:mpd:2011"
+  profiles="urn:mpeg:dash:profile:isoff-live:2011"
+  type="static"
+  mediaPresentationDuration="PT1M0.08S"
+  minBufferTime="PT4.0S">
+  <Period id="p0" start="PT0S">
+    <AdaptationSet
+      mimeType="video/mp4"
+      contentType="video"
+      segmentAlignment="true"
+      startWithSAP="1"
+      par="16:9">
+      <SegmentTemplate
+        timescale="90000"
+        initialization="dash/$RepresentationID$-init.mp4"
+        media="dash/$RepresentationID$-$Time$.m4s">
+        <SegmentTimeline>
+          <S t="0" d="540000" r="9"/>
+          <S t="5400000" d="7200"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="v-500k" bandwidth="500000" codecs="avc1.42C01E" width="854" height="480" frameRate="30000/1001" sar="1:1"/>
+      <Representation id="v-1500k" bandwidth="1500000" codecs="avc1.4D401F" width="1280" height="720" frameRate="30000/1001" sar="1:1"/>
+    </AdaptationSet>
+    <AdaptationSet mimeType="audio/mp4" contentType="audio" lang="en" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate
+        timescale="48000"
+        initialization="dash/$RepresentationID$-init.mp4"
+        media="dash/$RepresentationID$-$Time$.m4s">
+        <SegmentTimeline>
+          <S t="0" d="288000" r="9"/>
+          <S t="2880000" d="3840"/>
+        </SegmentTimeline>
+      </SegmentTemplate>
+      <Representation id="a-128k" bandwidth="128000" codecs="mp4a.40.2" audioSamplingRate="48000"/>
+    </AdaptationSet>
+    <AdaptationSet mimeType="text/vtt" contentType="text" lang="en">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
+      <Representation id="s-en" bandwidth="256">
+        <BaseURL>subtitles/en.vtt</BaseURL>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD
+  xmlns="urn:mpeg:dash:schema:mpd:2011"
+  profiles="urn:mpeg:dash:profile:isoff-live:2011"
+  type="dynamic"
+  availabilityStartTime="2026-03-11T09:00:00Z"
+  publishTime="2026-03-11T14:22:06Z"
+  minimumUpdatePeriod="PT2S"
+  timeShiftBufferDepth="PT5M"
+  minBufferTime="PT4S">
+  <BaseURL>https://live.example.com/channel-3/</BaseURL>
+  <Period id="p0" start="PT0S">
+    <AdaptationSet mimeType="video/mp4" contentType="video" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="90000" duration="360000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/$Number$.m4s" startNumber="1"/>
+      <Representation id="video=3000000" bandwidth="3000000" codecs="avc1.4D401F" width="1280" height="720" frameRate="50"/>
+      <Representation id="video=1200000" bandwidth="1200000" codecs="avc1.4D401E" width="768" height="432" frameRate="25"/>
+    </AdaptationSet>
+    <AdaptationSet mimeType="audio/mp4" contentType="audio" lang="en" segmentAlignment="true" startWithSAP="1">
+      <SegmentTemplate timescale="48000" duration="192000" initialization="$RepresentationID$/init.mp4" media="$RepresentationID$/$Number$.m4s" startNumber="1"/>
+      <Representation id="audio=96000" bandwidth="96000" codecs="mp4a.40.2" audioSamplingRate="48000"/>
+    </AdaptationSet>
+  </Period>
+</MPD>
