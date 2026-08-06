@@ -23,13 +23,22 @@
     {
       "files": ["apps/web/**/*.{ts,tsx}"],
       "plugins": ["react", "jsx-a11y"],
-      "env": { "browser": true }
+      "env": { "browser": true },
+      "rules": {
+        // The automatic JSX runtime (`jsx: "react-jsx"`) makes an in-scope
+        // `React` import unnecessary — and importing one purely to satisfy a
+        // lint rule would be dead code.
+        "react/react-in-jsx-scope": "off"
+      }
     },
     {
-      "files": ["**/test/**/*.ts", "**/*.test.ts"],
+      "files": ["**/test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"],
       "rules": {
         "no-console": "off",
-        "typescript/no-explicit-any": "off"
+        "typescript/no-explicit-any": "off",
+        // Tests await in sequence on purpose — the ordering is usually the
+        // thing under test. Parallelising them would change what they assert.
+        "no-await-in-loop": "off"
       }
     }
   ],
