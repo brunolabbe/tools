@@ -1,0 +1,32 @@
+{
+  "name": "downloader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Detect, capture and download video streams from arbitrary websites.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev": "npm run dev --workspaces --if-present",
+    "typecheck": "tsc --build --verbose",
+    "test": "node --test \"packages/*/test/**/*.test.ts\" \"apps/*/test/**/*.test.ts\"",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "check": "npm run lint && npm run format:check && npm run typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "oxfmt": "^0.62.0",
+    "oxlint": "^1.77.0",
+    "tsx": "^4.23.8",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
