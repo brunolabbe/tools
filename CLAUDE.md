@@ -20,7 +20,8 @@ npm run dev            # all apps in watch mode
 npm run check          # lint + format check + typecheck — must pass before done
 npm run lint:fix       # oxlint --fix
 npm run format         # oxfmt
-npm test               # node:test
+npm test               # vitest run
+npm run test:watch     # vitest
 ```
 
 Tooling: **oxlint** and **oxfmt** (not eslint/prettier). Config in
@@ -82,6 +83,12 @@ including after each redirect. Resolver output is attacker-influenced.
 `Content-Length`), report `null` and let the UI show an indeterminate state.
 
 ## Testing
+
+**vitest**, configured once in the root `vitest.config.ts`; tests live in
+`<package>/test/**/*.test.{ts,tsx}`. Import `test`/`expect`/`vi` explicitly —
+globals are off on purpose, so oxlint's `no-undef` keeps working. Do not reach
+for `node:test`: the pinned Node (22.15) cannot strip TypeScript types without a
+flag, so `.ts` tests fail under it outright.
 
 Fixtures, not live network calls — real sites change, rate-limit, and geo-vary,
 which makes CI failures meaningless. Check in real manifests under
