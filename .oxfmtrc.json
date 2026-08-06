@@ -1,4 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["dist/", "node_modules/", "storage/", "coverage/", "test/fixtures/"]
+  "ignorePatterns": [
+    ".claude/",
+    "dist/",
+    "node_modules/",
+    "storage/",
+    "coverage/",
+    "test/fixtures/"
+  ]
 }
