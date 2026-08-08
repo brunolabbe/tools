@@ -5,9 +5,27 @@
  * The distinction this file exists to get right: `EXT-X-KEY:METHOD=AES-128`
  * with an in-manifest `URI` is *transport encryption*. There is no licence
  * server and no device binding; ffmpeg fetches the key itself and it is fully
- * in scope. Only a non-`identity` `KEYFORMAT` — FairPlay's
+ * in scope. A non-`identity` `KEYFORMAT` — FairPlay's
  * `com.apple.streamingkeydelivery`, a Widevine/PlayReady UUID, or an `skd://`
- * key URI — is EME DRM, and only that sets `protected`.
+ * key URI — is EME DRM, and that sets `protected`.
+ *
+ * ## ClearKey
+ *
+ * `KEYFORMAT="org.w3.clearkey"` sits on the line and is split by *how the key
+ * is obtained*, not by the key system's name:
+ *
+ *  - **Key fetchable straight from the manifest's `URI`** — an ordinary
+ *    http(s), `data:` or relative URI. Mechanically identical to AES-128: one
+ *    GET returns the key, nothing is negotiated, no device identity is
+ *    involved. In scope, `protected: false`. Verified against the bundled
+ *    ffmpeg, which decrypts this byte-for-byte identically to `identity`.
+ *  - **Anything requiring an EME licence exchange** — no `URI`, or a scheme we
+ *    cannot simply fetch. Out of scope, `protected: true`. `CLAUDE.md` forbids
+ *    licence acquisition and key extraction, and that does not change here.
+ *
+ * The system is still recorded in `systems` either way; `protected` is the only
+ * thing the boundary moves, so a caller can always see that ClearKey was in
+ * play.
  */
 
 import { AppError } from "@downloader/shared";
@@ -23,7 +41,12 @@ import {
 } from "../common.ts";
 import type { ParsedManifest } from "./types.ts";
 
-/** `KEYFORMAT` values that identify an EME key system. Anything else non-identity is unknown DRM. */
+/**
+ * `KEYFORMAT` values that identify an EME key system. Anything else
+ * non-identity is unknown DRM. ClearKey is handled separately — see
+ * `CLEARKEY_FORMATS` — because it is the only one whose verdict depends on the
+ * key URI rather than on the key system alone.
+ */
 const KEYFORMAT_SYSTEMS: ReadonlyArray<readonly [string, DrmSystem]> = [
   ["com.apple.streamingkeydelivery", "fairplay"],
   ["com.apple.fps", "fairplay"],
@@ -33,8 +56,6 @@ const KEYFORMAT_SYSTEMS: ReadonlyArray<readonly [string, DrmSystem]> = [
   ["urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed", "widevine"],
   ["com.microsoft.playready", "playready"],
   ["urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95", "playready"],
-  ["org.w3.clearkey", "clearkey"],
-  ["urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e", "clearkey"],
 ];
 
 const AUDIO_ONLY_EXTENSIONS = new Set(["aac", "mp3", "m4a", "ac3", "ec3", "eac3"]);
@@ -136,16 +157,38 @@ function parseRendition(attrs: Map<string, string>): Rendition {
   };
 }
 
+/** ClearKey `KEYFORMAT` values, split out because they are the one negotiable case. */
+const CLEARKEY_FORMATS: ReadonlySet<string> = new Set([
+  "org.w3.clearkey",
+  "urn:uuid:e2719d58-a985-b3c9-781a-b030af78d30e",
+]);
+
+/**
+ * True when the key is one plain GET away.
+ *
+ * A relative URI resolves against the playlist and is fetched with the same
+ * `RequestContext` as the segments, so it counts. `skd://` and friends are
+ * licence-exchange entry points wearing a URI's clothes and do not.
+ */
+function isDirectlyFetchableKeyUri(uri: string): boolean {
+  if (uri === "") return false;
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(uri)?.[1]?.toLowerCase();
+  if (scheme === undefined) return true;
+  return scheme === "http" || scheme === "https" || scheme === "data";
+}
+
 /**
  * Classifies every `EXT-X-KEY` / `EXT-X-SESSION-KEY` in the playlist.
  *
  * A non-`identity` `KEYFORMAT` we do not recognise is still reported as
- * protected with system `unknown`: the default keyformat is the only one whose
- * key we can fetch ourselves, so anything else is by definition a key system we
- * cannot satisfy. That is positive evidence, not a guess.
+ * protected with system `unknown`: `identity` and directly-fetchable ClearKey
+ * are the only formats whose key we can obtain without negotiating, so anything
+ * else is by definition a key system we cannot satisfy. That is positive
+ * evidence, not a guess.
  */
 function inspectKeys(keys: Tag[]): DrmInfo {
-  const systems = new Set<DrmSystem>();
+  const protectedSystems = new Set<DrmSystem>();
+  const openSystems = new Set<DrmSystem>();
   const evidence: string[] = [];
   let sawTransportEncryption = false;
 
@@ -158,7 +201,7 @@ function inspectKeys(keys: Tag[]): DrmInfo {
     const uri = attrs.get("URI") ?? "";
 
     if (uri.toLowerCase().startsWith("skd://")) {
-      systems.add("fairplay");
+      protectedSystems.add("fairplay");
       evidence.push(`${key.name} METHOD=${method} URI="skd://…" (FairPlay)`);
       continue;
     }
@@ -170,20 +213,42 @@ function inspectKeys(keys: Tag[]): DrmInfo {
       continue;
     }
 
+    if (CLEARKEY_FORMATS.has(keyFormat)) {
+      openSystems.add("clearkey");
+      if (isDirectlyFetchableKeyUri(uri)) {
+        sawTransportEncryption = true;
+        evidence.push(`${key.name} METHOD=${method} KEYFORMAT="${keyFormat}" with a fetchable URI`);
+      } else {
+        openSystems.delete("clearkey");
+        protectedSystems.add("clearkey");
+        evidence.push(
+          `${key.name} METHOD=${method} KEYFORMAT="${keyFormat}" with no fetchable URI — licence exchange`,
+        );
+      }
+      continue;
+    }
+
     const known = KEYFORMAT_SYSTEMS.find(([format]) => format === keyFormat);
     const system: DrmSystem = known?.[1] ?? "unknown";
-    systems.add(system);
+    protectedSystems.add(system);
     evidence.push(`${key.name} METHOD=${method} KEYFORMAT="${keyFormat}" (${system})`);
   }
 
-  if (systems.size > 0) {
-    return { protected: true, systems: [...systems], evidence: evidence.join("; ") };
+  // One protected key anywhere in the playlist stops the pipeline, even if
+  // another key in the same playlist is fetchable: the segments under the
+  // protected key are undecryptable and the output would be a truncated file
+  // presented as a complete one.
+  if (protectedSystems.size > 0) {
+    return { protected: true, systems: [...protectedSystems], evidence: evidence.join("; ") };
   }
   if (sawTransportEncryption) {
     return {
       protected: false,
-      systems: [],
-      evidence: "EXT-X-KEY with an in-manifest key URI — transport encryption, not DRM",
+      systems: [...openSystems],
+      evidence:
+        evidence.length > 0
+          ? evidence.join("; ")
+          : "EXT-X-KEY with an in-manifest key URI — transport encryption, not DRM",
     };
   }
   return { protected: false, systems: [] };

@@ -22,6 +22,7 @@ import type {
   ResolveOptions,
   StreamProtocol,
 } from "@downloader/shared";
+import { toAbortError } from "../abort.ts";
 import { buildLabel, optional, urlExtension } from "../common.ts";
 import { parseDash } from "../manifest/dash.ts";
 import { parseHls } from "../manifest/hls.ts";
@@ -148,7 +149,13 @@ export class DirectUrlResolver implements Resolver {
     try {
       return await this.#fetch(url.href, init);
     } catch (cause) {
-      if (isAbort(cause)) throw new AppError("TIMEOUT", "Fetching that address took too long.");
+      if (isAbort(cause)) {
+        // `fetch` reports every abort as a bare `AbortError`, so the reason has
+        // to come from the signal we handed it, not from the error it threw.
+        const signal = init.signal;
+        if (signal?.aborted === true) throw toAbortError(signal, ABORT_MESSAGE);
+        throw new AppError("TIMEOUT", ABORT_MESSAGE);
+      }
       throw new AppError("UNREACHABLE", undefined, {
         cause,
         details: { url: url.href },
@@ -331,6 +338,8 @@ function titleFromUrl(url: URL): string {
 function sanitiseHeaderValue(value: string): string {
   return value.replaceAll(/[\r\n]+/g, " ").trim();
 }
+
+const ABORT_MESSAGE = "Fetching that address took too long.";
 
 function isAbort(error: unknown): boolean {
   return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");

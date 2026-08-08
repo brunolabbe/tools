@@ -7,6 +7,13 @@
  * Common Encryption with a key held by a licence server, so any of them sets
  * `protected` and stops the pipeline.
  *
+ * That includes ClearKey, which HLS treats as in scope when the key is one GET
+ * away. DASH ClearKey is not that: the key comes from the `<clearkey:Laurl>`
+ * licence endpoint via an EME licence request, and a `<cenc:pssh>` carries only
+ * the key *id*, never the key. Both sides of that are a licence exchange, which
+ * `CLAUDE.md` puts out of scope, so the boundary lands differently here purely
+ * because the format offers no fetchable-key form to land on.
+ *
  * Audio and video live in separate `AdaptationSet`s in almost every real MPD,
  * so muxing is the normal path rather than the exception.
  */
@@ -142,6 +149,18 @@ interface DrmScan {
   evidence: string[];
 }
 
+/**
+ * Whether a `ContentProtection` names a licence endpoint.
+ *
+ * Matched on the local name because the element is namespaced and the prefix
+ * varies by authoring tool — `clearkey:Laurl`, `dashif:Laurl` and a bare
+ * `Laurl` all appear in real manifests, and the parser keeps prefixes.
+ * Diagnostic only: this changes the evidence string, never the verdict.
+ */
+function hasLicenceUrl(element: XmlNode): boolean {
+  return Object.keys(element).some((key) => /(?:^|:)laurl$/i.test(key));
+}
+
 function scanContentProtection(node: XmlNode | undefined, scan: DrmScan): void {
   for (const element of childNodes(node, "ContentProtection")) {
     const scheme = (attr(element, "schemeIdUri") ?? "").toLowerCase();
@@ -150,6 +169,16 @@ function scanContentProtection(node: XmlNode | undefined, scan: DrmScan): void {
     const system = uuid === undefined ? undefined : DRM_UUIDS[uuid];
     if (system !== undefined) {
       scan.systems.add(system);
+      if (system === "clearkey") {
+        // Named explicitly so the hard stop is traceable to the licence
+        // exchange rather than looking like a blanket ban on the key system.
+        scan.evidence.push(
+          `MPD ContentProtection ${scheme} (clearkey, ${
+            hasLicenceUrl(element) ? "licence URL in manifest" : "key id only"
+          } — licence exchange required)`,
+        );
+        continue;
+      }
       scan.evidence.push(`MPD ContentProtection ${scheme} (${system})`);
       continue;
     }

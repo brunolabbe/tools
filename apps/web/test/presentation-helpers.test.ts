@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { parseJobEvent } from "@downloader/shared";
 import type { MediaVariant } from "@downloader/shared";
 import {
   UNKNOWN,
@@ -9,7 +10,7 @@ import {
   formatPercent,
   formatSpeed,
 } from "../src/lib/format.ts";
-import { parseJobEvent } from "../src/lib/contract-guards.ts";
+
 import { pickDefaultVariantId, sortVariantRows, toVariantRows } from "../src/lib/variants.ts";
 
 const variants: MediaVariant[] = [

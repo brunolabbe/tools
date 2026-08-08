@@ -12,11 +12,10 @@
  * retry path that will fail identically five more times.
  */
 
-import { AppError } from "@downloader/shared";
+import { AppError, redactUrl } from "@downloader/shared";
 import type { RequestContext } from "@downloader/shared";
 import type { FetchLike } from "../config.ts";
 import { buildFetchHeaders } from "../ffmpeg/headers.ts";
-import { redactUrl } from "../redact.ts";
 import { parseRetryAfter } from "./retry.ts";
 
 export interface HttpRequestOptions {

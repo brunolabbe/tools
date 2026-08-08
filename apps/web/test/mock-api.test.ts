@@ -6,6 +6,8 @@ import {
   ROUTES,
   canTransition,
   createJobRequestSchema,
+  jobEventSchema,
+  jobSchema,
   jobOptionsSchema,
   probeRequestSchema,
   sourceUrlSchema,
@@ -14,7 +16,7 @@ import type { ErrorCode, Job, JobEvent, JobOptions } from "@downloader/shared";
 import { createMockClient } from "../src/api/mock.ts";
 import { SCENARIOS, findScenario, scenarioUrl } from "../src/api/scenarios.ts";
 import type { ApiClient } from "../src/api/types.ts";
-import { isJob, isJobEvent } from "../src/lib/contract-guards.ts";
+
 import { applyJobEvents } from "../src/lib/job-reducer.ts";
 import { pickDefaultVariantId } from "../src/lib/variants.ts";
 
@@ -143,7 +145,7 @@ describe("job event streams", () => {
 
     expect(errors).toBe(0);
     expect(events.length).toBeGreaterThan(5);
-    for (const event of events) expect(isJobEvent(event)).toBe(true);
+    for (const event of events) expect(jobEventSchema.safeParse(event).success).toBe(true);
     expect(events.some((event) => event.type === "heartbeat")).toBe(true);
     expect(events.some((event) => event.type === "probed")).toBe(true);
 
@@ -157,7 +159,7 @@ describe("job event streams", () => {
 
     const folded = applyJobEvents(job, events);
     const server = (await api.getJob(job.id)).job;
-    expect(isJob(server)).toBe(true);
+    expect(jobSchema.safeParse(server).success).toBe(true);
     expect(folded).toEqual(server);
     expect(server.status).toBe("completed");
     expect(server.result).not.toBeNull();
@@ -280,7 +282,7 @@ describe("job lifecycle", () => {
     await api.createJob({ url: scenarioUrl("dlfail") });
     const { jobs, total } = await api.listJobs();
     expect(total).toBe(2);
-    expect(jobs.every((entry) => isJob(entry))).toBe(true);
+    expect(jobs.every((entry) => jobSchema.safeParse(entry).success)).toBe(true);
   });
 });
 

@@ -325,6 +325,14 @@ export const SCENARIOS: readonly Scenario[] = [
     job: SUCCESS,
   },
   {
+    keyword: "shutdown",
+    title: "Analysis canceled",
+    description: "The server stopped the probe mid-flight — a restart, typically. Not a timeout.",
+    probeDelayMs: 800,
+    probeError: "CANCELED",
+    job: SUCCESS,
+  },
+  {
     keyword: "gone",
     title: "Variant expired",
     description: "The re-probe finds the signed URLs already dead. Retryable.",

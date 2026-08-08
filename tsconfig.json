@@ -4,6 +4,7 @@
     { "path": "./packages/shared" },
     { "path": "./packages/resolvers" },
     { "path": "./packages/engine" },
+    { "path": "./apps/api" },
     { "path": "./apps/web" }
   ]
 }

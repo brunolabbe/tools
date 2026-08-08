@@ -1,21 +1,21 @@
 /**
- * Real HTTP transport. Paths come from `ROUTES`; nothing here spells one out.
- *
- * Unused until `apps/api` lands (WP-5) — `client.ts` selects it with an env flag.
+ * Real HTTP transport. Paths come from `ROUTES`; nothing here spells one out,
+ * and every response body is validated with the shared schemas before it is
+ * allowed to become UI state.
  */
 
-import { AppError, ROUTES } from "@downloader/shared";
-import type {
-  CreateJobRequest,
-  ErrorResponse,
-  JobListResponse,
-  JobResponse,
-  ProbeRequest,
-  ProbeResponse,
+import {
+  AppError,
+  appErrorPayloadSchema,
+  jobListResponseSchema,
+  jobResponseSchema,
+  parseJobEvent,
+  probeResponseSchema,
+  ROUTES,
 } from "@downloader/shared";
-import { parseJobEvent } from "../lib/contract-guards.ts";
+import type { CreateJobRequest, ProbeRequest } from "@downloader/shared";
+import type { z } from "zod";
 import type { EventStream } from "../lib/event-stream.ts";
-import { isAppErrorPayload } from "../lib/contract-guards.ts";
 import type { ApiClient } from "./types.ts";
 
 export interface HttpClientOptions {
@@ -27,7 +27,13 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
   const baseUrl = (options.baseUrl ?? "").replace(/\/$/, "");
   const url = (path: string): string => `${baseUrl}${path}`;
 
-  async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  /**
+   * Every response is parsed against its schema rather than cast. A server that
+   * is a version ahead, a captive-portal login page answering 200, or a proxy
+   * rewriting the body all produce data that would otherwise flow into UI state
+   * as if it were a `Job` and fail somewhere far from the cause.
+   */
+  async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit): Promise<T> {
     let response: Response;
     try {
       response = await fetch(url(path), {
@@ -40,36 +46,43 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
 
     const body: unknown = await response.json().catch(() => null);
     if (!response.ok) {
-      const payload = (body as ErrorResponse | null)?.error;
-      if (isAppErrorPayload(payload)) {
-        throw new AppError(payload.code, payload.message, {
-          retryable: payload.retryable,
-          ...(payload.details ? { details: payload.details } : {}),
+      const payload = appErrorPayloadSchema.safeParse((body as { error?: unknown } | null)?.error);
+      if (payload.success) {
+        throw new AppError(payload.data.code, payload.data.message, {
+          retryable: payload.data.retryable,
+          ...(payload.data.details ? { details: payload.data.details } : {}),
         });
       }
       throw new AppError("INTERNAL", undefined, { details: { status: response.status } });
     }
-    return body as T;
+
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      throw new AppError("INTERNAL", "The server sent a response this app cannot read.", {
+        details: { path, issues: parsed.error.issues.slice(0, 5) },
+      });
+    }
+    return parsed.data;
   }
 
   return {
     probe: (probeRequest: ProbeRequest) =>
-      request<ProbeResponse>(ROUTES.probe, {
+      request(ROUTES.probe, probeResponseSchema, {
         method: "POST",
         body: JSON.stringify(probeRequest),
       }),
 
     createJob: (createRequest: CreateJobRequest) =>
-      request<JobResponse>(ROUTES.jobs, {
+      request(ROUTES.jobs, jobResponseSchema, {
         method: "POST",
         body: JSON.stringify(createRequest),
       }),
 
-    getJob: (id: string) => request<JobResponse>(ROUTES.job(id)),
+    getJob: (id: string) => request(ROUTES.job(id), jobResponseSchema),
 
-    listJobs: () => request<JobListResponse>(ROUTES.jobs),
+    listJobs: () => request(ROUTES.jobs, jobListResponseSchema),
 
-    cancelJob: (id: string) => request<JobResponse>(ROUTES.cancelJob(id), { method: "POST" }),
+    cancelJob: (id: string) => request(ROUTES.cancelJob(id), jobResponseSchema, { method: "POST" }),
 
     openJobEvents(jobId, handlers): EventStream {
       const source = new EventSource(url(ROUTES.jobEvents(jobId)));

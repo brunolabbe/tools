@@ -11,7 +11,7 @@
  * Coverage is a property of this file alone.
  */
 
-import { AppError } from "@downloader/shared";
+import { AppError, redactUrl } from "@downloader/shared";
 import type {
   MediaVariant,
   ProbeResult,
@@ -28,7 +28,6 @@ import { HitCollector } from "../browser/intercept.ts";
 import { BrowserPool } from "../browser/pool.ts";
 import { provokePlayback, readMetadata, readSignals, waitForQuiet } from "../browser/provoke.ts";
 import { rankHits } from "../browser/rank.ts";
-import { describeUrl } from "../browser/redact.ts";
 import { buildRequestContext } from "../browser/request-context.ts";
 import type { NetworkHit } from "../browser/types.ts";
 import { opaqueManifestVariant, progressiveVariants } from "../browser/variants.ts";
@@ -284,7 +283,7 @@ export class BrowserResolver implements Resolver {
           details: {
             systems: parsed.drm.systems,
             ...(parsed.drm.evidence === undefined ? {} : { evidence: parsed.drm.evidence }),
-            url: describeUrl(hit.url),
+            url: redactUrl(hit.url),
           },
         });
       }

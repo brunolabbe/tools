@@ -2,17 +2,12 @@
  * Abort plumbing shared by the pool, the provocation loop and the quiet wait.
  */
 
-import { AppError } from "@downloader/shared";
+import type { AppError } from "@downloader/shared";
+import { toAbortError as classifyAbort } from "../abort.ts";
 
-/**
- * A caller-supplied signal is how the registry enforces `timeoutMs`, so an
- * abort with no better explanation is a timeout. When the caller aborted with a
- * typed reason, that reason is the truth and is preserved.
- */
+/** Package-wide mapping, with the copy this resolver wants for a timeout. */
 export function toAbortError(signal: AbortSignal): AppError {
-  const reason: unknown = signal.reason;
-  if (reason instanceof AppError) return reason;
-  return new AppError("TIMEOUT", "The page analysis was stopped before it finished.");
+  return classifyAbort(signal, "The page analysis was stopped before it finished.");
 }
 
 export function throwIfAborted(signal: AbortSignal | undefined): void {

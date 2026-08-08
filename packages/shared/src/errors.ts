@@ -50,6 +50,15 @@ export const ERROR_CODES = [
   "RATE_LIMITED",
   "JOB_NOT_FOUND",
   "JOB_CANCELED",
+  /**
+   * A caller's `AbortSignal` fired during an operation that knows nothing about
+   * jobs — resolution, a manifest fetch, a browser probe. Distinct from
+   * `JOB_CANCELED`, which is the orchestrator's vocabulary: a resolver has no
+   * business naming a concept from a layer above it. Distinct from `TIMEOUT`
+   * too, because "someone stopped this" and "this ran out of time" call for
+   * different copy and a different retry answer.
+   */
+  "CANCELED",
   /** File was garbage-collected after its retention window. */
   "FILE_EXPIRED",
   "INTERNAL",
@@ -64,13 +73,20 @@ export interface AppErrorPayload {
   message: string;
   /** True when retrying the same request unchanged could plausibly succeed. */
   retryable: boolean;
-  /** Extra structured context for logs and debugging. Not rendered verbatim in the UI. */
-  details?: Record<string, unknown>;
+  /**
+   * Extra structured context for logs and debugging. Not rendered verbatim in
+   * the UI. Written `| undefined` so `appErrorPayloadSchema` in `api.ts` can
+   * satisfy this type — see the note in `media.ts`.
+   */
+  details?: Record<string, unknown> | undefined;
 }
 
 /**
  * Codes worth an automatic retry. Everything else is terminal for the attempt:
  * either the caller must change something, or the source will never work.
+ *
+ * `CANCELED` and `JOB_CANCELED` are deliberately absent: someone asked for the
+ * work to stop, so retrying it automatically is the opposite of what they said.
  */
 export const RETRYABLE_CODES: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   "UNREACHABLE",
@@ -100,6 +116,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   RATE_LIMITED: "Too many requests. Try again shortly.",
   JOB_NOT_FOUND: "That download could not be found.",
   JOB_CANCELED: "The download was canceled.",
+  CANCELED: "The operation was canceled.",
   FILE_EXPIRED: "That file has been removed. Downloads are kept for a limited time.",
   INTERNAL: "Something went wrong on our end.",
 };

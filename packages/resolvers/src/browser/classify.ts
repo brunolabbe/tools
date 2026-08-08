@@ -7,8 +7,7 @@
  * needs to be one we would defend.
  */
 
-import { AppError } from "@downloader/shared";
-import { describeUrl } from "./redact.ts";
+import { AppError, redactUrl } from "@downloader/shared";
 
 /** Everything the classifier is allowed to look at. Gathered once, in-page. */
 export interface PageSignals {
@@ -89,7 +88,7 @@ function containsAny(haystack: string, needles: readonly string[]): string | und
 export function classifyFailure(signals: PageSignals): AppError {
   const haystack = `${signals.title}\n${signals.bodyText}\n${signals.html}`.toLowerCase();
   const details: Record<string, unknown> = {
-    url: describeUrl(signals.finalUrl),
+    url: redactUrl(signals.finalUrl),
     ...(signals.status === undefined ? {} : { status: signals.status }),
   };
 
@@ -153,11 +152,11 @@ export function classifyNavigationError(error: unknown, url: string): AppError {
   if (/timeout/i.test(message)) {
     return new AppError("TIMEOUT", "The page took too long to load.", {
       cause: error,
-      details: { url: describeUrl(url) },
+      details: { url: redactUrl(url) },
     });
   }
   return new AppError("UNREACHABLE", undefined, {
     cause: error,
-    details: { url: describeUrl(url), reason: message.split("\n")[0] ?? message },
+    details: { url: redactUrl(url), reason: message.split("\n")[0] ?? message },
   });
 }

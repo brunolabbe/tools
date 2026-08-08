@@ -44,7 +44,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { AppError } from "@downloader/shared";
+import { AppError, redactRequestContext } from "@downloader/shared";
 import type {
   JobOptions,
   JobProgress,
@@ -63,7 +63,6 @@ import { assertDiskSpace, assertWithinSizeLimit, estimateVariantBytes } from "./
 import type { Logger } from "./logger.ts";
 import type { MuxInputFile, OutputContainer, TranscodeNotice } from "./mux.ts";
 import { CONTAINER_EXTENSIONS, mux } from "./mux.ts";
-import { redactRequestContext } from "./redact.ts";
 import type { GcReport } from "./storage.ts";
 import { assertRealPathInside, sanitizeFilename, Storage } from "./storage.ts";
 
@@ -557,7 +556,6 @@ export type { Clock, EngineConfig, EngineConfigInput, FetchLike } from "./config
 export { bundledFfmpegPath, ENGINE_DEFAULTS, loadEngineConfig, SYSTEM_CLOCK } from "./config.ts";
 export type { Logger } from "./logger.ts";
 export { NOOP_LOGGER } from "./logger.ts";
-export { redactHeaders, redactRequestContext, redactUrl } from "./redact.ts";
 
 export {
   buildDurationLimitArgs,

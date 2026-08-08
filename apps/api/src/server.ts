@@ -1,0 +1,314 @@
+/**
+ * Builds the whole service: config in, a started-but-not-listening app out.
+ *
+ * `createApp()` deliberately does not call `listen()`. Tests drive it through
+ * `app.inject()` with no socket at all, and `main.ts` owns the listening and
+ * the signal handling. That split is what makes the pipeline testable without
+ * ports, timeouts or teardown races.
+ */
+
+import Database from "better-sqlite3";
+import { createEngine } from "@downloader/engine";
+import type { DownloadEngine } from "@downloader/engine";
+import { AppError } from "@downloader/shared";
+import Fastify from "fastify";
+import type { FastifyInstance } from "fastify";
+import type { ApiConfig } from "./config.ts";
+import { loadApiConfig } from "./config.ts";
+import type { AppContext } from "./context.ts";
+import { JobStore } from "./db/job-store.ts";
+import { migrate } from "./db/schema.ts";
+import { createGuardedFetch } from "./guarded-fetch.ts";
+import { toErrorResponse } from "./http-errors.ts";
+import { JobEventHub } from "./jobs/events.ts";
+import { JobOrchestrator } from "./jobs/orchestrator.ts";
+import { ProbeCache } from "./jobs/probe-cache.ts";
+import { InProcessJobQueue } from "./jobs/queue.ts";
+import type { AppLogger } from "./logger.ts";
+import { createLogger } from "./logger.ts";
+import { buildRegistry } from "./resolvers.ts";
+import { registerEventRoutes } from "./routes/events.ts";
+import { registerFileRoutes } from "./routes/files.ts";
+import { registerHealthRoute } from "./routes/health.ts";
+import { registerJobRoutes } from "./routes/jobs.ts";
+import { registerProbeRoute } from "./routes/probe.ts";
+import { createSsrfGuard } from "./ssrf.ts";
+import { ROUTES } from "@downloader/shared";
+
+export interface CreateAppOptions {
+  config?: Partial<ApiConfig>;
+  /** Injected in tests. Overrides anything the config would have built. */
+  engine?: DownloadEngine;
+  logger?: AppLogger;
+  now?: () => Date;
+  /** Skips the retention timer. Tests do not want a background sweep running. */
+  startGc?: boolean;
+}
+
+export interface App {
+  server: FastifyInstance;
+  context: AppContext;
+  config: ApiConfig;
+  /** Stops intake, cancels in-flight work, disposes resolvers, closes the db. */
+  shutdown(): Promise<void>;
+}
+
+/** Body size cap. Requests here carry a URL and a few options, nothing more. */
+const MAX_BODY_BYTES = 64 * 1024;
+
+export async function createApp(options: CreateAppOptions = {}): Promise<App> {
+  const config = loadApiConfig(options.config ?? {});
+  const logger = options.logger ?? createLogger({ level: config.logLevel });
+
+  const guard = createSsrfGuard({
+    allowHosts: config.ssrfAllowHosts,
+    allowPrivateAddresses: config.ssrfAllowPrivateAddresses,
+  });
+  const guardedFetch = createGuardedFetch(guard);
+
+  const engine =
+    options.engine ??
+    createEngine({
+      storageDir: config.storageDir,
+      maxFileSizeBytes: config.maxFileSizeBytes,
+      fileRetentionHours: config.fileRetentionHours,
+      stageTimeoutMs: config.stageTimeoutMs,
+      logger,
+      // Every direct fetch the engine makes — progressive downloads, segments,
+      // subtitles — goes through the redirect-checking guard.
+      fetchImpl: guardedFetch,
+      ...(config.ffmpegPath === undefined ? {} : { ffmpegPath: config.ffmpegPath }),
+      ...(config.proxyUrl === undefined ? {} : { proxyUrl: config.proxyUrl }),
+    });
+  await engine.init();
+
+  const db = new Database(config.databasePath);
+  migrate(db);
+  const store = new JobStore(db);
+
+  const { registry, resolverNames } = buildRegistry({ config, logger, fetchImpl: guardedFetch });
+  const events = new JobEventHub(options.now);
+  const probeCache = new ProbeCache({ ttlMs: config.probeCacheTtlMs });
+
+  let shuttingDown = false;
+  const queue = new InProcessJobQueue({
+    concurrency: config.maxConcurrentJobs,
+    onTaskError: (jobId, error) => {
+      // The orchestrator records its own failures, so reaching here means a bug
+      // in the orchestrator itself rather than a failed download.
+      logger.error("a job task rejected outside the orchestrator's own handling", {
+        jobId,
+        error: String(error),
+      });
+    },
+  });
+
+  const now = options.now ?? (() => new Date());
+  const orchestrator = new JobOrchestrator({
+    store,
+    engine,
+    registry,
+    guard,
+    events,
+    logger,
+    probeTimeoutMs: config.probeTimeoutMs,
+    fileRetentionHours: config.fileRetentionHours,
+    ...(config.proxyUrl === undefined ? {} : { proxyUrl: config.proxyUrl }),
+    fileUrl: (token) => ROUTES.file(token),
+    now,
+  });
+
+  const context: AppContext = {
+    config,
+    logger,
+    store,
+    engine,
+    registry,
+    resolverNames,
+    guard,
+    queue,
+    events,
+    probeCache,
+    orchestrator,
+    now,
+    isShuttingDown: () => shuttingDown,
+  };
+
+  const server = Fastify({
+    // The app's own logger writes structured lines; Fastify's would be a second
+    // unrelated format on the same stream.
+    logger: false,
+    bodyLimit: MAX_BODY_BYTES,
+    // Behind a reverse proxy this is what makes request.ip meaningful, which
+    // WP-6's per-IP rate limiting will need.
+    trustProxy: true,
+  });
+
+  registerErrorHandling(server, context);
+  registerCors(server, config);
+
+  registerHealthRoute(server, context);
+  registerProbeRoute(server, context);
+  registerJobRoutes(server, context);
+  registerEventRoutes(server, context);
+  registerFileRoutes(server, context);
+
+  reconcileInterruptedJobs(context);
+
+  const gcTimer =
+    options.startGc === false ? null : startRetentionSweep(context, config.gcIntervalMs);
+
+  await server.ready();
+
+  return {
+    server,
+    context,
+    config,
+    async shutdown(): Promise<void> {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      logger.info("shutting down");
+
+      // Order matters. Stop accepting, then stop working, then release the
+      // things the work was using.
+      if (gcTimer !== null) clearInterval(gcTimer);
+      await server.close();
+      await queue.close();
+      await registry.dispose().catch((error: unknown) => {
+        logger.warn("some resolvers did not shut down cleanly", { error: String(error) });
+      });
+      db.close();
+      logger.info("shutdown complete");
+    },
+  };
+}
+
+/**
+ * Every failure leaves through one place, so the status mapping and the
+ * redaction cannot be forgotten per-route.
+ */
+function registerErrorHandling(server: FastifyInstance, context: AppContext): void {
+  server.setErrorHandler((error, request, reply) => {
+    const { status, body } = toErrorResponse(error);
+    const appError = AppError.from(error);
+
+    // 5xx is ours; 4xx is theirs. Logging the two at the same level makes the
+    // log useless for spotting real problems.
+    const fields = {
+      method: request.method,
+      url: request.url,
+      code: appError.code,
+      status,
+      details: appError.details,
+    };
+    if (status >= 500) context.logger.error("request failed", fields);
+    else context.logger.info("request rejected", fields);
+
+    void reply.code(status).send(body);
+  });
+
+  server.setNotFoundHandler((request, reply) => {
+    const { status, body } = toErrorResponse(
+      new AppError("JOB_NOT_FOUND", "No such endpoint.", {
+        details: { path: request.url.slice(0, 200) },
+      }),
+    );
+    void reply.code(status).send(body);
+  });
+}
+
+/**
+ * CORS, hand-rolled rather than pulled in as a plugin.
+ *
+ * The policy is one line — an explicit origin allowlist, credentials off — and
+ * `CORS_ORIGINS` is empty by default because the intended deployment serves the
+ * UI from the same origin and needs no CORS at all.
+ */
+function registerCors(server: FastifyInstance, config: ApiConfig): void {
+  if (config.corsOrigins.length === 0) return;
+  const allowed = new Set(config.corsOrigins);
+
+  server.addHook("onRequest", async (request, reply) => {
+    const origin = request.headers.origin;
+    if (origin !== undefined && allowed.has(origin)) {
+      reply.header("Access-Control-Allow-Origin", origin);
+      // Tells caches the response varies by origin; without it a shared cache
+      // can serve one origin's CORS headers to another.
+      reply.header("Vary", "Origin");
+      reply.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      reply.header("Access-Control-Allow-Headers", "Content-Type");
+    }
+    if (request.method === "OPTIONS") {
+      await reply.code(204).send();
+    }
+  });
+}
+
+/**
+ * Jobs that were running when the process died.
+ *
+ * They cannot be resumed — the engine's tmp state is gone and the probe is
+ * stale — so they are failed honestly rather than left in `downloading`
+ * forever, where the UI would show a progress bar that never moves.
+ */
+function reconcileInterruptedJobs(context: AppContext): void {
+  const stranded = context.store.unfinished();
+  if (stranded.length === 0) return;
+
+  const error = new AppError("INTERNAL", "The server restarted while this download was running.", {
+    retryable: true,
+  }).toPayload();
+
+  for (const job of stranded) {
+    try {
+      context.store.transition(job.id, "failed", { error }, context.now().toISOString());
+    } catch {
+      // A status the FSM will not move to `failed` cannot be repaired here.
+      // Leaving it is better than crashing at boot over one stale row.
+    }
+  }
+  context.logger.warn("failed jobs interrupted by a restart", { count: stranded.length });
+}
+
+/**
+ * How long a token row outlives the file it addressed.
+ *
+ * The file goes at `expiresAt`; the row stays a further 30 days so the route
+ * can answer `410 Gone` — "this existed and is now deleted" — instead of a 404
+ * that reads as "you mistyped the link". After that the row is pruned, because
+ * an unbounded table is a worse problem than a slightly less precise error on
+ * a month-old link.
+ */
+export const TOKEN_ROW_GRACE_MS = 30 * 24 * 3_600_000;
+
+/** Retention sweep: expired output dirs, orphaned tmp dirs, and stale token rows. */
+function startRetentionSweep(context: AppContext, intervalMs: number): NodeJS.Timeout {
+  const sweep = async (): Promise<void> => {
+    try {
+      const nowMs = context.now().getTime();
+      const nowIso = context.now().toISOString();
+
+      // Delete the file, keep the row: see TOKEN_ROW_GRACE_MS.
+      for (const token of context.store.expiredTokens(nowIso)) {
+        await context.engine.removeJob(token.jobId);
+        context.store.markSwept(token.token, nowIso);
+      }
+
+      for (const token of context.store.prunableTokens(
+        new Date(nowMs - TOKEN_ROW_GRACE_MS).toISOString(),
+      )) {
+        context.store.deleteToken(token);
+      }
+
+      const report = await context.engine.collectGarbage(nowMs);
+      context.logger.debug("retention sweep complete", { ...report });
+    } catch (error: unknown) {
+      context.logger.warn("retention sweep failed", { error: String(error) });
+    }
+  };
+
+  const timer = setInterval(() => void sweep(), intervalMs);
+  // The sweep must never be the reason the process stays alive.
+  timer.unref?.();
+  return timer;
+}

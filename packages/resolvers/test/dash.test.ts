@@ -135,6 +135,17 @@ describe("DRM detection", () => {
     expect(parsed.drm.evidence).toContain("9a04f079-9840-4286-ab92-e65be0885f95");
   });
 
+  // The counterpart to the HLS ClearKey tests: same key system, opposite
+  // verdict, because DASH offers no fetchable-key form. The key lives behind
+  // the Laurl licence endpoint, and acquiring it is a licence exchange.
+  test("ClearKey is a hard stop in DASH, and says why", () => {
+    const parsed = parseDash(fixture("dash-clearkey.mpd"), "https://drm.example.net/ck/m.mpd");
+    expect(parsed.drm.protected).toBe(true);
+    expect(parsed.drm.systems).toContain("clearkey");
+    expect(parsed.drm.evidence).toContain("licence exchange required");
+    expect(parsed.drm.evidence).toContain("licence URL in manifest");
+  });
+
   test("bare Common Encryption is protected even though it names no key system", () => {
     const parsed = parseDash(
       `<?xml version="1.0"?><MPD type="static" mediaPresentationDuration="PT1M">

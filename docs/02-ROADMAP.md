@@ -70,9 +70,9 @@ Everything below assumes Plan B.
 
 ## Phases
 
-Phases 0 and 1 are done — see [04-STATUS.md](./04-STATUS.md) for current state
-and the next actions. Phase 1 was the parallel block, where running several
-agents at once paid off.
+Phases 0, 1 and 2 are done — see [04-STATUS.md](./04-STATUS.md) for current
+state and the next actions. Phase 1 was the parallel block, where running
+several agents at once paid off; Phase 2 was the single-agent join.
 
 ### Phase 0 — Foundations ✅ _complete_
 
@@ -84,10 +84,10 @@ instead of negotiating interfaces with each other mid-flight.
 
 ### Phase 1 — Parallel build ✅ _complete_
 
-Delivered by four concurrent agents; 330 tests, `npm run check` green. M1 is
-proven, M2 is deferred to WP-5 (nothing composes the registry yet, by design).
-See [04-STATUS.md](./04-STATUS.md) for what shipped, the decisions taken, and
-the approved contract changes that must land before WP-5 starts.
+Delivered by four concurrent agents; 330 tests, `npm run check` green. M1 was
+proven here; M2 was deferred to WP-5, because nothing composed the registry yet
+by design. See [04-STATUS.md](./04-STATUS.md) for what shipped and the decisions
+taken. The five approved contract changes it listed landed at the start of WP-5.
 
 | WP       | Package              | Deliverable                                            |
 | -------- | -------------------- | ------------------------------------------------------ |
@@ -108,7 +108,7 @@ dependency inside Phase 1, so if the parsers slip, have WP-2 stub them behind
 the same signature rather than idling. WP-4 mocks `apps/api` from the zod schemas
 in `shared`, so it does not wait on the backend.
 
-### Phase 2 — Integration ⟶ **1 agent, after Phase 1**
+### Phase 2 — Integration ✅ _complete_
 
 | WP       | Package    | Deliverable                                                      |
 | -------- | ---------- | ---------------------------------------------------------------- |
@@ -117,12 +117,17 @@ in `shared`, so it does not wait on the backend.
 This is the join point. One agent, because it wires the others together and
 concurrent edits here cause more trouble than they save.
 
+Delivered, along with M2 and M3. The SSRF guard was pulled forward from WP-6 by
+decision, since WP-5 is the first code exposed to the internet. See
+[04-STATUS.md](./04-STATUS.md) for what shipped and the one open contract
+question (the FSM has no back-edge, so re-probe retries cannot move status).
+
 ### Phase 3 — Hardening ⟶ **2 agents**
 
-| WP       | Area              | Deliverable                                                         |
-| -------- | ----------------- | ------------------------------------------------------------------- |
-| **WP-6** | Security & limits | SSRF guard, rate limits, path confinement, disk quota, retention GC |
-| **WP-7** | Ops & e2e         | Dockerfile, health checks, structured logging, end-to-end tests     |
+| WP       | Area              | Deliverable                                                              |
+| -------- | ----------------- | ------------------------------------------------------------------------ |
+| **WP-6** | Security & limits | ~~SSRF guard~~ (done in WP-5), rate limits, disk quota, path confinement |
+| **WP-7** | Ops & e2e         | Dockerfile, health checks, structured logging, end-to-end tests          |
 
 ### Phase 4 — Coverage (ongoing, never "done")
 
@@ -135,14 +140,14 @@ fix the abstraction rather than special-casing.
 
 ## Milestones
 
-- **M1 — Vertical slice.** One hardcoded HLS URL downloads to disk from the CLI.
+- **M1 — Vertical slice ✅.** One hardcoded HLS URL downloads to disk from the CLI.
   Proves ffmpeg + header replay. _After WP-3._
-- **M2 — Any-site probe.** Paste an arbitrary URL, get a variant list back.
+- **M2 — Any-site probe ✅.** Paste an arbitrary URL, get a variant list back.
   Proves the registry + sniffer. _After WP-1/WP-2._
   **Acceptance requires `ENABLE_YTDLP_RESOLVER=false`** — a probe that only works
   with the extractor tier enabled has not demonstrated the capability the project
   is for. Test on a site with no yt-dlp extractor.
-- **M3 — Functional goal.** Paste URL → pick quality → progress → download link.
+- **M3 — Functional goal ✅.** Paste URL → pick quality → progress → download link.
   **This is the goal you stated.** _After WP-5._
 - **M4 — Deployable.** Rate-limited, SSRF-guarded, containerised, GC'd. _After WP-6/WP-7._
 

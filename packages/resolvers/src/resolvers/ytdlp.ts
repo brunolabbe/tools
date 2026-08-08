@@ -29,6 +29,7 @@ import type {
   StreamProtocol,
   SubtitleTrack,
 } from "@downloader/shared";
+import { toAbortError } from "../abort.ts";
 import { buildLabel, compareVariantQuality, optional, subtitleFormat } from "../common.ts";
 
 /** yt-dlp JSON is far larger than a manifest; this is a memory bound, not a policy. */
@@ -474,11 +475,7 @@ function runProcess(
     child.on("close", (code, signalName) => {
       finish(() => {
         if (signal.aborted) {
-          reject(
-            signal.reason instanceof AppError
-              ? signal.reason
-              : new AppError("TIMEOUT", "yt-dlp was stopped before it finished."),
-          );
+          reject(toAbortError(signal, "yt-dlp was stopped before it finished."));
           return;
         }
         resolve({

@@ -36,13 +36,16 @@ move on. Lint rules, by contrast, are fully configurable in `.oxlintrc.json`.
 ## Layout
 
 ```
-packages/shared      types, error taxonomy, job FSM, zod API schemas — no logic
+packages/shared      types, error taxonomy, job FSM, zod schemas, redaction — no logic
 packages/resolvers   URL → ProbeResult (registry + resolver implementations)
 packages/engine      ProbeResult → file on disk (ffmpeg, storage, GC)
-apps/api             Fastify, job orchestration, SSE, file serving
+apps/api             Fastify, job orchestration, SSE, file serving, SSRF guard
 apps/web             React + Vite UI
 docs/                analysis, architecture, roadmap, agent briefs
 ```
+
+`apps/api` is the only place that reads `process.env`. The engine and the
+resolvers are libraries and take their configuration as arguments.
 
 ## Rules
 

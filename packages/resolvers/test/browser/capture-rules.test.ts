@@ -5,6 +5,7 @@
  * exercise incidentally.
  */
 
+import { REDACTED, redactHeaders, redactUrl } from "@downloader/shared";
 import { describe, expect, test } from "vitest";
 import { classifyFailure } from "../../src/browser/classify.ts";
 import { DrmObserver, drmInitScript, toDrmSystem } from "../../src/browser/drm.ts";
@@ -16,7 +17,6 @@ import {
 } from "../../src/browser/media-match.ts";
 import { Semaphore } from "../../src/browser/pool.ts";
 import { rankHits } from "../../src/browser/rank.ts";
-import { REDACTED, describeUrl, redactHeaders } from "../../src/browser/redact.ts";
 import { buildRequestContext } from "../../src/browser/request-context.ts";
 import type { NetworkHit } from "../../src/browser/types.ts";
 
@@ -238,10 +238,11 @@ describe("redaction", () => {
     expect(redacted["Referer"]).toBe("https://site.example/watch");
   });
 
-  test("describeUrl drops the signed query", () => {
-    expect(describeUrl("https://cdn.example/v.m3u8?token=secret")).toBe(
-      "https://cdn.example/v.m3u8",
+  test("redactUrl drops the signed query", () => {
+    expect(redactUrl("https://cdn.example/v.m3u8?token=secret")).toBe(
+      `https://cdn.example/v.m3u8?${REDACTED}`,
     );
+    expect(redactUrl("https://cdn.example/v.m3u8")).toBe("https://cdn.example/v.m3u8");
   });
 });
 
@@ -372,6 +373,15 @@ describe("Semaphore", () => {
     const controller = new AbortController();
     const queued = semaphore.acquire(controller.signal);
     controller.abort();
+    await expect(queued).rejects.toMatchObject({ code: "CANCELED" });
+    release();
+    expect(semaphore.active).toBe(0);
+  });
+
+  test("a queued acquire that runs out of budget is a TIMEOUT, not a cancel", async () => {
+    const semaphore = new Semaphore(1);
+    const release = await semaphore.acquire();
+    const queued = semaphore.acquire(AbortSignal.timeout(5));
     await expect(queued).rejects.toMatchObject({ code: "TIMEOUT" });
     release();
     expect(semaphore.active).toBe(0);

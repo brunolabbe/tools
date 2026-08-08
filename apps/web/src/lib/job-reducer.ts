@@ -92,6 +92,16 @@ export function applyJobEvent(job: Job, event: JobEvent): Job {
         updatedAt: event.at,
         finishedAt: event.at,
       };
+    case "canceled":
+      // `error` is populated for the copy, but `status` is what the rest of the
+      // UI reads — see the note on `Job` in `shared/job.ts`.
+      return {
+        ...job,
+        status: "canceled",
+        error: event.error,
+        updatedAt: event.at,
+        finishedAt: event.at,
+      };
   }
 }
 

@@ -8,7 +8,7 @@
  */
 
 import type { Job } from "@downloader/shared";
-import { isJob } from "./contract-guards.ts";
+import { jobSchema } from "@downloader/shared";
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -48,7 +48,8 @@ export function loadJobs(storage: StorageLike): Job[] {
 
   const jobs: Job[] = [];
   for (const candidate of parsed) {
-    if (isJob(candidate)) jobs.push(candidate);
+    const parsedJob = jobSchema.safeParse(candidate);
+    if (parsedJob.success) jobs.push(parsedJob.data);
   }
   return sortJobs(jobs).slice(0, MAX_PERSISTED_JOBS);
 }

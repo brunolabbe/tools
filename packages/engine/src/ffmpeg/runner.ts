@@ -15,10 +15,9 @@
 
 import { spawn } from "node:child_process";
 import process from "node:process";
-import { AppError } from "@downloader/shared";
+import { AppError, redactUrl } from "@downloader/shared";
 import type { Logger } from "../logger.ts";
 import { NOOP_LOGGER } from "../logger.ts";
-import { redactUrl } from "../redact.ts";
 import { IS_WINDOWS, killProcessTree } from "./kill.ts";
 import type { FfmpegProgressSnapshot } from "./progress.ts";
 import { FfmpegProgressParser } from "./progress.ts";

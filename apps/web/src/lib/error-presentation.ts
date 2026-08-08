@@ -160,6 +160,17 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
     allowRetry: false,
     final: true,
   },
+  // Distinct from JOB_CANCELED: this one is raised below the job layer, so it
+  // reaches the UI when analysis was stopped before a job existed — a server
+  // shutting down mid-probe, most often. The copy therefore promises nothing
+  // about partial files, and offers analysing again rather than a job retry.
+  CANCELED: {
+    title: "Analysis canceled",
+    detail: "Analysing this page was stopped before it finished. Try analysing it again.",
+    tone: "unavailable",
+    allowRetry: false,
+    final: true,
+  },
   FILE_EXPIRED: {
     title: "File removed",
     detail: "Finished files are kept for a limited time and this one is past its retention window.",

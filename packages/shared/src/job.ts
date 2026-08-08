@@ -9,21 +9,29 @@
 import type { AppErrorPayload } from "./errors.ts";
 import type { MediaVariant, ProbeResult } from "./media.ts";
 
-export type JobStatus =
+/**
+ * Written as a const tuple with the union derived from it, matching
+ * `ERROR_CODES`. The array is what `jobStatusSchema` validates against, so
+ * there is exactly one list and a schema cannot fall out of step with the type.
+ */
+export const JOB_STATUSES = [
   /** Accepted, waiting for a worker slot. */
-  | "queued"
+  "queued",
   /** Re-resolving the source (fresh probe, because signed URLs expire fast). */
-  | "probing"
+  "probing",
   /** Pulling segments or bytes. This is where almost all wall-clock time goes. */
-  | "downloading"
+  "downloading",
   /** ffmpeg is remuxing / joining audio+video / embedding subtitles. */
-  | "muxing"
+  "muxing",
   /** File is on disk and downloadable. */
-  | "completed"
+  "completed",
   /** Terminal failure; `error` is populated. */
-  | "failed"
+  "failed",
   /** User canceled; partial artifacts cleaned up. */
-  | "canceled";
+  "canceled",
+] as const;
+
+export type JobStatus = (typeof JOB_STATUSES)[number];
 
 /**
  * Legal transitions. Exported so the orchestrator and its tests share one
@@ -86,6 +94,16 @@ export interface JobResult {
   expiresAt: string;
 }
 
+/**
+ * A job record.
+ *
+ * **`status` is authoritative for cancellation.** "Canceled" is representable
+ * two ways — `status === "canceled"` and an `error` carrying `JOB_CANCELED` —
+ * and only the first is load-bearing. The orchestrator sets both: `error` exists
+ * so a client has copy to render and a `retryable` flag to obey, but a client
+ * deciding *whether* a job was canceled must read `status` and nothing else.
+ * Never infer the status from the error code.
+ */
 export interface Job {
   id: string;
   sourceUrl: string;
@@ -104,6 +122,11 @@ export interface Job {
   finishedAt: string | null;
 }
 
+/** Containers a caller may ask for. `source` means "keep the origin container". */
+export const CONTAINER_OPTIONS = ["mp4", "mkv", "webm", "source"] as const;
+
+export type ContainerOption = (typeof CONTAINER_OPTIONS)[number];
+
 /**
  * Options accepted when creating a job.
  *
@@ -116,7 +139,7 @@ export interface JobOptions {
   /** Omit to let the server pick the highest-quality variant. */
   variantId?: string | undefined;
   /** Preferred output container. Defaults to `mp4` when codecs allow it. */
-  container?: "mp4" | "mkv" | "webm" | "source" | undefined;
+  container?: ContainerOption | undefined;
   /** Burn nothing in — embed as a soft subtitle track when the container supports it. */
   embedSubtitles?: boolean | undefined;
   /** BCP-47 codes to embed. Empty/omitted means none. */
@@ -127,12 +150,23 @@ export interface JobOptions {
   liveDurationSec?: number | undefined;
 }
 
-/** Server-Sent Events pushed on the job progress channel. */
+/**
+ * Server-Sent Events pushed on the job progress channel.
+ *
+ * The three terminal statuses each get their own frame carrying the payload
+ * that explains them — `completed` its `JobResult`, `failed` and `canceled`
+ * their `AppErrorPayload`. A client that only listens therefore never has to
+ * synthesise the reason a job ended, and never has to re-fetch to find it.
+ * A `status` frame is still emitted alongside each of them, so a client that
+ * only tracks state can ignore the payload frames entirely.
+ */
 export type JobEvent =
   | { type: "status"; jobId: string; status: JobStatus; at: string }
   | { type: "progress"; jobId: string; progress: JobProgress; at: string }
   | { type: "probed"; jobId: string; probe: ProbeResult; at: string }
   | { type: "completed"; jobId: string; result: JobResult; at: string }
   | { type: "failed"; jobId: string; error: AppErrorPayload; at: string }
+  /** Carries the `JOB_CANCELED` payload; `status` remains the authority. */
+  | { type: "canceled"; jobId: string; error: AppErrorPayload; at: string }
   /** Periodic no-op so intermediaries do not close an idle connection. */
   | { type: "heartbeat"; at: string };

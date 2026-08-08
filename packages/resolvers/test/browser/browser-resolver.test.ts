@@ -302,6 +302,18 @@ describe("BrowserResolver", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(AppError);
+    expectCode(caught as AppError, "CANCELED");
+  });
+
+  test("a signal aborted by the time budget is still a TIMEOUT", async () => {
+    const resolver = new BrowserResolver({ pool });
+    let caught: unknown;
+    try {
+      await probe("/mse.html", resolver, options({ signal: AbortSignal.timeout(0) }));
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(AppError);
     expectCode(caught as AppError, "TIMEOUT");
   });
 

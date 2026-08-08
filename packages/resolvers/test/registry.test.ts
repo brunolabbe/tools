@@ -237,7 +237,9 @@ describe("the timeout is a budget for the whole chain", () => {
     const pending = registry.resolve(URL_UNDER_TEST, options({ signal: controller.signal }));
     controller.abort();
 
-    await expect(pending).rejects.toMatchObject({ code: "JOB_CANCELED" });
+    // `CANCELED`, not `JOB_CANCELED`: the registry has no job to speak of, and
+    // not `TIMEOUT` either — the budget had not elapsed, the caller pulled out.
+    await expect(pending).rejects.toMatchObject({ code: "CANCELED" });
   });
 });
 

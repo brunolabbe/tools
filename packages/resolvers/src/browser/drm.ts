@@ -71,7 +71,14 @@ export function drmInitScript(
 })();`;
 }
 
-/** EME key system string → the taxonomy in `@downloader/shared`. */
+/**
+ * EME key system string → the taxonomy in `@downloader/shared`.
+ *
+ * Everything this detector sees is by construction an EME licence exchange —
+ * `requestMediaKeySystemAccess` *is* the EME entry point — so ClearKey observed
+ * here stays protected, unlike the fetchable-key-URI case the HLS parser lets
+ * through. Same key system, different acquisition path, different verdict.
+ */
 export function toDrmSystem(keySystem: string): DrmSystem {
   const value = keySystem.toLowerCase();
   if (value.includes("widevine")) return "widevine";

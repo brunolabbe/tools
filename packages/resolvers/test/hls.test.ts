@@ -162,6 +162,66 @@ describe("DRM detection", () => {
     expect(parsed.drm.systems).toEqual(["unknown"]);
   });
 
+  // The ClearKey boundary. It abuts the DRM hard stop, so both sides are
+  // pinned: what makes a case downloadable is that the key is one plain GET
+  // away, never the name of the key system.
+  test("ClearKey with a fetchable key URI is transport encryption, not DRM", () => {
+    const parsed = parseHls(
+      fixture("hls-media-clearkey-fetchable.m3u8"),
+      "https://cdn.example.com/courses/lesson-42/index.m3u8",
+    );
+    expect(parsed.drm.protected).toBe(false);
+    // Recorded even though it is permitted, so a caller can still see ClearKey
+    // was in play rather than having to infer it from silence.
+    expect(parsed.drm.systems).toEqual(["clearkey"]);
+    expect(parsed.drm.evidence).toContain("fetchable URI");
+  });
+
+  test("a relative ClearKey key URI is fetchable too — it resolves against the playlist", () => {
+    const parsed = parseHls(
+      [
+        "#EXTM3U",
+        "#EXT-X-TARGETDURATION:4",
+        '#EXT-X-KEY:METHOD=AES-128,KEYFORMAT="org.w3.clearkey",URI="keys/ck.bin"',
+        "#EXTINF:4.0,",
+        "a.ts",
+        "#EXT-X-ENDLIST",
+      ].join("\n"),
+      MASTER_BASE,
+    );
+    expect(parsed.drm.protected).toBe(false);
+  });
+
+  test("ClearKey needing a licence exchange remains a hard stop", () => {
+    const parsed = parseHls(
+      fixture("hls-media-clearkey-licence.m3u8"),
+      "https://cdn.example.com/courses/lesson-42/index.m3u8",
+    );
+    expect(parsed.drm.protected).toBe(true);
+    expect(parsed.drm.systems).toEqual(["clearkey"]);
+    expect(parsed.drm.evidence).toContain("licence exchange");
+  });
+
+  test("one protected key poisons a playlist that also has a fetchable one", () => {
+    const parsed = parseHls(
+      [
+        "#EXTM3U",
+        "#EXT-X-TARGETDURATION:4",
+        '#EXT-X-KEY:METHOD=AES-128,KEYFORMAT="org.w3.clearkey",URI="https://k/ck"',
+        "#EXTINF:4.0,",
+        "a.ts",
+        '#EXT-X-KEY:METHOD=SAMPLE-AES,KEYFORMAT="com.widevine.alpha",URI="https://k/wv"',
+        "#EXTINF:4.0,",
+        "b.ts",
+        "#EXT-X-ENDLIST",
+      ].join("\n"),
+      MASTER_BASE,
+    );
+    // Half a file presented as a whole one is worse than an honest refusal.
+    expect(parsed.drm.protected).toBe(true);
+    expect(parsed.drm.systems).toEqual(["widevine"]);
+  });
+
   test("METHOD=NONE is not encryption at all", () => {
     const parsed = parseHls(
       ["#EXTM3U", "#EXT-X-KEY:METHOD=NONE", "#EXTINF:4.0,", "a.ts", "#EXT-X-ENDLIST"].join("\n"),

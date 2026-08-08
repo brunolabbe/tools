@@ -107,6 +107,9 @@ function abortIfNeeded(caller: AbortSignal, deadline: AbortSignal): void {
   }
   if (caller.aborted) {
     if (caller.reason instanceof AppError) throw caller.reason;
-    throw new AppError("JOB_CANCELED");
+    // `CANCELED`, not `JOB_CANCELED`: resolvers know nothing about jobs, and a
+    // registry embedded in a CLI or a test has no job to have canceled. The
+    // orchestrator translates this into job vocabulary at its own layer.
+    throw new AppError("CANCELED");
   }
 }
