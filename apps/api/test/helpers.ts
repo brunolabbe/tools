@@ -199,6 +199,12 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
       enableBrowserResolver: false,
       enableYtdlpResolver: false,
       enableDirectResolver: true,
+      // Off unless a test asks for them. Every injected request shares one
+      // client address, so the production defaults would have unrelated suites
+      // tripping a limiter they are not testing. `rate-limit.test.ts` turns
+      // them back on explicitly.
+      rateLimitProbePerMinute: 0,
+      rateLimitJobsPerMinute: 0,
       ...options.config,
     },
   });

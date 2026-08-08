@@ -21,11 +21,19 @@ export interface ApiConfig {
 
   maxConcurrentJobs: number;
   maxConcurrentBrowsers: number;
+  /**
+   * Probe requests allowed to be in flight at once, across all clients. The
+   * per-IP limiter bounds one caller; this bounds a distributed flood, which
+   * passes every per-IP bucket by definition.
+   */
+  maxConcurrentProbes: number;
   /** Budget for one resolution chain, across every tier it tries. */
   probeTimeoutMs: number;
   /** Ceiling on a single ffmpeg invocation. */
   stageTimeoutMs: number;
   maxFileSizeBytes: number;
+  /** Global cap on everything under `storageDir`. Zero disables the quota. */
+  maxTotalStorageBytes: number;
   fileRetentionHours: number;
   /** How often the retention sweep runs. */
   gcIntervalMs: number;
@@ -48,6 +56,21 @@ export interface ApiConfig {
   corsOrigins: readonly string[];
   logLevel: LogLevel;
 
+  /** Per-IP token bucket on `POST /api/probe`. Zero disables it. */
+  rateLimitProbePerMinute: number;
+  /** Per-IP token bucket on `POST /api/jobs`. Zero disables it. */
+  rateLimitJobsPerMinute: number;
+  /**
+   * Whether `X-Forwarded-For` may name the client.
+   *
+   * Off by default, and that default is load-bearing rather than conservative:
+   * every per-IP limit above is keyed on `request.ip`, so trusting a header any
+   * client can send would turn the rate limiter into a formality. Set it to
+   * `true` — or better, to the proxy's address or CIDR — only when this process
+   * genuinely sits behind a proxy that overwrites the header.
+   */
+  trustProxy: boolean | string;
+
   /** See `SsrfGuardOptions`. Both are escape hatches for local development. */
   ssrfAllowHosts: readonly string[];
   ssrfAllowPrivateAddresses: boolean;
@@ -66,11 +89,23 @@ export const API_DEFAULTS = {
   probeTimeoutMs: 45_000,
   stageTimeoutMs: 3_600_000,
   maxFileSizeMb: 4096,
+  maxTotalStorageGb: 50,
   fileRetentionHours: 6,
   gcIntervalMs: 15 * 60_000,
   probeCacheTtlMs: 30_000,
   logLevel: "info",
+  rateLimitProbePerMinute: 10,
+  rateLimitJobsPerMinute: 5,
 } as const;
+
+/**
+ * In-flight probes allowed per configured browser slot.
+ *
+ * Above 1 so a probe waiting on the browser pool does not idle a slot, but
+ * bounded, because each waiting request holds a socket for up to
+ * `probeTimeoutMs`.
+ */
+const PROBES_PER_BROWSER_SLOT = 4;
 
 /** The brief's cap. A cache that outlives the URLs it holds is worse than none. */
 export const PROBE_CACHE_TTL_CEILING_MS = 60_000;
@@ -102,6 +137,19 @@ function list(raw: string | undefined): string[] {
     .filter((entry) => entry !== "");
 }
 
+/**
+ * `false` (the default), `true`, or a proxy address / CIDR / comma-separated
+ * list, which Fastify accepts verbatim and is the form worth preferring.
+ */
+function trustProxy(raw: string | undefined): boolean | string {
+  const value = raw?.trim() ?? "";
+  if (value === "") return false;
+  const lower = value.toLowerCase();
+  if (["1", "true", "yes", "on"].includes(lower)) return true;
+  if (["0", "false", "no", "off"].includes(lower)) return false;
+  return value;
+}
+
 function logLevel(raw: string | undefined): LogLevel {
   const value = (raw ?? API_DEFAULTS.logLevel).trim().toLowerCase();
   return (LOG_LEVELS as readonly string[]).includes(value) ? (value as LogLevel) : "info";
@@ -120,6 +168,11 @@ export function loadApiConfig(
       ? ":memory:"
       : (rawDatabase ?? path.join(storageDir, API_DEFAULTS.databaseFile));
 
+  // Hoisted because the default probe concurrency is derived from it.
+  const maxConcurrentBrowsers =
+    overrides.maxConcurrentBrowsers ??
+    int(env["MAX_CONCURRENT_BROWSERS"], API_DEFAULTS.maxConcurrentBrowsers, { max: 16 });
+
   const config: ApiConfig = {
     host: overrides.host ?? env["HOST"] ?? API_DEFAULTS.host,
     port: overrides.port ?? int(env["PORT"], API_DEFAULTS.port, { min: 0, max: 65_535 }),
@@ -128,9 +181,12 @@ export function loadApiConfig(
     maxConcurrentJobs:
       overrides.maxConcurrentJobs ??
       int(env["MAX_CONCURRENT_JOBS"], API_DEFAULTS.maxConcurrentJobs, { max: 64 }),
-    maxConcurrentBrowsers:
-      overrides.maxConcurrentBrowsers ??
-      int(env["MAX_CONCURRENT_BROWSERS"], API_DEFAULTS.maxConcurrentBrowsers, { max: 16 }),
+    maxConcurrentBrowsers,
+    maxConcurrentProbes:
+      overrides.maxConcurrentProbes ??
+      int(env["MAX_CONCURRENT_PROBES"], maxConcurrentBrowsers * PROBES_PER_BROWSER_SLOT, {
+        max: 256,
+      }),
     probeTimeoutMs:
       overrides.probeTimeoutMs ?? int(env["PROBE_TIMEOUT_MS"], API_DEFAULTS.probeTimeoutMs),
     stageTimeoutMs:
@@ -138,6 +194,12 @@ export function loadApiConfig(
     maxFileSizeBytes:
       overrides.maxFileSizeBytes ??
       int(env["MAX_FILE_SIZE_MB"], API_DEFAULTS.maxFileSizeMb) * 1024 * 1024,
+    maxTotalStorageBytes:
+      overrides.maxTotalStorageBytes ??
+      int(env["MAX_TOTAL_STORAGE_GB"], API_DEFAULTS.maxTotalStorageGb, { min: 0 }) *
+        1024 *
+        1024 *
+        1024,
     fileRetentionHours:
       overrides.fileRetentionHours ??
       int(env["FILE_RETENTION_HOURS"], API_DEFAULTS.fileRetentionHours),
@@ -161,6 +223,13 @@ export function loadApiConfig(
     ytdlpPath: overrides.ytdlpPath ?? env["YTDLP_PATH"] ?? undefined,
     corsOrigins: overrides.corsOrigins ?? list(env["CORS_ORIGINS"]),
     logLevel: overrides.logLevel ?? logLevel(env["LOG_LEVEL"]),
+    rateLimitProbePerMinute:
+      overrides.rateLimitProbePerMinute ??
+      int(env["RATE_LIMIT_PROBE_PER_MINUTE"], API_DEFAULTS.rateLimitProbePerMinute, { min: 0 }),
+    rateLimitJobsPerMinute:
+      overrides.rateLimitJobsPerMinute ??
+      int(env["RATE_LIMIT_JOBS_PER_MINUTE"], API_DEFAULTS.rateLimitJobsPerMinute, { min: 0 }),
+    trustProxy: overrides.trustProxy ?? trustProxy(env["TRUST_PROXY"]),
     ssrfAllowHosts: overrides.ssrfAllowHosts ?? list(env["SSRF_ALLOW_HOSTS"]),
     ssrfAllowPrivateAddresses:
       overrides.ssrfAllowPrivateAddresses ?? bool(env["SSRF_ALLOW_PRIVATE_ADDRESSES"], false),

@@ -264,6 +264,23 @@ export class Storage {
     return assertPathInside(this.outDir(jobId), sanitizeFilename(filename));
   }
 
+  /**
+   * Bytes currently held under `tmp/` and `out/`.
+   *
+   * Walks the tree rather than keeping a running total, because the total is
+   * not ours alone: the retention sweep, a crashed job and an operator with a
+   * shell all change it behind our back, and a counter that drifts from the
+   * disk is worse than no counter. The walk is O(jobs) and happens once per
+   * download, next to work measured in minutes.
+   */
+  async usedBytes(): Promise<number> {
+    const [tmp, out] = await Promise.all([
+      directorySize(this.tmpRoot),
+      directorySize(this.outRoot),
+    ]);
+    return tmp + out;
+  }
+
   /** Called on every terminal state, success included. */
   async cleanupJob(jobId: string): Promise<void> {
     await fs.rm(this.tmpDir(jobId), { recursive: true, force: true }).catch((error: unknown) => {

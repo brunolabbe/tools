@@ -50,6 +50,12 @@ export interface EngineConfig {
   ffmpegPath: string;
   /** Per-job output cap. Checked from bitrate x duration *before* downloading. */
   maxFileSizeBytes: number;
+  /**
+   * Global cap on everything under `storageDir`, `tmp/` included. Zero disables
+   * it. Distinct from the free-space check in `estimate.ts`: that one protects
+   * the volume, this one protects everything *else* sharing the volume.
+   */
+  maxTotalStorageBytes: number;
   /** How long finished artifacts survive the retention sweep. */
   fileRetentionHours: number;
   /** How long a `tmp/<jobId>` directory may sit untouched before it counts as orphaned. */
@@ -113,9 +119,17 @@ function positiveNumber(raw: string | undefined, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+/** Separate from `positiveNumber` because zero is a meaningful value: "no cap". */
+function nonNegativeNumber(raw: string | undefined, fallback: number): number {
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
 export const ENGINE_DEFAULTS = {
   storageDir: "./storage",
   maxFileSizeMb: 4096,
+  maxTotalStorageGb: 50,
   fileRetentionHours: 6,
   tmpRetentionHours: 6,
   stageTimeoutMs: 3_600_000,
@@ -141,6 +155,12 @@ export function loadEngineConfig(
     storageDir,
     ffmpegPath: input.ffmpegPath ?? resolveFfmpegPath(env["FFMPEG_PATH"]),
     maxFileSizeBytes,
+    maxTotalStorageBytes:
+      input.maxTotalStorageBytes ??
+      nonNegativeNumber(env["MAX_TOTAL_STORAGE_GB"], ENGINE_DEFAULTS.maxTotalStorageGb) *
+        1024 *
+        1024 *
+        1024,
     fileRetentionHours:
       input.fileRetentionHours ??
       positiveNumber(env["FILE_RETENTION_HOURS"], ENGINE_DEFAULTS.fileRetentionHours),

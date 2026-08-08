@@ -4,20 +4,21 @@ Living document. Updated at the end of each work session so the next agent can
 start without re-deriving where things stand. Roadmap and phase definitions live
 in [02-ROADMAP.md](./02-ROADMAP.md); this file records what actually happened.
 
-**Last updated:** 2026-08-07 · **Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 next**
+**Last updated:** 2026-08-08 · **Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · WP-6 ✅ ·
+WP-7 next**
 
 ---
 
 ## Where things stand
 
-| Phase                    | State          | Evidence                                   |
-| ------------------------ | -------------- | ------------------------------------------ |
-| Phase 0 — Foundations    | ✅ complete    | `5ab843f`                                  |
-| Phase 1 — Parallel build | ✅ complete    | `5662f95`, `725740c`, `ca35a55`, `b876906` |
-| Phase 2 — Integration    | ✅ complete    | WP-5, `apps/api`                           |
-| Phase 3 — Hardening      | ⬜ not started | WP-6 security, WP-7 ops                    |
+| Phase                    | State       | Evidence                                   |
+| ------------------------ | ----------- | ------------------------------------------ |
+| Phase 0 — Foundations    | ✅ complete | `5ab843f`                                  |
+| Phase 1 — Parallel build | ✅ complete | `5662f95`, `725740c`, `ca35a55`, `b876906` |
+| Phase 2 — Integration    | ✅ complete | WP-5, `apps/api`                           |
+| Phase 3 — Hardening      | 🟡 half     | WP-6 ✅ · WP-7 ops not started             |
 
-**433 tests pass. `npm run check` is green.** 28 test files, zero live-network
+**466 tests pass. `npm run check` is green.** 31 test files, zero live-network
 tests.
 
 ### Milestones
@@ -35,7 +36,79 @@ tests.
   cleanly under ffmpeg, has `moov` before `mdat` (fast-start), and the origin
   log confirms **every segment** carried the replayed header. Range requests
   return `206` with a correct `Content-Range`; a forged token returns `404`.
-- **M4** — after WP-6/WP-7.
+- **M4** — after WP-7. WP-6's half is done: rate-limited, SSRF-guarded and
+  quota'd. Containerisation and CI remain.
+
+---
+
+## What WP-6 delivered
+
+Six items in the brief; two were already done, four were not.
+
+| Brief item          | State                                                                    |
+| ------------------- | ------------------------------------------------------------------------ |
+| 1. SSRF guard       | ✅ shipped early, in WP-5. Unchanged.                                    |
+| 2. Rate limits      | ✅ new — `apps/api/src/rate-limit.ts`                                    |
+| 3. Path confinement | ✅ already done in WP-3 (`storage.ts`) and WP-5 (`routes/files.ts`)      |
+| 4. No shell         | ✅ already true; now **enforced** by a source scan rather than by care   |
+| 5. Quotas           | ✅ global storage quota new; per-job, stage and concurrency caps existed |
+| 6. Retention GC     | ✅ already done in WP-3/WP-5                                             |
+
+### Rate limiting: two mechanisms, because they fail differently
+
+A **per-IP token bucket** on `POST /api/probe` (10/min) and `POST /api/jobs`
+(5/min). A bucket rather than a fixed window, because a window admits `2n`
+across its boundary and for a 15 s browser probe that is the difference between
+a limit and a suggestion. Refusals carry `Retry-After` plus the `RateLimit-*`
+draft headers, and `details.retryAfterSec` — which was already on the
+client-safe allowlist in `http-errors.ts`, so the UI can render it today.
+
+Reads are not limited. Rate-limiting a cancel would leave a client unable to
+stop the very work that spent its allowance.
+
+A **global concurrency gate** on probes (`MAX_CONCURRENT_PROBES`, default four
+per browser slot) behind it. Every per-IP bucket is passed by definition in a
+distributed flood; this is the only thing that helps there. It refuses rather
+than queues — the client is already holding a connection, and a wait line just
+converts a spike into a pile of simultaneous timeouts.
+
+Buckets are keyed by **IPv6 /64**, not by address. One customer routinely holds
+a /64, so keying on the full address means 2^64 free rotations. IPv4-mapped
+forms collapse to the v4 address so a client cannot hold two buckets by
+changing how it spells itself. The bucket map is LRU-capped and prunes refilled
+buckets, because an IP-keyed map is itself a memory attack.
+
+### `trustProxy` now defaults to **off** — a behaviour change
+
+WP-5 set `trustProxy: true` unconditionally. That is fine until something is
+keyed on `request.ip`, at which point it means any client can name its own rate
+limit bucket by sending `X-Forwarded-For`. It is now `TRUST_PROXY`, default
+`false`, accepting `true` or — better — the proxy's address or CIDR.
+
+**This needs setting on any deployment behind a reverse proxy.** Left off there,
+every client shares the proxy's bucket: still safe, but one busy user throttles
+everyone. Failing that way round was the deliberate choice.
+
+### Global storage quota
+
+`MAX_TOTAL_STORAGE_GB`, default 50, zero to disable. Enforced in the engine
+(`#assertStorageQuota`) because the engine owns the filesystem layout. It counts
+`tmp/` as well as `out/`: a job part-way through has already taken the space.
+
+Over quota, it **runs the retention sweep and re-measures before refusing**.
+Everything the sweep removes was already past its window, so refusing while
+still holding files we had promised to delete would be self-inflicted. If the
+space is still not there the answer is `SIZE_LIMIT_EXCEEDED` — the configured
+cap — and not `DISK_FULL`, which means the volume and would send an operator to
+look at a disk that has plenty of room.
+
+### The no-shell rule is now enforced, not remembered
+
+`packages/engine/test/spawn-safety.test.ts` scans every `src` file in the repo:
+no truthy `shell:`, no `exec`/`execSync` imported from `node:child_process`, and
+every file that spawns must say `shell: false` explicitly. It asserts its own
+scan found something first, so an empty walk cannot pass silently. Verified
+against a planted violation rather than assumed to work.
 
 ---
 
@@ -128,13 +201,24 @@ Currently "how many probe-and-download attempts this job has made", so a
 first-time success reports `1`. Worth confirming that is what the UI wants to
 render.
 
+### 3. Are the rate-limit defaults the ones you want?
+
+10 probes and 5 job creations per minute per client, as a token bucket, so both
+numbers are also the burst. They are a guess at "one person using the UI
+normally, with room for a mistake" — a probe, a look at the variants, a second
+probe after editing the URL. If this is ever pointed at a shared network where
+many people appear as one address, both want raising. `TRUST_PROXY` is the
+other half of that answer: set correctly, colleagues behind one NAT still get
+their own buckets.
+
 ---
 
 ## Known gaps and risks
 
-**Rate limiting does not exist.** WP-6. `/api/probe` runs a browser probe
-costing ~15 s and ~300 MB, so it is a one-line DoS today. `trustProxy` is on and
-`request.ip` is meaningful, so the hook has somewhere to attach.
+**Rate limiting is per-process, not per-deployment.** The buckets live in
+memory, so two replicas behind a load balancer grant two allowances. Correct for
+the single-container deployment this targets; a shared store (the same Redis
+BullMQ would want) is the fix if it is ever scaled out.
 
 **DNS rebinding is only partly mitigated.** The guard rejects any name where
 _any_ record is blocked, and re-checks after each redirect, but the gap between
@@ -171,7 +255,7 @@ is the right place.
 
 ```bash
 npm run check                       # lint + format + typecheck — must pass
-npm test                            # vitest run, all 433
+npm test                            # vitest run, all 466
 npx vitest run apps/api             # one package
 
 # The full stack. Two terminals:
@@ -194,3 +278,11 @@ ENABLE_BROWSER_RESOLVER=false ENABLE_YTDLP_RESOLVER=false \
 
 `SSRF_ALLOW_HOSTS` is the escape hatch for a local fixture origin; it is empty
 by default and must stay that way in production.
+
+A load test will trip the limits long before it finds anything interesting.
+Turn them off for that, and only that:
+
+```bash
+RATE_LIMIT_PROBE_PER_MINUTE=0 RATE_LIMIT_JOBS_PER_MINUTE=0 \
+  npm run dev -w @downloader/api
+```

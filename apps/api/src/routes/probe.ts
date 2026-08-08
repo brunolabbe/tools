@@ -2,21 +2,36 @@
  * `POST /api/probe` — analyse a page and return what can be downloaded.
  *
  * This is the expensive endpoint: a browser probe costs ~15 s and ~300 MB, so
- * it is the one worth caching (briefly) and the one a rate limiter will guard
- * first in WP-6.
+ * it is the one worth caching (briefly) and the one guarded hardest — a per-IP
+ * bucket in front, and a global concurrency gate behind it for the distributed
+ * case that no per-IP limit can see.
  *
  * The cache is read here and **nowhere else**. Jobs re-probe unconditionally —
  * see the orchestrator.
+ *
+ * The bucket is spent before the cache is consulted, so a cache hit costs a
+ * token. That is deliberate: the limit protects the endpoint, and refunding
+ * cheap answers would let a client hold a URL warm and poll it without limit.
  */
 
 import { AppError, probeRequestSchema, ROUTES } from "@downloader/shared";
 import type { ProbeResponse, ProbeResult, ResolveOptions } from "@downloader/shared";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
+import { createRateLimitHook } from "../rate-limit.ts";
 import { urlsInProbeResult } from "../ssrf.ts";
 
+/** What we tell a client to wait when the gate, rather than a bucket, refused. */
+const GATE_RETRY_AFTER_SEC = 10;
+
 export function registerProbeRoute(app: FastifyInstance, context: AppContext): void {
-  app.post(ROUTES.probe, async (request, reply) => {
+  const rateLimit = createRateLimitHook({
+    limiter: context.rateLimits.probe,
+    logger: context.logger,
+    scope: "probe",
+  });
+
+  app.post(ROUTES.probe, { onRequest: rateLimit }, async (request, reply) => {
     const parsed = probeRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError("INVALID_URL", undefined, {
@@ -51,7 +66,28 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
       ...(context.config.proxyUrl === undefined ? {} : { proxyUrl: context.config.proxyUrl }),
     };
 
-    const probe: ProbeResult = await context.registry.resolve(url, resolveOptions);
+    // The per-IP bucket above bounds one caller. This bounds the whole server,
+    // which is the only thing that helps when the requests arrive from a
+    // thousand addresses that have each spent nothing.
+    const release = context.probeGate.tryAcquire();
+    if (release === null) {
+      context.logger.warn("probe refused: concurrency gate full", {
+        limit: context.probeGate.limit,
+      });
+      reply.header("Retry-After", String(GATE_RETRY_AFTER_SEC));
+      throw new AppError(
+        "RATE_LIMITED",
+        "The server is analysing as many pages as it can at once. Try again shortly.",
+        { details: { scope: "probe-gate", retryAfterSec: GATE_RETRY_AFTER_SEC } },
+      );
+    }
+
+    let probe: ProbeResult;
+    try {
+      probe = await context.registry.resolve(url, resolveOptions);
+    } finally {
+      release();
+    }
 
     // Resolver output is attacker-influenced. Vetting it here means a client
     // never even learns that an internal address answered.

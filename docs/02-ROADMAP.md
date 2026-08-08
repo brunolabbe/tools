@@ -124,10 +124,10 @@ question (the FSM has no back-edge, so re-probe retries cannot move status).
 
 ### Phase 3 — Hardening ⟶ **2 agents**
 
-| WP       | Area              | Deliverable                                                              |
-| -------- | ----------------- | ------------------------------------------------------------------------ |
-| **WP-6** | Security & limits | ~~SSRF guard~~ (done in WP-5), rate limits, disk quota, path confinement |
-| **WP-7** | Ops & e2e         | Dockerfile, health checks, structured logging, end-to-end tests          |
+| WP       | Area              | Deliverable                                                              | State          |
+| -------- | ----------------- | ------------------------------------------------------------------------ | -------------- |
+| **WP-6** | Security & limits | ~~SSRF guard~~ (done in WP-5), rate limits, disk quota, path confinement | ✅ complete    |
+| **WP-7** | Ops & e2e         | Dockerfile, health checks, structured logging, end-to-end tests          | ⬜ not started |
 
 ### Phase 4 — Coverage (ongoing, never "done")
 

@@ -12,6 +12,7 @@ import { AppError, createJobRequestSchema, ROUTES } from "@downloader/shared";
 import type { Job, JobListResponse, JobResponse } from "@downloader/shared";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
+import { createRateLimitHook } from "../rate-limit.ts";
 
 const MAX_LIST_LIMIT = 100;
 
@@ -22,7 +23,16 @@ function intParam(raw: unknown, fallback: number, max: number): number {
 }
 
 export function registerJobRoutes(app: FastifyInstance, context: AppContext): void {
-  app.post(ROUTES.jobs, async (request, reply) => {
+  // Only on creation. Reading, listing and cancelling are cheap, and rate
+  // limiting a cancel would leave a client unable to stop the very work that
+  // spent its allowance.
+  const rateLimit = createRateLimitHook({
+    limiter: context.rateLimits.jobs,
+    logger: context.logger,
+    scope: "jobs",
+  });
+
+  app.post(ROUTES.jobs, { onRequest: rateLimit }, async (request, reply) => {
     if (context.isShuttingDown()) {
       throw new AppError("INTERNAL", "The server is shutting down and is not accepting new jobs.");
     }

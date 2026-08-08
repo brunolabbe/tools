@@ -26,6 +26,7 @@ import { ProbeCache } from "./jobs/probe-cache.ts";
 import { InProcessJobQueue } from "./jobs/queue.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
+import { ConcurrencyGate, RateLimiter } from "./rate-limit.ts";
 import { buildRegistry } from "./resolvers.ts";
 import { registerEventRoutes } from "./routes/events.ts";
 import { registerFileRoutes } from "./routes/files.ts";
@@ -71,6 +72,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     createEngine({
       storageDir: config.storageDir,
       maxFileSizeBytes: config.maxFileSizeBytes,
+      maxTotalStorageBytes: config.maxTotalStorageBytes,
       fileRetentionHours: config.fileRetentionHours,
       stageTimeoutMs: config.stageTimeoutMs,
       logger,
@@ -130,6 +132,17 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     events,
     probeCache,
     orchestrator,
+    rateLimits: {
+      probe: new RateLimiter({
+        perMinute: config.rateLimitProbePerMinute,
+        now: () => now().getTime(),
+      }),
+      jobs: new RateLimiter({
+        perMinute: config.rateLimitJobsPerMinute,
+        now: () => now().getTime(),
+      }),
+    },
+    probeGate: new ConcurrencyGate(config.maxConcurrentProbes),
     now,
     isShuttingDown: () => shuttingDown,
   };
@@ -139,9 +152,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     // unrelated format on the same stream.
     logger: false,
     bodyLimit: MAX_BODY_BYTES,
-    // Behind a reverse proxy this is what makes request.ip meaningful, which
-    // WP-6's per-IP rate limiting will need.
-    trustProxy: true,
+    // What makes `request.ip` mean the client rather than the proxy — and, off,
+    // what stops a client naming its own rate-limit bucket. See the note on
+    // `ApiConfig.trustProxy`.
+    trustProxy: config.trustProxy,
   });
 
   registerErrorHandling(server, context);

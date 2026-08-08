@@ -218,9 +218,10 @@ class Engine implements DownloadEngine {
       jobId,
       variantId: variant.id,
     });
+    await this.storage.init();
+    await this.#assertStorageQuota(estimate.bytes, { jobId, variantId: variant.id });
     await assertDiskSpace(this.storage.root, { requiredBytes: estimate.bytes });
 
-    await this.storage.init();
     const workDir = await this.storage.createTmpDir(jobId);
 
     try {
@@ -277,6 +278,45 @@ class Engine implements DownloadEngine {
     } finally {
       await this.storage.cleanupJob(jobId);
     }
+  }
+
+  /**
+   * The global storage quota, checked before a byte moves.
+   *
+   * Sweeps first and re-measures rather than refusing straight away: everything
+   * the sweep removes was already past its retention window, so it was going to
+   * go on the next tick anyway, and failing a download while holding files we
+   * had promised to delete would be a self-inflicted outage. If the space is
+   * still not there, the answer is honest — this is over the *configured* cap,
+   * so `SIZE_LIMIT_EXCEEDED` rather than `DISK_FULL`, which means the volume.
+   */
+  async #assertStorageQuota(
+    estimatedBytes: number | null,
+    context: { jobId: string; variantId: string },
+  ): Promise<void> {
+    const quota = this.config.maxTotalStorageBytes;
+    if (quota <= 0) return;
+
+    const wanted = Math.max(0, estimatedBytes ?? 0);
+    let used = await this.storage.usedBytes();
+    if (used + wanted <= quota) return;
+
+    await this.collectGarbage();
+    used = await this.storage.usedBytes();
+    if (used + wanted <= quota) return;
+
+    throw new AppError(
+      "SIZE_LIMIT_EXCEEDED",
+      "The server has reached its storage quota. Try again once earlier downloads expire.",
+      {
+        details: {
+          ...context,
+          usedBytes: used,
+          limitBytes: quota,
+          ...(estimatedBytes === null ? {} : { estimatedBytes }),
+        },
+      },
+    );
   }
 
   async #downloadMedia(
