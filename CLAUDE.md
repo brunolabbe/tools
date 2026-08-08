@@ -16,13 +16,28 @@ layer**.
 
 ```bash
 npm install            # workspaces
-npm run dev            # all apps in watch mode
+npm run dev            # API (8080) + web (5173) together, both in watch mode
+npm run dev:api        # just the API
+npm run dev:web        # just the UI
 npm run check          # lint + format check + typecheck — must pass before done
 npm run lint:fix       # oxlint --fix
 npm run format         # oxfmt
 npm test               # vitest run
 npm run test:watch     # vitest
 ```
+
+`npm run dev` runs the two through `concurrently`. It cannot be
+`npm run dev --workspaces`: npm runs workspace scripts **serially**, so the
+API's watcher never exits and the web app is never reached.
+
+The UI defaults to a **mocked** API — that is what let it ship before the
+backend existed. `cp apps/web/.env.example apps/web/.env.local` to point it at
+the real one. Until you do, the UI works but talks to nothing.
+
+The API's dev script is `node --watch --import tsx`, not `tsx watch`. On Windows
+`tsx watch` spawned by `concurrently` starts, prints nothing and never binds its
+port — silently, which costs an afternoon if you do not know. Node's own
+watcher does the restarting and tsx only transforms.
 
 Tooling: **oxlint** and **oxfmt** (not eslint/prettier). Config in
 `.oxlintrc.json` and `.oxfmtrc.json`.

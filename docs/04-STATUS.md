@@ -258,15 +258,24 @@ npm run check                       # lint + format + typecheck — must pass
 npm test                            # vitest run, all 466
 npx vitest run apps/api             # one package
 
-# The full stack. Two terminals:
-npm run dev -w @downloader/api      # API on 127.0.0.1:8080
-npm run dev -w @downloader/web      # UI on 5173, proxying /api to the API
+# The full stack, one terminal. API on 127.0.0.1:8080, UI on 5173.
+npm run dev
+npm run dev:api                     # or one at a time
+npm run dev:web
 ```
 
 `apps/web` defaults to the **mock** transport. To point it at a running API,
 copy `apps/web/.env.example` to `.env.local` (it sets `VITE_API_MOCK=false`).
 The Vite dev server proxies `/api`, so the setup is same-origin and needs no
 CORS configuration.
+
+**Two dev-tooling traps, both fixed, both worth not re-introducing.**
+`npm run dev --workspaces` runs workspaces _serially_, so the API's watcher held
+the chain and the web app never started — the root script goes through
+`concurrently` now. And on Windows, `tsx watch` under `concurrently` starts,
+prints nothing and never binds: no error, no exit, just a dead port. The API dev
+script is `node --watch --import tsx` for that reason. Verified by running it,
+including that a source edit still triggers a restart.
 
 To exercise the real pipeline without a browser tier, as the M3 verification did:
 
