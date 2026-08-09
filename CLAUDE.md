@@ -24,7 +24,16 @@ npm run lint:fix       # oxlint --fix
 npm run format         # oxfmt
 npm test               # vitest run
 npm run test:watch     # vitest
+npm run e2e            # Playwright: whole stack in a real browser
+npm run e2e:install    # once — fetches the browser the e2e run needs
+
+docker compose up --build   # the service on :8080, UI included
 ```
+
+`npm run e2e` builds the UI itself before starting the API, because the bundle
+bakes its transport in at build time — testing a stale `dist` is testing the
+mock. The suite runs the direct resolver only and talks to a local fixture
+origin it generates with ffmpeg; it never touches a third-party site.
 
 `npm run dev` runs the two through `concurrently`. It cannot be
 `npm run dev --workspaces`: npm runs workspace scripts **serially**, so the
@@ -56,8 +65,13 @@ packages/resolvers   URL → ProbeResult (registry + resolver implementations)
 packages/engine      ProbeResult → file on disk (ffmpeg, storage, GC)
 apps/api             Fastify, job orchestration, SSE, file serving, SSRF guard
 apps/web             React + Vite UI
-docs/                analysis, architecture, roadmap, agent briefs
+e2e/                 Playwright specs + the fixture HLS origin they run against
+docs/                analysis, architecture, roadmap, agent briefs, status
 ```
+
+The API also serves the built UI when `WEB_DIR` is set, which is how the
+container ships them on one origin — same-origin means no CORS to configure and
+an `EventSource` that just works.
 
 `apps/api` is the only place that reads `process.env`. The engine and the
 resolvers are libraries and take their configuration as arguments.

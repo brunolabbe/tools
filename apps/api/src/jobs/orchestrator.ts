@@ -86,6 +86,11 @@ const MAX_REPROBE_RETRIES = 1;
  * `docs/04-STATUS.md` for the owner to decide.
  */
 
+/** Per-run correlation, carried into the job's logger. See `registerRequestLogging`. */
+export interface RunContext {
+  requestId?: string | undefined;
+}
+
 /** Codes where a *fresh probe* is a plausible fix, as opposed to plain retrying. */
 const REPROBE_WORTHY: ReadonlySet<string> = new Set(["VARIANT_GONE", "DOWNLOAD_FAILED"]);
 
@@ -103,9 +108,15 @@ export class JobOrchestrator {
    * on the job and emitted, because a rejected task in the queue would be a
    * job stuck in `downloading` forever with nothing to explain it.
    */
-  async run(jobId: string, signal: AbortSignal): Promise<void> {
+  async run(jobId: string, signal: AbortSignal, context: RunContext = {}): Promise<void> {
     const { store, events, logger } = this.#options;
-    const log = logger.child({ jobId });
+    // The request id rides along so every line this job writes — minutes later,
+    // on a queue worker, with the HTTP call long gone — still points back at
+    // the call that created it.
+    const log = logger.child({
+      jobId,
+      ...(context.requestId === undefined ? {} : { requestId: context.requestId }),
+    });
 
     try {
       for (let attempt = 0; ; attempt++) {

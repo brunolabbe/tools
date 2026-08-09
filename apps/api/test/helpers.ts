@@ -10,6 +10,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import process from "node:process";
 import type { DownloadEngine, DownloadOutcome, DownloadRequest } from "@downloader/engine";
 import { AppError } from "@downloader/shared";
 import type { MediaVariant, ProbeResult, Resolver, ResolveOptions } from "@downloader/shared";
@@ -99,7 +100,10 @@ export function createStubEngine(options: StubEngineOptions): DownloadEngine & {
   let calls = 0;
 
   const engine = {
-    config: { ffmpegPath: "/stub/ffmpeg" } as DownloadEngine["config"],
+    // `/api/health` stats this path before calling ffmpeg available, so it has
+    // to be a real executable. Node's own binary is the one guaranteed to
+    // exist wherever the tests run; the stub never actually runs it.
+    config: { ffmpegPath: process.execPath } as DownloadEngine["config"],
     storage: { root } as DownloadEngine["storage"],
     get calls() {
       return calls;

@@ -20,6 +20,7 @@ export {
   createBrowserResolver,
 } from "./resolvers/browser.ts";
 export type { BrowserResolverOptions } from "./resolvers/browser.ts";
+export type { BrowserPoolStats } from "./browser/pool.ts";
 
 export { DirectUrlResolver } from "./resolvers/direct.ts";
 export type { DirectResolverOptions } from "./resolvers/direct.ts";

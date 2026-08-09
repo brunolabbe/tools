@@ -44,28 +44,41 @@ export interface RegistryBuild {
   registry: ResolverRegistry;
   /** What actually got registered, for `/api/health` and for the boot log. */
   resolverNames: string[];
+  /**
+   * The two tiers with runtime state worth reporting, kept as their concrete
+   * types rather than as `Resolver`. `/api/health` needs the browser pool's
+   * occupancy and whether yt-dlp's binary was actually found, and neither is on
+   * the `Resolver` interface — nor should be, since it is the *registry* that
+   * is general and these two that happen to own a process pool and a binary.
+   * Null means the tier is not registered at all.
+   */
+  ytdlp: YtDlpResolver | null;
+  browser: BrowserResolver | null;
 }
 
 export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
   const { config, logger } = options;
   const resolvers: Resolver[] = [];
+  let ytdlp: YtDlpResolver | null = null;
+  let browser: BrowserResolver | null = null;
 
   if (config.enableYtdlpResolver) {
     // No `binaryPath` key at all when unset: the resolver falls back to
     // `YTDLP_PATH` and then to `yt-dlp` on `PATH`, and passing an explicit
     // undefined would defeat that.
-    resolvers.push(
+    ytdlp =
       config.ytdlpPath === undefined
         ? new YtDlpResolver()
-        : new YtDlpResolver({ binaryPath: config.ytdlpPath }),
-    );
+        : new YtDlpResolver({ binaryPath: config.ytdlpPath });
+    resolvers.push(ytdlp);
   }
 
   if (config.enableBrowserResolver) {
     // No proxy here: `ResolveOptions.proxyUrl` carries it per call, because the
     // resolver contract makes the proxy a property of the request rather than
     // of the resolver.
-    resolvers.push(new BrowserResolver({ maxConcurrentBrowsers: config.maxConcurrentBrowsers }));
+    browser = new BrowserResolver({ maxConcurrentBrowsers: config.maxConcurrentBrowsers });
+    resolvers.push(browser);
   }
 
   if (config.enableDirectResolver) {
@@ -81,6 +94,9 @@ export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
     // always answered by which tiers were enabled at the time.
     ytdlpEnabled: config.enableYtdlpResolver,
     browserEnabled: config.enableBrowserResolver,
+    // Enabled and *present* are different things, and only the second one
+    // affects behaviour.
+    ytdlpAvailable: ytdlp?.available ?? false,
   });
 
   if (!config.enableBrowserResolver) {
@@ -89,5 +105,5 @@ export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
     );
   }
 
-  return { registry, resolverNames };
+  return { registry, resolverNames, ytdlp, browser };
 }

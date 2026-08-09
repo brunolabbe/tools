@@ -7,7 +7,7 @@
  */
 
 import type { DownloadEngine } from "@downloader/engine";
-import type { ResolverRegistry } from "@downloader/resolvers";
+import type { BrowserResolver, ResolverRegistry, YtDlpResolver } from "@downloader/resolvers";
 import type { ApiConfig } from "./config.ts";
 import type { JobStore } from "./db/job-store.ts";
 import type { JobEventHub } from "./jobs/events.ts";
@@ -25,6 +25,10 @@ export interface AppContext {
   engine: DownloadEngine;
   registry: ResolverRegistry;
   resolverNames: readonly string[];
+  /** The tiers with runtime state `/api/health` reports. Null when not registered. */
+  tiers: { ytdlp: YtDlpResolver | null; browser: BrowserResolver | null };
+  /** Process start, so health can report an uptime rather than a wall clock. */
+  startedAt: Date;
   guard: SsrfGuard;
   queue: JobQueue;
   events: JobEventHub;

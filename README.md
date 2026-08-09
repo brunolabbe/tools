@@ -3,9 +3,9 @@
 Give it a web page URL. It finds the video stream behind the page, downloads it,
 and hands back a link to the file.
 
-> **Status: Phase 0 — foundations.** The monorepo, toolchain and shared contracts
-> are in place. The resolvers, engine, API and UI are specified and ready to be
-> built; see [docs/03-AGENT-BRIEFS.md](./docs/03-AGENT-BRIEFS.md).
+> **Status: complete and deployable.** `docker compose up` gives a working
+> service on <http://localhost:8080>. See [docs/04-STATUS.md](./docs/04-STATUS.md)
+> for what shipped and what is still rough.
 
 ## Why this is not trivial
 
@@ -51,14 +51,35 @@ majority of the web in scope.
 
 ## Getting started
 
+### With Docker
+
+```bash
+docker compose up --build      # http://localhost:8080
+```
+
+One container: the UI, the API behind it, ffmpeg, Chromium, and a volume that
+keeps downloads and the job database across restarts. It binds to loopback on
+purpose — this service fetches URLs a client names, so publishing it on every
+interface by default would be handing out an open proxy. `compose.yaml`
+documents what to change before putting it behind anything.
+
+### From source
+
 ```bash
 npm install
 cp .env.example .env
+npm run dev       # API on :8080 and UI on :5173, both watching
 npm run check     # lint (oxlint) + format (oxfmt) + typecheck
+npm test          # vitest
+npm run e2e       # whole stack in a real browser (npm run e2e:install first)
 ```
 
 Requires Node ≥ 22. `ffmpeg` ships bundled via `ffmpeg-static`; `yt-dlp` is
 optional and the system degrades to browser-sniffing without it.
+
+The UI defaults to a **mocked** API in development, so it runs with no backend
+at all — copy `apps/web/.env.example` to `apps/web/.env.local` to point it at a
+running API. A production build defaults the other way.
 
 ## Docs
 
@@ -68,14 +89,16 @@ optional and the system degrades to browser-sniffing without it.
 | [01 — Architecture](./docs/01-ARCHITECTURE.md)                       | Packages, pipeline, decisions, config, security             |
 | [02 — Roadmap](./docs/02-ROADMAP.md)                                 | What was ruled out, the recommendation, phases, milestones  |
 | [03 — Agent briefs](./docs/03-AGENT-BRIEFS.md)                       | Ready-to-paste work packages                                |
+| [04 — Status](./docs/04-STATUS.md)                                   | What shipped, decisions taken, known gaps                   |
 | [CLAUDE.md](./CLAUDE.md)                                             | Conventions every agent follows                             |
 
 ## Layout
 
 ```
-packages/shared      types, error taxonomy, job FSM, zod API schemas   ✅
-packages/resolvers   URL → ProbeResult                                 WP-1, WP-2
-packages/engine      ProbeResult → file on disk                        WP-3
-apps/api             Fastify, orchestration, SSE, file serving         WP-5
-apps/web             React + Vite UI                                   WP-4
+packages/shared      types, error taxonomy, job FSM, zod API schemas
+packages/resolvers   URL → ProbeResult
+packages/engine      ProbeResult → file on disk
+apps/api             Fastify, orchestration, SSE, file serving, the UI
+apps/web             React + Vite UI
+e2e                  Playwright: the whole stack, one fixture HLS origin
 ```

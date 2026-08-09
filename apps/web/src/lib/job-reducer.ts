@@ -8,7 +8,7 @@
  * repaired by re-fetching the job on reconnect (see `job-stream.ts`).
  */
 
-import { TERMINAL_STATUSES, canTransition } from "@downloader/shared";
+import { TERMINAL_STATUSES } from "@downloader/shared";
 import type { Job, JobEvent, JobStatus, ProbeResult } from "@downloader/shared";
 
 function timestamp(value: string): number {
@@ -26,10 +26,21 @@ function isStale(job: Job, at: string): boolean {
 
 function withStatus(job: Job, next: JobStatus, at: string): Job {
   if (next === job.status) return { ...job, updatedAt: at };
-  // An illegal transition means we missed the intermediate states. Hold the
-  // status and let the reconnect refetch supply the truth; guessing here would
-  // put the UI in a state the server never reported.
-  if (!canTransition(job.status, next)) return job;
+  // A status frame is the server *reporting* where the job is, not asking to
+  // move it, so it is applied whether or not the two states are adjacent.
+  //
+  // This used to gate on `canTransition` and hold the old status on a jump,
+  // reasoning that a non-adjacent move meant missed frames. It does — but the
+  // status we skipped to came from the server too, and refusing it left the UI
+  // showing a state the server had already left. The case that made it visible
+  // is the common one: a job that finishes between `POST /api/jobs` returning
+  // and the event stream opening sends `downloading` as its first frame, which
+  // is not adjacent to `queued`, so *every* subsequent frame was refused and
+  // the card sat at "Queued" forever while its bytes ticked up underneath.
+  //
+  // Monotonicity, which is what the gate was really protecting, is still
+  // guaranteed: `applyJobEvent` drops anything that arrives after a terminal
+  // state or with an older timestamp.
   return {
     ...job,
     status: next,
@@ -49,6 +60,15 @@ function withProbe(job: Job, probe: ProbeResult, at: string): Job {
   };
 }
 
+/** The payload half of an outcome this job has already been told about. */
+function completesCurrentStatus(job: Job, event: JobEvent): boolean {
+  return (
+    (event.type === "completed" && job.status === "completed") ||
+    (event.type === "failed" && job.status === "failed") ||
+    (event.type === "canceled" && job.status === "canceled")
+  );
+}
+
 /**
  * Applies one event. Always returns a `Job`; returns the *same reference* when
  * the event is a no-op, so React can skip re-rendering on heartbeats.
@@ -56,8 +76,15 @@ function withProbe(job: Job, probe: ProbeResult, at: string): Job {
 export function applyJobEvent(job: Job, event: JobEvent): Job {
   if (event.type === "heartbeat") return job;
   if (event.jobId !== job.id) return job;
-  // Terminal states are facts, not snapshots — nothing may follow them.
-  if (TERMINAL_STATUSES.has(job.status)) return job;
+  // Terminal states are facts, not snapshots — nothing may follow them, with
+  // one exception: the outcome arrives in *two* frames. The server announces
+  // `status: completed` and then sends `completed`, which is the half carrying
+  // the result and the download link. Rejecting everything after the first
+  // left a job showing "Ready" with no file attached to it.
+  //
+  // Only the payload that agrees with the status already recorded gets in, so
+  // a late or duplicated `failed` still cannot overturn a completed job.
+  if (TERMINAL_STATUSES.has(job.status) && !completesCurrentStatus(job, event)) return job;
   if (isStale(job, event.at)) return job;
 
   switch (event.type) {

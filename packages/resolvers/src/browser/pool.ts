@@ -90,6 +90,15 @@ export interface BrowserPoolOptions {
   extraArgs?: readonly string[];
 }
 
+export interface BrowserPoolStats {
+  /** Probes holding a slot right now. */
+  active: number;
+  maxConcurrent: number;
+  /** Whether a shared Chromium is up. False before the first probe. */
+  launched: boolean;
+  closed: boolean;
+}
+
 export interface BrowserLeaseOptions {
   /** When set, a dedicated browser is launched: Chromium binds proxies per process. */
   proxyUrl?: string | undefined;
@@ -130,6 +139,25 @@ export class BrowserPool {
 
   get maxConcurrent(): number {
     return this.#semaphore.max;
+  }
+
+  /**
+   * What the pool is doing right now, for `/api/health`.
+   *
+   * Read-only and allocation-free, because a container health check asks for
+   * it every few seconds forever. `launched` distinguishes "idle" from "has
+   * never started a browser", which is the difference between a healthy
+   * service and one whose Chromium cannot start at all — a container missing
+   * its shared libraries looks identical to an unused one until the first
+   * probe fails.
+   */
+  get stats(): BrowserPoolStats {
+    return {
+      active: this.#semaphore.active,
+      maxConcurrent: this.#semaphore.max,
+      launched: this.#shared?.isConnected() ?? false,
+      closed: this.#closed,
+    };
   }
 
   /**

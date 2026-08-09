@@ -25,6 +25,8 @@ data/
 .browser-profiles/
 playwright-report/
 test-results/
+# Generated HLS fixtures, the API's storage dir, traces and videos.
+e2e/.artifacts/
 
 # Editors / OS
 .DS_Store

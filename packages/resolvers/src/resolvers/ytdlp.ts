@@ -118,6 +118,18 @@ export class YtDlpResolver implements Resolver {
     return this.#binaryPath !== undefined;
   }
 
+  /**
+   * Where the binary was found, for `/api/health`.
+   *
+   * Worth reporting rather than just the boolean: "yt-dlp is missing" on a
+   * machine where it is plainly installed is almost always a `PATH` that
+   * differs between the shell and the service, and the resolved path is what
+   * shows that at a glance.
+   */
+  get resolvedPath(): string | undefined {
+    return this.#binaryPath;
+  }
+
   canHandle(url: URL): boolean {
     if (!this.#enabled || this.#binaryPath === undefined) return false;
     return url.protocol === "http:" || url.protocol === "https:";

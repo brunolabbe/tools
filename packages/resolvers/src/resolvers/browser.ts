@@ -26,6 +26,7 @@ import { classifyFailure, classifyNavigationError } from "../browser/classify.ts
 import { DRM_BINDING_NAME, DrmObserver, drmInitScript, drmReadbackScript } from "../browser/drm.ts";
 import { HitCollector } from "../browser/intercept.ts";
 import { BrowserPool } from "../browser/pool.ts";
+import type { BrowserPoolStats } from "../browser/pool.ts";
 import { provokePlayback, readMetadata, readSignals, waitForQuiet } from "../browser/provoke.ts";
 import { rankHits } from "../browser/rank.ts";
 import { buildRequestContext } from "../browser/request-context.ts";
@@ -108,6 +109,11 @@ export class BrowserResolver implements Resolver {
   /** Anything fetchable over HTTP. This is the fallback for everything. */
   canHandle(url: URL): boolean {
     return url.protocol === "http:" || url.protocol === "https:";
+  }
+
+  /** Pool occupancy, for `/api/health`. */
+  get stats(): BrowserPoolStats {
+    return this.#pool.stats;
   }
 
   async resolve(url: URL, options: ResolveOptions): Promise<ProbeResult> {

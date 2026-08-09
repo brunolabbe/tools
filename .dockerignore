@@ -1,0 +1,42 @@
+# The build stage runs `npm ci` itself, and a host `node_modules` would both
+# bloat the context and — worse — carry native builds and Playwright browsers
+# compiled for the host platform into a Linux image.
+node_modules
+**/node_modules
+
+# Rebuilt inside the image. Copying a host build in risks a stale `dist` and a
+# `.tsbuildinfo` that convinces `tsc --build` there is nothing to do.
+dist
+**/dist
+**/*.tsbuildinfo
+
+# Runtime artifacts, and the one directory that could be tens of gigabytes.
+storage
+downloads
+tmp
+data
+*.log
+logs
+*.sqlite*
+
+# Secrets must never enter the build context: every layer is readable by
+# anyone who can pull the image.
+.env
+.env.*
+!.env.example
+
+.git
+.github
+.claude
+playwright-report
+test-results
+e2e/.artifacts
+
+docs
+*.md
+!README.md
+
+.vscode
+.idea
+.DS_Store
+Thumbs.db

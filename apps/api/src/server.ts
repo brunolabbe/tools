@@ -27,12 +27,14 @@ import { InProcessJobQueue } from "./jobs/queue.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
 import { ConcurrencyGate, RateLimiter } from "./rate-limit.ts";
+import { registerRequestLogging, requestIdFrom } from "./request-log.ts";
 import { buildRegistry } from "./resolvers.ts";
 import { registerEventRoutes } from "./routes/events.ts";
 import { registerFileRoutes } from "./routes/files.ts";
 import { registerHealthRoute } from "./routes/health.ts";
 import { registerJobRoutes } from "./routes/jobs.ts";
 import { registerProbeRoute } from "./routes/probe.ts";
+import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 import { createSsrfGuard } from "./ssrf.ts";
 import { ROUTES } from "@downloader/shared";
 
@@ -88,7 +90,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   migrate(db);
   const store = new JobStore(db);
 
-  const { registry, resolverNames } = buildRegistry({ config, logger, fetchImpl: guardedFetch });
+  const { registry, resolverNames, ytdlp, browser } = buildRegistry({
+    config,
+    logger,
+    fetchImpl: guardedFetch,
+  });
   const events = new JobEventHub(options.now);
   const probeCache = new ProbeCache({ ttlMs: config.probeCacheTtlMs });
 
@@ -127,6 +133,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     engine,
     registry,
     resolverNames,
+    tiers: { ytdlp, browser },
+    startedAt: now(),
     guard,
     queue,
     events,
@@ -156,8 +164,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     // what stops a client naming its own rate-limit bucket. See the note on
     // `ApiConfig.trustProxy`.
     trustProxy: config.trustProxy,
+    // Fastify's own ids are a per-process counter, which collide across
+    // restarts and across replicas — useless for correlating anything.
+    genReqId: (request) => requestIdFrom(request as { headers: Record<string, unknown> }),
   });
 
+  registerRequestLogging(server, context);
   registerErrorHandling(server, context);
   registerCors(server, config);
 
@@ -166,6 +178,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerJobRoutes(server, context);
   registerEventRoutes(server, context);
   registerFileRoutes(server, context);
+  // After the API routes, so a `/api/…` path can never be shadowed by a file
+  // that happens to sit at the same name in the bundle.
+  const servingWeb = await registerWebRoutes(server, context);
+  registerNotFoundHandler(server, servingWeb);
 
   reconcileInterruptedJobs(context);
 
@@ -215,13 +231,27 @@ function registerErrorHandling(server: FastifyInstance, context: AppContext): vo
       status,
       details: appError.details,
     };
-    if (status >= 500) context.logger.error("request failed", fields);
-    else context.logger.info("request rejected", fields);
+    // `request.logger` is missing only when the failure happened before the
+    // onRequest hook ran — a malformed request line, say. The declared type
+    // says it is always there because after that hook it is; the cast is what
+    // makes the one window where it is not visible rather than a crash.
+    const log = (request.logger as AppLogger | undefined) ?? context.logger;
+    if (status >= 500) log.error("request failed", fields);
+    else log.info("request rejected", fields);
 
     void reply.code(status).send(body);
   });
+}
 
+/**
+ * Split from `registerErrorHandling` because it has to be registered *after*
+ * the static plugin: the SPA fallback needs `reply.sendFile`, which only
+ * exists once that plugin has decorated the reply.
+ */
+function registerNotFoundHandler(server: FastifyInstance, servingWeb: boolean): void {
   server.setNotFoundHandler((request, reply) => {
+    if (servingWeb && serveIndexForUnknownPath(request, reply)) return;
+
     const { status, body } = toErrorResponse(
       new AppError("JOB_NOT_FOUND", "No such endpoint.", {
         details: { path: request.url.slice(0, 200) },

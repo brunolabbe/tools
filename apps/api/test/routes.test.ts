@@ -3,6 +3,7 @@
  * and file serving. The pipeline itself is covered in `pipeline.test.ts`.
  */
 
+import path from "node:path";
 import { AppError, parseJobEvent, ROUTES } from "@downloader/shared";
 import type { JobResponse, ProbeResponse } from "@downloader/shared";
 import { afterEach, describe, expect, test } from "vitest";
@@ -142,6 +143,42 @@ describe("GET /api/health", () => {
     expect(body.ok).toBe(true);
     expect(body.resolvers).toContain("stub");
     expect(body.jobs.maxConcurrent).toBe(2);
+  });
+
+  test("reports the tiers, the volume and the version an operator has to ask about", async () => {
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const body = (
+      await harness.app.server.inject({ method: "GET", url: ROUTES.health })
+    ).json() as HealthResponse;
+
+    expect(body.version).toMatch(/^\d+\.\d+\.\d+$/u);
+    expect(body.uptimeSec).toBeGreaterThanOrEqual(0);
+    // The harness disables both tiers, which must read as disabled rather than
+    // as broken — "off" and "missing" are different operational answers.
+    expect(body.ytdlp).toEqual({ enabled: false, available: false, path: null });
+    expect(body.browser.enabled).toBe(false);
+    expect(body.storage.dir).toBe(harness.storageRoot);
+    expect(body.storage.quotaBytes).toBeGreaterThan(0);
+    // `statfs` answers on both CI platforms; null is the documented fallback.
+    expect(body.storage.freeBytes === null || body.storage.freeBytes > 0).toBe(true);
+  });
+
+  test("a configured ffmpeg that is not actually there is 503, not a green light", async () => {
+    // The failure this catches: `ffmpeg-static` hands out a confident path
+    // inside node_modules whether or not its postinstall download ran, so a
+    // container built with --omit=optional passes every other check and then
+    // fails every single job.
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    (harness.engine.config as { ffmpegPath: string }).ffmpegPath = path.join(
+      harness.storageRoot,
+      "no-such-ffmpeg",
+    );
+
+    const response = await harness.app.server.inject({ method: "GET", url: ROUTES.health });
+    expect(response.statusCode).toBe(503);
+    const body = response.json() as HealthResponse;
+    expect(body.ok).toBe(false);
+    expect(body.ffmpeg.available).toBe(false);
   });
 });
 

@@ -593,7 +593,13 @@ export async function download(
 }
 
 export type { Clock, EngineConfig, EngineConfigInput, FetchLike } from "./config.ts";
-export { bundledFfmpegPath, ENGINE_DEFAULTS, loadEngineConfig, SYSTEM_CLOCK } from "./config.ts";
+export {
+  bundledFfmpegPath,
+  ENGINE_DEFAULTS,
+  loadEngineConfig,
+  resolveFfmpegPath,
+  SYSTEM_CLOCK,
+} from "./config.ts";
 export type { Logger } from "./logger.ts";
 export { NOOP_LOGGER } from "./logger.ts";
 

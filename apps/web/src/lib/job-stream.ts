@@ -146,7 +146,18 @@ export function createJobStream(options: JobStreamOptions): JobStream {
   };
 }
 
+/**
+ * Only the frames that *carry* the outcome end the stream.
+ *
+ * A terminal `status` frame used to count, which raced the server: it sends
+ * `status: completed` and then `completed` — the frame holding the result and
+ * the download link — back to back. Closing the socket on the first one threw
+ * the second away, and the job finished with no file to download.
+ *
+ * Nothing hangs if a payload frame is lost instead: the server ends the stream
+ * on its own after a terminal state, which surfaces here as an error, and the
+ * reconnect's mandatory refetch supplies the outcome.
+ */
 function isTerminalEvent(event: JobEvent): boolean {
-  if (event.type === "completed" || event.type === "failed") return true;
-  return event.type === "status" && TERMINAL_STATUSES.has(event.status);
+  return event.type === "completed" || event.type === "failed" || event.type === "canceled";
 }

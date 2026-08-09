@@ -1,29 +1,35 @@
 /**
- * A logger, pending pino in WP-7.
+ * Structured logging, on pino.
  *
- * `no-console` is in force repo-wide and there is no logging package yet, so
- * this writes structured JSON lines to stderr through `process.stderr.write`.
- * It satisfies the engine's `Logger` interface, which is the seam WP-7 will
- * repoint at pino without touching a single call site.
+ * The `AppLogger` interface is unchanged from the hand-rolled version this
+ * replaces — that seam was the whole point of writing it — so nothing outside
+ * this file moved when pino landed. It satisfies the engine's `Logger`
+ * interface too, which is why the engine can log without depending on the API.
  *
- * Everything written here goes through `redactHeaders` for any field that could
- * be a header bag, because a captured `RequestContext` routinely carries a live
- * session cookie and this is the layer that finally writes bytes somewhere.
+ * Two pino defaults are overridden deliberately:
+ *
+ *  - **String levels, ISO timestamps.** pino's numeric `level` and epoch `time`
+ *    are cheaper and what its own tooling expects, but this service's logs are
+ *    read raw far more often than they are piped through anything, and a line
+ *    nobody can read without a decoder ring does not get read.
+ *  - **stderr, not stdout.** Unchanged from before pino: stdout stays free for
+ *    data. Docker captures both streams, so nothing is lost in a container.
+ *
+ * Redaction happens twice, on purpose. `safeFields` recognises a
+ * `RequestContext` structurally, so a caller that forgets to redact one still
+ * cannot leak a session cookie; pino's own `redact` paths then catch header
+ * bags that arrive under some other shape. Captured headers routinely carry
+ * live credentials and this is the layer that finally writes bytes somewhere.
  */
 
+import os from "node:os";
 import process from "node:process";
-import { redactRequestContext } from "@downloader/shared";
+import { redactRequestContext, REDACTED } from "@downloader/shared";
 import type { RequestContext } from "@downloader/shared";
+import pino from "pino";
+import type { DestinationStream, Logger as PinoLogger } from "pino";
 import type { Logger } from "@downloader/engine";
 import type { LogLevel } from "./config.ts";
-
-const LEVEL_RANK: Record<LogLevel, number> = {
-  debug: 10,
-  info: 20,
-  warn: 30,
-  error: 40,
-  silent: 100,
-};
 
 export interface LoggerOptions {
   level: LogLevel;
@@ -37,6 +43,23 @@ export interface AppLogger extends Logger {
   /** A logger that stamps every line with extra fields. */
   child(bindings: Record<string, unknown>): AppLogger;
 }
+
+/**
+ * Header bags that did not arrive as a `RequestContext`.
+ *
+ * Path-based and therefore fragile by nature — which is why it is the second
+ * line of defence and not the first. `censor` matches `REDACTED` so a reader
+ * cannot tell which of the two mechanisms fired, and neither can be mistaken
+ * for a real value.
+ */
+const REDACT_PATHS = [
+  "headers.cookie",
+  "headers.authorization",
+  "*.headers.cookie",
+  "*.headers.authorization",
+  "*.cookie",
+  "*.authorization",
+];
 
 function isRequestContext(value: unknown): value is RequestContext {
   return (
@@ -68,43 +91,67 @@ function safeFields(
   return out ?? fields;
 }
 
-export function createLogger(options: LoggerOptions): AppLogger {
-  const threshold = LEVEL_RANK[options.level];
-  const write = options.write ?? ((line: string) => void process.stderr.write(`${line}\n`));
-  const bindings = options.bindings ?? {};
-
-  function emit(
-    level: Exclude<LogLevel, "silent">,
+/**
+ * Wraps a pino instance in the `AppLogger` shape.
+ *
+ * The two interfaces differ in argument order — pino takes the merge object
+ * first, ours takes the message — so this is a genuine adapter rather than a
+ * pass-through, and it is the single place `safeFields` is applied.
+ */
+function adapt(logger: PinoLogger): AppLogger {
+  /**
+   * Logging must never be the reason a request dies.
+   *
+   * pino's own serialiser is safe — cycles and BigInts become placeholders
+   * rather than throws — but the two passes *around* it are not: `safeFields`
+   * and pino's redact traversal both walk the object, and walking evaluates
+   * getters. One that throws would otherwise propagate into whatever was
+   * merely trying to report something. The message is the part worth keeping,
+   * so it goes out alone and says the fields were dropped.
+   */
+  const emit = (
+    level: "debug" | "info" | "warn" | "error",
     message: string,
-    fields?: Record<string, unknown>,
-  ): void {
-    if (LEVEL_RANK[level] < threshold) return;
-    const line = {
-      level,
-      time: new Date().toISOString(),
-      msg: message,
-      ...bindings,
-      ...safeFields(fields),
-    };
+    fields: Record<string, unknown> | undefined,
+  ): void => {
     try {
-      write(JSON.stringify(line));
+      logger[level](safeFields(fields) ?? {}, message);
     } catch {
-      // A field that cannot be serialised (a cycle, a BigInt) must not take the
-      // server down on the way to reporting something else.
-      write(JSON.stringify({ level, time: line.time, msg: message, ...bindings }));
+      logger[level]({ fieldsDropped: true }, message);
     }
-  }
+  };
 
   return {
     debug: (message, fields) => emit("debug", message, fields),
     info: (message, fields) => emit("info", message, fields),
     warn: (message, fields) => emit("warn", message, fields),
     error: (message, fields) => emit("error", message, fields),
-    child(extra) {
-      return createLogger({
-        ...options,
-        bindings: { ...bindings, ...extra },
-      });
-    },
+    child: (extra) => adapt(logger.child(safeFields(extra) ?? {})),
   };
+}
+
+export function createLogger(options: LoggerOptions): AppLogger {
+  const destination: DestinationStream =
+    options.write === undefined
+      ? // Synchronous: an async destination buffers, and the lines worth having
+        // most are the ones written just before the process dies.
+        pino.destination({ dest: 2, sync: true })
+      : { write: (chunk: string) => options.write?.(chunk.replace(/\n$/u, "")) };
+
+  const logger = pino(
+    {
+      level: options.level,
+      // See the file header: readable beats cheap for this service's volume.
+      formatters: { level: (label: string) => ({ level: label }) },
+      timestamp: pino.stdTimeFunctions.isoTime,
+      messageKey: "msg",
+      redact: { paths: REDACT_PATHS, censor: REDACTED },
+      // `hostname` is the container id under compose, which is the only way to
+      // tell two replicas' lines apart once they are interleaved.
+      base: { pid: process.pid, hostname: os.hostname(), ...options.bindings },
+    },
+    destination,
+  );
+
+  return adapt(logger);
 }

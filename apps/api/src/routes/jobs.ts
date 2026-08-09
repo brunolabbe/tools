@@ -61,10 +61,10 @@ export function registerJobRoutes(app: FastifyInstance, context: AppContext): vo
 
     context.queue.enqueue({
       jobId: job.id,
-      run: (signal) => context.orchestrator.run(job.id, signal),
+      run: (signal) => context.orchestrator.run(job.id, signal, { requestId: request.id }),
     });
 
-    context.logger.info("job accepted", { jobId: job.id, variantId: job.variantId });
+    request.logger.info("job accepted", { jobId: job.id, variantId: job.variantId });
     const body: JobResponse = { job };
     return await reply.code(201).send(body);
   });

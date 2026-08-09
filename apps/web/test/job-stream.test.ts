@@ -172,6 +172,43 @@ describe("createJobStream", () => {
     expect(harness.connections).toHaveLength(1);
   });
 
+  test("a terminal status frame does not close the stream before its payload", () => {
+    // The server sends `status: completed` and then `completed`, and only the
+    // second carries the result and the download link. Treating the status
+    // frame as the end closed the socket in between, so the job finished with
+    // no file to download.
+    const { harness, events, stream } = setup();
+    stream.start();
+    harness.connections[0]?.onOpen();
+    harness.connections[0]?.onEvent({
+      type: "status",
+      jobId: "job-1",
+      status: "completed",
+      at: "2026-08-05T10:00:05.000Z",
+    });
+
+    expect(stream.state).toBe("open");
+    expect(harness.closed).toBe(0);
+
+    harness.connections[0]?.onEvent({
+      type: "completed",
+      jobId: "job-1",
+      result: {
+        filename: "video.mp4",
+        sizeBytes: 1024,
+        container: "mp4",
+        durationSec: 10,
+        downloadUrl: "/api/files/abc",
+        expiresAt: "2026-08-05T16:00:00.000Z",
+        transcoded: false,
+      },
+      at: "2026-08-05T10:00:05.100Z",
+    });
+
+    expect(events).toHaveLength(2);
+    expect(stream.state).toBe("closed");
+  });
+
   test("a reconcile that reports a terminal job closes the stream", async () => {
     const { fake, harness, stream } = setup({
       refetch: () => Promise.resolve(stubJob("completed")),

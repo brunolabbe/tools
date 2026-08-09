@@ -70,9 +70,10 @@ Everything below assumes Plan B.
 
 ## Phases
 
-Phases 0, 1 and 2 are done — see [04-STATUS.md](./04-STATUS.md) for current
-state and the next actions. Phase 1 was the parallel block, where running
-several agents at once paid off; Phase 2 was the single-agent join.
+Phases 0 through 3 are done, and M4 with them — see
+[04-STATUS.md](./04-STATUS.md) for current state and the next actions. Phase 1
+was the parallel block, where running several agents at once paid off; Phase 2
+was the single-agent join. What remains is Phase 4, which never ends.
 
 ### Phase 0 — Foundations ✅ _complete_
 
@@ -122,12 +123,12 @@ decision, since WP-5 is the first code exposed to the internet. See
 [04-STATUS.md](./04-STATUS.md) for what shipped and the one open contract
 question (the FSM has no back-edge, so re-probe retries cannot move status).
 
-### Phase 3 — Hardening ⟶ **2 agents**
+### Phase 3 — Hardening ✅ _complete_
 
-| WP       | Area              | Deliverable                                                              | State          |
-| -------- | ----------------- | ------------------------------------------------------------------------ | -------------- |
-| **WP-6** | Security & limits | ~~SSRF guard~~ (done in WP-5), rate limits, disk quota, path confinement | ✅ complete    |
-| **WP-7** | Ops & e2e         | Dockerfile, health checks, structured logging, end-to-end tests          | ⬜ not started |
+| WP       | Area              | Deliverable                                                              | State       |
+| -------- | ----------------- | ------------------------------------------------------------------------ | ----------- |
+| **WP-6** | Security & limits | ~~SSRF guard~~ (done in WP-5), rate limits, disk quota, path confinement | ✅ complete |
+| **WP-7** | Ops & e2e         | Dockerfile, health checks, structured logging, end-to-end tests, CI      | ✅ complete |
 
 ### Phase 4 — Coverage (ongoing, never "done")
 
@@ -149,7 +150,11 @@ fix the abstraction rather than special-casing.
   is for. Test on a site with no yt-dlp extractor.
 - **M3 — Functional goal ✅.** Paste URL → pick quality → progress → download link.
   **This is the goal you stated.** _After WP-5._
-- **M4 — Deployable.** Rate-limited, SSRF-guarded, containerised, GC'd. _After WP-6/WP-7._
+- **M4 — Deployable ✅.** Rate-limited, SSRF-guarded, containerised, GC'd.
+  _After WP-6/WP-7._ Verified rather than assumed: the image builds, the
+  container serves the UI and the API on one origin, Chromium launches inside
+  it, and a real HLS stream downloads through it to a fast-start MP4 that
+  re-decodes with no errors.
 
 ---
 

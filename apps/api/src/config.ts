@@ -52,6 +52,12 @@ export interface ApiConfig {
   ffmpegPath: string | undefined;
   ytdlpPath: string | undefined;
 
+  /**
+   * Built UI to serve from this process, same-origin. Undefined serves nothing,
+   * which is a perfectly good headless configuration — see `routes/web.ts`.
+   */
+  webDir: string | undefined;
+
   /** Origins allowed to call the API from a browser. Empty means same-origin only. */
   corsOrigins: readonly string[];
   logLevel: LogLevel;
@@ -127,6 +133,11 @@ function int(
   const value = Number(raw);
   if (!Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, Math.trunc(value)));
+}
+
+function optionalPath(raw: string | undefined): string | undefined {
+  const value = raw?.trim() ?? "";
+  return value === "" ? undefined : path.resolve(value);
 }
 
 function list(raw: string | undefined): string[] {
@@ -221,6 +232,9 @@ export function loadApiConfig(
     proxyUrl: overrides.proxyUrl ?? env["PROXY_URL"] ?? undefined,
     ffmpegPath: overrides.ffmpegPath ?? env["FFMPEG_PATH"] ?? undefined,
     ytdlpPath: overrides.ytdlpPath ?? env["YTDLP_PATH"] ?? undefined,
+    // Resolved so a relative WEB_DIR means the same thing wherever the process
+    // was started from, matching how storageDir is handled above.
+    webDir: overrides.webDir ?? optionalPath(env["WEB_DIR"]),
     corsOrigins: overrides.corsOrigins ?? list(env["CORS_ORIGINS"]),
     logLevel: overrides.logLevel ?? logLevel(env["LOG_LEVEL"]),
     rateLimitProbePerMinute:

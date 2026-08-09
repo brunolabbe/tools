@@ -1,0 +1,85 @@
+# `docker compose up --build` gives a working service on http://localhost:8080:
+# the UI, the API behind it, and a volume that keeps downloads and the job
+# database across restarts.
+#
+# Defaults here are the single-host ones. Anything that would differ behind a
+# reverse proxy or on a shared network is called out below rather than left to
+# be discovered.
+
+services:
+  downloader:
+    build:
+      context: .
+      args:
+        # yt-dlp is a latency optimisation on well-known sites, never a
+        # dependency: without it, requests fall through to the browser sniffer
+        # and still resolve. Set true to include it.
+        INSTALL_YTDLP: "false"
+    image: downloader:local
+    restart: unless-stopped
+    ports:
+      # Bound to loopback. This service fetches URLs a client names and runs a
+      # browser against them; publishing it to every interface by default would
+      # be handing out an open proxy. Change to "8080:8080" deliberately, behind
+      # something that authenticates.
+      - "127.0.0.1:8080:8080"
+
+    # Node is PID 1 here, and PID 1 does not reap orphans. ffmpeg and Chromium
+    # both fork, so without an init the container slowly fills with zombies.
+    init: true
+
+    # Chromium's renderers use POSIX shared memory. Docker's default 64 MB
+    # /dev/shm is too small and shows up as tabs crashing mid-probe, which
+    # reads as a flaky site rather than a container setting.
+    shm_size: "1gb"
+
+    volumes:
+      - storage:/data
+
+    environment:
+      LOG_LEVEL: info
+
+      # --- The security trade-off worth understanding ---------------------
+      # Chromium's own sandbox needs privileges this container does not have,
+      # so it is disabled and the *container* is the boundary instead — which
+      # is why the image runs as a non-root user with no capabilities added.
+      # The alternative is to keep the sandbox and grant SYS_ADMIN, which is a
+      # strictly larger hole. Do not run this container as root.
+      BROWSER_NO_SANDBOX: "true"
+
+      # --- Capacity -------------------------------------------------------
+      # Each browser context costs roughly 300 MB; ffmpeg is CPU-hungry. Both
+      # defaults assume a small host.
+      MAX_CONCURRENT_JOBS: "2"
+      MAX_CONCURRENT_BROWSERS: "2"
+
+      # --- Retention and disk ---------------------------------------------
+      FILE_RETENTION_HOURS: "6"
+      MAX_TOTAL_STORAGE_GB: "50"
+      MAX_FILE_SIZE_MB: "4096"
+
+      # --- Behind a reverse proxy -----------------------------------------
+      # Every rate limit is keyed on the client address, so leaving this off
+      # behind a proxy makes all clients share the proxy's bucket: still safe,
+      # but one busy user throttles everyone. Set it to the proxy's address or
+      # CIDR — not `true`, which lets any client name its own bucket by sending
+      # X-Forwarded-For.
+      # TRUST_PROXY: "10.0.0.0/8"
+
+      # --- Egress ----------------------------------------------------------
+      # Signed media URLs are frequently IP-bound, so probing and downloading
+      # must leave from the same address.
+      # PROXY_URL: "http://proxy:3128"
+
+      # SSRF_ALLOW_HOSTS is an escape hatch for a local fixture origin during
+      # development. It is empty by default and must stay that way here.
+
+    # A Chromium probe is memory-hungry in bursts; without a limit one runaway
+    # page can take the host down with it.
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+volumes:
+  storage:

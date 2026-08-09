@@ -72,15 +72,61 @@ describe("applyJobEvent", () => {
     expect(final.progress.stage).toBe("completed");
   });
 
-  test("rejects an illegal transition instead of guessing", () => {
-    // queued → muxing is not in JOB_TRANSITIONS.
+  test("applies a status the server reports even when it skips states", () => {
+    // queued → muxing is not a step in JOB_TRANSITIONS, and it does not need to
+    // be: the frame says where the job *is*, so the only thing a jump tells us
+    // is that we missed the frames in between. Refusing it used to leave the
+    // card showing a state the server had already left.
     const next = applyJobEvent(job(), {
       type: "status",
       jobId: "job-1",
       status: "muxing",
       at: T1,
     });
-    expect(next.status).toBe("queued");
+    expect(next.status).toBe("muxing");
+  });
+
+  test("the result still lands when the status frame announced it first", () => {
+    // The outcome arrives in two frames — `status: completed`, then
+    // `completed` with the result. Treating the first as the last word left a
+    // job reading "Ready" with no file attached.
+    const final = applyJobEvents(job({ status: "downloading", updatedAt: T1 }), [
+      { type: "status", jobId: "job-1", status: "completed", at: T2 },
+      { type: "completed", jobId: "job-1", result, at: T3 },
+    ]);
+    expect(final.status).toBe("completed");
+    expect(final.result).toEqual(result);
+  });
+
+  test("a contradictory outcome cannot overturn one already recorded", () => {
+    const completed = applyJobEvents(job({ status: "downloading", updatedAt: T1 }), [
+      { type: "status", jobId: "job-1", status: "completed", at: T2 },
+      { type: "completed", jobId: "job-1", result, at: T3 },
+    ]);
+    const late = applyJobEvent(completed, {
+      type: "failed",
+      jobId: "job-1",
+      error: { code: "DOWNLOAD_FAILED", message: "nope", retryable: true },
+      at: T3,
+    });
+    expect(late).toBe(completed);
+  });
+
+  test("a job that finished before the stream opened still reaches completed", () => {
+    // The regression that hung the UI on every fast download. The first frame
+    // a client sees is the route's opening snapshot, which reports the job's
+    // *current* status — `downloading` for anything that started while the
+    // POST response was still in flight. That is not adjacent to `queued`, so
+    // holding the status meant every later frame was refused too and the card
+    // sat at "Queued" while its byte counter climbed.
+    const final = applyJobEvents(job(), [
+      { type: "status", jobId: "job-1", status: "downloading", at: T1 },
+      { type: "progress", jobId: "job-1", progress: progress({ stage: "downloading" }), at: T1 },
+      { type: "status", jobId: "job-1", status: "muxing", at: T2 },
+      { type: "status", jobId: "job-1", status: "completed", at: T3 },
+    ]);
+    expect(final.status).toBe("completed");
+    expect(final.finishedAt).toBe(T3);
   });
 
   test("a progress frame repairs a status frame lost while disconnected", () => {
@@ -125,15 +171,15 @@ describe("applyJobEvent", () => {
     expect(outOfOrder.progress.percent).toBe(80);
   });
 
-  test("a reordered frame that would need an illegal jump waits for reconciliation", () => {
-    // queued → downloading is not a legal transition, so a progress frame that
-    // arrives before the status frames it belongs to holds the status put. The
-    // reconnect refetch, not guesswork, is what repairs this.
+  test("a reordered frame cannot drag the status backwards", () => {
+    // The newest frame wins and the older one behind it is dropped as stale,
+    // which is what keeps the fold monotonic now that adjacency is no longer
+    // what guards it.
     const next = applyJobEvents(job(), [
       { type: "progress", jobId: "job-1", progress: progress({ percent: 80 }), at: T3 },
       { type: "status", jobId: "job-1", status: "probing", at: T1 },
     ]);
-    expect(next.status).toBe("queued");
+    expect(next.status).toBe("downloading");
     expect(next.progress.percent).toBe(80);
   });
 
