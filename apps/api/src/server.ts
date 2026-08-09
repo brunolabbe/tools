@@ -18,6 +18,7 @@ import { loadApiConfig } from "./config.ts";
 import type { AppContext } from "./context.ts";
 import { JobStore } from "./db/job-store.ts";
 import { migrate } from "./db/schema.ts";
+import { createEgressDispatcher } from "./dispatcher.ts";
 import { createGuardedFetch } from "./guarded-fetch.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import { JobEventHub } from "./jobs/events.ts";
@@ -67,7 +68,22 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     allowHosts: config.ssrfAllowHosts,
     allowPrivateAddresses: config.ssrfAllowPrivateAddresses,
   });
-  const guardedFetch = createGuardedFetch(guard);
+  // Pins each connection to an address the guard vetted — the half of the SSRF
+  // answer a pre-flight check cannot give — and carries the egress proxy, which
+  // Node's global fetch would otherwise ignore. See `dispatcher.ts`.
+  const egress = createEgressDispatcher({
+    guard,
+    ...(config.proxyUrl === undefined ? {} : { proxyUrl: config.proxyUrl }),
+  });
+  const guardedFetch = createGuardedFetch(guard, globalThis.fetch, {
+    dispatcher: egress.dispatcher,
+  });
+  logger.info("egress configured", {
+    mode: egress.mode,
+    // Whether a proxy is set, never which: the URL routinely carries
+    // credentials, and this line is not worth a leak.
+    proxied: config.proxyUrl !== undefined,
+  });
 
   const engine =
     options.engine ??
@@ -206,6 +222,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       await queue.close();
       await registry.dispose().catch((error: unknown) => {
         logger.warn("some resolvers did not shut down cleanly", { error: String(error) });
+      });
+      // After the queue and the resolvers: closing the dispatcher tears down
+      // keep-alive sockets, and doing it while a download still holds one turns
+      // an orderly shutdown into a failed job.
+      await egress.close().catch((error: unknown) => {
+        logger.warn("the egress dispatcher did not close cleanly", { error: String(error) });
       });
       db.close();
       logger.info("shutdown complete");

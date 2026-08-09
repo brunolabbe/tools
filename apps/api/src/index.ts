@@ -18,7 +18,14 @@ export type { AppContext } from "./context.ts";
 export type { CreateJobInput, FileToken, TransitionPatch } from "./db/job-store.ts";
 export { initialProgress, JobStore } from "./db/job-store.ts";
 export { migrate } from "./db/schema.ts";
-export type { GuardedFetch } from "./guarded-fetch.ts";
+export type {
+  AddressResolver,
+  EgressDispatcher,
+  EgressDispatcherOptions,
+  ResolvedAddress,
+} from "./dispatcher.ts";
+export { createEgressDispatcher, createPinningLookup } from "./dispatcher.ts";
+export type { GuardedFetch, GuardedFetchOptions } from "./guarded-fetch.ts";
 export { createGuardedFetch } from "./guarded-fetch.ts";
 export { statusForCode, toErrorResponse, toPublicPayload } from "./http-errors.ts";
 export type { JobEventListener, Unsubscribe } from "./jobs/events.ts";

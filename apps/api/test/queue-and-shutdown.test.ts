@@ -85,6 +85,24 @@ describe("resolver composition (M2)", () => {
     const config = loadApiConfig({}, { PROBE_CACHE_TTL_MS: "999999" });
     expect(config.probeCacheTtlMs).toBe(60_000);
   });
+
+  test("an unusable PROXY_URL stops the process at boot", () => {
+    // It now configures a ProxyAgent rather than only reaching subprocesses, and
+    // a service that silently egresses from the wrong address is precisely what
+    // the setting exists to prevent.
+    expect(() => loadApiConfig({}, { PROXY_URL: "not a url" })).toThrow(AppError);
+    // socks5 is the common mistake: ProxyAgent speaks HTTP to the proxy, so
+    // this would otherwise fail at the first fetch rather than at startup.
+    expect(() => loadApiConfig({}, { PROXY_URL: "socks5://127.0.0.1:1080" })).toThrow(AppError);
+  });
+
+  test("a usable PROXY_URL survives verbatim, credentials and all", () => {
+    // Round-tripping the URL through `new URL().href` would normalise the path
+    // and re-encode the credentials, which is not this function's business.
+    const raw = "http://user:p%40ss@proxy.internal:3128";
+    expect(loadApiConfig({}, { PROXY_URL: raw }).proxyUrl).toBe(raw);
+    expect(loadApiConfig({}, { PROXY_URL: "  " }).proxyUrl).toBeUndefined();
+  });
 });
 
 describe("InProcessJobQueue", () => {

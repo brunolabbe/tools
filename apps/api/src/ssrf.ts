@@ -16,16 +16,23 @@
  * theatre: `localtest.me` resolves to 127.0.0.1, and any attacker-controlled
  * domain can have an A record pointing wherever they want.
  *
- * ## What this cannot do
+ * ## What this file is, and is not
  *
- * DNS rebinding is not fully solvable here. Between our `lookup()` and the
- * socket connect, a TTL-0 record can change answer — the classic TOCTOU. Fixing
- * it properly means pinning the checked address into the connection itself via
- * a custom agent/dispatcher, which needs `undici` (see the proxy gap in
- * `docs/04-STATUS.md`). What we do instead is reject *any* name that resolves
- * to a blocked address in *any* of its records, which closes the common
- * multi-record variant, and re-check after every redirect. The residual risk is
- * recorded rather than papered over.
+ * This is the **pre-flight** check: it runs before a socket exists, so it can
+ * refuse a URL cheaply and with a typed error that names a reason. What it
+ * cannot do on its own is bind its answer to the connection — between this
+ * `lookup()` and the socket connect, a TTL-0 record can change answer, which is
+ * the classic DNS-rebinding TOCTOU.
+ *
+ * That gap is closed in `dispatcher.ts`, which resolves the name **once**,
+ * inside the connector, and hands the vetted addresses straight to the socket.
+ * The check that is load-bearing against rebinding is the one there; this one
+ * remains because a rejection before any connection is attempted is worth
+ * having, and because `assertAllAllowed` vets URLs that will be fetched by
+ * ffmpeg, which no dispatcher of ours can reach.
+ *
+ * Both share one policy: `isBlockedAddress` for the address rule, and
+ * `isExemptHost` below for the escape hatches, so the two cannot drift apart.
  */
 
 import dns from "node:dns/promises";
@@ -182,12 +189,26 @@ export interface SsrfGuard {
   assertAllowed(rawUrl: string): Promise<URL>;
   /** Same, for every URL in a batch. Used on the whole of a `ProbeResult`. */
   assertAllAllowed(rawUrls: readonly string[]): Promise<void>;
+  /**
+   * Whether this hostname skips the address check entirely — because it is in
+   * `allowHosts`, or because `allowPrivateAddresses` turned the check off.
+   *
+   * Exported so the connector in `dispatcher.ts` applies the *same* exemptions
+   * this guard does. Duplicating the policy there instead would mean a local
+   * fixture host that `assertAllowed` lets through gets refused at connect
+   * time, which is a confusing failure and an easy one to introduce.
+   */
+  isExemptHost(hostname: string): boolean;
 }
 
 export function createSsrfGuard(options: SsrfGuardOptions = {}): SsrfGuard {
   const lookup = options.lookup ?? systemLookup;
   const allowHosts = new Set((options.allowHosts ?? []).map((host) => host.toLowerCase()));
   const allowPrivate = options.allowPrivateAddresses === true;
+
+  function isExemptHost(hostname: string): boolean {
+    return allowPrivate || allowHosts.has(stripBrackets(hostname.toLowerCase()));
+  }
 
   async function assertAllowed(rawUrl: string): Promise<URL> {
     let url: URL;
@@ -213,8 +234,7 @@ export function createSsrfGuard(options: SsrfGuardOptions = {}): SsrfGuard {
 
     const hostname = url.hostname.toLowerCase();
     if (hostname === "") throw blocked(url, "empty-host");
-    if (allowHosts.has(hostname)) return url;
-    if (allowPrivate) return url;
+    if (isExemptHost(hostname)) return url;
 
     // WHATWG `URL` *keeps* the brackets on an IPv6 literal, so `net.isIP` says
     // 0 for `[::1]` and the host would fall through to the DNS path. It would
@@ -248,6 +268,7 @@ export function createSsrfGuard(options: SsrfGuardOptions = {}): SsrfGuard {
 
   return {
     assertAllowed,
+    isExemptHost,
     async assertAllAllowed(rawUrls: readonly string[]): Promise<void> {
       // Deduplicated because a probe result routinely repeats one manifest URL
       // across a dozen variants, and each check is a DNS round trip.

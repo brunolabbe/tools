@@ -8,7 +8,7 @@
 
 import path from "node:path";
 import process from "node:process";
-import { AppError } from "@downloader/shared";
+import { ALLOWED_SCHEMES, AppError } from "@downloader/shared";
 
 export interface ApiConfig {
   host: string;
@@ -161,6 +161,37 @@ function trustProxy(raw: string | undefined): boolean | string {
   return value;
 }
 
+/**
+ * The egress proxy, checked at boot rather than at the first fetch.
+ *
+ * Before `dispatcher.ts` this value only reached subprocesses, where a typo
+ * meant ffmpeg failed on a download minutes later. It now configures a
+ * `ProxyAgent` at startup, and an unusable one should stop the process here —
+ * a service that silently egresses from the wrong address is the failure this
+ * setting exists to prevent.
+ */
+function proxyUrl(raw: string | undefined): string | undefined {
+  const value = raw?.trim() ?? "";
+  if (value === "") return undefined;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new AppError("INTERNAL", "PROXY_URL is not a valid URL.", {
+      details: { hint: "Expected something like http://proxy.internal:3128" },
+    });
+  }
+  // `ProxyAgent` speaks to the proxy over HTTP or HTTPS. A socks5:// value is
+  // the common mistake, and it would otherwise fail at the first request.
+  if (!(ALLOWED_SCHEMES as readonly string[]).includes(parsed.protocol)) {
+    throw new AppError("INTERNAL", "PROXY_URL must be an http: or https: address.", {
+      details: { scheme: parsed.protocol },
+    });
+  }
+  return value;
+}
+
 function logLevel(raw: string | undefined): LogLevel {
   const value = (raw ?? API_DEFAULTS.logLevel).trim().toLowerCase();
   return (LOG_LEVELS as readonly string[]).includes(value) ? (value as LogLevel) : "info";
@@ -229,7 +260,7 @@ export function loadApiConfig(
       overrides.enableBrowserResolver ?? bool(env["ENABLE_BROWSER_RESOLVER"], true),
     enableDirectResolver:
       overrides.enableDirectResolver ?? bool(env["ENABLE_DIRECT_RESOLVER"], true),
-    proxyUrl: overrides.proxyUrl ?? env["PROXY_URL"] ?? undefined,
+    proxyUrl: overrides.proxyUrl ?? proxyUrl(env["PROXY_URL"]),
     ffmpegPath: overrides.ffmpegPath ?? env["FFMPEG_PATH"] ?? undefined,
     ytdlpPath: overrides.ytdlpPath ?? env["YTDLP_PATH"] ?? undefined,
     // Resolved so a relative WEB_DIR means the same thing wherever the process

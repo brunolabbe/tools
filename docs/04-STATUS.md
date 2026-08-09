@@ -18,7 +18,7 @@ is what remains**
 | Phase 2 — Integration    | ✅ complete | WP-5, `apps/api`                           |
 | Phase 3 — Hardening      | ✅ complete | WP-6 ✅ · WP-7 ✅                          |
 
-**494 tests pass across 33 files, plus 3 Playwright end-to-end tests.
+**510 tests pass across 34 files, plus 3 Playwright end-to-end tests.
 `npm run check` is green.** Zero live-network tests.
 
 ### Milestones
@@ -43,6 +43,50 @@ is what remains**
   Chromium launches inside it (`151.0.7922.34`), and a real HLS stream
   downloads through the container to a 157 KB MP4 whose box order is
   `ftyp,moov,free,mdat` and which re-decodes with zero ffmpeg errors.
+
+---
+
+## The undici work: address pinning and a real proxy
+
+Two gaps this document listed separately turned out to be one seam, and they
+closed together. `apps/api/src/dispatcher.ts` is the whole of it.
+
+**DNS rebinding is now actually fixed, not narrowed.** The old guard resolved a
+name, approved it, and then let the socket resolve it again — so the address
+that was checked and the address that was connected to were never the same
+object, and a TTL-0 record was free to differ. `net.connect` accepts a `lookup`
+and undici passes one through from `Agent`'s `connect` options, so the
+resolution the socket uses is now ours: resolve once, check every record, hand
+the survivors straight to the socket. There is no second resolution left to
+disagree with the first.
+
+`ssrf.ts` stays exactly where it was. It refuses a URL before a socket exists,
+with a typed error naming a reason, and it is the only check that can cover the
+URLs **ffmpeg** fetches through its own HTTP stack — which is why the sweep over
+every URL in a `ProbeResult` is still load-bearing. The two share one policy:
+`isBlockedAddress` for the address rule and the guard's new `isExemptHost` for
+the escape hatches, so a fixture host that the pre-flight check waves through
+cannot be refused at connect time.
+
+**The proxy now applies to direct fetches.** Node's global `fetch` ignores
+`http_proxy` entirely, so before this `PROXY_URL` reached ffmpeg, yt-dlp and the
+browser while every direct fetch quietly went around it. On a deployment that
+sets a proxy because its egress IP matters, that means signed URLs issued to one
+address and redeemed from another — a 403 that reads like a flaky extractor.
+`ProxyAgent` closes it. `PROXY_URL` is also now validated at boot rather than at
+the first request: `socks5://` is the common mistake, and `ProxyAgent` speaks
+HTTP to the proxy.
+
+**Proxy and pinning are exclusive, deliberately.** See the note in the gaps
+section below — with a proxy there is no local resolution to pin, so pinning is
+not weakened, it is simply not the mechanism in play.
+
+The tests worth reading are the last block of `apps/api/test/dispatcher.test.ts`.
+They give the guard a lookup that answers with a public address so the
+pre-flight check passes, point the connector's resolver at loopback, and fetch
+over a real socket — a DNS rebind reduced to its essentials. The connector
+refuses it; the companion test proves the dispatcher is genuinely in the socket
+path rather than being ignored. `npm run e2e` still passes unchanged.
 
 ---
 
@@ -377,19 +421,23 @@ memory, so two replicas behind a load balancer grant two allowances. Correct for
 the single-container deployment this targets; a shared store (the same Redis
 BullMQ would want) is the fix if it is ever scaled out.
 
-**DNS rebinding is only partly mitigated.** The guard rejects any name where
-_any_ record is blocked, and re-checks after each redirect, but the gap between
-`lookup()` and the socket connect is a genuine TOCTOU. Closing it properly means
-pinning the checked address into the connection via a custom dispatcher, which
-needs `undici` — the same dependency the proxy gap below wants.
+**DNS rebinding: closed, except through ffmpeg.** `apps/api/src/dispatcher.ts`
+pins the vetted address into the socket, so the check and the connection can no
+longer disagree — see the section above. What remains is the same ffmpeg gap
+recorded below: ffmpeg resolves its own names and no dispatcher of ours governs
+it, so for the segments ffmpeg fetches, the pre-flight check on every URL in a
+`ProbeResult` is still the only guard, TOCTOU and all.
 
 **ffmpeg fetches outside the guard.** `guarded-fetch.ts` covers the direct
 resolver and the engine's own fetches, but ffmpeg does its own HTTP and cannot
 be wrapped. This is why the guard vets **every URL in a `ProbeResult`** before
 the engine is handed anything — that check is load-bearing, not belt-and-braces.
 
-**No proxy for direct fetches.** Unchanged from Phase 1. Adding `undici` closes
-this and the rebinding gap together.
+**Proxy mode does not pin, by design.** With `PROXY_URL` set, the target name is
+resolved by the proxy and there is no local resolution to pin; what bounds
+egress there is the proxy's own policy. The pre-flight check still runs, and
+`SSRF_ALLOW_PRIVATE_ADDRESSES` exists for the deployment whose DNS view differs
+from its proxy's.
 
 **Test files are still not typechecked.** Unchanged: each project's `include` is
 `src/**`. `apps/api/test` is now the largest untypechecked surface in the repo,
@@ -428,7 +476,7 @@ run from inside a container.
 
 ```bash
 npm run check                       # lint + format + typecheck — must pass
-npm test                            # vitest run, all 494
+npm test                            # vitest run, all 510
 npx vitest run apps/api             # one package
 
 npm run e2e:install                 # once: fetches the browser
