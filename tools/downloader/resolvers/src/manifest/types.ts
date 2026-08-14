@@ -1,5 +1,5 @@
 /**
- * The seam between the manifest parsers (WP-1) and everything that consumes
+ * The seam between the manifest parsers (dl-1) and everything that consumes
  * them (the direct resolver, the browser sniffer). Fixed up front so the two
  * can be built in parallel.
  *

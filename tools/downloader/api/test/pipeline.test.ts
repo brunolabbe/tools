@@ -163,7 +163,7 @@ describe("re-probing", () => {
   test("a DOWNLOAD_FAILED during downloading is re-probe-worthy too", async () => {
     // ffmpeg does its own fetching and reports an expired manifest only as text
     // on stderr, so an expiry surfaces as DOWNLOAD_FAILED rather than
-    // VARIANT_GONE — see docs/04-STATUS.md. Not retrying it would leave the
+    // VARIANT_GONE — see tools/downloader/docs/03-STATUS.md. Not retrying it would leave the
     // commonest expiry case unhandled.
     harness = await createHarness({
       resolver: new StubResolver(probeResult()),

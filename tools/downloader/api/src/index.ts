@@ -3,7 +3,7 @@
  *
  * Registry in (`@downloader/resolvers`), engine out (`@downloader/engine`),
  * jobs and SSE and files in between. This module exports the pieces so the
- * tests, and eventually WP-7's e2e harness, can assemble them without a socket.
+ * tests, and eventually dl-7's e2e harness, can assemble them without a socket.
  *
  * ```ts
  * const app = await createApp({ config: { databasePath: ":memory:" } });

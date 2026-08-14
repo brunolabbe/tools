@@ -2,7 +2,7 @@
  * The job pipeline: `queued → probing → downloading → muxing → completed`.
  *
  * Three rules shape everything here, and each comes from a specific finding in
- * `docs/00-STREAM-CAPTURE-ANALYSIS.md`:
+ * `tools/downloader/docs/00-ANALYSIS.md`:
  *
  * 1. **Always re-probe** (§5). The `probing` state is not decoration. Signed
  *    media URLs commonly expire in 30–300 s, so the probe from the client's
@@ -61,7 +61,7 @@ export interface OrchestratorOptions {
  *
  * One. The brief says "on `VARIANT_GONE`, re-probe once and retry", and the
  * same reasoning covers `DOWNLOAD_FAILED` during `downloading`: per
- * `docs/04-STATUS.md`, ffmpeg reports an expired manifest as `DOWNLOAD_FAILED`
+ * `tools/downloader/docs/03-STATUS.md`, ffmpeg reports an expired manifest as `DOWNLOAD_FAILED`
  * because it does the fetching itself and only reports HTTP status in text, so
  * refusing to retry that would leave the commonest expiry case unhandled.
  *
@@ -83,7 +83,7 @@ const MAX_REPROBE_RETRIES = 1;
  *
  * This is honest enough — the job really is still trying to download — but it
  * is a workaround, and the cleaner fix is a back-edge in the FSM. Recorded in
- * `docs/04-STATUS.md` for the owner to decide.
+ * `tools/downloader/docs/03-STATUS.md` for the owner to decide.
  */
 
 /** Per-run correlation, carried into the job's logger. See `registerRequestLogging`. */

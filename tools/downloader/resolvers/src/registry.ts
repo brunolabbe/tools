@@ -1,7 +1,7 @@
 /**
  * The priority-ordered resolver chain.
  *
- * Layering, from `docs/00-STREAM-CAPTURE-ANALYSIS.md` §4: the browser sniffer is
+ * Layering, from `tools/downloader/docs/00-ANALYSIS.md` §4: the browser sniffer is
  * the foundation and everything ahead of it is a latency optimisation. Deleting
  * every optional tier must leave a working system, which is why the registry
  * knows nothing about the individual resolvers beyond their priority.

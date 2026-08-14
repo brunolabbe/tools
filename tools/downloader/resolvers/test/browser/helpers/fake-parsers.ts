@@ -1,5 +1,5 @@
 /**
- * Stand-ins for the WP-1 manifest parsers.
+ * Stand-ins for the dl-1 manifest parsers.
  *
  * The resolver takes them as constructor options, so these tests pin the
  * sniffer's behaviour — capture, ranking, header replay — without depending on

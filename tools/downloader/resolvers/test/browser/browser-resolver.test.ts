@@ -4,7 +4,7 @@
  * Every page is on 127.0.0.1: real sites change, rate-limit and geo-vary, which
  * makes CI failures meaningless.
  *
- * The definition of done for WP-2 lives in the first test: an MSE page whose
+ * The definition of done for dl-2 lives in the first test: an MSE page whose
  * `<video>` carries a `blob:` URL, where DOM scraping gets nothing and network
  * capture gets the master playlist.
  */
@@ -215,7 +215,7 @@ describe("BrowserResolver", () => {
   );
 
   test("works with the real parsers wired in", { timeout: TEST_TIMEOUT_MS }, async () => {
-    // No injection: whatever WP-1 has landed is exercised for real.
+    // No injection: whatever dl-1 has landed is exercised for real.
     const resolver = new BrowserResolver({ pool, quietMs: 1200 });
     const result = await probe("/mse.html", resolver);
     expect(result.variants.length).toBeGreaterThan(0);

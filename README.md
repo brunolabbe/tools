@@ -4,7 +4,7 @@ Give it a web page URL. It finds the video stream behind the page, downloads it,
 and hands back a link to the file.
 
 > **Status: complete and deployable.** `docker compose up` gives a working
-> service on <http://localhost:8080>. See [docs/04-STATUS.md](./docs/04-STATUS.md)
+> service on <http://localhost:8080>. See [tools/downloader/docs/03-STATUS.md](./tools/downloader/docs/03-STATUS.md)
 > for what shipped and what is still rough.
 
 ## Why this is not trivial
@@ -17,7 +17,7 @@ the page to right-click.
 The bytes still cross the network though — so the stream is caught at the
 **network layer**, by driving a real browser and watching what the page's own
 player requests. Full reasoning in
-[docs/00-STREAM-CAPTURE-ANALYSIS.md](./docs/00-STREAM-CAPTURE-ANALYSIS.md).
+[tools/downloader/docs/00-ANALYSIS.md](./tools/downloader/docs/00-ANALYSIS.md).
 
 ## How it works
 
@@ -37,7 +37,7 @@ tier in front of it is purely a fast path for the ~1800 sites it has extractors
 for: better metadata, ~2 s instead of ~15 s. It is optional by design, and the
 service is fully functional without it. An extractor-only tool was considered and
 ruled out — on an unknown site its coverage is not degraded but zero. See
-[docs/02-ROADMAP.md](./docs/02-ROADMAP.md).
+[tools/downloader/docs/02-ROADMAP.md](./tools/downloader/docs/02-ROADMAP.md).
 
 ## Scope
 
@@ -63,7 +63,7 @@ purpose — this service fetches URLs a client names, so publishing it on every
 interface by default would be handing out an open proxy. `compose.yaml`
 documents what to change before putting it behind anything.
 
-To reach it from outside the host, [docs/05-DEPLOYMENT.md](./docs/05-DEPLOYMENT.md)
+To reach it from outside the host, [docs/02-DEPLOYMENT.md](./docs/02-DEPLOYMENT.md)
 puts it on a subdomain behind a Cloudflare Tunnel and a login, without opening a
 port on the router.
 
@@ -87,14 +87,20 @@ point it at a running API. A production build defaults the other way.
 
 ## Docs
 
-|                                                                      |                                                             |
-| -------------------------------------------------------------------- | ----------------------------------------------------------- |
-| [00 — Stream capture analysis](./docs/00-STREAM-CAPTURE-ANALYSIS.md) | How video is delivered and how to catch it. **Read first.** |
-| [01 — Architecture](./docs/01-ARCHITECTURE.md)                       | Packages, pipeline, decisions, config, security             |
-| [02 — Roadmap](./docs/02-ROADMAP.md)                                 | What was ruled out, the recommendation, phases, milestones  |
-| [03 — Agent briefs](./docs/03-AGENT-BRIEFS.md)                       | Ready-to-paste work packages                                |
-| [04 — Status](./docs/04-STATUS.md)                                   | What shipped, decisions taken, known gaps                   |
-| [CLAUDE.md](./CLAUDE.md)                                             | Conventions every agent follows                             |
+The downloader's documentation lives with its code, in
+[tools/downloader/docs/](./tools/downloader/docs/):
+
+|                                                                 |                                                             |
+| --------------------------------------------------------------- | ----------------------------------------------------------- |
+| [00 — Analysis](./tools/downloader/docs/00-ANALYSIS.md)         | How video is delivered and how to catch it. **Read first.** |
+| [01 — Architecture](./tools/downloader/docs/01-ARCHITECTURE.md) | Packages, pipeline, decisions, config, security             |
+| [02 — Roadmap](./tools/downloader/docs/02-ROADMAP.md)           | What was ruled out, the recommendation, phases, milestones  |
+| [03 — Status](./tools/downloader/docs/03-STATUS.md)             | Where things stand, open questions, known gaps              |
+| [work/](./tools/downloader/docs/work/)                          | One file per ticket: the brief and what it did              |
+
+Repo-wide: [CLAUDE.md](./CLAUDE.md) for the conventions every agent follows,
+[docs/00-TOOLS.md](./docs/00-TOOLS.md) for the other tools and where their
+documentation lives.
 
 ## Layout
 

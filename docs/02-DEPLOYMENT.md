@@ -116,7 +116,7 @@ live.
 
 **This is the step that matters, and the service is unsafe without it.** There
 is no authentication anywhere in the application — see the security posture in
-[01-ARCHITECTURE.md](./01-ARCHITECTURE.md). A reachable, unauthenticated
+[01-ARCHITECTURE.md](../tools/downloader/docs/01-ARCHITECTURE.md). A reachable, unauthenticated
 instance is a machine that will fetch any URL a stranger names, open it in a
 real browser, and spend your disk and your bandwidth doing it. That is not a
 hypothetical use of an open endpoint; it is the only use.
@@ -231,7 +231,7 @@ Consider tightening these once it is reachable by more than you. The defaults in
 - A Cloudflare **WAF rate limiting rule** on `/api/` as a second layer, since it
   rejects at the edge and costs the host nothing. The in-process limiter still
   has to be right: it is per-process and does not survive a restart, which
-  [04-STATUS.md](./04-STATUS.md) covers.
+  [03-STATUS.md](../tools/downloader/docs/03-STATUS.md) covers.
 
 Updating:
 

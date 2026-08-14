@@ -3,6 +3,10 @@
 Rules for this tool only. The repo-wide conventions are in the root `CLAUDE.md`
 and are not repeated here.
 
+What is planned and what is deliberately undecided are in
+`tools/planner/docs/02-ROADMAP.md`; current state is in `03-STATUS.md` beside
+it, and each ticket keeps its brief and its log in `docs/work/`.
+
 ## What this is
 
 A trip planner: describe where you want to go and what you like, talk it through

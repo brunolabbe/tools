@@ -125,7 +125,7 @@ requests. This is the generic path and the reason the project can claim "any
 website".
 
 ```ts
-// The shape of it. Full implementation is WP-2.
+// The shape of it. Full implementation is dl-2.
 const hits: NetworkHit[] = [];
 
 page.on("request", (req) => {

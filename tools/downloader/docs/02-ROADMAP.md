@@ -51,7 +51,8 @@ Priority-ordered resolvers: site-specific → yt-dlp → browser sniffer → dir
 First usable answer wins. Fast and accurate where extractors exist, genuinely
 universal where they do not.
 
-**This is the plan.** The browser sniffer (WP-2) is what makes the goal
+**This is the plan.** The browser sniffer ([dl-2](./work/dl-2-browser-sniffer.md))
+is what makes the goal
 reachable; the extractor tier is a _speed optimisation layered on top of it_, and
 that ordering matters:
 
@@ -71,7 +72,7 @@ Everything below assumes Plan B.
 ## Phases
 
 Phases 0 through 3 are done, and M4 with them — see
-[04-STATUS.md](./04-STATUS.md) for current state and the next actions. Phase 1
+[03-STATUS.md](./03-STATUS.md) for current state and the next actions. Phase 1
 was the parallel block, where running several agents at once paid off; Phase 2
 was the single-agent join. What remains is Phase 4, which never ends.
 
@@ -86,72 +87,76 @@ instead of negotiating interfaces with each other mid-flight.
 ### Phase 1 — Parallel build ✅ _complete_
 
 Delivered by four concurrent agents; 330 tests, `npm run check` green. M1 was
-proven here; M2 was deferred to WP-5, because nothing composed the registry yet
-by design. See [04-STATUS.md](./04-STATUS.md) for what shipped and the decisions
-taken. The five approved contract changes it listed landed at the start of WP-5.
+proven here; M2 was deferred to [dl-5](./work/dl-5-api-and-orchestration.md),
+because nothing composed the registry yet by design. The five approved contract
+changes landed at the start of that ticket.
 
-| WP       | Package                      | Deliverable                                            |
-| -------- | ---------------------------- | ------------------------------------------------------ |
-| **WP-2** | `tools/downloader/resolvers` | **Browser sniffer (Playwright) — critical path**       |
-| **WP-1** | `tools/downloader/resolvers` | Registry + manifest parsers + yt-dlp fast path         |
-| **WP-3** | `tools/downloader/engine`    | ffmpeg runner, HLS/DASH/progressive download, progress |
-| **WP-4** | `tools/downloader/web`       | Full UI against a mocked API                           |
+| Ticket                                               | Package                      | Deliverable                                            |
+| ---------------------------------------------------- | ---------------------------- | ------------------------------------------------------ |
+| **[dl-2](./work/dl-2-browser-sniffer.md)**           | `tools/downloader/resolvers` | **Browser sniffer (Playwright) — critical path**       |
+| [dl-1](./work/dl-1-resolver-registry-and-parsers.md) | `tools/downloader/resolvers` | Registry + manifest parsers + yt-dlp fast path         |
+| [dl-3](./work/dl-3-download-engine.md)               | `tools/downloader/engine`    | ffmpeg runner, HLS/DASH/progressive download, progress |
+| [dl-4](./work/dl-4-web-ui.md)                        | `tools/downloader/web`       | Full UI against a mocked API                           |
 
-**WP-2 is listed first deliberately.** It is both the hardest package and the
+**dl-2 is listed first deliberately.** It is both the hardest package and the
 only one that determines whether the product can do what it claims — if you run
-one agent rather than four, run that one. WP-1's registry and manifest parsers
+one agent rather than four, run that one. dl-1's registry and manifest parsers
 are needed alongside it; its yt-dlp tier is the genuinely optional part and can
 be cut from scope without threatening the milestone.
 
-WP-1 and WP-2 share a package but touch disjoint files; both implement the same
-`Resolver` interface. WP-2 consumes WP-1's manifest parsers — the one real
-dependency inside Phase 1, so if the parsers slip, have WP-2 stub them behind
-the same signature rather than idling. WP-4 mocks `tools/downloader/api` from the zod schemas
-in `contract`, so it does not wait on the backend.
+dl-1 and dl-2 share a package but touch disjoint files; both implement the same
+`Resolver` interface. dl-2 consumes dl-1's manifest parsers — the one real
+dependency inside Phase 1, so if the parsers slip, have dl-2 stub them behind
+the same signature rather than idling. dl-4 mocks `tools/downloader/api` from
+the zod schemas in `contract`, so it does not wait on the backend.
 
 ### Phase 2 — Integration ✅ _complete_
 
-| WP       | Package                | Deliverable                                                      |
-| -------- | ---------------------- | ---------------------------------------------------------------- |
-| **WP-5** | `tools/downloader/api` | Fastify routes, job orchestrator + FSM, SSE, SQLite, file tokens |
+| Ticket                                       | Package                | Deliverable                                                      |
+| -------------------------------------------- | ---------------------- | ---------------------------------------------------------------- |
+| [dl-5](./work/dl-5-api-and-orchestration.md) | `tools/downloader/api` | Fastify routes, job orchestrator + FSM, SSE, SQLite, file tokens |
 
 This is the join point. One agent, because it wires the others together and
 concurrent edits here cause more trouble than they save.
 
-Delivered, along with M2 and M3. The SSRF guard was pulled forward from WP-6 by
-decision, since WP-5 is the first code exposed to the internet. See
-[04-STATUS.md](./04-STATUS.md) for what shipped and the one open contract
-question (the FSM has no back-edge, so re-probe retries cannot move status).
+Delivered, along with M2 and M3. The SSRF guard was pulled forward from dl-6 by
+decision, since dl-5 is the first code exposed to the internet. The one open
+contract question it left — the FSM has no back-edge, so re-probe retries cannot
+move status — is [dl-9](./work/dl-9-fsm-reprobe-back-edge.md).
 
 ### Phase 3 — Hardening ✅ _complete_
 
-| WP       | Area              | Deliverable                                                              | State       |
-| -------- | ----------------- | ------------------------------------------------------------------------ | ----------- |
-| **WP-6** | Security & limits | ~~SSRF guard~~ (done in WP-5), rate limits, disk quota, path confinement | ✅ complete |
-| **WP-7** | Ops & e2e         | Dockerfile, health checks, structured logging, end-to-end tests, CI      | ✅ complete |
+| Ticket                                     | Area              | Deliverable                                                              | State       |
+| ------------------------------------------ | ----------------- | ------------------------------------------------------------------------ | ----------- |
+| [dl-6](./work/dl-6-security-and-limits.md) | Security & limits | ~~SSRF guard~~ (done in dl-5), rate limits, disk quota, path confinement | ✅ complete |
+| [dl-7](./work/dl-7-ops-and-e2e.md)         | Ops & e2e         | Dockerfile, health checks, structured logging, end-to-end tests, CI      | ✅ complete |
+
+[dl-8](./work/dl-8-address-pinning-and-proxy.md) followed the phase, closing DNS
+rebinding at the socket rather than only at the pre-flight check.
 
 ### Phase 4 — Coverage (ongoing, never "done")
 
 Add site-specific resolvers at priority 10 for whatever the browser sniffer
-misses. Each is one file, one test, no changes elsewhere. If a new site ever
-forces an edit to the engine or the API, the abstraction has sprung a leak —
-fix the abstraction rather than special-casing.
+misses. **One ticket per site**, and each should be one file, one test, no
+changes elsewhere. If a new site ever forces an edit to the engine or the API,
+the abstraction has sprung a leak — fix the abstraction rather than
+special-casing, and say so in the ticket.
 
 ---
 
 ## Milestones
 
 - **M1 — Vertical slice ✅.** One hardcoded HLS URL downloads to disk from the CLI.
-  Proves ffmpeg + header replay. _After WP-3._
+  Proves ffmpeg + header replay. _After dl-3._
 - **M2 — Any-site probe ✅.** Paste an arbitrary URL, get a variant list back.
-  Proves the registry + sniffer. _After WP-1/WP-2._
+  Proves the registry + sniffer. _After dl-1/dl-2._
   **Acceptance requires `ENABLE_YTDLP_RESOLVER=false`** — a probe that only works
   with the extractor tier enabled has not demonstrated the capability the project
   is for. Test on a site with no yt-dlp extractor.
 - **M3 — Functional goal ✅.** Paste URL → pick quality → progress → download link.
-  **This is the goal you stated.** _After WP-5._
+  **This is the goal you stated.** _After dl-5._
 - **M4 — Deployable ✅.** Rate-limited, SSRF-guarded, containerised, GC'd.
-  _After WP-6/WP-7._ Verified rather than assumed: the image builds, the
+  _After dl-6/dl-7._ Verified rather than assumed: the image builds, the
   container serves the UI and the API on one origin, Chromium launches inside
   it, and a real HLS stream downloads through it to a fast-start MP4 that
   re-decodes with no errors.
@@ -161,12 +166,12 @@ fix the abstraction rather than special-casing.
 ## Sequencing for agents
 
 ```
-        ┌── WP-2 resolvers: browser sniffer ◄── CRITICAL PATH ──┐
-        ├── WP-1 resolvers: registry + parsers + yt-dlp ────────┤
-Phase 0 ┤        └─ parsers feed WP-2                           ├──► WP-5 api ──┬── WP-6 security
-  ✅    ├── WP-3 engine: ffmpeg + download ─────────────────────┤      (M3)     └── WP-7 ops
-        └── WP-4 web: UI on mocked API ────────────────────────┘                      (M4)
-              (M1 after WP-3, M2 after WP-1/2)
+        ┌── dl-2 resolvers: browser sniffer ◄── CRITICAL PATH ──┐
+        ├── dl-1 resolvers: registry + parsers + yt-dlp ────────┤
+Phase 0 ┤        └─ parsers feed dl-2                           ├──► dl-5 api ──┬── dl-6 security
+  ✅    ├── dl-3 engine: ffmpeg + download ─────────────────────┤      (M3)     └── dl-7 ops
+        └── dl-4 web: UI on mocked API ────────────────────────┘                      (M4)
+              (M1 after dl-3, M2 after dl-1/2)
 ```
 
 Rules that keep parallel agents from fighting:
@@ -174,11 +179,11 @@ Rules that keep parallel agents from fighting:
 1. **`tools/downloader/contract` is frozen during Phase 1.** If an agent needs a contract
    change, it stops and asks rather than editing — a unilateral edit silently
    breaks three siblings.
-2. **One agent per package**, except WP-1/WP-2 which are file-disjoint.
-3. **Every WP ships tests with fixtures**, not live network calls. Real sites
+2. **One agent per package**, except dl-1/dl-2 which are file-disjoint.
+3. **Every ticket ships tests with fixtures**, not live network calls. Real sites
    change and rate-limit; fixtures make failures mean something.
-4. **`npm run check` must pass** before a WP is called done — lint, format,
+4. **`npm run check` must pass** before a ticket is called done — lint, format,
    typecheck, all of it.
 
-Ready-to-paste briefs for each work package are in
-[03-AGENT-BRIEFS.md](./03-AGENT-BRIEFS.md).
+Each ticket in [work/](./work/) is self-contained enough to paste into an agent;
+the preamble to prepend is in [docs/01-TICKETS.md](../../../docs/01-TICKETS.md).

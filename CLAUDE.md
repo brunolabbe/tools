@@ -23,7 +23,8 @@ tools/<tool>/
   api/               its HTTP service
   web/               its UI
   e2e/               its Playwright specs
-docs/                analysis, architecture, roadmap, agent briefs, status
+  docs/              that tool's analysis, architecture, roadmap, status, tickets
+docs/                repo-wide only: the tool index, the ticket format, ADRs
 ```
 
 Two rules hold this shape, and they are the ones that keep tools from fusing:
@@ -109,6 +110,23 @@ CI runs lint, typecheck and every unit suite on every push. A tool's slow gates
 (e2e, container build) live in `.github/workflows/<tool>.yml`, path-filtered so
 work on one tool does not pay for another's.
 
+## Documentation and work
+
+**A tool's documentation lives with its code**, in `tools/<tool>/docs/`, on the
+same spine for every tool: `00-ANALYSIS`, `01-ARCHITECTURE`, `02-ROADMAP`,
+`03-STATUS`, and `work/`. The root `docs/` holds only what is true of the repo —
+the tool index, the ticket format, and ADRs for decisions binding more than one
+tool. A document that describes two tools is where two tools start to fuse.
+
+**Work is one file per ticket** in `tools/<tool>/docs/work/`, carrying its brief
+and its log together. Ids are prefixed per tool (`dl-`, `pl-`). The format, the
+fields and the preamble to hand an agent are in
+[docs/01-TICKETS.md](./docs/01-TICKETS.md).
+
+Append to a ticket's Log when you finish work on it, including whatever the
+brief turned out to have wrong. That is the note the next agent needs, and the
+roadmap and status pages are deliberately too thin to hold it.
+
 ## Style
 
 TypeScript strict, ESM, `.ts` extensions in relative imports (NodeNext),
@@ -126,4 +144,8 @@ No `console` — use the logger. Comment _why_, not _what_.
    `vitest.config.ts`.
 4. `tools/<name>/CLAUDE.md` — what the tool is, and only the rules specific to
    it. Do not restate anything on this page.
-5. `.github/workflows/<name>.yml` for anything slow, path-filtered to that tool.
+5. `tools/<name>/docs/02-ROADMAP.md` and an empty `work/`, plus a row in
+   [docs/00-TOOLS.md](./docs/00-TOOLS.md). The rest of the spine arrives when
+   there is something true to put in it — a young tool with two documents is an
+   honest young tool.
+6. `.github/workflows/<name>.yml` for anything slow, path-filtered to that tool.

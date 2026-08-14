@@ -1,7 +1,7 @@
 /**
  * Environment parsing, done once at boot.
  *
- * `docs/01-ARCHITECTURE.md` puts this here on purpose: the engine and the
+ * `tools/downloader/docs/01-ARCHITECTURE.md` puts this here on purpose: the engine and the
  * resolvers are libraries that take configuration as arguments, so this app is
  * the only place `process.env` is read. Everything below it receives values.
  */
@@ -254,7 +254,7 @@ export function loadApiConfig(
     // Both generic tiers default on. yt-dlp defaults on too, but its resolver
     // reports `canHandle() === false` when the binary is absent, so enabling it
     // on a machine without it is a no-op rather than an error — see the
-    // expendability rule in docs/02-ROADMAP.md.
+    // expendability rule in tools/downloader/docs/02-ROADMAP.md.
     enableYtdlpResolver: overrides.enableYtdlpResolver ?? bool(env["ENABLE_YTDLP_RESOLVER"], true),
     enableBrowserResolver:
       overrides.enableBrowserResolver ?? bool(env["ENABLE_BROWSER_RESOLVER"], true),

@@ -9,7 +9,7 @@
  * concatenating bytes itself.
  *
  * The engine deliberately does not parse playlists: that lives in
- * `packages/resolvers` (WP-1) and duplicating it here would give the project two
+ * `packages/resolvers` (dl-1) and duplicating it here would give the project two
  * HLS parsers that drift apart. The caller supplies the segment URL list.
  */
 

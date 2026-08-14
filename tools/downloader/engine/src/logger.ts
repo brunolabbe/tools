@@ -1,7 +1,7 @@
 /**
  * Minimal logger seam.
  *
- * No logger package exists yet (WP-7 introduces pino), and the engine must never
+ * No logger package exists yet (dl-7 introduces pino), and the engine must never
  * write to stdout on its own — a library that prints is unusable from a server
  * that structures its logs. So the engine accepts a logger and defaults to one
  * that discards everything.

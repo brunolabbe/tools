@@ -1,6 +1,6 @@
 /**
  * MPEG-DASH manifest parser — pure, offline, and the second DRM detector in the
- * system (see `docs/00-STREAM-CAPTURE-ANALYSIS.md` §3).
+ * system (see `tools/downloader/docs/00-ANALYSIS.md` §3).
  *
  * Unlike HLS there is no benign case here: DASH has no equivalent of an
  * in-manifest AES-128 key URI. A `<ContentProtection>` element always means

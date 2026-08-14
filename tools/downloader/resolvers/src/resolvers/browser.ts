@@ -64,7 +64,7 @@ export interface BrowserResolverOptions {
   /** Injected so tests can share one pool, and so a caller can cap it globally. */
   pool?: BrowserPool;
   /**
-   * WP-1 owns the parsers. They are injected rather than imported-and-called so
+   * dl-1 owns the parsers. They are injected rather than imported-and-called so
    * this resolver is testable before they land, and so a parser that throws on
    * an exotic manifest degrades to an opaque variant instead of failing a probe.
    */

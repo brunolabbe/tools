@@ -70,7 +70,7 @@ RUN apt-get update \
 
 # Optional, and off by default: yt-dlp is a latency optimisation, never a
 # dependency. Without it every request falls through to the browser sniffer and
-# still works — see docs/02-ROADMAP.md. Build with
+# still works — see tools/downloader/docs/02-ROADMAP.md. Build with
 # `--build-arg INSTALL_YTDLP=true` to include it.
 ARG INSTALL_YTDLP=false
 ARG YTDLP_VERSION=2025.09.26

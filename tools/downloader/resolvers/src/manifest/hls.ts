@@ -1,6 +1,6 @@
 /**
  * HLS playlist parser — pure, offline, and one of the two DRM detectors in the
- * system (see `docs/00-STREAM-CAPTURE-ANALYSIS.md` §3).
+ * system (see `tools/downloader/docs/00-ANALYSIS.md` §3).
  *
  * The distinction this file exists to get right: `EXT-X-KEY:METHOD=AES-128`
  * with an in-manifest `URI` is *transport encryption*. There is no licence

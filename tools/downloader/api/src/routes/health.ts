@@ -51,7 +51,7 @@ export interface HealthResponse {
     /** The configured cap, not the volume's size. Zero means no quota. */
     quotaBytes: number;
   };
-  /** Kept from the pre-WP-7 shape so an existing client does not break. */
+  /** Kept from the pre-dl-7 shape so an existing client does not break. */
   storageDir: string;
 }
 
