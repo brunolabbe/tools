@@ -99,11 +99,13 @@
     "DEVCONTAINER": "true"
   },
 
-  "forwardPorts": [8080, 5173, 8099],
+  "forwardPorts": [8080, 5173, 8099, 8090, 5183],
   "portsAttributes": {
-    "8080": { "label": "api", "onAutoForward": "notify" },
-    "5173": { "label": "web", "onAutoForward": "openBrowserOnce" },
-    "8099": { "label": "e2e", "onAutoForward": "silent" }
+    "8080": { "label": "downloader api", "onAutoForward": "notify" },
+    "5173": { "label": "downloader web", "onAutoForward": "openBrowserOnce" },
+    "8099": { "label": "downloader e2e", "onAutoForward": "silent" },
+    "8090": { "label": "planner api", "onAutoForward": "notify" },
+    "5183": { "label": "planner web", "onAutoForward": "openBrowserOnce" }
   },
 
   "postCreateCommand": "bash .devcontainer/post-create.sh",
