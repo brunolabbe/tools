@@ -6,9 +6,9 @@
  * out; `JobProgress` along the way.** It owns ffmpeg, the filesystem layout and
  * the retention sweep, and it owns nothing else — it never resolves a URL,
  * never touches a database, and never decides job state. Those belong to
- * `apps/api` (WP-5), which is the only intended consumer of this module.
+ * `apps/api` (dl-5), which is the only intended consumer of this module.
  *
- * ## The seam WP-5 consumes
+ * ## The seam dl-5 consumes
  *
  * ```ts
  * const engine = createEngine({ storageDir, maxFileSizeBytes, logger });
@@ -39,7 +39,7 @@
  *    so the orchestrator must hand in a *fresh* variant; passing a stale one is
  *    how `VARIANT_GONE` happens.
  *  - The engine does not enforce SSRF policy on `variant.url`. Resolver output
- *    is attacker-influenced, so WP-6's guard must run before this is called.
+ *    is attacker-influenced, so dl-6's guard must run before this is called.
  */
 
 import fs from "node:fs/promises";
@@ -86,7 +86,7 @@ export interface DownloadRequest {
   /**
    * Forces the manual segment-fetch path (bounded concurrency pool, then
    * ffmpeg's concat demuxer). Only for sources where ffmpeg demonstrably cannot
-   * replay the required headers. URLs come from the WP-1 manifest parsers.
+   * replay the required headers. URLs come from the dl-1 manifest parsers.
    */
   segmentUrls?: readonly string[] | undefined;
 }

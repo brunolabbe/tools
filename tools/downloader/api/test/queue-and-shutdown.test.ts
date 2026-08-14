@@ -2,7 +2,7 @@
  * The queue and graceful shutdown, plus the resolver composition that finally
  * makes **M2** demonstrable.
  *
- * The M2 acceptance criterion from `docs/02-ROADMAP.md` is not "the sniffer
+ * The M2 acceptance criterion from `tools/downloader/docs/02-ROADMAP.md` is not "the sniffer
  * works" — it is that the system resolves *without the extractor tier*. So the
  * expendability invariant is tested here, at the layer that actually composes
  * the chain, rather than asserted in prose.

@@ -10,7 +10,7 @@
  * for the case where ffmpeg cannot replay what the origin demands (per-segment
  * rotating tokens, a cookie jar that changes mid-playlist). Assembly still goes
  * through ffmpeg's concat demuxer. The engine does not parse playlists — the
- * caller gets the URL list from the WP-1 parsers in `packages/resolvers`.
+ * caller gets the URL list from the dl-1 parsers in `packages/resolvers`.
  */
 
 import type { ManifestDownloadOptions, ManifestDownloadResult } from "./manifest.ts";

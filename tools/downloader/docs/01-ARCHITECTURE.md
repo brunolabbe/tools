@@ -1,6 +1,6 @@
 # Architecture
 
-Derived from [00-STREAM-CAPTURE-ANALYSIS.md](./00-STREAM-CAPTURE-ANALYSIS.md).
+Derived from [00-ANALYSIS.md](./00-ANALYSIS.md).
 Every structural choice below traces back to a constraint in that document.
 
 ---

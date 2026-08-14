@@ -6,7 +6,7 @@
  * and it is the first code in the repo that assembles the whole chain. That
  * makes it where **M2** is finally demonstrable.
  *
- * The ordering rule from `docs/02-ROADMAP.md`, restated because it is the one
+ * The ordering rule from `tools/downloader/docs/02-ROADMAP.md`, restated because it is the one
  * thing here that is easy to get subtly wrong:
  *
  *   The browser sniffer is the *foundation*. yt-dlp is a latency optimisation

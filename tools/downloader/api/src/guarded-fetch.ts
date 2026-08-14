@@ -10,7 +10,7 @@
  * Injected into `DirectUrlResolver` (which fetches manifests) and into the
  * engine's `fetchImpl` (progressive downloads, segments, subtitles). ffmpeg
  * does its own fetching and cannot be wrapped this way — that gap is recorded
- * in `docs/04-STATUS.md`, and it is the reason the guard also vets every URL a
+ * in `tools/downloader/docs/03-STATUS.md`, and it is the reason the guard also vets every URL a
  * resolver returns before the engine is handed anything.
  *
  * The per-hop check here and the dispatcher from `dispatcher.ts` are two halves

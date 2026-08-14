@@ -18,7 +18,7 @@
 #    and Docker's automatic allocation is not stable across recreates.
 #
 # The Cloudflare half — hostname, certificate, access policy — is not in this
-# file, because it lives in the dashboard. See docs/05-DEPLOYMENT.md.
+# file, because it lives in the dashboard. See docs/02-DEPLOYMENT.md.
 
 services:
   downloader:
@@ -49,7 +49,7 @@ services:
       # inside this one token. It is a credential in the full sense: anyone
       # holding it can publish traffic as this tunnel. It belongs in `.env`,
       # which is gitignored, and nowhere else. Never in this file.
-      TUNNEL_TOKEN: "${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env - see docs/05-DEPLOYMENT.md}"
+      TUNNEL_TOKEN: "${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env - see docs/02-DEPLOYMENT.md}"
 
     depends_on:
       downloader:

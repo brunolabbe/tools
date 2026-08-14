@@ -4,7 +4,7 @@
  * The engine is a library: it takes its configuration as an argument rather than
  * reading `process.env` behind the caller's back. `loadEngineConfig()` exists so
  * the CLI and tests have a one-liner, but `apps/api` is expected to parse and
- * validate the environment once at boot (per docs/01-ARCHITECTURE.md) and pass
+ * validate the environment once at boot (per tools/downloader/docs/01-ARCHITECTURE.md) and pass
  * the values in explicitly.
  */
 

@@ -1,7 +1,7 @@
 /**
  * SSRF guard.
  *
- * Formally WP-6, pulled forward because WP-5 is the first code that exposes any
+ * Formally dl-6, pulled forward because dl-5 is the first code that exposes any
  * of this to the internet. Two distinct attack surfaces, and the second is the
  * one that gets forgotten:
  *
@@ -10,7 +10,7 @@
  *     whatever the page asked for, so a hostile page can name any address it
  *     likes and have this server fetch it with the server's own credentials and
  *     network position. Resolver output is attacker-influenced data, not
- *     trusted input, and `docs/01-ARCHITECTURE.md` says so explicitly.
+ *     trusted input, and `tools/downloader/docs/01-ARCHITECTURE.md` says so explicitly.
  *
  * The check is on **resolved IP addresses**, not on hostnames. A name check is
  * theatre: `localtest.me` resolves to 127.0.0.1, and any attacker-controlled

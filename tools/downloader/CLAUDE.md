@@ -3,8 +3,11 @@
 Rules for this tool only. The repo-wide conventions are in the root
 `CLAUDE.md` and are not repeated here.
 
-Read `docs/00-STREAM-CAPTURE-ANALYSIS.md` before touching resolver or engine
-code — most non-obvious decisions here are justified there, not repeated.
+Read `tools/downloader/docs/00-ANALYSIS.md` before touching resolver or engine
+code — most non-obvious decisions here are justified there, not repeated. The
+rest of this tool's documentation is beside it in `docs/`: architecture,
+roadmap, current status, and `docs/work/` where each ticket keeps its brief and
+its log.
 
 ## What this is
 
