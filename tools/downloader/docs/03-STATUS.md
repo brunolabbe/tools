@@ -39,9 +39,10 @@ is what remains**
 
 ## Open tickets
 
-| Ticket                                    | Status    | Note                                                 |
-| ----------------------------------------- | --------- | ---------------------------------------------------- |
-| [dl-10](./work/dl-10-release-pipeline.md) | in-flight | Landed but unproven — the first release exercises it |
+| Ticket                                        | Status    | Note                                                      |
+| --------------------------------------------- | --------- | --------------------------------------------------------- |
+| [dl-10](./work/dl-10-release-pipeline.md)     | in-flight | Landed but unproven — the first release exercises it      |
+| [dl-11](./work/dl-11-guarded-egress-proxy.md) | ready     | Closes the ffmpeg gap below, at the socket not the parser |
 
 Phase 4 adds a ticket per site-specific resolver, as and when the sniffer misses
 one.
@@ -73,6 +74,12 @@ resolver and the engine's own fetches, but ffmpeg does its own HTTP and cannot
 be wrapped. This is why the guard vets **every URL in a `ProbeResult`** before
 the engine is handed anything — that check is load-bearing, not belt-and-braces,
 TOCTOU and all.
+
+That sweep cannot cover the URLs a manifest names — segment URIs, the
+`EXT-X-KEY` key, DASH template expansions — because they do not exist yet when
+it runs, nor a redirect ffmpeg follows, nor a name it re-resolves for itself.
+[dl-11](./work/dl-11-guarded-egress-proxy.md) closes all three at the socket:
+ffmpeg through a loopback proxy that runs the same guard.
 
 **Proxy mode does not pin, by design.** With `PROXY_URL` set, the target name is
 resolved by the proxy and there is no local resolution to pin; what bounds

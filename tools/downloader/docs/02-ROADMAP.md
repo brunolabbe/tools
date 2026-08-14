@@ -135,6 +135,9 @@ and it is the table's only back-edge.
 
 [dl-8](./work/dl-8-address-pinning-and-proxy.md) followed the phase, closing DNS
 rebinding at the socket rather than only at the pre-flight check.
+[dl-11](./work/dl-11-guarded-egress-proxy.md) is the same move for the one
+egress dl-8 could not reach: ffmpeg fetches through its own HTTP stack, so a
+manifest's segment URIs are opened without anything having authorised them.
 
 ### Phase 4 — Coverage (ongoing, never "done")
 
