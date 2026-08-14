@@ -114,6 +114,17 @@ describe("input arguments", () => {
     expect(args.at(-1)).toBe("https://cdn.example/master.m3u8");
   });
 
+  test("a remote input can be opened through a proxy", () => {
+    // `httpproxy` is how libavformat opens an HTTPS target when a proxy is set.
+    // Without it, every proxied HTTPS download fails with `Invalid argument`
+    // before the proxy is contacted — which is what happened until dl-11, and
+    // what nothing here caught, because no fixture is HTTPS.
+    const args = buildNetworkInputArgs("https://cdn.example/master.m3u8");
+
+    const whitelist = args[args.indexOf("-protocol_whitelist") + 1];
+    expect(whitelist).toContain("httpproxy");
+  });
+
   test("headers precede the -i they apply to", () => {
     const args = buildNetworkInputArgs("https://cdn.example/v.m3u8", { requestContext: CONTEXT });
     expect(args.indexOf("-headers")).toBeLessThan(args.indexOf("-i"));
