@@ -142,6 +142,14 @@ manifest's segment URIs are opened without anything having authorised them.
 pointing the two subprocess resolvers at the same proxy — the browser tier
 being the wider hole of the three, since a page fetches whatever it names.
 
+Four tickets sit between this phase and the next, and none of them adds
+capability: [dl-13](./work/dl-13-typecheck-the-tests.md) puts the test files in
+the typechecker, [dl-14](./work/dl-14-proxied-https-coverage.md) covers the
+proxied-HTTPS path that shipped broken once already,
+[dl-15](./work/dl-15-component-render-tests.md) renders the UI's components, and
+[dl-16](./work/dl-16-e2e-through-the-sniffer.md) drives the sniffer end to end —
+the capability this whole plan rests on, and the one the e2e suite turns off.
+
 ### Phase 4 — Coverage (ongoing, never "done")
 
 Add site-specific resolvers at priority 10 for whatever the browser sniffer
