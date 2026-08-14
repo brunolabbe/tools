@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { API_DEFAULTS, loadApiConfig } from "../src/config.ts";
 
@@ -25,7 +26,10 @@ describe("loadApiConfig", () => {
     expect(config.host).toBe("0.0.0.0");
     expect(config.port).toBe(9100);
     expect(config.corsOrigins).toEqual(["https://a.example", "https://b.example"]);
-    expect(config.webDir?.startsWith("/")).toBe(true);
+    // `isAbsolute`, not a leading "/": this suite runs on Windows in CI too,
+    // where an absolute path starts with a drive letter.
+    expect(path.isAbsolute(config.webDir ?? "")).toBe(true);
+    expect(config.webDir?.endsWith(path.join("web", "dist", "app"))).toBe(true);
     expect(config.logLevel).toBe("warn");
   });
 
