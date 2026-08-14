@@ -3,7 +3,7 @@ id: pl-3
 tool: planner
 title: The trip brief, in the contract
 kind: work-package
-status: ready
+status: done
 milestone: P1
 depends_on: []
 ---
@@ -99,4 +99,107 @@ storage, no UI lands in this ticket.
 
 ## Log
 
-_Not started._
+### 2026-08-14 — landed
+
+`tools/planner/contract/src/brief.ts`, exported from `index.ts`, with
+`contract/test/brief.test.ts` beside it. `npm run check` and
+`npm test -- --project planner` are green. No tree, no storage, no UI, as the
+brief required.
+
+**What is in the contract.** `TripBrief` = a flat `TripBriefCore` of eleven
+slots plus `details: TripShapeDetails | null`. `TripShape` is the six shapes
+from §1. Each shape gets its own extension type, discriminated on `shape`, and
+each extension carries a `context` free-text slot. `Slot<T>` is the three-state
+union with `slot.unknown()` / `slot.declined()` / `slot.answered(v)`
+constructors and `isAnswered` / `isSettled` predicates. Every schema is written
+`satisfies z.ZodType<T>`; `slotSchema` is a generic factory, so it carries an
+explicit return type instead, which buys the same proof.
+
+**Where the schemas live, and why not `api.ts`.** They sit beside their types in
+`brief.ts`. `api.ts` is documented as the HTTP contract and a brief is validated
+in places with no HTTP in them — `@planner/intake` assembles one offline, a
+specialist reads one it was handed. The property the brief actually asked for is
+the `satisfies`, and that is unaffected by the file.
+
+#### Step 5 — the error codes, proposed
+
+**One new code: `BRIEF_INCOMPLETE`.** Raised when something asks for a plan
+against a brief whose `missingRequiredSlots` is not empty. Nothing existing
+covers it: core has no "your input was incomplete" code at all — its input codes
+are about a URL — and the request that raises this one is _well formed_. It is
+the document behind it that is not ready, which is a different sentence to a
+user and a different fix. Its `details` carries the missing slot ids, so the UI
+can send someone back to the right question rather than to the start of the
+wizard.
+
+**The date rules need nothing new, and that is the considered answer rather than
+a shrug.** `INVALID_DATES` already covers a return before departure, a date in
+the past, and a span longer than we will plan. Flexibility adds one case — a
+window too narrow to hold the nights asked for ("two weeks between the 1st and
+the 7th") — and it is the _same cause_ as the others: these dates contradict
+each other. It wants the same sentence in front of a user. What distinguishes it
+is `details`, not the taxonomy, and `AppError` already carries those. A code per
+date shape would give the UI six ways to say one thing. Both code comments in
+`errors.ts` now say this, so nobody re-opens it silently.
+
+#### Decisions worth knowing before pl-6
+
+**`destination` is a core slot and is deliberately _not_ required.** The brief's
+core list (from §3) does not mention a destination, but pl-7 step 5 draws an
+intake's title from "the destination answer", so the slot has to exist. Making
+it optional is what reconciles them, and it is also right on the product: §1's
+list of hard facts a user knows is who, when, budget and origin — not where.
+"Somewhere warm, you pick" is a real trip to plan, and a _declined_ destination
+is an instruction to the roster rather than a hole in the brief.
+
+**Required is six core slots plus one or two per shape** — `shape`, `origin`,
+`dates`, `travellers`, `budget`, `effort`, then e.g. `maxDailyDriveHours` and
+`vehicle` for a road trip. That is eight answers for most shapes and seven for a
+resort, which lands on §3's "perhaps eight to ten", and a test asserts the count
+stays there. `comfort`, `ages`, `accessNeeds`, `dealBreakers` and `destination`
+are all _refine_: each improves a plan, none of them prevents one, and the bar
+here is the line where a user is allowed to leave.
+
+**`REQUIRED_SHAPE_SLOTS` is the table pl-6 must agree with**, and its type keys
+each row to that shape's own slot keys — a slot renamed on an extension breaks
+the table rather than silently dropping a requirement. pl-6 still owes the test
+in both directions against the checked-in tree.
+
+**The extensions are `type` aliases, not `interface`s, on purpose.** A type alias
+carries an implicit index signature, which is what lets `missingRequiredSlots`
+look a slot up by id without a type assertion. Do not "tidy" them into
+interfaces.
+
+**`shape` and `details` are kept in step by construction and by the schema.**
+`withShape` is the operation the brief's trap asks for — it spreads the core
+through untouched and swaps only `details`, so a road trip that turns out to be
+a hiking trip with a drive at each end costs the extension and nothing else.
+`tripBriefSchema` has a refinement rejecting a brief whose extension is not its
+shape's, so nothing downstream has to consider that case.
+
+**No clock, so `INVALID_DATES` is only half-enforced here.** The schemas check
+what is true without one: a return not before its departure, a window that does
+not end before it starts, `nights` inside `MAX_TRIP_NIGHTS`. "In the past" and
+the window-too-narrow case need `now` or date arithmetic and belong to pl-6's
+`validateAnswer`.
+
+#### What the brief got wrong, or left out
+
+- **`missingRequiredSlots` is runtime logic in a package `01-ARCHITECTURE.md`
+  describes as having none.** The brief already argued for it and this ticket
+  followed that; `emptyBrief`, `emptyShapeDetails` and `withShape` came along on
+  the same reasoning — both sides need them and neither should own them. Worth
+  saying out loud since the architecture page still reads "no runtime logic".
+- **The brief lists "party (count, ages that matter, accessibility)" as one
+  item.** It cannot be one slot: pl-6 fills one slot per question node, so it is
+  three — `travellers`, `ages`, `accessNeeds` — and only the first is required.
+- **`isSettled` takes `Slot<unknown>`, not a generic `Slot<T>`.** A generic
+  cannot infer over `brief[id]` where `id` ranges across slots of different value
+  types, which is exactly how `missingRequiredSlots` calls it.
+- **`slot.unknown()` and `slot.declined()` return their own narrow types** rather
+  than `Slot<T>`, so they need no type argument at a call site and a helper that
+  only clears a slot can say so in its signature.
+- **Tests on this branch are not covered by the typechecker yet** — dl-13 was
+  still in flight when this landed. `contract/test/brief.test.ts` was
+  typechecked by hand against `tsconfig.base.json` so it does not break the gate
+  the day dl-13 merges.
