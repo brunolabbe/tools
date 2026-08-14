@@ -157,6 +157,12 @@ Non-negotiable, because this service fetches arbitrary URLs on request:
   cloud-metadata ranges, re-validated **after every redirect**. Applies to the
   page URL _and_ to every media URL a resolver returns; a resolver's output is
   attacker-influenced data, not trusted input.
+- **Guarded egress** — the pre-flight check above cannot reach a fetch made by a
+  subprocess, and three of them fetch: ffmpeg, Chromium and yt-dlp. All three
+  are pointed at a loopback proxy that runs the same guard on every request and
+  pins the address it vetted, so a segment URI or a page subresource that no
+  `ProbeResult` ever contained is still checked. `PROXY_URL`, when set, is
+  chained to rather than replaced.
 - **Path safety** — filenames sanitised, output paths confined to `STORAGE_DIR`,
   no user string ever reaching a shell. Spawn with argument arrays, never
   `shell: true`.

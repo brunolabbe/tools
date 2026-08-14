@@ -1,62 +1,77 @@
 /**
- * A loopback HTTP proxy that puts ffmpeg's own fetches behind the SSRF guard.
+ * A loopback HTTP proxy that puts every subprocess fetch behind the SSRF guard.
  *
  * ## Why this exists
  *
  * `guarded-fetch.ts` checks every redirect hop and `dispatcher.ts` pins each
- * connection to a vetted address — but both live inside undici, and ffmpeg
- * fetches through libavformat. Three things follow from that, and they are the
- * three holes dl-11 closes:
+ * connection to a vetted address — but both live inside undici, and three of
+ * this service's fetchers are not undici at all: ffmpeg goes through
+ * libavformat, and the browser and yt-dlp tiers are separate processes with
+ * their own network stacks. Three things follow from that, and they are the
+ * three holes dl-11 closed for ffmpeg and dl-12 closed for the other two:
  *
- *  1. **The URLs a manifest names.** ffmpeg reads the playlist and then fetches
- *     what it points at — `#EXTINF` segments, the `#EXT-X-MAP` init segment, the
- *     `#EXT-X-KEY` key, DASH template expansions. None of those exist when
+ *  1. **The URLs nobody vetted, because nobody had seen them.** ffmpeg reads a
+ *     playlist and then fetches what it points at — `#EXTINF` segments, the
+ *     `#EXT-X-MAP` init segment, the `#EXT-X-KEY` key, DASH template expansions.
+ *     Chromium does the same thing on a far wider scale: every script, image,
+ *     `fetch()` and XHR a hostile page names, with the timing and the error
+ *     readable back in the page's own JavaScript. None of those URLs exist when
  *     `assertAllAllowed` sweeps the `ProbeResult`, so that sweep — load-bearing
  *     as it is — structurally cannot cover them.
  *  2. **Redirects.** A vetted manifest URL answering `302` to an internal
  *     address is followed without anyone checking the second hop.
- *  3. **Re-resolution.** ffmpeg resolves names itself, so dl-8's pinning never
- *     applies and the pre-flight answer is not binding.
+ *  3. **Re-resolution.** ffmpeg and Chromium resolve names themselves, so dl-8's
+ *     pinning never applies and the pre-flight answer is not binding.
  *
  * Parsing manifests ourselves and pre-vetting each URI is the obvious answer and
  * the wrong one — it gives up why `download/manifest.ts` exists (analysis §6)
- * and still misses key URIs and nested playlists. The check belongs at the
- * socket, and a proxy is where ffmpeg will accept one.
+ * and still misses key URIs and nested playlists. Nor is there any version of it
+ * for a page's subresources. The check belongs at the socket, and a proxy is
+ * where all three of these will accept one.
  *
  * ## What it does
  *
- * `CONNECT host:port` for HTTPS, absolute-form `GET`/`HEAD` for plain HTTP —
- * that is the whole of what ffmpeg speaks, verified against ffmpeg 6.1 rather
- * than assumed. Each is vetted with the same `SsrfGuard` the rest of the service
- * uses and connected through the same pinning `lookup` as `dispatcher.ts`.
+ * `CONNECT host:port` for HTTPS, absolute-form requests for plain HTTP. Each is
+ * vetted with the same `SsrfGuard` the rest of the service uses and connected
+ * through the same pinning `lookup` as `dispatcher.ts`.
  *
  * **No TLS interception.** A `CONNECT` is tunnelled byte-for-byte, so
- * certificates stay end-to-end and ffmpeg needs no trust-store change. Not
+ * certificates stay end-to-end and no client needs a trust-store change. Not
  * seeing the request path costs nothing: the guard is host- and address-based.
  *
- * **In proxy mode ffmpeg resolves nothing.** It connects to us and names a
+ * **In proxy mode the client resolves nothing.** It connects to us and names a
  * host; we do the resolving. That is what closes hole 3 — there is no second
  * resolution left to disagree with the first, exactly as in dl-8.
  *
  * ## What it is not
  *
  * Not a general-purpose proxy, and it must not become one. It binds loopback on
- * an ephemeral port, and it refuses every method and request form outside the
- * two above. There is no authentication because there is nothing usable to
- * authenticate with: ffmpeg 6.1 sends no `Proxy-Authorization`, with or without
- * credentials in the proxy URL. Loopback binding is the containment.
+ * an ephemeral port, it takes absolute-form requests only, and it refuses any
+ * method outside the set a browser or a media client actually sends. There is no
+ * authentication because there is nothing usable to authenticate with: ffmpeg
+ * 6.1 sends no `Proxy-Authorization`, with or without credentials in the proxy
+ * URL. Loopback binding is the containment.
+ *
+ * ## What it still cannot see
+ *
+ * WebRTC opens UDP straight out of Chromium, which no HTTP proxy observes, and
+ * a `ws://` upgrade on a plain-HTTP page is refused rather than tunnelled
+ * (`wss://` rides inside a `CONNECT` and is unaffected). QUIC is not a bypass:
+ * Chromium speaks no UDP through an HTTP proxy and falls back to TCP.
  *
  * That also means a refusal cannot be attributed to a job — one proxy serves
  * every download and nothing in the request identifies the caller. A blocked
  * fetch is logged here and surfaces to the client as the `DOWNLOAD_FAILED` that
- * any ffmpeg failure does; the refusal reason lives in the log and in the
- * stderr tail, not in the error code. See the ticket's Log.
+ * any ffmpeg failure does, or as whatever a page makes of a subresource it could
+ * not load; the refusal reason lives in the log, not in the error code. See the
+ * tickets' logs.
  */
 
 import http from "node:http";
 import net from "node:net";
 import type { AddressInfo } from "node:net";
 import { AppError } from "@downloader/contract";
+import type { ProbeResult } from "@downloader/contract";
 import { createPinningLookup, systemResolve } from "./dispatcher.ts";
 import type { AddressResolver } from "./dispatcher.ts";
 import type { AppLogger } from "./logger.ts";
@@ -75,7 +90,11 @@ export interface EgressProxyOptions {
 }
 
 export interface EgressProxy {
-  /** What to hand ffmpeg as `http_proxy`. Always `http://127.0.0.1:<port>`. */
+  /**
+   * What to hand every subprocess: ffmpeg's `http_proxy`, Chromium's
+   * `--proxy-server`, yt-dlp's `--proxy`. Always `http://127.0.0.1:<port>`, and
+   * never anything a client should see — see `withoutEgressProxy`.
+   */
   url: string;
   /**
    * `pinned` — this process resolves the target and binds the address into the
@@ -100,8 +119,18 @@ const HOP_BY_HOP = new Set([
   "upgrade",
 ]);
 
-/** ffmpeg reads; it never writes. Anything else has no business here. */
-const ALLOWED_METHODS = new Set(["GET", "HEAD"]);
+/**
+ * ffmpeg only ever reads, and while this proxy served ffmpeg alone the set was
+ * `GET`/`HEAD`. A page is not so tidy: its `fetch()` and XHR reach a proxy as
+ * absolute-form `POST` (measured against Chromium, not assumed), and refusing
+ * those would break plain-HTTP pages in a way no log explains — the browser
+ * tier's whole job is to let a page's own player run.
+ *
+ * What keeps this from being an open proxy is the guard on every target, the
+ * absolute-form-only rule and the loopback binding, not the verb list. The list
+ * is here to keep the surface recognisable rather than to be the boundary.
+ */
+const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 
 /**
  * A tunnel that stalls forever is a connection leaked per job. ffmpeg has its
@@ -315,6 +344,28 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
         server.closeAllConnections();
         server.close(() => resolve());
       }),
+  };
+}
+
+/**
+ * Drops the proxy this process told the resolvers to use out of a probe's
+ * `RequestContext`.
+ *
+ * Every resolver echoes `ResolveOptions.proxyUrl` into the context it returns,
+ * which was informative while that value was the operator's proxy. Since dl-12
+ * it is this proxy — an ephemeral loopback port, meaningless to anyone outside
+ * this process and wrong after a restart. The field means "the proxy needed to
+ * re-issue this request from somewhere else", and that is not it.
+ *
+ * Called on both paths a `ProbeResult` takes to a client: the probe response and
+ * the `probed` job event.
+ */
+export function withoutEgressProxy(probe: ProbeResult): ProbeResult {
+  if (probe.requestContext.proxyUrl === undefined) return probe;
+  const { headers, expiresAt } = probe.requestContext;
+  return {
+    ...probe,
+    requestContext: { headers, ...(expiresAt === undefined ? {} : { expiresAt }) },
   };
 }
 

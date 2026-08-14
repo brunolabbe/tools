@@ -59,6 +59,8 @@ export class StubResolver implements Resolver {
   readonly priority = 10;
   calls = 0;
   disposed = 0;
+  /** What the caller asked for, so tests can assert on the options it composed. */
+  lastOptions: ResolveOptions | undefined;
 
   readonly #script: (call: number) => Promise<ProbeResult>;
 
@@ -72,6 +74,7 @@ export class StubResolver implements Resolver {
 
   async resolve(_url: URL, options: ResolveOptions): Promise<ProbeResult> {
     const call = this.calls++;
+    this.lastOptions = options;
     if (options.signal.aborted) throw new AppError("CANCELED");
     return await this.#script(call);
   }

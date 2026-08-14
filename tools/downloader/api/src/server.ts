@@ -79,9 +79,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const guardedFetch = createGuardedFetch(guard, globalThis.fetch, {
     dispatcher: egress.dispatcher,
   });
-  // The other half of the same answer, for the egress no dispatcher can reach:
-  // ffmpeg fetches through libavformat, so it gets a proxy that runs this guard
-  // on every CONNECT. See `egress-proxy.ts`.
+  // The other half of the same answer, for the egress no dispatcher can reach.
+  // ffmpeg fetches through libavformat and the resolver tiers fetch from their
+  // own subprocesses, so all three get a proxy that runs this guard on every
+  // request. See `egress-proxy.ts`.
   const egressProxy = await startEgressProxy({
     guard,
     logger,
@@ -89,7 +90,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   });
   logger.info("egress configured", {
     mode: egress.mode,
-    ffmpegProxyMode: egressProxy.mode,
+    subprocessProxyMode: egressProxy.mode,
     // Whether a proxy is set, never which: the URL routinely carries
     // credentials, and this line is not worth a leak.
     proxied: config.proxyUrl !== undefined,
@@ -149,7 +150,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     logger,
     probeTimeoutMs: config.probeTimeoutMs,
     fileRetentionHours: config.fileRetentionHours,
-    ...(config.proxyUrl === undefined ? {} : { proxyUrl: config.proxyUrl }),
+    // Not `config.proxyUrl`, for the same reason the engine does not get it:
+    // the browser and yt-dlp tiers fetch from their own subprocesses, so the
+    // only check that can reach them is the one at this proxy. See dl-12.
+    proxyUrl: egressProxy.url,
     fileUrl: (token) => ROUTES.file(token),
     now,
   });
@@ -164,6 +168,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     tiers: { ytdlp, browser },
     startedAt: now(),
     guard,
+    egressProxyUrl: egressProxy.url,
     queue,
     events,
     probeCache,

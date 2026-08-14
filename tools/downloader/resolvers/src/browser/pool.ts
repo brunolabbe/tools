@@ -100,7 +100,16 @@ export interface BrowserPoolStats {
 }
 
 export interface BrowserLeaseOptions {
-  /** When set, a dedicated browser is launched: Chromium binds proxies per process. */
+  /**
+   * Chromium binds `--proxy-server` per process, so the shared browser is keyed
+   * on this: leases asking for the same proxy share it, and only a lease asking
+   * for a *different* one pays for a dedicated launch.
+   *
+   * Since dl-12 the API sets this on every probe — its loopback egress proxy is
+   * how a page's own fetches are made to pass the SSRF guard — so treating a
+   * proxy as the exception would have meant a fresh Chromium, ~1 s and ~150 MB,
+   * on every single probe.
+   */
   proxyUrl?: string | undefined;
   signal?: AbortSignal | undefined;
 }
@@ -127,6 +136,9 @@ export class BrowserPool {
   readonly #args: string[];
   #shared: Browser | undefined;
   #launching: Promise<Browser> | undefined;
+  /** The proxy the shared browser is bound to; `undefined` until one is claimed. */
+  #sharedProxyUrl: string | undefined;
+  #sharedClaimed = false;
   #closed = false;
 
   constructor(options: BrowserPoolOptions = {}) {
@@ -175,12 +187,15 @@ export class BrowserPool {
     let dedicated: Browser | undefined;
     try {
       throwIfAborted(options.signal);
+      const proxyUrl = options.proxyUrl === "" ? undefined : options.proxyUrl;
       let browser: Browser;
-      if (options.proxyUrl) {
-        dedicated = await this.#launch(options.proxyUrl);
+      if (this.#sharedClaimed && this.#sharedProxyUrl !== proxyUrl) {
+        // A second proxy in one process. Rare enough not to be worth a second
+        // pooled browser, and a dedicated one is closed as soon as it is done.
+        dedicated = await this.#launch(proxyUrl);
         browser = dedicated;
       } else {
-        browser = await this.#shareBrowser();
+        browser = await this.#shareBrowser(proxyUrl);
       }
       return await fn(browser);
     } finally {
@@ -200,6 +215,8 @@ export class BrowserPool {
     const browser = this.#shared ?? (await this.#launching?.catch(() => undefined));
     this.#shared = undefined;
     this.#launching = undefined;
+    this.#sharedClaimed = false;
+    this.#sharedProxyUrl = undefined;
     if (!browser) return;
     try {
       await browser.close();
@@ -208,10 +225,14 @@ export class BrowserPool {
     }
   }
 
-  async #shareBrowser(): Promise<Browser> {
+  async #shareBrowser(proxyUrl: string | undefined): Promise<Browser> {
+    // The first lease claims the shared browser's proxy; every later one either
+    // matches it or was sent down the dedicated path before getting here.
+    this.#sharedClaimed = true;
+    this.#sharedProxyUrl = proxyUrl;
     if (this.#shared?.isConnected()) return this.#shared;
     this.#shared = undefined;
-    this.#launching ??= this.#launch().then(
+    this.#launching ??= this.#launch(proxyUrl).then(
       (browser) => {
         this.#shared = browser;
         this.#launching = undefined;
@@ -219,6 +240,11 @@ export class BrowserPool {
       },
       (error: unknown) => {
         this.#launching = undefined;
+        // Nothing got bound, so the claim goes back: a later probe with a
+        // different proxy should get the shared slot rather than be exiled to a
+        // dedicated browser by a launch that never happened.
+        this.#sharedClaimed = false;
+        this.#sharedProxyUrl = undefined;
         throw error;
       },
     );
@@ -230,6 +256,14 @@ export class BrowserPool {
       return await chromium.launch({
         headless: this.#headless,
         args: this.#args,
+        // No `bypass`: Playwright adds `--proxy-bypass-list=<-loopback>` of its
+        // own accord whenever a proxy is set, and passing a bypass list that
+        // mentions a loopback host is what would *undo* it. That default is
+        // load-bearing — Chromium otherwise refuses to proxy `127.0.0.1`, which
+        // would leave a page free to reach the deployment's own loopback
+        // services with nothing checking. The API's `tiers-behind-the-proxy`
+        // suite asserts against it, so a Playwright upgrade that changed the
+        // default fails a test rather than quietly reopening the hole.
         ...(proxyUrl === undefined ? {} : { proxy: { server: proxyUrl } }),
       });
     } catch (error) {

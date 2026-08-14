@@ -18,6 +18,7 @@ import { AppError, probeRequestSchema, ROUTES } from "@downloader/contract";
 import type { ProbeResponse, ProbeResult, ResolveOptions } from "@downloader/contract";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
+import { withoutEgressProxy } from "../egress-proxy.ts";
 import { createRateLimitHook } from "../rate-limit.ts";
 import { urlsInProbeResult } from "../ssrf.ts";
 
@@ -61,9 +62,13 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
     });
 
     const resolveOptions: ResolveOptions = {
+      // The loopback proxy, never `config.proxyUrl`: the browser and yt-dlp
+      // tiers fetch from their own processes, so this is the only place their
+      // egress can be checked at all. It chains to the operator's proxy when
+      // there is one. See `egress-proxy.ts` and dl-12.
+      proxyUrl: context.egressProxyUrl,
       timeoutMs: context.config.probeTimeoutMs,
       signal: controller.signal,
-      ...(context.config.proxyUrl === undefined ? {} : { proxyUrl: context.config.proxyUrl }),
     };
 
     // The per-IP bucket above bounds one caller. This bounds the whole server,
@@ -84,7 +89,9 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
 
     let probe: ProbeResult;
     try {
-      probe = await context.registry.resolve(url, resolveOptions);
+      // The resolvers echo the proxy they were given; that is this process's own
+      // loopback port and no client's business.
+      probe = withoutEgressProxy(await context.registry.resolve(url, resolveOptions));
     } finally {
       release();
     }

@@ -157,6 +157,24 @@ describe("the spawn path", () => {
     expect(probe.variants.length).toBeGreaterThan(0);
   });
 
+  test("the proxy it is given reaches the process as --proxy", async () => {
+    // Since dl-12 that proxy is the API's guarded loopback one, and it is the
+    // only thing standing between this subprocess and an unchecked socket. The
+    // fake binary reports its own arguments as the title.
+    const probe = await fakeResolver("echo-args").resolve(
+      SOURCE,
+      options({ proxyUrl: "http://127.0.0.1:45999" }),
+    );
+
+    expect(probe.title).toContain("--proxy http://127.0.0.1:45999");
+  });
+
+  test("an empty proxy is not passed at all", async () => {
+    const probe = await fakeResolver("echo-args").resolve(SOURCE, options({ proxyUrl: "" }));
+
+    expect(probe.title).not.toContain("--proxy");
+  });
+
   test("an unsupported URL falls through with NO_MEDIA_FOUND", async () => {
     await expect(fakeResolver("unsupported").resolve(SOURCE, options())).rejects.toMatchObject({
       code: "NO_MEDIA_FOUND",

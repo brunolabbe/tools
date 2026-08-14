@@ -35,6 +35,7 @@ import type { DownloadEngine } from "@downloader/engine";
 import type { ResolverRegistry } from "@downloader/resolvers";
 import { initialProgress } from "../db/job-store.ts";
 import type { JobStore } from "../db/job-store.ts";
+import { withoutEgressProxy } from "../egress-proxy.ts";
 import type { AppLogger } from "../logger.ts";
 import type { SsrfGuard } from "../ssrf.ts";
 import { urlsInProbeResult } from "../ssrf.ts";
@@ -51,6 +52,11 @@ export interface OrchestratorOptions {
   logger: AppLogger;
   probeTimeoutMs: number;
   fileRetentionHours: number;
+  /**
+   * The loopback egress proxy the resolver tiers fetch through, not the
+   * operator's — the browser and yt-dlp tiers are subprocesses and this is the
+   * only check that reaches them. See `egress-proxy.ts` and dl-12.
+   */
   proxyUrl?: string | undefined;
   /** Builds the `downloadUrl` on a `JobResult`. Injected so routes own the path. */
   fileUrl: (token: string) => string;
@@ -280,7 +286,10 @@ export class JobOrchestrator {
       signal,
       ...(proxyUrl === undefined ? {} : { proxyUrl }),
     };
-    const probe = await registry.resolve(url, resolveOptions);
+    // Stripped here rather than at the event: the `probed` event carries the
+    // whole result to the client, and this process's loopback port is no part
+    // of what a client is owed.
+    const probe = withoutEgressProxy(await registry.resolve(url, resolveOptions));
     log.debug("re-probe complete", {
       resolver: probe.resolver,
       variants: probe.variants.length,

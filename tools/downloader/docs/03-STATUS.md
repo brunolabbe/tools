@@ -19,7 +19,7 @@ is what remains**
 | Phase 2 — Integration    | ✅ complete | [dl-5](./work/dl-5-api-and-orchestration.md)                                                                                                                           |
 | Phase 3 — Hardening      | ✅ complete | [dl-6](./work/dl-6-security-and-limits.md) · [dl-7](./work/dl-7-ops-and-e2e.md)                                                                                        |
 
-**522 tests pass across 34 files, plus 3 Playwright end-to-end tests.
+**534 tests pass across 36 files, plus 3 Playwright end-to-end tests.
 `npm run check` is green.** Zero live-network tests.
 
 ### Milestones
@@ -42,7 +42,6 @@ is what remains**
 | Ticket                                    | Status    | Note                                                 |
 | ----------------------------------------- | --------- | ---------------------------------------------------- |
 | [dl-10](./work/dl-10-release-pipeline.md) | in-flight | Landed but unproven — the first release exercises it |
-| dl-12 (not written)                       | ready     | Point the browser and yt-dlp tiers at the same proxy |
 
 Phase 4 adds a ticket per site-specific resolver, as and when the sniffer misses
 one.
@@ -66,16 +65,21 @@ BullMQ would want) is the fix if it is ever scaled out.
 
 **DNS rebinding: closed.** `api/src/dispatcher.ts` pins the vetted address into
 the socket for everything going through `fetch`
-([dl-8](./work/dl-8-address-pinning-and-proxy.md)), and ffmpeg resolves nothing
-of its own now that it goes through the proxy in
-[dl-11](./work/dl-11-guarded-egress-proxy.md).
+([dl-8](./work/dl-8-address-pinning-and-proxy.md)), and no subprocess resolves
+anything of its own now that all three go through the proxy in
+[dl-11](./work/dl-11-guarded-egress-proxy.md) and
+[dl-12](./work/dl-12-tiers-behind-the-egress-proxy.md).
 
-**The browser and yt-dlp tiers still fetch outside the guard.** dl-11 put ffmpeg
-behind a loopback proxy that runs the same `SsrfGuard`, but the two subprocess
-resolvers still take `config.proxyUrl` directly. Chromium is the wider hole of
-the two: it fetches whatever subresources a hostile page names. Both already
-accept a proxy URL, so pointing them at the same one is small — it needs a
-ticket and a check that Playwright is happy with it.
+**Subprocess egress: closed.** ffmpeg, Chromium and yt-dlp all fetch through the
+loopback proxy that runs the same `SsrfGuard`. The browser tier was the wide
+one — a page fetches whatever it names, and reads the timing and the errors back
+in its own JavaScript, so an unproxied Chromium was a network scanner a client
+could point anywhere.
+
+What no HTTP proxy can see is WebRTC, which leaves Chromium over UDP, and a
+`ws://` upgrade on a plain-HTTP page, which the proxy refuses rather than
+tunnels (`wss://` rides inside a `CONNECT` and is unaffected). QUIC is not a
+bypass: Chromium speaks no UDP through an HTTP proxy and falls back to TCP.
 
 The `ProbeResult` sweep stays where it is regardless. It refuses a URL before
 any socket exists, with a typed error naming a reason, which a proxy refusal
@@ -85,8 +89,8 @@ cannot give — one proxy serves every job and nothing in a `CONNECT` says which
 resolved by the proxy and there is no local resolution to pin; what bounds
 egress there is the proxy's own policy. The pre-flight check still runs, and
 `SSRF_ALLOW_PRIVATE_ADDRESSES` exists for the deployment whose DNS view differs
-from its proxy's. The local ffmpeg proxy chains to the operator's rather than
-replacing it, and reports `mode: "chained"` when it does.
+from its proxy's. The local proxy chains to the operator's rather than replacing
+it, and reports `mode: "chained"` when it does.
 
 **`PROXY_URL` was untested until dl-11, and was broken.** No unit test sets a
 proxy and no e2e fixture is HTTPS, so nobody noticed that ffmpeg's whitelist

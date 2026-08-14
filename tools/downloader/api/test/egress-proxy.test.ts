@@ -116,11 +116,19 @@ function connectThrough(
   });
 }
 
-/** Sends an absolute-form GET, the way ffmpeg addresses a proxy over plain HTTP. */
-function getThrough(proxyPort: number, url: string): Promise<{ status: number; body: string }> {
+/**
+ * Sends an absolute-form request — the way ffmpeg addresses a proxy over plain
+ * HTTP, and the way Chromium sends a page's own `fetch()`.
+ */
+function sendThrough(
+  proxyPort: number,
+  method: string,
+  url: string,
+  options: { body?: string } = {},
+): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const request = http.request(
-      { host: "127.0.0.1", port: proxyPort, method: "GET", path: url, headers: { host: "x" } },
+      { host: "127.0.0.1", port: proxyPort, method, path: url, headers: { host: "x" } },
       (response) => {
         let body = "";
         response.setEncoding("utf8");
@@ -129,8 +137,12 @@ function getThrough(proxyPort: number, url: string): Promise<{ status: number; b
       },
     );
     request.once("error", reject);
-    request.end();
+    request.end(options.body);
   });
+}
+
+function getThrough(proxyPort: number, url: string): Promise<{ status: number; body: string }> {
+  return sendThrough(proxyPort, "GET", url);
 }
 
 describe("the holes dl-11 closes", () => {
@@ -224,26 +236,61 @@ describe("tunnelling", () => {
   });
 });
 
+describe("what a page sends, which ffmpeg never did", () => {
+  test("an absolute-form POST reaches an allowed origin, body and all", async () => {
+    // A page's `fetch()` and XHR arrive here exactly like this. Refusing them —
+    // as this proxy did while it served ffmpeg alone — breaks a plain-HTTP page
+    // in a way nothing in the logs explains. See dl-12.
+    const bodies: string[] = [];
+    const origin = await startOrigin((request, response) => {
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk: string) => (body += chunk));
+      request.once("end", () => {
+        bodies.push(body);
+        response.writeHead(200).end("accepted");
+      });
+    });
+    const guard = createSsrfGuard({ allowHosts: ["allowed.test"] });
+    const proxy = await startProxy({
+      guard,
+      logger: NOOP_LOGGER,
+      resolve: resolverFor([v4("127.0.0.1")]),
+    });
+
+    const result = await sendThrough(proxy.port, "POST", `http://allowed.test:${origin.port}/x`, {
+      body: "q=1",
+    });
+
+    expect(result.status).toBe(200);
+    expect(bodies).toEqual(["q=1"]);
+  });
+
+  test("a POST to a blocked target never reaches it", async () => {
+    const origin = await startOrigin((_request, response) => response.end("leaked"));
+    const guard = guardResolving({ "metadata.test": ["169.254.169.254"] });
+    const proxy = await startProxy({ guard, logger: NOOP_LOGGER });
+
+    const result = await sendThrough(
+      proxy.port,
+      "POST",
+      `http://metadata.test:${origin.port}/exfiltrate`,
+      { body: "secret" },
+    );
+
+    expect(result.status).toBe(403);
+    expect(origin.hits).toEqual([]);
+  });
+});
+
 describe("it is not a general-purpose proxy", () => {
-  test("a method other than GET or HEAD is refused", async () => {
+  test("a method no browser or media client sends is refused", async () => {
     const guard = createSsrfGuard({ allowHosts: ["allowed.test"] });
     const proxy = await startProxy({ guard, logger: NOOP_LOGGER });
 
-    const status = await new Promise<number>((resolve, reject) => {
-      const request = http.request(
-        {
-          host: "127.0.0.1",
-          port: proxy.port,
-          method: "POST",
-          path: "http://allowed.test/upload",
-        },
-        (response) => resolve(response.statusCode ?? 0),
-      );
-      request.once("error", reject);
-      request.end("payload");
-    });
+    const result = await sendThrough(proxy.port, "TRACE", "http://allowed.test/upload");
 
-    expect(status).toBe(405);
+    expect(result.status).toBe(405);
   });
 
   test("an origin-form request is refused", async () => {
