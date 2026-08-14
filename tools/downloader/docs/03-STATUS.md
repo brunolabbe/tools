@@ -5,8 +5,8 @@ Where the downloader stands right now. Phases and milestones are defined in
 ticket under [work/](./work/). This page is a dashboard, not a log — if you find
 yourself writing a paragraph here, it belongs in a ticket.
 
-**Last updated:** 2026-08-14 · **Phases 0–3 ✅ · M1–M4 ✅ · Phase 4 (coverage)
-is what remains**
+**Last updated:** 2026-08-14 · **Phases 0–3 ✅ · M1–M4 ✅ · four open tickets,
+all of them test coverage for code that already shipped**
 
 ---
 
@@ -39,8 +39,19 @@ is what remains**
 
 ## Open tickets
 
-**None.** [dl-10](./work/dl-10-release-pipeline.md) closed with the first
-release: `downloader-v0.1.1` is tagged, released and pushed to
+Four, and all four are coverage debt on code that already shipped rather than
+new capability. They are independent of each other; the order below is the order
+worth doing them in, not a dependency chain.
+
+| Ticket                                           | What it closes                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------ |
+| [dl-13](./work/dl-13-typecheck-the-tests.md)     | 39 test files and `e2e/` sit outside `tsc --build`                       |
+| [dl-14](./work/dl-14-proxied-https-coverage.md)  | Nothing in this repo serves TLS, so proxied HTTPS is untested end to end |
+| [dl-15](./work/dl-15-component-render-tests.md)  | No component in `web` is ever rendered by a test                         |
+| [dl-16](./work/dl-16-e2e-through-the-sniffer.md) | Nothing drives sniffer → engine → UI in one piece                        |
+
+[dl-10](./work/dl-10-release-pipeline.md) closed with the first release:
+`downloader-v0.1.1` is tagged, released and pushed to
 `ghcr.io/<owner>/downloader`. One thing it cannot close from here — the mini-PC
 still has to `docker compose pull && up -d` and show `0.1.1` at `/api/health`.
 
@@ -96,12 +107,15 @@ it, and reports `mode: "chained"` when it does.
 **`PROXY_URL` was untested until dl-11, and was broken.** No unit test sets a
 proxy and no e2e fixture is HTTPS, so nobody noticed that ffmpeg's whitelist
 omitted `httpproxy` and every proxied HTTPS download failed at startup. Fixed,
-but the gap in coverage that hid it is still there.
+but the gap in coverage that hid it is still there: nothing in this repo serves
+TLS, so the `CONNECT` path is exercised only against socket echoes.
+[dl-14](./work/dl-14-proxied-https-coverage.md).
 
 **Test files are still not typechecked.** Each project's `include` is `src/**`.
 `api/test` is the largest untypechecked surface here, and `e2e/` is in the same
 position — Playwright transpiles it without type checking, so a stale selector
 helper fails at run time rather than at build.
+[dl-13](./work/dl-13-typecheck-the-tests.md).
 
 **Interrupted jobs are failed, not resumed.** A job running when the process
 died cannot be resumed — the engine's tmp state is gone and the probe is stale —
@@ -115,7 +129,10 @@ treated as re-probe-worthy exactly once.
 **No component-render tests** in `web`, and **the E2E suite drives only the
 direct resolver** — so nothing exercises sniffer → engine → UI in one piece, and
 **the container's browser tier is only smoke-tested**. See
-[dl-2](./work/dl-2-browser-sniffer.md) and [dl-4](./work/dl-4-web-ui.md).
+[dl-2](./work/dl-2-browser-sniffer.md) and [dl-4](./work/dl-4-web-ui.md) for how
+each got here, [dl-15](./work/dl-15-component-render-tests.md) and
+[dl-16](./work/dl-16-e2e-through-the-sniffer.md) for closing them. The
+smoke-tested container tier stays as it is — dl-16 does not reach it.
 
 ---
 
