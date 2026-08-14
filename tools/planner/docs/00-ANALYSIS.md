@@ -108,6 +108,58 @@ persisted (that is the tool's existing premise); the brief is what the
 conversation is _for_, and re-asking something the brief already holds is the
 most visible way this tool can look stupid.
 
+### Amendment, 2026-08-14 — the intake is a form after all
+
+The section above is kept as it was argued. It was overruled by a product
+decision, and the record is more useful than a rewrite that reads as though the
+debate never happened.
+
+**The decision:** the intake asks **predetermined questions from an authored
+question tree**. No model participates in it. A model runs later, in the
+fan-out, exactly as §4 describes.
+
+The section anticipated this. Its own second paragraph says the interview "can
+later be replaced (a form, an import, a paste of an email thread) without a
+specialist noticing" — that indirection through `TripBrief` is why the decision
+costs so little. Everything downstream reads the brief and never the transcript,
+so §4 through §6 stand untouched.
+
+How the three rules fare:
+
+- **"A small fixed core, then branch on shape"** — unchanged, and it _is_ the
+  tree. The branch is authored rather than chosen at runtime, which makes the
+  claim in §1 (which questions matter is a function of the trip's shape) a table
+  a test can read rather than a behaviour to hope for.
+- **"Completeness is measured against the schema, not asked about"** — unchanged
+  and strengthened. `missingRequiredSlots` was defined here to stop a model
+  claiming it had enough; against an authored tree there is no such claim to
+  guard against, and the function becomes a plain fact about the brief.
+- **"Draft early, interview less"** — unchanged, and it is now the sharpest
+  argument in this section. A wizard that asks twenty questions before showing
+  anything is abandoned. So every node in the tree is marked `core` (needed
+  before a first draft can exist) or `refine`, and the draft-early behaviour this
+  section argues for is a property of that marking rather than of a model
+  deciding it has heard enough.
+
+**What the decision costs**, stated plainly so nobody rediscovers it as a
+surprise. An adaptive interviewer can follow up on something unanticipated —
+"you mentioned your father has trouble walking" — and a tree cannot. The mitigation
+is a free-text slot per branch, carried into the brief and read by specialists as
+context, and it is a genuinely weaker answer than a model asking the follow-up.
+That is the trade the decision makes.
+
+**What it buys**, which is why it was made: an intake with no model in it costs
+nothing to run, cannot hallucinate a slot, is deterministic in CI without a
+script, and is reviewable as data by whoever knows about trips rather than as a
+prompt by whoever knows about models.
+
+**What it makes newly hard**, and this is not in the original section because a
+model-driven interview does not have the problem: **answer invalidation**.
+Someone answers eight questions down the backcountry branch, changes the shape to
+city-and-culture, and those eight answers are answers to questions nobody would
+ask. The rule is that abandoned answers are discarded, and the user is told which
+before it happens. §7's failure modes gain this one.
+
 ---
 
 ## 4. The fan-out, and what each part is not allowed to do

@@ -57,14 +57,16 @@ It stops before composing. Packing days is arithmetic and belongs in
    get no credentials and no write tools; from Phase 4 on they are reading hostile
    text (§5), and the habit has to exist before the grounding does.
 8. **Scripted specialists for CI.** Extend the scripted provider so each
-   specialist has a deterministic answer for the checked-in briefs from pl-4. The
+   specialist has a deterministic answer for the checked-in briefs from pl-3. The
    whole fan-out must run offline with no key.
 
 Traps worth knowing in advance:
 
-- **Do not thread the transcript into a specialist.** It sees the brief. Sending
-  the conversation multiplies the bill by the roster size and re-introduces the
-  unbounded-transcript problem the tool's `CLAUDE.md` already warns about.
+- **A specialist sees the brief and only the brief** — not the raw answers, not
+  the tree, not another specialist's output. There is no transcript to be
+  tempted by any more, but the rule predates that and outlives it: threading
+  anything larger multiplies the bill by the roster size, and the `TripBrief`
+  indirection is what makes a specialist testable from a fixture at all.
 - **Season filtering happens before the composer**, not inside it: a candidate
   outside its own season window should never reach packing (§7).
 - **Cancel must kill the whole fan-out.** In-flight provider calls take the

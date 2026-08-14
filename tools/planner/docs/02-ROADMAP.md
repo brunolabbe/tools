@@ -1,16 +1,25 @@
 # Roadmap — planner
 
 Describe a vacation — a road trip, a hiking weekend, a skidoo ride up north, a
-slow week of history in Europe — get interviewed about it, have the specialists
-that trip actually needs work on it, and keep the plan.
+slow week of history in Europe — answer a guided set of questions about it, have
+the specialists that trip actually needs work on it, and keep the plan.
 
-Two claims carry the whole plan, both argued in [00-ANALYSIS.md](./00-ANALYSIS.md):
+Three claims carry the whole plan, all argued in [00-ANALYSIS.md](./00-ANALYSIS.md):
 
 - **The roster is data.** Which questions matter and which specialists a plan
-  needs are a function of the trip's shape, decided at runtime (§1, §4).
+  needs are a function of the trip's shape (§1, §4).
 - **Models generate candidates; code schedules and checks.** Drive times, day
   packing, budgets and opening hours are arithmetic, and arithmetic is where AI
   itineraries embarrass themselves (§2).
+- **The intake asks authored questions, and no model is in it.** A checked-in
+  question tree, branching on the trip's shape, producing the same `TripBrief`
+  an interviewer would have (§3 amendment).
+
+**This tool is not a chat.** It was scaffolded as one, and the transcript premise
+was retired on 2026-08-14 — see [pl-1](./work/pl-1-conversation-loop.md) before
+reaching for a conversation loop here. The §3 amendment records what the decision
+costs as well as what it buys, and the cost is real: a tree cannot follow up on
+something nobody anticipated.
 
 The domain used to be deliberately absent from this page. It is now designed at
 the level of shape — [00-ANALYSIS.md](./00-ANALYSIS.md) for why, and
@@ -33,7 +42,11 @@ about it. The persisted aggregate is the plan, everywhere, including
 | `contract` | `Conversation`/`Message`, the error taxonomy, zod schemas, `ROUTES.health` |
 | `agent`    | The `ChatProvider` seam and the scripted provider behind it                |
 | `api`      | Fastify, SQLite with numbered migrations, config, logging, `/api/health`   |
-| `web`      | The app shell and a health call — no conversation UI yet                   |
+| `web`      | The app shell and a health call — no intake UI                             |
+
+The `contract` row is history, not a description of where this is going:
+`Conversation` and `Message` are superseded by the brief and the intake, and
+migration 1's tables go with them.
 
 Two decisions from Phase 0 survive the domain landing, and are not up for
 revisiting casually:
@@ -46,24 +59,29 @@ revisiting casually:
   deterministic to assert against; nobody can mistake it for a model.
 
 The third Phase 0 decision — _the conversation is the only modelled domain_ — has
-now expired on purpose. The brief, the candidate and the plan are what Phases 2
-and 3 add, and they are designed rather than guessed.
+expired twice over. The brief, the candidate and the plan are what Phases 2 and 3
+add; and the conversation itself is gone, not merely joined.
 
-## Phase 1 — It holds a conversation
+## Phase 1 — The intake produces a brief
 
-The routes, the store and the transcript UI. Nothing here models a trip; it is
-the loop everything later plugs into.
-→ [pl-1](./work/pl-1-conversation-loop.md)
+The whole intake, and no model anywhere in it. Three pieces in the order the code
+forces:
 
-## Phase 2 — The interview produces a brief
+1. **The contract for a brief** — `TripBrief`, `TripShape`, the three-state slot,
+   and `missingRequiredSlots` as a function. Contract-first because four packages
+   depend on it. → [pl-3](./work/pl-3-trip-brief-contract.md)
+2. **The tree and the engine over it** — an authored, versioned question tree,
+   what it opens, and what an edit discards. Pure: no model, no network, no
+   clock. → [pl-6](./work/pl-6-question-tree-and-engine.md)
+3. **Persistence and the wizard** — answers stored one per row, an intake that
+   survives a reload, and a UI that never silently drops an answer.
+   → [pl-7](./work/pl-7-intake-persistence-and-wizard.md)
 
-A `TripBrief` in the contract, and an interviewer that fills it: a small fixed
-core, then branch on trip shape, completeness measured against the schema rather
-than asked about (§3). The brief is the only thing specialists ever see, which is
-what makes everything after this testable from a fixture.
-→ [pl-3](./work/pl-3-trip-brief-and-interview.md)
+This phase is worth more than it looks. It is the only one that ships something a
+user can hold without a model being involved at all, and it is the phase whose
+output every later phase is tested from.
 
-## Phase 3 — The first plan
+## Phase 2 — The first plan
 
 The three pieces that turn a brief into a document, in the order the code forces:
 
@@ -77,18 +95,18 @@ The three pieces that turn a brief into a document, in the order the code forces
    travel time, hours, season and budget, and an adversarial feasibility pass over
    the result. Ordinary TypeScript, ordinary unit tests, no model.
 
-All of Phase 3 runs against the scripted provider and no grounding. That is
+All of Phase 2 runs against the scripted provider and no grounding. That is
 deliberate: it makes the first plan a claim about the machinery — roster,
 fan-out, packing, feasibility, persistence — rather than about a model.
 
-## Phase 4 — Grounding behind a seam
+## Phase 3 — Grounding behind a seam
 
 `GroundingProvider` with a fixture default, then one real backend. Distances and
 travel times first, opening hours and seasons second, existence third, prices
 last and always as bands (§5). Provenance on every item; the cache table; the
 SSRF guard lifted to `packages/core` as the second real consumer claims it.
 
-## Phase 5 — Revision is the product
+## Phase 4 — Revision is the product
 
 Pin an item, name the days a re-plan may touch, re-run a slice with two
 specialists instead of the fleet, and show a diff (§6). Everything before this
@@ -107,11 +125,13 @@ authority for backcountry, marine or winter motorised travel. The reasons are in
 
 ## Milestones
 
-- **P1 — It holds a conversation.** Describe a trip, get a reply, reload the
-  page, transcript intact. Scripted provider, so it is a claim about persistence.
-- **P2 — It produces a plan.** An interview fills a brief, a roster is chosen
-  from it, specialists return candidates, the composer packs days that survive
-  their own constraints. Still scripted and ungrounded: a claim about machinery.
+- **P1 — It produces a brief.** Answer the questions, change an earlier answer
+  and be told exactly what that discards, reload the page and find the intake
+  where you left it. **No model is involved**, so it is a claim about the tree,
+  the invalidation rules and persistence — and it is checkable without a key.
+- **P2 — It produces a plan.** A brief chooses a roster, specialists return
+  candidates, the composer packs days that survive their own constraints. Still
+  scripted and ungrounded: a claim about machinery.
 - **P3 — The plan is true.** Grounded facts with provenance, against a real model,
   with the run's bill bounded.
 - **P4 — The plan is revisable.** Pin, re-plan a slice, read the diff.
@@ -125,9 +145,22 @@ Short, and each one is a real decision someone has to make rather than a gap:
 - **Whether a specialist streams.** The chat seam does not stream, and adding it
   before a caller needs it was deferred once already. The fan-out's progress is
   per-specialist, which may be enough.
-- **The transcript strategy.** Still unanswered from Phase 0, and now sharper:
-  the brief and the plan are the real state, so older turns can be summarised
-  harder than a general chat could risk. Needed before a metered provider.
+- **When the first draft is offered.** §3 argues "draft early, interview less",
+  and the tree marks every node `core` or `refine` so that it can be. Whether the
+  wizard actually stops at the core questions and plans, or asks everything
+  first, is a product call nobody has made — and it is the one most likely to
+  decide whether people finish the intake at all.
+- **What a tree version change does to a saved intake.** Someone starts, the tree
+  changes in a release, they come back. Proposed in
+  [pl-7](./work/pl-7-intake-persistence-and-wizard.md): re-run the engine against
+  the current tree and prune what no longer fits, since it is the same machinery
+  as any other invalidation. The alternative is keeping every historical tree
+  forever. Not yet decided.
+
+The **transcript strategy**, open since Phase 0, is closed rather than answered:
+there is no transcript. Specialists were always going to read the brief and never
+the conversation, and now there is no conversation to be tempted by. What
+replaces it as the cost control is the per-run budget in §9.
 
 Later phases have no ticket files yet, on purpose. A brief written three phases
 ahead is fiction, and this format keeps briefs and outcomes in the same file

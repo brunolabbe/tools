@@ -62,12 +62,12 @@ first is not a hardening preference:
 
 - **No Bypass rule.** The downloader's on `/api/files/*` is bought by a 256-bit
   capability token. Nothing here is safe to serve unauthenticated.
-- **There is no owner model at all.** Migration 1 is
-  `conversations (id, title, created_at, updated_at)` — no user column — so
-  every visitor shares one conversation store and can read and edit everyone's
-  plans. Until a user model lands, an Access allowlist is not a precaution
-  around the data model; it is the only configuration in which that model is
-  coherent.
+- **There is no owner model at all.** No table the design proposes carries a user
+  column — not migration 1's `conversations`, and not the `intakes` and `answers`
+  that supersede it in [pl-7](./pl-7-intake-persistence-and-wizard.md). So every
+  visitor shares one store and can read and edit everyone's trips. Until a user
+  model lands, an Access allowlist is not a precaution around the data model; it
+  is the only configuration in which that model is coherent.
 - **No rate limiting and no `TRUST_PROXY`.** `ApiConfig` has neither. This
   matters more once `CHAT_PROVIDER` is real: an open endpoint is a stranger
   spending a token budget, with `MAX_OUTPUT_TOKENS` capping one reply and
