@@ -102,8 +102,28 @@ responsible for never discarding it silently.
 10. **Progress, honestly.** The reachable count moves as branches open and close,
     so "question 4 of 18" is a number the tool cannot stand behind — the repo's
     rule against faking progress applies directly. Report what is answered and
-    that more remain. Once the `core` / `refine` split is used, "the essentials
-    are done" is a truthful milestone where a percentage is not.
+    that more remain. "The essentials are done" is a truthful milestone where a
+    percentage is not, and step 12 is where it earns its keep.
+
+11. **Stop at the core questions.** Decided 2026-08-14 — the roadmap's
+    _Still open_ carries the reasoning and the consequences. When nothing
+    reachable and `core` is unanswered, the wizard says so and offers two ways
+    on: take the draft, or keep refining. It does not march to the end of the
+    tree, and it does not decide this by filtering the reachable set in the
+    browser — pl-6's `nextQuestion` reports the core-complete flag and this
+    renders it.
+
+    In this ticket there is no plan to draft: Phase 2 owns that button. So what
+    lands here is the checkpoint, the refine path, and an **exit** that leaves a
+    complete intake behind. Build the fork now anyway — retrofitting a stopping
+    point into a linear wizard is a rewrite of the flow, and the whole argument
+    for stopping is that people abandon the corridor.
+
+12. **Refining is re-entrant.** A user who takes the draft comes back to sharpen
+    it, so refine is somewhere you return to, not a corridor you leave once. The
+    intake stays open after core-complete and the list route must show it as
+    resumable rather than finished. Nothing here is a second state machine:
+    "core-complete" is a fact computed from the answers, never a column.
 
 11. **The client mirrors the seam, not the logic.** No condition evaluation in
     the browser. The server returns the next question, the reachable set and the
@@ -138,10 +158,11 @@ gap. See the traps in [pl-2](./pl-2-container-image.md).
 
 ## Done when
 
-Someone answers into a branch, goes back, changes an early answer, is shown
-exactly which answers that discards and confirms it, reloads mid-intake, and
-finds the intake where they left it. The dry run and the real write agree on what
-is discarded. Re-answering a question does not create a second row. An unknown
+Someone answers into a branch, is told the essentials are done and can stop
+there, goes back, changes an early answer, is shown exactly which answers that
+discards and confirms it, reloads mid-intake, and finds the intake where they
+left it — resumable, whether or not it passed the checkpoint. The dry run and the
+real write agree on what is discarded. Re-answering a question does not create a second row. An unknown
 intake id is a typed 404 and not a 500. `npm test -- --project planner` covers
 the store, the routes and the invalidation path.
 

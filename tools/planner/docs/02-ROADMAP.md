@@ -76,12 +76,16 @@ forces:
    what it opens, and what an edit discards. Pure: no model, no network, no
    clock. → [pl-6](./work/pl-6-question-tree-and-engine.md)
 3. **Persistence and the wizard** — answers stored one per row, an intake that
-   survives a reload, and a UI that never silently drops an answer.
-   → [pl-7](./work/pl-7-intake-persistence-and-wizard.md)
+   survives a reload, a UI that never silently drops an answer, and a stop at the
+   core questions. → [pl-7](./work/pl-7-intake-persistence-and-wizard.md)
 
 This phase is worth more than it looks. It is the only one that ships something a
 user can hold without a model being involved at all, and it is the phase whose
 output every later phase is tested from.
+
+**The wizard stops when the core questions are done** — decided 2026-08-14, see
+_Still open_ below. In this phase there is nothing to draft yet, so the stop is a
+milestone and an exit; the fork gains its other half in Phase 2.
 
 ## Phase 2 — The first plan
 
@@ -127,10 +131,11 @@ authority for backcountry, marine or winter motorised travel. The reasons are in
 
 ## Milestones
 
-- **P1 — It produces a brief.** Answer the questions, change an earlier answer
-  and be told exactly what that discards, reload the page and find the intake
-  where you left it. **No model is involved**, so it is a claim about the tree,
-  the invalidation rules and persistence — and it is checkable without a key.
+- **P1 — It produces a brief.** Answer the questions, be told the essentials are
+  done and allowed to stop there, change an earlier answer and be told exactly
+  what that discards, reload the page and find the intake where you left it.
+  **No model is involved**, so it is a claim about the tree, the invalidation
+  rules and persistence — and it is checkable without a key.
 - **P2 — It produces a plan.** A brief chooses a roster, specialists return
   candidates, the composer packs days that survive their own constraints. Still
   scripted and ungrounded: a claim about machinery.
@@ -147,17 +152,30 @@ Short, and each one is a real decision someone has to make rather than a gap:
 - **Whether a specialist streams.** The chat seam does not stream, and adding it
   before a caller needs it was deferred once already. The fan-out's progress is
   per-specialist, which may be enough.
-- **When the first draft is offered.** §3 argues "draft early, interview less",
-  and the tree marks every node `core` or `refine` so that it can be. Whether the
-  wizard actually stops at the core questions and plans, or asks everything
-  first, is a product call nobody has made — and it is the one most likely to
-  decide whether people finish the intake at all.
 - **What a tree version change does to a saved intake.** Someone starts, the tree
   changes in a release, they come back. Proposed in
   [pl-7](./work/pl-7-intake-persistence-and-wizard.md): re-run the engine against
   the current tree and prune what no longer fits, since it is the same machinery
   as any other invalidation. The alternative is keeping every historical tree
   forever. Not yet decided.
+
+**When the first draft is offered** was answered on 2026-08-14, and it is the one
+that shapes Phase 1: **the wizard stops at the core questions.** When nothing
+`core` is unanswered it says so and offers two ways on — take the draft, or keep
+refining — rather than marching to the end of the tree. §3's "draft early,
+interview less", made into behaviour rather than left as a marking.
+
+Three consequences, all of them load-bearing on tickets nobody has started:
+
+- `missingRequiredSlots` (pl-3) and the `core` marking (pl-6) must describe the
+  same set. If they can disagree the checkpoint is a lie, and a test should say
+  so in both directions.
+- pl-7 owns the fork, and owns **re-entry**: refining is something you come back
+  to after a draft exists, not a corridor you leave once. It also owns the honest
+  progress line at the boundary — "the essentials are done", never a percentage.
+- pl-5's specialists must tolerate a brief whose `refine` slots are unknown. That
+  is not new work: a declined slot is already unknown to them, and the
+  three-state slot from pl-3 is what makes the two indistinguishable downstream.
 
 The **transcript strategy**, open since Phase 0, is closed rather than answered:
 there is no transcript. Specialists were always going to read the brief and never

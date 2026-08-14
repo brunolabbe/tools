@@ -65,6 +65,15 @@ the two are exact for unrelated reasons. See the packages table in
    "draft early, interview less" made into data, and it is nearly free now and
    expensive to retrofit once answers are stored without it.
 
+   **`core` is behaviour, not a label** — decided 2026-08-14, see the roadmap's
+   _Still open_. The wizard stops when nothing `core` is unanswered and offers
+   the draft there, so this marking is what a user actually runs into. The
+   consequence for this ticket: **the `core` nodes and pl-3's
+   `missingRequiredSlots` must describe the same set.** A `core` node whose slot
+   is not required, or a required slot no `core` node fills, makes the checkpoint
+   a lie — the wizard would either stop short of a draftable brief or keep asking
+   past one. Test it in both directions against the checked-in tree.
+
    **Conditions may reference only questions appearing earlier in the tree.**
    This is the constraint that makes everything below a single forward pass — no
    cycle detection, no fixpoint. Document it here; enforce it in step 3.
@@ -105,6 +114,11 @@ the two are exact for unrelated reasons. See the packages table in
    (pl-3), and a test should say so, because re-asking a declined question is the
    most visible way this tool can look stupid.
 
+   It also reports **whether anything reachable and `core` is still unanswered**,
+   since that is the checkpoint pl-7 renders. Compute it here rather than letting
+   the wizard filter the reachable set by stage — the same reason nothing else
+   about the tree is evaluated in the browser.
+
 7. **`toBrief(tree, answers)`** — assemble the `TripBrief`. This is where answers
    stop being answers and become the document specialists read.
 
@@ -131,6 +145,8 @@ need a script, and the §3 amendment is undone by increments.
 - The validator rejects each malformed tree in step 3, each with a named test.
 - The checked-in tree passes the validator, and reaches a draft-ready brief —
   `missingRequiredSlots` empty — for at least two shapes that diverge early.
+- Answering every reachable `core` node empties `missingRequiredSlots`, and
+  leaving any one of them unanswered does not, for each of those two shapes.
 - No file in the package imports a database, a network client, or a clock.
 - `npm run check` and `npm test -- --project planner` pass.
 

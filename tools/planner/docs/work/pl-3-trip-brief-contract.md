@@ -54,6 +54,14 @@ contract unilaterally. The tree that fills the brief is
    orchestrator's readiness check both read. It stays in the contract because
    both sides need it and neither should own it.
 
+   It is also load-bearing on a product decision taken 2026-08-14: **the wizard
+   stops asking when this list is empty** and offers the draft there. So
+   "required" is not a wish about data quality — it is the line where a user is
+   allowed to leave. Mark a slot required only if a first draft is genuinely
+   impossible without it; anything the plan is merely better for knowing is a
+   `refine` question in pl-6, and belongs behind the checkpoint rather than in
+   front of it.
+
 4. **A free-text slot per shape.** The §3 amendment names this as the mitigation
    for the one thing an authored tree cannot do — follow up on something nobody
    anticipated. It is carried into the brief and read by specialists as context.
