@@ -39,9 +39,10 @@ is what remains**
 
 ## Open tickets
 
-| Ticket                                    | Status    | Note                                                 |
-| ----------------------------------------- | --------- | ---------------------------------------------------- |
-| [dl-10](./work/dl-10-release-pipeline.md) | in-flight | Landed but unproven — the first release exercises it |
+**None.** [dl-10](./work/dl-10-release-pipeline.md) closed with the first
+release: `downloader-v0.1.1` is tagged, released and pushed to
+`ghcr.io/<owner>/downloader`. One thing it cannot close from here — the mini-PC
+still has to `docker compose pull && up -d` and show `0.1.1` at `/api/health`.
 
 Phase 4 adds a ticket per site-specific resolver, as and when the sniffer misses
 one.
