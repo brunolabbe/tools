@@ -7,11 +7,13 @@ Every structural choice below traces back to a constraint in that document.
 
 ## System shape
 
+Every package named below lives under `tools/downloader/`.
+
 ```
 ┌──────────────┐   POST /api/probe          ┌────────────────────────────┐
 │              │ ─────────────────────────► │                            │
-│   apps/web   │   POST /api/jobs           │        apps/api            │
-│  React+Vite  │ ─────────────────────────► │        Fastify             │
+│     web      │   POST /api/jobs           │            api             │
+│  React+Vite  │ ─────────────────────────► │          Fastify           │
 │              │   GET  /api/jobs/:id/events│                            │
 │              │ ◄───────── SSE ─────────── │  ┌──────────────────────┐  │
 └──────────────┘   GET  /api/files/:token   │  │  Job orchestrator    │  │
@@ -21,7 +23,7 @@ Every structural choice below traces back to a constraint in that document.
                                     ┌─────────────────┴─────────────────┐
                                     ▼                                   ▼
                     ┌───────────────────────────┐      ┌────────────────────────────┐
-                    │  packages/resolvers       │      │  packages/engine           │
+                    │        resolvers          │      │           engine           │
                     │  ─────────────────────    │      │  ────────────────────      │
                     │  registry (by priority)   │      │  hls · dash · progressive  │
                     │   ├─ site-specific   (10) │      │  ffmpeg runner + progress  │
@@ -29,23 +31,31 @@ Every structural choice below traces back to a constraint in that document.
                     │   ├─ browser sniffer (50) │      │                            │
                     │   └─ direct URL      (90) │      └────────────────────────────┘
                     └───────────────────────────┘
-                                    └──────── packages/shared ──────────┘
+                                    └────────────  contract  ───────────┘
                                        types · errors · FSM · API schemas
+                                                    │
+                                            @webtools/core
+                                    error machinery · transitions · redaction
 ```
 
 ## Packages
 
-| Package              | Responsibility                                                         | Depends on                |
-| -------------------- | ---------------------------------------------------------------------- | ------------------------- |
-| `packages/shared`    | Types, error taxonomy, job FSM, zod API schemas. **No runtime logic.** | —                         |
-| `packages/resolvers` | URL → `ProbeResult`. Registry + all resolver implementations.          | shared                    |
-| `packages/engine`    | `ProbeResult` → file on disk. ffmpeg, segments, storage, GC.           | shared                    |
-| `apps/api`           | Fastify HTTP surface, job orchestration, SSE, file serving.            | shared, resolvers, engine |
-| `apps/web`           | Single-page UI: paste URL → pick variant → watch progress → download.  | shared                    |
+| Package     | Responsibility                                                         | Depends on                  |
+| ----------- | ---------------------------------------------------------------------- | --------------------------- |
+| `contract`  | Types, error taxonomy, job FSM, zod API schemas. **No runtime logic.** | `@webtools/core`            |
+| `resolvers` | URL → `ProbeResult`. Registry + all resolver implementations.          | contract                    |
+| `engine`    | `ProbeResult` → file on disk. ffmpeg, segments, storage, GC.           | contract                    |
+| `api`       | Fastify HTTP surface, job orchestration, SSE, file serving.            | contract, resolvers, engine |
+| `web`       | Single-page UI: paste URL → pick variant → watch progress → download.  | contract                    |
 
-`packages/shared` is already written. It is the contract that lets several
-agents build in parallel without colliding — treat changes to it as
-interface changes requiring coordination, not routine edits.
+`contract` is the seam that lets several agents build in parallel without
+colliding — treat changes to it as interface changes requiring coordination,
+not routine edits.
+
+It owns only what is _about video_. The generic half of the error taxonomy and
+the job-transition machinery come from `@webtools/core` in `packages/`, which is
+shared with every other tool in the repo and must stay free of this tool's
+vocabulary.
 
 ---
 
@@ -103,7 +113,7 @@ unguessable random bytes, never the job id. Job ids appear in logs and URLs; the
 download capability must not be inferable from them.
 
 **Fail loudly with typed codes.** Every failure maps to one `ErrorCode` in
-`shared/errors.ts`. No layer invents its own strings — that is what makes the UI
+`contract/src/errors.ts`. No layer invents its own strings — that is what makes the UI
 able to say something useful instead of "something went wrong".
 
 ---

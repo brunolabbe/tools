@@ -21,9 +21,9 @@ fi
 # The UI ships with a mocked transport so it can run without a backend. In here
 # there is always a backend, and an agent debugging a UI that silently talks to
 # nothing loses an hour to it.
-if [ ! -f apps/web/.env.local ] && [ -f apps/web/.env.example ]; then
-  cp apps/web/.env.example apps/web/.env.local
-  echo "[post-create] apps/web/.env.local created — UI points at the real API"
+if [ ! -f tools/downloader/web/.env.local ] && [ -f tools/downloader/web/.env.example ]; then
+  cp tools/downloader/web/.env.example tools/downloader/web/.env.local
+  echo "[post-create] tools/downloader/web/.env.local created — UI points at the real API"
 fi
 
 # A no-op when the image's browsers already match the installed Playwright,

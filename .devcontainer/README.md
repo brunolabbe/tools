@@ -15,18 +15,18 @@ touching the Windows host.
 4. `gh auth login` if the agent should open PRs.
 
 Then `npm run dev` (API on 8080, UI on 5173, both forwarded to Windows),
-`npm test`, `npm run e2e`, `npm run check` — all work with no further setup.
+`npm test`, `npm run e2e:downloader`, `npm run check` — all work with no further setup.
 
 ## What is where
 
-| File | Does |
-| --- | --- |
-| `devcontainer.json` | mounts, ports, capabilities, VS Code wiring |
-| `Dockerfile` | the image: Node 22 on Playwright's base, plus ffmpeg / yt-dlp / gh / claude |
-| `post-create.sh` | runs once on create: `npm ci`, `.env.local`, sanity checks |
-| `init-firewall.sh` | runs on every start: default-deny egress |
-| `allowed-domains.txt` | the egress allowlist — **edit this, not the script** |
-| `fix-mounts.sh` | gives the container user its named volumes |
+| File                  | Does                                                                        |
+| --------------------- | --------------------------------------------------------------------------- |
+| `devcontainer.json`   | mounts, ports, capabilities, VS Code wiring                                 |
+| `Dockerfile`          | the image: Node 22 on Playwright's base, plus ffmpeg / yt-dlp / gh / claude |
+| `post-create.sh`      | runs once on create: `npm ci`, `.env.local`, sanity checks                  |
+| `init-firewall.sh`    | runs on every start: default-deny egress                                    |
+| `allowed-domains.txt` | the egress allowlist — **edit this, not the script**                        |
+| `fix-mounts.sh`       | gives the container user its named volumes                                  |
 
 ## Running agents without prompts
 
@@ -67,7 +67,7 @@ sudo /usr/local/bin/init-firewall.sh
 **Consequence worth knowing:** the resolver tiers exist to probe arbitrary
 third-party sites, and in here they can reach none of them. Every unit test and
 the e2e suite run against local fixtures by design, so the test suites are
-unaffected. Probing a real site from the container needs its hostname *and* its
+unaffected. Probing a real site from the container needs its hostname _and_ its
 media CDN's in the allowlist.
 
 `sudo` is restricted to `init-firewall.sh` and `fix-mounts.sh`, with no
@@ -82,7 +82,7 @@ not a defence against a process actively trying to get out.
 
 The Windows checkout's `node_modules` holds win32 binaries (esbuild, rollup,
 `better-sqlite3`) that a Linux container cannot load. Named volumes are mounted
-over `node_modules` and `apps/web/node_modules` so the two installs never see
+over `node_modules` and `tools/downloader/web/node_modules` so the two installs never see
 each other. Neither host nor container needs cleaning when you switch between
 them.
 

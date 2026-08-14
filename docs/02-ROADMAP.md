@@ -78,7 +78,7 @@ was the single-agent join. What remains is Phase 4, which never ends.
 ### Phase 0 — Foundations ✅ _complete_
 
 Monorepo, TypeScript project references, oxlint + oxfmt, and
-`packages/shared`: types, error taxonomy, job FSM, zod API schemas.
+`tools/downloader/contract`: types, error taxonomy, job FSM, zod API schemas.
 
 This exists so the parallel agents in Phase 1 code against a fixed contract
 instead of negotiating interfaces with each other mid-flight.
@@ -90,12 +90,12 @@ proven here; M2 was deferred to WP-5, because nothing composed the registry yet
 by design. See [04-STATUS.md](./04-STATUS.md) for what shipped and the decisions
 taken. The five approved contract changes it listed landed at the start of WP-5.
 
-| WP       | Package              | Deliverable                                            |
-| -------- | -------------------- | ------------------------------------------------------ |
-| **WP-2** | `packages/resolvers` | **Browser sniffer (Playwright) — critical path**       |
-| **WP-1** | `packages/resolvers` | Registry + manifest parsers + yt-dlp fast path         |
-| **WP-3** | `packages/engine`    | ffmpeg runner, HLS/DASH/progressive download, progress |
-| **WP-4** | `apps/web`           | Full UI against a mocked API                           |
+| WP       | Package                      | Deliverable                                            |
+| -------- | ---------------------------- | ------------------------------------------------------ |
+| **WP-2** | `tools/downloader/resolvers` | **Browser sniffer (Playwright) — critical path**       |
+| **WP-1** | `tools/downloader/resolvers` | Registry + manifest parsers + yt-dlp fast path         |
+| **WP-3** | `tools/downloader/engine`    | ffmpeg runner, HLS/DASH/progressive download, progress |
+| **WP-4** | `tools/downloader/web`       | Full UI against a mocked API                           |
 
 **WP-2 is listed first deliberately.** It is both the hardest package and the
 only one that determines whether the product can do what it claims — if you run
@@ -106,14 +106,14 @@ be cut from scope without threatening the milestone.
 WP-1 and WP-2 share a package but touch disjoint files; both implement the same
 `Resolver` interface. WP-2 consumes WP-1's manifest parsers — the one real
 dependency inside Phase 1, so if the parsers slip, have WP-2 stub them behind
-the same signature rather than idling. WP-4 mocks `apps/api` from the zod schemas
-in `shared`, so it does not wait on the backend.
+the same signature rather than idling. WP-4 mocks `tools/downloader/api` from the zod schemas
+in `contract`, so it does not wait on the backend.
 
 ### Phase 2 — Integration ✅ _complete_
 
-| WP       | Package    | Deliverable                                                      |
-| -------- | ---------- | ---------------------------------------------------------------- |
-| **WP-5** | `apps/api` | Fastify routes, job orchestrator + FSM, SSE, SQLite, file tokens |
+| WP       | Package                | Deliverable                                                      |
+| -------- | ---------------------- | ---------------------------------------------------------------- |
+| **WP-5** | `tools/downloader/api` | Fastify routes, job orchestrator + FSM, SSE, SQLite, file tokens |
 
 This is the join point. One agent, because it wires the others together and
 concurrent edits here cause more trouble than they save.
@@ -171,7 +171,7 @@ Phase 0 ┤        └─ parsers feed WP-2                           ├──�
 
 Rules that keep parallel agents from fighting:
 
-1. **`packages/shared` is frozen during Phase 1.** If an agent needs a contract
+1. **`tools/downloader/contract` is frozen during Phase 1.** If an agent needs a contract
    change, it stops and asks rather than editing — a unilateral edit silently
    breaks three siblings.
 2. **One agent per package**, except WP-1/WP-2 which are file-disjoint.

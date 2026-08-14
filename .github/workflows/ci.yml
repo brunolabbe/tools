@@ -58,52 +58,7 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
       - run: npm test
 
-  # The whole stack in one piece: real UI, real API, real ffmpeg, real file.
-  # Linux only — it is the slowest job and the thing it proves is not
-  # platform-specific.
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-        env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
-      - run: npm run e2e
-      # Traces and video, kept only when something failed — that is the whole
-      # reason `trace: retain-on-failure` is set.
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: e2e-artifacts
-          path: e2e/.artifacts/results
-          retention-days: 7
-
-  # `docker compose up` from a clean machine is the M4 acceptance criterion, so
-  # it is checked rather than assumed. Builds the image and waits for the
-  # service's own health endpoint to report ready.
-  docker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - run: docker compose build
-      - run: docker compose up -d
-      - name: Wait for the service to report healthy
-        run: |
-          for attempt in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:8080/api/health > /tmp/health.json; then
-              cat /tmp/health.json
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "the service never became healthy"
-          docker compose logs
-          exit 1
-      - if: always()
-        run: docker compose down -v
+  # The slow, downloader-specific gates — end-to-end and the container — live in
+  # `downloader.yml`, which only runs when that tool or the packages beneath it
+  # change. Nothing here should grow tool-specific: this workflow is what every
+  # tool in the repo pays on every push.

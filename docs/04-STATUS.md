@@ -15,7 +15,7 @@ is what remains**
 | ------------------------ | ----------- | ------------------------------------------ |
 | Phase 0 — Foundations    | ✅ complete | `5ab843f`                                  |
 | Phase 1 — Parallel build | ✅ complete | `5662f95`, `725740c`, `ca35a55`, `b876906` |
-| Phase 2 — Integration    | ✅ complete | WP-5, `apps/api`                           |
+| Phase 2 — Integration    | ✅ complete | WP-5, `tools/downloader/api`               |
 | Phase 3 — Hardening      | ✅ complete | WP-6 ✅ · WP-7 ✅                          |
 
 **510 tests pass across 34 files, plus 3 Playwright end-to-end tests.
@@ -23,9 +23,9 @@ is what remains**
 
 ### Milestones
 
-- **M1 — Vertical slice ✅.** Proven by `packages/engine/test/hls-e2e.test.ts`.
-- **M2 — Any-site probe ✅.** `apps/api/src/resolvers.ts` composes the registry,
-  and `apps/api/test/queue-and-shutdown.test.ts` asserts the expendability
+- **M1 — Vertical slice ✅.** Proven by `tools/downloader/engine/test/hls-e2e.test.ts`.
+- **M2 — Any-site probe ✅.** `tools/downloader/api/src/resolvers.ts` composes the registry,
+  and `tools/downloader/api/test/queue-and-shutdown.test.ts` asserts the expendability
   invariant directly: with `ENABLE_YTDLP_RESOLVER=false` the chain still
   contains the sniffer and still resolves. A configuration with _every_ tier
   disabled is now refused at boot rather than answering `NO_MEDIA_FOUND` for
@@ -49,7 +49,7 @@ is what remains**
 ## The undici work: address pinning and a real proxy
 
 Two gaps this document listed separately turned out to be one seam, and they
-closed together. `apps/api/src/dispatcher.ts` is the whole of it.
+closed together. `tools/downloader/api/src/dispatcher.ts` is the whole of it.
 
 **DNS rebinding is now actually fixed, not narrowed.** The old guard resolved a
 name, approved it, and then let the socket resolve it again — so the address
@@ -81,12 +81,12 @@ HTTP to the proxy.
 section below — with a proxy there is no local resolution to pin, so pinning is
 not weakened, it is simply not the mechanism in play.
 
-The tests worth reading are the last block of `apps/api/test/dispatcher.test.ts`.
+The tests worth reading are the last block of `tools/downloader/api/test/dispatcher.test.ts`.
 They give the guard a lookup that answers with a public address so the
 pre-flight check passes, point the connector's resolver at loopback, and fetch
 over a real socket — a DNS rebind reduced to its essentials. The connector
 refuses it; the companion test proves the dispatcher is genuinely in the socket
-path rather than being ignored. `npm run e2e` still passes unchanged.
+path rather than being ignored. `npm run e2e:downloader` still passes unchanged.
 
 ---
 
@@ -137,7 +137,7 @@ download link ever appeared.
    with the status already recorded, so a late or contradictory `failed` still
    cannot overturn a completed job.
 
-Each has a regression test in `apps/web/test/`. The general lesson is the one
+Each has a regression test in `tools/downloader/web/test/`. The general lesson is the one
 the brief was betting on: a mocked transport cannot reproduce the ordering of a
 real one, and the bug lived precisely in the ordering.
 
@@ -202,7 +202,7 @@ a user rather than by a test.
 ### Docker
 
 Playwright's own image as the base, pinned to the `playwright` version in
-`packages/resolvers` — a mismatch makes Playwright try to download a browser at
+`tools/downloader/resolvers` — a mismatch makes Playwright try to download a browser at
 runtime, into a read-only filesystem, at the moment of the first probe. ffmpeg
 comes from the distribution rather than `ffmpeg-static`, so image builds do not
 depend on a GitHub release being up and a CVE can be patched without an npm
@@ -243,7 +243,7 @@ Six items in the brief; two were already done, four were not.
 | Brief item          | State                                                                    |
 | ------------------- | ------------------------------------------------------------------------ |
 | 1. SSRF guard       | ✅ shipped early, in WP-5. Unchanged.                                    |
-| 2. Rate limits      | ✅ new — `apps/api/src/rate-limit.ts`                                    |
+| 2. Rate limits      | ✅ new — `tools/downloader/api/src/rate-limit.ts`                        |
 | 3. Path confinement | ✅ already done in WP-3 (`storage.ts`) and WP-5 (`routes/files.ts`)      |
 | 4. No shell         | ✅ already true; now **enforced** by a source scan rather than by care   |
 | 5. Quotas           | ✅ global storage quota new; per-job, stage and concurrency caps existed |
@@ -299,7 +299,7 @@ look at a disk that has plenty of room.
 
 ### The no-shell rule is now enforced, not remembered
 
-`packages/engine/test/spawn-safety.test.ts` scans every `src` file in the repo:
+`packages/core/test/spawn-safety.test.ts` scans every `src` file in the repo:
 no truthy `shell:`, no `exec`/`execSync` imported from `node:child_process`, and
 every file that spawns must say `shell: false` explicitly. It asserts its own
 scan found something first, so an empty walk cannot pass silently. Verified
@@ -309,7 +309,7 @@ against a planted violation rather than assumed to work.
 
 ## What WP-5 delivered
 
-`apps/api`, ~20 source files and 5 test files (85 tests).
+`tools/downloader/api`, ~20 source files and 5 test files (85 tests).
 
 | Area            | Files                                           | Notes                                                                |
 | --------------- | ----------------------------------------------- | -------------------------------------------------------------------- |
@@ -421,7 +421,7 @@ memory, so two replicas behind a load balancer grant two allowances. Correct for
 the single-container deployment this targets; a shared store (the same Redis
 BullMQ would want) is the fix if it is ever scaled out.
 
-**DNS rebinding: closed, except through ffmpeg.** `apps/api/src/dispatcher.ts`
+**DNS rebinding: closed, except through ffmpeg.** `tools/downloader/api/src/dispatcher.ts`
 pins the vetted address into the socket, so the check and the connection can no
 longer disagree — see the section above. What remains is the same ffmpeg gap
 recorded below: ffmpeg resolves its own names and no dispatcher of ours governs
@@ -440,7 +440,7 @@ egress there is the proxy's own policy. The pre-flight check still runs, and
 from its proxy's.
 
 **Test files are still not typechecked.** Unchanged: each project's `include` is
-`src/**`. `apps/api/test` is now the largest untypechecked surface in the repo,
+`src/**`. `tools/downloader/api/test` is now the largest untypechecked surface in the repo,
 and `e2e/` is in the same position — Playwright transpiles it without type
 checking, so a stale selector helper fails at run time rather than at build.
 
@@ -453,7 +453,7 @@ rather than leaving a progress bar that never moves.
 both unchanged from Phase 1, and both now handled: `DOWNLOAD_FAILED` during
 `downloading` is treated as re-probe-worthy exactly once.
 
-**No component-render tests** in `apps/web`. The Playwright suite now covers the
+**No component-render tests** in `tools/downloader/web`. The Playwright suite now covers the
 paths that matter most end to end, which is where the three status bugs were
 caught, but there is still nothing between "pure function" and "whole stack in
 a browser". A broken component that happens not to be on the E2E path fails
@@ -477,21 +477,21 @@ run from inside a container.
 ```bash
 npm run check                       # lint + format + typecheck — must pass
 npm test                            # vitest run, all 510
-npx vitest run apps/api             # one package
+npx vitest run tools/downloader/api             # one package
 
 npm run e2e:install                 # once: fetches the browser
-npm run e2e                         # whole stack in a real browser
+npm run e2e:downloader                         # whole stack in a real browser
 
 docker compose up --build           # the service, on http://localhost:8080
 
 # The full stack, one terminal. API on 127.0.0.1:8080, UI on 5173.
 npm run dev
-npm run dev:api                     # or one at a time
-npm run dev:web
+npm run dev:downloader:api                     # or one at a time
+npm run dev:downloader:web
 ```
 
-`apps/web` defaults to the **mock** transport. To point it at a running API,
-copy `apps/web/.env.example` to `.env.local` (it sets `VITE_API_MOCK=false`).
+`tools/downloader/web` defaults to the **mock** transport. To point it at a running API,
+copy `tools/downloader/web/.env.example` to `.env.local` (it sets `VITE_API_MOCK=false`).
 The Vite dev server proxies `/api`, so the setup is same-origin and needs no
 CORS configuration.
 

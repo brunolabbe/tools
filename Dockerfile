@@ -5,9 +5,9 @@
 # browser sniffer is the tier that makes "any website" reachable, and Chromium
 # needs some seventy shared libraries that no Node image carries; installing
 # them by hand is a list that goes stale every Playwright release. The tag must
-# match the `playwright` version in `packages/resolvers` — a mismatch makes
-# Playwright try to download a browser at runtime, into a read-only filesystem,
-# at the moment of the first probe.
+# match the `playwright` version in `tools/downloader/resolvers` — a mismatch
+# makes Playwright try to download a browser at runtime, into a read-only
+# filesystem, at the moment of the first probe.
 ARG PLAYWRIGHT_VERSION=1.62.1
 ARG BASE=mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
@@ -25,18 +25,20 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 # Manifests first: this layer is what `npm ci` is keyed on, and it changes far
 # less often than the source does.
 COPY package.json package-lock.json ./
-COPY packages/shared/package.json packages/shared/
-COPY packages/resolvers/package.json packages/resolvers/
-COPY packages/engine/package.json packages/engine/
-COPY apps/api/package.json apps/api/
-COPY apps/web/package.json apps/web/
+COPY packages/core/package.json packages/core/
+COPY tools/downloader/contract/package.json tools/downloader/contract/
+COPY tools/downloader/resolvers/package.json tools/downloader/resolvers/
+COPY tools/downloader/engine/package.json tools/downloader/engine/
+COPY tools/downloader/api/package.json tools/downloader/api/
+COPY tools/downloader/web/package.json tools/downloader/web/
 RUN npm ci
 
 COPY tsconfig.base.json tsconfig.json ./
 COPY packages packages
-COPY apps apps
+COPY tools tools
 
-# The bundle's transport is decided at build time (see apps/web/src/api/client.ts).
+# The bundle's transport is decided at build time
+# (see tools/downloader/web/src/api/client.ts).
 # A production build already defaults to the real API; it is spelled out here
 # because an image that silently mocked every download would look perfectly
 # healthy and do nothing.
@@ -79,16 +81,18 @@ RUN if [ "${INSTALL_YTDLP}" = "true" ]; then \
 # out of its own.
 COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/package.json ./
-COPY --from=build /app/packages/shared/package.json packages/shared/
-COPY --from=build /app/packages/shared/dist packages/shared/dist
-COPY --from=build /app/packages/resolvers/package.json packages/resolvers/
-COPY --from=build /app/packages/resolvers/dist packages/resolvers/dist
-COPY --from=build /app/packages/engine/package.json packages/engine/
-COPY --from=build /app/packages/engine/dist packages/engine/dist
-COPY --from=build /app/apps/api/package.json apps/api/
-COPY --from=build /app/apps/api/dist apps/api/dist
-COPY --from=build /app/apps/web/package.json apps/web/
-COPY --from=build /app/apps/web/dist/app apps/web/dist/app
+COPY --from=build /app/packages/core/package.json packages/core/
+COPY --from=build /app/packages/core/dist packages/core/dist
+COPY --from=build /app/tools/downloader/contract/package.json tools/downloader/contract/
+COPY --from=build /app/tools/downloader/contract/dist tools/downloader/contract/dist
+COPY --from=build /app/tools/downloader/resolvers/package.json tools/downloader/resolvers/
+COPY --from=build /app/tools/downloader/resolvers/dist tools/downloader/resolvers/dist
+COPY --from=build /app/tools/downloader/engine/package.json tools/downloader/engine/
+COPY --from=build /app/tools/downloader/engine/dist tools/downloader/engine/dist
+COPY --from=build /app/tools/downloader/api/package.json tools/downloader/api/
+COPY --from=build /app/tools/downloader/api/dist tools/downloader/api/dist
+COPY --from=build /app/tools/downloader/web/package.json tools/downloader/web/
+COPY --from=build /app/tools/downloader/web/dist/app tools/downloader/web/dist/app
 
 ENV NODE_ENV=production
 # 127.0.0.1 — the default — is unreachable from outside a container.
@@ -98,7 +102,7 @@ ENV PORT=8080
 ENV STORAGE_DIR=/data
 ENV DATABASE_PATH=/data/jobs.db
 # Same-origin UI: no CORS to configure, and EventSource just works.
-ENV WEB_DIR=/app/apps/web/dist/app
+ENV WEB_DIR=/app/tools/downloader/web/dist/app
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 
 # `pwuser` comes with the base image. Nothing here needs root, and this process
@@ -110,9 +114,9 @@ EXPOSE 8080
 VOLUME ["/data"]
 
 # The app's own endpoint, which reports 503 while draining and whenever ffmpeg
-# is missing — see apps/api/src/routes/health.ts. `start-period` is generous
-# because the first boot runs the SQLite migrations.
+# is missing — see tools/downloader/api/src/routes/health.ts. `start-period` is
+# generous because the first boot runs the SQLite migrations.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["node", "apps/api/dist/main.js"]
+CMD ["node", "tools/downloader/api/dist/main.js"]

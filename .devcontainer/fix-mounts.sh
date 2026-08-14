@@ -20,9 +20,10 @@ for dir in /commandhistory "/home/${USERNAME}/.claude" "/home/${USERNAME}/.confi
   chown -R "${USERNAME}:${USERNAME}" "$dir"
 done
 
-# Depth 4 reaches /workspaces/<repo>/apps/<app>/node_modules. -prune stops the
-# walk from descending into a tree with tens of thousands of files.
-find /workspaces -maxdepth 4 -type d -name node_modules -prune \
+# Depth 5 reaches /workspaces/<repo>/tools/<tool>/<package>/node_modules, which
+# is the deepest a workspace nests. -prune stops the walk from descending into a
+# tree with tens of thousands of files.
+find /workspaces -maxdepth 5 -type d -name node_modules -prune \
   -exec chown "${USERNAME}:${USERNAME}" {} +
 
 printf '[fix-mounts] volumes are owned by %s\n' "$USERNAME"

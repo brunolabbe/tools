@@ -61,9 +61,9 @@
       "type": "volume"
     },
     // Linux node_modules, kept off the Windows bind mount. Both paths are
-    // listed because npm currently nests one under apps/web; if a future
-    // install nests another, add it here rather than letting it land on the
-    // host tree.
+    // listed because npm currently nests one under the downloader's web
+    // workspace; if a future install nests another, add it here rather than
+    // letting it land on the host tree.
     {
       "source": "downloader-node-modules-${devcontainerId}",
       "target": "${containerWorkspaceFolder}/node_modules",
@@ -71,7 +71,7 @@
     },
     {
       "source": "downloader-web-node-modules-${devcontainerId}",
-      "target": "${containerWorkspaceFolder}/apps/web/node_modules",
+      "target": "${containerWorkspaceFolder}/tools/downloader/web/node_modules",
       "type": "volume"
     }
   ],

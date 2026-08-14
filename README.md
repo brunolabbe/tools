@@ -71,15 +71,15 @@ cp .env.example .env
 npm run dev       # API on :8080 and UI on :5173, both watching
 npm run check     # lint (oxlint) + format (oxfmt) + typecheck
 npm test          # vitest
-npm run e2e       # whole stack in a real browser (npm run e2e:install first)
+npm run e2e:downloader       # whole stack in a real browser (npm run e2e:install first)
 ```
 
 Requires Node ≥ 22. `ffmpeg` ships bundled via `ffmpeg-static`; `yt-dlp` is
 optional and the system degrades to browser-sniffing without it.
 
 The UI defaults to a **mocked** API in development, so it runs with no backend
-at all — copy `apps/web/.env.example` to `apps/web/.env.local` to point it at a
-running API. A production build defaults the other way.
+at all — copy `.env.example` to `.env.local` inside `tools/downloader/web` to
+point it at a running API. A production build defaults the other way.
 
 ## Docs
 
@@ -94,11 +94,16 @@ running API. A production build defaults the other way.
 
 ## Layout
 
+This repo holds several small web tools that share one toolchain. Anything
+tool-agnostic lives in `packages/`; everything else belongs to exactly one tool.
+
 ```
-packages/shared      types, error taxonomy, job FSM, zod API schemas
-packages/resolvers   URL → ProbeResult
-packages/engine      ProbeResult → file on disk
-apps/api             Fastify, orchestration, SSE, file serving, the UI
-apps/web             React + Vite UI
-e2e                  Playwright: the whole stack, one fixture HLS origin
+packages/core          error machinery, job transitions, redaction — no domain
+tools/downloader/
+  contract             types, error taxonomy, job FSM, zod API schemas
+  resolvers            URL → ProbeResult
+  engine               ProbeResult → file on disk
+  api                  Fastify, orchestration, SSE, file serving, the UI
+  web                  React + Vite UI
+  e2e                  Playwright: the whole stack, one fixture HLS origin
 ```

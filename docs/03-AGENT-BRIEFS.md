@@ -1,13 +1,13 @@
 # Agent briefs
 
 Copy a brief verbatim into a Claude Code agent. Each is self-contained and
-assumes only that `packages/shared` exists and Phase 0 is done.
+assumes only that `tools/downloader/contract` exists and Phase 0 is done.
 
 **Preamble to prepend to every brief:**
 
 > Read `CLAUDE.md`, `docs/00-STREAM-CAPTURE-ANALYSIS.md` and
 > `docs/01-ARCHITECTURE.md` before writing code. All types come from
-> `@downloader/shared` — do not redefine them, and do not edit that package;
+> `@downloader/contract` — do not redefine them, and do not edit that package;
 > if you believe the contract is wrong, stop and say so rather than changing it.
 > Use `AppError` with a code from the taxonomy for every failure. Ship unit tests
 > with checked-in fixtures, never live network calls. `npm run check` must pass.
@@ -23,7 +23,7 @@ brief are not.
 
 ## WP-1 — Resolver registry + manifest parsers + yt-dlp fast path
 
-**Package:** `packages/resolvers` · **Parallel with:** WP-2, WP-3, WP-4
+**Package:** `tools/downloader/resolvers` · **Parallel with:** WP-2, WP-3, WP-4
 
 The registry (1) and manifest parsers (4) are load-bearing — WP-2 consumes the
 parsers. The yt-dlp adapter (2) is a **latency optimisation, not a coverage
@@ -75,7 +75,7 @@ DRM fixtures produce `drm.protected === true` with the right system named.
 
 ## WP-2 — Browser sniffer resolver
 
-**Package:** `packages/resolvers` · **Parallel with:** WP-1, WP-3, WP-4
+**Package:** `tools/downloader/resolvers` · **Parallel with:** WP-1, WP-3, WP-4
 **This is the hardest work package and the one that delivers "any website".**
 
 Build `resolvers/browser.ts`, priority 50, `canHandle` returns true for all http(s).
@@ -125,7 +125,7 @@ precisely the case that defeats DOM scraping.
 
 ## WP-3 — Download engine
 
-**Package:** `packages/engine` · **Parallel with:** WP-1, WP-2, WP-4
+**Package:** `tools/downloader/engine` · **Parallel with:** WP-1, WP-2, WP-4
 
 1. `ffmpeg/runner.ts` — spawn bundled `ffmpeg-static` (override via
    `FFMPEG_PATH`) with an argument array. Pass captured headers via `-headers`
@@ -162,10 +162,10 @@ to a playable, seekable, fast-start MP4.
 
 ## WP-4 — Web UI
 
-**App:** `apps/web` · **Parallel with:** WP-1, WP-2, WP-3
+**App:** `tools/downloader/web` · **Parallel with:** WP-1, WP-2, WP-3
 
 React + Vite + TypeScript. **Mock the API from the zod schemas in
-`@downloader/shared`** so this ships without waiting on WP-5.
+`@downloader/contract`** so this ships without waiting on WP-5.
 
 Flow: paste URL → _Analyse_ (with a real progress indication — browser probes
 take 10–20 s, and silent waiting reads as a hang) → variant picker table
@@ -190,10 +190,10 @@ error state.
 
 ## WP-5 — API and job orchestration
 
-**App:** `apps/api` · **Runs alone, after Phase 1. This is M3.**
+**App:** `tools/downloader/api` · **Runs alone, after Phase 1. This is M3.**
 
-1. Fastify + zod validation from `shared/api.ts`. Routes exactly as `ROUTES`.
-2. **Job FSM** — use `canTransition()` from `shared/job.ts`; reject illegal
+1. Fastify + zod validation from `contract/src/api.ts`. Routes exactly as `ROUTES`.
+2. **Job FSM** — use `canTransition()` from `contract/src/job.ts`; reject illegal
    transitions rather than tolerating them. Persist to SQLite
    (`better-sqlite3`), so a restart does not lose job history.
 3. **Queue** — in-process, `MAX_CONCURRENT_JOBS`, behind an interface so BullMQ
@@ -217,7 +217,7 @@ download the file. End to end, on a real site.
 
 ## WP-6 — Security and limits
 
-**Area:** `apps/api` + `packages/engine` · **Parallel with:** WP-7
+**Area:** `tools/downloader/api` + `tools/downloader/engine` · **Parallel with:** WP-7
 
 1. **SSRF guard** — resolve hostnames, reject loopback / private / link-local /
    ULA / cloud-metadata (`169.254.169.254`), re-checked **after every redirect**.

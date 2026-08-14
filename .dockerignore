@@ -30,7 +30,7 @@ logs
 .claude
 playwright-report
 test-results
-e2e/.artifacts
+**/e2e/.artifacts
 
 docs
 *.md

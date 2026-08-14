@@ -1,0 +1,22 @@
+{
+  "name": "@webtools/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tool-agnostic primitives: error machinery, job transition rules, credential redaction. Knows nothing about any one tool's domain.",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  }
+}

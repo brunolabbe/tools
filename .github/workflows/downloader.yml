@@ -1,0 +1,90 @@
+name: downloader
+
+# The slow gates: the whole stack in a browser, and the container that ships it.
+# Split out of `ci.yml` and filtered by path so that work on another tool does
+# not spend ten minutes generating HLS fixtures with ffmpeg to prove something
+# about code it never touched. Lint, typecheck and the unit suites still run for
+# every change — those are in `ci.yml` and are not filtered.
+#
+# The filter deliberately includes `packages/**`: everything here sits on top of
+# `@webtools/core`, so a change there can break this tool without touching it.
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "tools/downloader/**"
+      - "packages/**"
+      - "Dockerfile"
+      - "compose.yaml"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/downloader.yml"
+  pull_request:
+    paths:
+      - "tools/downloader/**"
+      - "packages/**"
+      - "Dockerfile"
+      - "compose.yaml"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/downloader.yml"
+  # So a failure can be re-run without an empty commit.
+  workflow_dispatch:
+
+concurrency:
+  group: downloader-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The whole stack in one piece: real UI, real API, real ffmpeg, real file.
+  # Linux only — it is the slowest job and the thing it proves is not
+  # platform-specific.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
+      - run: npm run e2e:downloader
+      # Traces and video, kept only when something failed — that is the whole
+      # reason `trace: retain-on-failure` is set.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-artifacts
+          path: tools/downloader/e2e/.artifacts/results
+          retention-days: 7
+
+  # `docker compose up` from a clean machine is the M4 acceptance criterion, so
+  # it is checked rather than assumed. Builds the image and waits for the
+  # service's own health endpoint to report ready.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - run: docker compose build
+      - run: docker compose up -d
+      - name: Wait for the service to report healthy
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/api/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "the service never became healthy"
+          docker compose logs
+          exit 1
+      - if: always()
+        run: docker compose down -v

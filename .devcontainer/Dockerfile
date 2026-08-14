@@ -1,5 +1,5 @@
 # Dev container image: everything an agent needs to build, test and *run* this
-# service, so that "npm run check", "npm test" and "npm run e2e" all work on a
+# service, so that "npm run check", "npm test" and "npm run e2e:downloader" all work on a
 # fresh clone with no host setup and no permission prompts.
 #
 # The base is Playwright's own image for the same reason the production

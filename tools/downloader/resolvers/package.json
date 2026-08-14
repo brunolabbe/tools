@@ -1,0 +1,27 @@
+{
+  "name": "@downloader/resolvers",
+  "version": "0.1.0",
+  "private": true,
+  "description": "URL to ProbeResult. Priority-ordered resolver registry, manifest parsers, browser sniffer.",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@downloader/contract": "*",
+    "fast-xml-parser": "^5.3.1",
+    "playwright": "^1.57.0"
+  }
+}
