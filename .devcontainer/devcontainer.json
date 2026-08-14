@@ -1,0 +1,126 @@
+// Dev container for agent-driven work on this repo.
+//
+// The shape of it: an agent runs inside with permission prompts off, the
+// container is the security boundary, and outbound traffic is limited to an
+// allowlist (see allowed-domains.txt and init-firewall.sh). The workspace is a
+// bind mount, so edits show up in VS Code on Windows immediately; node_modules
+// is not, because a Windows checkout's node_modules holds win32 binaries.
+//
+// See .devcontainer/README.md before changing anything here.
+{
+  "name": "downloader (agent sandbox)",
+
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      // Keep in step with `playwright` in package-lock.json.
+      "PLAYWRIGHT_VERSION": "1.62.1",
+      "YTDLP_VERSION": "2025.09.26",
+      "NODE_MAJOR": "22"
+    }
+  },
+
+  "runArgs": [
+    // ffmpeg and Chromium both fork. PID 1 does not reap, so without an init
+    // the container slowly fills with zombies — same reason compose.yaml sets
+    // it for production.
+    "--init",
+    // Chromium's renderers use POSIX shared memory; the default 64 MB /dev/shm
+    // shows up as tabs crashing mid-probe, which reads as a flaky site.
+    "--shm-size=1g",
+    // What init-firewall.sh needs to write iptables rules in this namespace.
+    // Nothing else in here uses them, and the container has no other added
+    // capabilities.
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW"
+  ],
+
+  "containerUser": "pwuser",
+  "remoteUser": "pwuser",
+  // The host is Windows, so bind-mount ownership is synthesised anyway and
+  // remapping the container UID would only add rebuild churn.
+  "updateRemoteUserUID": false,
+
+  "mounts": [
+    // Login survives rebuilds: `claude` is authenticated once, in here, and the
+    // host's own credentials are never mounted in.
+    {
+      "source": "downloader-claude-${devcontainerId}",
+      "target": "/home/pwuser/.claude",
+      "type": "volume"
+    },
+    // Same idea for `gh auth login`.
+    {
+      "source": "downloader-gh-${devcontainerId}",
+      "target": "/home/pwuser/.config/gh",
+      "type": "volume"
+    },
+    {
+      "source": "downloader-history-${devcontainerId}",
+      "target": "/commandhistory",
+      "type": "volume"
+    },
+    // Linux node_modules, kept off the Windows bind mount. Both paths are
+    // listed because npm currently nests one under apps/web; if a future
+    // install nests another, add it here rather than letting it land on the
+    // host tree.
+    {
+      "source": "downloader-node-modules-${devcontainerId}",
+      "target": "${containerWorkspaceFolder}/node_modules",
+      "type": "volume"
+    },
+    {
+      "source": "downloader-web-node-modules-${devcontainerId}",
+      "target": "${containerWorkspaceFolder}/apps/web/node_modules",
+      "type": "volume"
+    }
+  ],
+
+  "containerEnv": {
+    // Chromium's own sandbox needs privileges this container does not have, so
+    // the container is the boundary instead — the same trade-off compose.yaml
+    // documents for production.
+    "BROWSER_NO_SANDBOX": "true",
+    // The distro ffmpeg, not the ffmpeg-static download.
+    "FFMPEG_PATH": "/usr/bin/ffmpeg",
+    "YTDLP_PATH": "/usr/local/bin/yt-dlp",
+    // Dev servers must listen on all interfaces to be reachable through
+    // Docker's port forwarding; API_DEFAULTS.host is 127.0.0.1.
+    "HOST": "0.0.0.0",
+    "LOG_LEVEL": "debug",
+    "DEVCONTAINER": "true"
+  },
+
+  "forwardPorts": [8080, 5173, 8099],
+  "portsAttributes": {
+    "8080": { "label": "api", "onAutoForward": "notify" },
+    "5173": { "label": "web", "onAutoForward": "openBrowserOnce" },
+    "8099": { "label": "e2e", "onAutoForward": "silent" }
+  },
+
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  // Every start, not just creation: iptables rules live in the network
+  // namespace and are gone after a restart.
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
+  "waitFor": "postCreateCommand",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "oxc.oxc-vscode",
+        "ms-playwright.playwright",
+        "vitest.explorer"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        // The repo is edited from Windows and built here; CRLF creeping into a
+        // shell script under .devcontainer breaks the container itself.
+        "files.eol": "\n",
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "oxc.oxc-vscode",
+        "typescript.tsdk": "node_modules/typescript/lib"
+      }
+    }
+  }
+}

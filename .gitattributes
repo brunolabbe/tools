@@ -1,0 +1,16 @@
+# The repo is edited on Windows and built in a Linux container. A shell script
+# that arrives with CRLF fails with `bad interpreter: /usr/bin/env bash^M`, and
+# the two under .devcontainer/ break the container itself — so they are pinned
+# to LF regardless of core.autocrlf.
+* text=auto eol=lf
+
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.m3u8 text eol=lf
+
+# Media fixtures. Note `.ts` is deliberately absent: in this repo it is
+# TypeScript, not an MPEG transport stream, and the HLS segments the e2e suite
+# generates are gitignored under e2e/.artifacts/.
+*.mp4 binary
+*.png binary
+*.ico binary

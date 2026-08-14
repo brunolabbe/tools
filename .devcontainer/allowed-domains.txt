@@ -1,0 +1,65 @@
+# Egress allowlist for the dev container.
+#
+# init-firewall.sh resolves every name below to its A records at container
+# start and puts those addresses in an ipset; everything else outbound is
+# dropped. Blank lines and `#` comments are ignored. GitHub is NOT listed here:
+# its address ranges are pulled from https://api.github.com/meta instead,
+# because they are many and they move.
+#
+# Two things to know before editing:
+#
+#   * This file is baked into the image. Edit it, then "Dev Containers: Rebuild
+#     Container" — a running container keeps the list it started with. That is
+#     deliberate: an allowlist the agent could widen in place would not be one.
+#
+#   * Names are pinned to the IPs they resolved to at start time. Big CDNs
+#     rotate addresses, so a long-lived container can start seeing failures
+#     that a re-run of `sudo /usr/local/bin/init-firewall.sh` fixes.
+
+# --- Claude Code -----------------------------------------------------------
+api.anthropic.com
+console.anthropic.com
+claude.ai
+statsig.anthropic.com
+sentry.io
+
+# --- npm -------------------------------------------------------------------
+registry.npmjs.org
+
+# --- GitHub bits the meta ranges do not cover ------------------------------
+# Release assets (yt-dlp, ffmpeg-static, many postinstalls) and raw file reads.
+objects.githubusercontent.com
+raw.githubusercontent.com
+codeload.github.com
+ghcr.io
+pkg-containers.githubusercontent.com
+cli.github.com
+
+# --- Playwright browser downloads ------------------------------------------
+# Only needed when the npm `playwright` version drifts from the image's
+# browsers, but that is exactly when you least want to be debugging a firewall.
+cdn.playwright.dev
+playwright.download.prss.microsoft.com
+playwright.azureedge.net
+
+# --- VS Code server and extensions -----------------------------------------
+update.code.visualstudio.com
+marketplace.visualstudio.com
+vscode.download.prss.microsoft.com
+main.vscode-cdn.net
+
+# --- Distro packages -------------------------------------------------------
+# apt inside a running container is a poor habit — the reproducible fix is to
+# add the package to the Dockerfile — but a blocked `apt-get update` produces a
+# baffling error, so the mirrors are open. These are round-robin CDNs and are
+# the entries most likely to need a firewall re-run.
+archive.ubuntu.com
+security.ubuntu.com
+deb.nodesource.com
+
+# --- Add your own below ----------------------------------------------------
+# The resolver tiers in this repo exist to probe arbitrary third-party sites,
+# and none of them can reach anything from in here. Unit and e2e suites run
+# against local fixtures by design, so that is not a problem for tests. If you
+# genuinely need to probe a real site, add its hostname (and its media CDN's)
+# here and rebuild.
