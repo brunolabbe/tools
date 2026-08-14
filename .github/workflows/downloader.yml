@@ -59,6 +59,14 @@ jobs:
       - run: npx playwright install --with-deps chromium
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
+      # See the note in ci.yml: the bundled `ffmpeg-static` binary segfaults on
+      # this runner, which here shows up as a download that never reaches
+      # "Ready" rather than as an error.
+      - name: Use the distribution's ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          echo "FFMPEG_PATH=/usr/bin/ffmpeg" >> "$GITHUB_ENV"
       - run: npm run e2e:downloader
       # Traces and video, kept only when something failed — that is the whole
       # reason `trace: retain-on-failure` is set.
