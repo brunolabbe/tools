@@ -125,7 +125,7 @@ responsible for never discarding it silently.
     resumable rather than finished. Nothing here is a second state machine:
     "core-complete" is a fact computed from the answers, never a column.
 
-11. **The client mirrors the seam, not the logic.** No condition evaluation in
+13. **The client mirrors the seam, not the logic.** No condition evaluation in
     the browser. The server returns the next question, the reachable set and the
     discard preview; the UI renders them.
 
@@ -162,9 +162,10 @@ Someone answers into a branch, is told the essentials are done and can stop
 there, goes back, changes an early answer, is shown exactly which answers that
 discards and confirms it, reloads mid-intake, and finds the intake where they
 left it — resumable, whether or not it passed the checkpoint. The dry run and the
-real write agree on what is discarded. Re-answering a question does not create a second row. An unknown
-intake id is a typed 404 and not a 500. `npm test -- --project planner` covers
-the store, the routes and the invalidation path.
+real write agree on what is discarded. Re-answering a question does not create a
+second row. An unknown intake id is a typed 404 and not a 500.
+`npm test -- --project planner` covers the store, the routes and the
+invalidation path.
 
 ## Log
 
