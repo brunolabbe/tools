@@ -1,9 +1,13 @@
-# Dev container image: everything an agent needs to build, test and *run* this
-# service, so that "npm run check", "npm test" and "npm run e2e:downloader" all work on a
-# fresh clone with no host setup and no permission prompts.
+# Dev container image: everything an agent needs to build, test and *run* the
+# tools in this repo, so that "npm run check", "npm test" and each tool's e2e
+# suite all work on a fresh clone with no host setup and no permission prompts.
 #
-# The base is Playwright's own image for the same reason the production
-# Dockerfile uses it: the browser sniffer is a first-class tier here, and
+# Repo-scoped, not tool-scoped — one sandbox serves every tool under `tools/`.
+# It currently carries ffmpeg and yt-dlp because the downloader needs them; a
+# tool needing something else adds it here rather than getting its own image.
+#
+# The base is Playwright's own image for the same reason the downloader's
+# production Dockerfile uses it: the browser sniffer is a first-class tier, and
 # Chromium needs some seventy shared libraries no Node image carries. Keep
 # PLAYWRIGHT_VERSION in step with the `playwright` / `@playwright/test` version
 # in package-lock.json — a mismatch makes Playwright try to download a browser

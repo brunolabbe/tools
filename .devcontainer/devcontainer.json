@@ -8,7 +8,7 @@
 //
 // See .devcontainer/README.md before changing anything here.
 {
-  "name": "downloader (agent sandbox)",
+  "name": "webtools (agent sandbox)",
 
   "build": {
     "dockerfile": "Dockerfile",
@@ -45,18 +45,18 @@
     // Login survives rebuilds: `claude` is authenticated once, in here, and the
     // host's own credentials are never mounted in.
     {
-      "source": "downloader-claude-${devcontainerId}",
+      "source": "webtools-claude-${devcontainerId}",
       "target": "/home/pwuser/.claude",
       "type": "volume"
     },
     // Same idea for `gh auth login`.
     {
-      "source": "downloader-gh-${devcontainerId}",
+      "source": "webtools-gh-${devcontainerId}",
       "target": "/home/pwuser/.config/gh",
       "type": "volume"
     },
     {
-      "source": "downloader-history-${devcontainerId}",
+      "source": "webtools-history-${devcontainerId}",
       "target": "/commandhistory",
       "type": "volume"
     },
@@ -65,12 +65,12 @@
     // workspace; if a future install nests another, add it here rather than
     // letting it land on the host tree.
     {
-      "source": "downloader-node-modules-${devcontainerId}",
+      "source": "webtools-node-modules-${devcontainerId}",
       "target": "${containerWorkspaceFolder}/node_modules",
       "type": "volume"
     },
     {
-      "source": "downloader-web-node-modules-${devcontainerId}",
+      "source": "webtools-downloader-web-node-modules-${devcontainerId}",
       "target": "${containerWorkspaceFolder}/tools/downloader/web/node_modules",
       "type": "volume"
     }

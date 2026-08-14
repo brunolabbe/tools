@@ -2,8 +2,13 @@
 
 A Linux sandbox with the whole toolchain in it — Node 22, ffmpeg, yt-dlp,
 Chromium, `gh`, and the Claude Code CLI — so an agent can build, test and run
-this service end to end without asking permission for anything and without
-touching the Windows host.
+any tool in this repo end to end without asking permission for anything and
+without touching the Windows host.
+
+One sandbox for the whole repo, not one per tool: it is named `webtools`, and
+its named volumes are `webtools-*`. The `downloader:local` image that
+`compose.yaml` builds is a different thing entirely — that one ships the
+downloader as a product, and each tool gets its own.
 
 ## Getting started
 
