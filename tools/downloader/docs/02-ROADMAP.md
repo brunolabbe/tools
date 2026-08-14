@@ -138,6 +138,9 @@ rebinding at the socket rather than only at the pre-flight check.
 [dl-11](./work/dl-11-guarded-egress-proxy.md) is the same move for the one
 egress dl-8 could not reach: ffmpeg fetches through its own HTTP stack, so a
 manifest's segment URIs are opened without anything having authorised them.
+[dl-12](./work/dl-12-tiers-behind-the-egress-proxy.md) finishes that sweep by
+pointing the two subprocess resolvers at the same proxy — the browser tier
+being the wider hole of the three, since a page fetches whatever it names.
 
 ### Phase 4 — Coverage (ongoing, never "done")
 

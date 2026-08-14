@@ -30,6 +30,13 @@ export interface AppContext {
   /** Process start, so health can report an uptime rather than a wall clock. */
   startedAt: Date;
   guard: SsrfGuard;
+  /**
+   * The loopback proxy every subprocess egress goes through — ffmpeg, Chromium
+   * and yt-dlp alike. Runtime state rather than configuration: the port is
+   * ephemeral and chosen at boot, which is also why it must never be reported
+   * to a client. See `egress-proxy.ts` and dl-12.
+   */
+  egressProxyUrl: string;
   queue: JobQueue;
   events: JobEventHub;
   probeCache: ProbeCache;

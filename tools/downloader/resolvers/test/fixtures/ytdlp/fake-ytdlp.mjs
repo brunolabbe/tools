@@ -43,6 +43,26 @@ switch (mode) {
     process.stdout.write("this is not json\n");
     break;
   }
+  case "echo-args": {
+    // Reports the arguments it was invoked with as the video title, which is the
+    // shortest path from "what did the resolver decide to pass" to an assertion.
+    process.stdout.write(
+      JSON.stringify({
+        title: process.argv.slice(3).join(" "),
+        formats: [
+          {
+            format_id: "1",
+            url: "https://cdn.example/v.mp4",
+            protocol: "https",
+            ext: "mp4",
+            vcodec: "avc1.640028",
+            acodec: "mp4a.40.2",
+          },
+        ],
+      }),
+    );
+    break;
+  }
   default: {
     process.stdout.write(readFileSync(join(here, `${mode}.json`), "utf8"));
   }
