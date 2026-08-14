@@ -37,8 +37,14 @@ export const PROGRESS_ARGS: readonly string[] = ["-progress", "pipe:1", "-nostat
  * `file` is deliberately absent. A manifest is attacker-influenced data, and an
  * HLS playlist whose segment URI is `file:///etc/passwd` would otherwise be
  * remuxed straight into the user's download.
+ *
+ * `httpproxy` is what libavformat opens an HTTPS target through when a proxy is
+ * set, and leaving it out does not make anything safer — it makes proxied HTTPS
+ * fail with `Invalid argument` before the proxy is ever contacted, which is what
+ * it did until dl-11. Every egress now goes through the guarded proxy anyway, so
+ * a manifest naming `httpproxy://` reaches the same check as everything else.
  */
-export const REMOTE_PROTOCOL_WHITELIST = "http,https,tcp,tls,crypto,data";
+export const REMOTE_PROTOCOL_WHITELIST = "http,https,httpproxy,tcp,tls,crypto,data";
 
 /** Local assembly (the concat demuxer) reads a list file we wrote ourselves. */
 export const LOCAL_PROTOCOL_WHITELIST = "file,crypto,data";
