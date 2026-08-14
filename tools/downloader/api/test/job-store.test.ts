@@ -70,6 +70,20 @@ describe("the FSM", () => {
     expect(done.finishedAt).not.toBeNull();
   });
 
+  test("allows the one back-edge, downloading → probing, and no other", () => {
+    create();
+    store.transition("job-1", "probing");
+    store.transition("job-1", "downloading");
+    expect(store.transition("job-1", "probing").status).toBe("probing");
+    expect(store.transition("job-1", "downloading").status).toBe("downloading");
+
+    // The back-edge is for an expired URL mid-download. Once muxing has begun
+    // there is nothing to re-resolve, and the FSM stays forward.
+    store.transition("job-1", "muxing");
+    expect(codeOf(() => store.transition("job-1", "probing"))).toBe("INTERNAL");
+    expect(store.get("job-1").status).toBe("muxing");
+  });
+
   test("rejects a skipped state rather than tolerating it", () => {
     create();
     // queued → downloading skips probing, which would mean a job that never

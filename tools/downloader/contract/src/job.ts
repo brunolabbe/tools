@@ -37,11 +37,17 @@ export type JobStatus = (typeof JOB_STATUSES)[number];
 /**
  * Legal transitions. Exported so the orchestrator and its tests share one
  * definition rather than each encoding the rules separately.
+ *
+ * **`downloading → probing` is the one back-edge**, and it is deliberate. A
+ * signed media URL that expires mid-download is not a failure of the job, it is
+ * a reason to resolve the source again — so the job genuinely returns to
+ * probing, and says so, rather than re-probing while still reporting
+ * `downloading`. Bounded by the orchestrator, which retries once (dl-9).
  */
 export const JOB_TRANSITIONS: TransitionTable<JobStatus> = {
   queued: ["probing", "canceled", "failed"],
   probing: ["downloading", "failed", "canceled"],
-  downloading: ["muxing", "completed", "failed", "canceled"],
+  downloading: ["muxing", "probing", "completed", "failed", "canceled"],
   muxing: ["completed", "failed", "canceled"],
   completed: [],
   failed: [],

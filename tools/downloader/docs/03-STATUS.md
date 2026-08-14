@@ -19,7 +19,7 @@ is what remains**
 | Phase 2 — Integration    | ✅ complete | [dl-5](./work/dl-5-api-and-orchestration.md)                                                                                                                           |
 | Phase 3 — Hardening      | ✅ complete | [dl-6](./work/dl-6-security-and-limits.md) · [dl-7](./work/dl-7-ops-and-e2e.md)                                                                                        |
 
-**506 tests pass across 33 files, plus 3 Playwright end-to-end tests.
+**509 tests pass across 33 files, plus 3 Playwright end-to-end tests.
 `npm run check` is green.** Zero live-network tests.
 
 ### Milestones
@@ -39,10 +39,9 @@ is what remains**
 
 ## Open tickets
 
-| Ticket                                       | Status    | Note                                                    |
-| -------------------------------------------- | --------- | ------------------------------------------------------- |
-| [dl-9](./work/dl-9-fsm-reprobe-back-edge.md) | ready     | Needs an owner decision first — it changes the contract |
-| [dl-10](./work/dl-10-release-pipeline.md)    | in-flight | Landed but unproven — the first release exercises it    |
+| Ticket                                    | Status    | Note                                                 |
+| ----------------------------------------- | --------- | ---------------------------------------------------- |
+| [dl-10](./work/dl-10-release-pipeline.md) | in-flight | Landed but unproven — the first release exercises it |
 
 Phase 4 adds a ticket per site-specific resolver, as and when the sniffer misses
 one.
@@ -54,8 +53,6 @@ one.
    what the UI wants to render.
 2. **The rate-limit defaults** — see the closing section of
    [dl-6](./work/dl-6-security-and-limits.md).
-3. **The FSM back-edge** — [dl-9](./work/dl-9-fsm-reprobe-back-edge.md) is
-   written up and waiting on approval to touch `contract`.
 
 ---
 

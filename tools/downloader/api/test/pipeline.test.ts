@@ -8,8 +8,9 @@
  */
 
 import { AppError, ROUTES } from "@downloader/contract";
-import type { Job, JobResponse, ProbeResponse } from "@downloader/contract";
+import type { Job, JobResponse, JobStatus, ProbeResponse } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
+import { initialProgress } from "../src/db/job-store.ts";
 import {
   createHarness,
   probeResult,
@@ -39,6 +40,22 @@ async function createJob(current: Harness, payload: Record<string, unknown> = {}
 
 function readJob(current: Harness, id: string): Job {
   return current.app.context.store.get(id);
+}
+
+/**
+ * A latch a test can hold a job at.
+ *
+ * The resolver and the engine are stubs, so a job runs to completion faster
+ * than the test can subscribe to its events. Blocking inside the resolver is
+ * how a test watches a sequence instead of racing it.
+ */
+function latch(): { wait: Promise<void>; open: () => void } {
+  // Definitely assigned: the executor runs synchronously inside the constructor.
+  let open!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return { wait, open };
 }
 
 async function runToTerminal(current: Harness, id: string): Promise<Job> {
@@ -158,6 +175,82 @@ describe("re-probing", () => {
     // Two probes: the first attempt and the retry's fresh one.
     expect(resolver.calls).toBe(2);
     expect(finished.attempts).toBe(2);
+  });
+
+  test("the job is observably in `probing` while it re-probes", async () => {
+    // dl-9, and the reason the FSM has its one back-edge. Before it existed the
+    // retry re-probed in place, so a job reported `downloading` throughout a
+    // period when it was doing nothing of the sort.
+    const statusAtProbe: (JobStatus | undefined)[] = [];
+    const firstProbe = latch();
+    harness = await createHarness({
+      resolver: new StubResolver(async (call) => {
+        // The stubs are instantaneous, so a job left to itself finishes before
+        // the test can subscribe. Holding the first probe open is what makes
+        // the frame sequence observable rather than a race.
+        if (call === 0) await firstProbe.wait;
+        // One job per harness, so the first row is this job. Read from the
+        // store rather than a captured id: the first probe starts before
+        // `POST /api/jobs` has returned one.
+        statusAtProbe.push(harness?.app.context.store.list().jobs[0]?.status);
+        return probeResult();
+      }),
+      engineOptions: {
+        failWith: (call) => (call === 0 ? new AppError("VARIANT_GONE") : undefined),
+      },
+    });
+
+    const created = await createJob(harness);
+    const frames: JobStatus[] = [];
+    harness.app.context.events.subscribe(created.id, (event) => {
+      if (event.type === "status") frames.push(event.status);
+    });
+    firstProbe.open();
+
+    const finished = await runToTerminal(harness, created.id);
+    expect(finished.status).toBe("completed");
+    expect(statusAtProbe[1]).toBe("probing");
+    // `queued → probing` went out before the subscription; everything from the
+    // held probe onwards is here, and the back-edge is the second entry.
+    expect(frames).toEqual(["downloading", "probing", "downloading", "completed"]);
+  });
+
+  test("the re-probe resets progress rather than carrying the dead attempt's bytes", async () => {
+    const firstProbe = latch();
+    harness = await createHarness({
+      resolver: new StubResolver(async (call) => {
+        if (call === 0) await firstProbe.wait;
+        return probeResult();
+      }),
+      engineOptions: {
+        // Report bytes, then fail: an expiry mid-download leaves a percentage
+        // on screen that refers to an attempt being abandoned.
+        onDownload: (request, call) => {
+          if (call === 0)
+            request.onProgress?.({
+              ...initialProgress("downloading"),
+              downloadedBytes: 512,
+              totalBytes: 1024,
+              percent: 50,
+            });
+        },
+        failWith: (call) => (call === 0 ? new AppError("VARIANT_GONE") : undefined),
+      },
+    });
+
+    const created = await createJob(harness);
+    const bytes: number[] = [];
+    harness.app.context.events.subscribe(created.id, (event) => {
+      if (event.type === "progress") bytes.push(event.progress.downloadedBytes);
+    });
+    firstProbe.open();
+
+    const finished = await runToTerminal(harness, created.id);
+    expect(finished.status).toBe("completed");
+    // 512 from the dead attempt, then a frame telling the client it is back to
+    // zero — not a stale bar sitting at 50% under "Re-analysing".
+    expect(bytes).toEqual([512, 0]);
+    expect(finished.progress.percent).toBe(100);
   });
 
   test("a DOWNLOAD_FAILED during downloading is re-probe-worthy too", async () => {
