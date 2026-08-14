@@ -19,7 +19,7 @@ is what remains**
 | Phase 2 — Integration    | ✅ complete | [dl-5](./work/dl-5-api-and-orchestration.md)                                                                                                                           |
 | Phase 3 — Hardening      | ✅ complete | [dl-6](./work/dl-6-security-and-limits.md) · [dl-7](./work/dl-7-ops-and-e2e.md)                                                                                        |
 
-**521 tests pass across 34 files, plus 3 Playwright end-to-end tests.
+**522 tests pass across 34 files, plus 3 Playwright end-to-end tests.
 `npm run check` is green.** Zero live-network tests.
 
 ### Milestones
