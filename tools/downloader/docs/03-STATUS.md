@@ -5,8 +5,8 @@ Where the downloader stands right now. Phases and milestones are defined in
 ticket under [work/](./work/). This page is a dashboard, not a log — if you find
 yourself writing a paragraph here, it belongs in a ticket.
 
-**Last updated:** 2026-08-14 · **Phases 0–3 ✅ · M1–M4 ✅ · three open tickets,
-all of them test coverage for code that already shipped**
+**Last updated:** 2026-08-14 · **Phases 0–3 ✅ · M1–M4 ✅ · two open tickets,
+both of them test coverage for code that already shipped**
 
 ---
 
@@ -19,10 +19,14 @@ all of them test coverage for code that already shipped**
 | Phase 2 — Integration    | ✅ complete | [dl-5](./work/dl-5-api-and-orchestration.md)                                                                                                                           |
 | Phase 3 — Hardening      | ✅ complete | [dl-6](./work/dl-6-security-and-limits.md) · [dl-7](./work/dl-7-ops-and-e2e.md)                                                                                        |
 
-**573 tests pass across 42 files, plus 3 Playwright end-to-end tests.
-`npm run check` is green**, and since
+**543 tests pass across 37 files in this tool's suite, plus 3 Playwright
+end-to-end tests. `npm run check` is green**, and since
 [dl-13](./work/dl-13-typecheck-the-tests.md) it typechecks the test files too.
 Zero live-network tests.
+
+(This tool's count, `npm test -- --project downloader`, rather than the repo's:
+a number on this page that moved every time the planner grew a test was one
+nobody could check.)
 
 ### Milestones
 
@@ -41,19 +45,21 @@ Zero live-network tests.
 
 ## Open tickets
 
-Three, and all three are coverage debt on code that already shipped rather than
-new capability. They are independent of each other; the order below is the order
+Two, and both are coverage debt on code that already shipped rather than new
+capability. They are independent of each other; the order below is the order
 worth doing them in, not a dependency chain.
 
-| Ticket                                           | What it closes                                                           |
-| ------------------------------------------------ | ------------------------------------------------------------------------ |
-| [dl-14](./work/dl-14-proxied-https-coverage.md)  | Nothing in this repo serves TLS, so proxied HTTPS is untested end to end |
-| [dl-15](./work/dl-15-component-render-tests.md)  | No component in `web` is ever rendered by a test                         |
-| [dl-16](./work/dl-16-e2e-through-the-sniffer.md) | Nothing drives sniffer → engine → UI in one piece                        |
+| Ticket                                           | What it closes                                    |
+| ------------------------------------------------ | ------------------------------------------------- |
+| [dl-15](./work/dl-15-component-render-tests.md)  | No component in `web` is ever rendered by a test  |
+| [dl-16](./work/dl-16-e2e-through-the-sniffer.md) | Nothing drives sniffer → engine → UI in one piece |
 
 [dl-13](./work/dl-13-typecheck-the-tests.md) closed: every `test/` directory in
 the repo and `e2e/` are projects in `tsc --build` now, so `npm run check` holds
 them to the same `strict` the source has always been held to.
+[dl-14](./work/dl-14-proxied-https-coverage.md) closed with it: the repo serves
+TLS in a fixture now, and the proxied-HTTPS path has the coverage it shipped
+without.
 
 [dl-10](./work/dl-10-release-pipeline.md) closed with the first release:
 `downloader-v0.1.1` is tagged, released and pushed to
@@ -109,12 +115,25 @@ egress there is the proxy's own policy. The pre-flight check still runs, and
 from its proxy's. The local proxy chains to the operator's rather than replacing
 it, and reports `mode: "chained"` when it does.
 
-**`PROXY_URL` was untested until dl-11, and was broken.** No unit test sets a
-proxy and no e2e fixture is HTTPS, so nobody noticed that ffmpeg's whitelist
-omitted `httpproxy` and every proxied HTTPS download failed at startup. Fixed,
-but the gap in coverage that hid it is still there: nothing in this repo serves
-TLS, so the `CONNECT` path is exercised only against socket echoes.
-[dl-14](./work/dl-14-proxied-https-coverage.md).
+**`PROXY_URL` was untested until dl-11, and was broken.** ffmpeg's whitelist
+omitted `httpproxy`, so every proxied HTTPS download failed at startup and no
+test could see it, because nothing in the repo served TLS.
+[dl-14](./work/dl-14-proxied-https-coverage.md) closed that: a fixture origin
+with a per-run certificate, real ffmpeg downloading through the real egress proxy
+over a real handshake, the `CONNECT` tunnel proven to carry the origin's own
+certificate, a blocked target refused before any handshake, `guardedFetch`
+through the proxied dispatcher, and chained mode moving bytes through two
+proxies. The whitelist regression was watched failing before it was called a
+test.
+
+**ffmpeg does not verify TLS certificates.** `tls_verify` defaults to `0` in
+libavformat and nothing sets it, so segment fetches are encrypted but
+unauthenticated — a MITM on the path to a CDN can substitute what it likes. The
+egress proxy neither causes nor fixes this: it tunnels rather than intercepts, so
+the certificate arriving is the origin's, checked by nobody. dl-14 proved the
+capability works (`-tls_verify 1 -ca_file` against the fixture) without turning
+it on; doing so is a behaviour change and wants its own ticket, including which
+CA bundle the container has.
 
 **Interrupted jobs are failed, not resumed.** A job running when the process
 died cannot be resumed — the engine's tmp state is gone and the probe is stale —
