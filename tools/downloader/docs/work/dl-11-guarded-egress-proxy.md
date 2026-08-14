@@ -3,7 +3,7 @@ id: dl-11
 tool: downloader
 title: Put ffmpeg's own fetches behind a guarded egress proxy
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-6, dl-8]
 ---
@@ -126,4 +126,55 @@ process keeps the sockets alive.
 
 ## Log
 
-_(empty — not started)_
+Shipped as `api/src/egress-proxy.ts`, wired in `server.ts`, with one engine
+change. Verified against real ffmpeg 6.1 rather than reasoned about: a playlist
+whose `#EXTINF` segment points at `169.254.169.254`, served from a local origin,
+is fetched — and then the segment is refused with `BLOCKED_TARGET`, naming the
+address, while the origin is never asked for anything but the playlist.
+
+**A pre-existing bug fell out of this, and it is the more urgent half.**
+`REMOTE_PROTOCOL_WHITELIST` did not contain `httpproxy`, which is the protocol
+libavformat opens an HTTPS target through when a proxy is set. So on any
+deployment with `PROXY_URL`, **every HTTPS download through ffmpeg was already
+failing** — `Error opening input files: Invalid argument`, thrown before the
+proxy was contacted at all, and surfacing as an ordinary `DOWNLOAD_FAILED` that
+reads like a dead link. Adding `httpproxy` costs nothing in exposure now that
+every egress passes the guard anyway. dl-8 shipped `PROXY_URL` reaching ffmpeg
+without this, and nothing caught it because no test sets a proxy and no e2e
+fixture is HTTPS.
+
+**The brief was wrong about `BLOCKED_TARGET` reaching the client.** It assumed
+per-job proxy credentials were available for correlation. They are not: ffmpeg
+6.1 sends **no `Proxy-Authorization` header at all**, with or without
+credentials in the proxy URL, on either `CONNECT` or absolute-form `GET`. That
+was measured, not inferred. Two consequences:
+
+- One proxy serves every job and nothing in a request identifies the caller, so
+  a refusal cannot be attributed to a job. A blocked fetch is logged here and
+  reaches the client as the `DOWNLOAD_FAILED` that any ffmpeg failure does. The
+  refusal reason lives in the log line and in the stderr tail — the acceptance
+  criterion above overstated what is reachable.
+- There is no authentication in front of the proxy, because there is nothing
+  usable to authenticate with. Loopback binding is the whole containment, which
+  is what step 3 anticipated.
+
+**Two smaller traps.** `new URL("https://host:443")` normalises the default port
+away and reports `port === ""`, so a scheme-based parse cannot distinguish a
+well-formed CONNECT target from one naming no port — the authority is parsed by
+hand. And the `connect` event is declared with a `Duplex`, so the concrete
+`net.Socket` needed for `setTimeout` and `unshift` takes a cast at the boundary.
+
+**What is genuinely closed.** In proxy mode ffmpeg resolves nothing itself — it
+connects to us and names a host — so the rebinding hole closes for the same
+reason dl-8's did, with no second resolution left to disagree with the first.
+Redirect hops arrive as their own requests and are checked individually.
+
+**Still open, deliberately.** The browser and yt-dlp tiers still take
+`config.proxyUrl` directly and so remain outside this. Chromium in particular
+fetches whatever subresources a hostile page names, which is a wider hole than
+the one this ticket closed; step 6 defers it and it now needs its own ticket.
+
+`tools/downloader/api/test/egress-proxy.test.ts` — 12 tests, named after the
+holes. 521 unit tests pass across 34 files, `npm run check` is green, and
+`npm run e2e:downloader` passes unchanged, which is what proves
+`SSRF_ALLOW_HOSTS=127.0.0.1` still reaches a fixture origin through the proxy.

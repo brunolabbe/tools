@@ -19,7 +19,7 @@ is what remains**
 | Phase 2 — Integration    | ✅ complete | [dl-5](./work/dl-5-api-and-orchestration.md)                                                                                                                           |
 | Phase 3 — Hardening      | ✅ complete | [dl-6](./work/dl-6-security-and-limits.md) · [dl-7](./work/dl-7-ops-and-e2e.md)                                                                                        |
 
-**509 tests pass across 33 files, plus 3 Playwright end-to-end tests.
+**521 tests pass across 34 files, plus 3 Playwright end-to-end tests.
 `npm run check` is green.** Zero live-network tests.
 
 ### Milestones
@@ -39,10 +39,10 @@ is what remains**
 
 ## Open tickets
 
-| Ticket                                        | Status    | Note                                                      |
-| --------------------------------------------- | --------- | --------------------------------------------------------- |
-| [dl-10](./work/dl-10-release-pipeline.md)     | in-flight | Landed but unproven — the first release exercises it      |
-| [dl-11](./work/dl-11-guarded-egress-proxy.md) | ready     | Closes the ffmpeg gap below, at the socket not the parser |
+| Ticket                                    | Status    | Note                                                 |
+| ----------------------------------------- | --------- | ---------------------------------------------------- |
+| [dl-10](./work/dl-10-release-pipeline.md) | in-flight | Landed but unproven — the first release exercises it |
+| dl-12 (not written)                       | ready     | Point the browser and yt-dlp tiers at the same proxy |
 
 Phase 4 adds a ticket per site-specific resolver, as and when the sniffer misses
 one.
@@ -64,28 +64,34 @@ memory, so two replicas behind a load balancer grant two allowances. Correct for
 the single-container deployment this targets; a shared store (the same Redis
 BullMQ would want) is the fix if it is ever scaled out.
 
-**DNS rebinding: closed, except through ffmpeg.** `api/src/dispatcher.ts` pins
-the vetted address into the socket, so the check and the connection can no
-longer disagree — see [dl-8](./work/dl-8-address-pinning-and-proxy.md). What
-remains is the ffmpeg gap below.
+**DNS rebinding: closed.** `api/src/dispatcher.ts` pins the vetted address into
+the socket for everything going through `fetch`
+([dl-8](./work/dl-8-address-pinning-and-proxy.md)), and ffmpeg resolves nothing
+of its own now that it goes through the proxy in
+[dl-11](./work/dl-11-guarded-egress-proxy.md).
 
-**ffmpeg fetches outside the guard.** `guarded-fetch.ts` covers the direct
-resolver and the engine's own fetches, but ffmpeg does its own HTTP and cannot
-be wrapped. This is why the guard vets **every URL in a `ProbeResult`** before
-the engine is handed anything — that check is load-bearing, not belt-and-braces,
-TOCTOU and all.
+**The browser and yt-dlp tiers still fetch outside the guard.** dl-11 put ffmpeg
+behind a loopback proxy that runs the same `SsrfGuard`, but the two subprocess
+resolvers still take `config.proxyUrl` directly. Chromium is the wider hole of
+the two: it fetches whatever subresources a hostile page names. Both already
+accept a proxy URL, so pointing them at the same one is small — it needs a
+ticket and a check that Playwright is happy with it.
 
-That sweep cannot cover the URLs a manifest names — segment URIs, the
-`EXT-X-KEY` key, DASH template expansions — because they do not exist yet when
-it runs, nor a redirect ffmpeg follows, nor a name it re-resolves for itself.
-[dl-11](./work/dl-11-guarded-egress-proxy.md) closes all three at the socket:
-ffmpeg through a loopback proxy that runs the same guard.
+The `ProbeResult` sweep stays where it is regardless. It refuses a URL before
+any socket exists, with a typed error naming a reason, which a proxy refusal
+cannot give — one proxy serves every job and nothing in a `CONNECT` says which.
 
 **Proxy mode does not pin, by design.** With `PROXY_URL` set, the target name is
 resolved by the proxy and there is no local resolution to pin; what bounds
 egress there is the proxy's own policy. The pre-flight check still runs, and
 `SSRF_ALLOW_PRIVATE_ADDRESSES` exists for the deployment whose DNS view differs
-from its proxy's.
+from its proxy's. The local ffmpeg proxy chains to the operator's rather than
+replacing it, and reports `mode: "chained"` when it does.
+
+**`PROXY_URL` was untested until dl-11, and was broken.** No unit test sets a
+proxy and no e2e fixture is HTTPS, so nobody noticed that ffmpeg's whitelist
+omitted `httpproxy` and every proxied HTTPS download failed at startup. Fixed,
+but the gap in coverage that hid it is still there.
 
 **Test files are still not typechecked.** Each project's `include` is `src/**`.
 `api/test` is the largest untypechecked surface here, and `e2e/` is in the same

@@ -19,6 +19,7 @@ import type { AppContext } from "./context.ts";
 import { JobStore } from "./db/job-store.ts";
 import { migrate } from "./db/schema.ts";
 import { createEgressDispatcher } from "./dispatcher.ts";
+import { startEgressProxy } from "./egress-proxy.ts";
 import { createGuardedFetch } from "./guarded-fetch.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import { JobEventHub } from "./jobs/events.ts";
@@ -78,8 +79,17 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const guardedFetch = createGuardedFetch(guard, globalThis.fetch, {
     dispatcher: egress.dispatcher,
   });
+  // The other half of the same answer, for the egress no dispatcher can reach:
+  // ffmpeg fetches through libavformat, so it gets a proxy that runs this guard
+  // on every CONNECT. See `egress-proxy.ts`.
+  const egressProxy = await startEgressProxy({
+    guard,
+    logger,
+    ...(config.proxyUrl === undefined ? {} : { upstreamProxyUrl: config.proxyUrl }),
+  });
   logger.info("egress configured", {
     mode: egress.mode,
+    ffmpegProxyMode: egressProxy.mode,
     // Whether a proxy is set, never which: the URL routinely carries
     // credentials, and this line is not worth a leak.
     proxied: config.proxyUrl !== undefined,
@@ -98,7 +108,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       // subtitles — goes through the redirect-checking guard.
       fetchImpl: guardedFetch,
       ...(config.ffmpegPath === undefined ? {} : { ffmpegPath: config.ffmpegPath }),
-      ...(config.proxyUrl === undefined ? {} : { proxyUrl: config.proxyUrl }),
+      // Not `config.proxyUrl`: ffmpeg goes through the local guarded proxy,
+      // which chains to the operator's when there is one.
+      proxyUrl: egressProxy.url,
     });
   await engine.init();
 
@@ -228,6 +240,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       // an orderly shutdown into a failed job.
       await egress.close().catch((error: unknown) => {
         logger.warn("the egress dispatcher did not close cleanly", { error: String(error) });
+      });
+      // Same ordering rule: an open tunnel here belongs to an ffmpeg the queue
+      // has already stopped.
+      await egressProxy.close().catch((error: unknown) => {
+        logger.warn("the ffmpeg egress proxy did not close cleanly", { error: String(error) });
       });
       db.close();
       logger.info("shutdown complete");

@@ -92,7 +92,8 @@ export interface EgressDispatcher {
   close(): Promise<void>;
 }
 
-async function systemResolve(hostname: string): Promise<ResolvedAddress[]> {
+/** The default for both this file and `egress-proxy.ts`, so one policy resolves names. */
+export async function systemResolve(hostname: string): Promise<ResolvedAddress[]> {
   // `verbatim` keeps the resolver's own ordering rather than re-sorting v4
   // ahead of v6, so what we connect to is what DNS actually preferred.
   const records = await dns.lookup(hostname, { all: true, verbatim: true });
