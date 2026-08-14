@@ -49,9 +49,12 @@ cannot work at all.
   The image is **not** built here: it is pulled from GHCR at an exact version,
   which is what makes "roll back" a pull rather than a rebuild. See
   [03-RELEASING.md](./03-RELEASING.md).
-- `docker login ghcr.io` on the host, with a fine-grained token carrying
-  `read:packages` and nothing else. This is the one credential the arrangement
-  costs, and it is read-only.
+- `docker login ghcr.io` on the host, with a **classic** personal access token
+  carrying `read:packages` and nothing else. This is the one credential the
+  arrangement costs, and it is read-only. It has to be a classic token:
+  `read:packages` has no fine-grained equivalent, so a fine-grained one cannot
+  be given the scope at all. See
+  [03-RELEASING.md](./03-RELEASING.md#registry-access).
 
 Nothing needs to be installed on the router.
 
