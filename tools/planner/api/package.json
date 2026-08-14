@@ -1,0 +1,25 @@
+{
+  "name": "@planner/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HTTP API and persistence. The join point: a conversation in, an agent's answer and a saved trip out.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean",
+    "dev": "node --watch --import tsx src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@planner/agent": "*",
+    "@planner/contract": "*",
+    "better-sqlite3": "^12.4.1",
+    "fastify": "^5.7.1",
+    "pino": "^10.3.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13"
+  }
+}

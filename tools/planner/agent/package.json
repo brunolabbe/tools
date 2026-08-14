@@ -1,0 +1,26 @@
+{
+  "name": "@planner/agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The planning agent: prompts, the conversation loop, and the seam every chat provider plugs into.",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@planner/contract": "*",
+    "@webtools/core": "*"
+  }
+}

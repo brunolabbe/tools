@@ -106,4 +106,9 @@ tools/downloader/
   api                  Fastify, orchestration, SSE, file serving, the UI
   web                  React + Vite UI
   e2e                  Playwright: the whole stack, one fixture HLS origin
+tools/planner/         trip planning with an assistant — scaffolded, domain in design
+  contract             types, error taxonomy, zod API schemas
+  agent                prompts, the conversation loop, the chat-provider seam
+  api                  Fastify, SQLite persistence, HTTP
+  web                  React + Vite UI
 ```

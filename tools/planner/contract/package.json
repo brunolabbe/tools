@@ -1,0 +1,26 @@
+{
+  "name": "@planner/contract",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Types, contracts and error taxonomy shared by every package in this tool. The seam agents code against.",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@webtools/core": "*",
+    "zod": "^4.4.3"
+  }
+}

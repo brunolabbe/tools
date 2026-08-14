@@ -37,6 +37,17 @@ export default defineConfig({
           globals: false,
         },
       },
+      {
+        test: {
+          name: "planner",
+          include: ["tools/planner/*/test/**/*.test.{ts,tsx}"],
+          environment: "node",
+          // No browser, no ffmpeg: the default timeout is honest here, and a
+          // suite that talks to a model provider will use a fake rather than
+          // waiting on one.
+          globals: false,
+        },
+      },
     ],
   },
 });
