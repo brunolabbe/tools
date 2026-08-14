@@ -1,0 +1,77 @@
+# Production overlay: the service, plus the Cloudflare Tunnel that fronts it.
+#
+#   cp .env.prod.example .env     # then fill in TUNNEL_TOKEN
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+#
+# `compose.yaml` on its own still gives the local single-host setup. This file
+# only adds what a public hostname needs, and changes three things:
+#
+#  - a `cloudflared` sidecar dials *out* to Cloudflare and receives requests
+#    back over that connection. The host opens no inbound port, needs no static
+#    address, and works behind CGNAT. The loopback port inherited from
+#    `compose.yaml` stays, but it is for debugging from the host — it is not
+#    how anything is served.
+#  - `TRUST_PROXY` names the compose network. Every rate limit is keyed on
+#    `request.ip`, and with a proxy in front that address is cloudflared's on
+#    every request unless the header is trusted.
+#  - the network gets an explicit subnet, because `TRUST_PROXY` has to name it
+#    and Docker's automatic allocation is not stable across recreates.
+#
+# The Cloudflare half — hostname, certificate, access policy — is not in this
+# file, because it lives in the dashboard. See docs/05-DEPLOYMENT.md.
+
+services:
+  downloader:
+    networks: [edge]
+    environment:
+      # The proxy's CIDR, never `true`. `true` lets any client name its own
+      # rate-limit bucket by sending X-Forwarded-For, which on a public hostname
+      # makes every limit in the API decorative. cloudflared overwrites that
+      # header with the real client address, so this is the one hop worth
+      # trusting — and naming it by CIDR is what stops anything else being.
+      TRUST_PROXY: "172.30.42.0/24"
+
+  cloudflared:
+    # Pin this to a release tag once one is known good: `latest` means a
+    # `docker compose pull` can change the binary under a working deployment.
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    networks: [edge]
+
+    # `--no-autoupdate` because the in-place updater replaces the running binary
+    # and restarts it underneath the container supervisor, which shows up as an
+    # unexplained blip rather than as an update. New versions arrive by pulling
+    # a new image, on purpose, at a time of your choosing.
+    command: ["tunnel", "--no-autoupdate", "run"]
+
+    environment:
+      # The entire tunnel configuration — credentials, hostnames, routes — is
+      # inside this one token. It is a credential in the full sense: anyone
+      # holding it can publish traffic as this tunnel. It belongs in `.env`,
+      # which is gitignored, and nowhere else. Never in this file.
+      TUNNEL_TOKEN: "${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env - see docs/05-DEPLOYMENT.md}"
+
+    depends_on:
+      downloader:
+        # No public hostname until the service passes its own health check.
+        # Without this a restart publishes a hostname that 502s for the twenty
+        # seconds the SQLite migrations take, which reads to a user as the site
+        # being broken rather than as it still starting.
+        condition: service_healthy
+
+    # It relays TCP and terminates nothing. Left unbounded it is invisible in
+    # `docker stats`; bounded, a runaway is attributable.
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+networks:
+  edge:
+    ipam:
+      config:
+        # Fixed, so `TRUST_PROXY` above can name it. If this collides with a
+        # subnet already on the host, change both together — they are one
+        # setting written twice, and a mismatch silently reverts every rate
+        # limit to sharing a single bucket.
+        - subnet: 172.30.42.0/24
