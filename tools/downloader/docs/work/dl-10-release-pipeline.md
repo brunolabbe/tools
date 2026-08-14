@@ -3,7 +3,7 @@ id: dl-10
 tool: downloader
 title: Release from conventional commits, and ship a tagged image to the registry
 kind: chore
-status: in-flight
+status: done
 milestone: null
 depends_on: [dl-7]
 ---
@@ -172,3 +172,38 @@ and will expire: when it does, release-please stops opening pull requests
 **silently** — the workflow still succeeds and simply does nothing.
 [03-RELEASING.md](../../../../docs/03-RELEASING.md) covers the renewal and the
 GitHub App alternative that has no expiry.
+
+**2026-08-14 — the first release ran, and the pipeline holds.**
+
+`chore(downloader): release 0.1.1` ([#7](https://github.com/brunolabbe/tools/pull/7))
+merged, and everything that had never executed executed: the tag
+`downloader-v0.1.1`, the GitHub release `downloader: v0.1.1`, a `CHANGELOG.md`
+release-please wrote from the two `fix(downloader)` commits since 0.1.0, and
+`publish (tools/downloader)` green in 3m13s — resolve, compute tags, build,
+push to `ghcr.io/brunolabbe/downloader`. `.release-please-manifest.json` and
+`api/package.json` both read `0.1.1`, so `/api/health` reports the version that
+was released rather than a decoration.
+
+Nothing needed fixing this time, which is the first release PR of which that is
+true — the two earlier entries above are why.
+
+**One acceptance criterion is a host action and stays open.**
+`docker compose pull && up -d` on the mini-PC, with `/api/health` reporting
+`0.1.1`, cannot be checked from CI or from here. The credential it needs is not
+new: the first push creates the GHCR package **private**, which
+[03-RELEASING.md](../../../../docs/03-RELEASING.md) already anticipated and
+[02-DEPLOYMENT.md](../../../../docs/02-DEPLOYMENT.md) already covers with a
+`read:packages` login on the host. Worth knowing that a package staying private
+is the expected state, not a misconfiguration to go hunting for.
+
+**The other one is half-proven and finishes itself.** The criterion is that a
+planner-only release does not rebuild the downloader's image; what this release
+showed is the same mechanism in the other direction — only
+`publish (tools/downloader)` ran, because the publish matrix comes from
+release-please's own outputs and the planner was not in them. The stated
+direction gets its evidence when the planner's release PR merges, at no cost to
+anyone.
+
+Marking this ticket done regardless: the machinery is built, exercised and
+correct, and what remains is one `docker compose pull` on hardware this repo
+does not reach.
