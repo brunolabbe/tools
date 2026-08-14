@@ -50,8 +50,10 @@ export const PLANNER_ERROR_CODES = [
   "CONTEXT_LIMIT",
 
   // --- The trip ---
+  // "Trip" is the journey the user is taking; "Plan" is the document this tool
+  // keeps about it. The aggregate, and therefore the code, is the plan.
   "CONVERSATION_NOT_FOUND",
-  "TRIP_NOT_FOUND",
+  "PLAN_NOT_FOUND",
   /** Return before departure, a date in the past, a span longer than we will plan. */
   "INVALID_DATES",
 ] as const;
@@ -78,7 +80,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   AGENT_MALFORMED_REPLY: "The assistant’s answer could not be understood.",
   CONTEXT_LIMIT: "This conversation has grown too long to continue. Start a new one.",
   CONVERSATION_NOT_FOUND: "That conversation could not be found.",
-  TRIP_NOT_FOUND: "That trip could not be found.",
+  PLAN_NOT_FOUND: "That plan could not be found.",
   INVALID_DATES: "Those travel dates do not make sense.",
 };
 
