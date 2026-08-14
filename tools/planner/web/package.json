@@ -1,0 +1,24 @@
+{
+  "name": "@planner/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Single-page UI: describe a trip, talk it through with the assistant, keep the plan.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --build && vite build",
+    "preview": "vite preview",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@planner/contract": "*",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "vite": "^7.2.0"
+  }
+}

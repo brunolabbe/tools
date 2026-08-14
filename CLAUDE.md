@@ -11,6 +11,7 @@ A repo of small, independent web tools that share a toolchain, a CI pipeline and
 a set of conventions. They do not share a domain. Today:
 
 - `tools/downloader` — page URL in, video stream found and downloaded, link out.
+- `tools/planner` — describe a trip, plan it with an assistant, keep the plan.
 
 ## Layout
 

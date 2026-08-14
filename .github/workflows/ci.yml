@@ -51,11 +51,29 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Every workspace is consumed through its `dist` — that is what its
+      # package.json `exports` points at — so a tree that has never been built
+      # cannot resolve a single cross-package import. Locally this is invisible,
+      # because `npm run check` typechecks with `tsc --build` and leaves the
+      # output behind; a fresh checkout has nothing.
+      - run: npm run build
       # The browser-sniffer suite launches a real Chromium; without this it
       # would skip or fail depending on the runner image.
       - run: npx playwright install --with-deps chromium
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
+      # The `ffmpeg-static` fallback is a binary built against a much older
+      # glibc, and on this runner it dies of SIGSEGV with an empty stderr the
+      # moment the engine spawns it — every hls-e2e case, and only here: the
+      # same commit passes on the Windows runner and against a distribution
+      # build locally. Point FFMPEG_PATH at the distro binary, which is what
+      # the image and the dev container already do, and for the same reason.
+      - if: runner.os == 'Linux'
+        name: Use the distribution's ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          echo "FFMPEG_PATH=/usr/bin/ffmpeg" >> "$GITHUB_ENV"
       - run: npm test
 
   # The slow, downloader-specific gates — end-to-end and the container — live in

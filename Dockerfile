@@ -35,7 +35,12 @@ RUN npm ci
 
 COPY tsconfig.base.json tsconfig.json ./
 COPY packages packages
-COPY tools tools
+# This tool only. `npm run build` builds `--workspaces`, and npm discovers those
+# by globbing `tools/*/*` on disk — so copying the whole directory would enlist
+# every other tool in the repo into this image's build, with only the manifests
+# above installed for them. Keeping the copy narrow is also what makes this the
+# downloader's image rather than the monorepo's.
+COPY tools/downloader tools/downloader
 
 # The bundle's transport is decided at build time
 # (see tools/downloader/web/src/api/client.ts).

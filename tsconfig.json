@@ -6,6 +6,10 @@
     { "path": "./tools/downloader/resolvers" },
     { "path": "./tools/downloader/engine" },
     { "path": "./tools/downloader/api" },
-    { "path": "./tools/downloader/web" }
+    { "path": "./tools/downloader/web" },
+    { "path": "./tools/planner/contract" },
+    { "path": "./tools/planner/agent" },
+    { "path": "./tools/planner/api" },
+    { "path": "./tools/planner/web" }
   ]
 }
