@@ -51,6 +51,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # The API under test is started with tsx, which runs its own sources but
+      # still resolves `@downloader/engine` and friends through their `dist`.
+      # Without this the fixture server never comes up and Playwright reports a
+      # web server that would not start, which reads as an e2e failure.
+      - run: npm run build
       - run: npx playwright install --with-deps chromium
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"

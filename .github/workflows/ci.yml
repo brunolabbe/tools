@@ -51,6 +51,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Every workspace is consumed through its `dist` — that is what its
+      # package.json `exports` points at — so a tree that has never been built
+      # cannot resolve a single cross-package import. Locally this is invisible,
+      # because `npm run check` typechecks with `tsc --build` and leaves the
+      # output behind; a fresh checkout has nothing.
+      - run: npm run build
       # The browser-sniffer suite launches a real Chromium; without this it
       # would skip or fail depending on the runner image.
       - run: npx playwright install --with-deps chromium
