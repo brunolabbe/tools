@@ -157,6 +157,15 @@ The general lesson for anything added to this pipeline later: every gate this
 repo runs on a human's pull request also runs on a **generated** one, and
 release-please's output was written to satisfy neither.
 
+Fixing that on `main` does not clear the red on an open release PR, which is the
+third thing this taught: release-please skips the branch entirely when the title
+and body come out identical (`maybeUpdateExistingPullRequest`, "PR remained the
+same"), so the PR keeps checks that ran against the broken `main` until someone
+presses **Update branch**. `always-update: true` takes the other branch of that
+condition and rebuilds the release branch on every push to `main`. The cost is a
+force-push per open release PR per push; the gain is that a release PR's green
+checks were earned against the `main` it merges into.
+
 `RELEASE_PLEASE_TOKEN` is set on the repository, so release pull requests will
 run the normal checks rather than arriving unverified. It is a fine-grained PAT
 and will expire: when it does, release-please stops opening pull requests

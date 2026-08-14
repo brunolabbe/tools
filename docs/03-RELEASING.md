@@ -137,6 +137,14 @@ it from scratch every release, so `format:check` failed on every release PR and
 reformatting it would only be undone by the next one. A generated file is not
 ours to format.
 
+**`always-update` is on**, so release-please rebuilds the release branch on
+every push to `main` rather than only when the changelog or the title changed.
+Without it, a release PR that went red keeps its red checks after the fix lands
+— its branch still points at the `main` that was broken, and nothing re-runs
+until someone presses **Update branch**. It costs a force-push per release PR
+per push to `main`, which buys a release PR whose green checks were earned
+against the `main` it will merge into.
+
 Published tags, per release:
 
 | Tag          | Use                                              |
