@@ -16,7 +16,14 @@
       // Keep in step with `playwright` in package-lock.json.
       "PLAYWRIGHT_VERSION": "1.62.1",
       "YTDLP_VERSION": "2025.09.26",
-      "NODE_MAJOR": "22"
+      "NODE_MAJOR": "22",
+      // The container user's ids. They must equal the owner of the checkout on
+      // the host, because the workspace is a bind mount from a Linux
+      // filesystem and its uid is not remapped. 1000 is the first user account
+      // on a stock WSL distro; change both if `id -u`/`id -g` there says
+      // otherwise.
+      "USER_UID": "1000",
+      "USER_GID": "1000"
     }
   },
 
@@ -37,8 +44,9 @@
 
   "containerUser": "pwuser",
   "remoteUser": "pwuser",
-  // The host is Windows, so bind-mount ownership is synthesised anyway and
-  // remapping the container UID would only add rebuild churn.
+  // pwuser is already built at the host's uid (USER_UID above), so there is
+  // nothing left for the CLI's own remap to do — and letting it try only adds
+  // an image layer per rebuild.
   "updateRemoteUserUID": false,
 
   "mounts": [

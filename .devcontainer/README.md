@@ -95,6 +95,24 @@ If a future dependency change makes npm nest another `node_modules` under a
 workspace, add that path to `mounts` in `devcontainer.json` — otherwise it
 lands on the host tree and the two builds start fighting.
 
+## Host uid
+
+The checkout lives on a Linux filesystem (WSL), so the workspace bind mount
+keeps its real ownership — Docker does not synthesise it the way it does for a
+Windows drive. The container user is therefore built at the host owner's ids:
+`USER_UID` / `USER_GID` in `devcontainer.json`, both 1000, which is the first
+user account on a stock WSL distro.
+
+If `id -u` on the host says something else, change both and rebuild. The symptom
+of a mismatch is `postCreateCommand` dying with `Permission denied` on the first
+file it writes into the workspace — the tree is readable but not writable, so
+`npm ci` (which installs into named volumes) succeeds first and hides the cause.
+
+Changing the ids strands the `node_modules` volumes, which outlive the image and
+are still full of files owned by the previous uid — `npm ci` then fails with
+`EACCES` unlinking one of them. `fix-mounts.sh` repairs that on the next create,
+so a rebuild is enough; the volumes do not need deleting.
+
 ## Versions to keep in step
 
 - `PLAYWRIGHT_VERSION` in `devcontainer.json` ↔ `playwright` in

@@ -38,11 +38,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Node from NodeSource rather than whatever the Playwright image happens to
 # ship. The repo pins Node 22 on purpose (see CLAUDE.md on type stripping), and
 # an image that silently moved to 24 would make the container disagree with CI.
+#
+# The base image already carries a newer Node from NodeSource, so a plain
+# `apt-get install nodejs` is a downgrade: apt reports "already the newest
+# version", installs nothing, and the container quietly runs the wrong major.
+# Hence the explicit version and --allow-downgrades — and the assertion, so the
+# next time the base image moves the build fails here instead of in CI.
 RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" -o /tmp/nodesource.sh \
   && bash /tmp/nodesource.sh \
-  && apt-get install -y --no-install-recommends nodejs \
+  && apt-get install -y --no-install-recommends --allow-downgrades "nodejs=${NODE_MAJOR}.*" \
   && rm -rf /var/lib/apt/lists/* /tmp/nodesource.sh \
-  && node --version
+  && node --version \
+  && test "$(node --version | cut -d. -f1)" = "v${NODE_MAJOR}"
 
 # gh, so an agent can open PRs and read issues without a browser.
 RUN mkdir -p -m 0755 /etc/apt/keyrings \
@@ -61,9 +68,31 @@ RUN curl -fsSL -o /usr/local/bin/yt-dlp \
       "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp_linux" \
   && chmod 0755 /usr/local/bin/yt-dlp
 
+# The workspace is a bind mount from a real Linux filesystem (the checkout lives
+# in WSL, not on a Windows drive), so its ownership comes through as-is — uid
+# 1000 for a first user account. Playwright's pwuser is 1001, which makes the
+# whole working tree read-only to the agent: postCreateCommand dies on the first
+# file it writes, and every later edit would too. So renumber pwuser to match.
+# Ubuntu's stock `ubuntu` account squats on 1000 and is unused here, so it goes.
+# Override USER_UID/USER_GID from devcontainer.json if `id -u` on the host
+# differs.
+ARG USER_UID=1000
+ARG USER_GID=1000
+RUN if [ "$(id -u "${USERNAME}")" != "${USER_UID}" ] || [ "$(id -g "${USERNAME}")" != "${USER_GID}" ]; then \
+      squatter="$(getent passwd "${USER_UID}" | cut -d: -f1)" \
+      && if [ -n "${squatter}" ] && [ "${squatter}" != "${USERNAME}" ]; then userdel -r "${squatter}" 2>/dev/null || userdel "${squatter}"; fi \
+      && squatgroup="$(getent group "${USER_GID}" | cut -d: -f1)" \
+      && if [ -n "${squatgroup}" ] && [ "${squatgroup}" != "${USERNAME}" ]; then groupdel "${squatgroup}"; fi \
+      && groupmod --gid "${USER_GID}" "${USERNAME}" \
+      && usermod --uid "${USER_UID}" --gid "${USER_GID}" "${USERNAME}"; \
+    fi \
+  && test "$(id -u "${USERNAME}")" = "${USER_UID}" \
+  && test "$(id -g "${USERNAME}")" = "${USER_GID}"
+
 # Mount points, created here with the right owner so the named volumes that
 # land on them are not root-owned. fix-mounts.sh repairs the ones Docker
-# creates fresh anyway; this just keeps the common case quiet.
+# creates fresh anyway; this just keeps the common case quiet. The `chown -R`
+# also repairs the home directory after the renumbering above.
 RUN mkdir -p /commandhistory /workspaces \
       "/home/${USERNAME}/.claude" \
       "/home/${USERNAME}/.config/gh" \
