@@ -120,6 +120,16 @@ Release-As: 0.2.1
 4. [`release.yml`](../.github/workflows/release.yml) tags, publishes a GitHub
    release, and pushes the image.
 
+That title is a `pull-request-title-pattern` in
+[`release-please-config.json`](../release-please-config.json), and it is not the
+default. release-please would title it `chore(main): release planner 0.2.0` —
+the _target branch_ in the scope position — which `pr-title` rejects, because
+`main` is not a scope. The release PR is a pull request and is held to the same
+rule as any other. The pattern needs `component-no-space` per package, or
+`${component}` is rendered with the leading space the default relies on and the
+title reads `chore( planner)`. `scripts/test/commit-message.test.ts` builds the
+title out of that config and validates it, so this cannot regress quietly.
+
 Published tags, per release:
 
 | Tag          | Use                                              |

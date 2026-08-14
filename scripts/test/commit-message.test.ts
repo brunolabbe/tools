@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { expect, test } from "vitest";
 import { validate } from "../commit-message.mjs";
 
@@ -96,6 +97,34 @@ test("does not count GitHub's squash suffix against the length limit", () => {
 test("an empty message is rejected rather than crashing", () => {
   expect(check("").ok).toBe(false);
   expect(check("\n\n").ok).toBe(false);
+});
+
+test("the title release-please gives a release pull request passes this rule", () => {
+  // `pr-title.yml` checks every pull request, and a release PR is a pull
+  // request. release-please's *default* title is `chore(main): release planner
+  // 0.2.0` — the target branch sits where the scope goes, and `main` is not a
+  // scope, so the release was gated by the gate. The pattern below is the fix,
+  // and this test is what stops it being edited back into something the gate
+  // rejects. Real scopes, read off `tools/`, so a third tool needs nothing here.
+  const config: {
+    "pull-request-title-pattern": string;
+    packages: Record<string, { component: string; "component-no-space"?: boolean }>;
+  } = JSON.parse(
+    fs.readFileSync(new URL("../../release-please-config.json", import.meta.url), "utf8"),
+  );
+
+  for (const pkg of Object.values(config.packages)) {
+    // Without this, release-please renders `${component}` with a leading space
+    // and the title reads `chore( planner): release 0.2.0`.
+    expect(pkg["component-no-space"]).toBe(true);
+
+    const title = config["pull-request-title-pattern"]
+      .replace("${scope}", "")
+      .replace("${component}", pkg.component)
+      .replace("${version}", "1.2.3")
+      .trim();
+    expect(validate(title)).toEqual({ ok: true, errors: [] });
+  }
 });
 
 test("scope validation is skipped when the tool list cannot be read", () => {
