@@ -61,6 +61,42 @@ RUN mkdir -p -m 0755 /etc/apt/keyrings \
   && apt-get update && apt-get install -y --no-install-recommends gh \
   && rm -rf /var/lib/apt/lists/*
 
+# The docker CLI and the compose plugin — `docker-ce-cli`, deliberately not
+# `docker-ce`, which is the daemon.
+#
+# What this buys: `docker compose -f compose.yaml -f compose.prod.yaml config`
+# merges and schema-checks the deployment overlay. That overlay pins a subnet
+# and sets TRUST_PROXY to name it, and if those two ever drift apart every rate
+# limit in the API silently reverts to one shared bucket — a failure with no
+# symptom until someone abuses it. Merging files needs nothing to be running.
+#
+# What is deliberately absent: a daemon. Docker-in-Docker needs --privileged,
+# and mounting the host's socket is the same authority by a longer route. Either
+# ends the premise that the container is the security boundary, which is the
+# whole justification for running an agent in here with permission prompts off
+# (see README.md, "Running agents without prompts"). A nested daemon would also
+# add its own ACCEPT rule to FORWARD *after* init-firewall.sh had set that
+# chain's policy to DROP, so anything started inside it would egress freely —
+# defeating an allowlist this image keeps root-owned and rebuild-only precisely
+# so that it cannot be widened from the inside.
+#
+# Building and running the real container is a CI gate, on a clean machine,
+# which tests more than a nested daemon here would: .github/workflows/downloader.yml.
+#
+# The `docker compose version` at the end is an assertion: the plugin is a
+# separate package from the CLI, and a missing one should fail the build rather
+# than the first time someone reaches for it.
+RUN mkdir -p -m 0755 /etc/apt/keyrings \
+  && curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+       -o /etc/apt/keyrings/docker.asc \
+  && chmod go+r /etc/apt/keyrings/docker.asc \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${VERSION_CODENAME}") stable" \
+       > /etc/apt/sources.list.d/docker.list \
+  && apt-get update && apt-get install -y --no-install-recommends \
+       docker-ce-cli docker-compose-plugin \
+  && rm -rf /var/lib/apt/lists/* \
+  && docker compose version
+
 # yt-dlp is a latency optimisation, never a dependency — but the resolver tier
 # that uses it only has tests worth running when the binary exists, so it is
 # present here even though the production image defaults it off.

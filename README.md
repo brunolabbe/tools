@@ -63,6 +63,10 @@ purpose — this service fetches URLs a client names, so publishing it on every
 interface by default would be handing out an open proxy. `compose.yaml`
 documents what to change before putting it behind anything.
 
+To reach it from outside the host, [docs/05-DEPLOYMENT.md](./docs/05-DEPLOYMENT.md)
+puts it on a subdomain behind a Cloudflare Tunnel and a login, without opening a
+port on the router.
+
 ### From source
 
 ```bash
