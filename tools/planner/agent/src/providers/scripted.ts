@@ -1,9 +1,9 @@
 /**
  * A provider that answers from a script instead of from a model.
  *
- * Two jobs, both real. Tests get a conversation loop whose replies are fixed,
- * so an assertion about the loop is not an assertion about a model's mood. And
- * a developer with no API key — or no wish to spend one — gets a UI that works
+ * Two jobs, both real. Tests get fixed replies, so an assertion about the code
+ * that called the model is not an assertion about a model's mood. And a
+ * developer with no API key — or no wish to spend one — gets a UI that works
  * end to end, which is the same trick the downloader's mocked transport plays.
  *
  * It is not a stub in the sense of "unfinished": it never becomes a model, and
@@ -11,23 +11,23 @@
  */
 
 import { AppError } from "@planner/contract";
-import type { ChatProvider, ChatReply, ChatRequest } from "../provider.ts";
+import type { ModelProvider, ModelReply, ModelRequest } from "../provider.ts";
 
 export interface ScriptedProviderOptions {
   /**
    * Replies, handed out in order. The last one repeats once the script runs
-   * out — a conversation that dies mid-test because the tester wrote four
-   * replies and the loop asked for a fifth teaches nothing.
+   * out — a test that dies because the tester wrote four replies and the code
+   * asked for a fifth teaches nothing.
    */
   replies: readonly string[];
 }
 
 const DEFAULT_REPLIES: readonly string[] = [
   "This server is running the scripted planner, so I am not a real assistant yet — " +
-    "but the wiring works. Configure a chat provider to plan an actual trip.",
+    "but the wiring works. Configure a model provider to plan an actual trip.",
 ];
 
-export class ScriptedProvider implements ChatProvider {
+export class ScriptedProvider implements ModelProvider {
   readonly name = "scripted";
   readonly model = "scripted";
 
@@ -41,7 +41,7 @@ export class ScriptedProvider implements ChatProvider {
     this.#replies = options.replies;
   }
 
-  async send(request: ChatRequest): Promise<ChatReply> {
+  async send(request: ModelRequest): Promise<ModelReply> {
     // Honoured even though nothing here is slow: a caller that cancels expects
     // cancellation, and a provider that ignores it hides the bug in the caller.
     request.signal?.throwIfAborted();

@@ -21,7 +21,7 @@ async function main(): Promise<void> {
     host: config.host,
     port: config.port,
     databasePath: config.databasePath,
-    provider: context.chat.name,
+    provider: context.model.name,
   });
 
   let shuttingDown = false;

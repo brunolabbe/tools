@@ -30,7 +30,7 @@ the suite on every push, and `.github/workflows/planner.yml` builds this tool's
 image and waits for it to report healthy — path-filtered, so downloader work does
 not pay for it.
 
-What exists: the error taxonomy, the `ChatProvider` seam with the scripted
+What exists: the error taxonomy, the `ModelProvider` seam with the scripted
 provider behind it, an API that opens SQLite and answers `/api/health`, a web
 shell that calls it, and a container image the release pipeline publishes.
 
@@ -41,7 +41,10 @@ image.
 
 What exists but is **wrong for the current design**, and is scheduled to be
 replaced rather than extended: the contract's `Conversation` / `Message` types
-and the `conversations` / `messages` tables from migration 1.
+and the `conversations` / `messages` tables from migration 1. They go with
+migration 2 in [pl-7](./work/pl-7-intake-persistence-and-wizard.md), which is why
+[pl-8](./work/pl-8-model-provider-seam.md) renamed the model seam and left them
+alone — a rename cannot carry a migration.
 
 **The documentation leads the code by four phases**, which is the intended state
 after a design pass and a liability if it lasts. Read
@@ -59,6 +62,7 @@ after a design pass and a liability if it lasts. Read
 | [pl-5](./work/pl-5-orchestrator-and-fan-out.md)      | ready     | The roster is a table, not conditionals                  |
 | [pl-6](./work/pl-6-question-tree-and-engine.md)      | ready     | The tree and the invalidation engine. The hard part      |
 | [pl-7](./work/pl-7-intake-persistence-and-wizard.md) | ready     | Persistence, routes, and the wizard over them            |
+| [pl-8](./work/pl-8-model-provider-seam.md)           | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER` |
 
 ## Known gaps and risks
 

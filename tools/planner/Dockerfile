@@ -86,17 +86,17 @@ ENV HOST=0.0.0.0
 # 8090, not 8080: the downloader's API defaults there and both tools run on the
 # same host.
 ENV PORT=8090
-# A volume, so conversations survive a redeploy.
+# A volume, so intakes and plans survive a redeploy.
 ENV DATABASE_PATH=/data/planner.db
 # Same-origin UI: no CORS to configure.
 ENV WEB_DIR=/app/tools/planner/web/dist/app
 
-# Spelled out although it is also the default. An unset `CHAT_PROVIDER` gives a
-# service that boots, reports healthy, and answers every question from a fixed
-# script — see `ScriptedProvider`. That is the right default for a fresh clone
-# and the wrong thing to arrive at by omission on a deployed host, so the value
-# is stated here where a reader will see it. `/api/health` reports it too.
-ENV CHAT_PROVIDER=scripted
+# Spelled out although it is also the default. An unset `MODEL_PROVIDER` gives a
+# service that boots, reports healthy, and answers from a fixed script — see
+# `ScriptedProvider`. That is the right default for a fresh clone and the wrong
+# thing to arrive at by omission on a deployed host, so the value is stated here
+# where a reader will see it. `/api/health` reports it too.
+ENV MODEL_PROVIDER=scripted
 
 # `node` comes with the base image and owns nothing it does not need.
 RUN mkdir -p /data && chown -R node:node /data /app

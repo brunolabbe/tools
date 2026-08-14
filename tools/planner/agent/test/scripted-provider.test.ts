@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { AppError } from "@planner/contract";
 import { ScriptedProvider } from "../src/index.ts";
-import type { ChatRequest } from "../src/index.ts";
+import type { ModelRequest } from "../src/index.ts";
 
-function request(overrides: Partial<ChatRequest> = {}): ChatRequest {
+function request(overrides: Partial<ModelRequest> = {}): ModelRequest {
   return {
     system: "You plan trips.",
     messages: [{ role: "user", content: "Two weeks in Portugal, in October." }],
@@ -22,8 +22,8 @@ describe("the scripted provider", () => {
   test("repeats the last reply rather than running dry", async () => {
     const provider = new ScriptedProvider({ replies: ["only"] });
     await provider.send(request());
-    // A conversation that dies mid-test because the script was one turn short
-    // would fail the test for a reason that has nothing to do with the loop.
+    // A test that dies because the script was one reply short would fail for a
+    // reason that has nothing to do with the code under test.
     expect((await provider.send(request())).content).toBe("only");
   });
 

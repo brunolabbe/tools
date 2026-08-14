@@ -31,7 +31,7 @@ describe("GET /api/health", () => {
     // rather than let a scripted assistant pass for a real one.
     expect(body.agent).toEqual({ provider: "scripted", model: "scripted" });
     expect(body.database).toEqual({ path: ":memory:", open: true });
-    expect(context.chat.name).toBe("scripted");
+    expect(context.model.name).toBe("scripted");
   });
 
   test("releases the database on shutdown, and can be asked twice", async () => {

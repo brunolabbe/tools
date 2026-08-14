@@ -70,7 +70,7 @@ Traps worth knowing in advance:
 - **Season filtering happens before the composer**, not inside it: a candidate
   outside its own season window should never reach packing (§7).
 - **Cancel must kill the whole fan-out.** In-flight provider calls take the
-  `AbortSignal` that `ChatRequest` already carries.
+  `AbortSignal` that `ModelRequest` already carries.
 
 ## Done when
 

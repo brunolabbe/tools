@@ -295,12 +295,12 @@ differences, and the first is not a hardening preference:
 - **No rate limiting, and no `TRUST_PROXY` to set.** Its `ApiConfig` has neither
   the limiter fields nor the trust setting the downloader's has, so the
   `TRUST_PROXY` line in `compose.prod.yaml` is downloader-specific and has no
-  planner equivalent. This matters more here, not less: once `CHAT_PROVIDER` is
+  planner equivalent. This matters more here, not less: once `MODEL_PROVIDER` is
   something other than `scripted`, an unauthenticated endpoint is a stranger
   spending your token budget, with `MAX_OUTPUT_TOKENS` capping one reply and
   nothing at all capping the number of replies. A Cloudflare WAF rate limiting
   rule is the only layer available until the tool grows its own.
-- **`CHAT_PROVIDER` defaults to `scripted`.** A deployment that does not set it
+- **`MODEL_PROVIDER` defaults to `scripted`.** A deployment that does not set it
   looks healthy and answers from a fixed script. `/api/health` reports
   `agent.provider`, so it is visible — but set it explicitly rather than relying
   on someone reading a health payload.
@@ -315,7 +315,7 @@ published to GHCR by the release pipeline — see
 service and the Cloudflare half, which is
 [pl-2](../tools/planner/docs/work/pl-2-container-image.md).
 
-Two things to expect a little further out. A real chat provider means outbound
+Two things to expect a little further out. A real model provider means outbound
 egress and, on a hosted API, a key — `.env.prod.example` grows past
 `TUNNEL_TOKEN`, or a local model joins the compose network instead. And
 streaming replies, which

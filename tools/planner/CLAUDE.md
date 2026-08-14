@@ -67,9 +67,9 @@ downloader's note; the same Windows failure applies.
 ## Rules
 
 **No vendor above the seam.** Everything that talks to a model goes through
-`ChatProvider` in `agent/src/provider.ts`. Which backend answers is a deployment
+`ModelProvider` in `agent/src/provider.ts`. Which backend answers is a deployment
 decision — a local model over Ollama, a hosted API, or the scripted one — and
-`createChatProvider` in `api/src/server.ts` is the only place in the tool that
+`createModelProvider` in `api/src/server.ts` is the only place in the tool that
 knows a provider by name. When grounding lands, search and the data APIs get the
 same treatment through the same file: one seam, a fixture default, one place that
 names a backend.

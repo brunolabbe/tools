@@ -1,5 +1,5 @@
 /**
- * The seam every chat backend plugs into.
+ * The seam every model backend plugs into.
  *
  * Which model answers is a deployment decision, not an architectural one, and
  * it is the decision most likely to change: a local model over Ollama costs
@@ -7,23 +7,27 @@
  * between a laptop, CI and production. So nothing above this file names a
  * vendor — the API picks an implementation at boot and passes it down.
  *
- * The interface is deliberately the smallest thing that can hold a
- * conversation. Streaming and tool use both matter for a planner and both will
- * land here, but their shapes depend on the loop above them, and an interface
- * guessed at now would be one more thing to unpick. Add them when the caller
- * exists.
+ * The interface is deliberately the smallest thing that can carry one model
+ * call. `messages` is the provider API's shape and not a transcript: the intake
+ * asks authored questions with no model in it, and the callers this seam is
+ * waiting for are the specialists in the fan-out, each of which reads a
+ * `TripBrief` and asks once.
+ *
+ * Streaming and tool use both matter for a planner and both will land here, but
+ * their shapes depend on the caller above them, and an interface guessed at now
+ * would be one more thing to unpick. Add them when the caller exists.
  */
 
-export interface ChatMessage {
+export interface ModelMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-export interface ChatRequest {
-  /** The agent's instructions. Not part of the stored transcript — see `Message`. */
+export interface ModelRequest {
+  /** The agent's instructions. */
   system: string;
   /** Oldest first. */
-  messages: readonly ChatMessage[];
+  messages: readonly ModelMessage[];
   /**
    * Ceiling on the reply. A planner answers in prose, not in essays, and an
    * unbounded reply is an unbounded bill on a metered provider.
@@ -32,13 +36,13 @@ export interface ChatRequest {
   signal?: AbortSignal | undefined;
 }
 
-export interface ChatUsage {
+export interface ModelUsage {
   /** Null where the provider does not report it — a local model usually will not. */
   inputTokens: number | null;
   outputTokens: number | null;
 }
 
-export interface ChatReply {
+export interface ModelReply {
   content: string;
   /**
    * Why the model stopped. `length` means the reply was cut off at
@@ -46,10 +50,10 @@ export interface ChatReply {
    * rather than silently keep half of.
    */
   stopReason: "end" | "length" | "refusal";
-  usage: ChatUsage;
+  usage: ModelUsage;
 }
 
-export interface ChatProvider {
+export interface ModelProvider {
   /** Reported by `/api/health` and stamped on log lines. Never includes a key. */
   readonly name: string;
   /**
@@ -57,5 +61,5 @@ export interface ChatProvider {
    * because "which model answered" is the first question about a bad reply.
    */
   readonly model: string;
-  send(request: ChatRequest): Promise<ChatReply>;
+  send(request: ModelRequest): Promise<ModelReply>;
 }

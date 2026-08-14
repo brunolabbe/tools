@@ -50,7 +50,7 @@ export function registerHealthRoute(app: FastifyInstance, context: AppContext): 
       shuttingDown: context.isShuttingDown(),
       version: VERSION,
       uptimeSec: Math.round((context.now().getTime() - context.startedAt.getTime()) / 1000),
-      agent: { provider: context.chat.name, model: context.chat.model },
+      agent: { provider: context.model.name, model: context.model.model },
       database: { path: context.config.databasePath, open: context.db.open },
     };
     // 503 while draining so a load balancer stops sending traffic before the

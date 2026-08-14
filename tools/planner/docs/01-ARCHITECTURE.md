@@ -32,7 +32,7 @@ Every package named below lives under `tools/planner/`.
 │  ────────────────────  │  │  ──────────────────────  │  │  ────────────────────  │
 │  tree  authored, ver'd │  │  orchestrator → roster   │  │  composer packs days   │
 │  reachable  what to ask│  │  specialists → Candidate │  │  constraints  time ·   │
-│  prune  what to discard│  │  ChatProvider ─ scripted │  │    money · hours ·     │
+│  prune  what to discard│  │  ModelProvider ─ scripted│  │    money · hours ·     │
 │         → TripBrief    │  │  Grounding ─ fixtures    │  │    season              │
 │  no model, no network  │  │                          │  │  critic · diff         │
 └────────────────────────┘  └──────────────────────────┘  └────────────────────────┘
@@ -193,7 +193,7 @@ All via environment, parsed and validated once at boot with zod, `api` only.
 | Variable                | Default    | Why it matters                                                 |
 | ----------------------- | ---------- | -------------------------------------------------------------- |
 | `PORT`                  | `8090`     | 8090/5183 so both tools run at once                            |
-| `CHAT_PROVIDER`         | `scripted` | The only place a model backend is named                        |
+| `MODEL_PROVIDER`        | `scripted` | The only place a model backend is named                        |
 | `GROUNDING_PROVIDER`    | `fixtures` | Same seam, same default: a fresh clone plans with no key       |
 | `MAX_SPECIALISTS`       | `5`        | The roster cap the orchestrator degrades to (§9)               |
 | `MAX_GROUNDING_CALLS`   | `40`       | Per run. Grounding is where the bill lives                     |
@@ -204,7 +204,7 @@ All via environment, parsed and validated once at boot with zod, `api` only.
 
 ## Key decisions and why
 
-**No vendor above a seam — now twice.** `ChatProvider` already does this for the
+**No vendor above a seam — now twice.** `ModelProvider` already does this for the
 model. `GroundingProvider` does it for search and the data APIs: one interface,
 a fixture implementation as the default, and `api/src/server.ts` as the only file
 that knows a backend by name. The fixture default is what keeps `npm test` free,
@@ -213,7 +213,7 @@ without making a key a prerequisite for running the tool.
 
 **Grounding implementations live in `api`, the interface in `agent`.** The real
 one needs `process.env`, a cache and a guarded fetch, all of which are `api`'s
-job. The fixture one lives beside the scripted chat provider, because that pair
+job. The fixture one lives beside the scripted model provider, because that pair
 is what a fresh clone runs.
 
 **One SSRF guard, lifted when the planner earns it.** The downloader's
