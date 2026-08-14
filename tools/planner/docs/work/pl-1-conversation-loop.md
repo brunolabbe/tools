@@ -3,8 +3,8 @@ id: pl-1
 tool: planner
 title: The conversation loop, end to end
 kind: work-package
-status: ready
-milestone: P1
+status: dropped
+milestone: null
 depends_on: []
 ---
 
@@ -60,4 +60,39 @@ store, the routes and the reply-validation path.
 
 ## Log
 
-_Not started._
+**2026-08-14 — dropped, never started. There is no conversation.**
+
+The tool does not hold a chat. The user answers **predetermined questions from an
+authored tree**; a model is involved later, in the fan-out, and never in the
+intake. Every build step above describes a transcript that will not exist, so
+this is a rewrite rather than a revision, and the replacement work is
+[pl-6](./pl-6-question-tree-and-engine.md) and
+[pl-7](./pl-7-intake-persistence-and-wizard.md).
+
+The reasoning is recorded as an amendment to
+[00-ANALYSIS.md §3](../00-ANALYSIS.md), which had argued the opposite position
+under the heading "an interview, not a form". The amendment was appended rather
+than replacing the argument: the section is a record of reasoning, and an argued
+position plus a dated override is worth more to the next reader than a rewrite
+that reads as though the debate never happened. It also records what the decision
+costs, which is real — a tree cannot follow up on something nobody anticipated.
+
+Kept rather than deleted, because the next person to reach for a conversation
+loop here should find the reason it did not happen. Three things in it were right
+and survive elsewhere:
+
+- **The open question — await the reply or stream it — is answered by the shape.**
+  Nothing streams during intake, because nothing in the intake calls anything.
+  The question moves intact to the fan-out, where it is listed under "still open"
+  in the roadmap as _whether a specialist streams_.
+- **"Validate the reply before it is stored" was right**, and it was always going
+  to matter more where a model actually speaks. It is now a rule in the tool's
+  `CLAUDE.md` and a build step in [pl-5](./pl-5-orchestrator-and-fan-out.md).
+- **The transcript-bounding worry is gone, not deferred.** Nothing is re-sent
+  turn over turn. The cost control that replaces it is the per-run budget.
+
+The tables this ticket would have used — `conversations` and `messages` from
+migration 1 — are superseded by `intakes` and `answers`. Note for whoever writes
+that migration: **append, do not edit migration 1.** The published image already
+carries it, so anything that has run sits at `user_version = 1` and would never
+see an edited version.

@@ -3,9 +3,10 @@
 Rules for this tool only. The repo-wide conventions are in the root `CLAUDE.md`
 and are not repeated here.
 
-Read `tools/planner/docs/00-ANALYSIS.md` before touching interview, roster,
+Read `tools/planner/docs/00-ANALYSIS.md` before touching intake, roster,
 specialist or composer code — the non-obvious decisions are justified there and
-not repeated here. `01-ARCHITECTURE.md` beside it is the structure that follows;
+not repeated here. **Read §3 with its amendment**: the section argues for a model
+interview and the amendment overrules it, and the pair is deliberate. `01-ARCHITECTURE.md` beside it is the structure that follows;
 `02-ROADMAP.md` is what is planned and what is still open; `03-STATUS.md` is what
 actually exists today, which is much less. Each ticket keeps its brief and its
 log in `docs/work/`.
@@ -13,29 +14,37 @@ log in `docs/work/`.
 ## What this is
 
 A trip planner: describe a vacation — a road trip, a hiking weekend, a skidoo
-ride up north, a slow week of history in Europe — get interviewed about it, have
-the specialists that trip actually needs work on it, and keep the plan.
+ride up north, a slow week of history in Europe — answer a guided set of
+questions about it, have the specialists that trip actually needs work on it, and
+keep the plan.
 
-The interesting problem is not the chat. It is that **a trip is an
-under-specified constraint problem** whose constraints the user cannot state up
-front, and that **a plan is a long-lived, revisable document** rather than a chat
-log. Two consequences run through everything: which questions get asked and which
-specialists run are decided at runtime from the trip's shape, and revising a plan
-touches a slice of it rather than regenerating it.
+**This is not a chat.** The intake asks predetermined questions from an authored,
+versioned tree, and no model is in it; a model is involved later, in the fan-out.
+The tool was scaffolded as a chat and stopped being one on 2026-08-14 — read the
+log on `docs/work/pl-1-conversation-loop.md` before reaching for a transcript.
+
+The interesting problem is that **a trip is an under-specified constraint
+problem** whose constraints the user cannot state up front, and that **a plan is
+a long-lived, revisable document**. Two consequences run through everything:
+which questions get asked and which specialists run are functions of the trip's
+shape, and revising a plan touches a slice of it rather than regenerating it.
 
 ## Layout
 
 ```
 contract     types, error taxonomy, zod schemas — no logic
-agent        everything that talks to a model: prompts, interview, roster, specialists, seams
+intake       the question tree, what it opens, what an edit discards — no model, no network, no clock
+agent        everything that talks to a model: prompts, roster, specialists, seams
 itinerary    everything that must be exact: day packing, constraints, critic — no model, no network
 api          Fastify, persistence, HTTP, run orchestration
 web          React + Vite UI
 e2e          Playwright specs (empty until there is a flow worth driving)
 ```
 
-`itinerary` is designed and not yet built — see `01-ARCHITECTURE.md`. Until it
-exists, do not solve its problems in `agent`.
+`intake` and `itinerary` are designed and not yet built — see
+`01-ARCHITECTURE.md`. Until they exist, do not solve their problems in `agent`.
+The two are separate on purpose: an intake engine inside a package named for the
+output document is a name that lies, and they are exact for unrelated reasons.
 
 `api` is the only place that reads `process.env`. The agent is a library and
 takes its configuration — including which provider to talk to — as arguments.
@@ -77,9 +86,21 @@ where, how long, what it costs, when it is in season, how far ahead it must be
 booked, and its sources — with nothing about which day they fall on. Two
 specialists that each write itinerary produce two itineraries to reconcile.
 
-**A specialist reads the brief, never the transcript.** Sending the conversation
-multiplies the bill by the roster size and re-introduces the unbounded-transcript
-problem below.
+**A specialist reads the brief, and only the brief.** Not the raw answers, not
+the tree, not another specialist's output. The `TripBrief` indirection is what
+makes the fan-out testable from a fixture, and it is what made swapping the
+interview for a question tree cost nothing downstream.
+
+**No model in the intake.** The tree, reachability and invalidation are pure
+functions over authored data — no provider, no network, no clock. The moment a
+condition becomes "ask the model whether this applies", the package needs a
+provider, the tests need a script, and §3's amendment is undone by increments.
+
+**Never discard an answer silently.** Changing an earlier answer can strand
+everything below an abandoned branch. The user is told which answers that costs,
+by prompt and not by id, and confirms before anything is written. The list comes
+from the same `prune` the write runs — never from a second implementation in the
+browser.
 
 **The roster is data.** Which specialists run is a pure function of the brief — a
 table a test asserts against, not conditionals inside the orchestrator. "Which
@@ -116,13 +137,12 @@ when it does not fit. A specialist gets no credentials and no write tools, and
 every URL a search result or a model reply hands us is SSRF-checked before it is
 fetched, after each redirect included.
 
-**Never send more of a conversation than the user's plan needs.** Every stored
-turn is re-sent on the next turn, so an unbounded transcript is an unbounded
-bill. `MAX_MESSAGE_CHARS` caps one turn; the transcript itself needs a
-summarisation strategy before this ships against a metered provider. A plan run
-is roughly an order of magnitude more than a chat turn — the roster, its grounding
-calls and a critic pass — so a run carries a budget, enforced _before_ the fan-out
-and degraded by dropping specialists rather than discovered halfway through.
+**A run carries a budget, enforced before the fan-out.** There is no transcript
+to bound any more, so this is the cost control: the roster, its grounding calls
+and a critic pass make one run roughly an order of magnitude more than a single
+model call. Degrade by dropping specialists rather than discovering the ceiling
+halfway through. It is a DoS control as much as a cost one — without it, one open
+endpoint is a stranger spending your budget.
 
 **Never log a provider key.** `logger.ts` censors `apiKey` and the usual auth
 headers as a backstop, not as permission to log a config object whole.

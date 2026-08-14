@@ -15,51 +15,66 @@ assuming any of it exists.
 Every package named below lives under `tools/planner/`.
 
 ```
-┌──────────────┐  POST /api/conversations        ┌────────────────────────────┐
+┌──────────────┐  POST /api/intakes              ┌────────────────────────────┐
 │              │ ──────────────────────────────► │                            │
-│     web      │  POST /api/conversations/:id/turns            api            │
+│     web      │  POST /api/intakes/:id/answers               api             │
 │  React+Vite  │ ──────────────────────────────► │          Fastify           │
 │              │  POST /api/plans/:id/revisions  │                            │
-│  interview   │ ──────────────────────────────► │  ┌──────────────────────┐  │
+│  wizard      │ ──────────────────────────────► │  ┌──────────────────────┐  │
 │  plan view   │  GET  /api/runs/:id/events      │  │    run orchestrator  │  │
 │  revise+pin  │ ◄────────── SSE ─────────────── │  │  queue · FSM · SSE   │  │
 └──────────────┘                                 │  └──────┬───────────────┘  │
-                                                 └─────────┼──────────────────┘
-                              ┌────────────────────────────┴──────────┐
-                              ▼                                       ▼
-        ┌─────────────────────────────────────┐   ┌──────────────────────────────┐
-        │               agent                 │   │          itinerary           │
-        │  ─────────────────────────────────  │   │  ──────────────────────────  │
-        │  interviewer   → TripBrief          │   │  composer  packs days        │
-        │  orchestrator  → roster from brief  │   │  constraints  time · money   │
-        │  specialists   → Candidate[]        │   │               hours · season │
-        │  ChatProvider seam ─ scripted       │   │  critic  feasibility pass    │
-        │  GroundingProvider seam ─ fixtures  │   │  diff  revision → revision   │
-        └─────────────────────────────────────┘   └──────────────────────────────┘
-                              └──────────── contract ───────────────┘
-                       conversation · brief · candidate · plan · errors · schemas
-                                             │
-                                     @webtools/core
-                               error machinery · transitions · redaction
+                                                 └────┬────┴─────────┬────────┘
+                        ┌─────────────────────────────┘              │
+                        ▼                                            ▼
+┌────────────────────────┐  ┌──────────────────────────┐  ┌────────────────────────┐
+│        intake          │  │          agent           │  │       itinerary        │
+│  ────────────────────  │  │  ──────────────────────  │  │  ────────────────────  │
+│  tree  authored, ver'd │  │  orchestrator → roster   │  │  composer packs days   │
+│  reachable  what to ask│  │  specialists → Candidate │  │  constraints  time ·   │
+│  prune  what to discard│  │  ChatProvider ─ scripted │  │    money · hours ·     │
+│         → TripBrief    │  │  Grounding ─ fixtures    │  │    season              │
+│  no model, no network  │  │                          │  │  critic · diff         │
+└────────────────────────┘  └──────────────────────────┘  └────────────────────────┘
+              └──────────────────── contract ───────────────────────┘
+              tree · brief · candidate · plan · errors · schemas
+                                     │
+                             @webtools/core
+                     error machinery · transitions · redaction
 ```
 
 ## Packages
 
-| Package     | Responsibility                                                                                      | Depends on                 |
-| ----------- | --------------------------------------------------------------------------------------------------- | -------------------------- |
-| `contract`  | Types, error taxonomy, zod schemas, routes. **No runtime logic.**                                   | `@webtools/core`           |
-| `agent`     | Everything that talks to a model: prompts, interviewer, roster, specialists, seams.                 | contract                   |
-| `itinerary` | Everything that must be exact: composer, constraint checks, critic, diff. **No model, no network.** | contract                   |
-| `api`       | Fastify surface, persistence, run orchestration, SSE, provider selection.                           | contract, agent, itinerary |
-| `web`       | Interview, plan, revision and diff UI.                                                              | contract                   |
+| Package     | Responsibility                                                                                      | Depends on                         |
+| ----------- | --------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `contract`  | Types, error taxonomy, zod schemas, routes. **No runtime logic.**                                   | `@webtools/core`                   |
+| `intake`    | The question tree, what to ask next, what an edit discards. **No model, no network, no clock.**     | contract                           |
+| `agent`     | Everything that talks to a model: prompts, roster, specialists, seams.                              | contract                           |
+| `itinerary` | Everything that must be exact: composer, constraint checks, critic, diff. **No model, no network.** | contract                           |
+| `api`       | Fastify surface, persistence, run orchestration, SSE, provider selection.                           | contract, intake, agent, itinerary |
+| `web`       | Wizard, plan, revision and diff UI.                                                                 | contract                           |
 
-`itinerary` does not exist yet, and it is the one addition Phase 0's shape did
-not anticipate. It exists because of the analysis's central decision (§2):
-**models generate candidates, code schedules and checks.** Keeping the arithmetic
-in its own package with no model and no network dependency is what makes it
-ordinary testable TypeScript — give it a fixture brief and a fixture candidate
-list and its output is deterministic, which is not a property anything in `agent`
-can have.
+Neither `intake` nor `itinerary` exists yet, and both are additions Phase 0's
+shape did not anticipate.
+
+`itinerary` exists because of the analysis's central decision (§2): **models
+generate candidates, code schedules and checks.** Keeping the arithmetic in its
+own package with no model and no network dependency is what makes it ordinary
+testable TypeScript — give it a fixture brief and a fixture candidate list and
+its output is deterministic, which is not a property anything in `agent` can
+have.
+
+`intake` exists for the same reason one step earlier, following the amendment to
+§3: **the intake asks authored questions, and no model participates in it.** It
+is deliberately not folded into `itinerary` despite sharing that package's "must
+be exact" character — an intake engine inside a package named for the output
+document is a name that lies, and these two are exact for unrelated reasons. It
+is not in `contract` either, because the contract holds no runtime logic and
+reachability is logic.
+
+The `no clock` on `intake` is not decoration. "Is this departure date in the
+past" is time-dependent, so `now` is an argument. A `Date.now()` inside a pure
+engine is a test that fails at midnight.
 
 `contract` is the seam that lets several agents build in parallel without
 colliding. Treat changes to it as interface changes requiring coordination, not
@@ -70,7 +85,11 @@ routine edits.
 ## The pipeline
 
 ```
-answers ─► [interview turn] ─► TripBrief ─── slots still empty? ─► ask more
+answer ─► [reachable]  which questions the answers so far actually open
+            [prune]    which earlier answers this one just discarded
+                │
+                ▼  no model here — authored tree, pure functions (§3 amendment)
+            TripBrief ─── core slots still empty? ─► ask the next question
                                    │
                                    ▼  enough for a first draft (§3)
                             [orchestrator]  roster + run budget (§4, §9)
@@ -89,7 +108,12 @@ answers ─► [interview turn] ─► TripBrief ─── slots still empty? �
                           Plan revision (append-only)
 ```
 
-Two properties of this pipeline are load-bearing:
+Three properties of this pipeline are load-bearing:
+
+**Nothing upstream of the orchestrator talks to a model.** The user's whole
+intake is deterministic, free to run and testable without a key or a script.
+That is the §3 amendment expressed as a pipeline property, and it is what makes
+the first arrow above a pure function rather than a request.
 
 **A specialist never writes a schedule.** It returns `Candidate`s — location,
 duration, cost band, season window, lead time, sources — and says nothing about
@@ -107,15 +131,23 @@ day rather than seven over two weeks (§6).
 Four aggregates, deliberately separate.
 
 ```
-Conversation ──1:n── Message          exists today; how a plan gets edited
-TripBrief                             the interview's structured output; one per plan
+Intake ──1:n── Answer                 one row per answered question; the input
+TripBrief                             the intake's structured output; one per plan
 Plan ──1:n── PlanRevision             append-only; a revision is never overwritten
                 └── PlanDay ──1:n── PlanItem ──► Candidate (with provenance, pinned?)
 ```
 
-- **The conversation is not the plan.** It is the medium the plan is edited
-  through. Fusing them means re-reading a chat log to find out what Tuesday is
-  (§6).
+- **The intake is not the plan, and the answers are not the brief.** Answers are
+  what the user said; the brief is the validated document derived from them; the
+  plan is what the tool made of it. Fusing any two of the three means deriving
+  one of them by re-reading another (§6).
+- **One row per answer**, keyed by intake and question, rather than a JSON blob
+  per intake. Discarding an abandoned branch is then a `DELETE`, and re-answering
+  a question is idempotent by primary key rather than by care.
+- **`Answer` stores what was said, `TripBrief` stores what it meant.** Keeping
+  both is what lets the tree change under a saved intake without the brief
+  becoming a lie — see the version rule in
+  [pl-7](./work/pl-7-intake-persistence-and-wizard.md).
 - **Revisions append.** The plan the user liked is always retrievable, and the UI
   shows a diff rather than a wall of new prose.
 - **Provenance lives on the item**, not in a log: source and fetch time for a
@@ -139,10 +171,15 @@ already uses. This is the second real consumer of it, which is exactly when the
 repo's rules say shared code is allowed to be shared.
 
 ```
-queued ─► interviewing ─► fanning-out ─► composing ─► reviewing ─► done
-                              │              │            │
-                              └──────────────┴────────────┴──► failed | canceled
+queued ─► fanning-out ─► composing ─► reviewing ─► done
+              │              │            │
+              └──────────────┴────────────┴──► failed | canceled
 ```
+
+There is no `interviewing` state. The intake completes before a run is created —
+it is synchronous, deterministic and fast, because nothing in it calls anything.
+A run starts with a brief already in hand, which is also why its first state can
+report a roster size.
 
 Progress here is genuinely knowable — the roster's size is decided before the
 fan-out starts — so the UI reports "4 of 7 specialists done" rather than a
@@ -206,7 +243,7 @@ an interface, do not pay for Redis now.
 ## Runtime layout
 
 ```
-storage/planner/planner.db   conversations, messages, briefs, plans, revisions, runs
+storage/planner/planner.db   intakes, answers, briefs, plans, revisions, runs
                              grounding cache (separate table, TTL'd, evictable)
 ```
 
