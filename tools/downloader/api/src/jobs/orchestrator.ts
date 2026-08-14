@@ -33,6 +33,7 @@ import type {
 } from "@downloader/contract";
 import type { DownloadEngine } from "@downloader/engine";
 import type { ResolverRegistry } from "@downloader/resolvers";
+import { initialProgress } from "../db/job-store.ts";
 import type { JobStore } from "../db/job-store.ts";
 import type { AppLogger } from "../logger.ts";
 import type { SsrfGuard } from "../ssrf.ts";
@@ -72,18 +73,15 @@ export interface OrchestratorOptions {
 const MAX_REPROBE_RETRIES = 1;
 
 /**
- * Why a retry does not send the job back to `probing`.
+ * A retry sends the job back to `probing`, and that is a real status move.
  *
- * `JOB_TRANSITIONS` in `@downloader/contract` is a strictly forward FSM — there
- * is no `downloading → probing` edge, so a retry cannot be modelled as a status
- * move without changing the contract, and `CLAUDE.md` forbids doing that
- * unilaterally. The retry therefore re-probes **in place**: the job stays in
- * the status it failed in, `attempts` increments, and a fresh `probed` event is
- * emitted so a client still sees the new variant list.
+ * `JOB_TRANSITIONS` carries a `downloading → probing` back-edge for exactly
+ * this (dl-9). Before it existed the retry re-probed **in place** — the job sat
+ * in `downloading` while it was doing no such thing — which was tested and
+ * worked, and was still a job reporting one thing while doing another.
  *
- * This is honest enough — the job really is still trying to download — but it
- * is a workaround, and the cleaner fix is a back-edge in the FSM. Recorded in
- * `tools/downloader/docs/03-STATUS.md` for the owner to decide.
+ * The retry is bounded here rather than in the contract: the FSM says the move
+ * is legal, `MAX_REPROBE_RETRIES` says how often it may be made.
  */
 
 /** Per-run correlation, carried into the job's logger. See `registerRequestLogging`. */
@@ -166,12 +164,26 @@ export class JobOrchestrator {
     const options = store.options(jobId);
 
     // --- probing ---------------------------------------------------------
-    // First attempt: `queued → probing`. A retry re-probes in place, because
-    // the FSM has no back-edge — see the note on MAX_REPROBE_RETRIES.
+    // `queued → probing` on the first attempt; `downloading → probing` on a
+    // retry, over the back-edge, so a job that is re-probing says so. The
+    // progress snapshot resets with it: the bytes of an abandoned attempt are
+    // not progress towards this one, and leaving them would show a percentage
+    // that no longer refers to anything being downloaded.
+    //
+    // The fallback is for a failure that surfaced once `muxing` had begun —
+    // there is no back-edge from there, so that job re-probes in place as
+    // every retry used to.
+    const attempts = attempt + 1;
     if (canTransition(job.status, "probing")) {
-      this.#transition(jobId, "probing", { attempts: attempt + 1 });
+      const reset = initialProgress("probing");
+      this.#transition(jobId, "probing", { attempts, progress: reset });
+      // Resetting the stored snapshot is not enough on its own: a client that
+      // is only listening would keep the dead attempt's percentage on screen
+      // under "Re-analysing". The frame is how it learns the counter is back
+      // to zero.
+      events.progress(jobId, reset);
     } else {
-      store.patch(jobId, { attempts: attempt + 1 }, this.#iso());
+      store.patch(jobId, { attempts }, this.#iso());
     }
     const probe = await this.#probe(job.sourceUrl, signal, log);
     throwIfAborted(signal);
@@ -331,7 +343,11 @@ export class JobOrchestrator {
     this.#options.events.status(jobId, to);
   }
 
-  /** Clears the failure from the previous attempt. Status stays where it is. */
+  /**
+   * Clears the failure from the previous attempt. The status move back to
+   * `probing` belongs to the next `#attempt`, which is where every other
+   * transition is decided.
+   */
   #prepareRetry(jobId: string): void {
     this.#options.store.patch(jobId, { error: null }, this.#iso());
   }

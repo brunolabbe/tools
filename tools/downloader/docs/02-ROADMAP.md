@@ -121,8 +121,10 @@ concurrent edits here cause more trouble than they save.
 
 Delivered, along with M2 and M3. The SSRF guard was pulled forward from dl-6 by
 decision, since dl-5 is the first code exposed to the internet. The one open
-contract question it left — the FSM has no back-edge, so re-probe retries cannot
-move status — is [dl-9](./work/dl-9-fsm-reprobe-back-edge.md).
+contract question it left — the FSM had no back-edge, so re-probe retries could
+not move status — was answered by
+[dl-9](./work/dl-9-fsm-reprobe-back-edge.md): `downloading → probing` is legal,
+and it is the table's only back-edge.
 
 ### Phase 3 — Hardening ✅ _complete_
 
