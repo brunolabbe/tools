@@ -4,16 +4,19 @@
   "separate-pull-requests": true,
   "include-component-in-tag": true,
   "bump-minor-pre-major": true,
+  "pull-request-title-pattern": "chore(${component}): release ${version}",
 
   "packages": {
     "tools/downloader": {
       "release-type": "simple",
       "component": "downloader",
+      "component-no-space": true,
       "extra-files": [{ "type": "json", "path": "api/package.json", "jsonpath": "$.version" }]
     },
     "tools/planner": {
       "release-type": "simple",
       "component": "planner",
+      "component-no-space": true,
       "extra-files": [{ "type": "json", "path": "api/package.json", "jsonpath": "$.version" }]
     }
   },
