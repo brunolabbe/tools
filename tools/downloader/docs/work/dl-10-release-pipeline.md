@@ -196,6 +196,12 @@ new: the first push creates the GHCR package **private**, which
 `read:packages` login on the host. Worth knowing that a package staying private
 is the expected state, not a misconfiguration to go hunting for.
 
+Walking that step on a real host found one thing wrong with it:
+02-DEPLOYMENT.md called for a **fine-grained** token, which cannot carry
+`read:packages` at all — the scope has no fine-grained equivalent. 03-RELEASING
+had it right and said why; the deployment page, which is the one you actually
+follow, sent you to a dead end. Fixed here.
+
 **The other one is half-proven and finishes itself.** The criterion is that a
 planner-only release does not rebuild the downloader's image; what this release
 showed is the same mechanism in the other direction — only
