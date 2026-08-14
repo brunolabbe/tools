@@ -6,7 +6,7 @@
  * provider and drive it through `inject()` with no socket at all.
  */
 
-import type { ChatProvider } from "@planner/agent";
+import type { ModelProvider } from "@planner/agent";
 import type { Database } from "better-sqlite3";
 import type { ApiConfig } from "./config.ts";
 import type { AppLogger } from "./logger.ts";
@@ -15,7 +15,7 @@ export interface AppContext {
   config: ApiConfig;
   logger: AppLogger;
   db: Database;
-  chat: ChatProvider;
+  model: ModelProvider;
   startedAt: Date;
   /** Injected in tests so anything time-dependent is assertable. */
   now: () => Date;

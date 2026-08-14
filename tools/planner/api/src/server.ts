@@ -10,7 +10,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { ScriptedProvider } from "@planner/agent";
-import type { ChatProvider } from "@planner/agent";
+import type { ModelProvider } from "@planner/agent";
 import { AppError } from "@planner/contract";
 import Database from "better-sqlite3";
 import Fastify from "fastify";
@@ -27,7 +27,7 @@ import { registerHealthRoute } from "./routes/health.ts";
 export interface CreateAppOptions {
   config?: Partial<ApiConfig>;
   /** Injected in tests. Overrides whatever the config would have built. */
-  chat?: ChatProvider;
+  model?: ModelProvider;
   logger?: AppLogger;
   now?: () => Date;
 }
@@ -40,18 +40,18 @@ export interface App {
   shutdown(): Promise<void>;
 }
 
-/** Body size cap. Requests here carry a conversation turn, nothing more. */
+/** Body size cap. Requests here carry one intake answer, nothing more. */
 const MAX_BODY_BYTES = 64 * 1024;
 
 /**
- * Picks the chat backend named in the config.
+ * Picks the model backend named in the config.
  *
  * One `switch`, and it is the only place in the tool that knows a provider by
  * name. Adding a real one is a case here plus a file under
  * `agent/src/providers/` — nothing above the seam changes.
  */
-function createChatProvider(config: ApiConfig): ChatProvider {
-  switch (config.chatProvider) {
+function createModelProvider(config: ApiConfig): ModelProvider {
+  switch (config.modelProvider) {
     case "scripted":
       return new ScriptedProvider();
   }
@@ -70,15 +70,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const db = new Database(config.databasePath);
   migrate(db);
 
-  const chat = options.chat ?? createChatProvider(config);
-  logger.info("agent configured", { provider: chat.name, model: chat.model });
+  const model = options.model ?? createModelProvider(config);
+  logger.info("agent configured", { provider: model.name, model: model.model });
 
   let shuttingDown = false;
   const context: AppContext = {
     config,
     logger,
     db,
-    chat,
+    model,
     startedAt: now(),
     now,
     isShuttingDown: () => shuttingDown,

@@ -13,14 +13,14 @@ export const LOG_LEVELS = ["debug", "info", "warn", "error", "silent"] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
 /**
- * Chat backends this build knows how to construct.
+ * Model backends this build knows how to construct.
  *
  * `scripted` is the default and answers from a fixed script — see
  * `ScriptedProvider`. It means a fresh clone runs with no key, no account and
  * no bill, and it is what CI uses. A real provider is a deliberate act.
  */
-export const CHAT_PROVIDERS = ["scripted"] as const;
-export type ChatProviderName = (typeof CHAT_PROVIDERS)[number];
+export const MODEL_PROVIDERS = ["scripted"] as const;
+export type ModelProviderName = (typeof MODEL_PROVIDERS)[number];
 
 export interface ApiConfig {
   host: string;
@@ -29,8 +29,8 @@ export interface ApiConfig {
   /** SQLite file. `:memory:` is honoured, and is what the tests use. */
   databasePath: string;
 
-  chatProvider: ChatProviderName;
-  /** Ceiling on one reply. See `ChatRequest.maxOutputTokens`. */
+  modelProvider: ModelProviderName;
+  /** Ceiling on one reply. See `ModelRequest.maxOutputTokens`. */
   maxOutputTokens: number;
 
   /**
@@ -51,7 +51,7 @@ export const API_DEFAULTS = {
   port: 8090,
   dataDir: "./storage/planner",
   databaseFile: "planner.db",
-  chatProvider: "scripted",
+  modelProvider: "scripted",
   maxOutputTokens: 2_048,
   logLevel: "info",
 } as const satisfies Partial<Record<string, unknown>>;
@@ -93,11 +93,11 @@ function logLevel(raw: string | undefined): LogLevel {
  * typo here can only mean the assistant is visibly scripted — which the health
  * endpoint reports, and which nobody will mistake for a working model.
  */
-function chatProvider(raw: string | undefined): ChatProviderName {
-  const value = (raw ?? API_DEFAULTS.chatProvider).trim().toLowerCase();
-  return (CHAT_PROVIDERS as readonly string[]).includes(value)
-    ? (value as ChatProviderName)
-    : API_DEFAULTS.chatProvider;
+function modelProvider(raw: string | undefined): ModelProviderName {
+  const value = (raw ?? API_DEFAULTS.modelProvider).trim().toLowerCase();
+  return (MODEL_PROVIDERS as readonly string[]).includes(value)
+    ? (value as ModelProviderName)
+    : API_DEFAULTS.modelProvider;
 }
 
 export function loadApiConfig(
@@ -114,7 +114,7 @@ export function loadApiConfig(
     host: overrides.host ?? env["HOST"] ?? API_DEFAULTS.host,
     port: overrides.port ?? int(env["PORT"], API_DEFAULTS.port, { min: 0, max: 65_535 }),
     databasePath,
-    chatProvider: overrides.chatProvider ?? chatProvider(env["CHAT_PROVIDER"]),
+    modelProvider: overrides.modelProvider ?? modelProvider(env["MODEL_PROVIDER"]),
     maxOutputTokens:
       overrides.maxOutputTokens ??
       int(env["MAX_OUTPUT_TOKENS"], API_DEFAULTS.maxOutputTokens, { max: 32_000 }),

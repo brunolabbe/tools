@@ -40,7 +40,7 @@ about it. The persisted aggregate is the plan, everywhere, including
 | Package    | State                                                                      |
 | ---------- | -------------------------------------------------------------------------- |
 | `contract` | `Conversation`/`Message`, the error taxonomy, zod schemas, `ROUTES.health` |
-| `agent`    | The `ChatProvider` seam and the scripted provider behind it                |
+| `agent`    | The `ModelProvider` seam and the scripted provider behind it               |
 | `api`      | Fastify, SQLite with numbered migrations, config, logging, `/api/health`   |
 | `web`      | The app shell and a health call — no intake UI                             |
 
@@ -51,9 +51,11 @@ migration 1's tables go with them.
 Two decisions from Phase 0 survive the domain landing, and are not up for
 revisiting casually:
 
-- **No vendor above the seam.** `ChatProvider` is the only way to a model, and
-  `createChatProvider` in `api/src/server.ts` is the only place that knows a
-  backend by name. Grounding now gets the same treatment.
+- **No vendor above the seam.** `ModelProvider` is the only way to a model, and
+  `createModelProvider` in `api/src/server.ts` is the only place that knows a
+  backend by name. Grounding now gets the same treatment. The seam was named
+  `ChatProvider` until [pl-8](./work/pl-8-model-provider-seam.md) renamed it; the
+  decision it encodes is unchanged.
 - **The scripted provider is the default and reports itself by name** in
   `/api/health`. A fresh clone runs with no key and no bill; CI has something
   deterministic to assert against; nobody can mistake it for a model.

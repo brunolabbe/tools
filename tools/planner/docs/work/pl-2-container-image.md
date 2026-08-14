@@ -94,3 +94,9 @@ first trap. The image is published and runnable; nothing points a hostname at it
 
 Unverified: no Docker in the dev container, so the image has not been built
 locally. `planner.yml` is the first real build.
+
+**2026-08-14 — the env var in step 2 is now `MODEL_PROVIDER`.** Renamed by
+[pl-8](./pl-8-model-provider-seam.md) along with the seam behind it. The brief
+above is left saying `CHAT_PROVIDER` because that is what landed; the argument
+for setting it explicitly in the image is unchanged, and so is the value. Nothing
+that reads it broke, because `scripted` is the default and the fallback both.

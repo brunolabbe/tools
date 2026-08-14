@@ -216,12 +216,12 @@ Ungrounded, the model plans from a snapshot of the web that is months old and
 was never a price list. Grounded, the tool costs money per plan and inherits an
 attack surface. Both halves are true, so:
 
-**Everything that reaches outside goes through one seam**, the way `ChatProvider`
+**Everything that reaches outside goes through one seam**, the way `ModelProvider`
 already works for the model. Which search backend, which weather source, whether
 a map API is configured at all — deployment decisions, named in exactly one file.
 The default implementation answers from checked-in fixtures, so a fresh clone
 plans a trip with no key and no bill and CI has something deterministic to assert
-against. That is the same argument the scripted chat provider already won.
+against. That is the same argument the scripted model provider already won.
 
 What grounding is for, in priority order — this is the ranking that decides which
 API is worth adding first:

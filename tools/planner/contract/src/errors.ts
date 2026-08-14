@@ -35,7 +35,7 @@ export type { AppErrorOptions } from "@webtools/core";
 export const PLANNER_ERROR_CODES = [
   // --- The model ---
   /**
-   * No chat provider is configured, or the one named does not exist. Distinct
+   * No model provider is configured, or the one named does not exist. Distinct
    * from `AGENT_UNAVAILABLE`: nothing was ever reachable, so retrying is
    * pointless until an operator changes something.
    */

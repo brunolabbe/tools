@@ -7,7 +7,7 @@ describe("loadApiConfig", () => {
     const config = loadApiConfig({}, {});
     expect(config.host).toBe(API_DEFAULTS.host);
     expect(config.port).toBe(API_DEFAULTS.port);
-    expect(config.chatProvider).toBe("scripted");
+    expect(config.modelProvider).toBe("scripted");
     expect(config.corsOrigins).toEqual([]);
     expect(config.webDir).toBeUndefined();
   });
@@ -36,7 +36,7 @@ describe("loadApiConfig", () => {
   test("falls back to the scripted provider when the name is unknown", () => {
     // Visibly scripted is a safe failure — health reports it by name — so a
     // typo should not stop the process the way a bad egress setting would.
-    expect(loadApiConfig({}, { CHAT_PROVIDER: "gpt-9" }).chatProvider).toBe("scripted");
+    expect(loadApiConfig({}, { MODEL_PROVIDER: "gpt-9" }).modelProvider).toBe("scripted");
   });
 
   test("clamps a nonsense token ceiling instead of passing it to a provider", () => {

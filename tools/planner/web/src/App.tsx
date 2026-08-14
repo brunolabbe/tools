@@ -1,7 +1,7 @@
 /**
  * The shell, and a live check that it is talking to its backend.
  *
- * Deliberately not a mocked-up chat: an empty transcript and a disabled input
+ * Deliberately not a mocked-up intake: an empty question and a disabled input
  * would look like progress without being any. What it renders instead is the
  * one thing that is true today — which assistant this server is running — so
  * the first real screen replaces something honest rather than something staged.
