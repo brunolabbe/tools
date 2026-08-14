@@ -45,9 +45,13 @@ cannot work at all.
 - A domain on Cloudflare, using Cloudflare's nameservers.
 - Docker and the Compose plugin on the host. `depends_on: condition:` needs
   Compose v2, which every current install has.
-- A checkout of this repo on the host. The image is built there — there is no
-  registry in this setup, which is one less credential and one less thing to
-  keep in sync.
+- A checkout of this repo on the host, for the two compose files and `.env`.
+  The image is **not** built here: it is pulled from GHCR at an exact version,
+  which is what makes "roll back" a pull rather than a rebuild. See
+  [03-RELEASING.md](./03-RELEASING.md).
+- `docker login ghcr.io` on the host, with a fine-grained token carrying
+  `read:packages` and nothing else. This is the one credential the arrangement
+  costs, and it is read-only.
 
 Nothing needs to be installed on the router.
 
@@ -99,15 +103,21 @@ Cloudflare creates the proxied DNS record itself. Do not add one by hand.
 
 ## 3 — Bring it up
 
+Set the two lines in `.env` that say which image to run — `GHCR_OWNER`, and
+`DOWNLOADER_TAG` at a released version — then:
+
 ```bash
-docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+docker compose -f compose.yaml -f compose.prod.yaml pull
+docker compose -f compose.yaml -f compose.prod.yaml up -d
 docker compose -f compose.yaml -f compose.prod.yaml logs -f cloudflared
 ```
 
-The first build is long — the Playwright base image is large and the workspace
-compiles from scratch. `cloudflared` waits for the container's health check
-before it registers, so a few seconds of `dependency failed to start` at the top
-of the logs is the intended behaviour and not an error.
+No `--build`: this host pulls a released image rather than compiling one. The
+first pull is long — the downloader's image carries Playwright's Chromium and
+ffmpeg — but subsequent ones move only the layers that changed. `cloudflared`
+waits for the container's health check before it registers, so a few seconds of
+`dependency failed to start` at the top of the logs is the intended behaviour
+and not an error.
 
 Once the logs show four `Registered tunnel connection` lines, the hostname is
 live.
@@ -233,12 +243,17 @@ Consider tightening these once it is reachable by more than you. The defaults in
   has to be right: it is per-process and does not survive a restart, which
   [03-STATUS.md](../tools/downloader/docs/03-STATUS.md) covers.
 
-Updating:
+Updating — set `DOWNLOADER_TAG` in `.env` to the version you want, then:
 
 ```bash
-git pull
-docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+git pull                                                      # compose files only
+docker compose -f compose.yaml -f compose.prod.yaml pull
+docker compose -f compose.yaml -f compose.prod.yaml up -d
 ```
+
+Rolling back is the same three commands with the previous version in `.env`, and
+takes as long as a pull. Which versions exist, and how one gets cut, are in
+[03-RELEASING.md](./03-RELEASING.md).
 
 The `/data` volume carries the job database and any file still inside its
 retention window across the restart. Jobs that were mid-download are failed
@@ -287,14 +302,15 @@ differences, and the first is not a hardening preference:
   `agent.provider`, so it is visible — but set it explicitly rather than relying
   on someone reading a health payload.
 
-**It also needs an image, and the root `Dockerfile` cannot become it.** That one
-is built on Playwright's base, installs ffmpeg and yt-dlp, and ends at
-`CMD node tools/downloader/api/dist/main.js`. `planner` needs no browser and no
-ffmpeg — a plain Node base, a fraction of the size. So adding it is the point at
-which the root-level single `Dockerfile` and `compose.yaml` stop being the right
-shape and want to move under `tools/<tool>/`, the way the slow CI gates already
-live in `.github/workflows/<tool>.yml`. Worth deciding before the second image
-is written, not after.
+**It has its own image, and had to.** The downloader's is built on Playwright's
+base and installs ffmpeg and yt-dlp; `planner` needs neither, so
+[`tools/planner/Dockerfile`](../tools/planner/Dockerfile) is a plain Node base
+and a twentieth of the size. That is why each tool now owns its Dockerfile, the
+way the slow CI gates already live in `.github/workflows/<tool>.yml`. Both are
+published to GHCR by the release pipeline — see
+[03-RELEASING.md](./03-RELEASING.md) — so what is left here is the compose
+service and the Cloudflare half, which is
+[pl-2](../tools/planner/docs/work/pl-2-container-image.md).
 
 Two things to expect a little further out. A real chat provider means outbound
 egress and, on a hosted API, a key — `.env.prod.example` grows past

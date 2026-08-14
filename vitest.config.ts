@@ -26,6 +26,18 @@ export default defineConfig({
       },
       {
         test: {
+          // Repo tooling, which belongs to no tool and ships in no image: the
+          // commit-message convention the hook and the PR gate share. It is
+          // plain `.mjs` and deliberately outside the `tsc --build` graph, so
+          // this project is the only thing that checks it.
+          name: "repo",
+          include: ["scripts/test/**/*.test.ts"],
+          environment: "node",
+          globals: false,
+        },
+      },
+      {
+        test: {
           name: "downloader",
           include: ["tools/downloader/*/test/**/*.test.{ts,tsx}"],
           environment: "node",

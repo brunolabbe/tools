@@ -29,20 +29,27 @@ honest description of a young tool rather than a gap to fill with guesses.
 
 ## Repo-wide
 
-| File                                   | What it is                                                       |
-| -------------------------------------- | ---------------------------------------------------------------- |
-| [`CLAUDE.md`](../CLAUDE.md)            | The conventions every tool follows. The rules, not the plan      |
-| [01-TICKETS.md](./01-TICKETS.md)       | How work is written down: the ticket format and its life         |
-| [02-DEPLOYMENT.md](./02-DEPLOYMENT.md) | Putting a tool on a public subdomain from a host behind a router |
-| [adr/](./adr/)                         | Decisions binding more than one tool                             |
+| File                                   | What it is                                                        |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| [`CLAUDE.md`](../CLAUDE.md)            | The conventions every tool follows. The rules, not the plan       |
+| [01-TICKETS.md](./01-TICKETS.md)       | How work is written down: the ticket format and its life          |
+| [02-DEPLOYMENT.md](./02-DEPLOYMENT.md) | Putting a tool on a public subdomain from a host behind a router  |
+| [03-RELEASING.md](./03-RELEASING.md)   | Commit conventions, versions, changelogs, and the images they cut |
+| [adr/](./adr/)                         | Decisions binding more than one tool                              |
 
-Deployment is here rather than under a tool because the tunnel, the login
-policy and `compose.prod.yaml` are one story for whatever gets published; the
-downloader is its worked example, not its subject.
+Deployment and releasing are here rather than under a tool because the tunnel,
+the login policy, `compose.prod.yaml` and the version scheme are one story for
+whatever gets published; the downloader is their worked example, not their
+subject.
+
+A tool's generated `CHANGELOG.md` sits at the root of the tool rather than in
+its `docs/` spine — the spine is written by hand and read by agents, and a file
+release-please rewrites on every release does not belong in the middle of it.
 
 ### Decision records
 
 - [001 — Documentation and tickets live under the tool](./adr/001-per-tool-docs-and-tickets.md)
+- [002 — Each tool releases itself, from conventional commits](./adr/002-releases-from-conventional-commits.md)
 
 An ADR belongs here only when the decision constrains **two or more tools** —
 what earns a place in `packages/core`, which runtime the repo targets, how CI is

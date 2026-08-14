@@ -9,6 +9,8 @@
   ],
   "type": "module",
   "scripts": {
+    "// prepare": "Points git at .githooks so the commit-message check installs itself with the dependencies. `|| true` because this also runs inside the Docker build, where there is no repository and no git.",
+    "prepare": "git config core.hooksPath .githooks || true",
     "build": "npm run build --workspaces --if-present",
     "dev": "npm run dev:downloader",
     "dev:downloader": "concurrently -n api,web -c cyan,magenta -k \"npm:dev:downloader:api\" \"npm:dev:downloader:web\"",
@@ -22,6 +24,7 @@
     "test:watch": "vitest",
     "test:downloader": "vitest run --project downloader",
     "test:planner": "vitest run --project planner",
+    "test:repo": "vitest run --project repo",
     "e2e": "npm run e2e:downloader",
     "e2e:downloader": "playwright test -c tools/downloader/playwright.config.ts",
     "e2e:install": "playwright install --with-deps chromium",

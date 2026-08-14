@@ -14,20 +14,23 @@ each piece of work did lives in its ticket under [work/](./work/).
 | Phase 0 — Scaffold | ✅ complete | `0f8583e` |
 
 **19 tests pass across 4 files.** `npm run check` is green. The repo-wide CI
-runs the suite on every push; the planner has no slow gates of its own yet, so
-there is no `.github/workflows/planner.yml`.
+runs the suite on every push, and `.github/workflows/planner.yml` builds this
+tool's image and waits for it to report healthy — path-filtered, so downloader
+work does not pay for it.
 
 What exists: the contract's conversation types and error taxonomy, the
 `ChatProvider` seam with the scripted provider behind it, an API that opens
-SQLite and answers `/api/health`, and a web shell that calls it. What does not
-exist: any route that carries a conversation, any conversation UI, any real
-provider, and any model of a trip.
+SQLite and answers `/api/health`, a web shell that calls it, and a container
+image the release pipeline publishes. What does not exist: any route that
+carries a conversation, any conversation UI, any real provider, any model of a
+trip, and any hostname pointing at the image.
 
 ## Open tickets
 
-| Ticket                                   | Status | Note                                         |
-| ---------------------------------------- | ------ | -------------------------------------------- |
-| [pl-1](./work/pl-1-conversation-loop.md) | ready  | The smallest thing that makes the tool exist |
+| Ticket                                   | Status    | Note                                                 |
+| ---------------------------------------- | --------- | ---------------------------------------------------- |
+| [pl-1](./work/pl-1-conversation-loop.md) | ready     | The smallest thing that makes the tool exist         |
+| [pl-2](./work/pl-2-container-image.md)   | in-flight | Image and release component landed; no subdomain yet |
 
 ## Known gaps and risks
 

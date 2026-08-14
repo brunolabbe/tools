@@ -1,0 +1,78 @@
+name: planner
+
+# This tool's slow gate: the image that ships it.
+#
+# It exists so that the first time the planner's container is built is not the
+# day it is released. `release.yml` pushes to a registry from a tag, and a
+# Dockerfile that has never been exercised fails there — after the version is
+# cut and the changelog is written, which is the worst moment to discover a
+# missing manifest or a native module that will not compile.
+#
+# Path-filtered, so downloader work does not pay for it. `packages/**` is
+# included deliberately: this image is built on `@webtools/core`, so a change
+# there can break it without touching a planner file.
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "tools/planner/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/planner.yml"
+  pull_request:
+    paths:
+      - "tools/planner/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/planner.yml"
+  # So a failure can be re-run without an empty commit.
+  workflow_dispatch:
+
+concurrency:
+  group: planner-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      # Built and started, not just built. A planner image can compile
+      # perfectly and still fail to boot: `better-sqlite3` is a native addon
+      # crossing from the build stage's Debian to the runtime stage's slim one,
+      # and a mismatch there surfaces at the first query rather than at compile.
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: tools/planner/Dockerfile
+          push: false
+          load: true
+          tags: planner:ci
+          cache-from: type=gha,scope=planner
+          cache-to: type=gha,mode=max,scope=planner
+
+      - name: Wait for the service to report healthy
+        run: |
+          set -euo pipefail
+          docker run -d --name planner -p 127.0.0.1:8090:8090 planner:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8090/api/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "the service never became healthy"
+          docker logs planner
+          exit 1
+
+      - if: always()
+        run: docker rm -f planner || true

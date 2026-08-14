@@ -33,13 +33,16 @@ is what remains**
   [dl-5](./work/dl-5-api-and-orchestration.md).
 - **M4 — Deployable ✅.** `docker compose up` gives a working service, verified
   by doing it rather than by reading the Dockerfile. Details in
-  [dl-7](./work/dl-7-ops-and-e2e.md).
+  [dl-7](./work/dl-7-ops-and-e2e.md). The Dockerfile now lives under this tool
+  rather than at the repo root, and the deployed host pulls a released image
+  instead of building one — [dl-10](./work/dl-10-release-pipeline.md).
 
 ## Open tickets
 
-| Ticket                                       | Status | Note                                                    |
-| -------------------------------------------- | ------ | ------------------------------------------------------- |
-| [dl-9](./work/dl-9-fsm-reprobe-back-edge.md) | ready  | Needs an owner decision first — it changes the contract |
+| Ticket                                       | Status    | Note                                                    |
+| -------------------------------------------- | --------- | ------------------------------------------------------- |
+| [dl-9](./work/dl-9-fsm-reprobe-back-edge.md) | ready     | Needs an owner decision first — it changes the contract |
+| [dl-10](./work/dl-10-release-pipeline.md)    | in-flight | Landed but unproven — the first release exercises it    |
 
 Phase 4 adds a ticket per site-specific resolver, as and when the sniffer misses
 one.

@@ -4,8 +4,11 @@
 #   docker compose -f compose.yaml -f compose.prod.yaml up -d --build
 #
 # `compose.yaml` on its own still gives the local single-host setup. This file
-# only adds what a public hostname needs, and changes three things:
+# only adds what a public hostname needs, and changes four things:
 #
+#  - the image is **pulled, not built**. `compose.yaml` builds from source
+#    because that is what a developer wants; a deployed host wants a released
+#    artifact it can name and roll back to. See docs/03-RELEASING.md.
 #  - a `cloudflared` sidecar dials *out* to Cloudflare and receives requests
 #    back over that connection. The host opens no inbound port, needs no static
 #    address, and works behind CGNAT. The loopback port inherited from
@@ -22,6 +25,19 @@
 
 services:
   downloader:
+    # A released image from the registry, pinned by version. `compose.yaml`'s
+    # `build:` section is still merged in underneath — compose has no way to
+    # unset it — which is what `pull_policy` is for: without it, `up -d` on a
+    # host that happens to have a stale local image would use that instead of
+    # pulling the version named here.
+    #
+    # DOWNLOADER_TAG is required rather than defaulted to `latest` on purpose. A
+    # host following a moving tag cannot answer "what is it running", and
+    # rolling back means guessing. `/api/health` reports the version, and it
+    # matches this line because release-please stamps both.
+    image: "ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env - see docs/02-DEPLOYMENT.md}/downloader:${DOWNLOADER_TAG:?set DOWNLOADER_TAG in .env to a released version - see docs/03-RELEASING.md}"
+    pull_policy: always
+
     networks: [edge]
     environment:
       # The proxy's CIDR, never `true`. `true` lets any client name its own

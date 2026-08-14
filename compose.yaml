@@ -9,7 +9,11 @@
 services:
   downloader:
     build:
+      # The context is the repo root and the Dockerfile is under the tool: a
+      # tool's image is built from the root lockfile, the root tsconfig and
+      # `packages/core`, none of which live beside its Dockerfile.
       context: .
+      dockerfile: tools/downloader/Dockerfile
       args:
         # yt-dlp is a latency optimisation on well-known sites, never a
         # dependency: without it, requests fall through to the browser sniffer

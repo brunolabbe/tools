@@ -1,0 +1,19 @@
+#!/bin/sh
+#
+# Reject a commit message that release-please would misread, while whoever
+# wrote it — usually an agent — is still in the loop that produced it. A CI
+# failure arrives minutes later, after the context is gone.
+#
+# Installed by the root `prepare` script, which points `core.hooksPath` here.
+#
+# This hook is a convenience, not the enforcement. It fails *open* when node is
+# unavailable, because a fresh clone that cannot commit at all is a worse
+# problem than a malformed message: `.github/workflows/pr-title.yml` checks the
+# pull request title, and that title is what actually lands on `main`.
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "commit-msg: no node on PATH, skipping the message check" >&2
+  exit 0
+fi
+
+exec node "$(dirname "$0")/../scripts/commit-message.mjs" "$1"

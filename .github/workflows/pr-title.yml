@@ -1,0 +1,36 @@
+name: pr-title
+
+# This repo squash-merges, so the pull request title — not the commits on the
+# branch — is the message that lands on `main`, and it is what release-please
+# reads to decide a version and write a changelog entry. A branch's intermediate
+# commits are working notes; this one is the record.
+#
+# The rule is the same one `.githooks/commit-msg` enforces locally, from the
+# same file, so the two cannot drift.
+
+on:
+  pull_request:
+    # `edited` matters more than it looks: a title fixed after a red check has
+    # to turn the check green without an empty commit to re-trigger it.
+    types: [opened, edited, reopened, synchronize]
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # No `setup-node`, no `npm ci`: the validator is dependency-free `.mjs`
+      # and the runner already has a node. This job answers in seconds.
+      - uses: actions/checkout@v4
+      - name: Check the pull request title
+        env:
+          # Through the environment rather than an expression, so a title
+          # containing quotes or backticks is data and never shell syntax.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node scripts/commit-message.mjs --text "$PR_TITLE"

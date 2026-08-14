@@ -1,6 +1,16 @@
 # Multi-stage build for the whole service: API, resolvers, engine, and the UI
 # it serves. One image, one process, one port.
 #
+# **The build context is the repository root, not this directory.** Everything
+# below copies from there, because a tool is not self-contained: it is built out
+# of the root lockfile, the root tsconfig and `packages/core`. Build it with
+#
+#     docker build -f tools/downloader/Dockerfile .
+#
+# or let `compose.yaml` do it, which is why that file names both. This file
+# lives here rather than at the root because there are two tools now and their
+# images have nothing in common — see docs/adr/002-releases-from-conventional-commits.md.
+#
 # The base is Playwright's own image rather than a plain `node:` one. The
 # browser sniffer is the tier that makes "any website" reachable, and Chromium
 # needs some seventy shared libraries that no Node image carries; installing

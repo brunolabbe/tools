@@ -1,0 +1,187 @@
+name: release
+
+# Two halves, and the interesting one is the gap between them.
+#
+# release-please watches `main` and keeps an open pull request per tool that has
+# unreleased conventional commits, accumulating the changelog as work lands.
+# Nothing ships while that PR is open. **Merging it is the release**: that is the
+# manual trigger, and it is a better one than a button because you read the
+# changelog and the version bump as a diff before you agree to them.
+#
+# Merging then produces a tag, a GitHub release, and the image below. Which
+# tools get built is decided at runtime from what was actually released, so a
+# planner-only release never rebuilds the downloader's two-gigabyte image.
+#
+# The whole story, including how to deploy what comes out, is in
+# docs/03-RELEASING.md.
+
+on:
+  push:
+    branches: [main]
+  # For rebuilding an image without a version bump — a base image CVE, or a
+  # push that failed after the tag was already cut.
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: "Tool to rebuild and push at its current version"
+        required: true
+        type: choice
+        options: [downloader, planner]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Opens, updates, and — once merged — completes the release. Does nothing at
+  # all on a push that contains no releasable commits.
+  release-please:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      paths_released: ${{ steps.release.outputs.paths_released }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          # A pull request opened with the default GITHUB_TOKEN does not trigger
+          # other workflows, so `ci.yml` would never run on a release PR and it
+          # would merge with no checks at all. A PAT or App token in
+          # RELEASE_PLEASE_TOKEN fixes that; without one this still works, and
+          # the release PR simply arrives unchecked. See docs/03-RELEASING.md.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+  # One build per tool actually released — zero, one, or all of them. The matrix
+  # is `paths_released`, a JSON array release-please emits, so adding a third
+  # tool means adding a component and a Dockerfile and nothing in this file.
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.paths_released != '' && needs.release-please.outputs.paths_released != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # One tool's registry outage must not cancel the other's push, and the
+      # releases are already tagged: a failure here is re-run, not rolled back.
+      fail-fast: false
+      matrix:
+        path: ${{ fromJSON(needs.release-please.outputs.paths_released) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The version comes off disk rather than out of an action output. The
+      # release commit bumped `version.txt` and this checkout contains it, and
+      # release-please's per-path outputs are keyed dynamically in a way a
+      # matrix cannot index. The owner is lowercased because GHCR rejects
+      # anything else and GitHub logins are not.
+      - name: Resolve the image and its version
+        id: image
+        env:
+          TOOL_PATH: ${{ matrix.path }}
+        run: |
+          set -euo pipefail
+          tool="$(basename "$TOOL_PATH")"
+          version="$(tr -d '[:space:]' < "$TOOL_PATH/version.txt")"
+          owner="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          {
+            echo "tool=$tool"
+            echo "version=$version"
+            echo "repository=ghcr.io/$owner/$tool"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `X.Y.Z` is the one that matters and the one `compose.prod.yaml` pins.
+      # `X.Y` and `latest` are conveniences; `latest` is deliberately not what
+      # the deployment doc tells you to run, because a host that silently
+      # follows a moving tag has no answer to "what is it running".
+      - name: Compute tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.repository }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.image.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.image.outputs.version }}
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          # The repo root, not the tool directory: every image is built from the
+          # root lockfile, the root tsconfig and `packages/core`.
+          context: .
+          file: ${{ matrix.path }}/Dockerfile
+          # amd64 only, which is what the mini-PC this deploys to runs. Adding
+          # arm64 here means QEMU emulation and a build measured in tens of
+          # minutes for the downloader's Playwright base — do it with a native
+          # arm64 runner or not at all.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Without this every release rebuilds `npm ci` and the whole compile
+          # from cold, because each run starts on a fresh machine.
+          cache-from: type=gha,scope=${{ steps.image.outputs.tool }}
+          cache-to: type=gha,mode=max,scope=${{ steps.image.outputs.tool }}
+
+      - name: Summarise
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          {
+            echo "### ${{ steps.image.outputs.tool }} ${{ steps.image.outputs.version }}"
+            echo
+            echo '```'
+            echo "$TAGS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # The manual escape hatch: rebuild one tool at whatever version `main` says it
+  # is, and overwrite that tag. Only correct when the *inputs* changed and the
+  # source did not — a patched base image. If the source changed, cut a release.
+  rebuild:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - id: image
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < "tools/${{ inputs.tool }}/version.txt")"
+          owner="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "repository=ghcr.io/$owner/${{ inputs.tool }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: tools/${{ inputs.tool }}/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.image.outputs.repository }}:${{ steps.image.outputs.version }}
+            ${{ steps.image.outputs.repository }}:latest
+          cache-from: type=gha,scope=${{ inputs.tool }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.tool }}
