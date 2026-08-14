@@ -6,6 +6,7 @@
     "node_modules/",
     "storage/",
     "coverage/",
-    "test/fixtures/"
+    "test/fixtures/",
+    "**/CHANGELOG.md"
   ]
 }

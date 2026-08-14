@@ -130,6 +130,13 @@ rule as any other. The pattern needs `component-no-space` per package, or
 title reads `chore( planner)`. `scripts/test/commit-message.test.ts` builds the
 title out of that config and validates it, so this cannot regress quietly.
 
+**`CHANGELOG.md` is ignored by `oxfmt`**, in
+[`.oxfmtrc.json`](../.oxfmtrc.json). release-please writes it in its own
+markdown — `*` bullets, a blank line the formatter would collapse — and rewrites
+it from scratch every release, so `format:check` failed on every release PR and
+reformatting it would only be undone by the next one. A generated file is not
+ours to format.
+
 Published tags, per release:
 
 | Tag          | Use                                              |
