@@ -83,6 +83,35 @@ anyway.
 This is a guardrail against a mistake or a bad instruction, not a jail. It is
 not a defence against a process actively trying to get out.
 
+## Docker, and why there is no daemon
+
+The image carries the docker **CLI** and the compose plugin, and no daemon. So
+this works:
+
+```bash
+docker compose -f compose.yaml -f compose.prod.yaml config
+```
+
+which merges the deployment overlay and checks it against the schema — worth
+doing before a deploy, because `compose.prod.yaml` pins a subnet and sets
+`TRUST_PROXY` to name it, and the two drifting apart takes every rate limit in
+the API back to a single shared bucket without any visible symptom. Merging
+files needs nothing to be running.
+
+Anything that needs a daemon — `docker compose build`, `up`, `ps` — will fail
+here, and is meant to. Docker-in-Docker needs `--privileged`, and mounting the
+host's socket is the same authority reached the long way; either one ends the
+premise that the container is the boundary, which is the entire reason
+`--dangerously-skip-permissions` is defensible in here. A nested daemon would
+also insert its own ACCEPT rule into `FORWARD` after `init-firewall.sh` had set
+that chain to DROP, giving anything it started the unrestricted egress the
+allowlist exists to prevent.
+
+Building the real image and running it is a CI gate on a clean machine — see
+`.github/workflows/downloader.yml` — which is a better test of the container
+than a nested daemon on a working tree would be. Locally,
+`npm run e2e:downloader` already drives the whole stack without one.
+
 ## node_modules
 
 The Windows checkout's `node_modules` holds win32 binaries (esbuild, rollup,

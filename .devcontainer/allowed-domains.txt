@@ -56,6 +56,11 @@ main.vscode-cdn.net
 archive.ubuntu.com
 security.ubuntu.com
 deb.nodesource.com
+# Not for installing anything at runtime: the docker CLI is already in the
+# image. It is here because the Dockerfile leaves that repository in
+# sources.list.d, so without it every `apt-get update` in a running container
+# fails on this one line — the baffling error described above.
+download.docker.com
 
 # --- Add your own below ----------------------------------------------------
 # The resolver tiers in this repo exist to probe arbitrary third-party sites,
