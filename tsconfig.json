@@ -1,4 +1,14 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // The repo's inventory, and nothing else: `files: []` makes this a solution
+  // file rather than a program, which is what lets `npm run check` be one
+  // `tsc --build` over every project — source and test alike.
+  //
+  // It has to stay empty. A solution file may reference a `noEmit` project; a
+  // project with files of its own may not (TS6310), and every test project is
+  // `noEmit`. So the test program cannot be folded in here, and lives in
+  // `tsconfig.tests.json` — which is also the config the other three test
+  // projects extend. The reasoning for all four is written there.
   "files": [],
   "references": [
     { "path": "./packages/core" },
@@ -10,6 +20,11 @@
     { "path": "./tools/planner/contract" },
     { "path": "./tools/planner/agent" },
     { "path": "./tools/planner/api" },
-    { "path": "./tools/planner/web" }
+    { "path": "./tools/planner/web" },
+
+    { "path": "./tsconfig.tests.json" },
+    { "path": "./tools/downloader/web/test" },
+    { "path": "./tools/downloader/e2e" },
+    { "path": "./scripts/test" }
   ]
 }

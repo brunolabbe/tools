@@ -159,14 +159,14 @@ export function createStubEngine(options: StubEngineOptions): DownloadEngine & {
       };
     },
     async collectGarbage() {
-      return { removedOutDirs: 0, removedTmpDirs: 0, freedBytes: 0 };
+      return { removedOutDirs: [], removedTmpDirs: [], freedBytes: 0 };
     },
     async removeJob(jobId: string): Promise<void> {
       await fs.rm(path.join(root, "out", jobId), { recursive: true, force: true });
     },
-  };
+  } satisfies DownloadEngine & { calls: number };
 
-  return engine as DownloadEngine & { calls: number };
+  return engine;
 }
 
 export interface HarnessOptions extends CreateAppOptions {

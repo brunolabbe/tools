@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // Every test suite that runs under node, in one project — and the config the
+  // other three test projects extend.
+  //
+  // **The split is by compiler surface, never by package.** `lib`, `types`,
+  // `jsx`, `moduleResolution` and `allowJs` cannot vary within a project, and
+  // the repo needs exactly four combinations of them: this one (NodeNext, node
+  // globals, no DOM), `tools/downloader/web/test` (Bundler + DOM + JSX),
+  // `tools/downloader/e2e` (DOM + Playwright's types) and `scripts/test`
+  // (`allowJs`). Those three extend this file and override only the options
+  // that make them different. Anything that would differ merely by an `include`
+  // is not a project — it is one more glob here.
+  //
+  // That is also the one thing the split buys, and it is enforced rather than
+  // aspirational: naming `document` in a node suite fails to compile, because
+  // the DOM lib reaches only the two projects that should have it. It does not
+  // buy import isolation — project references order the build, they do not
+  // restrict resolution, so a downloader test importing `@planner/contract`
+  // compiles exactly as the same import in `src` would. That rule is the root
+  // `CLAUDE.md`'s and stays a review rule.
+  //
+  // **Why `references` is a written-out list and not a glob.** Tests import
+  // their subject relatively — `import "../src/context.ts"`. Without a
+  // reference reaching the owning package, tsc treats that file as a loose
+  // member of *this* program and then fails TS6307 on every module it imports
+  // in turn. The reference is what redirects the specifier to the built project
+  // instead. TypeScript has no glob form for it.
+  //
+  // **A missing entry is not reliably an error, so keep the list complete.**
+  // Measured, one entry at a time:
+  //
+  // - drop `tools/downloader/api` — 26 × TS6307. Nothing else references `api`,
+  //   so removing it here makes the project unreachable.
+  // - drop `tools/downloader/engine` — green. `api` still references `engine`,
+  //   and redirection follows the graph transitively, not just direct entries.
+  // - drop `packages/core` — green. Its suite is `spawn-safety.test.ts`, which
+  //   reads source files as text and imports nothing from `../src`.
+  //
+  // So the loud failure only lands for a leaf package whose tests import its
+  // own `src`. Every other entry is redundant until the graph shifts under it,
+  // which is exactly when nobody is looking. The list is kept complete for that
+  // reason, not because each line is individually load-bearing.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // Checked, never emitted. The only output is a `.tsbuildinfo`, which is what
+    // still lets `tsc --build` skip an unchanged run, and no test artefact ever
+    // reaches a package's `dist`. `npm run build` never comes through here at
+    // all: it runs each workspace's own build, and no source project references
+    // a test project, so this graph is only ever reached from the root.
+    "noEmit": true,
+    // Nothing here is emitted, so there is no output whose relative paths could
+    // need rewriting — and with the source projects emitting to `dist/`, leaving
+    // it on makes every `../src/*.ts` import a TS2878 error.
+    "rewriteRelativeImportExtensions": false
+  },
+  // `.tsx` as well as `.ts`, deliberately: the rule is that **anything vitest
+  // can run, tsc must check**, and `vitest.config.ts` collects
+  // `*.test.{ts,tsx}` for both tools. A `.tsx` test in a package that is not
+  // `web` is almost certainly a mistake, but it would have run under vitest
+  // while being invisible here — and a test that runs unchecked is the exact
+  // hole dl-13 exists to close. Included, it either typechecks or fails
+  // TS17004 for having JSX with no `jsx` option; both are answers, silence is
+  // not.
+  "include": [
+    "packages/*/test/**/*.ts",
+    "packages/*/test/**/*.tsx",
+    "tools/*/*/test/**/*.ts",
+    "tools/*/*/test/**/*.tsx"
+  ],
+  // The `include` above is deliberately broad, so a suite with a project of its
+  // own has to be carved back out — otherwise its files sit in two projects and
+  // are checked twice under two different surfaces, with nothing saying which
+  // answer is authoritative.
+  //
+  // **One concrete path, never `tools/*/web/test/**`.** The generic glob is the
+  // tempting version and it is a trap: it excludes web tests in *every* tool,
+  // including tools that have no project to catch them. A test file at
+  // `tools/planner/web/test/` would then belong to no project at all and pass
+  // `npm run check` with any error in it — measured, not supposed — which is
+  // the precise hole this ticket exists to close, re-armed for the next tool.
+  // Naming one path means the next `web` suite lands in this project and fails
+  // loudly until someone gives it a project of its own and a line here. Adding
+  // a tool must not be able to open a silent gap.
+  //
+  // The carve-out is not load-bearing today and should not pretend to be:
+  // dropping it and referencing `tools/downloader/web` typechecks green, since
+  // the current web tests are reducers, a job store and presentation helpers
+  // with no DOM global between them. What it buys is that they are checked the
+  // way they run — `web` is `moduleResolution: "Bundler"`, so a specifier Vite
+  // resolves and NodeNext does not is caught at the gate rather than at build
+  // time. The DOM half starts paying when dl-15's component tests land.
+  //
+  // Anything extending this file must restate `exclude`: `extends` inherits it,
+  // and it would otherwise exclude that project's own files.
+  "exclude": ["tools/downloader/web/test/**"],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./tools/downloader/contract" },
+    { "path": "./tools/downloader/resolvers" },
+    { "path": "./tools/downloader/engine" },
+    { "path": "./tools/downloader/api" },
+    { "path": "./tools/planner/contract" },
+    { "path": "./tools/planner/agent" },
+    { "path": "./tools/planner/api" }
+  ]
+}

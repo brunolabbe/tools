@@ -60,6 +60,7 @@ function variant(overrides: Partial<MediaVariant> = {}): MediaVariant {
     hasVideo: true,
     hasAudio: true,
     filesizeBytes: 1 * MB,
+    label: "720p · H.264 + AAC",
     ...overrides,
   };
 }
