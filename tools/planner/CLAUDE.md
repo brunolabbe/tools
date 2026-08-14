@@ -96,6 +96,15 @@ functions over authored data — no provider, no network, no clock. The moment a
 condition becomes "ask the model whether this applies", the package needs a
 provider, the tests need a script, and §3's amendment is undone by increments.
 
+**The intake stops at the core questions.** Every node is `core` or `refine`, and
+when nothing reachable and `core` is unanswered the wizard says the essentials are
+done and offers the draft — it does not march to the end of the tree. `core` and
+the contract's `missingRequiredSlots` describe the same set; if they can disagree,
+the checkpoint is a lie. Refining is somewhere a user comes back to after a draft,
+so it is re-entrant, and "core-complete" is computed from the answers rather than
+stored. Analysis §3's "draft early, interview less", decided as behaviour on
+2026-08-14 — the consequences are in `docs/02-ROADMAP.md`.
+
 **Never discard an answer silently.** Changing an earlier answer can strand
 everything below an abandoned branch. The user is told which answers that costs,
 by prompt and not by id, and confirms before anything is written. The list comes

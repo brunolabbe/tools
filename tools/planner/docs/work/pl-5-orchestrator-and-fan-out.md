@@ -67,6 +67,13 @@ Traps worth knowing in advance:
   tempted by any more, but the rule predates that and outlives it: threading
   anything larger multiplies the bill by the roster size, and the `TripBrief`
   indirection is what makes a specialist testable from a fixture at all.
+- **A brief arrives with its `refine` slots unknown**, and that is the normal
+  case rather than a degraded one. The wizard stops at core-complete and offers
+  the draft there (decided 2026-08-14, see the roadmap's _Still open_), so the
+  first plan is usually built from the minimum. Specialists must read an unknown
+  slot as unknown and say what they could not account for — never guess a value
+  and never refuse to propose. pl-3's three-state slot makes this identical to
+  the declined case, which is the point: there is one path, not two.
 - **Season filtering happens before the composer**, not inside it: a candidate
   outside its own season window should never reach packing (§7).
 - **Cancel must kill the whole fan-out.** In-flight provider calls take the
