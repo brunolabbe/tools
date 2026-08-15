@@ -1,0 +1,119 @@
+{
+  "brief": {
+    "shape": { "state": "answered", "value": "road-trip" },
+    "origin": { "state": "answered", "value": "Montréal, Québec" },
+    "destination": { "state": "answered", "value": "Gaspésie" },
+    "dates": {
+      "state": "answered",
+      "value": { "kind": "exact", "departure": "2027-07-03", "return": "2027-07-11" }
+    },
+    "travellers": { "state": "answered", "value": 4 },
+    "ages": { "state": "answered", "value": [41, 39, 11, 7] },
+    "accessNeeds": { "state": "declined" },
+    "budget": {
+      "state": "answered",
+      "value": { "kind": "amount", "currency": "CAD", "amount": 4200, "basis": "total" }
+    },
+    "effort": { "state": "answered", "value": "moderate" },
+    "comfort": { "state": "answered", "value": "simple" },
+    "dealBreakers": {
+      "state": "answered",
+      "value": ["No more than one night in any campground without showers"]
+    },
+    "details": {
+      "shape": "road-trip",
+      "maxDailyDriveHours": { "state": "answered", "value": 4 },
+      "vehicle": { "state": "answered", "value": "own-car" },
+      "routeStyle": { "state": "answered", "value": "loop" },
+      "mustSee": { "state": "answered", "value": ["Percé Rock", "Forillon National Park"] },
+      "context": {
+        "state": "answered",
+        "value": "The seven-year-old is miserable after about three hours in the car, so we would rather stop often than push through. We have done the north shore before and would like to see something new."
+      }
+    }
+  },
+  "candidates": [
+    {
+      "id": "rt-cand-1",
+      "specialist": "route-and-logistics",
+      "title": "Montréal to Rimouski via the 132",
+      "summary": "The slow river road rather than the autoroute. Adds about an hour over the 20 and turns the drive into the first day of the trip rather than a transfer.",
+      "place": {
+        "name": "Route 132, Bas-Saint-Laurent",
+        "locality": "Québec, Canada",
+        "coordinates": null
+      },
+      "durationMinutes": 330,
+      "cost": null,
+      "season": { "from": "05-01", "to": "10-31" },
+      "bookingLeadTimeDays": null,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "rt-cand-2",
+      "specialist": "activities",
+      "title": "Forillon National Park — Cap Bon Ami and the Mont-Saint-Alban loop",
+      "summary": "A half-day on foot with a lookout the children can actually reach, and seals on the beach below most mornings.",
+      "place": {
+        "name": "Forillon National Park",
+        "locality": "Gaspé, Québec",
+        "coordinates": { "latitude": 48.7594, "longitude": -64.1889 }
+      },
+      "durationMinutes": 240,
+      "cost": {
+        "currency": "CAD",
+        "low": 0,
+        "high": 25,
+        "basis": "per-party",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "06-01", "to": "10-15" },
+      "bookingLeadTimeDays": 0,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "rt-cand-3",
+      "specialist": "lodging",
+      "title": "Motel on the water at Sainte-Anne-des-Monts",
+      "summary": "Simple rooms, private bathrooms, and a kitchenette that makes a cheap dinner possible after a long day.",
+      "place": {
+        "name": "Sainte-Anne-des-Monts",
+        "locality": "Québec, Canada",
+        "coordinates": null
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 145,
+        "high": 210,
+        "basis": "per-party",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "05-15", "to": "10-15" },
+      "bookingLeadTimeDays": 60,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "rt-cand-4",
+      "specialist": "food",
+      "title": "Poissonnerie counter lunch, Sainte-Thérèse-de-Gaspé",
+      "summary": "Buy shrimp off the boat and eat it at a picnic table. Cheap, fast, and the thing the children will remember.",
+      "place": {
+        "name": "Sainte-Thérèse-de-Gaspé",
+        "locality": "Québec, Canada",
+        "coordinates": null
+      },
+      "durationMinutes": 60,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 60,
+        "basis": "per-party",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "05-01", "to": "09-30" },
+      "bookingLeadTimeDays": null,
+      "provenance": { "kind": "model-asserted" }
+    }
+  ]
+}
