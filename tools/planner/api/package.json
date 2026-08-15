@@ -13,6 +13,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@fastify/static": "^10.1.3",
     "@planner/agent": "*",
     "@planner/contract": "*",
     "@planner/intake": "*",

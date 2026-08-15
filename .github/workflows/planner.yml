@@ -42,6 +42,54 @@ permissions:
   contents: read
 
 jobs:
+  # The intake, through a browser, against the bundle the API serves. The unit
+  # suites prove each half of it — `inject()` for the server, a faked client for
+  # the browser — and neither can prove the two are wired to each other, or that
+  # a reload resumes. See `tools/planner/e2e/intake.spec.ts`.
+  #
+  # Not in `ci.yml`: it costs a browser download and a Vite build, and this file
+  # is where the planner's slow gates live, path-filtered so downloader work
+  # does not pay for them.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The API under test is started with tsx, which runs its own sources but
+      # still resolves `@planner/contract`, `@planner/intake` and
+      # `@planner/agent` through their `dist`. The serve script builds `web`,
+      # which does not reach all three — without this the API never comes up and
+      # Playwright reports a web server that would not start, which reads as an
+      # e2e failure rather than as a missing build.
+      - run: npm run build
+      # Keyed on the lockfile, so a Playwright bump invalidates it; the install
+      # below still runs on a hit and finds the browser already there. Same
+      # pattern and same key as `ci.yml`.
+      - name: Cache the Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
+      # No key and no network: the scripted provider is the default, and the
+      # config names it anyway. A red run here is the tool's fault, never a
+      # vendor's.
+      - run: npm run e2e:planner
+      # Traces and video, kept only when something failed — that is the whole
+      # reason `trace: retain-on-failure` is set.
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: planner-e2e-artifacts
+          path: tools/planner/e2e/.artifacts/results
+          retention-days: 7
+
   docker:
     runs-on: ubuntu-latest
     steps:
@@ -77,6 +125,21 @@ jobs:
           echo "the service never became healthy"
           docker logs planner
           exit 1
+
+      # The image served no UI at all until pl-13 — `WEB_DIR` was set in the
+      # Dockerfile and parsed by `config.ts`, and nothing read it. Health
+      # answered perfectly throughout, which is why nothing here noticed. So the
+      # page is now asked for, by a client that says it wants one.
+      - name: The image serves the UI, not only the API
+        run: |
+          set -euo pipefail
+          curl -fsS -H 'Accept: text/html' http://127.0.0.1:8090/ > /tmp/index.html
+          # The bundle's own root element, so an error page or a JSON body
+          # cannot satisfy this the way a 200 alone would.
+          grep -q '<div id="root">' /tmp/index.html
+          # And the API still answers on its own paths, rather than the static
+          # plugin having swallowed the prefix.
+          curl -fsS http://127.0.0.1:8090/api/health > /dev/null
 
       - if: always()
         run: docker rm -f planner || true

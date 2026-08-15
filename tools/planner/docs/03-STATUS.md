@@ -26,10 +26,11 @@ reasoning, including what the decision costs, is an amendment to
 argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
-**143 tests pass across 14 files.** `npm run check` is green. The repo-wide CI
-runs the suite on every push, and `.github/workflows/planner.yml` builds this
-tool's image and waits for it to report healthy — path-filtered, so downloader
-work does not pay for it.
+**212 unit tests pass across 19 files, plus 2 e2e specs.** `npm run check` is
+green. The repo-wide CI runs the unit suite on every push, and
+`.github/workflows/planner.yml` now carries two gates — the e2e suite in a real
+browser, and the image, which is built, started, and asked for both `/api/health`
+and the page. Both are path-filtered, so downloader work does not pay for them.
 
 What exists: the error taxonomy, the `TripBrief` and its schemas, the question
 tree and the engine over it (`@planner/intake` — 36 questions, reachability,
@@ -76,26 +77,34 @@ after a design pass and a liability if it lasts. Read
 | [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER` |
 | [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | ready     | Delete what migration 3 outlived; `NOT_FOUND` to core    |
 | [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | ready     | 1,100 lines of `.tsx` and no test renders any of it      |
-| [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | ready     | The halves are tested; nothing tests them wired together |
+| [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI  |
+
+**This table has not caught up with pl-4.** It is merged — the plan document
+exists and took migration 2 — so "pl-4 · ready" is wrong, and pl-9 and pl-10 have
+no rows at all. The "what does not exist" paragraph above says the same thing
+twice over. Left for one pass rather than patched from three tickets that each
+happened to notice.
 
 ## Known gaps and risks
 
-**The image does not serve the UI it ships.** `WEB_DIR` is parsed in
-`api/src/config.ts` and set by the `Dockerfile`, whose header claims the UI is
-served same-origin — and `server.ts` registers no static handler. It cost nothing
-while the only screen was a health readout; now that there is a wizard, the
-container is an API with a bundle it never hands out. Development is unaffected,
-because Vite proxies `/api`. Found during pl-7; it is
-[pl-2](./work/pl-2-container-image.md)'s ground — its "serves the UI" acceptance
-is what this falsifies — and
-[pl-13](./work/pl-13-drive-the-intake-end-to-end.md) is blocked on it, since an
-e2e suite worth having drives the thing that ships.
+**The image serves the UI as of
+[pl-13](./work/pl-13-drive-the-intake-end-to-end.md).** `WEB_DIR` had been parsed
+in `api/src/config.ts` and set by the `Dockerfile` since pl-2, and nothing read
+it, so the container was an API with a bundle it never handed out — invisible
+throughout, because `/api/health` answered perfectly and that was all anything
+asked for. `api/src/routes/web.ts` now serves it same-origin, and the workflow
+asks the running container for the page as well as for health. That closes
+[pl-2](./work/pl-2-container-image.md)'s "serves the UI" acceptance, which was
+the thing this had falsified.
 
-**Nothing renders the wizard, and nothing drives it.** pl-7's UI is covered only
-by the API tests underneath it, so the two rules that live in the browser — the
-discard confirmation and the stop at the checkpoint — are asserted nowhere they
-actually run. [pl-12](./work/pl-12-render-the-wizard-in-tests.md) and
-[pl-13](./work/pl-13-drive-the-intake-end-to-end.md).
+**Nothing renders the wizard's components**, which is the half
+[pl-12](./work/pl-12-render-the-wizard-in-tests.md) still owns. The browser is
+now driven end to end by pl-13, so the two rules that live there — the discard
+confirmation and the stop at the checkpoint — are asserted where they actually
+run. But that is two specs over one path through the tree, deliberately: it
+proves the seams, not the branches. Six trip shapes times three date modes is
+component-test work, and until it exists a control that misbehaves off the road-
+trip branch has nothing watching it.
 
 **No owner model.** Every visitor shares one store and can read and edit
 everyone's intakes, and the list route shows all of them. That is the honest gap
@@ -177,6 +186,12 @@ npm run dev:planner:api        # just the API
 npm run dev:planner:web        # just the UI
 npm test -- --project planner
 npm run check
+
+npm run e2e:install            # once, for the browser
+npm run e2e:planner            # the intake, in Chromium, against the built bundle
 ```
 
-Ports are 8090/5183 rather than 8080/5173 so both tools can run at once.
+Ports are 8090/5183 rather than 8080/5173 so both tools can run at once. The e2e
+suite takes 8098 and its own database under `e2e/.artifacts/`, so it does not
+collide with either, and it starts the API itself — there is nothing to have
+running first.

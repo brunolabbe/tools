@@ -1,0 +1,28 @@
+{
+  // The fourth compiler surface, and the second copy of the third: Playwright
+  // transpiles specs without checking them, so a helper that has drifted from
+  // the DOM it drives fails after a browser launch rather than at the terminal.
+  //
+  // Its own project because of the two options below — DOM lib for the
+  // `page.evaluate` callbacks, `@playwright/test` for the runner's own types.
+  //
+  // `playwright.config.ts` is pulled in from a directory up. It sits beside the
+  // tool rather than inside `e2e/` (the runner's own convention, and the
+  // downloader's), so nothing would otherwise check it — and it is the file
+  // that decides `WEB_DIR`, the port and the database, which is a poor thing to
+  // discover by launching a browser.
+  //
+  // No `references`: this suite imports nothing from the workspace. It drives
+  // the app through its DOM and reads every prompt off the screen, which is
+  // deliberate — see the note on `fillField`.
+  "extends": "../../../tsconfig.tests.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "@playwright/test"]
+  },
+  "include": ["**/*.ts", "../playwright.config.ts"],
+  // Replaces the root's `exclude` rather than adding to it — `extends` inherits
+  // the whole array, and the root's entry is about its own program, not this
+  // one.
+  "exclude": [".artifacts"]
+}
