@@ -54,8 +54,8 @@ What exists but is **wrong for the current design**: the contract's
 `CONVERSATION_NOT_FOUND`. Migration 2 dropped the tables under them in
 [pl-7](./work/pl-7-intake-persistence-and-wizard.md); the types stayed, because
 removing a code is a contract change that also has to fix
-`registerNotFoundHandler`'s abuse of it for unknown URLs, and that is nobody's
-ticket yet. It wants one.
+`registerNotFoundHandler`'s abuse of it for unknown URLs. That is
+[pl-11](./work/pl-11-retire-the-conversation-vocabulary.md).
 
 **The documentation leads the code by four phases**, which is the intended state
 after a design pass and a liability if it lasts. Read
@@ -64,18 +64,19 @@ after a design pass and a liability if it lasts. Read
 
 ## Open tickets
 
-| Ticket                                               | Status    | Note                                                     |
-| ---------------------------------------------------- | --------- | -------------------------------------------------------- |
-| [pl-1](./work/pl-1-conversation-loop.md)             | dropped   | The chat premise. Read the log before rebuilding it      |
-| [pl-2](./work/pl-2-container-image.md)               | in-flight | Image and release component landed; no subdomain yet     |
-| [pl-3](./work/pl-3-trip-brief-contract.md)           | done      | The brief, its slots and `missingRequiredSlots` are in   |
-| [pl-4](./work/pl-4-plan-document-contract.md)        | done      | The plan document, migration 2, and pl-5's fixtures      |
-| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)      | ready     | The roster is a table, not conditionals                  |
-| [pl-6](./work/pl-6-question-tree-and-engine.md)      | done      | `@planner/intake`: the tree, reachability, invalidation  |
-| [pl-7](./work/pl-7-intake-persistence-and-wizard.md) | done      | Persistence, routes, and the wizard over them            |
-| [pl-8](./work/pl-8-model-provider-seam.md)           | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER` |
-| [pl-9](./work/pl-9-composer-and-critic.md)           | ready     | The `itinerary` package. Needs only pl-4, so start now   |
-| [pl-10](./work/pl-10-plan-view-and-provenance.md)    | ready     | Renders the plan, its gaps and what was verified         |
+| Ticket                                                      | Status    | Note                                                     |
+| ----------------------------------------------------------- | --------- | -------------------------------------------------------- |
+| [pl-1](./work/pl-1-conversation-loop.md)                    | dropped   | The chat premise. Read the log before rebuilding it      |
+| [pl-2](./work/pl-2-container-image.md)                      | in-flight | Image and release component landed; no subdomain yet     |
+| [pl-3](./work/pl-3-trip-brief-contract.md)                  | done      | The brief, its slots and `missingRequiredSlots` are in   |
+| [pl-4](./work/pl-4-plan-document-contract.md)               | ready     | Contract-first; pl-5 cannot start without it             |
+| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)             | ready     | The roster is a table, not conditionals                  |
+| [pl-6](./work/pl-6-question-tree-and-engine.md)             | done      | `@planner/intake`: the tree, reachability, invalidation  |
+| [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them            |
+| [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER` |
+| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | ready     | Delete what migration 2 outlived; `NOT_FOUND` to core    |
+| [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | ready     | 1,100 lines of `.tsx` and no test renders any of it      |
+| [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | ready     | The halves are tested; nothing tests them wired together |
 
 ## Known gaps and risks
 
@@ -84,8 +85,17 @@ after a design pass and a liability if it lasts. Read
 served same-origin — and `server.ts` registers no static handler. It cost nothing
 while the only screen was a health readout; now that there is a wizard, the
 container is an API with a bundle it never hands out. Development is unaffected,
-because Vite proxies `/api`. Found during pl-7, and it is pl-2's ground rather
-than pl-7's: it needs a ticket.
+because Vite proxies `/api`. Found during pl-7; it is
+[pl-2](./work/pl-2-container-image.md)'s ground — its "serves the UI" acceptance
+is what this falsifies — and
+[pl-13](./work/pl-13-drive-the-intake-end-to-end.md) is blocked on it, since an
+e2e suite worth having drives the thing that ships.
+
+**Nothing renders the wizard, and nothing drives it.** pl-7's UI is covered only
+by the API tests underneath it, so the two rules that live in the browser — the
+discard confirmation and the stop at the checkpoint — are asserted nowhere they
+actually run. [pl-12](./work/pl-12-render-the-wizard-in-tests.md) and
+[pl-13](./work/pl-13-drive-the-intake-end-to-end.md).
 
 **No owner model.** Every visitor shares one store and can read and edit
 everyone's intakes, and the list route shows all of them. That is the honest gap
