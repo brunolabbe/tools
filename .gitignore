@@ -34,3 +34,11 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Agents. Worktrees are created in here and live inside the repo, so without
+# this every parallel session shows up as untracked clutter in every other one.
+# Ignored wholesale rather than by name, because whatever a future tool drops
+# beside them is local state too — `settings.json` is the one deliberate
+# exception, being the permission allowlist the repo shares.
+.claude/*
+!.claude/settings.json
