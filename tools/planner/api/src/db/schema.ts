@@ -10,9 +10,8 @@
  * by `user_version`. Deliberately the smallest thing that works.
  *
  * Migration 1 is the conversation, and it is **history**: this tool stopped
- * being a chat on 2026-08-14. Its tables are still here because dropping them
- * belongs with the intake that replaces them, which is pl-7's migration and not
- * this one. Nothing reads them.
+ * being a chat on 2026-08-14. Migration 3 is where its tables finally go, in
+ * the same step that adds the intake replacing them.
  */
 
 import type { Database } from "better-sqlite3";
@@ -164,6 +163,42 @@ const MIGRATIONS: readonly string[] = [
   BEGIN
     SELECT RAISE(ABORT, 'only pinned may change on a placed item');
   END;
+  `,
+  // 3 — the tool stopped being a chat (2026-08-14). Intakes and their answers
+  // replace conversations and their turns, and migration 1's tables go here.
+  //
+  // Appended rather than folded into migration 1, although no database of
+  // consequence exists: the published image already carries migration 1, so
+  // anything that has run it sits at `user_version = 1` and would never see an
+  // edited version of a migration it has already applied.
+  `
+  DROP TABLE messages;
+  DROP TABLE conversations;
+
+  CREATE TABLE intakes (
+    id           TEXT PRIMARY KEY,
+    -- Derived from the answers, stored so the list route does not have to
+    -- assemble every brief to render a row.
+    title        TEXT,
+    -- Which tree version these answers were last reconciled against. An intake
+    -- whose version has moved is visible rather than silent.
+    tree_version INTEGER NOT NULL,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+  ) STRICT;
+
+  CREATE INDEX intakes_updated_at ON intakes (updated_at DESC);
+
+  -- One row per answer rather than a blob per intake: discarding an abandoned
+  -- branch is then a DELETE, and re-answering is idempotent by primary key
+  -- rather than by care.
+  CREATE TABLE answers (
+    intake_id   TEXT NOT NULL REFERENCES intakes (id) ON DELETE CASCADE,
+    question_id TEXT NOT NULL,
+    value       TEXT NOT NULL,     -- JSON, parsed against the contract schema
+    answered_at TEXT NOT NULL,
+    PRIMARY KEY (intake_id, question_id)
+  ) STRICT;
   `,
 ];
 

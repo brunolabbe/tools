@@ -73,6 +73,11 @@ COPY --from=build /app/packages/core/package.json packages/core/
 COPY --from=build /app/packages/core/dist packages/core/dist
 COPY --from=build /app/tools/planner/contract/package.json tools/planner/contract/
 COPY --from=build /app/tools/planner/contract/dist tools/planner/contract/dist
+# The API imports the intake engine as of pl-7. Without these two lines the
+# image boots and then cannot resolve the module on the first request — the
+# build stage's manifest above is only what `npm ci` needs.
+COPY --from=build /app/tools/planner/intake/package.json tools/planner/intake/
+COPY --from=build /app/tools/planner/intake/dist tools/planner/intake/dist
 COPY --from=build /app/tools/planner/agent/package.json tools/planner/agent/
 COPY --from=build /app/tools/planner/agent/dist tools/planner/agent/dist
 COPY --from=build /app/tools/planner/api/package.json tools/planner/api/

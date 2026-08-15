@@ -70,7 +70,7 @@ The rest of the chat scaffold — `contract/src/conversation.ts`,
 `MAX_MESSAGE_CHARS`, `CONVERSATION_NOT_FOUND`, and migration 1's
 `conversations` / `messages` tables. Those are deletions with a migration
 attached and they belong to [pl-7](./pl-7-intake-persistence-and-wizard.md),
-which drops the tables in migration 2. A rename that also deleted the contract's
+which drops the tables in migration 3. A rename that also deleted the contract's
 types would collide with it.
 
 ## Done when

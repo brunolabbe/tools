@@ -12,6 +12,9 @@
   --text: #201d19;
   --muted: #6b6459;
   --bad: #a3341f;
+  --accent: #2f5d50;
+  --accent-text: #ffffff;
+  --warn-bg: #fdf5e6;
 
   --radius: 10px;
   --gap: 1rem;
@@ -25,6 +28,9 @@
     --text: #f0ece4;
     --muted: #a49b8a;
     --bad: #e8836a;
+    --accent: #7fbfa8;
+    --accent-text: #14170f;
+    --warn-bg: #2a2415;
   }
 }
 
@@ -44,7 +50,7 @@ body {
 }
 
 .shell {
-  max-width: 46rem;
+  max-width: 62rem;
   margin: 0 auto;
   padding: 3rem 1.25rem;
 }
@@ -88,4 +94,271 @@ dt {
 
 dd {
   margin: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * The wizard
+ * ------------------------------------------------------------------------ */
+
+.wizard {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+/* One column on a phone: the question comes first, what is already known after. */
+@media (max-width: 46rem) {
+  .wizard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.main,
+.aside {
+  display: grid;
+  gap: var(--gap);
+}
+
+.panel {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+}
+
+.panel.warn {
+  background: var(--warn-bg);
+}
+
+.panel p {
+  margin: 0 0 0.75rem;
+}
+
+.panel p:last-of-type {
+  margin-bottom: 0;
+}
+
+.help,
+.hint,
+.muted {
+  color: var(--muted);
+}
+
+.hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.9rem;
+}
+
+.progress,
+.crumb,
+.notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.notice {
+  padding: 0.6rem 0.85rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+
+.crumb {
+  margin-bottom: 1rem;
+}
+
+/* --- Controls --- */
+
+fieldset.choices {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+fieldset.choices.tight {
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+@media (max-width: 34rem) {
+  fieldset.choices.tight {
+    grid-auto-flow: row;
+  }
+}
+
+.choice {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.choice.on {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.field {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+}
+
+.field.short {
+  max-width: 6rem;
+  text-transform: uppercase;
+}
+
+.composite {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+}
+
+.row .field {
+  width: auto;
+  flex: 1 1 8rem;
+}
+
+.row label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.measure {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.measure .field {
+  max-width: 9rem;
+}
+
+.unit {
+  color: var(--muted);
+}
+
+/* --- Actions --- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.1rem;
+}
+
+button {
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+button.link {
+  display: grid;
+  width: 100%;
+  gap: 0.15rem;
+  padding: 0.5rem 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+button.link.inline {
+  display: inline;
+  width: auto;
+  padding: 0;
+  color: var(--muted);
+}
+
+button.link:hover .prompt {
+  text-decoration: underline;
+}
+
+/* --- Lists --- */
+
+ul.answers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+ul.answers li + li {
+  border-top: 1px solid var(--border);
+}
+
+.prompt {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.value {
+  overflow-wrap: anywhere;
+}
+
+.panel.warn ul {
+  margin: 0 0 0.75rem;
+  padding-left: 1.2rem;
+}
+
+/* --- The health readout, now a footnote rather than the page --- */
+
+.health {
+  margin-top: 2rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.health p {
+  margin: 0;
+}
+
+/* A legend that is read but not shown: the prompt above it is the same words. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

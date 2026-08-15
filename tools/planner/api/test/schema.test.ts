@@ -64,17 +64,17 @@ function seedPlan(database: Database.Database): void {
 }
 
 describe("migrate", () => {
-  test("applies to an existing database, keeping migration 1's tables", () => {
+  test("applies to an existing database, retiring migration 1's tables", () => {
     // The case that actually happens: a deployment that has been running since
-    // Phase 0 gets the plan tables added under it. Migration 1's tables are
-    // superseded but are dropped by pl-7's migration, not this one.
+    // Phase 0 gets the plan tables added under it by migration 2, and its
+    // conversation tables replaced by the intake in migration 3.
     const database = atVersionOne();
     migrate(database);
 
-    expect(database.pragma("user_version", { simple: true })).toBe(2);
+    expect(database.pragma("user_version", { simple: true })).toBe(3);
     expect(tableNames(database)).toEqual([
-      "conversations",
-      "messages",
+      "answers",
+      "intakes",
       "plan_candidates",
       "plan_days",
       "plan_items",
@@ -96,7 +96,7 @@ describe("migrate", () => {
     const database = fresh();
     migrate(database);
     migrate(database);
-    expect(database.pragma("user_version", { simple: true })).toBe(2);
+    expect(database.pragma("user_version", { simple: true })).toBe(3);
   });
 });
 
