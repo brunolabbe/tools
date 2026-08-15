@@ -80,6 +80,16 @@ export interface EgressDispatcherOptions {
   /** Operator-configured egress proxy. Switches this into proxy mode wholesale. */
   proxyUrl?: string | undefined;
   resolve?: AddressResolver;
+  /**
+   * TLS options for the request made *through* the proxy — the origin end of
+   * the tunnel, not the hop to the proxy itself.
+   *
+   * Injected for the same reason `resolve` is: a fixture origin's certificate is
+   * in no trust store, and the alternative is `NODE_TLS_REJECT_UNAUTHORIZED=0`,
+   * which turns off the check the test exists to keep honest. Unset in
+   * production, where the system trust store is the right answer.
+   */
+  requestTls?: { ca: string } | undefined;
 }
 
 export interface EgressDispatcher {
@@ -184,7 +194,10 @@ export function createEgressDispatcher(options: EgressDispatcherOptions): Egress
     // the proxy is named by the operator in an environment variable, not by
     // anything a client can influence, and a proxy on a private address is the
     // normal case rather than an attack.
-    const agent = new ProxyAgent({ uri: proxyUrl });
+    const agent = new ProxyAgent({
+      uri: proxyUrl,
+      ...(options.requestTls === undefined ? {} : { requestTls: options.requestTls }),
+    });
     return {
       dispatcher: agent as unknown as FetchDispatcher,
       mode: "proxy",
