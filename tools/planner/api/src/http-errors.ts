@@ -12,6 +12,7 @@ import { AppError, type ErrorCode, type ErrorResponse } from "@planner/contract"
 const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   INVALID_URL: 400,
   INVALID_DATES: 400,
+  INVALID_ANSWER: 400,
   BLOCKED_TARGET: 403,
   CONVERSATION_NOT_FOUND: 404,
   PLAN_NOT_FOUND: 404,

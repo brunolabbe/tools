@@ -18,6 +18,7 @@
     { "path": "./tools/downloader/api" },
     { "path": "./tools/downloader/web" },
     { "path": "./tools/planner/contract" },
+    { "path": "./tools/planner/intake" },
     { "path": "./tools/planner/agent" },
     { "path": "./tools/planner/api" },
     { "path": "./tools/planner/web" },

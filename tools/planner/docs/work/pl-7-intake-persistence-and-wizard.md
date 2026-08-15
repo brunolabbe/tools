@@ -22,6 +22,39 @@ It is also where the invalidation rule from [pl-6](./pl-6-question-tree-and-engi
 meets a user. The engine can compute what an edit discards; this ticket is
 responsible for never discarding it silently.
 
+## What pl-6 leaves you
+
+`@planner/intake` landed on 2026-08-15 and is pure — no database, no network, no
+clock, enforced by a source scan. Everything below is already built and tested;
+this ticket calls it and stores what it says.
+
+```ts
+QUESTION_TREE                              // the authored tree, and its `version`
+reachable(tree, answers): QuestionNode[]   // which questions these answers open
+prune(tree, answers): { kept, dropped }    // and what no longer answers anything
+nextQuestion(tree, answers): IntakeProgress // { node, coreComplete }
+toBrief(tree, answers): TripBrief
+validateAnswer(node, answer, now): void    // throws INVALID_ANSWER / INVALID_DATES
+validateTree(tree): string[]               // run as a test, not at boot
+```
+
+Five facts from that work change what this ticket builds:
+
+- **An answer is `{ state: "declined" } | { state: "answered", value }`**, and
+  `value` carries the same `kind` as its question — parse it with the contract's
+  `answerSchema`. That object is what the `answers.value` column holds as JSON.
+  There is no `unknown` state: an unanswered question is a row that is not there.
+- **`validateAnswer` takes the whole answer, and `now` as an argument.** Pass the
+  request's clock in; do not let a route reach for one inside the engine.
+- **A `core` question cannot be declined** — the engine refuses it with
+  `INVALID_ANSWER`. So the wizard must not offer "skip" on a core question, and
+  the checkpoint means what it says.
+- **`INVALID_ANSWER` exists** (`details.question` is the id, mapped to 400 in
+  `api/src/http-errors.ts`). Let the engine's errors out through
+  `toErrorResponse`; do not catch and re-word them.
+- **Question ids are dot-separated slugs** (`shape`, `road-trip.drive-hours`) and
+  the validator holds them to it, so they are safe in a path segment.
+
 ## Build
 
 ### Persistence
@@ -61,15 +94,19 @@ responsible for never discarding it silently.
 
 3. **Submitting an answer is one transaction, and it is the whole ticket.**
 
-   - Parse the body with the contract schema — the boundary where `unknown`
-     becomes a typed answer.
-   - `validateAnswer` against the node.
+   - Parse the body with `answerSchema` — the boundary where `unknown` becomes a
+     typed answer.
+   - Find the node in `reachable(tree, answers)`, not in `tree.nodes`: answering
+     a question this intake never opened is a request to refuse, not a row to
+     write.
+   - `validateAnswer(node, answer, now)`.
    - Write the answer, then `prune`, and delete the orphans **in the same
      transaction**. A crash between the two leaves an intake holding answers to
      unasked questions, which is exactly the state pl-6 exists to make
      impossible.
-   - Return the next question, the reachable set, the brief so far, and **which
-     answers were discarded**.
+   - Return `nextQuestion`, the reachable set, `toBrief`, and **which answers
+     were discarded** — `dropped` carries each answer's node, so the UI has its
+     prompt.
    - Move `updated_at`; the index on it is there for the list route.
 
 4. **A preview of that transaction**, as a dry run or a sibling route. The wizard
@@ -81,6 +118,15 @@ responsible for never discarding it silently.
 5. **The title is drawn from the destination answer** once one exists, so the
    list route has something to show. Null until then.
 
+   **pl-6 moved that further away than this step assumed.** `destination` is a
+   `refine` question — a plan can be drafted without it (§1's hard facts do not
+   include where) — so it is the _first question past the checkpoint_, and an
+   intake that stops where the wizard invites it to stop has no destination and
+   no title at all. Decide what the list shows for one: the shape and the dates
+   ("a backcountry trip in February") is the obvious answer and needs no new
+   column, since the brief is derivable from the answers. Whatever it is, record
+   it here.
+
 ### The wizard
 
 6. **One question per screen.** The tree branches, so a single long form would
@@ -90,7 +136,13 @@ responsible for never discarding it silently.
 
 7. **A control per question kind**, driven by the contract's discriminated union,
    so a kind added to the contract without a control here is a compile error
-   rather than a blank screen.
+   rather than a blank screen. There are eight: `single-choice`, `multi-choice`,
+   `text`, `text-list`, `number`, `number-list`, `dates` and `budget`. The last
+   two are composites and carry the weight — `dates` has to make "ten nights
+   sometime in spring" as easy to say as a pair of dates, or every user invents
+   dates and the tool plans against fiction. Each node carries its own bounds
+   (`min`, `max`, `integer`, `unit`, `maxLength`, `maxItems`) and its `choices`;
+   render from those rather than hard-coding any of them.
 
 8. **Back, and edit — and never a silent discard.** When a change would strand
    answers, the preview from step 4 names them **by prompt and not by id**, and
@@ -110,8 +162,13 @@ responsible for never discarding it silently.
     reachable and `core` is unanswered, the wizard says so and offers two ways
     on: take the draft, or keep refining. It does not march to the end of the
     tree, and it does not decide this by filtering the reachable set in the
-    browser — pl-6's `nextQuestion` reports the core-complete flag and this
-    renders it.
+    browser — `nextQuestion` returns `{ node, coreComplete }` and this renders
+    it. `coreComplete` true with a `node` still to ask **is** the checkpoint:
+    the essentials are done and refining is open.
+
+    It arrives after eight questions for five shapes and seven for a resort, so
+    the checkpoint is a screen most users will actually reach — build it as one,
+    not as a banner.
 
     In this ticket there is no plan to draft: Phase 2 owns that button. So what
     lands here is the checkpoint, the refine path, and an **exit** that leaves a
@@ -141,6 +198,19 @@ alternative is keeping every historical tree version forever. Either way, an
 intake whose version moved must say so rather than quietly losing answers.
 Record the decision in this log and in the roadmap's "still open".
 
+pl-6 did half of it already: `prune` drops an answer whose question the tree no
+longer has and returns it as a `dropped` entry with a **null node**, which is
+the one case the UI has no prompt to name it by. Say "some earlier answers no
+longer apply" and move on; do not print an id at a user.
+
+**A tree edit can turn a saved intake into a 500, and `tree_version` is how you
+see it coming.** `toBrief` parses what it assembles against the contract, so an
+answer that no longer fits its slot — a bound tightened, a choice removed —
+throws `INTERNAL` on a plain read of an old intake. Re-validating each stored
+answer with `validateAnswer` when the version has moved, and dropping the ones
+that now fail the way `prune` drops the rest, is the same decision as the trap
+above and probably wants the same code path.
+
 **`fetchHealth` in [web/src/api/health.ts](../../web/src/api/health.ts) is the
 pattern to follow** — contract types on both sides, the server's own error
 payload parsed back into an `AppError` rather than a generic "request failed",
@@ -150,6 +220,13 @@ there.
 **Do not delete the health readout.** Which provider is configured stays worth
 showing once a real one exists; it is the first question about a bad plan. Move
 it, do not drop it.
+
+**The image does not carry `@planner/intake` yet.** pl-6 added its manifest to
+the build stage — `npm ci` fails without it — but the runtime stage copies a
+`dist` per package and the intake's is not among them, because nothing imported
+it. The first `import` from `api` makes that a container that boots and then
+cannot resolve a module. Add the two `COPY` lines in `tools/planner/Dockerfile`
+in the same change, and check the image, not just the tests.
 
 **There is still no owner model**, so every visitor shares one store and can read
 and edit everyone's intakes. Do not paper over it with an unguessable id — that

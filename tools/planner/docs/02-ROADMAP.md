@@ -69,10 +69,10 @@ add; and the conversation itself is gone, not merely joined.
 The whole intake, and no model anywhere in it. Three pieces in the order the code
 forces:
 
-1. **The contract for a brief** — `TripBrief`, `TripShape`, the three-state slot,
+1. **The contract for a brief** ✅ — `TripBrief`, `TripShape`, the three-state slot,
    and `missingRequiredSlots` as a function. Contract-first because four packages
    depend on it. → [pl-3](./work/pl-3-trip-brief-contract.md)
-2. **The tree and the engine over it** — an authored, versioned question tree,
+2. **The tree and the engine over it** ✅ — an authored, versioned question tree,
    what it opens, and what an edit discards. Pure: no model, no network, no
    clock. → [pl-6](./work/pl-6-question-tree-and-engine.md)
 3. **Persistence and the wizard** — answers stored one per row, an intake that
@@ -187,7 +187,9 @@ Short, and each one is a real decision someone has to make rather than a gap:
   [pl-7](./work/pl-7-intake-persistence-and-wizard.md): re-run the engine against
   the current tree and prune what no longer fits, since it is the same machinery
   as any other invalidation. The alternative is keeping every historical tree
-  forever. Not yet decided.
+  forever. Still not decided — but pl-6 made the proposed answer cheap: `prune`
+  already drops an answer whose question the tree no longer has, and reports it
+  with a null node rather than losing it quietly.
 
 **When the first draft is offered** was answered on 2026-08-14, and it is the one
 that shapes Phase 1: **the wizard stops at the core questions.** When nothing
@@ -197,9 +199,10 @@ interview less", made into behaviour rather than left as a marking.
 
 Three consequences, all of them load-bearing on tickets nobody has started:
 
-- `missingRequiredSlots` (pl-3) and the `core` marking (pl-6) must describe the
-  same set. If they can disagree the checkpoint is a lie, and a test should say
-  so in both directions.
+- `missingRequiredSlots` (pl-3) and the `core` marking (pl-6) describe the same
+  set, and `validateTree` fails the tree in either direction if they stop doing
+  so. That half is settled; what is not is that no UI has yet been told to stop
+  at the checkpoint.
 - pl-7 owns the fork, and owns **re-entry**: refining is something you come back
   to after a draft exists, not a corridor you leave once. It also owns the honest
   progress line at the boundary — "the essentials are done", never a percentage.
