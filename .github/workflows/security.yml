@@ -38,8 +38,8 @@ jobs:
       security-events: write
       actions: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
         with:
           # One language covers the repo — `javascript-typescript` analyses
           # both, and there is nothing compiled here.
@@ -50,7 +50,7 @@ jobs:
           queries: security-extended
       # No build step. The JS/TS extractor reads source directly, so it does not
       # need `npm ci` or a populated `dist` the way the suites in `ci.yml` do.
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
         with:
           category: /language:javascript-typescript
 
@@ -64,8 +64,8 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
         with:
           # Moderate rather than low: this repo pulls a large transitive tree
           # through Playwright and ffmpeg, and a gate that cries at every

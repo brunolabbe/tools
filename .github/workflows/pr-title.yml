@@ -27,7 +27,7 @@ jobs:
     steps:
       # No `setup-node`, no `npm ci`: the validator is dependency-free `.mjs`
       # and the runner already has a node. This job answers in seconds.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check the pull request title
         env:
           # Through the environment rather than an expression, so a title
