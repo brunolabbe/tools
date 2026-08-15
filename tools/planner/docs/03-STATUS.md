@@ -71,6 +71,8 @@ after a design pass and a liability if it lasts. Read
 | [pl-6](./work/pl-6-question-tree-and-engine.md)      | ready     | The tree and the invalidation engine. The hard part      |
 | [pl-7](./work/pl-7-intake-persistence-and-wizard.md) | ready     | Persistence, routes, and the wizard over them            |
 | [pl-8](./work/pl-8-model-provider-seam.md)           | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER` |
+| [pl-9](./work/pl-9-composer-and-critic.md)           | ready     | The `itinerary` package. Needs only pl-4, so start now   |
+| [pl-10](./work/pl-10-plan-view-and-provenance.md)    | ready     | Renders the plan, its gaps and what was verified         |
 
 ## Known gaps and risks
 
@@ -87,9 +89,18 @@ rather than a price — but expressing them is not producing them. Until pl-5 an
 the composer land, every one of those is a shape with no writer.
 
 **The `itinerary` package does not exist**, and it is where the design says the
-plan is actually decided — day packing, travel time, budget sums, opening-hour
-conflicts. Until it does, there is nothing to stop a model being asked to do
-arithmetic, which is the failure the analysis is mostly about.
+plan is actually decided — day packing, budget sums, opening-hour conflicts.
+Until it does, there is nothing to stop a model being asked to do arithmetic,
+which is the failure the analysis is mostly about. It is now ticketed as
+[pl-9](./work/pl-9-composer-and-critic.md), which depends only on pl-4 and can
+start immediately.
+
+**Phase 2 cannot pack under travel time, and that is undecided rather than
+missed.** `Place.coordinates` is null until grounding, and §5 puts distances in
+Phase 3 — so the composer can pack under hours, season, budget and effort, and
+not under legs. Travel time is §2's failure 1, so this narrows what the P2
+milestone may claim. The options are laid out in the roadmap's _Still open_;
+nobody has chosen.
 
 **The `intake` package does not exist either**, so nothing yet _fills_ a
 `TripBrief` — the shape is in the contract as of pl-3, but the tree that answers
@@ -114,7 +125,11 @@ is a cost control and a DoS control at once, and it lands with pl-5 or not at al
 
 **The transcript risk is gone**, not deferred — there is no transcript, so nothing
 is re-sent turn over turn. The per-run budget replaces it as the cost control.
-`MAX_MESSAGE_CHARS` is now a constant with no job and should go with migration 2.
+`MAX_MESSAGE_CHARS` is now a constant with no job. It should go with the
+`Conversation` / `Message` types it bounds, which is
+[pl-7](./work/pl-7-intake-persistence-and-wizard.md)'s migration — **not**
+migration 2, which pl-4 took for the plan tables and which deliberately left
+migration 1 alone.
 
 **The error codes the design needs are all in.** pl-3 added `BRIEF_INCOMPLETE`
 and recorded that the flexible-date cases need no code beyond `INVALID_DATES` —
