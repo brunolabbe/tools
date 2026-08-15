@@ -248,7 +248,7 @@ invalidation path.
 
 ### 2026-08-15 — built
 
-Migration 2, the store, four routes and the wizard over them. `npm run check` is
+Migration 3, the store, four routes and the wizard over them. `npm run check` is
 green and `npm test -- --project planner` is 143 tests across 14 files (24 of
 them new: the store, the routes, the invalidation path and the migration).
 Branched from `pl-6-question-tree-and-engine`, which is PR #20 and not yet
@@ -256,7 +256,7 @@ merged.
 
 **What landed**
 
-- `answers` and `intakes` per the brief's SQL, appended as migration 2, plus the
+- `answers` and `intakes` per the brief's SQL, appended as migration 3, plus the
   `intakes_updated_at` index the list route reads and a test that upgrades a
   database already sitting at `user_version = 1` rather than only a fresh one.
 - `api/src/db/intakes.ts` — reads and writes, no tree. The one judgement it
@@ -319,7 +319,7 @@ beyond the `title` the migration already carries, since the brief is derivable.
   `PLANNER_ERROR_CODES`, mapped to 404. **Flag for review**: this and the point
   above are the only contract changes, and both are additions.
 - **`CONVERSATION_NOT_FOUND`, `Conversation`, `Message` and `MAX_MESSAGE_CHARS`
-  are still in the contract**, although migration 2 drops the tables under them.
+  are still in the contract**, although migration 3 drops the tables under them.
   03-STATUS says they go with a rename that also has to fix
   `registerNotFoundHandler`'s abuse of the code for unknown URLs. That is a
   removal rather than an addition and it is nobody's ticket yet — it wants one.
@@ -356,3 +356,23 @@ beyond the `title` the migration already carries, since the brief is derivable.
   the merge, and they do. **Whoever merges pl-6 must add
   `{ "path": "./tools/planner/intake" }` to `tsconfig.tests.json`'s references**,
   or the intake's own tests land in a project that cannot resolve `../src`.
+
+### 2026-08-15 — the migration was numbered against the wrong main
+
+The brief said "migration 2", and it was right when it was written: pl-4 had not
+landed. It landed first, taking 2 for the plan tables, and this branch's merge
+kept both files' _text_ without noticing the two migrations were the same index —
+so the intake migration silently replaced the plan one. A fresh database came up
+with `intakes` and `answers` and no `plans`, and the eleven pl-4 assertions in
+`api/test/schema.test.ts` failed on `no such table: plans` in CI.
+
+Fixed by restoring migration 2 verbatim from main and appending the intake as
+**migration 3**, which is what the rule in the file's header says to do. The
+`DROP TABLE` of `conversations` / `messages` moved with it, so migration 1's
+tables now survive until 3. Test expectations followed: `migrations.test.ts` and
+`schema.test.ts` both assert `user_version = 3`, and the upgrade-from-1 case now
+asserts the conversation tables are gone rather than kept.
+
+The lesson is cheap to state and easy to miss on a stacked branch: **a migration
+index is a shared resource, and a text merge does not check it.** Re-read
+`MIGRATIONS` after any merge, not just the diff.

@@ -51,7 +51,7 @@ image.
 
 What exists but is **wrong for the current design**: the contract's
 `Conversation` / `Message` types, `MAX_MESSAGE_CHARS`, and
-`CONVERSATION_NOT_FOUND`. Migration 2 dropped the tables under them in
+`CONVERSATION_NOT_FOUND`. Migration 3 dropped the tables under them in
 [pl-7](./work/pl-7-intake-persistence-and-wizard.md); the types stayed, because
 removing a code is a contract change that also has to fix
 `registerNotFoundHandler`'s abuse of it for unknown URLs. That is
@@ -74,7 +74,7 @@ after a design pass and a liability if it lasts. Read
 | [pl-6](./work/pl-6-question-tree-and-engine.md)             | done      | `@planner/intake`: the tree, reachability, invalidation  |
 | [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them            |
 | [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER` |
-| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | ready     | Delete what migration 2 outlived; `NOT_FOUND` to core    |
+| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | ready     | Delete what migration 3 outlived; `NOT_FOUND` to core    |
 | [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | ready     | 1,100 lines of `.tsx` and no test renders any of it      |
 | [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | ready     | The halves are tested; nothing tests them wired together |
 
@@ -140,7 +140,7 @@ is a cost control and a DoS control at once, and it lands with pl-5 or not at al
 
 **The transcript risk is gone**, not deferred — there is no transcript, so nothing
 is re-sent turn over turn. The per-run budget replaces it as the cost control.
-`MAX_MESSAGE_CHARS` is a constant with no job: migration 2 has landed and it
+`MAX_MESSAGE_CHARS` is a constant with no job: migration 3 has landed and it
 outlived the table, so it goes with the removal below rather than with a
 migration.
 

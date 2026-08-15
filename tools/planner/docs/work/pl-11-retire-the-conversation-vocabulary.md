@@ -15,7 +15,7 @@ depends_on: [pl-7]
 ## Why
 
 The tool stopped being a chat on 2026-08-14, and
-[pl-7](./pl-7-intake-persistence-and-wizard.md)'s migration 2 dropped the
+[pl-7](./pl-7-intake-persistence-and-wizard.md)'s migration 3 dropped the
 `conversations` and `messages` tables. What survived them is the vocabulary:
 
 | Still exported                                                    | Where                          |

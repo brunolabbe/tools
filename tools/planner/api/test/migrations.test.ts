@@ -18,15 +18,23 @@ describe("migrations", () => {
     const db = new Database(":memory:");
     migrate(db);
 
-    expect(tables(db)).toEqual(["answers", "intakes"]);
-    expect(userVersion(db)).toBe(2);
+    expect(tables(db)).toEqual([
+      "answers",
+      "intakes",
+      "plan_candidates",
+      "plan_days",
+      "plan_items",
+      "plan_revisions",
+      "plans",
+    ]);
+    expect(userVersion(db)).toBe(3);
     db.close();
   });
 
   test("a database that already ran migration 1 is carried forward", () => {
     const db = new Database(":memory:");
     // What the published image left behind: the chat this tool stopped being.
-    // Migration 2 was appended rather than folded into 1 for exactly this
+    // Migration 3 was appended rather than folded into 1 for exactly this
     // database — an edited migration 1 would never be applied here.
     db.exec(`
       CREATE TABLE conversations (id TEXT PRIMARY KEY, title TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL) STRICT;
@@ -39,8 +47,9 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(tables(db)).toEqual(["answers", "intakes"]);
-    expect(userVersion(db)).toBe(2);
+    expect(tables(db)).toContain("intakes");
+    expect(tables(db)).not.toContain("conversations");
+    expect(userVersion(db)).toBe(3);
     db.close();
   });
 
@@ -53,7 +62,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(2);
+    expect(userVersion(db)).toBe(3);
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
     db.close();
   });
