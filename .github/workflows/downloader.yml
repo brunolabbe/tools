@@ -8,9 +8,13 @@ name: downloader
 #
 # The filter deliberately includes `packages/**`: everything here sits on top of
 # `@webtools/core`, so a change there can break this tool without touching it.
+#
+# `push` is `main` only. See the note in `ci.yml`: a branch with an open pull
+# request fires both events into separate concurrency groups, so it used to pay
+# twice for the same answer.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "tools/downloader/**"
       - "packages/**"
@@ -85,8 +89,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - run: docker compose build
-      - run: docker compose up -d
+      # Through buildx with a registry-backed layer cache rather than a bare
+      # `docker compose build`, which starts from nothing every run. `planner`
+      # has had this from the start; this job was paying ~2.3 minutes to rebuild
+      # layers that had not changed. `compose up` then finds the image by tag
+      # and starts it without building.
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: tools/downloader/Dockerfile
+          push: false
+          load: true
+          # The tag and the build arg both have to match `compose.yaml`, or the
+          # `--no-build` below starts something other than what was just built.
+          tags: downloader:local
+          build-args: INSTALL_YTDLP=false
+          cache-from: type=gha,scope=downloader
+          cache-to: type=gha,mode=max,scope=downloader
+      - run: docker compose up -d --no-build
       - name: Wait for the service to report healthy
         run: |
           for attempt in $(seq 1 60); do
