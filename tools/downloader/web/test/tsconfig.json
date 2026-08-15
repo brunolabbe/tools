@@ -1,0 +1,21 @@
+{
+  // One of the three suites with a compiler surface of its own: `web` is the
+  // project that resolves as a bundler, with the DOM lib and the JSX runtime. A
+  // test that renders a component (dl-15) has to see them the way Vite does.
+  // Everything else — `noEmit`, the extension rewriting, `strict` — comes from
+  // the root.
+  "extends": "../../../../tsconfig.tests.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "types": ["node", "vite/client"]
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  // Restated, not inherited: the root excludes `tools/*/web/test/**` to keep
+  // these files out of its own program, and inheriting that here would leave
+  // this project with nothing in it.
+  "exclude": [],
+  "references": [{ "path": ".." }, { "path": "../../contract" }]
+}

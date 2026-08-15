@@ -3,7 +3,7 @@ id: dl-14
 tool: downloader
 title: Cover the proxied-HTTPS path with a TLS fixture origin
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-11, dl-12]
 ---
@@ -125,4 +125,77 @@ with no end-to-end coverage. Every real site the tool exists for is HTTPS.
 
 ## Log
 
-_Not started._
+**Done.** Nine tests in one new file, `api/test/proxied-https.test.ts`, against a
+TLS fixture generated per run. `npm run check` green, `npm test` green (543
+downloader tests across 37 files, up from 534/36 — this ticket is the +9), and
+`npm run e2e:downloader` unchanged at 3 passing.
+
+`03-STATUS.md`'s test count now quotes `--project downloader` rather than the
+whole repo, which is what it had drifted into: a downloader page whose headline
+number changed whenever the planner grew a suite is a number no reader can
+check.
+
+**The brief said `engine/test/` and `api/test/` with a shared helper. It is all
+in `api/test/`, and the helper is not shared.** The thing under test is a
+combination — real ffmpeg (engine) fetching through the real guarded proxy (api)
+over a real handshake — and `api` is the only package that depends on both. The
+two alternatives were worse: an engine test importing `@downloader/api` inverts
+the dependency graph and pulls fastify and better-sqlite3 into the engine's
+suite, and an api test importing `engine/test/helpers/http.ts` is precisely the
+cross-package test-helper import [dl-13](./dl-13-typecheck-the-tests.md) called
+out as a finding. The cost is a second HLS-fixture generator, ~40 lines of ffmpeg
+argv duplicated from `hls-e2e.test.ts`; it is named as such in the helper's
+header. `engine/test/helpers/http.ts` is untouched and still plain HTTP, which is
+right — no engine suite has a proxy in it.
+
+**The certificate: `node-forge`, a new devDependency of `@downloader/api`.**
+Generated per run, never checked in. Node's `crypto` generates keys and parses
+X.509 but writes no certificate, so the options were a spawned `openssl` or a
+package. `openssl` was the first choice and is wrong here: **`ci.yml` runs
+`npm test` on `windows-latest` as well as ubuntu**, and `openssl` on a Windows
+runner's `PATH` is not something to bet a required check on. `ffmpeg-static` is
+the precedent — a test's binary comes from `node_modules`, not from the machine.
+`selfsigned@5` is the obvious package and brings 19 transitive ones
+(`@peculiar/x509`, `pkijs`, `asn1js`, the `@peculiar/asn1-*` family); `node-forge`
+is one package with no dependencies, for twenty more lines of setup. Both are
+dev-only and neither reaches an image.
+
+**One production line changed**, `EgressDispatcherOptions.requestTls` in
+`dispatcher.ts`, passed through to `ProxyAgent`. Without it the guardedFetch test
+could not verify the fixture's certificate, and the alternative was
+`rejectUnauthorized: false` — which would have made the test pass whether the
+tunnel worked or not. It is the same test-injection seam `resolve` already is,
+and it is documented as one. Unset in production.
+
+**The regression was watched failing, not assumed.** `httpproxy` deleted from
+`REMOTE_PROTOCOL_WHITELIST`, `npm run build -w @downloader/engine`, suite red:
+three tests, including the headline download. Put back, green again. There is
+also a test that mutates the argv in place — it takes the real
+`buildManifestDownloadArgs` output, removes the one protocol and asserts ffmpeg
+fails with `invalid argument`/`protocol` in its stderr — so the constant stays
+load-bearing without anyone having to remember this paragraph.
+
+### What this turned up
+
+**ffmpeg does not verify TLS certificates, in production, today.** `tls_verify`
+defaults to `0` in libavformat, and nothing in `buildNetworkInputArgs` sets it.
+So every segment fetch is unauthenticated transport: a MITM on the path to a CDN
+can serve whatever it likes and ffmpeg will remux it. The proxy does not change
+this either way — it tunnels rather than intercepts, so the certificate that
+arrives is the origin's, verified by nobody. This is not dl-14's to fix (turning
+`-tls_verify 1` on is a behaviour change that needs its own ticket and its own
+thought about which CA bundle a container has), but it is now written down, and
+`03-STATUS.md` carries it. The `-tls_verify 1 -ca_file` test proves the
+capability is there and that the chain survives the tunnel intact.
+
+**`connectTunnel` resolves on `close` as well as on the status line.** A refusal
+ends the socket without a tunnel, and a helper that only waited for `\r\n\r\n`
+hangs on exactly the case the blocked-target test is about.
+
+**What is still uncovered.** The Playwright e2e origin stays plain HTTP, as the
+brief instructs — teaching Chromium to trust a fixture CA costs more than it
+tells us now that the tunnel is proven at this level. The browser and yt-dlp
+tiers' own fetches through the proxy remain covered by
+[dl-12](./dl-12-tiers-behind-the-egress-proxy.md)'s plain-HTTP fixtures; what
+dl-14 proves for them is that the `CONNECT` path they share works and refuses
+what it should.

@@ -1,0 +1,20 @@
+{
+  // Brought in rather than left out. `commit-message.mjs` is plain JS and stays
+  // that way — the commit hook runs it under bare node with no build step — but
+  // the test that exercises it is TypeScript, and what it asserts is the
+  // `{ ok, errors }` shape the hook and the CI gate both read. `allowJs` lets
+  // tsc infer `validate`'s signature from the source so those calls are checked;
+  // `checkJs` stays off, because the `.mjs` is not this project's to hold to
+  // `strict`. `allowJs` is per-project, which is the whole reason this is one.
+  //
+  // The `.mjs` is named in `include` because a composite project must list
+  // every file in its program, and it lives one level up from the tests.
+  "extends": "../../tsconfig.tests.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["**/*.ts", "../commit-message.mjs"],
+  // Restated, not inherited — the root's exclude is about the root's program.
+  "exclude": []
+}
