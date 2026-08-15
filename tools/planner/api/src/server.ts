@@ -23,6 +23,7 @@ import { toErrorResponse } from "./http-errors.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
 import { registerHealthRoute } from "./routes/health.ts";
+import { registerIntakeRoutes } from "./routes/intakes.ts";
 
 export interface CreateAppOptions {
   config?: Partial<ApiConfig>;
@@ -94,6 +95,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerErrorHandling(server, context);
   registerCors(server, config);
   registerHealthRoute(server, context);
+  registerIntakeRoutes(server, context);
   registerNotFoundHandler(server);
 
   await server.ready();

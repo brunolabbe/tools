@@ -53,6 +53,17 @@ export const PLANNER_ERROR_CODES = [
   // "Trip" is the journey the user is taking; "Plan" is the document this tool
   // keeps about it. The aggregate, and therefore the code, is the plan.
   "CONVERSATION_NOT_FOUND",
+  /**
+   * No intake under that id.
+   *
+   * Not `PLAN_NOT_FOUND`: the intake and the plan are separate aggregates by
+   * design — the answers are what the user said, the plan is what the tool made
+   * of it — and 01-ARCHITECTURE's data model is explicit that fusing them means
+   * deriving one by re-reading another. They also fail at different times, and
+   * a user reading "that plan could not be found" while resuming a half-finished
+   * questionnaire is told about a document that was never created.
+   */
+  "INTAKE_NOT_FOUND",
   "PLAN_NOT_FOUND",
   /**
    * A revision of a plan that exists, but not that revision.
@@ -143,6 +154,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   AGENT_MALFORMED_REPLY: "The assistant’s answer could not be understood.",
   CONTEXT_LIMIT: "This conversation has grown too long to continue. Start a new one.",
   CONVERSATION_NOT_FOUND: "That conversation could not be found.",
+  INTAKE_NOT_FOUND: "That trip could not be found.",
   PLAN_NOT_FOUND: "That plan could not be found.",
   REVISION_NOT_FOUND: "That version of the plan could not be found.",
   PLAN_INFEASIBLE: "This trip cannot be planned as described — something has to give.",

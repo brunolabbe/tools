@@ -3,7 +3,7 @@ id: pl-7
 tool: planner
 title: The intake — persistence, routes, and the wizard over them
 kind: work-package
-status: ready
+status: done
 milestone: P1
 depends_on: [pl-3, pl-6]
 ---
@@ -246,4 +246,113 @@ invalidation path.
 
 ## Log
 
-_Not started._
+### 2026-08-15 — built
+
+Migration 2, the store, four routes and the wizard over them. `npm run check` is
+green and `npm test -- --project planner` is 143 tests across 14 files (24 of
+them new: the store, the routes, the invalidation path and the migration).
+Branched from `pl-6-question-tree-and-engine`, which is PR #20 and not yet
+merged.
+
+**What landed**
+
+- `answers` and `intakes` per the brief's SQL, appended as migration 2, plus the
+  `intakes_updated_at` index the list route reads and a test that upgrades a
+  database already sitting at `user_version = 1` rather than only a fresh one.
+- `api/src/db/intakes.ts` — reads and writes, no tree. The one judgement it
+  makes is at the parse boundary (below).
+- `api/src/intakes/state.ts` — the transaction, the reconciliation and nothing
+  else. `previewAnswer` and `writeAnswer` call the same `prune` on the same
+  answers, which is what makes "the dry run and the real write agree" a property
+  rather than a hope.
+- `POST/GET /api/intakes`, `GET /api/intakes/:id`,
+  `POST /api/intakes/:id/answers/:questionId` and `.../preview`.
+- The wizard: one question per screen, a control per kind switched
+  exhaustively, the checkpoint as a screen, edit-from-a-list, the discard
+  confirmation, the brief panel and an honest progress line. The health readout
+  moved to a footer rather than being dropped.
+- `@planner/intake` added to the API's manifest, its tsconfig references and the
+  Dockerfile's runtime stage.
+
+**The decision this ticket owed: a tree version change.** Taken as the brief
+proposed — **re-run the engine against the current tree and prune what no longer
+fits**, rather than keeping every historical tree. It is one code path
+(`reconcileWithin`), it runs on load and at the top of a write, and it reports
+what it dropped in the same response. Recorded in the roadmap's _Still open_.
+
+Two things the implementation had to settle inside that decision:
+
+- **Re-validating stored answers is scoped to a version move**, not to every
+  read. `validateAnswer` knows what day it is, so running it on every load would
+  discard a departure date for the crime of the date arriving, and re-asking
+  dates on every reload is worse than the trap it closes. On a version move it is
+  the right answer anyway: a trip whose departure has passed does need
+  re-answering.
+- **The loss is reported once**, in the response for the request that reconciled.
+  Subsequent reads are clean, because the rows are gone. `updated_at` deliberately
+  does not move: the tree moved, nobody touched the intake, and floating it to the
+  top of the list would be a lie about when it was last worked on.
+
+**The title, which step 5 asked to have recorded.** The brief's assumption was
+already known to be wrong and it is: `destination` is `refine`, so an intake that
+stops where the wizard invites it to stop has none. The title is the shape and
+the month — "A backcountry trip in February" — with the destination joined in
+front once there is one ("Lisbon — a city trip for 4 nights"). Both halves are
+`core`, so every intake past its second answer has a name, and it needs no column
+beyond the `title` the migration already carries, since the brief is derivable.
+
+### What the brief got wrong, or did not say
+
+- **It says `Packages: api, web`, and that is not enough.** The wizard needs a
+  response envelope, and an envelope is a cross-package type: `web` cannot define
+  it, `api` cannot export it to `web`, and redefining it in both is the thing the
+  repo forbids. `contract/src/api.ts` gained the route patterns, two URL helpers
+  and `IntakeState` / `IntakeSummary` / `DiscardedAnswer` / `DiscardPreview` /
+  `IntakeListResponse`. **All additive** — nothing pl-3 or pl-6 defined was
+  touched. Responses get types and no zod schema, deliberately: a schema would be
+  a second definition of `QuestionNode`, which is the same argument that keeps
+  `conditionSchema` out of `tree.ts`, and nothing untrusted arrives in that shape.
+- **There was no error code for a missing intake, and `PLAN_NOT_FOUND` is not
+  it.** The intake and the plan are separate aggregates by design, they fail at
+  different times, and "that plan could not be found" is a sentence about a
+  document that was never created. Added `INTAKE_NOT_FOUND` to
+  `PLANNER_ERROR_CODES`, mapped to 404. **Flag for review**: this and the point
+  above are the only contract changes, and both are additions.
+- **`CONVERSATION_NOT_FOUND`, `Conversation`, `Message` and `MAX_MESSAGE_CHARS`
+  are still in the contract**, although migration 2 drops the tables under them.
+  03-STATUS says they go with a rename that also has to fix
+  `registerNotFoundHandler`'s abuse of the code for unknown URLs. That is a
+  removal rather than an addition and it is nobody's ticket yet — it wants one.
+- **A stored answer that no longer parses was not in the brief.** `selectAnswers`
+  reports it as `unreadable` rather than throwing, and reconciliation drops it the
+  way `prune` drops an answer whose question is gone. One corrupt row must not
+  brick an intake, and the two cases want the same sentence in front of a user.
+- **An unopened question is `INVALID_ANSWER`, not a 404.** The brief says to
+  refuse it without saying with what. It is the caller's mistake, `details.question`
+  is what the wizard needs either way, and the code already means "this answer does
+  not fit this question".
+- **The wizard previews before every write except the first.** The brief frames
+  the preview as a warning for editing an earlier answer, but a `not` condition
+  means answering a _fresh_ question can strand one too. Skipping the round trip
+  is only safe when the intake holds no answers at all.
+- **The list shows every intake as resumable and marks none finished**, which is
+  the roadmap's re-entrancy requirement read literally. It also means the summary
+  needs no `coreComplete`: computing it per row would mean assembling every
+  intake's answers to render a list, and "core-complete" is a fact about answers
+  rather than a state worth denormalising.
+
+### Two things found on the way, neither fixed here
+
+- **`WEB_DIR` is parsed and never used.** `api/src/config.ts` resolves it,
+  `Dockerfile` sets it and its header claims the image serves the UI same-origin
+  — and `server.ts` registers no static handler, so it serves nothing. Harmless
+  while the only UI was a health readout; now that there is a wizard, the image
+  is an API with a bundle it does not hand out. Dev is unaffected (Vite proxies
+  `/api`). This is pl-2's ground, not pl-7's, and it wants a ticket.
+- **This branch predates dl-13.** `pl-6-question-tree-and-engine` was cut before
+  `tsconfig.tests.json` landed on main, so **tests are not typechecked on this
+  branch** — `npm run check` passes without ever looking at them. The new suites
+  were checked against a local copy of main's config to be sure they will survive
+  the merge, and they do. **Whoever merges pl-6 must add
+  `{ "path": "./tools/planner/intake" }` to `tsconfig.tests.json`'s references**,
+  or the intake's own tests land in a project that cannot resolve `../src`.

@@ -75,7 +75,7 @@ forces:
 2. **The tree and the engine over it** ✅ — an authored, versioned question tree,
    what it opens, and what an edit discards. Pure: no model, no network, no
    clock. → [pl-6](./work/pl-6-question-tree-and-engine.md)
-3. **Persistence and the wizard** — answers stored one per row, an intake that
+3. **Persistence and the wizard** ✅ — answers stored one per row, an intake that
    survives a reload, a UI that never silently drops an answer, and a stop at the
    core questions. → [pl-7](./work/pl-7-intake-persistence-and-wizard.md)
 
@@ -182,14 +182,24 @@ Short, and each one is a real decision someone has to make rather than a gap:
 - **Whether a specialist streams.** The chat seam does not stream, and adding it
   before a caller needs it was deferred once already. The fan-out's progress is
   per-specialist, which may be enough.
-- **What a tree version change does to a saved intake.** Someone starts, the tree
-  changes in a release, they come back. Proposed in
-  [pl-7](./work/pl-7-intake-persistence-and-wizard.md): re-run the engine against
-  the current tree and prune what no longer fits, since it is the same machinery
-  as any other invalidation. The alternative is keeping every historical tree
-  forever. Still not decided — but pl-6 made the proposed answer cheap: `prune`
-  already drops an answer whose question the tree no longer has, and reports it
-  with a null node rather than losing it quietly.
+
+**What a tree version change does to a saved intake** was answered on 2026-08-15,
+as pl-7 proposed: **re-run the engine against the current tree and prune what no
+longer fits.** No historical tree is kept, and it is one code path rather than a
+second — the same `prune` every other invalidation goes through, plus a
+re-validation of each surviving answer against the question it answers, since a
+tightened bound would otherwise surface as an `INTERNAL` on a plain read.
+
+Three consequences, recorded where the code is in
+[pl-7](./work/pl-7-intake-persistence-and-wizard.md)'s log:
+
+- Re-validating is scoped to a version move, never to every read. `validateAnswer`
+  knows what day it is, so running it on every load would discard a departure date
+  for the crime of the date arriving.
+- What was dropped is reported in the response for the request that reconciled,
+  and `updated_at` does not move for it: the tree moved, nobody touched the intake.
+- An answer whose question is gone has no prompt to name it by, so the UI says
+  "some earlier answers no longer apply" and never prints an id.
 
 **When the first draft is offered** was answered on 2026-08-14, and it is the one
 that shapes Phase 1: **the wizard stops at the core questions.** When nothing
@@ -201,8 +211,7 @@ Three consequences, all of them load-bearing on tickets nobody has started:
 
 - `missingRequiredSlots` (pl-3) and the `core` marking (pl-6) describe the same
   set, and `validateTree` fails the tree in either direction if they stop doing
-  so. That half is settled; what is not is that no UI has yet been told to stop
-  at the checkpoint.
+  so. Both halves are settled as of pl-7: the wizard stops there too.
 - pl-7 owns the fork, and owns **re-entry**: refining is something you come back
   to after a draft exists, not a corridor you leave once. It also owns the honest
   progress line at the boundary — "the essentials are done", never a percentage.
