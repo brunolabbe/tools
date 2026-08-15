@@ -56,6 +56,15 @@ cannot work at all.
   be given the scope at all. See
   [03-RELEASING.md](./03-RELEASING.md#registry-access).
 
+  A **package's visibility is its own setting**, independent of the repository's:
+  the first push creates it private, and making the repository public does not
+  change that. So the login above is required even for a stranger reading this
+  from a public repo, unless the package has been flipped to public deliberately
+  (its page on GHCR → **Package settings** → **Change visibility**). Worth
+  deciding on purpose in either direction — private and documented is a fine
+  answer, and so is public; what is not fine is a public repo whose deployment
+  instructions 404 for everyone who follows them.
+
 Nothing needs to be installed on the router.
 
 ---

@@ -1,9 +1,22 @@
 name: CI
 
+# `push` is `main` only, deliberately. A branch with an open pull request fires
+# both events, and because the two carry different `github.ref` values their
+# concurrency groups do not collide — so every commit used to buy two identical
+# runs. The pull request is the one that gates the merge; the `main` push is the
+# one that records the merged state. A branch with no pull request open yet is
+# not worth a runner.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
+  # Nightly against `main`, because the failures this repo actually hits are
+  # environmental and no commit triggers them. The `ffmpeg-static` SIGSEGV
+  # documented below appeared when a runner image changed underneath us, not
+  # when anyone wrote code; a nightly finds that on a Tuesday instead of during
+  # a release. 07:00 UTC — off-peak, and long after the day's work has landed.
+  schedule:
+    - cron: "0 7 * * *"
   # So a failure can be re-run without an empty commit.
   workflow_dispatch:
 
@@ -38,6 +51,13 @@ jobs:
   # has a genuine Windows story — process-tree kills use `taskkill`, paths are
   # confined with `path.relative`, and reserved filenames like `CON` are a
   # Windows-only hazard. Linux-only CI would not exercise any of it.
+  #
+  # This ran briefly path-filtered to the downloader, on the theory that every
+  # Windows hazard is that tool's. It is unfiltered again: the filter was a
+  # concession to a Windows minute costing 1.67x a Linux one, and on a public
+  # repository it costs nothing. A root `package.json`, a tsconfig or a vitest
+  # setting can all change Windows behaviour without touching a downloader
+  # path, and a filter that never fires for them is a gap, not a saving.
   test:
     strategy:
       fail-fast: false
@@ -57,6 +77,16 @@ jobs:
       # because `npm run check` typechecks with `tsc --build` and leaves the
       # output behind; a fresh checkout has nothing.
       - run: npm run build
+      # Downloading Chromium is 265 of the Windows job's 460 seconds, and it is
+      # the same bytes every run. Keyed on the lockfile, so a Playwright bump
+      # invalidates it; the install below still runs on a hit and finds the
+      # browser already there. The cache location is Playwright's own, which
+      # differs per platform.
+      - name: Cache the Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       # The browser-sniffer suite launches a real Chromium; without this it
       # would skip or fail depending on the runner image.
       - run: npx playwright install --with-deps chromium
@@ -76,7 +106,7 @@ jobs:
           echo "FFMPEG_PATH=/usr/bin/ffmpeg" >> "$GITHUB_ENV"
       - run: npm test
 
-  # The slow, downloader-specific gates — end-to-end and the container — live in
-  # `downloader.yml`, which only runs when that tool or the packages beneath it
-  # change. Nothing here should grow tool-specific: this workflow is what every
-  # tool in the repo pays on every push.
+  # The slow, downloader-specific gates — end-to-end, the container, and the
+  # Windows suite — live in `downloader.yml`, which only runs when that tool or
+  # the packages beneath it change. Nothing here should grow tool-specific: this
+  # workflow is what every tool in the repo pays on every change.
