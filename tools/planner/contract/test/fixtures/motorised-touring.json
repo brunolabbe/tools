@@ -1,0 +1,109 @@
+{
+  "brief": {
+    "shape": { "state": "answered", "value": "motorised-touring" },
+    "origin": { "state": "answered", "value": "Saguenay, Québec" },
+    "destination": { "state": "declined" },
+    "dates": {
+      "state": "answered",
+      "value": { "kind": "window", "earliest": "2027-01-20", "latest": "2027-02-28", "nights": 3 }
+    },
+    "travellers": { "state": "answered", "value": 4 },
+    "ages": { "state": "declined" },
+    "accessNeeds": { "state": "unknown" },
+    "budget": {
+      "state": "answered",
+      "value": { "kind": "amount", "currency": "CAD", "amount": 900, "basis": "per-person" }
+    },
+    "effort": { "state": "answered", "value": "demanding" },
+    "comfort": { "state": "answered", "value": "simple" },
+    "dealBreakers": { "state": "unknown" },
+    "details": {
+      "shape": "motorised-touring",
+      "machine": { "state": "answered", "value": "snowmobile" },
+      "machineSource": { "state": "answered", "value": "rental" },
+      "rangeKm": { "state": "answered", "value": 180 },
+      "context": {
+        "state": "answered",
+        "value": "Two of the four have ridden a season; the other two have not ridden at all. We would rather do fewer kilometres on a groomed trail than anything off-trail."
+      }
+    }
+  },
+  "candidates": [
+    {
+      "id": "mt-cand-1",
+      "specialist": "route-and-logistics",
+      "title": "Trans-Québec 83 north from Saguenay",
+      "summary": "A groomed provincial trail with fuel and food at intervals inside the party's stated 180 km range, which is the constraint that decides where a day can end.",
+      "place": {
+        "name": "Trans-Québec 83",
+        "locality": "Saguenay–Lac-Saint-Jean, Québec",
+        "coordinates": null
+      },
+      "durationMinutes": 360,
+      "cost": null,
+      "season": { "from": "12-15", "to": "03-31" },
+      "bookingLeadTimeDays": null,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "mt-cand-2",
+      "specialist": "practicalities",
+      "title": "Machine rental with trail permit included",
+      "summary": "Four machines for three days. The provincial trail permit is normally bundled with a rental; without it the trail is not legally rideable, so it is a document and not an upsell.",
+      "place": {
+        "name": "Saguenay",
+        "locality": "Québec, Canada",
+        "coordinates": null
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 250,
+        "high": 400,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "12-15", "to": "03-31" },
+      "bookingLeadTimeDays": 45,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "mt-cand-3",
+      "specialist": "conditions-and-gear",
+      "title": "Snow base, trail status and what two of the party do not own",
+      "summary": "Trail condition is published daily by the local club and is the only thing that can say whether a section is open — nothing here is a substitute for it. Two riders with no season behind them will need a helmet, a balaclava and boots rated well below the day's forecast.",
+      "place": {
+        "name": "Saguenay–Lac-Saint-Jean trail network",
+        "locality": "Québec, Canada",
+        "coordinates": null
+      },
+      "durationMinutes": null,
+      "cost": null,
+      "season": { "from": "12-01", "to": "04-15" },
+      "bookingLeadTimeDays": null,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "mt-cand-4",
+      "specialist": "lodging",
+      "title": "Trail-side auberge at Lac-Saint-Jean",
+      "summary": "Rides in off the trail, has a heated shed for the machines overnight, and serves a hot breakfast early enough to be riding by eight.",
+      "place": {
+        "name": "Lac-Saint-Jean",
+        "locality": "Québec, Canada",
+        "coordinates": null
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 120,
+        "high": 180,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "12-01", "to": "04-01" },
+      "bookingLeadTimeDays": 30,
+      "provenance": { "kind": "model-asserted" }
+    }
+  ]
+}

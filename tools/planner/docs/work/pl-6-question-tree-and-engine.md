@@ -275,3 +275,34 @@ three traps it did not have — that `destination` is now a `refine` question so
 checkpointed intake has no title, that a tree edit can turn a saved intake into a
 500 through `toBrief`, and that the image's runtime stage does not carry this
 package's `dist` yet.
+
+### 2026-08-15 — merged main (pl-4), and the reference this ticket owed
+
+Conflicted with [pl-4](./pl-4-plan-document-contract.md) in two places, both
+because the two tickets describe the same repo from different halves of it:
+
+- `contract/src/index.ts` — one export line each, `plan.ts` and `tree.ts`. Both.
+- `03-STATUS.md` — four hunks, and none of them had a correct side. Each was
+  written as "the other half does not exist yet", which stopped being true when
+  both landed. Merged rather than picked: both contracts are built, the tree
+  stands over one of them, **neither is filled** — pl-7 fills the brief, pl-5 and
+  pl-9 fill the plan. The error-codes paragraph is the clearest case: pl-4's
+  "all in" and this ticket's "still partly missing" were each true of their own
+  branch and both wrong of the merge, so it now names `INVALID_ANSWER`
+  alongside `PLAN_INFEASIBLE` and `REVISION_NOT_FOUND`. The counts are measured,
+  not added: **178 planner tests over 15 files**, 741 repo-wide over 54.
+
+**What the brief got wrong, found by the merge and not by the conflict.**
+`tsconfig.tests.json` had no `{ "path": "./tools/planner/intake" }`, so
+`npm run check` fails TS6307 five times — `intake` is a leaf whose tests import
+its own `src`, which that file's comment names as the one case the omission is
+loud for. This ticket's log says "tests are still outside the typechecker (dl-13
+has not landed)", and that was true when the work was done: dl-13 landed on main
+afterwards, and the earlier merge of main into this branch took the new file
+without adding the line the new package owed it. So the branch was red on
+`check` before this merge touched it, for a reason no conflict marker would ever
+have shown. Root `CLAUDE.md`'s "adding a tool" step 3 is the rule — a new
+package's tests cost one reference line there — and it applies to a new package
+in an existing tool just as much.
+
+Green after: `npm run check` clean, 741 tests over 54 files.

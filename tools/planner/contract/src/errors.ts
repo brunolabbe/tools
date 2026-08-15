@@ -55,6 +55,33 @@ export const PLANNER_ERROR_CODES = [
   "CONVERSATION_NOT_FOUND",
   "PLAN_NOT_FOUND",
   /**
+   * A revision of a plan that exists, but not that revision.
+   *
+   * Separate from `PLAN_NOT_FOUND` because the two send a user to different
+   * places: a missing plan means the list, and a missing revision means the
+   * plan's current draft, which is still there. Revisions are addressable —
+   * §6's whole point is that the user can get back the draft they liked — so a
+   * stale link to one is an ordinary thing to happen and deserves an ordinary
+   * sentence rather than "that plan could not be found", which is a lie.
+   */
+  "REVISION_NOT_FOUND",
+  /**
+   * The plan's own constraints cannot all be satisfied: a day that cannot hold
+   * its legs and its activities, a deal-breaker that nothing survives, a
+   * budget no candidate set fits inside.
+   *
+   * This is a **promise about what the tool checked**, which is why it is a
+   * code and not a note on the plan. §7 puts the check in `@planner/itinerary`,
+   * in code, and the repo's rule is that a plan violating a hard constraint is
+   * not shipped — so the composer has to have a way to say "I could not build
+   * one" that is distinguishable from "I built one with holes". The holes case
+   * is `PlanGap`, and it ships.
+   *
+   * `details` carries which constraints failed, so the UI can offer the one
+   * useful next step: relax one, or change the answer behind it.
+   */
+  "PLAN_INFEASIBLE",
+  /**
    * The brief is too thin to draft from: `missingRequiredSlots` is not empty
    * and something asked for a plan anyway.
    *
@@ -117,6 +144,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   CONTEXT_LIMIT: "This conversation has grown too long to continue. Start a new one.",
   CONVERSATION_NOT_FOUND: "That conversation could not be found.",
   PLAN_NOT_FOUND: "That plan could not be found.",
+  REVISION_NOT_FOUND: "That version of the plan could not be found.",
+  PLAN_INFEASIBLE: "This trip cannot be planned as described — something has to give.",
   BRIEF_INCOMPLETE: "There are still a few essentials to answer before this trip can be planned.",
   INVALID_ANSWER: "That answer does not fit the question.",
   INVALID_DATES: "Those travel dates do not make sense.",
