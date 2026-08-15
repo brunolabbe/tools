@@ -1,0 +1,74 @@
+name: security
+
+# Static analysis and dependency screening. Both of these are free on a public
+# repository and cost money on a private one, which is the only reason this
+# file did not exist earlier — not a judgement that the repo did not need them.
+#
+# The fit here is better than average. This codebase spends most of its risk
+# budget on three things CodeQL's taint tracking reads well: URLs a user
+# influenced reaching a fetch (SSRF), user strings reaching a subprocess
+# argument, and credentials reaching a log line. The last two are currently
+# policed by `packages/core/test/spawn-safety.test.ts` and by review, which is a
+# source scan and a habit respectively — neither follows a value across a
+# function boundary.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Weekly, because CodeQL's queries improve without this repo changing. A
+  # finding can appear in code that has been still for a month.
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The only reason this workflow needs more than `contents: read`: the
+      # results are uploaded to the repository's code-scanning alerts.
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          # One language covers the repo — `javascript-typescript` analyses
+          # both, and there is nothing compiled here.
+          languages: javascript-typescript
+          # `security-and-quality` adds maintainability queries that are noisy
+          # on a codebase this size; the default `security-extended` is the
+          # signal worth reading.
+          queries: security-extended
+      # No build step. The JS/TS extractor reads source directly, so it does not
+      # need `npm ci` or a populated `dist` the way the suites in `ci.yml` do.
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:javascript-typescript
+
+  # Blocks a known-vulnerable dependency at the pull request rather than at
+  # whatever later moment someone runs `npm audit`. Pull requests only — there
+  # is no "changed dependencies" to diff on a push to `main` or on a schedule.
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          # Moderate rather than low: this repo pulls a large transitive tree
+          # through Playwright and ffmpeg, and a gate that cries at every
+          # advisory is a gate people learn to click past.
+          fail-on-severity: moderate
+          comment-summary-in-pr: on-failure

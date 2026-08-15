@@ -11,9 +11,13 @@ name: planner
 # Path-filtered, so downloader work does not pay for it. `packages/**` is
 # included deliberately: this image is built on `@webtools/core`, so a change
 # there can break it without touching a planner file.
+#
+# `push` is `main` only. See the note in `ci.yml`: a branch with an open pull
+# request fires both events into separate concurrency groups, so it used to pay
+# twice for the same answer.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "tools/planner/**"
       - "packages/**"
