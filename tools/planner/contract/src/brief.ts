@@ -527,7 +527,7 @@ export const tripBriefSchema = z
 // ---------------------------------------------------------------------------
 
 /** Every slot key on a shape extension — `shape` itself is the discriminant, not a slot. */
-type ShapeSlotKeys<D> = Exclude<keyof D, "shape"> & string;
+export type ShapeSlotKeys<D> = Exclude<keyof D, "shape"> & string;
 
 export type CoreSlotId = keyof TripBriefCore;
 

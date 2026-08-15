@@ -33,7 +33,7 @@ shape, and revising a plan touches a slice of it rather than regenerating it.
 
 ```
 contract     types, error taxonomy, zod schemas — no logic
-intake       the question tree, what it opens, what an edit discards — no model, no network, no clock
+intake       the question tree, what it opens, what an edit discards — no model, no network, no clock (pl-6)
 agent        everything that talks to a model: prompts, roster, specialists, seams
 itinerary    everything that must be exact: day packing, constraints, critic — no model, no network
 api          Fastify, persistence, HTTP, run orchestration
@@ -41,10 +41,10 @@ web          React + Vite UI
 e2e          Playwright specs (empty until there is a flow worth driving)
 ```
 
-`intake` and `itinerary` are designed and not yet built — see
-`01-ARCHITECTURE.md`. Until they exist, do not solve their problems in `agent`.
-The two are separate on purpose: an intake engine inside a package named for the
-output document is a name that lies, and they are exact for unrelated reasons.
+`itinerary` is designed and not yet built — see `01-ARCHITECTURE.md`. Until it
+exists, do not solve its problems in `agent` or in `intake`. The two are
+separate on purpose: an intake engine inside a package named for the output
+document is a name that lies, and they are exact for unrelated reasons.
 
 `api` is the only place that reads `process.env`. The agent is a library and
 takes its configuration — including which provider to talk to — as arguments.
@@ -95,6 +95,15 @@ interview for a question tree cost nothing downstream.
 functions over authored data — no provider, no network, no clock. The moment a
 condition becomes "ask the model whether this applies", the package needs a
 provider, the tests need a script, and §3's amendment is undone by increments.
+`intake/test/purity.test.ts` scans for it rather than trusting this paragraph.
+
+**The tree is content, and it is reviewed as content.** It lives in
+`intake/src/tree.ts`. Does the question earn its place, would a real person know
+the answer, does the answer change what a specialist would do? Bump `version`
+whenever the nodes change, and **never reuse an id for a different question** —
+every saved answer under that id silently becomes an answer to something else.
+`validateTree` runs as a test, not at boot: a malformed tree is a review
+mistake, not a reason to refuse to start.
 
 **The intake stops at the core questions.** Every node is `core` or `refine`, and
 when nothing reachable and `core` is unanswered the wizard says the essentials are

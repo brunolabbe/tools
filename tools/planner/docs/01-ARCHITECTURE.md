@@ -54,8 +54,8 @@ Every package named below lives under `tools/planner/`.
 | `api`       | Fastify surface, persistence, run orchestration, SSE, provider selection.                           | contract, intake, agent, itinerary |
 | `web`       | Wizard, plan, revision and diff UI.                                                                 | contract                           |
 
-Neither `intake` nor `itinerary` exists yet, and both are additions Phase 0's
-shape did not anticipate.
+`intake` exists as of [pl-6](./work/pl-6-question-tree-and-engine.md);
+`itinerary` does not. Both are additions Phase 0's shape did not anticipate.
 
 `itinerary` exists because of the analysis's central decision (§2): **models
 generate candidates, code schedules and checks.** Keeping the arithmetic in its
@@ -74,7 +74,9 @@ reachability is logic.
 
 The `no clock` on `intake` is not decoration. "Is this departure date in the
 past" is time-dependent, so `now` is an argument. A `Date.now()` inside a pure
-engine is a test that fails at midnight.
+engine is a test that fails at midnight. All three prohibitions — no model, no
+network, no clock — are enforced by a source scan in
+`intake/test/purity.test.ts` rather than by this paragraph.
 
 `contract` is the seam that lets several agents build in parallel without
 colliding. Treat changes to it as interface changes requiring coordination, not

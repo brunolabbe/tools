@@ -66,6 +66,21 @@ export const PLANNER_ERROR_CODES = [
    */
   "BRIEF_INCOMPLETE",
   /**
+   * The answer does not fit the question it answers: a choice that is not on
+   * the list, a number outside the question's bounds, empty text, or a decline
+   * of a question a first draft cannot do without.
+   *
+   * Not covered by anything existing, and not `BRIEF_INCOMPLETE`, which is
+   * about the document being too thin to plan from — this one is about a single
+   * answer being wrong on its way in, and it is the caller's to fix. Core's
+   * input codes are all about a URL. `details` carries the question id, so the
+   * wizard can put the user back on the question rather than at the start.
+   *
+   * Dates get `INVALID_DATES` instead: they are the field most likely to be
+   * wrong, they have their own sentence, and that code already exists.
+   */
+  "INVALID_ANSWER",
+  /**
    * Return before departure, a date in the past, a span longer than
    * `MAX_TRIP_NIGHTS`, or a flexible window too narrow to hold the nights asked
    * for.
@@ -103,6 +118,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   CONVERSATION_NOT_FOUND: "That conversation could not be found.",
   PLAN_NOT_FOUND: "That plan could not be found.",
   BRIEF_INCOMPLETE: "There are still a few essentials to answer before this trip can be planned.",
+  INVALID_ANSWER: "That answer does not fit the question.",
   INVALID_DATES: "Those travel dates do not make sense.",
 };
 

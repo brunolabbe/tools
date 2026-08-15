@@ -32,6 +32,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
 COPY tools/planner/contract/package.json tools/planner/contract/
+COPY tools/planner/intake/package.json tools/planner/intake/
 COPY tools/planner/agent/package.json tools/planner/agent/
 COPY tools/planner/api/package.json tools/planner/api/
 COPY tools/planner/web/package.json tools/planner/web/

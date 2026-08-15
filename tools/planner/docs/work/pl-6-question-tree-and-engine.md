@@ -3,7 +3,7 @@ id: pl-6
 tool: planner
 title: The question tree, and the engine that walks it
 kind: work-package
-status: ready
+status: done
 milestone: P1
 depends_on: [pl-3]
 ---
@@ -152,4 +152,126 @@ need a script, and the §3 amendment is undone by increments.
 
 ## Log
 
-_Not started._
+### 2026-08-15 — landed
+
+`tools/planner/intake`, scoped `@planner/intake`, with the tree's vocabulary
+added to `contract/src/tree.ts`. `npm run check` and `npm test` are green; the
+planner suite is 119 tests over 11 files, 83 of them new here.
+
+**The tree is 36 questions, 17 of them `core`.** A draft is eight questions away
+for five shapes and seven for a resort — §3's "perhaps eight to ten", and the
+same count pl-3's log predicted. The whole tree is 14–16 questions depending on
+shape, and nobody has to answer it: the checkpoint is at question eight.
+
+Two nodes are there to prove the tree's own shape rather than to fill a slot
+cheaply. `comfort` is gated on `not(all(shape = backcountry, shelter = tent))`
+— two ancestors, which a nested tree cannot express and which is the entire
+argument for a flat list with conditions. `multi-city.min-nights` is gated on
+`answered(multi-city.cities)`, because "the fewest nights in any one of them" is
+a question about a list and there is no list until they name one.
+
+#### The contract additions, and one new error code
+
+`tree.ts` carries `Condition`, `QuestionNode`, `QuestionTree`, `Answer` and
+`AnswerValue`, plus `answerSchema` for the HTTP boundary. Three notes:
+
+- **`ShapeSlotKeys` is now exported from `brief.ts`.** It was already the type
+  behind `REQUIRED_SHAPE_SLOTS`; the tree needs it for the same job.
+- **There is no `conditionSchema`.** Conditions never cross a wire — the tree is
+  ours, authored in TypeScript and checked by `validateTree` — and a schema
+  written for an imagined parser is a second definition to keep in step.
+  Answers do cross a wire, so they have one.
+- **`INVALID_ANSWER` is a new code**, proposed here the way pl-3 proposed
+  `BRIEF_INCOMPLETE`. Nothing covered it: core's input codes are all about a
+  URL, and `BRIEF_INCOMPLETE` is about the _document_ being too thin to plan
+  from, which is a different sentence and a different fix. This one is about a
+  single answer being wrong on its way in — an option that is not on the list, a
+  number outside the question's bounds, empty text, a decline of a `core`
+  question. `details` carries the question id so the wizard can put the user
+  back on it. Dates keep `INVALID_DATES`. `api/src/http-errors.ts` maps it to
+  400, because leaving it unmapped means a 500 for a typo.
+
+#### Decisions worth knowing before pl-7
+
+**A node names a slot _target_, not a slot id.** The brief said each node
+carries "the `TripBrief` slot it fills", and that is not enough to identify one:
+`context` exists on all six extensions and `nightsOut` on exactly one. So
+`fills` is `{ scope: "core", slot }` or `{ scope: "shape", shape, slot }`, typed
+per shape the way `REQUIRED_SHAPE_SLOTS` is. Two things fall out of it —
+`{ shape: "resort", slot: "nightsOut" }` is a compile error rather than a
+runtime one, and the validator can check that a shape's question is _gated on
+that shape_, which is the rule that stops an answer landing on an extension the
+brief is not carrying.
+
+**A `core` question cannot be declined.** Not in the brief, and it is
+load-bearing: a declined slot counts as settled, so `missingRequiredSlots` would
+call it satisfied. Without this rule someone could shrug their way past the
+checkpoint and be told the essentials are done over an empty brief. Declining is
+derived from `stage` rather than being a fourth field on a node — a `core`
+question is by definition one the draft cannot do without, and a node that could
+say otherwise would be a second source of truth about the same thing.
+
+**`equals` and `includes` read text only.** They branch on choices and free
+text, not on numbers, dates or budgets — so "ask this only if travelling alone"
+is not expressible today. That is deliberate: a numeric comparison is a
+condition kind with its own edge cases (units, integers, open bounds) and no
+question in the tree needs one. Add it when one does. `includes` is in the
+vocabulary and the engine, tested there, and the checked-in tree happens not to
+use it yet.
+
+**`toBrief` assembles loosely and then proves it.** The alternative was a writer
+function per slot — thirty-odd of them, restating what the tree already says —
+so instead assembly goes through one documented cast and the result is parsed
+against the contract's own `tripBriefSchema`. A node whose kind or bounds do not
+fit its slot therefore fails loudly (`INTERNAL`, with zod paths and codes but
+never the user's text) rather than quietly producing a brief with a number where
+a date belongs. `tree.test.ts` walks every shape and asserts the assembled brief
+parses, which is what makes the backstop a test rather than a hope.
+
+**`prune` returns dropped answers whose node is `null`** when the tree no longer
+has that question. That is one half of pl-7's tree-version trap already
+answered — re-running the engine against the current tree prunes what no longer
+fits, and the caller can see it happened. **The decision itself is still pl-7's**:
+this only makes the honest option cheap.
+
+**`nextQuestion` returns `{ node, coreComplete }`** (`IntakeProgress`).
+`coreComplete` is true while `node` still holds a `refine` question — that pair
+_is_ the checkpoint, and pl-7 renders it. It is computed from the answers, never
+stored.
+
+**The purity rule is a test, not a paragraph.** `test/purity.test.ts` scans
+`src/` for imports other than the contract, for `Date.now`/`new Date()`, for
+`fetch`, and for anything reaching the model seam — the shape of
+`packages/core/test/spawn-safety.test.ts`, for the same reason. §3's amendment
+gets undone one convenient import at a time, and this is what notices.
+
+#### What the brief got wrong, or left out
+
+- **`validateAnswer(node, value, now)` takes the whole `Answer`**, not just the
+  value: declining is one of the things that can be wrong about an answer, and
+  the rule above has to live somewhere.
+- **Step 3's "a node filling a slot that is not in `TripBrief`"** is now mostly a
+  compile error. The runtime check stayed anyway — it costs a line, it reads the
+  slot names off `emptyBrief()` rather than restating them, and a test can still
+  hand the validator a tree the compiler never saw.
+- **The validator gained rules the brief did not list**: two questions filling
+  one slot (last-answer-wins in `toBrief`, and which one wins depends on tree
+  order — a silent way to lose an answer), a shape question that does not offer
+  every shape, an id that will not survive a URL, and number bounds the wrong way
+  round.
+- **`validateTree` returns problems rather than throwing.** One run names all of
+  them, which is what a content review wants.
+- **The Dockerfile needed a line.** `npm ci` fails when a workspace in the
+  lockfile has no manifest in the image, so the build stage copies
+  `tools/planner/intake/package.json`. The runtime stage does not copy its
+  `dist` yet, because nothing imports it until pl-7 does — add it there.
+- **Tests are still outside the typechecker** (dl-13 has not landed). These were
+  written against the contract's own types and checked by hand, the way pl-3's
+  were.
+
+**[pl-7](./pl-7-intake-persistence-and-wizard.md)'s brief was amended** with what
+this leaves it: the API surface, the five facts that change what it builds, and
+three traps it did not have — that `destination` is now a `refine` question so a
+checkpointed intake has no title, that a tree edit can turn a saved intake into a
+500 through `toBrief`, and that the image's runtime stage does not carry this
+package's `dist` yet.
