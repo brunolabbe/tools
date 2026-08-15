@@ -44,7 +44,7 @@ jobs:
     outputs:
       paths_released: ${{ steps.release.outputs.paths_released }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
@@ -73,7 +73,7 @@ jobs:
       matrix:
         path: ${{ fromJSON(needs.release-please.outputs.paths_released) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The version comes off disk rather than out of an action output. The
       # release commit bumped `version.txt` and this checkout contains it, and
@@ -95,9 +95,9 @@ jobs:
             echo "repository=ghcr.io/$owner/$tool"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -109,7 +109,7 @@ jobs:
       # follows a moving tag has no answer to "what is it running".
       - name: Compute tags
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ steps.image.outputs.repository }}
           tags: |
@@ -119,7 +119,7 @@ jobs:
             type=sha,prefix=sha-,format=short
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           # The repo root, not the tool directory: every image is built from the
           # root lockfile, the root tsconfig and `packages/core`.
@@ -160,7 +160,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: image
         run: |
           set -euo pipefail
@@ -168,13 +168,13 @@ jobs:
           owner="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "repository=ghcr.io/$owner/${{ inputs.tool }}" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/${{ inputs.tool }}/Dockerfile
