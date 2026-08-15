@@ -99,7 +99,19 @@ show an indeterminate state.
 **vitest**, configured once in the root `vitest.config.ts` as one project per
 tool plus one for `packages/`. Tests live in `<package>/test/**/*.test.{ts,tsx}`.
 Import `test`/`expect`/`vi` explicitly — globals are off on purpose, so oxlint's
-`no-undef` keeps working. Do not reach for `node:test`: the pinned Node (22.15)
+`no-undef` keeps working.
+
+**Tests are typechecked, and by the same gate the source is.** So `npm run
+check` holds a fake to the signature of the thing it fakes, and there is no
+second command to remember. `tsconfig.tests.json` at the root covers every suite
+that runs under node — its `include` is a glob, so **a new package's tests cost
+one reference line there, not a file**. Only a genuinely different compiler surface earns a file of
+its own, and there are three: `tools/downloader/web/test` (Bundler + DOM + JSX),
+`tools/downloader/e2e` (DOM + Playwright's types) and `scripts/test`
+(`allowJs`). They split on `lib` and `types` being per-project, which is what
+keeps `document` out of scope in an API test — enforced, not aspirational. Do
+not add a `test/tsconfig.json` back per package; that shape existed briefly and
+was eight copies of the same five lines. Do not reach for `node:test`: the pinned Node (22.15)
 cannot strip TypeScript types without a flag, so `.ts` tests fail under it.
 
 Fixtures, not live network calls — real services change, rate-limit and geo-vary,
@@ -150,8 +162,16 @@ No `console` — use the logger. Comment _why_, not _what_.
    worked example).
 2. Its packages, scoped `@<name>/*`, each with a `tsconfig.json` referencing the
    ones it depends on.
-3. Register the projects in the root `tsconfig.json` and a vitest project in
-   `vitest.config.ts`.
+3. Register each package's `src` project in the root `tsconfig.json`, and add a
+   vitest project in `vitest.config.ts`. Its tests are already inside
+   `tsconfig.tests.json`'s glob, so they need only a `references` entry there.
+   A `web` package is the exception, and it announces itself: the glob picks its
+   tests up too, and they fail loudly against the node surface — no DOM lib, no
+   JSX. Give it its own `test/tsconfig.json` beside the downloader's, add its
+   path to that glob's `exclude`, and reference it from the root. The `exclude`
+   names `tools/downloader/web/test/**` and nothing wider on purpose — a pattern
+   that pre-excluded every tool's `web` would drop a new one into no project at
+   all, and pass green while checking nothing.
 4. `tools/<name>/CLAUDE.md` — what the tool is, and only the rules specific to
    it. Do not restate anything on this page.
 5. `tools/<name>/docs/02-ROADMAP.md` and an empty `work/`, plus a row in

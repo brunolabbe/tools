@@ -1,0 +1,22 @@
+{
+  // `e2e/` was in no `tsconfig.json` at all: Playwright transpiles it without
+  // checking, so a helper that had drifted from the component it selects failed
+  // after a browser launch and a segmented clip rather than at the terminal.
+  //
+  // Its own project because of the two options below — DOM lib for the
+  // `page.evaluate` callbacks, `@playwright/test` for the runner's own types.
+  // It references `engine` because `fixtures/hls-origin.ts` imports
+  // `resolveFfmpegPath` — a real consumer of the build graph, not a loose
+  // folder.
+  "extends": "../../../tsconfig.tests.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "@playwright/test"]
+  },
+  "include": ["**/*.ts"],
+  // Replaces the root's `exclude` rather than adding to it — `extends` inherits
+  // the whole array, and the root's entry is about its own program, not this
+  // one.
+  "exclude": [".artifacts"],
+  "references": [{ "path": "../engine" }]
+}

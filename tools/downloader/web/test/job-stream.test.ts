@@ -200,7 +200,6 @@ describe("createJobStream", () => {
         durationSec: 10,
         downloadUrl: "/api/files/abc",
         expiresAt: "2026-08-05T16:00:00.000Z",
-        transcoded: false,
       },
       at: "2026-08-05T10:00:05.100Z",
     });
