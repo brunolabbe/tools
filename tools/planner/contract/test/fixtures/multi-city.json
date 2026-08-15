@@ -1,0 +1,118 @@
+{
+  "brief": {
+    "shape": { "state": "answered", "value": "multi-city" },
+    "origin": { "state": "answered", "value": "Halifax" },
+    "destination": { "state": "answered", "value": "Central Europe" },
+    "dates": {
+      "state": "answered",
+      "value": { "kind": "window", "earliest": "2027-05-01", "latest": "2027-06-15", "nights": 12 }
+    },
+    "travellers": { "state": "answered", "value": 2 },
+    "ages": { "state": "declined" },
+    "accessNeeds": { "state": "declined" },
+    "budget": { "state": "answered", "value": { "kind": "band", "band": "comfortable" } },
+    "effort": { "state": "answered", "value": "moderate" },
+    "comfort": { "state": "answered", "value": "hotel" },
+    "dealBreakers": { "state": "answered", "value": ["No internal flights"] },
+    "details": {
+      "shape": "multi-city",
+      "cities": { "state": "answered", "value": ["Vienna", "Ljubljana", "Trieste"] },
+      "interCityTransport": { "state": "answered", "value": "train" },
+      "minNightsPerCity": { "state": "answered", "value": 3 },
+      "context": {
+        "state": "answered",
+        "value": "The order is not fixed — we picked those three because the trains between them looked reasonable, and we would drop one rather than rush all three."
+      }
+    }
+  },
+  "candidates": [
+    {
+      "id": "mc-cand-1",
+      "specialist": "route-and-logistics",
+      "title": "Vienna to Ljubljana by direct rail",
+      "summary": "A single train rather than a change at Villach, which is the difference between a travel morning and a travel day. Book at the ninety-day mark for the cheap fare bucket.",
+      "place": {
+        "name": "Wien Hauptbahnhof",
+        "locality": "Vienna, Austria",
+        "coordinates": { "latitude": 48.1854, "longitude": 16.3765 }
+      },
+      "durationMinutes": 360,
+      "cost": {
+        "currency": "EUR",
+        "low": 30,
+        "high": 80,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "01-01", "to": "12-31" },
+      "bookingLeadTimeDays": 90,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "mc-cand-2",
+      "specialist": "route-and-logistics",
+      "title": "Ljubljana to Trieste by bus, not train",
+      "summary": "The rail link is slow and involves a change; the coach is under two hours and runs several times a day. Worth naming because the party asked for trains and this is the one leg where the train is the wrong answer.",
+      "place": {
+        "name": "Ljubljana bus station",
+        "locality": "Ljubljana, Slovenia",
+        "coordinates": { "latitude": 46.0583, "longitude": 14.5108 }
+      },
+      "durationMinutes": 110,
+      "cost": {
+        "currency": "EUR",
+        "low": 10,
+        "high": 18,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "01-01", "to": "12-31" },
+      "bookingLeadTimeDays": 7,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "mc-cand-3",
+      "specialist": "activities",
+      "title": "Lake Bled as a day out of Ljubljana",
+      "summary": "An hour and a bit each way by bus, and it does not need a night of its own — which is what keeps the three-nights-per-city floor intact.",
+      "place": {
+        "name": "Lake Bled",
+        "locality": "Slovenia",
+        "coordinates": { "latitude": 46.3625, "longitude": 14.0936 }
+      },
+      "durationMinutes": 480,
+      "cost": {
+        "currency": "EUR",
+        "low": 20,
+        "high": 45,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "04-01", "to": "10-31" },
+      "bookingLeadTimeDays": 0,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "mc-cand-4",
+      "specialist": "food",
+      "title": "Osmize in the Carso above Trieste",
+      "summary": "Farmhouses licensed to sell their own wine and cured meat for a few weeks a year, announced when they open rather than scheduled. Which are open during the trip cannot be known this far out.",
+      "place": {
+        "name": "Carso",
+        "locality": "Trieste, Italy",
+        "coordinates": null
+      },
+      "durationMinutes": 180,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 35,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": null,
+      "bookingLeadTimeDays": null,
+      "provenance": { "kind": "model-asserted" }
+    }
+  ]
+}

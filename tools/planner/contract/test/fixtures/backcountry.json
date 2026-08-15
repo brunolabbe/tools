@@ -1,0 +1,110 @@
+{
+  "brief": {
+    "shape": { "state": "answered", "value": "backcountry" },
+    "origin": { "state": "answered", "value": "Québec City" },
+    "destination": { "state": "answered", "value": "Parc national de la Gaspésie" },
+    "dates": {
+      "state": "answered",
+      "value": { "kind": "window", "earliest": "2027-08-15", "latest": "2027-09-15", "nights": 3 }
+    },
+    "travellers": { "state": "answered", "value": 2 },
+    "ages": { "state": "answered", "value": [34, 36] },
+    "accessNeeds": { "state": "declined" },
+    "budget": { "state": "answered", "value": { "kind": "band", "band": "shoestring" } },
+    "effort": { "state": "answered", "value": "demanding" },
+    "comfort": { "state": "answered", "value": "rustic" },
+    "dealBreakers": {
+      "state": "answered",
+      "value": ["Nothing that requires a river ford above the knee"]
+    },
+    "details": {
+      "shape": "backcountry",
+      "nightsOut": { "state": "answered", "value": 3 },
+      "shelter": { "state": "answered", "value": "hut" },
+      "maxDailyDistanceKm": { "state": "answered", "value": 16 },
+      "experience": { "state": "answered", "value": "some" },
+      "context": {
+        "state": "answered",
+        "value": "We have done hut-to-hut in the Chic-Chocs once before, in fair weather. Neither of us has navigated in cloud and we would rather not learn on this trip."
+      }
+    }
+  },
+  "candidates": [
+    {
+      "id": "bc-cand-1",
+      "specialist": "lodging",
+      "title": "Refuge Le Carouge",
+      "summary": "A bunkroom hut on the traverse, wood stove, no plumbing. Reserved through SEPAQ and it goes early for the late-August weekends.",
+      "place": {
+        "name": "Refuge Le Carouge",
+        "locality": "Parc national de la Gaspésie, Québec",
+        "coordinates": { "latitude": 48.9497, "longitude": -66.1522 }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 30,
+        "high": 45,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "06-15", "to": "10-01" },
+      "bookingLeadTimeDays": 150,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "bc-cand-2",
+      "specialist": "route-and-logistics",
+      "title": "Mont Albert traverse, southern approach",
+      "summary": "Up the south face to the plateau and across it. About 14 km with the climb front-loaded, which suits a party carrying three nights of food.",
+      "place": {
+        "name": "Mont Albert",
+        "locality": "Parc national de la Gaspésie, Québec",
+        "coordinates": { "latitude": 48.9333, "longitude": -66.1833 }
+      },
+      "durationMinutes": 420,
+      "cost": null,
+      "season": { "from": "06-24", "to": "09-30" },
+      "bookingLeadTimeDays": null,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "bc-cand-3",
+      "specialist": "conditions-and-gear",
+      "title": "Plateau weather and the caribou closure",
+      "summary": "The plateau makes its own weather and can be in cloud with the valley clear, which is the navigation case this party said it wanted to avoid. Parts of the range close seasonally for the caribou herd — the park authority is the only source that can say which, and it must be checked before departure.",
+      "place": {
+        "name": "Mont Albert plateau",
+        "locality": "Parc national de la Gaspésie, Québec",
+        "coordinates": null
+      },
+      "durationMinutes": null,
+      "cost": null,
+      "season": { "from": "06-01", "to": "10-15" },
+      "bookingLeadTimeDays": null,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "bc-cand-4",
+      "specialist": "practicalities",
+      "title": "Park entry and hut reservation through SEPAQ",
+      "summary": "Backcountry huts are reservation-only and entry is per person per day. Both are bought in the same transaction, which is the one deadline this trip actually has.",
+      "place": {
+        "name": "Parc national de la Gaspésie",
+        "locality": "Québec, Canada",
+        "coordinates": null
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 10,
+        "high": 14,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 150,
+      "provenance": { "kind": "model-asserted" }
+    }
+  ]
+}

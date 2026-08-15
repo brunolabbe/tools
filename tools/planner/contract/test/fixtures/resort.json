@@ -1,0 +1,105 @@
+{
+  "brief": {
+    "shape": { "state": "answered", "value": "resort" },
+    "origin": { "state": "answered", "value": "Ottawa" },
+    "destination": { "state": "declined" },
+    "dates": { "state": "answered", "value": { "kind": "open", "nights": 7 } },
+    "travellers": { "state": "answered", "value": 5 },
+    "ages": { "state": "answered", "value": [38, 37, 9, 6, 2] },
+    "accessNeeds": { "state": "declined" },
+    "budget": {
+      "state": "answered",
+      "value": { "kind": "amount", "currency": "CAD", "amount": 7000, "basis": "total" }
+    },
+    "effort": { "state": "answered", "value": "gentle" },
+    "comfort": { "state": "answered", "value": "hotel" },
+    "dealBreakers": {
+      "state": "answered",
+      "value": ["Nothing with a connecting flight longer than two hours", "No adults-only property"]
+    },
+    "details": {
+      "shape": "resort",
+      "boardBasis": { "state": "answered", "value": "all-inclusive" },
+      "setting": { "state": "answered", "value": "beach" },
+      "onSiteMusts": {
+        "state": "answered",
+        "value": [
+          "Shallow pool the two-year-old can stand in",
+          "Kids' club that takes a six-year-old"
+        ]
+      },
+      "context": {
+        "state": "answered",
+        "value": "The point of this trip is that nobody has to plan anything once we land. We do not intend to leave the property and would rather not rent a car."
+      }
+    }
+  },
+  "candidates": [
+    {
+      "id": "rs-cand-1",
+      "specialist": "lodging",
+      "title": "All-inclusive family property, Riviera Maya",
+      "summary": "A zero-entry pool the youngest can stand in, a kids' club with a stated minimum age of four, and family rooms rather than two doubles that must be booked separately.",
+      "place": {
+        "name": "Riviera Maya",
+        "locality": "Quintana Roo, Mexico",
+        "coordinates": null
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 4200,
+        "high": 6400,
+        "basis": "per-party",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "11-15", "to": "04-30" },
+      "bookingLeadTimeDays": 120,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "rs-cand-2",
+      "specialist": "route-and-logistics",
+      "title": "Direct Ottawa to Cancún, and the resort transfer",
+      "summary": "There is a seasonal non-stop, which is what keeps this inside the party's two-hour connection rule. The airport transfer is normally sold with the package and is about an hour each way.",
+      "place": {
+        "name": "Cancún International Airport",
+        "locality": "Quintana Roo, Mexico",
+        "coordinates": { "latitude": 21.0365, "longitude": -86.8771 }
+      },
+      "durationMinutes": 300,
+      "cost": {
+        "currency": "CAD",
+        "low": 2600,
+        "high": 4000,
+        "basis": "per-party",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "12-01", "to": "04-15" },
+      "bookingLeadTimeDays": 120,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "rs-cand-3",
+      "specialist": "practicalities",
+      "title": "Passports for the children, and the entry form",
+      "summary": "A child's passport is valid five years and the two-year-old may not have one. This is the longest lead time on the trip and the only one that cannot be bought late.",
+      "place": {
+        "name": "Ottawa",
+        "locality": "Ontario, Canada",
+        "coordinates": null
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "CAD",
+        "low": 57,
+        "high": 120,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 180,
+      "provenance": { "kind": "model-asserted" }
+    }
+  ]
+}

@@ -98,12 +98,21 @@ The three pieces that turn a brief into a document, in the order the code forces
    specialists in parallel, each returning candidates and never a schedule, the
    run as a job with real progress. → [pl-5](./work/pl-5-orchestrator-and-fan-out.md)
 3. **The composer and the critic** — the `itinerary` package: packing days under
-   travel time, hours, season and budget, and an adversarial feasibility pass over
-   the result. Ordinary TypeScript, ordinary unit tests, no model.
+   hours, season and budget, and an adversarial feasibility pass over the result.
+   Ordinary TypeScript, ordinary unit tests, no model.
+   → [pl-9](./work/pl-9-composer-and-critic.md)
+4. **The plan, read honestly** — the days, the gaps, and which lines were
+   verified rather than asserted. Costs as bands, and a plan that admits what it
+   could not check. → [pl-10](./work/pl-10-plan-view-and-provenance.md)
+
+pl-9 depends only on pl-4, not on pl-5: the candidate sets are checked in, so the
+composer can be built and tested with no fan-out and no model. It and pl-5 can
+run in parallel.
 
 All of Phase 2 runs against the scripted provider and no grounding. That is
 deliberate: it makes the first plan a claim about the machinery — roster,
-fan-out, packing, feasibility, persistence — rather than about a model.
+fan-out, packing, feasibility, persistence — rather than about a model. **It also
+costs Phase 2 travel time**, which is the open question below.
 
 ## Phase 3 — Grounding behind a seam
 
@@ -146,6 +155,27 @@ authority for backcountry, marine or winter motorised travel. The reasons are in
 ## Still open
 
 Short, and each one is a real decision someone has to make rather than a gap:
+
+- **Whether Phase 2's composer can pack under travel time at all**, raised by
+  pl-4 on 2026-08-15 and unresolved. Phase 2 above promised packing "under travel
+  time"; §5 ranks distances and travel times as the **first** thing grounding
+  buys, and Phase 2 has no grounding. `Place.coordinates` is null until Phase 3,
+  so there is nothing to compute a leg from. This matters more than it sounds:
+  travel time is §2's failure 1, the single most common way an AI itinerary is
+  wrong, so a P2 that silently omits it is claiming more than it checked. Three
+  ways out, and it is a product decision rather than a technical one:
+  - **Pack without it and name the gap.** Consistent with _never fake progress_,
+    and it makes P2's "days that survive their own constraints" narrower than it
+    currently reads. The milestone's wording would have to change with it.
+  - **Allow a straight-line floor from coordinates.** Does not actually escape —
+    coordinates are themselves grounding, so this is Phase 3 wearing a hat.
+  - **Move travel-time grounding earlier**, letting one seam straddle the phase
+    boundary. Buys the most and costs the cleanliness of "Phase 2 is a claim about
+    machinery, not about a model".
+
+  Until it is decided, [pl-9](./work/pl-9-composer-and-critic.md) packs under
+  hours, season, budget and effort, and says travel time was not accounted for.
+  Whatever is chosen, an invented duration is not on the list.
 
 - **Which grounding backend first.** §5 ranks what to buy; it does not pick a
   vendor. Whichever it is, the fixtures come from its real payloads.

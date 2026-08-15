@@ -1,0 +1,138 @@
+{
+  "brief": {
+    "shape": { "state": "answered", "value": "city-and-culture" },
+    "origin": { "state": "answered", "value": "Toronto" },
+    "destination": { "state": "answered", "value": "Rome" },
+    "dates": {
+      "state": "answered",
+      "value": { "kind": "exact", "departure": "2027-10-09", "return": "2027-10-16" }
+    },
+    "travellers": { "state": "answered", "value": 2 },
+    "ages": { "state": "answered", "value": [68, 71] },
+    "accessNeeds": {
+      "state": "answered",
+      "value": "One of us can walk a few kilometres a day but not on cobbles for long, and stairs without a handrail are difficult."
+    },
+    "budget": {
+      "state": "answered",
+      "value": { "kind": "amount", "currency": "CAD", "amount": 350, "basis": "per-day" }
+    },
+    "effort": { "state": "answered", "value": "gentle" },
+    "comfort": { "state": "answered", "value": "hotel" },
+    "dealBreakers": {
+      "state": "answered",
+      "value": ["Nothing that needs to be at a place before 09:00", "No guided group tours"]
+    },
+    "details": {
+      "shape": "city-and-culture",
+      "pace": { "state": "answered", "value": "slow" },
+      "interests": {
+        "state": "answered",
+        "value": ["Roman archaeology", "Baroque painting", "markets"]
+      },
+      "context": {
+        "state": "answered",
+        "value": "We have been to Rome once, thirty years ago, and saw the obvious things then. We would rather spend a whole morning in one place than see four."
+      }
+    }
+  },
+  "candidates": [
+    {
+      "id": "cc-cand-1",
+      "specialist": "activities",
+      "title": "Galleria Borghese, timed entry",
+      "summary": "Two hours in one building, and the Caravaggios are on the ground floor. Entry is by a timed slot that must be reserved — there is no walk-up.",
+      "place": {
+        "name": "Galleria Borghese",
+        "locality": "Rome, Italy",
+        "coordinates": { "latitude": 41.9142, "longitude": 12.4922 }
+      },
+      "durationMinutes": 120,
+      "cost": {
+        "currency": "EUR",
+        "low": 15,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "01-01", "to": "12-31" },
+      "bookingLeadTimeDays": 21,
+      "provenance": {
+        "kind": "grounded",
+        "sources": [
+          {
+            "url": "https://galleriaborghese.beniculturali.it/en/",
+            "title": "Galleria Borghese — official site",
+            "fetchedAt": "2026-08-14T18:12:04.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "cc-cand-2",
+      "specialist": "activities",
+      "title": "Ostia Antica, by train from Porta San Paolo",
+      "summary": "A whole Roman town with almost none of the crowd of the Forum, and the site is flat once you are inside it. The train is half an hour and runs on a metro ticket.",
+      "place": {
+        "name": "Ostia Antica",
+        "locality": "Rome, Italy",
+        "coordinates": { "latitude": 41.7554, "longitude": 12.2917 }
+      },
+      "durationMinutes": 300,
+      "cost": {
+        "currency": "EUR",
+        "low": 12,
+        "high": 18,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "01-01", "to": "12-31" },
+      "bookingLeadTimeDays": 0,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "cc-cand-3",
+      "specialist": "food",
+      "title": "Mercato di Testaccio, late morning",
+      "summary": "A working market rather than a restored one, and it is indoors and level throughout. Best after ten, when the lunch counters open and the produce crowd has gone.",
+      "place": {
+        "name": "Mercato di Testaccio",
+        "locality": "Rome, Italy",
+        "coordinates": { "latitude": 41.8781, "longitude": 12.4753 }
+      },
+      "durationMinutes": 90,
+      "cost": {
+        "currency": "EUR",
+        "low": 10,
+        "high": 25,
+        "basis": "per-person",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": { "from": "01-01", "to": "12-31" },
+      "bookingLeadTimeDays": null,
+      "provenance": { "kind": "model-asserted" }
+    },
+    {
+      "id": "cc-cand-4",
+      "specialist": "lodging",
+      "title": "Hotel in Monti with a lift",
+      "summary": "Central enough to walk home from dinner, and it has a lift — which in this part of Rome is worth checking rather than assuming.",
+      "place": {
+        "name": "Monti",
+        "locality": "Rome, Italy",
+        "coordinates": { "latitude": 41.8947, "longitude": 12.4922 }
+      },
+      "durationMinutes": null,
+      "cost": {
+        "currency": "EUR",
+        "low": 180,
+        "high": 280,
+        "basis": "per-party",
+        "provenance": { "kind": "model-asserted" }
+      },
+      "season": null,
+      "bookingLeadTimeDays": 90,
+      "provenance": { "kind": "model-asserted" }
+    }
+  ]
+}
