@@ -267,3 +267,34 @@ candidates here carry real coordinates, which the first pass at the migration
 overwrote with `null`. The fixtures are more grounded than the roadmap's
 "coordinates are null until Phase 3" suggests; that sentence is about what the
 tool _produces_.
+
+#### Amended 2026-08-16 by pl-5
+
+**The six candidate sets are realistic candidate sets and are not claims about
+who ran.** Read as the latter they are wrong twice over, and both were found by
+building the thing that consumes them.
+
+**The resort set has a `route-and-logistics` candidate that §4 says should not
+exist.** "A resort week needs lodging, food and practicalities, and a route
+specialist would produce noise about airport transfers" is the analysis's own
+sentence, so [pl-5](./pl-5-orchestrator-and-fan-out.md)'s roster has no route row
+for `resort` — which makes the fixture's five-hour Ottawa→Cancún transfer a
+candidate the fan-out would never propose. [pl-9](./pl-9-composer-and-critic.md)
+had already found that the composer drops it, for an unrelated reason: a resort
+brief has no drive appetite, so a transfer is charged to a `gentle` day's 180
+activity minutes and does not fit. Two mechanisms disagreeing with the fixture
+independently is a reason to believe them rather than it.
+
+**Its route candidates are routinely over the day the brief asked for**, which is
+pl-9's finding in full and is now a rule: an appetite answer bounds what a
+specialist may propose, stated in the prompt and enforced after the reply. The
+road-trip set's 5½-hour leg to a party who answered `half-day` is the worked
+example of what not to write, and pl-5's scripted answers split the same journey
+into legs that fit.
+
+**Neither is a defect in this ticket and neither was changed.** These sets exist
+so the composer could be built and tested before a fan-out existed, and they did
+that job — including by being wrong in a way that taught pl-5 what to enforce.
+Anyone reaching for them as "what a roster produces" should reach for
+`SCRIPTED_FAN_OUT` in `@planner/agent` instead, which is keyed by shape _and_
+specialist and is written against these same six briefs.

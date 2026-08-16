@@ -2,7 +2,7 @@
   "name": "@planner/agent",
   "version": "0.1.0",
   "private": true,
-  "description": "The planning agent: prompts, the conversation loop, and the seam every chat provider plugs into.",
+  "description": "The planning agent: the roster, the specialists, the fan-out over them, and the seam every model provider plugs into.",
   "files": [
     "dist"
   ],
@@ -21,6 +21,10 @@
   },
   "dependencies": {
     "@planner/contract": "*",
-    "@webtools/core": "*"
+    "@webtools/core": "*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@planner/itinerary": "*"
   }
 }

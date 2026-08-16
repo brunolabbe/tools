@@ -235,6 +235,23 @@ of the brief, so it is a table a test can assert against. The alternative — a
 chain of conditionals inside the orchestrator — is where "which agents ran and
 why" stops being answerable.
 
+**The fan-out takes the day's ceilings as an argument; `agent` does not import
+`itinerary`.** An appetite answer is a constraint on what a specialist may
+propose, and the numbers behind it live in `itinerary/src/limits.ts` — so the
+obvious move is an import, and the table above says `agent` depends on `contract`.
+Both are kept: `runFanOut` takes a **required** `TripCapacity` and `api`
+assembles it from `dayCapacity` and `tripSpan`. Required rather than optional is
+the point — a caller who forgets it writes the bug pl-9 found, and forgetting
+should be a compile error rather than a plan with no drives in it.
+
+The one thing that had to be restated on the agent's side is which of the day's
+two budgets a specialist's output is charged to, which is the packer's
+`BUCKET_OF` seen from the proposing side. It is `CANDIDATE_LIMIT_OF`, and the
+drift it invites is why `@planner/itinerary` is a **devDependency** of `agent`: a
+test imports both tables and fails when they disagree. That is the whole of the
+edge — no production file in `agent` imports `itinerary`, and the dependency
+table above is still true of what ships.
+
 **SQLite and an in-process queue, as the downloader chose.** Runs are
 long-running and low-throughput; the queue is not the bottleneck. Keep it behind
 an interface, do not pay for Redis now.
