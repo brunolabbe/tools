@@ -85,7 +85,7 @@ const ANSWERS = {
 } as const;
 
 function mount(): void {
-  render(<Wizard intakeId="intake-1" onExit={vi.fn()} />);
+  render(<Wizard intakeId="intake-1" onExit={vi.fn()} onDraft={vi.fn()} />);
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +252,7 @@ test("core-complete with nothing left to sharpen offers only the way out", async
     }),
   );
   const onExit = vi.fn();
-  render(<Wizard intakeId="intake-1" onExit={onExit} />);
+  render(<Wizard intakeId="intake-1" onExit={onExit} onDraft={vi.fn()} />);
 
   const heading = await screen.findByRole("heading", { name: "The essentials are done." });
   expect(heading.parentElement?.textContent).toContain("nothing left to sharpen");

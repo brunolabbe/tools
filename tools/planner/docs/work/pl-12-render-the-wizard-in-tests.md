@@ -172,3 +172,19 @@ to re-open it — is exercised only insofar as the preview gate is; the `editing
 state's own transitions have no test. Error rendering (`AppError.from` reaching
 the `bad` paragraph) is untested. None of these is a claim in
 `tools/planner/CLAUDE.md`, which is where this ticket's scope came from.
+
+### CI, after the fact
+
+`check` went red on the pull request after pl-16 merged to `main` ahead of it.
+That ticket made `onDraft` a required `WizardProps` prop, and both `render` sites
+here predate it — `tsc --build` failed on `tsconfig.tests.json` with two
+`TS2741`s and nothing else. Fixed by passing `onDraft={vi.fn()}` from `mount()`
+and from the one test that renders directly.
+
+Nothing was asserted about drafting: the checkpoint now carries a "Draft a plan"
+button that no test here touches, and covering that fork belongs to whoever owns
+the run's UI. Note that `core-complete with nothing left to sharpen offers only
+the way out` no longer quite means what its name says — the way out is now one of
+two buttons on that screen. It still asserts what it was written to assert
+(`Keep refining` absent, `onExit` fired), so it is left alone rather than renamed
+in a fix commit.
