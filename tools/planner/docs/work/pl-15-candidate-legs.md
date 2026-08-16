@@ -136,3 +136,28 @@ Four things the brief did not know:
   transfer into one candidate and therefore has three points, not two; the leg
   is Ottawa → Cancún and the transfer stays in the summary. If that turns out to
   matter, the fix is two candidates, not three points.
+
+**2026-08-16 — the fallout pass.** Five passages across the tool said some
+version of _"there is no leg"_, which this ticket made false in a specific way:
+legs exist and carry both ends; what is missing is a distance along one. Every
+conclusion still held — travel time stays unchecked on every plan — so what
+moved is the reason, in `itinerary/src/unchecked.ts` (twice),
+`itinerary/src/compose.ts`, `docs/03-STATUS.md` and `docs/02-ROADMAP.md`. Three
+of those were shipped code comments rather than documentation.
+
+Two tickets and one rules page did not know about the union and now do:
+
+- **[pl-5](./pl-5-orchestrator-and-fan-out.md)** — its route specialist must
+  return `between`, as a trap and an acceptance criterion.
+- **[pl-10](./pl-10-plan-view-and-provenance.md)** — it renders the plan and is
+  `ready`, so it could have shipped a drive rendered as one place. It also
+  inherits a case no earlier item could produce: **a leg can be half-grounded.**
+  `Provenance` is per-candidate but coordinates are per-`Place`, and the
+  multi-city rail leg has them on its origin station and not on its destination.
+- **`tools/planner/CLAUDE.md`** — a standing rule that a movement carries both
+  its ends, since that page is what every future specialist author reads and
+  pl-5's brief only covers pl-5.
+
+[pl-9](./pl-9-composer-and-critic.md)'s log carries an amendment rather than an
+edit: its argument for why travel time is unchecked rests on the premise this
+ticket removed, and the repo's habit is to keep the argument and override it.

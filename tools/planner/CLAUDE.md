@@ -96,6 +96,15 @@ where, how long, what it costs, when it is in season, how far ahead it must be
 booked, and its sources — with nothing about which day they fall on. Two
 specialists that each write itinerary produce two itineraries to reconcile.
 
+**A movement carries both its ends.** `Candidate.location` is `at` a place or
+`between` two (pl-15), and a specialist that proposes a drive, a transfer, a
+flight or a traverse returns the second. Endpoints in the title — "Montréal to
+Rimouski via the 132", with the 132 in the one `Place` — is the shape the
+checked-in fixtures had and the shape a model will write again unless the prompt
+and the output schema both say otherwise. Travel time between consecutive items,
+a detour weighed off a leg, and conditions along one corridor rather than
+another are each unbuildable without both ends, and none of them is built.
+
 **A specialist reads the brief, and only the brief.** Not the raw answers, not
 the tree, not another specialist's output. The `TripBrief` indirection is what
 makes the fan-out testable from a fixture, and it is what made swapping the

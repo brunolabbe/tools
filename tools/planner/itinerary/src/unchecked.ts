@@ -29,15 +29,21 @@ export const UNCHECKED_CONSTRAINTS = [
    * Travel time between consecutive items. §2's failure 1, and the one this
    * list exists for.
    *
-   * `Place.coordinates` is `null` until grounding lands, so there is no leg to
-   * compute — decided 2026-08-16 for Phase 2 (roadmap, _Still open_): pack
-   * without it and name the gap, rather than invent a duration or pull
+   * `Place.coordinates` is `null` until grounding lands, so a leg has no
+   * measured length — decided 2026-08-16 for Phase 2 (roadmap, _Still open_):
+   * pack without it and name the gap, rather than invent a duration or pull
    * grounding forward. A drive a specialist *stated* a duration for is still
    * bounded by the day's drive budget; what is unchecked is the distance
    * between one item and the next.
+   *
+   * **A leg is no longer the thing that is missing.** pl-15 made a candidate
+   * either `at` a place or `between` two, so a drive now carries both of its
+   * ends. What is still absent is a distance along one, and that is grounding.
+   * The conclusion here did not move when the premise did — this list is
+   * unchanged — but the reason it holds is narrower than it was.
    */
   "travel-time",
-  /** A backcountry party's `maxDailyDistanceKm`. Same cause: no coordinates, no legs. */
+  /** A backcountry party's `maxDailyDistanceKm`. Same cause: ends without a distance between them. */
   "daily-distance",
   /** A machine's `rangeKm` between fuel stops. Same cause. */
   "machine-range",

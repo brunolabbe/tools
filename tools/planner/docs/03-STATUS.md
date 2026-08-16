@@ -132,7 +132,9 @@ comes back as `UNCHECKED_CONSTRAINTS` on the result rather than as silence.
 
 **Phase 2 does not pack under travel time, and that is now decided rather than
 open.** `Place.coordinates` is null until grounding and §5 puts distances in
-Phase 3, so there is no leg to compute. Decided 2026-08-16: **pack without it
+Phase 3, so a leg has no measured length. (Until
+[pl-15](./work/pl-15-candidate-legs.md) it had no ends either; that half is
+closed and this one is not.) Decided 2026-08-16: **pack without it
 and name the gap**, which narrowed the P2 milestone's wording — see the
 roadmap. Every plan carries `travel-time` on its unchecked list, without
 exception, and a test per trip shape says so. Daily distance (backcountry) and

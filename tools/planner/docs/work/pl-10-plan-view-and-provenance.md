@@ -59,16 +59,31 @@ _produce_ a document nobody can read.
    candidate's provenance and its cost's provenance are **separate** and may
    disagree — a real place with a guessed price is the common case, and the view
    must be able to say exactly that.
-4. **Show costs as bands, never as figures.** A `CostEstimate` is `low`/`high`
+4. **An item is at a place or runs between two.** `Candidate.location` is a
+   union as of [pl-15](./pl-15-candidate-legs.md) — `at` a place, or `between`
+   two — and a drive, a transfer, a flight or a traverse is the second. Rendering
+   only `location.place` type-errors; rendering only a leg's `from` silently
+   drops where it goes. Both kinds appear in the checked-in fixtures, so this is
+   not a case that waits for pl-5.
+
+   **A leg can be half-grounded, and that is new.** `Provenance` is on the
+   candidate as a whole, but coordinates are per-`Place`: the multi-city rail leg
+   has them on its origin station and not on its destination. So one item can be
+   partly located and partly not, which no earlier item could be. Decide what
+   that renders as rather than letting it fall out of the template — the honest
+   answer is probably to say nothing about coordinates at all until Phase 3 uses
+   them, but it is a decision.
+
+5. **Show costs as bands, never as figures.** A `CostEstimate` is `low`/`high`
    with a basis. Rendering the midpoint, or the low end, turns an estimate into a
    quote — which is the thing §5 says ages fastest and the reason the contract has
    no field for a single number.
-5. **Show the gaps as part of the plan, not as an error.** A `PlanGap` names a
+6. **Show the gaps as part of the plan, not as an error.** A `PlanGap` names a
    specialist and a reason, and each reason is a different sentence: "not
    applicable to this trip" is reassurance, "we tried and could not" is a warning.
    They belong in the document's flow where the missing section would have been —
    not in a toast that disappears.
-6. **Show what was not checked, beside the days.** `ComposeResult.unchecked` from
+7. **Show what was not checked, beside the days.** `ComposeResult.unchecked` from
    `@planner/itinerary` — each entry a kind, a sentence already written for a
    reader, and the candidate ids it applies to when it applies to particular
    items rather than to the whole plan. Travel time is on every plan and is the
@@ -93,11 +108,11 @@ _produce_ a document nobody can read.
    the one to refuse: it makes the honesty a property of how you arrived at the
    page.
 
-7. **Pinning, from the UI.** Pin and unpin an item. This is the one write that
+8. **Pinning, from the UI.** Pin and unpin an item. This is the one write that
    does **not** create a revision, and the database enforces it: `plan_items`
    rejects an update of every column but `pinned`. A pin is a statement about what
    the next re-plan may touch.
-8. **Surface the revision list, read-only.** Which revision is showing, and how
+9. **Surface the revision list, read-only.** Which revision is showing, and how
    many there are. **The diff is Phase 4 and is out of scope here** — this ticket
    is the honest read of one document, not the revision experience.
 
