@@ -12,13 +12,15 @@
   // different. Anything that would differ merely by an `include` is not a
   // project — it is one more glob here.
   //
-  // **With one exception, and it is a mechanical one:** the Playwright surface
-  // has two files, `tools/downloader/e2e` and `tools/planner/e2e`, because an
-  // `include` is rooted at the config's own directory and cannot span both
-  // tools. Four surfaces, five projects. A third tool's e2e suite makes it six,
-  // and that is expected rather than a smell — it is the one place where "not a
-  // project, one more glob" cannot apply, since a glob here would pull both
-  // tools' specs onto the node surface and fail on `document`.
+  // **With one exception, and it is a mechanical one:** a surface that two tools
+  // both need costs a file per tool, because an `include` is rooted at the
+  // config's own directory and cannot span both. That is true of the Playwright
+  // surface — `tools/downloader/e2e` and `tools/planner/e2e` — and since pl-12
+  // it is true of the `web` one too, `tools/downloader/web/test` and
+  // `tools/planner/web/test`. Four surfaces, six projects, and a third tool with
+  // either suite makes it seven. That is expected rather than a smell: it is the
+  // one place where "not a project, one more glob" cannot apply, since a glob
+  // here would pull those files onto the node surface and fail on `document`.
   //
   // That is also the one thing the split buys, and it is enforced rather than
   // aspirational: naming `document` in a node suite fails to compile, because
@@ -91,17 +93,24 @@
   // loudly until someone gives it a project of its own and a line here. Adding
   // a tool must not be able to open a silent gap.
   //
-  // The carve-out is not load-bearing today and should not pretend to be:
-  // dropping it and referencing `tools/downloader/web` typechecks green, since
-  // the current web tests are reducers, a job store and presentation helpers
-  // with no DOM global between them. What it buys is that they are checked the
-  // way they run — `web` is `moduleResolution: "Bundler"`, so a specifier Vite
+  // The downloader's carve-out is not load-bearing today and should not pretend
+  // to be: dropping it and referencing `tools/downloader/web` typechecks green,
+  // since its web tests are reducers, a job store and presentation helpers with
+  // no DOM global between them. What it buys is that they are checked the way
+  // they run — `web` is `moduleResolution: "Bundler"`, so a specifier Vite
   // resolves and NodeNext does not is caught at the gate rather than at build
   // time. The DOM half starts paying when dl-15's component tests land.
   //
+  // The planner's carve-out **is** load-bearing, and is the worked example of
+  // why the list is concrete: pl-12's suite renders the wizard, so it names
+  // `document`, `HTMLInputElement` and JSX. Under this project it does not
+  // compile; under its own it does. One path per `web` suite, added when that
+  // suite gets a project — never a pattern that would cover a suite with no
+  // project behind it.
+  //
   // Anything extending this file must restate `exclude`: `extends` inherits it,
   // and it would otherwise exclude that project's own files.
-  "exclude": ["tools/downloader/web/test/**"],
+  "exclude": ["tools/downloader/web/test/**", "tools/planner/web/test/**"],
   "references": [
     { "path": "./packages/core" },
     { "path": "./tools/downloader/contract" },

@@ -114,8 +114,8 @@ check` holds a fake to the signature of the thing it fakes, and there is no
 second command to remember. `tsconfig.tests.json` at the root covers every suite
 that runs under node — its `include` is a glob, so **a new package's tests cost
 one reference line there, not a file**. Only a genuinely different compiler surface earns a file of
-its own, and there are three beyond the default: `tools/downloader/web/test`
-(Bundler + DOM + JSX), the Playwright surface (DOM + Playwright's types) and
+its own, and there are three beyond the default: the `web` surface (Bundler +
+DOM + JSX), the Playwright surface (DOM + Playwright's types) and
 `scripts/test` (`allowJs`). They split on `lib` and `types` being per-project,
 which is what keeps `document` out of scope in an API test — enforced, not
 aspirational.
@@ -123,11 +123,13 @@ aspirational.
 **A surface is shared; a project file is not.** `tools/downloader/e2e` and
 `tools/planner/e2e` are the same surface and still need one file each, because a
 project's `include` is rooted at its own directory — there is no way to write one
-that spans both without moving the specs. So the count of surfaces is three and
-the count of files is four, and a second tool's e2e suite costs a file of its own
-copied from the first. That is not the per-package `test/tsconfig.json` shape
-below returning: it is one file per _tool's_ e2e suite, of which there are as
-many as there are tools with one.
+that spans both without moving the specs. The same is true of the `web` surface
+since pl-12: `tools/downloader/web/test` and `tools/planner/web/test` are twins.
+So the count of surfaces is three and the count of files is five, and a second
+tool's e2e or `web` suite costs a file of its own copied from the first. That is
+not the per-package `test/tsconfig.json` shape below returning: it is one file
+per _tool's_ suite on a shared surface, of which there are as many as there are
+tools with one.
 
 Do not add a `test/tsconfig.json` back per package; that shape existed briefly and
 was eight copies of the same five lines. Do not reach for `node:test`: the pinned Node (22.15)

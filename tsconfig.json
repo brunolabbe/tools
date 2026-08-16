@@ -26,6 +26,7 @@
 
     { "path": "./tsconfig.tests.json" },
     { "path": "./tools/downloader/web/test" },
+    { "path": "./tools/planner/web/test" },
     { "path": "./tools/downloader/e2e" },
     { "path": "./tools/planner/e2e" },
     { "path": "./scripts/test" }

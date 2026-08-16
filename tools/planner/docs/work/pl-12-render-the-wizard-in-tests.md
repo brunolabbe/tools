@@ -3,7 +3,7 @@ id: pl-12
 tool: planner
 title: Render the wizard's components in tests, not only the routes under them
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: [pl-7]
 ---
@@ -94,4 +94,97 @@ asserting a fixture. Hand components the `IntakeState` the server would return.
 
 ## Log
 
-_Not started._
+**2026-08-16 — done.** `tools/planner/web/test/` exists and holds 21 tests over
+two files plus a fixture module. `npm test -- --project planner` is 351 tests
+across 27 files, up from 330 across 25, and `npm run check` is green.
+
+**The jsdom pattern, since dl-15 has not landed.** A `// @vitest-environment
+jsdom` docblock at the top of each rendering file, and **no change to
+`vitest.config.ts` at all** — which is the one line of the brief's Area that
+turned out to be wrong. The `planner` project's `include` is
+`tools/planner/*/test/**/*.test.{ts,tsx}` and it already collects a `.tsx` file
+under `web/test`, so the suite needed nothing added; a project entry of its own
+would have had to be carved back out of that glob to stop both collecting the
+same files, which is the same "two owners and no authoritative answer" shape
+`tsconfig.tests.json` warns about for the compiler. The API suite keeps
+`environment: "node"` and pays nothing. **dl-15 should follow this** rather than
+pick again: its own project's glob has the same shape, and one repo with two
+answers to "how does a test get a DOM" is worse than either answer.
+
+**The compiler surface.** `tools/planner/web/test/tsconfig.json` is the
+downloader's twin, `tsconfig.tests.json`'s `exclude` gained the concrete second
+path, and the root `tsconfig.json` gained the reference. The carve-out is
+load-bearing here in a way the downloader's is not, and it was measured rather
+than assumed: dropping `tools/planner/web/test/**` from that `exclude` fails the
+build with TS17004 (JSX with no `jsx` option), TS2339 on `HTMLInputElement`, and
+a TS6307 that spreads into `web/src` — where the downloader's carve-out is still
+green when dropped. Its comment now says so, and the header's "four surfaces,
+five projects" is now six: the `web` surface has become the second one two tools
+share, for exactly the reason the Playwright one does. Root `CLAUDE.md`'s
+matching count went from four files to five.
+
+**The negative direction is checked too.** A `document` reference in
+`tools/planner/api/test/` still fails TS2584, so the split is enforced in both
+directions and not merely declared.
+
+**Removing the preview call turns three tests red**, as the acceptance asked —
+verified by deleting the `previewAnswer` block from `Wizard.tsx` and running the
+suite, not by reading it.
+
+### What the brief got wrong, or did not know
+
+- **Four devDependencies, not three.** `@testing-library/react` v16 declares
+  `@testing-library/dom` as a **peer** rather than bundling it the way v14 did,
+  so it has to be named explicitly or the resolver finds nothing. The list is
+  `@testing-library/dom`, `@testing-library/react`, `@testing-library/user-event`
+  and `jsdom`.
+- **`vitest.config.ts` did not need touching** — see above.
+- **"A `legend` per fieldset and a `label` per input" is only two-thirds true.**
+  The choice controls have their `legend`, and `dates` and `budget` label every
+  input. But `text`, `text-list`, `number` and `number-list` render a bare
+  `input`/`textarea` with `id={field-...}` and **no `label` at all** — the prompt
+  is the `h2` in `QuestionCard`, a level up, which nothing associates with the
+  field. Those four have no accessible name to query by, so `controls.test.tsx`
+  asks for them by role alone. That is a real accessibility defect and not a
+  testing inconvenience; it is left alone here because pl-16 is editing
+  `web/src` in parallel and a test can be written without it, and it is written
+  up in `03-STATUS.md`'s gaps. The fix is an `aria-labelledby` per field and one
+  changed query in this suite.
+- **`QuestionCard`, `Checkpoint` and `ConfirmDiscard` are not exported.** The
+  brief names them as units to cover, and the honest way to reach them without
+  touching `web/src` is through `Wizard` with `src/api/intake.ts` faked — which
+  is what the traps ask for anyway, and it covers the wiring between them for
+  free. No component was exported and no `web/src` file was changed.
+- **The fixtures are typed builders, not a captured payload.** "Hand components
+  the `IntakeState` the server would return" reads like a checked-in JSON
+  capture, but `web` does not depend on `@planner/intake` and the brief's own
+  dependency list says to keep it that way. `test/fixtures.ts` builds the state
+  from `@planner/contract` types instead — `emptyBrief()` included, so the slot
+  inventory is not restated — which gives the same protection against drift via
+  `npm run check` and keeps the tree out of it. No test names a real question id.
+
+### What is deliberately not covered
+
+`Brief.tsx`, `Trips.tsx`, `App.tsx` and `format.ts` render but nothing asserts
+them; the brief scoped this to the two rules that are UI claims, and the brief
+panel is not one of them. `Wizard`'s edit path — clicking an answer in the aside
+to re-open it — is exercised only insofar as the preview gate is; the `editing`
+state's own transitions have no test. Error rendering (`AppError.from` reaching
+the `bad` paragraph) is untested. None of these is a claim in
+`tools/planner/CLAUDE.md`, which is where this ticket's scope came from.
+
+### CI, after the fact
+
+`check` went red on the pull request after pl-16 merged to `main` ahead of it.
+That ticket made `onDraft` a required `WizardProps` prop, and both `render` sites
+here predate it — `tsc --build` failed on `tsconfig.tests.json` with two
+`TS2741`s and nothing else. Fixed by passing `onDraft={vi.fn()}` from `mount()`
+and from the one test that renders directly.
+
+Nothing was asserted about drafting: the checkpoint now carries a "Draft a plan"
+button that no test here touches, and covering that fork belongs to whoever owns
+the run's UI. Note that `core-complete with nothing left to sharpen offers only
+the way out` no longer quite means what its name says — the way out is now one of
+two buttons on that screen. It still asserts what it was written to assert
+(`Keep refining` absent, `onExit` fired), so it is left alone rather than renamed
+in a fix commit.
