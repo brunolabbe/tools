@@ -40,6 +40,11 @@ context — numbered steps, named files, the traps worth knowing in advance.
 Acceptance, in terms someone else can check. "Tests prove X" or "this command
 produces Y", never "it works".
 
+## Review
+
+The gate. One row per line above, each naming the test that proves it. Absent
+until the work is reviewed, and written by the review rather than by the author.
+
 ## Log
 
 Appended as the work happens: decisions taken, commits, what turned out to be
@@ -67,6 +72,50 @@ did not happen.
 **One file per ticket, and the file is the unit of work.** If a ticket needs
 splitting to be dispatchable, split it into two files rather than growing a
 checklist that only its author can read.
+
+## The review gate
+
+`Done when` is written so that someone else can check it. **`Review` is where
+someone else checked it**, and it is on the ticket for the same reason the Log
+is: a verdict that lives in a chat scrollback is not a record, and the next
+person to touch this code cannot find it.
+
+It is one table — a row per acceptance line, naming the test that proves it,
+`file.test.ts:88` rather than "covered" — a list of findings by severity, and a
+single word:
+
+| Gate         | When                                                              |
+| ------------ | ----------------------------------------------------------------- |
+| **PASS**     | Every acceptance line proven, nothing found above `low`           |
+| **CONCERNS** | A `med` finding, or a line proven only by a gate that has not run |
+| **FAIL**     | A `high` finding, or an acceptance line nothing asserts at all    |
+| **WAIVED**   | A human overrode a gate, named themself, and said why             |
+
+The vocabulary is fixed so that the gate is a decision rather than a mood. Prose
+verdicts drift towards the reviewer's appetite for argument that afternoon; four
+words with a written rule do not, and "CONCERNS" is a thing you can grep for
+across every ticket a milestone contains.
+
+**The middle row is the one that earns the section.** An acceptance line whose
+proof is a tool's e2e suite or its container build is proven by nothing that runs
+on your machine — those gates live in `.github/workflows/<tool>.yml` and only
+there. [pl-16](../tools/planner/docs/work/pl-16-the-plan-run.md) is the worked
+example: `npm run check` green, 1,020 tests green, and the image would not boot.
+That row is `unproven (gate)`, which is deliberately neither PASS nor FAIL — the
+work may be perfectly correct and simply unproven, and saying so is the whole
+job.
+
+**A review appends; it never edits the brief and never moves `status`.** A FAIL
+is a report, and whether the work stops is the author's call. The reviewer's job
+is to make the state of the thing legible, not to decide it.
+
+The procedure is a skill —
+[`.claude/skills/review-ticket`](../.claude/skills/review-ticket/SKILL.md),
+invoked as `/review-ticket <id>`. It reads the ticket, delegates defect-hunting
+to the `code-review` skill rather than repeating it, and spends its own effort on
+the two things a general-purpose reviewer cannot know: what this change was
+supposed to do, and the rules in this repo's `CLAUDE.md` files that each exist
+because something once went wrong.
 
 ## What the other documents keep
 
