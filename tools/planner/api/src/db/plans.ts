@@ -1,0 +1,304 @@
+/**
+ * The plan store: rows in, a `PlanDetail` out, and nothing else.
+ *
+ * Nothing here decides what a plan *contains*. Packing days, choosing which
+ * candidate goes where and deriving a revision's number and parent all belong
+ * further up — `@planner/itinerary` and `appendRevision` respectively. A store
+ * that starts deciding placement is a second composer, and it will drift.
+ *
+ * **Rows where something is addressed, JSON where a value is read whole**, which
+ * is migration 2's rule and the reason the reads below look asymmetric: days and
+ * items come back column by column because pinning updates one of them, while
+ * the brief, a candidate and the gap list are parsed from JSON in one go and
+ * validated against `@planner/contract` on the way out.
+ *
+ * A stored row that no longer fits its schema is a **fatal** read here, unlike
+ * an unreadable intake answer. The difference is what a caller can do about it:
+ * a corrupt answer is one question to re-ask, and a corrupt candidate is a plan
+ * that would silently lose an item from a draft the user is looking at.
+ */
+
+import {
+  AppError,
+  candidateSchema,
+  planGapSchema,
+  tripBriefSchema,
+  type Candidate,
+  type PlanDay,
+  type PlanDetail,
+  type PlanGap,
+  type PlanItem,
+  type PlanRevision,
+  type TripBrief,
+} from "@planner/contract";
+import type { Database } from "better-sqlite3";
+import { z } from "zod";
+
+interface PlanRow {
+  id: string;
+  title: string;
+  brief_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface CandidateRow {
+  id: string;
+  candidate_json: string;
+}
+
+interface RevisionRow {
+  id: string;
+  plan_id: string;
+  revision: number;
+  parent_revision_id: string | null;
+  reason: string;
+  gaps_json: string;
+  created_at: string;
+}
+
+interface DayRow {
+  id: string;
+  revision_id: string;
+  day_index: number;
+  date: string | null;
+}
+
+interface ItemRow {
+  id: string;
+  day_id: string;
+  candidate_id: string;
+  position: number;
+  starts_at: string | null;
+  pinned: number;
+  note: string | null;
+}
+
+function corrupt(what: string, id: string): AppError {
+  return new AppError("INTERNAL", `A stored ${what} could not be read back.`, {
+    details: { [what]: id },
+  });
+}
+
+function parseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function parseOr<T>(schema: z.ZodType<T>, raw: string, what: string, id: string): T {
+  const parsed = schema.safeParse(parseJson(raw));
+  if (!parsed.success) throw corrupt(what, id);
+  return parsed.data;
+}
+
+// ---------------------------------------------------------------------------
+// Writing
+// ---------------------------------------------------------------------------
+
+export interface NewPlan {
+  id: string;
+  title: string;
+  brief: TripBrief;
+  now: string;
+}
+
+/**
+ * Write the plan row.
+ *
+ * Called **before** the fan-out, so the run has somewhere to report to from its
+ * first frame. The plan that comes back has no revisions, which is a real and
+ * reachable state for as long as the run takes — `latestRevision` returns `null`
+ * for it and says so in its own signature.
+ */
+export function insertPlan(db: Database, plan: NewPlan): PlanDetail {
+  db.prepare(
+    `INSERT INTO plans (id, title, brief_json, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(plan.id, plan.title, JSON.stringify(plan.brief), plan.now, plan.now);
+
+  return {
+    id: plan.id,
+    title: plan.title,
+    createdAt: plan.now,
+    updatedAt: plan.now,
+    latestRevision: 0,
+    brief: plan.brief,
+    candidates: [],
+    revisions: [],
+  };
+}
+
+/**
+ * Store what a run proposed, placed or not.
+ *
+ * Candidates hang off the plan rather than off a revision: one the composer did
+ * not place is what the next revision draws on when the user says they cannot
+ * afford the second hotel, and one that two revisions both place must not be
+ * stored twice. `run_id` records which run minted it — migration 2 anticipated
+ * the column and migration 4 added it.
+ */
+export function insertCandidates(
+  db: Database,
+  input: { planId: string; runId: string; candidates: readonly Candidate[]; now: string },
+): void {
+  const statement = db.prepare(
+    `INSERT INTO plan_candidates (id, plan_id, run_id, specialist, candidate_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  for (const candidate of input.candidates) {
+    statement.run(
+      candidate.id,
+      input.planId,
+      input.runId,
+      candidate.specialist,
+      JSON.stringify(candidate),
+      input.now,
+    );
+  }
+}
+
+/**
+ * Write one revision, its days and its items.
+ *
+ * Takes the revision **already numbered**, because deriving the number and the
+ * parent is `appendRevision`'s job and doing it here as well would be two
+ * implementations of §6's append-only rule. The database enforces the same thing
+ * from below with its triggers and its `UNIQUE (plan_id, revision)`, so a
+ * concurrent re-plan that produced two revision 3s fails rather than corrupting
+ * the diff.
+ */
+export function insertRevision(db: Database, revision: PlanRevision): void {
+  db.prepare(
+    `INSERT INTO plan_revisions
+       (id, plan_id, revision, parent_revision_id, reason, gaps_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    revision.id,
+    revision.planId,
+    revision.revision,
+    revision.parentRevisionId,
+    revision.reason,
+    JSON.stringify(revision.gaps),
+    revision.createdAt,
+  );
+
+  const day = db.prepare(
+    "INSERT INTO plan_days (id, revision_id, day_index, date) VALUES (?, ?, ?, ?)",
+  );
+  const item = db.prepare(
+    `INSERT INTO plan_items (id, day_id, candidate_id, position, starts_at, pinned, note)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+
+  for (const each of revision.days) {
+    day.run(each.id, revision.id, each.dayIndex, each.date);
+    for (const placed of each.items) {
+      item.run(
+        placed.id,
+        each.id,
+        placed.candidateId,
+        placed.position,
+        placed.startsAt,
+        placed.pinned ? 1 : 0,
+        placed.note,
+      );
+    }
+  }
+}
+
+/** Moves with a revision or a pin, and with nothing else. */
+export function touchPlan(db: Database, planId: string, now: string): void {
+  db.prepare("UPDATE plans SET updated_at = ? WHERE id = ?").run(now, planId);
+}
+
+// ---------------------------------------------------------------------------
+// Reading
+// ---------------------------------------------------------------------------
+
+export function planExists(db: Database, id: string): boolean {
+  return db.prepare("SELECT 1 FROM plans WHERE id = ?").get(id) !== undefined;
+}
+
+/**
+ * The whole document, in four queries rather than one per day.
+ *
+ * A plan is read entire — the UI renders a draft, and a diff needs two of them —
+ * so there is no partial read worth the extra shape.
+ */
+export function selectPlan(db: Database, id: string): PlanDetail | undefined {
+  const row = db.prepare("SELECT * FROM plans WHERE id = ?").get(id) as PlanRow | undefined;
+  if (row === undefined) return undefined;
+
+  const brief = parseOr(tripBriefSchema, row.brief_json, "brief", id);
+
+  const candidateRows = db
+    .prepare("SELECT id, candidate_json FROM plan_candidates WHERE plan_id = ? ORDER BY id")
+    .all(id) as CandidateRow[];
+  const candidates: Candidate[] = candidateRows.map((each) =>
+    parseOr(candidateSchema, each.candidate_json, "candidate", each.id),
+  );
+
+  const revisionRows = db
+    .prepare("SELECT * FROM plan_revisions WHERE plan_id = ? ORDER BY revision")
+    .all(id) as RevisionRow[];
+
+  const revisions = revisionRows.map((each) => toRevision(db, each));
+
+  return {
+    id: row.id,
+    title: row.title,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    latestRevision: revisions.at(-1)?.revision ?? 0,
+    brief,
+    candidates,
+    revisions,
+  };
+}
+
+const gapsSchema = z.array(planGapSchema);
+
+function toRevision(db: Database, row: RevisionRow): PlanRevision {
+  const gaps: PlanGap[] = parseOr(gapsSchema, row.gaps_json, "revision", row.id);
+
+  const dayRows = db
+    .prepare("SELECT * FROM plan_days WHERE revision_id = ? ORDER BY day_index")
+    .all(row.id) as DayRow[];
+
+  const days: PlanDay[] = dayRows.map((day) => ({
+    id: day.id,
+    dayIndex: day.day_index,
+    date: day.date,
+    items: selectItems(db, day.id),
+  }));
+
+  return {
+    id: row.id,
+    planId: row.plan_id,
+    revision: row.revision,
+    parentRevisionId: row.parent_revision_id,
+    reason: row.reason,
+    createdAt: row.created_at,
+    days,
+    gaps,
+  };
+}
+
+function selectItems(db: Database, dayId: string): PlanItem[] {
+  const rows = db
+    .prepare("SELECT * FROM plan_items WHERE day_id = ? ORDER BY position")
+    .all(dayId) as ItemRow[];
+
+  return rows.map((row) => ({
+    id: row.id,
+    candidateId: row.candidate_id,
+    position: row.position,
+    startsAt: row.starts_at,
+    // STRICT has no boolean type; the column is 0 or 1 and the CHECK keeps it so.
+    pinned: row.pinned === 1,
+    note: row.note,
+  }));
+}

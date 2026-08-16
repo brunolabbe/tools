@@ -10,7 +10,7 @@
 import { ROUTES } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
 import { createHarness, probeResult, SOURCE_URL, StubResolver } from "./helpers.ts";
-import { clientKey, ConcurrencyGate, RateLimiter } from "../src/rate-limit.ts";
+import { clientKey, ConcurrencyGate, RateLimiter } from "@webtools/core/rate-limit";
 
 /** A clock the test moves by hand. */
 function fakeClock(startMs = 1_000_000): { now: () => number; advance: (ms: number) => void } {

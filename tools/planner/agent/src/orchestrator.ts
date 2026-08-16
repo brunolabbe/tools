@@ -47,8 +47,8 @@
 import { AppError, isAnswered, missingRequiredSlots } from "@planner/contract";
 import type {
   Candidate,
-  ErrorCode,
   PlanGap,
+  RunProgress,
   Specialist,
   TripBrief,
   TripShape,
@@ -58,38 +58,6 @@ import { applyBudget, rosterGaps, type RunBudget } from "./budget.ts";
 import type { ModelProvider } from "./provider.ts";
 import { rosterFor, type RosterEntry } from "./roster.ts";
 import { candidateCeiling, SPECIALIST_DEFINITIONS, type TripCapacity } from "./specialists.ts";
-
-// ---------------------------------------------------------------------------
-// Progress
-// ---------------------------------------------------------------------------
-
-/**
- * What a run can honestly say about itself while it is happening.
- *
- * **The total is known before the first request goes out**, because the roster's
- * size is decided by `applyBudget` and not discovered — which is what lets a UI
- * say "4 of 7 specialists done" rather than show a spinner. Nothing here reports
- * a fraction of one specialist's work: a model call has no progress inside it,
- * and inventing one would be the repo's _never fake progress_ rule broken in the
- * one place it is easiest to break.
- */
-export type FanOutProgress =
-  | { type: "roster"; running: Specialist[]; droppedForBudget: Specialist[]; total: number }
-  | { type: "specialist-started"; specialist: Specialist; total: number }
-  | {
-      type: "specialist-finished";
-      specialist: Specialist;
-      candidates: number;
-      done: number;
-      total: number;
-    }
-  | {
-      type: "specialist-failed";
-      specialist: Specialist;
-      code: ErrorCode;
-      done: number;
-      total: number;
-    };
 
 // ---------------------------------------------------------------------------
 // Input and output
@@ -115,7 +83,16 @@ export interface FanOutInput {
   runId: string;
   /** Cancels the whole fan-out. Every in-flight provider call takes it. */
   signal?: AbortSignal | undefined;
-  onProgress?: ((event: FanOutProgress) => void) | undefined;
+  /**
+   * Told what the run is doing, as `@planner/contract`'s `RunProgress`.
+   *
+   * The contract's type rather than one of this package's: `api` forwards these
+   * frames onto SSE and `web` renders them, and a shape defined twice is one
+   * that gains a field on one side only (pl-16). What this package cannot fill
+   * is the timestamp — it has no clock, for the reason `runId` is an argument —
+   * so `api` wraps each of these in a `RunEvent` and reads the clock once.
+   */
+  onProgress?: ((event: RunProgress) => void) | undefined;
 }
 
 /** A proposal that came back and was refused, with the reason, for the log. */

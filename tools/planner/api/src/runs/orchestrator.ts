@@ -1,0 +1,417 @@
+/**
+ * The run: a brief in, a plan revision out, and an account of it along the way.
+ *
+ * This is the seam pl-5 stopped at and pl-9 stopped at from the other side.
+ * `runFanOut` turns a brief into candidates, `compose` turns candidates into a
+ * revision, and until pl-16 the only place the two met was a unit test.
+ *
+ * ```
+ * POST /api/plans ─► brief from the intake
+ *                    plan row  ◄── written BEFORE the fan-out, so the run has
+ *                       │           somewhere to report to
+ *                       ▼
+ *                    run row, queued ─► queue (MAX_CONCURRENT_RUNS)
+ *                       │
+ *                       ▼  fanning-out    runFanOut ─► candidates + gaps
+ *                       │                 progress ─► SSE, one frame per specialist
+ *                       ▼  composing      compose   ─► NewRevision
+ *                       ▼  done           appendRevision, persisted
+ * ```
+ *
+ * Three things it must get right, and each is a trap the brief named:
+ *
+ * **Cancel reaches the provider.** The queue's `AbortSignal` is handed to
+ * `runFanOut`, which hands it to every in-flight `ModelRequest`. Moving a row to
+ * `canceled` without that would leave the fan-out running and the bill accruing.
+ *
+ * **A cancellation is not a `PlanGap`.** pl-5's orchestrator rethrows rather
+ * than recording one, precisely so a canceled draft cannot look like a completed
+ * one with holes — so nothing here catches a cancellation and converts it. A
+ * canceled run writes no revision at all.
+ *
+ * **A plan with no revisions is a real state.** It exists from the moment the
+ * plan row is written until the composer is done, and `latestRevision` returns
+ * `null` for it on purpose. Every reader handles it; none of them treats it as
+ * missing.
+ */
+
+import { randomUUID } from "node:crypto";
+import { runFanOut, type RunBudget } from "@planner/agent";
+import {
+  AppError,
+  appendRevision,
+  canRunTransition,
+  isAnswered,
+  latestRevision,
+  missingRequiredSlots,
+  TERMINAL_RUN_STATUSES,
+  type PlanDetail,
+  type Run,
+  type RunProgress,
+  type RunStatus,
+  type TripBrief,
+} from "@planner/contract";
+import type { TripCapacity } from "@planner/agent";
+import { compose, dayCapacity, tripSpan } from "@planner/itinerary";
+import type { ApiConfig } from "../config.ts";
+import type { AppContext } from "../context.ts";
+import {
+  insertCandidates,
+  insertPlan,
+  insertRevision,
+  selectPlan,
+  touchPlan,
+} from "../db/plans.ts";
+import {
+  insertRun,
+  selectRun,
+  updateRunProgress,
+  updateRunRoster,
+  updateRunStatus,
+} from "../db/runs.ts";
+import { intakeTitle } from "../intakes/title.ts";
+import { readIntake } from "../intakes/state.ts";
+
+/**
+ * What the first draft's revision says it is.
+ *
+ * `reason` is the diff's caption, and the first draft's is simply that it is the
+ * first draft — there is nothing before it to have changed.
+ */
+const FIRST_DRAFT_REASON = "The first draft.";
+
+/** A plan whose brief said nothing nameable. Never rendered as an id. */
+const UNTITLED = "Untitled trip";
+
+// ---------------------------------------------------------------------------
+// The budget
+// ---------------------------------------------------------------------------
+
+/**
+ * How many specialists this deployment can afford, and what each may spend.
+ *
+ * `RUN_TOKEN_BUDGET` is spent **by degrading the roster**, not by stopping
+ * partway: it divides down into a number of specialists this run can pay for,
+ * and the lower of that and `MAX_SPECIALISTS` is the cap `runFanOut` enforces
+ * before a single request goes out. A run that discovered the ceiling halfway
+ * through would have paid for a plan it cannot ship — §9's whole point.
+ *
+ * `MAX_SPECIALISTS` stays at its default of 5 even though some shapes roster
+ * six, which means the budget specialist is dropped on those trips and the plan
+ * carries a `specialist-dropped-for-budget` gap saying so. That is the cap
+ * working: the composer sums cost bands in code whether or not a budget
+ * specialist ran, and a cap nothing ever reaches is not a cost control.
+ */
+export function runBudgetFor(config: ApiConfig): RunBudget {
+  const attempts = 2;
+  const affordable =
+    config.runTokenBudget === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.floor(config.runTokenBudget / (config.maxOutputTokens * attempts));
+
+  return {
+    // Floored at zero rather than at one: a token budget too small for even one
+    // specialist means "run nothing", the plan comes back as gaps, and that is a
+    // truthful answer. Quietly running one anyway would not be.
+    maxSpecialists: Math.max(0, Math.min(config.maxSpecialists, affordable)),
+    maxOutputTokens: config.maxOutputTokens,
+    maxAttemptsPerSpecialist: attempts,
+  };
+}
+
+/**
+ * What a day holds and how many there are.
+ *
+ * Assembled here because `@planner/agent` does not import `@planner/itinerary` —
+ * the numbers behind an appetite answer live in `limits.ts` and the fan-out
+ * takes them as a required argument, so this layer is the one that knows both.
+ */
+function capacityFor(brief: TripBrief): TripCapacity {
+  if (!isAnswered(brief.dates)) {
+    throw new AppError("BRIEF_INCOMPLETE", undefined, { details: { missing: ["dates"] } });
+  }
+  return { dayCount: tripSpan(brief.dates.value).dayCount, ...dayCapacity(brief) };
+}
+
+// ---------------------------------------------------------------------------
+// Starting one
+// ---------------------------------------------------------------------------
+
+/**
+ * Refuse a brief too thin to plan from **before** anything is written.
+ *
+ * The same two checks `runFanOut` and `compose` each make, made once more up
+ * here and for a different reason: theirs protect the algorithm, this one keeps
+ * a request that can only fail from leaving an empty plan behind it. It is a
+ * 400 the wizard can act on, with the missing slots in `details`.
+ */
+function assertDraftable(brief: TripBrief): void {
+  const missing = missingRequiredSlots(brief);
+  if (missing.length > 0) {
+    throw new AppError("BRIEF_INCOMPLETE", undefined, { details: { missing } });
+  }
+  if (!isAnswered(brief.shape)) {
+    throw new AppError("BRIEF_INCOMPLETE", undefined, { details: { missing: ["shape"] } });
+  }
+  if (!isAnswered(brief.dates)) {
+    throw new AppError("BRIEF_INCOMPLETE", undefined, { details: { missing: ["dates"] } });
+  }
+}
+
+export function startRun(context: AppContext, intakeId: string): Run {
+  const { brief } = readIntake(context, intakeId);
+  assertDraftable(brief);
+
+  const now = context.now();
+  const timestamp = now.toISOString();
+  const planId = randomUUID();
+  const runId = randomUUID();
+
+  // The plan and the run land together: a run pointing at a plan that does not
+  // exist, or a plan nothing is drafting, are both states no reader handles.
+  const run = context.db.transaction((): Run => {
+    insertPlan(context.db, {
+      id: planId,
+      title: intakeTitle(brief) ?? UNTITLED,
+      brief,
+      now: timestamp,
+    });
+    return insertRun(context.db, { id: runId, planId, status: "queued", now: timestamp });
+  })();
+
+  context.runs.enqueue({
+    runId,
+    run: async (signal) => {
+      await execute(context, { runId, planId, brief }, signal);
+    },
+  });
+
+  return run;
+}
+
+// ---------------------------------------------------------------------------
+// Running one
+// ---------------------------------------------------------------------------
+
+/**
+ * Move the run, refusing an illegal move.
+ *
+ * `RUN_TRANSITIONS` is the authority and it lives in the contract, so `web` and
+ * this file cannot disagree about what a run may do next. An illegal move is a
+ * bug here rather than an operational condition — it is logged and dropped
+ * rather than thrown, because failing a run because we mis-sequenced our own
+ * bookkeeping would lose a plan the user is otherwise about to get.
+ */
+function moveTo(
+  context: AppContext,
+  runId: string,
+  to: RunStatus,
+  error: AppError | null = null,
+): boolean {
+  const current = selectRun(context.db, runId);
+  if (current === undefined) return false;
+  if (!canRunTransition(current.status, to)) {
+    context.logger.warn("illegal run transition", { run: runId, from: current.status, to });
+    return false;
+  }
+
+  updateRunStatus(context.db, {
+    id: runId,
+    status: to,
+    now: context.now().toISOString(),
+    terminal: TERMINAL_RUN_STATUSES.has(to),
+    error: error === null ? null : error.toPayload(),
+  });
+  context.events.status(runId, to);
+  return true;
+}
+
+interface RunInput {
+  runId: string;
+  planId: string;
+  brief: TripBrief;
+}
+
+async function execute(context: AppContext, input: RunInput, signal: AbortSignal): Promise<void> {
+  const { runId, planId, brief } = input;
+
+  try {
+    if (!moveTo(context, runId, "fanning-out")) return;
+
+    const result = await runFanOut({
+      brief,
+      capacity: capacityFor(brief),
+      provider: context.model,
+      budget: runBudgetFor(context.config),
+      runId,
+      signal,
+      onProgress: (event) => {
+        record(context, runId, event);
+      },
+    });
+
+    const composedAt = context.now();
+    const timestamp = composedAt.toISOString();
+
+    insertCandidates(context.db, {
+      planId,
+      runId,
+      candidates: result.candidates,
+      now: timestamp,
+    });
+
+    if (!moveTo(context, runId, "composing")) return;
+
+    const composed = compose({
+      brief,
+      candidates: result.candidates,
+      gaps: result.gaps,
+      revision: { id: `${runId}-1`, reason: FIRST_DRAFT_REASON, createdAt: timestamp },
+      now: composedAt,
+    });
+
+    // `unchecked` is deliberately not persisted here. What a plan did not
+    // *check* — travel time, always, while `Place.coordinates` is null — is
+    // pl-10's decision to store or to recompute, and solving half of it would
+    // make its other half harder. It reaches this run's SSE client through
+    // nothing today, and a reload loses it.
+    const revisionId = persist(context, planId, composed.revision, timestamp);
+
+    if (!moveTo(context, runId, "done")) return;
+    context.events.done(runId, planId, revisionId);
+  } catch (error: unknown) {
+    // A cancellation is not a failure and it is not a gap. pl-5 rethrows it out
+    // of the fan-out rather than recording one, so that a canceled draft cannot
+    // be mistaken for a completed one with holes; catching it here to write a
+    // revision anyway would undo exactly that.
+    if (isCancellation(error, signal)) {
+      const canceled = new AppError("JOB_CANCELED");
+      if (moveTo(context, runId, "canceled", canceled)) {
+        context.events.canceled(runId, canceled.toPayload());
+      }
+      return;
+    }
+
+    const failure = AppError.from(error);
+    context.logger.error("run failed", { run: runId, plan: planId, code: failure.code });
+    if (moveTo(context, runId, "failed", failure)) {
+      context.events.failed(runId, failure.toPayload());
+    }
+  }
+}
+
+/**
+ * The fan-out's own account of itself, written down and forwarded.
+ *
+ * The payload is the contract's `RunProgress` and is passed through untouched;
+ * the run id and the timestamp are added by the hub, which is the one place in
+ * the tool that reads a clock for a frame.
+ */
+function record(context: AppContext, runId: string, event: RunProgress): void {
+  switch (event.type) {
+    case "roster":
+      // Knowable before the first request goes out, which is what lets the UI
+      // say "4 of 7" instead of showing a spinner.
+      updateRunRoster(context.db, runId, event.total);
+      break;
+    case "specialist-finished":
+    case "specialist-failed":
+      updateRunProgress(context.db, runId, event.done);
+      break;
+    case "specialist-started":
+      break;
+  }
+  context.events.progress(runId, event);
+}
+
+/**
+ * Number the revision, write it, and move the plan's clock.
+ *
+ * `appendRevision` derives the number and the parent from the plan rather than
+ * accepting them, so this cannot produce an orphan; the database's
+ * `UNIQUE (plan_id, revision)` refuses the one thing it could still get wrong,
+ * which is two concurrent runs both drafting revision 1.
+ */
+function persist(
+  context: AppContext,
+  planId: string,
+  next: Parameters<typeof appendRevision>[1],
+  now: string,
+): string {
+  return context.db.transaction((): string => {
+    const plan = selectPlan(context.db, planId);
+    if (plan === undefined) {
+      throw new AppError("PLAN_NOT_FOUND", undefined, { details: { plan: planId } });
+    }
+
+    const appended = appendRevision(plan, next);
+    const revision = latestRevision(appended);
+    if (revision === null) {
+      throw new AppError("INTERNAL", "A revision was appended and did not appear.");
+    }
+
+    insertRevision(context.db, revision);
+    touchPlan(context.db, planId, now);
+    return revision.id;
+  })();
+}
+
+/**
+ * Was this the user stopping the run, or the run breaking?
+ *
+ * The same three tests `@planner/agent` makes, because the two layers have to
+ * agree: the signal, the typed code the queue aborts with, and a bare
+ * `AbortError` from anything that only speaks DOM.
+ */
+function isCancellation(error: unknown, signal: AbortSignal): boolean {
+  if (signal.aborted) return true;
+  if (error instanceof AppError) return error.code === "CANCELED" || error.code === "JOB_CANCELED";
+  return error instanceof Error && error.name === "AbortError";
+}
+
+// ---------------------------------------------------------------------------
+// Reading and stopping
+// ---------------------------------------------------------------------------
+
+export function readRun(context: AppContext, id: string): Run {
+  const run = selectRun(context.db, id);
+  if (run === undefined) {
+    throw new AppError("JOB_NOT_FOUND", undefined, { details: { run: id } });
+  }
+  return run;
+}
+
+export function readPlan(context: AppContext, id: string): PlanDetail {
+  const plan = selectPlan(context.db, id);
+  if (plan === undefined) {
+    throw new AppError("PLAN_NOT_FOUND", undefined, { details: { plan: id } });
+  }
+  return plan;
+}
+
+/**
+ * Stop a run, whether it is waiting or already fanning out.
+ *
+ * The queue's `cancel` is what makes this reach the provider: it aborts the
+ * controller whose signal every in-flight `ModelRequest` is carrying, and the
+ * run's own catch does the bookkeeping. A run the queue has never heard of is
+ * one that already finished — which is not an error, and is why the status is
+ * only forced here when the run is still live.
+ */
+export function cancelRun(context: AppContext, id: string): Run {
+  const run = readRun(context, id);
+  if (TERMINAL_RUN_STATUSES.has(run.status)) return run;
+
+  const stopped = context.runs.cancel(id);
+  if (!stopped) {
+    // Live by its status and absent from the queue: the process that was
+    // running it went away. Nothing is going to move this row, so this call is
+    // what closes it out.
+    const canceled = new AppError("JOB_CANCELED");
+    if (moveTo(context, id, "canceled", canceled)) {
+      context.events.canceled(id, canceled.toPayload());
+    }
+  }
+
+  return readRun(context, id);
+}

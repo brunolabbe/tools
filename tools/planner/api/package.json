@@ -17,6 +17,8 @@
     "@planner/agent": "*",
     "@planner/contract": "*",
     "@planner/intake": "*",
+    "@planner/itinerary": "*",
+    "@webtools/core": "*",
     "better-sqlite3": "^12.4.1",
     "fastify": "^5.7.1",
     "pino": "^10.3.1"

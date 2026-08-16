@@ -200,6 +200,43 @@ const MIGRATIONS: readonly string[] = [
     PRIMARY KEY (intake_id, question_id)
   ) STRICT;
   `,
+  // 4 — the run: the job that turns a brief into a revision (pl-16).
+  //
+  // Migration 2 wrote the plan and its drafts but nothing that produced them,
+  // and said so: `plan_candidates`' own comment left the run it came from to
+  // this ticket. That column is added here rather than folded into migration 2,
+  // which has shipped.
+  `
+  CREATE TABLE plan_runs (
+    id               TEXT PRIMARY KEY,
+    -- The plan is written *before* the fan-out, so the run always has somewhere
+    -- to report to. That is why this is NOT NULL and why a plan with no
+    -- revisions is a reachable state — see \`latestRevision\`.
+    plan_id          TEXT NOT NULL REFERENCES plans (id) ON DELETE CASCADE,
+    -- A \`RunStatus\`. Not a CHECK constraint: the legal values and the legal
+    -- moves between them are \`RUN_TRANSITIONS\` in @planner/contract, and a
+    -- second half-copy of that here would be the one that goes stale.
+    status           TEXT NOT NULL,
+    -- How many specialists this run pays for. NULL while queued: the roster is
+    -- decided as the fan-out starts, and "not decided yet" is not zero.
+    roster_size      INTEGER,
+    specialists_done INTEGER NOT NULL DEFAULT 0,
+    -- The AppError payload, whole. Only ever read entire and rendered, never
+    -- filtered on — the same argument that makes the brief and the gaps JSON.
+    error_json       TEXT,
+    started_at       TEXT NOT NULL,
+    -- Set when the run reaches a terminal state, and only then.
+    finished_at      TEXT
+  ) STRICT;
+
+  -- "What happened to this plan, most recent first" is the only read.
+  CREATE INDEX plan_runs_plan ON plan_runs (plan_id, started_at DESC);
+
+  -- Which run proposed a candidate. Nullable because nothing enforces that a
+  -- candidate came from a run — a re-plan may reuse one an earlier run minted,
+  -- and rows written before this migration have no run at all.
+  ALTER TABLE plan_candidates ADD COLUMN run_id TEXT REFERENCES plan_runs (id);
+  `,
 ];
 
 export function migrate(db: Database): void {

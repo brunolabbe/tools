@@ -25,9 +25,10 @@ describe("migrations", () => {
       "plan_days",
       "plan_items",
       "plan_revisions",
+      "plan_runs",
       "plans",
     ]);
-    expect(userVersion(db)).toBe(3);
+    expect(userVersion(db)).toBe(4);
     db.close();
   });
 
@@ -49,7 +50,7 @@ describe("migrations", () => {
 
     expect(tables(db)).toContain("intakes");
     expect(tables(db)).not.toContain("conversations");
-    expect(userVersion(db)).toBe(3);
+    expect(userVersion(db)).toBe(4);
     db.close();
   });
 
@@ -62,7 +63,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(3);
+    expect(userVersion(db)).toBe(4);
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
     db.close();
   });

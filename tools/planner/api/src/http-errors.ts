@@ -13,6 +13,10 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   INVALID_URL: 400,
   INVALID_DATES: 400,
   INVALID_ANSWER: 400,
+  // The request is well formed; the document behind it is not ready. 400 rather
+  // than 409 because `details` names the missing slots and the wizard's next
+  // move is to go and ask them — it is the caller's to fix, now.
+  BRIEF_INCOMPLETE: 400,
   BLOCKED_TARGET: 403,
   NOT_FOUND: 404,
   INTAKE_NOT_FOUND: 404,

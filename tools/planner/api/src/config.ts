@@ -34,6 +34,39 @@ export interface ApiConfig {
   maxOutputTokens: number;
 
   /**
+   * How many specialists one run may pay for (§9).
+   *
+   * **Kept at 5 with a roster of six for some shapes**, which means the budget
+   * specialist is dropped on those trips and the plan says so — a
+   * `specialist-dropped-for-budget` gap, on the stored revision, in front of the
+   * user. That is the cap working rather than a bug: "run every specialist every
+   * time" is not the design, the composer sums the cost bands in code whether or
+   * not a budget specialist ran, and a cap nothing ever hits is not a cost
+   * control. Raise it deliberately, per deployment, not to make a gap go away.
+   */
+  maxSpecialists: number;
+  /**
+   * Hard ceiling on a run's output tokens, or `undefined` for no ceiling beyond
+   * `maxSpecialists`.
+   *
+   * Spent by degrading the roster rather than by discovering it halfway through:
+   * it divides down into how many specialists this run can afford, and the lower
+   * of that and `maxSpecialists` is what `runFanOut` is given. A run that stopped
+   * mid-fan-out for want of budget would have paid for a plan it cannot ship.
+   */
+  runTokenBudget: number | undefined;
+  /** Each run is itself a fan-out, so this is a memory and a spend bound. */
+  maxConcurrentRuns: number;
+  /**
+   * Runs one client may start per minute.
+   *
+   * A plan run is a roster of model calls, which is expensive enough to be a
+   * trivial denial of service — the architecture's security posture calls this
+   * out separately from the per-run budget for that reason. Zero disables it.
+   */
+  rateLimitRunsPerMinute: number;
+
+  /**
    * Built UI to serve from this process, same-origin. Undefined serves nothing,
    * which is a perfectly good headless configuration.
    */
@@ -53,6 +86,9 @@ export const API_DEFAULTS = {
   databaseFile: "planner.db",
   modelProvider: "scripted",
   maxOutputTokens: 2_048,
+  maxSpecialists: 5,
+  maxConcurrentRuns: 2,
+  rateLimitRunsPerMinute: 5,
   logLevel: "info",
 } as const satisfies Partial<Record<string, unknown>>;
 
@@ -65,6 +101,14 @@ function int(
   const value = Number(raw);
   if (!Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, Math.trunc(value)));
+}
+
+/** An integer that may be absent entirely, for a ceiling with no default. */
+function optionalInt(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 1) return undefined;
+  return Math.trunc(value);
 }
 
 function optionalPath(raw: string | undefined): string | undefined {
@@ -118,6 +162,15 @@ export function loadApiConfig(
     maxOutputTokens:
       overrides.maxOutputTokens ??
       int(env["MAX_OUTPUT_TOKENS"], API_DEFAULTS.maxOutputTokens, { max: 32_000 }),
+    maxSpecialists:
+      overrides.maxSpecialists ?? int(env["MAX_SPECIALISTS"], API_DEFAULTS.maxSpecialists),
+    runTokenBudget: overrides.runTokenBudget ?? optionalInt(env["RUN_TOKEN_BUDGET"]),
+    maxConcurrentRuns:
+      overrides.maxConcurrentRuns ??
+      int(env["MAX_CONCURRENT_RUNS"], API_DEFAULTS.maxConcurrentRuns),
+    rateLimitRunsPerMinute:
+      overrides.rateLimitRunsPerMinute ??
+      int(env["RATE_LIMIT_RUNS_PER_MINUTE"], API_DEFAULTS.rateLimitRunsPerMinute, { min: 0 }),
     // Resolved so a relative WEB_DIR means the same thing wherever the process
     // was started from.
     webDir: overrides.webDir ?? optionalPath(env["WEB_DIR"]),

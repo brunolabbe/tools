@@ -33,6 +33,7 @@ COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
 COPY tools/planner/contract/package.json tools/planner/contract/
 COPY tools/planner/intake/package.json tools/planner/intake/
+COPY tools/planner/itinerary/package.json tools/planner/itinerary/
 COPY tools/planner/agent/package.json tools/planner/agent/
 COPY tools/planner/api/package.json tools/planner/api/
 COPY tools/planner/web/package.json tools/planner/web/
@@ -73,11 +74,21 @@ COPY --from=build /app/packages/core/package.json packages/core/
 COPY --from=build /app/packages/core/dist packages/core/dist
 COPY --from=build /app/tools/planner/contract/package.json tools/planner/contract/
 COPY --from=build /app/tools/planner/contract/dist tools/planner/contract/dist
-# The API imports the intake engine as of pl-7. Without these two lines the
-# image boots and then cannot resolve the module on the first request — the
-# build stage's manifest above is only what `npm ci` needs.
+# The API imports the intake engine as of pl-7 and the composer as of pl-16.
+# Without each pair of lines the image boots and then cannot resolve the module
+# — the build stage's manifest above is only what `npm ci` needs.
+#
+# So **adding a workspace to `api`'s dependencies costs two edits to this file**,
+# and the two fail differently. Miss the runtime pair and the container starts,
+# reports nothing wrong, and throws ERR_MODULE_NOT_FOUND when the code path is
+# first reached. Miss the *build*-stage manifest and `npm ci` never creates the
+# workspace symlink at all, so nothing is there to copy in the first place —
+# which is the half that actually broke pl-16 and the reason the list above is
+# not merely a cache optimisation.
 COPY --from=build /app/tools/planner/intake/package.json tools/planner/intake/
 COPY --from=build /app/tools/planner/intake/dist tools/planner/intake/dist
+COPY --from=build /app/tools/planner/itinerary/package.json tools/planner/itinerary/
+COPY --from=build /app/tools/planner/itinerary/dist tools/planner/itinerary/dist
 COPY --from=build /app/tools/planner/agent/package.json tools/planner/agent/
 COPY --from=build /app/tools/planner/agent/dist tools/planner/agent/dist
 COPY --from=build /app/tools/planner/api/package.json tools/planner/api/

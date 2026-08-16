@@ -12,6 +12,7 @@ import path from "node:path";
 import { ScriptedProvider } from "@planner/agent";
 import type { ModelProvider } from "@planner/agent";
 import { AppError } from "@planner/contract";
+import { RateLimiter } from "@webtools/core/rate-limit";
 import Database from "better-sqlite3";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
@@ -22,9 +23,13 @@ import { migrate } from "./db/schema.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
+import { registerRunEventRoutes } from "./routes/events.ts";
 import { registerHealthRoute } from "./routes/health.ts";
 import { registerIntakeRoutes } from "./routes/intakes.ts";
+import { registerPlanRoutes } from "./routes/plans.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
+import { RunEventHub } from "./runs/events.ts";
+import { InProcessRunQueue } from "./runs/queue.ts";
 
 export interface CreateAppOptions {
   config?: Partial<ApiConfig>;
@@ -76,11 +81,24 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   logger.info("agent configured", { provider: model.name, model: model.model });
 
   let shuttingDown = false;
+  const events = new RunEventHub(now);
+  const runs = new InProcessRunQueue({
+    concurrency: config.maxConcurrentRuns,
+    // The orchestrator records failure itself, so anything arriving here is a
+    // bug in the bookkeeping rather than a failed run.
+    onTaskError: (runId, error: unknown) => {
+      logger.error("run task rejected", { run: runId, error: AppError.from(error).code });
+    },
+  });
+
   const context: AppContext = {
     config,
     logger,
     db,
     model,
+    runs,
+    events,
+    runLimiter: new RateLimiter({ perMinute: config.rateLimitRunsPerMinute }),
     startedAt: now(),
     now,
     isShuttingDown: () => shuttingDown,
@@ -97,6 +115,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerCors(server, config);
   registerHealthRoute(server, context);
   registerIntakeRoutes(server, context);
+  registerPlanRoutes(server, context);
+  registerRunEventRoutes(server, context);
   // After the API routes, so a file in the bundle can never answer where a
   // route should have, and before the not-found handler, which needs the
   // static plugin's `reply.sendFile` to exist.
@@ -113,8 +133,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       if (shuttingDown) return;
       shuttingDown = true;
       logger.info("shutting down");
-      // Stop accepting first, then release what the work was using.
+      // Stop accepting first, then release what the work was using. The queue
+      // is closed before the database because an in-flight run still writes to
+      // it — closing them the other way round is a run failing on a closed
+      // handle rather than on the cancellation it was actually given.
       await server.close();
+      await runs.close();
       db.close();
       logger.info("shutdown complete");
     },

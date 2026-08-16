@@ -175,9 +175,23 @@ repo's rules say shared code is allowed to be shared.
 
 ```
 queued ─► fanning-out ─► composing ─► reviewing ─► done
-              │              │            │
-              └──────────────┴────────────┴──► failed | canceled
+              │              │  └──────────────────►│
+              └──────────────┴────────────┬────────► failed | canceled
 ```
+
+The states, the table between them and the derived terminal set are
+`RUN_STATUSES` / `RUN_TRANSITIONS` in `@planner/contract` as of
+[pl-16](./work/pl-16-the-plan-run.md), on `@webtools/core`'s machinery: `web`
+renders the state and `api` enforces it, so neither owns it.
+
+**`composing → done` skips `reviewing`, and that edge is deliberate.** pl-9 built
+the critic _inside_ `compose()` — it packs, critiques, feeds droppable findings
+back and packs again for bounded rounds, then returns once — so there is no
+moment `api` could honestly observe the changeover at. Emitting `reviewing`
+around that call to make this diagram come true would be _never fake progress_
+broken for decoration. The state is kept, because a critic pass with its own
+rounds and its own cost is a thing this tool will want to show, and the edge that
+skips it is legal so nothing has to lie in the meantime.
 
 There is no `interviewing` state. The intake completes before a run is created —
 it is synchronous, deterministic and fast, because nothing in it calls anything.
@@ -193,17 +207,18 @@ against faking progress applies (§7).
 
 All via environment, parsed and validated once at boot with zod, `api` only.
 
-| Variable                | Default    | Why it matters                                                 |
-| ----------------------- | ---------- | -------------------------------------------------------------- |
-| `PORT`                  | `8090`     | 8090/5183 so both tools run at once                            |
-| `MODEL_PROVIDER`        | `scripted` | The only place a model backend is named                        |
-| `GROUNDING_PROVIDER`    | `fixtures` | Same seam, same default: a fresh clone plans with no key       |
-| `MAX_SPECIALISTS`       | `5`        | The roster cap the orchestrator degrades to (§9)               |
-| `MAX_GROUNDING_CALLS`   | `40`       | Per run. Grounding is where the bill lives                     |
-| `GROUNDING_CACHE_TTL_*` | varies     | Hours for an opening time, months for a distance (§5)          |
-| `MAX_CRITIC_ROUNDS`     | `2`        | Bounded, or the critic and composer argue on the clock         |
-| `RUN_TOKEN_BUDGET`      | —          | Hard ceiling per run; degrade the roster rather than exceed it |
-| `MAX_CONCURRENT_RUNS`   | `2`        | Each run is itself a fan-out                                   |
+| Variable                     | Default    | Why it matters                                                 |
+| ---------------------------- | ---------- | -------------------------------------------------------------- |
+| `PORT`                       | `8090`     | 8090/5183 so both tools run at once                            |
+| `MODEL_PROVIDER`             | `scripted` | The only place a model backend is named                        |
+| `GROUNDING_PROVIDER`         | `fixtures` | Same seam, same default: a fresh clone plans with no key       |
+| `MAX_SPECIALISTS`            | `5`        | The roster cap the orchestrator degrades to (§9)               |
+| `MAX_GROUNDING_CALLS`        | `40`       | Per run. Grounding is where the bill lives                     |
+| `GROUNDING_CACHE_TTL_*`      | varies     | Hours for an opening time, months for a distance (§5)          |
+| `MAX_CRITIC_ROUNDS`          | `2`        | Bounded, or the critic and composer argue on the clock         |
+| `RUN_TOKEN_BUDGET`           | —          | Hard ceiling per run; degrade the roster rather than exceed it |
+| `MAX_CONCURRENT_RUNS`        | `2`        | Each run is itself a fan-out                                   |
+| `RATE_LIMIT_RUNS_PER_MINUTE` | `5`        | Runs one client may start. Zero disables it (pl-16)            |
 
 ## Key decisions and why
 

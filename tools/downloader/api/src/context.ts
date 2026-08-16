@@ -11,11 +11,11 @@ import type { BrowserResolver, ResolverRegistry, YtDlpResolver } from "@download
 import type { ApiConfig } from "./config.ts";
 import type { JobStore } from "./db/job-store.ts";
 import type { JobEventHub } from "./jobs/events.ts";
+import type { ConcurrencyGate, RateLimiter } from "@webtools/core/rate-limit";
 import type { JobOrchestrator } from "./jobs/orchestrator.ts";
 import type { ProbeCache } from "./jobs/probe-cache.ts";
 import type { JobQueue } from "./jobs/queue.ts";
 import type { AppLogger } from "./logger.ts";
-import type { ConcurrencyGate, RateLimiter } from "./rate-limit.ts";
 import type { SsrfGuard } from "./ssrf.ts";
 
 export interface AppContext {
