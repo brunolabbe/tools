@@ -27,14 +27,14 @@ reasoning, including what the decision costs, is an amendment to
 argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
-**212 unit tests pass across 19 files, plus 2 e2e specs.** `npm run check` is
+**218 unit tests pass across 19 files, plus 2 e2e specs.** `npm run check` is
 green. The repo-wide CI runs the unit suite on every push, and
 `.github/workflows/planner.yml` now carries two gates — the e2e suite in a real
 browser, and the image, which is built, started, and asked for both `/api/health`
 and the page. Both are path-filtered, so downloader work does not pay for them.
 
 What exists: the error taxonomy, the `TripBrief` and its schemas, the question
-tree and the engine over it (`@planner/intake` — 36 questions, reachability,
+tree and the engine over it (`@planner/intake` — version 2, 37 questions, reachability,
 invalidation, brief assembly, answer validation, all pure), the plan document —
 `Candidate`, `Provenance`, `Plan`, `PlanRevision`, `PlanDay`, `PlanItem`,
 `PlanGap`, with migration 2 behind it and a checked-in candidate set per trip
@@ -88,7 +88,7 @@ still unwritten.
 | [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | ready     | Delete what migration 3 outlived; `NOT_FOUND` to core    |
 | [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | ready     | 1,100 lines of `.tsx` and no test renders any of it      |
 | [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI  |
-| [pl-14](./work/pl-14-tree-content-review.md)                | ready     | The tree reviewed as content; the first `version` bump   |
+| [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2    |
 
 ## Known gaps and risks
 

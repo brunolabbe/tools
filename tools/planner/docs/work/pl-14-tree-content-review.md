@@ -3,7 +3,7 @@ id: pl-14
 tool: planner
 title: Review the question tree as content — budget, drive appetite, vehicle
 kind: work-package
-status: ready
+status: done
 milestone: P1
 depends_on: [pl-6, pl-7]
 ---
@@ -27,7 +27,7 @@ once a specialist reads the brief it is a migration with a plan attached.
 
 **This ticket proposes contract edits, and that is deliberate.** The root
 `CLAUDE.md` forbids changing a tool's contract unilaterally, so this file is the
-"stop and say so": three of the four changes below are contract changes, agreed
+"stop and say so": three of the five changes below are contract changes, agreed
 in review before the work starts rather than during it.
 
 ### The five, and the argument for each
@@ -257,4 +257,110 @@ more.
 
 ## Log
 
-_Empty — the work has not started._
+### 2026-08-16 — landed, all five
+
+The tree is **version 2**: 37 questions, 16 of them `core`, and the checkpoint is
+at **seven** questions for a road trip, **six** for a resort. `npm run check` is
+green, the planner suite is 218 tests over 19 files (781 repo-wide over 58), and
+`npm run e2e:planner` passes with **no spec edited** — which is the claim pl-13
+made about content edits, now paid out by a change that retired two ids, moved a
+question across the checkpoint and added a third.
+
+The contract edits are the three the ticket proposed and nothing else:
+`REQUIRED_CORE_SLOTS` loses `budget`, `DRIVE_APPETITES` and the
+`ROAD_VEHICLE_KINDS` / `VEHICLE_SOURCES` pair arrive, `RoadTripDetails` carries
+`driveAppetite`, `vehicleKind` and `vehicleSource`, and
+`REQUIRED_SHAPE_SLOTS["road-trip"]` is `["driveAppetite", "vehicleKind"]`. Each
+constant's doc comment carries the reason, because the comment is the only place
+the bar is written down.
+
+**pl-6's `core` ⇄ `missingRequiredSlots` test needed no edit**, in either
+direction. Both sides moved together, which is what it exists to prove.
+
+#### What the brief got wrong
+
+- **The api discarded-answer assertion names _two_ ids, not three.** Build step 4
+  predicted three. `answerThroughCore` stops at the checkpoint, and
+  `road-trip.vehicle-source` is `refine`, so it is never answered and cannot be
+  discarded — the shape change costs `road-trip.drive-appetite` and
+  `road-trip.vehicle-kind`, exactly the pair the "Done when" list names. The
+  third id only ever appears if a suite walks past the checkpoint first.
+- **The 4.5-hours case could not simply "become a choice case".** It was the
+  tree's only coverage of a `number` node with `integer: false`, and
+  `road-trip.drive-hours` was the node it used. So it moved to
+  `backcountry.daily-distance` (which §"Considered and not done" deliberately
+  left a number) and a separate choice case was added for
+  `road-trip.drive-appetite` — one that also asserts a `number` answer is now
+  refused there, which is the id-change rule made visible.
+- **`intake/test/tree.test.ts`'s shape-independent core list would have passed
+  unedited.** The budget node keeps `when: null`, so it stays reachable across a
+  shape change whatever its `stage` is; removing `budget` from that list is
+  tidying, not a fix. What did need fixing in the same test was its comment,
+  which credited `shape` being question one with the guarantee — §5's error,
+  reproduced. The identical wrong argument sits in
+  `api/test/intakes-routes.test.ts`'s discard test ("the whole reason the fixed
+  core sits after `shape`"); both now name `when: null` and `withShape` instead.
+- **`contract/test/fixtures/road-trip.json` is unlisted collateral.** It carries
+  the old slot names, `fixtures.test.ts` parses it against `tripBriefSchema`, and
+  it is the checked-in brief a specialist test will read — so it now holds a
+  car that is `own`, with the two facts separate.
+- **Three prose counts were stale and unlisted**: `03-STATUS.md`'s "36
+  questions" and its test count, and `brief.ts`'s "puts a draftable brief at
+  eight answers" above `REQUIRED_SHAPE_SLOTS`. Fixed.
+
+#### Deliberately not changed
+
+`e2e/intake.spec.ts`, `contract/src/api.ts` and `web/src/wizard/Wizard.tsx` all
+still cite `road-trip.drive-hours` in a comment, as the counter-example of a
+selector or a rendered string that must never appear. That id is now retired,
+which makes it a _better_ illustration than a live one, and leaving the spec
+untouched is what lets "the e2e suite passed with no spec edited" be checked
+rather than asserted. `tools/planner/CLAUDE.md` is the one that had to move,
+because it states the rule with an example that read as current fact — it now
+names a live id and the right question count.
+
+#### One environment note for the next worktree
+
+A git worktree under `.claude/worktrees/` has no `node_modules` of its own, and
+node's parent-directory lookup walks straight up to the main checkout's — so
+`@planner/contract` resolved to `/workspaces/tools/tools/planner/contract` and
+`tsc --build` reported the new exports as missing no matter how often the
+worktree's contract was rebuilt. `npm install` inside the worktree (ten seconds,
+workspace symlinks only) fixes it. Worth knowing before debugging a contract
+change that "will not compile".
+
+### 2026-08-16 — review pass on the content
+
+Three fixes to the content itself, none of them to the machinery. The suite was
+green before them and is green after, which is the point: a tree edit that tests
+cannot see is exactly the kind this file exists to catch.
+
+- **The drive-appetite labels carried no distance, and the ticket promised one.**
+  §2 argues for "a four-way choice whose labels carry a distance anchor" and
+  build step 2 then spells out four labels with only hours in them. The labels
+  won, the argument lost, and the argument was the half that came from the review:
+  the whole reason the question changed shape is that hours are the honest unit
+  and distance is the palpable one, so a label with only hours in it keeps the
+  problem it was meant to solve. Each label now carries both — "about 300 km"
+  beside "three or four hours" — with a comment saying the kilometres are an
+  illustration at an ordinary highway speed and not a second answer, since the
+  band was never a promise about how far.
+
+  Worth naming as a failure mode rather than a typo: a brief that argues for
+  something in prose and then contradicts itself in a literal gets implemented
+  from the literal, every time. The literal is the specification.
+
+- **The help text talked about the form instead of the trip.** "Nobody answers
+  this in decimals. Pick the day that sounds like yours." is true of the node's
+  history and invisible to a user, who never saw the decimal field. It now says
+  what the answer decides — how far apart two nights can be, and how much of a
+  day is left on arrival — which is the register every other help line in the
+  file uses.
+
+- **`tools/planner/CLAUDE.md` had picked up a changelog.** The e2e rule gained a
+  clause about pl-14 retiring an id and moving the count off eight. That belongs
+  in this log, where it already is; a rules page states the rule and names a live
+  example. Reverted to the original sentence with the id and count updated.
+
+Also: the Why section still said "three of the four changes below", written
+before §5 existed.

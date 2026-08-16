@@ -24,6 +24,12 @@ import { answerFor, choice, DECLINED, DIVERGING_SHAPES, walk } from "./helpers.t
 
 const NOW = new Date("2026-08-14T12:00:00.000Z");
 
+/** How many questions this shape answers before the checkpoint lets it stop. */
+function coreQuestionCount(shape: TripShape): number {
+  return Object.keys(walk(QUESTION_TREE, { preset: { shape: choice(shape) }, coreOnly: true }))
+    .length;
+}
+
 test("the checked-in tree is valid", () => {
   expect(validateTree(QUESTION_TREE)).toEqual([]);
 });
@@ -63,13 +69,20 @@ describe("the checkpoint", () => {
     },
   );
 
-  test("the essentials are eight questions or so, not twenty", () => {
+  test("the essentials are seven questions or so, not twenty", () => {
     // §3's "perhaps eight to ten". A number that creeps up is the interview
     // this tool decided not to be, so it is asserted rather than hoped for.
     for (const shape of TRIP_SHAPES) {
       const answers = walk(QUESTION_TREE, { preset: { shape: choice(shape) }, coreOnly: true });
       expect(Object.keys(answers).length, shape).toBeLessThanOrEqual(10);
     }
+  });
+
+  test("a road trip reaches it in seven, and a resort in six", () => {
+    // The exact counts, because the content review of 2026-08-16 moved one and
+    // split another, and "eight to ten" is too loose to notice a third arriving.
+    expect(coreQuestionCount("road-trip")).toBe(7);
+    expect(coreQuestionCount("resort")).toBe(6);
   });
 
   test("refining carries on past the checkpoint, and reaches the end of the tree", () => {
@@ -159,9 +172,11 @@ describe("shapes branch", () => {
 
     expect(open.has("backcountry.shelter")).toBe(false);
     expect(open.has("city-and-culture.pace")).toBe(true);
-    // The fixed core is shape-independent, which is the whole reason `shape` is
-    // question one: who is coming and when did not change.
-    for (const id of ["origin", "dates", "travellers", "budget", "effort"]) {
+    // The fixed core is shape-independent — every one of these carries
+    // `when: null`, which is what puts it out of `prune`'s reach. Note that this
+    // is a property of the conditions and of `withShape`, not of `shape` being
+    // question one: it would hold just as well if it were asked sixth.
+    for (const id of ["origin", "dates", "travellers", "effort"]) {
       expect(open.has(id), id).toBe(true);
     }
   });

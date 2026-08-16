@@ -37,8 +37,9 @@ const CORE_LABELS: Record<CoreSlotId, string> = {
 
 /** Every slot a shape extension can carry. `context` is shared by all six. */
 const SHAPE_LABELS: Record<string, string> = {
-  maxDailyDriveHours: "Driving a day",
-  vehicle: "Vehicle",
+  driveAppetite: "Driving a day",
+  vehicleKind: "Vehicle",
+  vehicleSource: "Vehicle from",
   routeStyle: "Route",
   mustSee: "Must see",
   nightsOut: "Nights out",

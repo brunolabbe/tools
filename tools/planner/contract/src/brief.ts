@@ -274,8 +274,39 @@ export type ComfortFloor = (typeof COMFORT_FLOORS)[number];
 // Per-shape extension slot value types
 // ---------------------------------------------------------------------------
 
-export const ROAD_VEHICLES = ["own-car", "rental-car", "camper-van", "motorhome"] as const;
-export type RoadVehicle = (typeof ROAD_VEHICLES)[number];
+/**
+ * How much road a day is allowed to hold, as a band rather than a decimal.
+ *
+ * Hours are the right unit and a number is the wrong control: nobody types 3.5,
+ * and distance would be worse — 400 km is a lazy afternoon on an interstate and
+ * a full day on a mountain pass, so a distance answer forces the composer to
+ * invent a speed to convert it back into the thing it actually needs. Named for
+ * the day and not for a number, the way `EFFORT_APPETITES` is.
+ */
+export const DRIVE_APPETITES = ["short-hops", "half-day", "long-day", "all-day"] as const;
+export type DriveAppetite = (typeof DRIVE_APPETITES)[number];
+
+/**
+ * What is being driven, with no claim about who owns it.
+ *
+ * Split from ownership on 2026-08-16 (pl-14): a single enum of
+ * `own-car | rental-car | camper-van | motorhome` cannot say *rented camper
+ * van*, which in most markets is the commonest camper trip there is — so every
+ * rental constraint went missing on the case where they bite hardest.
+ */
+export const ROAD_VEHICLE_KINDS = ["car", "camper-van", "motorhome"] as const;
+export type RoadVehicleKind = (typeof ROAD_VEHICLE_KINDS)[number];
+
+/**
+ * The other half of that split: whose it is.
+ *
+ * This duplicates `MACHINE_SOURCES` member for member and stays its own enum on
+ * purpose. One list covering a motorhome and a snowmobile couples two shapes'
+ * content, and the two are free to diverge — a car can gain `borrowed`, a
+ * machine can gain an outfitter.
+ */
+export const VEHICLE_SOURCES = ["own", "rental"] as const;
+export type VehicleSource = (typeof VEHICLE_SOURCES)[number];
 
 /** One-way rental fees are a real line item, so the loop/one-way answer is a slot. */
 export const ROUTE_STYLES = ["loop", "one-way"] as const;
@@ -334,9 +365,11 @@ export type InterCityTransport = (typeof INTER_CITY_TRANSPORT)[number];
  */
 export type RoadTripDetails = {
   shape: "road-trip";
-  /** Hours behind the wheel on a normal day — §2's failure 1, in the brief. */
-  maxDailyDriveHours: Slot<number>;
-  vehicle: Slot<RoadVehicle>;
+  /** How much road a normal day holds — §2's failure 1, in the brief. */
+  driveAppetite: Slot<DriveAppetite>;
+  vehicleKind: Slot<RoadVehicleKind>;
+  /** Whether it is theirs. A rental carries a pickup point and a fee. */
+  vehicleSource: Slot<VehicleSource>;
   routeStyle: Slot<RouteStyle>;
   /** Stops the party already wants. Names, not an itinerary. */
   mustSee: Slot<string[]>;
@@ -404,8 +437,9 @@ const contextSlotSchema = slotSchema(z.string().trim().min(1).max(MAX_CONTEXT_CH
 export const tripShapeDetailsSchema = z.discriminatedUnion("shape", [
   z.object({
     shape: z.literal("road-trip"),
-    maxDailyDriveHours: slotSchema(z.number().positive().max(24)),
-    vehicle: slotSchema(z.enum(ROAD_VEHICLES)),
+    driveAppetite: slotSchema(z.enum(DRIVE_APPETITES)),
+    vehicleKind: slotSchema(z.enum(ROAD_VEHICLE_KINDS)),
+    vehicleSource: slotSchema(z.enum(VEHICLE_SOURCES)),
     routeStyle: slotSchema(z.enum(ROUTE_STYLES)),
     mustSee: slotSchema(noteListSchema),
     context: contextSlotSchema,
@@ -550,19 +584,28 @@ export type BriefSlotId = CoreSlotId | ShapeSlotId;
  *
  * That bar is why `destination`, `comfort`, `ages`, `accessNeeds` and
  * `dealBreakers` are absent. Each improves a plan; none of them prevents one.
+ *
+ * **`budget` is absent too**, removed in the content review of 2026-08-16
+ * (pl-14). It is still a question — it moves hotel tier, whether flights are in
+ * scope, whether an activity makes the list — but a first draft is entirely
+ * possible from a `moderate` default, which is §3's "draft early, interview
+ * less" exactly. `comfort` drives lodging tier the same way and was already
+ * `refine`, so keeping budget here was inconsistent as well as too strict. It is
+ * also the question people are least able to answer honestly up front, because
+ * the true answer is "depends what it buys" — which is the thing a draft
+ * supplies.
  */
 export const REQUIRED_CORE_SLOTS = [
   "shape",
   "origin",
   "dates",
   "travellers",
-  "budget",
   "effort",
 ] as const satisfies readonly CoreSlotId[];
 
 /**
  * The same bar, per shape. Two questions past the core for most shapes, which
- * puts a draftable brief at eight answers — §3's "perhaps eight to ten".
+ * puts a draftable brief at seven answers — inside §3's "perhaps eight to ten".
  *
  * The type ties each row to that shape's own slot keys, so a slot renamed on an
  * extension breaks this table rather than silently dropping a requirement.
@@ -575,8 +618,11 @@ export const REQUIRED_CORE_SLOTS = [
 export const REQUIRED_SHAPE_SLOTS: {
   [S in TripShape]: readonly ShapeSlotKeys<Extract<TripShapeDetails, { shape: S }>>[];
 } = {
-  // How far a day drives and what it drives decide every leg and the one-way fee.
-  "road-trip": ["maxDailyDriveHours", "vehicle"],
+  // How much road a day holds decides every leg; what it is driven in decides
+  // where a day can end, because a camper sleeps you and a car does not.
+  // `vehicleSource` is deliberately not here: whether the camper is rented moves
+  // a pickup point and a fee, and a draft exists without knowing it.
+  "road-trip": ["driveAppetite", "vehicleKind"],
   // Nights out sets the pack, and hut-or-tent sets the booking deadline.
   backcountry: ["nightsOut", "shelter"],
   // Which machine, and whether it must be rented — rentals are the binding constraint.
@@ -637,8 +683,9 @@ export function emptyShapeDetails(shape: TripShape): TripShapeDetails {
     case "road-trip":
       return {
         shape,
-        maxDailyDriveHours: slot.unknown(),
-        vehicle: slot.unknown(),
+        driveAppetite: slot.unknown(),
+        vehicleKind: slot.unknown(),
+        vehicleSource: slot.unknown(),
         routeStyle: slot.unknown(),
         mustSee: slot.unknown(),
         context: slot.unknown(),
