@@ -44,6 +44,7 @@ npm test                      # vitest, every project
 npm test -- --project <tool>  # one tool's suite: seconds, not a minute
 npm run build                 # every workspace
 npm run e2e:downloader        # whole stack in a real browser
+npm run e2e:planner           # the intake, likewise (`npm run e2e:install` once first)
 ```
 
 Lint and format are **oxlint** and **oxfmt**, not eslint and prettier.
@@ -67,8 +68,9 @@ tools/planner/
   contract             types, error taxonomy, zod API schemas
   intake               the authored question tree — no model, no network, no clock
   agent                prompts, the roster, the specialists, the provider seam
-  api                  Fastify, SQLite persistence, HTTP, run orchestration
+  api                  Fastify, SQLite persistence, HTTP, run orchestration, the UI
   web                  React + Vite UI
+  e2e                  Playwright: the intake, in a browser, against the built bundle
 ```
 
 The two ports differ from each other on purpose, so both tools can run at once

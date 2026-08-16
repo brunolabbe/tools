@@ -1,16 +1,24 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   // Every test suite that runs under node, in one project — and the config the
-  // other three test projects extend.
+  // other test projects extend.
   //
   // **The split is by compiler surface, never by package.** `lib`, `types`,
   // `jsx`, `moduleResolution` and `allowJs` cannot vary within a project, and
   // the repo needs exactly four combinations of them: this one (NodeNext, node
-  // globals, no DOM), `tools/downloader/web/test` (Bundler + DOM + JSX),
-  // `tools/downloader/e2e` (DOM + Playwright's types) and `scripts/test`
-  // (`allowJs`). Those three extend this file and override only the options
-  // that make them different. Anything that would differ merely by an `include`
-  // is not a project — it is one more glob here.
+  // globals, no DOM), `tools/downloader/web/test` (Bundler + DOM + JSX), the
+  // Playwright one (DOM + Playwright's types) and `scripts/test` (`allowJs`).
+  // The others extend this file and override only the options that make them
+  // different. Anything that would differ merely by an `include` is not a
+  // project — it is one more glob here.
+  //
+  // **With one exception, and it is a mechanical one:** the Playwright surface
+  // has two files, `tools/downloader/e2e` and `tools/planner/e2e`, because an
+  // `include` is rooted at the config's own directory and cannot span both
+  // tools. Four surfaces, five projects. A third tool's e2e suite makes it six,
+  // and that is expected rather than a smell — it is the one place where "not a
+  // project, one more glob" cannot apply, since a glob here would pull both
+  // tools' specs onto the node surface and fail on `document`.
   //
   // That is also the one thing the split buys, and it is enforced rather than
   // aspirational: naming `document` in a node suite fails to compile, because

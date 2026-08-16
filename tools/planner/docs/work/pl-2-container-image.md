@@ -100,3 +100,18 @@ locally. `planner.yml` is the first real build.
 above is left saying `CHAT_PROVIDER` because that is what landed; the argument
 for setting it explicitly in the image is unchanged, and so is the value. Nothing
 that reads it broke, because `scripted` is the default and the fallback both.
+
+**2026-08-16 — the first half of _done when_ is closed, by
+[pl-13](./pl-13-drive-the-intake-end-to-end.md).** "`docker run` of the published
+image serves the UI" was written as an acceptance and was never true: `WEB_DIR`
+was set here in step 2 and parsed in `config.ts`, and `server.ts` registered no
+static handler, so the image shipped a bundle it never handed out. Nothing caught
+it because the CI gate asked only for `/api/health`, which answered perfectly
+throughout — an acceptance criterion that no check was pointed at.
+
+`api/src/routes/web.ts` serves it now, and `planner.yml` asks the running
+container for `/` and greps for the bundle's own root element rather than
+trusting a 200. **So do not re-verify that half when picking this ticket up** —
+it is gated. What is left is genuinely steps 5 and 6: the compose service, the
+subdomain and the Access application, all of which still need the user model
+argument in the first trap resolved or accepted.
