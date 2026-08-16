@@ -48,9 +48,15 @@ jobs:
       - run: npm run check
 
   # The unit and integration suites. On both platforms, because this project
-  # has a genuine Windows story — process-tree kills use `taskkill`, paths are
-  # confined with `path.relative`, and reserved filenames like `CON` are a
-  # Windows-only hazard. Linux-only CI would not exercise any of it.
+  # has a genuine Windows story — but narrower than it looks, and worth naming
+  # precisely so nobody deletes the wrong half. `buildTaskkillArgs` and
+  # `sanitizeFilename("CON")` are pure functions and answer identically on
+  # Linux; their tests are not why this matrix exists. The reason is
+  # `hls-e2e.test.ts`'s "cancelling kills the process tree and leaves no
+  # artifacts", which has no `skipIf`: on this runner it spawns a real
+  # `ffmpeg-static`, takes `killTreeWindows` into a real `taskkill.exe`, and
+  # asserts nothing was orphaned. That is the only execution of `taskkillPath()`
+  # anywhere, and it pins the process-tree rule in CLAUDE.md.
   #
   # This ran briefly path-filtered to the downloader, on the theory that every
   # Windows hazard is that tool's. It is unfiltered again: the filter was a
@@ -77,19 +83,32 @@ jobs:
       # because `npm run check` typechecks with `tsc --build` and leaves the
       # output behind; a fresh checkout has nothing.
       - run: npm run build
-      # Downloading Chromium is 265 of the Windows job's 460 seconds, and it is
-      # the same bytes every run. Keyed on the lockfile, so a Playwright bump
+      # Windows only, and that asymmetry is measured rather than assumed.
+      # Downloading Chromium there is minutes; on the Linux runner it is ~20
+      # seconds against a CDN, which is less than this step spends restoring
+      # 282 MB. A cache that saves six seconds is not free — every branch that
+      # touches the lockfile writes its own copy, and the repository's 10 GB
+      # cache quota is what pays. Keyed on the lockfile, so a Playwright bump
       # invalidates it; the install below still runs on a hit and finds the
-      # browser already there. The cache location is Playwright's own, which
-      # differs per platform.
-      - name: Cache the Playwright browsers
+      # browser already there.
+      - if: runner.os == 'Windows'
+        name: Cache the Playwright browsers
         uses: actions/cache@v6
         with:
-          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || '~/.cache/ms-playwright' }}
+          path: ~\AppData\Local\ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       # The browser-sniffer suite launches a real Chromium; without this it
       # would skip or fail depending on the runner image.
-      - run: npx playwright install --with-deps chromium
+      #
+      # `--with-deps` on Linux only. It means two different things per platform:
+      # on Linux it is `apt-get` for Chromium's shared libraries, which the
+      # runner does not ship and the launch genuinely needs — 16 seconds. On
+      # Windows it shells out to DISM to enable the *Media Foundation* Windows
+      # feature, which took 200 of this job's 306 seconds and is the single
+      # largest line item in the whole pull request. Nothing here decodes video:
+      # the sniffer reads network traffic, and the ffmpeg suite spawns its own
+      # binary. So Windows gets the browser and not the feature.
+      - run: npx playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} chromium
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
       # The `ffmpeg-static` fallback is a binary built against a much older
