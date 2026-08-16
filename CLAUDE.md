@@ -72,9 +72,17 @@ with a code from its taxonomy. Never a bare `Error`, never an ad-hoc string
 code. If no existing code fits, say so rather than inventing one locally.
 
 Codes that describe the _transport or the job runner_ — bad URL, unreachable,
-timed out, rate limited, canceled — live in `@webtools/core` and are shared.
-Codes about a _domain_ belong to the tool. A new code that would mean something
-to a tool which has never heard of yours belongs in core; anything else does not.
+no such route, timed out, rate limited, canceled — live in `@webtools/core` and
+are shared. Codes about a _domain_ belong to the tool. A new code that would mean
+something to a tool which has never heard of yours belongs in core; anything else
+does not.
+
+`NOT_FOUND` and `JOB_NOT_FOUND` are both in core and are not interchangeable: the
+first is a URL that matched no route, the second a job the runner has no record
+of. `NOT_FOUND` is there because both tools independently reached for their
+nearest _domain_ code for a route miss and re-worded it at the call site — which
+is the tell. If the copy has to be replaced where the error is raised, the code is
+the wrong one.
 
 **Never invoke a shell.** Spawn with argument arrays, `shell: false`. User URLs
 and titles reach subprocess arguments. Enforced repo-wide by a source scan in

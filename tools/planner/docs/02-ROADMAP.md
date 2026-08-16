@@ -44,9 +44,12 @@ about it. The persisted aggregate is the plan, everywhere, including
 | `api`      | Fastify, SQLite with numbered migrations, config, logging, `/api/health`   |
 | `web`      | The app shell and a health call — no intake UI                             |
 
-The `contract` row is history, not a description of where this is going:
-`Conversation` and `Message` are superseded by the brief and the intake, and
-migration 1's tables go with them.
+The `contract` row is history in the strict sense — none of it is still there.
+The brief and the intake replaced `Conversation` and `Message`, migration 3
+dropped the tables under them, and
+[pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) deleted the types,
+the schemas and `CONVERSATION_NOT_FOUND` themselves. Migrations 1 and 3 both
+remain in the file: an applied migration is not edited.
 
 Two decisions from Phase 0 survive the domain landing, and are not up for
 revisiting casually:
