@@ -205,6 +205,28 @@ changed shape, was renamed or was removed. Three of them are a new
   code. `api/src/runs/queue.ts` says all of this at the top. Lift it on a third
   consumer.
 
+**pl-16 changed `tools/downloader`, and that is worth saying plainly** — a
+planner ticket editing another tool is exactly the thing this repo's layout
+rules exist to prevent, so a reader of the downloader's history should be able to
+find out why from here. The lift above is the whole of it, and nothing in the
+downloader's behaviour changed:
+
+- `tools/downloader/api/src/rate-limit.ts` lost `RateLimiter`, `RateLimitDecision`,
+  `RateLimiterOptions`, `clientKey` and `ConcurrencyGate` to
+  `@webtools/core/rate-limit` and kept `createRateLimitHook`.
+- `context.ts`, `server.ts`, `index.ts` and `test/rate-limit.test.ts` import them
+  from core instead; `api/package.json` and `api/tsconfig.json` gained the
+  dependency and the project reference.
+- The downloader's own tests are unchanged except for that one import line, and
+  its CI gate is green.
+
+It is scope beyond what the ticket asked for. The justification is the repo rule
+it would otherwise have broken: the alternative was a second copy of a token
+bucket in `tools/planner/api`, and "shared code moves to `packages/` on the
+second real consumer" is the rule that copy would have violated — the ticket's
+own Build step 5 names the question. If a reviewer would rather have had the
+copy, the revert is one file plus five import lines.
+
 **`MAX_SPECIALISTS` stays at 5, decided rather than overlooked.** The last trap
 asked whether the number is still right now that a roster exists. It is: the cap
 has to stay a constraint something actually reaches, the composer sums the cost
@@ -242,3 +264,47 @@ and a `.run-progress` block in `styles.css`.
 **Numbers.** 457 planner tests across 35 files, 1,020 repo-wide. `npm run check`
 green. Migration 4 adds `plan_runs` and `plan_candidates.run_id`; the two
 migration suites that pin `user_version` moved from 3 to 4.
+
+### 2026-08-16 — the image gate, afterwards
+
+`npm run check` and `npm test` were both green and the image still would not
+boot. `.github/workflows/planner.yml` built it, started it, and the container
+never became healthy:
+
+    ERR_MODULE_NOT_FOUND: Cannot find package '@planner/itinerary'
+      imported from /app/tools/planner/api/dist/runs/orchestrator.js
+
+**`tools/planner/Dockerfile` lists its workspaces by hand, in two places, and
+`itinerary` was in neither.** It has existed since pl-9, but nothing in `api`
+imported it until this ticket put `compose` in the run orchestrator — so the
+first consumer pays for the Dockerfile line, and that was me.
+
+The rule worth carrying, now written above the lines themselves: **adding a
+workspace to `api`'s dependencies costs two edits to that file, and the two fail
+differently.**
+
+- Miss the **runtime** pair (`package.json` + `dist`) and the container starts,
+  reports nothing wrong, and throws `ERR_MODULE_NOT_FOUND` when the code path is
+  first reached. That is the failure the existing comment above `intake`'s lines
+  already described.
+- Miss the **build-stage manifest** and `npm ci` never creates the workspace
+  symlink at all, so there is nothing for the runtime stage to copy. That is the
+  half that actually broke here, and it is why the manifest list is not merely a
+  layer-cache optimisation.
+
+Nothing else I added has the same shape. `@webtools/core/rate-limit` is a new
+**subpath** on a package whose `package.json` and whole `dist` the runtime stage
+already copies, and the subpath is what carries the `exports` map — confirmed by
+importing it rather than assumed. The full set of workspaces the built API
+imports is `@planner/{contract,intake,itinerary,agent}` and `@webtools/core`, and
+all five now have all three lines.
+
+**Docker is not available in the environment this was fixed in**, so the image
+was not built and run here — this is verified by checking every bare workspace
+specifier in `tools/planner/api/dist` against the Dockerfile's copy lines, and by
+resolving `@webtools/core/rate-limit` for real. The gate is the actual proof.
+
+A cheap way to stop this recurring, not built and offered rather than assumed
+wanted: the check above is a dozen lines and is the same shape as
+`packages/core/test/spawn-safety.test.ts` — a source scan asserting a rule the
+comments currently carry. It would have failed on this PR before CI did.
