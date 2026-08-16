@@ -281,5 +281,21 @@ with step 4 and the `web` half now pl-16's.
 
 #### Green
 
-`npm run check` passes. `npm test -- --project planner` is 420 tests across 31
-files, 84 of them new here.
+`npm run check` passes. `npm test -- --project planner` is 421 tests across 31
+files, 85 of them new here.
+
+#### The fence pattern was a ReDoS, and CodeQL caught it
+
+CodeQL failed the PR on `extractJson`: `/```(?:json)?\s*\n(...)/` is polynomial,
+because `\s` matches a newline and so `\s*\n` gives the engine two ways to consume
+every line of a fence that never closes. Measured before the fix, on `"```\n"`
+followed by `"\n "` repeated: 20k repetitions took 226ms, and it is quadratic, so
+60k is seconds and the reply size that stalls the event loop is not large.
+
+The run of whitespace is now `[^\S\n]*` — horizontal only, `\r\n` still handled —
+and the ambiguity is gone. What makes this worth a paragraph rather than a
+one-line diff is that it is _this package's own rule_ biting: a model reply is
+untrusted input, and the pattern that reads it was one a stranger's reply could
+choose the cost of. The regression test in `agent/test/ask.test.ts` asserts a
+time bound rather than a result, which is the only thing that would fail if the
+`\s*` came back.

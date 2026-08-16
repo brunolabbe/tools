@@ -71,9 +71,15 @@ export interface AskResult {
  * is unwrapped and a bare object is found by its outermost braces — and nothing
  * beyond that is attempted, because a parser that tries harder than this is
  * guessing at what a model meant.
+ *
+ * The run of whitespace before the newline is `[^\S\n]` and not `\s`, because
+ * `\s` matches a newline too: `\s*\n` gives the engine two ways to consume every
+ * line of an unterminated fence, and a model reply is untrusted input long
+ * enough to make that quadratic. Horizontal whitespace only, and the ambiguity
+ * is gone.
  */
 export function extractJson(content: string): string {
-  const fenced = /```(?:json)?\s*\n([\s\S]*?)\n?```/.exec(content);
+  const fenced = /```(?:json)?[^\S\n]*\n([\s\S]*?)\n?```/.exec(content);
   const text = (fenced?.[1] ?? content).trim();
 
   const open = text.indexOf("{");

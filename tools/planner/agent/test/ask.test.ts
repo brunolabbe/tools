@@ -51,6 +51,18 @@ describe("reading a reply", () => {
   test("unwraps a fenced block, because a model that explains itself is still useful", () => {
     expect(extractJson('```json\n{"candidates":[]}\n```')).toBe('{"candidates":[]}');
     expect(extractJson('Sure!\n{"candidates":[]}\nHope that helps.')).toBe('{"candidates":[]}');
+    expect(extractJson('```json  \n{"candidates":[]}\n```')).toBe('{"candidates":[]}');
+  });
+
+  test("an unterminated fence does not make the unwrapping regex chew", () => {
+    // A reply is untrusted input, so the fence pattern must not be one a
+    // stranger can turn into a stalled event loop. `\s*\n` was: two ways to
+    // consume each line, no closing fence to stop on.
+    const hostile = "```\n" + "\n ".repeat(60_000);
+    const started = performance.now();
+
+    expect(extractJson(hostile)).toBe(hostile.trim());
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 
   test("an empty list is a real answer and not a failure", async () => {
