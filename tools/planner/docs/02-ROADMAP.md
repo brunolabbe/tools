@@ -100,7 +100,9 @@ The three pieces that turn a brief into a document, in the order the code forces
 
 1. **The contract for a plan** — `Candidate`, `Plan`, `PlanRevision`, `PlanDay`,
    `PlanItem`, provenance, `pinned`. Contract-first because four packages depend
-   on it. → [pl-4](./work/pl-4-plan-document-contract.md)
+   on it. → [pl-4](./work/pl-4-plan-document-contract.md), amended by
+   [pl-15](./work/pl-15-candidate-legs.md), which made a candidate either `at` a
+   place or `between` two so a leg's endpoints stop living in its prose.
 2. **The orchestrator and the fan-out** — roster as a pure function of the brief,
    specialists in parallel, each returning candidates and never a schedule, the
    run as a job with real progress. → [pl-5](./work/pl-5-orchestrator-and-fan-out.md)

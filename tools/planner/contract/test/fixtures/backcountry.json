@@ -35,10 +35,13 @@
       "specialist": "lodging",
       "title": "Refuge Le Carouge",
       "summary": "A bunkroom hut on the traverse, wood stove, no plumbing. Reserved through SEPAQ and it goes early for the late-August weekends.",
-      "place": {
-        "name": "Refuge Le Carouge",
-        "locality": "Parc national de la Gaspésie, Québec",
-        "coordinates": { "latitude": 48.9497, "longitude": -66.1522 }
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Refuge Le Carouge",
+          "locality": "Parc national de la Gaspésie, Québec",
+          "coordinates": { "latitude": 48.9497, "longitude": -66.1522 }
+        }
       },
       "durationMinutes": null,
       "cost": {
@@ -57,10 +60,18 @@
       "specialist": "route-and-logistics",
       "title": "Mont Albert traverse, southern approach",
       "summary": "Up the south face to the plateau and across it. About 14 km with the climb front-loaded, which suits a party carrying three nights of food.",
-      "place": {
-        "name": "Mont Albert",
-        "locality": "Parc national de la Gaspésie, Québec",
-        "coordinates": { "latitude": 48.9333, "longitude": -66.1833 }
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Mont Albert",
+          "locality": "Parc national de la Gaspésie, Québec",
+          "coordinates": { "latitude": 48.9333, "longitude": -66.1833 }
+        },
+        "to": {
+          "name": "Refuge Le Carouge",
+          "locality": "Parc national de la Gaspésie, Québec",
+          "coordinates": null
+        }
       },
       "durationMinutes": 420,
       "cost": null,
@@ -73,10 +84,13 @@
       "specialist": "conditions-and-gear",
       "title": "Plateau weather and the caribou closure",
       "summary": "The plateau makes its own weather and can be in cloud with the valley clear, which is the navigation case this party said it wanted to avoid. Parts of the range close seasonally for the caribou herd — the park authority is the only source that can say which, and it must be checked before departure.",
-      "place": {
-        "name": "Mont Albert plateau",
-        "locality": "Parc national de la Gaspésie, Québec",
-        "coordinates": null
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Mont Albert plateau",
+          "locality": "Parc national de la Gaspésie, Québec",
+          "coordinates": null
+        }
       },
       "durationMinutes": null,
       "cost": null,
@@ -89,10 +103,13 @@
       "specialist": "practicalities",
       "title": "Park entry and hut reservation through SEPAQ",
       "summary": "Backcountry huts are reservation-only and entry is per person per day. Both are bought in the same transaction, which is the one deadline this trip actually has.",
-      "place": {
-        "name": "Parc national de la Gaspésie",
-        "locality": "Québec, Canada",
-        "coordinates": null
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Parc national de la Gaspésie",
+          "locality": "Québec, Canada",
+          "coordinates": null
+        }
       },
       "durationMinutes": null,
       "cost": {

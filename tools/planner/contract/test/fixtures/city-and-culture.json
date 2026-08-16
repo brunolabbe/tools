@@ -42,10 +42,13 @@
       "specialist": "activities",
       "title": "Galleria Borghese, timed entry",
       "summary": "Two hours in one building, and the Caravaggios are on the ground floor. Entry is by a timed slot that must be reserved — there is no walk-up.",
-      "place": {
-        "name": "Galleria Borghese",
-        "locality": "Rome, Italy",
-        "coordinates": { "latitude": 41.9142, "longitude": 12.4922 }
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Galleria Borghese",
+          "locality": "Rome, Italy",
+          "coordinates": { "latitude": 41.9142, "longitude": 12.4922 }
+        }
       },
       "durationMinutes": 120,
       "cost": {
@@ -73,10 +76,13 @@
       "specialist": "activities",
       "title": "Ostia Antica, by train from Porta San Paolo",
       "summary": "A whole Roman town with almost none of the crowd of the Forum, and the site is flat once you are inside it. The train is half an hour and runs on a metro ticket.",
-      "place": {
-        "name": "Ostia Antica",
-        "locality": "Rome, Italy",
-        "coordinates": { "latitude": 41.7554, "longitude": 12.2917 }
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Ostia Antica",
+          "locality": "Rome, Italy",
+          "coordinates": { "latitude": 41.7554, "longitude": 12.2917 }
+        }
       },
       "durationMinutes": 300,
       "cost": {
@@ -95,10 +101,13 @@
       "specialist": "food",
       "title": "Mercato di Testaccio, late morning",
       "summary": "A working market rather than a restored one, and it is indoors and level throughout. Best after ten, when the lunch counters open and the produce crowd has gone.",
-      "place": {
-        "name": "Mercato di Testaccio",
-        "locality": "Rome, Italy",
-        "coordinates": { "latitude": 41.8781, "longitude": 12.4753 }
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Mercato di Testaccio",
+          "locality": "Rome, Italy",
+          "coordinates": { "latitude": 41.8781, "longitude": 12.4753 }
+        }
       },
       "durationMinutes": 90,
       "cost": {
@@ -117,10 +126,13 @@
       "specialist": "lodging",
       "title": "Hotel in Monti with a lift",
       "summary": "Central enough to walk home from dinner, and it has a lift — which in this part of Rome is worth checking rather than assuming.",
-      "place": {
-        "name": "Monti",
-        "locality": "Rome, Italy",
-        "coordinates": { "latitude": 41.8947, "longitude": 12.4922 }
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Monti",
+          "locality": "Rome, Italy",
+          "coordinates": { "latitude": 41.8947, "longitude": 12.4922 }
+        }
       },
       "durationMinutes": null,
       "cost": {

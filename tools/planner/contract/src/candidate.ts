@@ -2,9 +2,10 @@
  * What a specialist returns, and the only thing it returns.
  *
  * `00-ANALYSIS.md` §4: **a specialist proposes options; it never writes the
- * schedule.** So a `Candidate` says what a thing is, where it is, how long it
- * takes, roughly what it costs, when it is in season and how far ahead it must
- * be booked — and says **nothing about which day it falls on**. That omission is
+ * schedule.** So a `Candidate` says what a thing is, where it is or which two
+ * places it runs between, how long it takes, roughly what it costs, when it is
+ * in season and how far ahead it must be booked — and says **nothing about
+ * which day it falls on**. That omission is
  * the seam: let two specialists each write itinerary and you get two itineraries
  * to reconcile, which is a harder problem than the one you started with.
  *
@@ -226,7 +227,7 @@ export const ALL_YEAR: SeasonWindow = { from: "01-01", to: "12-31" };
 export const MAX_PLACE_NAME_CHARS = 200;
 
 /**
- * Where a candidate is.
+ * One place. A candidate has one of these or two — see `CandidateLocation`.
  *
  * `coordinates` is `null` until grounding fills it (Phase 3) and the field
  * exists now because the composer's first job is travel time between
@@ -255,6 +256,71 @@ export const placeSchema = z.object({
     })
     .nullable(),
 }) satisfies z.ZodType<Place>;
+
+// ---------------------------------------------------------------------------
+// Where a candidate is, or where it goes
+// ---------------------------------------------------------------------------
+
+/**
+ * A thing at a place, or a movement between two.
+ *
+ * Until pl-15 a candidate had a single `place`, which meant a drive leg's
+ * endpoints lived in its prose: the road-trip fixture said "Montréal to
+ * Rimouski via the 132" in the title and put `Route 132, Bas-Saint-Laurent` in
+ * the one `Place` it had. Nothing could read the two ends of it, and three
+ * things this tool intends to do all need them:
+ *
+ * - **Travel time** between consecutive items (§2's failure 1) is a leg, and a
+ *   leg needs two endpoints before a distance between them means anything.
+ * - **A detour** — "is a 40-minute diversion worth this attraction" — is
+ *   measured off a leg. With one point there is nothing to divert from.
+ * - **Conditions on a route** — roadworks, a trail closure, weather along one
+ *   corridor rather than another — are properties of a span, not of a dot.
+ *
+ * None of those three exist yet; all of them are unbuildable while the
+ * endpoints are prose, and every one of them would otherwise have needed this
+ * change *plus* a re-run of every stored candidate. The union is the cheap half,
+ * taken now.
+ *
+ * ## Why a union and not an optional second place
+ *
+ * The same reason `Provenance` is one: a leg with only one end must be
+ * unrepresentable. A `place` beside a nullable `to` admits a candidate whose
+ * two fields disagree, and leaves every reader to decide which it trusts.
+ *
+ * ## `from` may equal `to`
+ *
+ * A scenic loop out of a town and back is a real leg and a common one. The
+ * schema deliberately does not reject it — a validator that did would make the
+ * loop unrepresentable, in the same way ordering a `SeasonWindow` would make
+ * winter unrepresentable.
+ *
+ * ## Which specialists may produce which kind is not enforced here
+ *
+ * A `between` from `lodging` would be nonsense, and it is still not this
+ * schema's business: which bucket a candidate is scheduled into is a property
+ * of its specialist, and that table lives in `@planner/itinerary`'s packer. The
+ * contract says what is representable; the packer says what is done with it.
+ */
+export type CandidateLocation =
+  | { kind: "at"; place: Place }
+  | { kind: "between"; from: Place; to: Place };
+
+export const candidateLocationSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("at"), place: placeSchema }),
+  z.object({ kind: z.literal("between"), from: placeSchema, to: placeSchema }),
+]) satisfies z.ZodType<CandidateLocation>;
+
+/**
+ * Constructors, so no caller writes the discriminant by hand. A namespace
+ * rather than two bare exports, following `slot` in `brief.ts`: `at` and
+ * `between` are words too common to take from a barrel export.
+ */
+export const location = {
+  at: (place: Place): CandidateLocation => ({ kind: "at", place }),
+  /** Both ends, always — that is the whole point of the union. */
+  between: (from: Place, to: Place): CandidateLocation => ({ kind: "between", from, to }),
+};
 
 // ---------------------------------------------------------------------------
 // The candidate
@@ -286,7 +352,11 @@ export interface Candidate {
   title: string;
   /** Why this is worth doing, in prose the UI shows. Never an itinerary. */
   summary: string;
-  place: Place;
+  /**
+   * Where it is, or which two places it runs between. A leg carries both ends
+   * as structure rather than in its title — see `CandidateLocation`.
+   */
+  location: CandidateLocation;
   /** How long it takes. `null` when nobody established it — never a guess. */
   durationMinutes: number | null;
   cost: CostEstimate | null;
@@ -310,7 +380,7 @@ export const candidateSchema = z.object({
   specialist: z.enum(SPECIALISTS),
   title: z.string().trim().min(1).max(MAX_CANDIDATE_TITLE_CHARS),
   summary: z.string().trim().min(1).max(MAX_CANDIDATE_SUMMARY_CHARS),
-  place: placeSchema,
+  location: candidateLocationSchema,
   durationMinutes: z.number().int().positive().max(MAX_CANDIDATE_DURATION_MINUTES).nullable(),
   cost: costEstimateSchema.nullable(),
   season: seasonWindowSchema.nullable(),

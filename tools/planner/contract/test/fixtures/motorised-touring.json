@@ -34,10 +34,14 @@
       "specialist": "route-and-logistics",
       "title": "Trans-Québec 83 north from Saguenay",
       "summary": "A groomed provincial trail with fuel and food at intervals inside the party's stated 180 km range, which is the constraint that decides where a day can end.",
-      "place": {
-        "name": "Trans-Québec 83",
-        "locality": "Saguenay–Lac-Saint-Jean, Québec",
-        "coordinates": null
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Saguenay",
+          "locality": "Saguenay–Lac-Saint-Jean, Québec",
+          "coordinates": null
+        },
+        "to": { "name": "Lac-Saint-Jean", "locality": "Québec, Canada", "coordinates": null }
       },
       "durationMinutes": 360,
       "cost": null,
@@ -50,10 +54,13 @@
       "specialist": "practicalities",
       "title": "Machine rental with trail permit included",
       "summary": "Four machines for three days. The provincial trail permit is normally bundled with a rental; without it the trail is not legally rideable, so it is a document and not an upsell.",
-      "place": {
-        "name": "Saguenay",
-        "locality": "Québec, Canada",
-        "coordinates": null
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Saguenay",
+          "locality": "Québec, Canada",
+          "coordinates": null
+        }
       },
       "durationMinutes": null,
       "cost": {
@@ -72,10 +79,13 @@
       "specialist": "conditions-and-gear",
       "title": "Snow base, trail status and what two of the party do not own",
       "summary": "Trail condition is published daily by the local club and is the only thing that can say whether a section is open — nothing here is a substitute for it. Two riders with no season behind them will need a helmet, a balaclava and boots rated well below the day's forecast.",
-      "place": {
-        "name": "Saguenay–Lac-Saint-Jean trail network",
-        "locality": "Québec, Canada",
-        "coordinates": null
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Saguenay–Lac-Saint-Jean trail network",
+          "locality": "Québec, Canada",
+          "coordinates": null
+        }
       },
       "durationMinutes": null,
       "cost": null,
@@ -88,10 +98,13 @@
       "specialist": "lodging",
       "title": "Trail-side auberge at Lac-Saint-Jean",
       "summary": "Rides in off the trail, has a heated shed for the machines overnight, and serves a hot breakfast early enough to be riding by eight.",
-      "place": {
-        "name": "Lac-Saint-Jean",
-        "locality": "Québec, Canada",
-        "coordinates": null
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Lac-Saint-Jean",
+          "locality": "Québec, Canada",
+          "coordinates": null
+        }
       },
       "durationMinutes": null,
       "cost": {

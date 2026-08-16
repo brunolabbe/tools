@@ -13,6 +13,7 @@
 import {
   emptyShapeDetails,
   emptyBrief,
+  location,
   MODEL_ASSERTED,
   slot,
   type Candidate,
@@ -70,7 +71,7 @@ export function candidate(overrides: Partial<Candidate> & { specialist: Speciali
     id: `cand-${sequence}`,
     title: "Something to do",
     summary: "A thing a specialist proposed.",
-    place: { name: "Somewhere", locality: null, coordinates: null },
+    location: location.at({ name: "Somewhere", locality: null, coordinates: null }),
     durationMinutes: null,
     cost: null,
     season: null,
