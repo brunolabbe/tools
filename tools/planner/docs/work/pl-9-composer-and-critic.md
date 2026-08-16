@@ -3,7 +3,7 @@ id: pl-9
 tool: planner
 title: The composer and the critic — the itinerary package
 kind: work-package
-status: ready
+status: done
 milestone: P2
 depends_on: [pl-4]
 ---
@@ -100,4 +100,74 @@ Traps worth knowing in advance:
 
 ## Log
 
-_Not started._
+**2026-08-16 — built.** `@planner/itinerary` exists: `dates`, `season`, `cost`,
+`limits`, `pack`, `critic`, `compose`, `unchecked`. 112 tests over six files,
+`npm run check` green, `npm test -- --project planner` at 330. Registered in the
+root `tsconfig.json` and `tsconfig.tests.json`; **`vitest.config.ts` needed no
+change** — the planner project already globs `tools/planner/*/test/**`, so the
+"add a vitest project" step in the brief was a step that does not exist for a
+package inside an existing tool. Worth knowing before the next one.
+
+**Travel time was decided first, and it had to be.** The brief called it a
+prerequisite for step 3 rather than something to improvise, and it was: the
+roadmap's three options lead to three different packers. Decided **pack without
+it and name the gap** — option one. The consequences landed as
+`UNCHECKED_CONSTRAINTS`, and P2's milestone wording changed with it (roadmap).
+
+**`PlanGap` could not carry it, and this is the one contract friction found.**
+Every `PlanGapReason` is about a _specialist_ — failed, dropped, not applicable,
+found nothing. "We could not check travel time" is not a statement about a
+specialist at all: route-and-logistics ran perfectly and returned good
+candidates, and what is missing is a distance nobody has.
+`specialist-not-applicable` would put a false sentence in front of a user about
+a specialist that worked. So the unchecked list lives on `ComposeResult` and
+**does not survive a reload** — pl-10 renders it from the compose call, and a
+plan read back out of the database has lost it. If it should persist,
+`PlanGapReason` needs a member that is about a constraint rather than about a
+specialist. That is a contract change and it is deliberately not made here.
+
+**What the brief had wrong or left open, in the order it bit:**
+
+- **Deal-breakers cannot be checked in code, and §7 says they can.**
+  `dealBreakers` is `Slot<string[]>` of free text — "no more than one night in
+  any campground without showers". No arithmetic decides whether a candidate
+  violates that, and a keyword match would fail both ways while _looking_ like a
+  check, which is worse than none. It is stated as unchecked and the specialists
+  that read the brief carry it. Making it real means a structured constraint the
+  composer can evaluate, not a cleverer string search. §7's row is aspirational
+  as written.
+- **`pinnedCandidateIds` is not enough to honour a pin.** The contract's helper
+  returns ids, and "may not move" needs the placement — so the composer takes
+  the whole previous `PlanRevision` and derives day and position itself
+  (`pinnedPlacements`, exported here rather than added to the contract). The
+  guarantee is exact about what it can promise: **a pin fixes the day and the
+  order among pins**, not an absolute position, because `PlanItem.position` must
+  be dense and a day may end up shorter than the index the pin was at.
+- **Pins outrank both the fit checks and the season filter**, deliberately. A
+  silently deleted pin is the worst possible answer to a pin, so a pin that makes
+  a day impossible produces an over-full day for the critic to find — which is
+  what actually gives the critic something to do, since the packer never
+  over-fills a day on its own.
+- **A day count can exceed `MAX_PLAN_DAYS`.** 60 nights is 61 days and the
+  contract caps a plan at 60, so the longest trips this tool accepts lose their
+  last day. Reported as `trip-truncated` rather than clamped in silence.
+- **`possibleMonthDays` needs a leap year, not the real one.** A window spanning
+  a year starting in a common year yields 365 distinct `MM-DD`s and would rule
+  out anything whose season is `02-29`. It is answered from 2000's calendar.
+
+**A finding for [pl-5](./pl-5-orchestrator-and-fan-out.md), from the fixtures.**
+Composing all six checked-in sets, the route candidates are routinely over the
+day's drive budget and get dropped — the road-trip fixture proposes a 5½-hour
+leg to a party that answered `half-day`, and the resort fixture a 5-hour
+transfer. The composer is right to refuse them and names the gap, but the result
+is a road trip with no drives in it. **The route specialist must respect
+`driveAppetite` when it proposes a leg**, or every leg it writes will be thrown
+away downstream. It reads the brief, so it has the answer; nothing yet makes it
+use it. Same for `pace` and `effort`.
+
+**What is deliberately not in here.** No travel time, no opening hours, no
+distance — all three are grounding and all three are named on every plan rather
+than approximated. No `startsAt` on any item: a wall-clock start is a claim that
+something outside the plan fixes it, and without opening hours nothing could.
+No currency conversion, ever — a rate is a fact with an age, which makes it
+grounding.

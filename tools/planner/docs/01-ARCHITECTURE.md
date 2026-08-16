@@ -54,8 +54,9 @@ Every package named below lives under `tools/planner/`.
 | `api`       | Fastify surface, persistence, run orchestration, SSE, provider selection.                           | contract, intake, agent, itinerary |
 | `web`       | Wizard, plan, revision and diff UI.                                                                 | contract                           |
 
-`intake` exists as of [pl-6](./work/pl-6-question-tree-and-engine.md);
-`itinerary` does not. Both are additions Phase 0's shape did not anticipate.
+`intake` exists as of [pl-6](./work/pl-6-question-tree-and-engine.md) and
+`itinerary` as of [pl-9](./work/pl-9-composer-and-critic.md). Both are additions
+Phase 0's shape did not anticipate.
 
 `itinerary` exists because of the analysis's central decision (§2): **models
 generate candidates, code schedules and checks.** Keeping the arithmetic in its
