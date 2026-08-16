@@ -38,7 +38,10 @@ Thumbs.db
 # Agents. Worktrees are created in here and live inside the repo, so without
 # this every parallel session shows up as untracked clutter in every other one.
 # Ignored wholesale rather than by name, because whatever a future tool drops
-# beside them is local state too — `settings.json` is the one deliberate
-# exception, being the permission allowlist the repo shares.
+# beside them is local state too. The two exceptions are the things the repo
+# shares on purpose rather than accumulates: the permission allowlist, and the
+# skills that encode this repo's own review and workflow rules — a skill only
+# one machine has is a convention the next agent will not follow.
 .claude/*
 !.claude/settings.json
+!.claude/skills/
