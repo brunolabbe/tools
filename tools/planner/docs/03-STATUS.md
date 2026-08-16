@@ -88,6 +88,7 @@ still unwritten.
 | [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | ready     | Delete what migration 3 outlived; `NOT_FOUND` to core    |
 | [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | ready     | 1,100 lines of `.tsx` and no test renders any of it      |
 | [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI  |
+| [pl-14](./work/pl-14-tree-content-review.md)                | ready     | The tree reviewed as content; the first `version` bump   |
 
 ## Known gaps and risks
 
