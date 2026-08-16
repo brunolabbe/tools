@@ -1,0 +1,23 @@
+{
+  // The second file on the `web` compiler surface, and it is a file rather than
+  // a glob for the same reason the two e2e configs are: an `include` is rooted
+  // at its own directory, so nothing here can span both tools. The surface is
+  // shared with `tools/downloader/web/test` and this config is deliberately its
+  // twin — Bundler resolution, the DOM lib and the JSX runtime, because a test
+  // that renders a component has to see them the way Vite does. Everything else
+  // comes from the root.
+  "extends": "../../../../tsconfig.tests.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "types": ["node", "vite/client"]
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  // Restated, not inherited: the root names this directory in its own `exclude`
+  // to keep these files out of that program, and inheriting the list here would
+  // leave this project with nothing in it.
+  "exclude": [],
+  "references": [{ "path": ".." }, { "path": "../../contract" }]
+}

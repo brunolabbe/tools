@@ -99,7 +99,7 @@ still unwritten.
 | [pl-9](./work/pl-9-composer-and-critic.md)                  | done      | `@planner/itinerary`: season, packing, budget, critic            |
 | [pl-10](./work/pl-10-plan-view-and-provenance.md)           | ready     | Renders the plan, its gaps and what was verified                 |
 | [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | done      | The vocabulary is gone; `NOT_FOUND` lifted to core               |
-| [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | ready     | 1,100 lines of `.tsx` and no test renders any of it              |
+| [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | done      | The wizard and all eight controls render in tests                |
 | [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI          |
 | [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2            |
 | [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two                |
@@ -117,14 +117,24 @@ asks the running container for the page as well as for health. That closes
 [pl-2](./work/pl-2-container-image.md)'s "serves the UI" acceptance, which was
 the thing this had falsified.
 
-**Nothing renders the wizard's components**, which is the half
-[pl-12](./work/pl-12-render-the-wizard-in-tests.md) still owns. The browser is
-now driven end to end by pl-13, so the two rules that live there — the discard
-confirmation and the stop at the checkpoint — are asserted where they actually
-run. But that is two specs over one path through the tree, deliberately: it
-proves the seams, not the branches. Six trip shapes times three date modes is
-component-test work, and until it exists a control that misbehaves off the road-
-trip branch has nothing watching it.
+**The wizard's components render in tests as of
+[pl-12](./work/pl-12-render-the-wizard-in-tests.md).** `tools/planner/web/test`
+holds 21 tests over the wizard and all eight controls, on the same `web`
+compiler surface the downloader's suite uses and with the DOM arriving per file
+as `// @vitest-environment jsdom`. The two rules that live in the UI are now
+asserted in both places and for different reasons: pl-13's e2e proves the seams
+over one path through the tree, and these prove the branches — a `core` question
+offering no way to decline it, a discarded answer with no prompt reading as a
+sentence rather than an id, and a half-filled `dates` or `budget` staying
+unsubmittable.
+
+**The bare fields still have no accessible name.** `text`, `text-list`, `number`
+and `number-list` render an input with an `id` and no `label`; the prompt is an
+`h2` a level up in `QuestionCard`, which a screen reader does not connect to the
+field. The choice controls, `dates` and `budget` are all labelled properly, so
+this is four kinds and not a systemic gap. pl-12 found it and left it alone
+rather than widen its own diff — it wants an `aria-labelledby` on each field and
+a test that asks for the control by its prompt.
 
 **No owner model.** Every visitor shares one store and can read and edit
 everyone's intakes, and the list route shows all of them. That is the honest gap
