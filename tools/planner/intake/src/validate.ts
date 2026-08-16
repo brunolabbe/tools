@@ -78,12 +78,6 @@ function slotExists(target: SlotTarget): boolean {
     : (SHAPE_SLOTS.get(target.shape)?.has(target.slot) ?? false);
 }
 
-function isRequired(target: SlotTarget): boolean {
-  const required: readonly string[] =
-    target.scope === "core" ? REQUIRED_CORE_SLOTS : REQUIRED_SHAPE_SLOTS[target.shape];
-  return required.includes(target.slot);
-}
-
 export function validateTree(tree: QuestionTree): string[] {
   const problems: string[] = [];
   const { nodes } = tree;
@@ -246,28 +240,39 @@ function validateShapeGates(nodes: readonly QuestionNode[]): string[] {
 }
 
 /**
- * `core` means what the contract says it means — in both directions.
+ * The checkpoint tells the truth.
  *
- * The wizard stops when nothing reachable and `core` is unanswered and tells the
- * user the essentials are done. If a `core` node fills a slot that is not
- * required, it stops short of a draftable brief; if a required slot has no
- * `core` node, it keeps asking past one, or worse, offers a draft that
- * `missingRequiredSlots` will refuse. Either way the checkpoint is a lie, which
- * is why this is checked from both ends.
+ * The wizard stops when nothing reachable that a draft needs is unanswered, and
+ * tells the user the essentials are done. **Every required slot must therefore
+ * be filled by a `core` node** — a required slot behind the checkpoint means
+ * offering a draft `missingRequiredSlots` will refuse.
  *
- * A `core` question behind a `refine` one is the same lie wearing a hat: a
- * question needed for the draft, sitting behind one the user was invited to
- * skip.
+ * The converse is not checked, and its absence is the point of pl-18: a `core`
+ * node whose slot is not required is an early *optional* question — asked before
+ * the draft because the user is ready to answer it, skippable because the plan
+ * survives without it. `destination` is the case that earned this.
+ *
+ * Two orderings still have to hold, and both are checked here because nothing
+ * else does. A `core` question gated behind a `refine` one is a question the
+ * draft needs, sitting behind one the user was invited to skip. And a `core`
+ * question placed after a `refine` one is never reached before the checkpoint at
+ * all, which makes `stage` a label rather than a position — the one job it still
+ * has after this ticket.
  */
 function validateCoreMarking(nodes: readonly QuestionNode[]): string[] {
   const problems: string[] = [];
   const stages = new Map(nodes.map((node) => [node.id, node.stage]));
 
-  for (const node of nodes) {
-    if (node.stage !== "core") continue;
+  let firstRefine: QuestionNode | null = null;
 
-    if (!isRequired(node.fills)) {
-      problems.push(`${node.id}: marked core, but ${targetKey(node.fills)} is not required.`);
+  for (const node of nodes) {
+    if (node.stage === "refine") {
+      firstRefine ??= node;
+      continue;
+    }
+
+    if (firstRefine !== null) {
+      problems.push(`${node.id}: a core question after ${firstRefine.id}, which is refine.`);
     }
 
     if (node.when === null) continue;

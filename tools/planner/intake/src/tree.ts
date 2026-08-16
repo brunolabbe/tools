@@ -10,9 +10,15 @@
  * ## The order is the asking order
  *
  * Every `core` node comes before every `refine` node, because the wizard stops
- * at the checkpoint: when nothing reachable and `core` is unanswered it says the
- * essentials are done and offers the draft. Seven questions get most shapes
- * there, and six a resort — inside §3's "perhaps eight to ten".
+ * at the checkpoint: when nothing reachable that the draft *needs* is unanswered
+ * it says the essentials are done and offers it. **Eight** questions get most
+ * shapes there and seven a resort — inside §3's "perhaps eight to ten".
+ *
+ * Asked and needed are different counts, and the gap is one question. Seven of
+ * those eight fill a slot in `REQUIRED_CORE_SLOTS` or `REQUIRED_SHAPE_SLOTS`;
+ * `destination` does not, and may be skipped without holding the checkpoint open
+ * (pl-18). So `stage` here means *when it is asked* and nothing else — what
+ * blocks a draft is `isRequiredSlot`, and what may be declined is the same test.
  *
  * ## Shape first
  *
@@ -118,6 +124,21 @@ const NODES: readonly QuestionNode[] = [
     help: "A city or an airport is enough. It decides what is a day away and what is a flight.",
     when: null,
     fills: { scope: "core", slot: "origin" },
+    stage: "core",
+    kind: "text",
+    maxLength: MAX_NOTE_CHARS,
+  },
+  {
+    // Question three since pl-18, and **not required** — the tree's first
+    // question that is one without the other. Most people know where they are
+    // going and were made to wait until after the checkpoint to say so; the
+    // ones who do not know are served by the help text below, which is a
+    // cheaper place to serve them than the asking order.
+    id: "destination",
+    prompt: "Where are you going?",
+    help: "If you know, say so now. If you do not, leave it blank — “somewhere warm, you pick” is a real answer, and choosing becomes part of the job.",
+    when: null,
+    fills: { scope: "core", slot: "destination" },
     stage: "core",
     kind: "text",
     maxLength: MAX_NOTE_CHARS,
@@ -344,6 +365,10 @@ const NODES: readonly QuestionNode[] = [
   // -------------------------------------------------------------------------
   // Refining — everything past the checkpoint. Each of these improves a plan;
   // none of them prevents one, which is the bar `REQUIRED_*` draws.
+  //
+  // Not prevents-a-plan's opposite, though: `destination` clears that same bar
+  // and is asked third anyway (pl-18). Everything here is optional *and* was
+  // judged not worth asking before the draft — two decisions, not one.
   // -------------------------------------------------------------------------
   {
     // First past the checkpoint, and `refine` since 2026-08-16: a draft is
@@ -358,16 +383,6 @@ const NODES: readonly QuestionNode[] = [
     fills: { scope: "core", slot: "budget" },
     stage: "refine",
     kind: "budget",
-  },
-  {
-    id: "destination",
-    prompt: "Where are you going?",
-    help: "“Somewhere warm, you pick” is a real answer — skip this and we will treat choosing as part of the job.",
-    when: null,
-    fills: { scope: "core", slot: "destination" },
-    stage: "refine",
-    kind: "text",
-    maxLength: MAX_NOTE_CHARS,
   },
   {
     id: "comfort",
@@ -646,6 +661,6 @@ const NODES: readonly QuestionNode[] = [
  * to something else.
  */
 export const QUESTION_TREE: QuestionTree = {
-  version: 2,
+  version: 3,
   nodes: NODES,
 };

@@ -112,11 +112,15 @@ describe("starting and resuming an intake", () => {
         kind: "dates",
         value: { kind: "exact", departure: "2027-02-10", return: "2027-02-14" },
       }),
+      destination: { state: "declined" },
     });
 
-    // `destination` is a refine question, so an intake that stops where the
-    // wizard invites it to stop has none — and still needs a name.
-    expect(state.answers["destination"]).toBeUndefined();
+    // `destination` is asked third since pl-18 and may be declined, which is
+    // the whole point of it moving up: someone who has not picked a place says
+    // so and carries on. The intake still reaches the checkpoint, and still
+    // needs a name.
+    expect(state.answers["destination"]).toEqual({ state: "declined" });
+    expect(state.progress.coreComplete).toBe(true);
     expect(state.intake.title).toBe("A backcountry trip in February");
 
     const listed = await server.inject({ method: "GET", url: ROUTES.intakes });
@@ -384,6 +388,66 @@ describe("the version 1 tree meeting version 2", () => {
     expect(missingRequiredSlots(state.brief)).toEqual([]);
     expect(state.answers["road-trip.drive-appetite"]).toBeDefined();
     expect(state.answers["road-trip.vehicle-kind"]).toBeDefined();
+  });
+});
+
+function saveVersionTwoRoadTrip(started: App): string {
+  const { db } = started.context;
+  const id = "v2-road-trip";
+  db.prepare(
+    "INSERT INTO intakes (id, title, tree_version, created_at, updated_at) VALUES (?, NULL, ?, ?, ?)",
+  ).run(id, 2, NOW.toISOString(), NOW.toISOString());
+
+  const write = (question: string, value: unknown): void => {
+    db.prepare(
+      "INSERT INTO answers (intake_id, question_id, value, answered_at) VALUES (?, ?, ?, ?)",
+    ).run(id, question, JSON.stringify(value), NOW.toISOString());
+  };
+
+  write("shape", { state: "answered", value: { kind: "single-choice", value: "road-trip" } });
+  write("origin", { state: "answered", value: { kind: "text", value: "Montréal" } });
+  // Answered when the question sat eighteenth, behind the checkpoint. pl-18
+  // moved it to third without touching its id, so it must come through intact.
+  write("destination", { state: "answered", value: { kind: "text", value: "Gaspésie" } });
+  write("travellers", { state: "answered", value: { kind: "number", value: 2 } });
+  return id;
+}
+
+describe("the version 2 tree meeting version 3", () => {
+  test("moves the destination question without discarding its answer", async () => {
+    const started = await startApp();
+    const id = saveVersionTwoRoadTrip(started);
+
+    const state = await readIntake(started.server, id);
+
+    // pl-18 moved a node and changed no id, so unlike the v1 bump this one costs
+    // nothing. A discard here means the node was re-created rather than moved.
+    expect(state.discarded).toEqual([]);
+    expect(state.answers["destination"]).toEqual({
+      state: "answered",
+      value: { kind: "text", value: "Gaspésie" },
+    });
+    expect(state.brief.destination).toEqual({ state: "answered", value: "Gaspésie" });
+
+    expect(state.intake.treeVersion).toBe(QUESTION_TREE.version);
+    expect(answerRows(started, id)).toBe(4);
+  });
+
+  test("does not ask it again, and stops at the checkpoint without it", async () => {
+    const started = await startApp();
+    const id = saveVersionTwoRoadTrip(started);
+    await readIntake(started.server, id);
+
+    const state = await answerThroughCore(started.server, id, {});
+
+    // Already answered, so the wizard walks past it — a moved question that gets
+    // re-asked is the most visible way this bump could look broken.
+    expect(state.answers["destination"]).toEqual({
+      state: "answered",
+      value: { kind: "text", value: "Gaspésie" },
+    });
+    expect(state.progress.coreComplete).toBe(true);
+    expect(missingRequiredSlots(state.brief)).toEqual([]);
   });
 });
 

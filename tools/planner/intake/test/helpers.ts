@@ -101,6 +101,16 @@ export const DIVERGING_SHAPES: readonly TripShape[] = ["backcountry", "city-and-
  * `fills` is the same slot on every one of them, which `validateTree` would
  * reject and the engine does not read.
  */
+/**
+ * A synthetic text question.
+ *
+ * The slot follows the stage, and that is not arbitrary. Since pl-18 the
+ * checkpoint and the decline rule read `isRequiredSlot(node.fills)` rather than
+ * `stage`, so a `core` node has to fill a slot a draft actually needs for these
+ * trees to model what their tests mean by "core". `destination` — the slot this
+ * used to hand out unconditionally — is the one early question that is *not*
+ * required, which would make every synthetic core node optional.
+ */
 export function textNode(
   id: string,
   when: Condition | null,
@@ -111,7 +121,7 @@ export function textNode(
     prompt: `${id}?`,
     help: null,
     when,
-    fills: { scope: "core", slot: "destination" },
+    fills: { scope: "core", slot: stage === "core" ? "origin" : "destination" },
     stage,
     kind: "text",
     maxLength: 100,
