@@ -117,6 +117,12 @@ the two things a general-purpose reviewer cannot know: what this change was
 supposed to do, and the rules in this repo's `CLAUDE.md` files that each exist
 because something once went wrong.
 
+**The model that wrote the code does not gate it.** The skill dispatches a
+subagent on the other of Opus and Sonnet, and the caller appends what comes back
+without editing it. A model reading its own work re-runs the reasoning that
+produced it, so the blind spot is correlated and a second pass mostly re-derives
+the first one's confidence.
+
 ## What the other documents keep
 
 - **`02-ROADMAP.md`** — phases, milestones, and the shape of the argument. It

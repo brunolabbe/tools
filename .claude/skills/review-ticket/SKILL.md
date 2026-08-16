@@ -26,7 +26,47 @@ wrong ticket produces a confident answer to a question nobody asked.
 `level` is passed to `code-review` and defaults to `medium`. **Never `ultra`**: it
 is billed separately and is the user's to trigger, not yours.
 
+## A different model reviews
+
+The agent that wrote the code does not review it. **A subagent on a different
+model does**, and that is not ceremony. A model reading its own work re-runs the
+reasoning that produced it: the assumption that felt safe while writing feels
+safe while reading, and the blind spot is perfectly correlated. A second pass
+from the same model mostly re-derives the same confidence. A different one has
+not made this particular wrong turn.
+
+So the invoking agent's job here is to dispatch, not to review:
+
+| Wrote the code | Reviews it |
+| -------------- | ---------- |
+| Opus           | Sonnet     |
+| Sonnet         | Opus       |
+| anything else  | Opus       |
+
+**The reviewer is `sonnet` or `opus` — never `haiku`, never `fable`.** The rule
+is "a different model", not "a cheaper one": the small models are the wrong tool
+for a job whose whole content is holding a ticket, a diff and a page of
+invariants in mind at once, and a gate they produce is worth less than no gate,
+because it still reads as PASS. If you are already on one of the two, take the
+other; if you are on anything else, take Opus.
+
+Dispatch with the Agent tool — `subagent_type: general-purpose`, `model:` from
+the table — and hand it the ticket id, the diff range, and the steps below.
+
+**The subagent returns the `## Review` section as text, and the caller appends it
+to the ticket unedited.** Two reasons, and both matter. A subagent cannot enter a
+worktree of its own accord, so one that edited files would write them somewhere
+the parent is not looking. And a caller that rewrites the verdict has handed the
+review back to the model under review, which is the whole thing this split
+exists to prevent. Append it verbatim. If you disagree with a row, say so in the
+Log under your own name — never quietly soften one.
+
+**One reviewer, not a panel.** Two models reviewing in parallel is not a second
+opinion, it is two gates and no rule saying which one counts.
+
 ## Steps
+
+These are the reviewing subagent's steps, not the caller's.
 
 1. **Read the ticket** — `tools/<tool>/docs/work/<id>-*.md`. Its **Done when**
    lines are the acceptance criteria; its **Build** steps and traps are what the
