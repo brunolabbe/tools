@@ -170,14 +170,12 @@ rejects a bad one as you write it, and the rule itself lives in
 `scripts/commit-message.mjs`. The taxonomy, the escape hatches and how a release
 is cut are in [docs/03-RELEASING.md](./docs/03-RELEASING.md).
 
-**Nothing is squashed, and a merge commit's body is empty.** Every commit on a
-branch lands on `main` as itself, so each one is a changelog line rather than a
-working note. release-please reads a merge commit's body too, counting each
-conventional line in it as a further commit — so a body repeating what the
-branch already said lands that entry twice, which is how the downloader's 0.2.0
-changelog came to list one planner feature two times. Merging is GitHub's job,
-and blanking the body is a repository setting, not something a hook can do;
-`03-RELEASING.md` names the switch.
+**The pull request title is the message that lands.** This repo squash-merges,
+so a branch's own commits are working notes and the title is the changelog line
+— check yours with `node scripts/commit-message.mjs --text "<title>"` before
+opening the pull request. A commit that touches two tools lands in both
+changelogs under one sentence written for one of them, which is the tell that it
+should have been two commits.
 
 ## Style
 

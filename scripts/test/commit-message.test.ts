@@ -76,9 +76,10 @@ test("passes through what git generates for merges and reverts", () => {
 });
 
 test("rejects a conventional line in a merge commit's body", () => {
-  // The shape GitHub writes when `merge_commit_message` is `PR_TITLE`. It cost
-  // downloader 0.2.0 a changelog with the same planner feature listed twice,
-  // once for the branch commit and once for the merge that landed it.
+  // The shape GitHub wrote while this repo landed pull requests as merge
+  // commits. It cost downloader 0.2.0 a changelog with the same planner feature
+  // listed twice, once for the branch commit and once for the merge that landed
+  // it. Squash-only now, so this guards a `git merge --no-ff` done by hand.
   const { ok, errors } = check(
     [
       "Merge pull request #34 from brunolabbe/worktree-pl-16-the-plan-run",

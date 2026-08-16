@@ -14,10 +14,10 @@ work it.
            │  feat(downloader): …
            ▼
    ┌────────────────────┐
-   │  pull request      │   merged with a merge commit, so every
-   │                    │   commit on the branch lands as itself
+   │  pull request      │   the *title* is checked, because a squash
+   │                    │   merge lands the title, not the commits
    └─────────┬──────────┘
-             │ merged — body empty, see below
+             │ merged
              ▼
    ┌────────────────────────────────────────────────┐
    │  main                                          │
@@ -55,11 +55,6 @@ type(scope): subject
 [`.github/workflows/pr-title.yml`](../.github/workflows/pr-title.yml) checks the
 pull request title. Both run [`scripts/commit-message.mjs`](../scripts/commit-message.mjs),
 which is the actual specification — this table is a summary of it.
-
-**Every commit on a branch lands on `main` as itself**, because this repo merges
-with merge commits and nothing collapses a branch into one message. So a commit
-is not a working note: it is the changelog line. The hook is the gate that
-matters, and the title check exists so the pull request list reads well.
 
 | Type                                                      | Version                            | In the changelog |
 | --------------------------------------------------------- | ---------------------------------- | ---------------- |
@@ -125,11 +120,22 @@ Release-As: 0.2.1
 
 ## Merging a pull request
 
-**A merge commit's body must be empty.** release-please does not stop at a merge
-commit's subject. It reads the body, and counts every line there that parses as
-a conventional commit as a commit in its own right — which is the behaviour that
-makes a merge-commit workflow work at all, and the behaviour that bites when the
-body repeats what the branch already said. Land this:
+**Squash, and nothing else.** The repository allows one merge method, and the
+squash commit is titled by the pull request title with an empty body. That is
+what makes the title the message and a branch's own commits working notes —
+everything on this page assumes it. In API terms, and these four are the whole
+arrangement:
+
+```bash
+gh api repos/<owner>/<repo> --jq \
+  '{squash: .allow_squash_merge, merge: .allow_merge_commit,
+    title: .squash_merge_commit_title, body: .squash_merge_commit_message}'
+# {"squash":true,"merge":false,"title":"PR_TITLE","body":"BLANK"}
+```
+
+**It was not always configured that way, and the gap was invisible.** Until
+2026-08-16 `allow_squash_merge` was off and every pull request landed as a merge
+commit, with `merge_commit_message: PR_TITLE` writing the title into the body:
 
 ```
 Merge pull request #34 from brunolabbe/worktree-pl-16-the-plan-run
@@ -137,34 +143,31 @@ Merge pull request #34 from brunolabbe/worktree-pl-16-the-plan-run
 feat(planner): run the fan-out as a job (pl-16)
 ```
 
-and the changelog gets the line twice, under two SHAs — once for the branch
-commit, once for the merge that landed it. That is downloader 0.2.0, and it cost
-one line of body.
+release-please does not stop at a merge commit's subject — it reads the body,
+and counts every line there that parses as a conventional commit as a commit in
+its own right. So that entry landed twice, once for the branch commit and once
+for the merge, and downloader 0.2.0 shipped with its single feature listed under
+two SHAs. Every merged pull request had been doing it; nothing failed, and the
+release is where it became visible.
 
-**GitHub writes that body for you.** It is the repository's
-`merge_commit_message` setting, and `PR_TITLE` — the value that puts the pull
-request title in the body — is not the default this repo wants. Set it to
-`BLANK`, in _Settings → General → Pull Requests → Default merge commit message_,
-or:
+**The body could not be blanked.** GitHub accepts only three title/message
+combinations for a merge commit — `PR_TITLE`+`PR_BODY`, `PR_TITLE`+`BLANK`,
+`MERGE_MESSAGE`+`PR_TITLE` — and all three put the pull request title into the
+merge commit, as subject or as body. With conventional branch commits landing
+alongside it, every one of them duplicates. There is no merge-commit
+configuration that avoids this, which is the argument for squash and not merely
+a preference for it.
 
-```bash
-gh api -X PATCH repos/<owner>/<repo> -f merge_commit_message=BLANK
-```
+**`squash_merge_commit_message` matters as much as the method.** The default is
+`COMMIT_MESSAGES`, which writes every branch commit message into the squash
+commit's body — reproducing the same duplication through the other door. `BLANK`
+is not decoration.
 
-Nothing local can enforce that: the merge commit is made on GitHub's side, after
-every hook has run. The setting is the fix.
-
-**The hook is the backstop for a merge made by hand.**
-`scripts/commit-message.mjs` skips a merge commit's subject, as it always did,
-and now rejects a conventional line in its body — which catches a local
-`git merge --no-ff` whose buffer still held the branch's message. It cannot
-catch GitHub's, so it is a second line of defence and not the first.
-
-**Squash merging is off**, and the docs assume it stays off. Turning it on is a
-coherent alternative — one commit per pull request, titled by the title, which
-is what [`pr-title.yml`](../.github/workflows/pr-title.yml) would then be
-guarding — but it is the opposite arrangement, not a tweak, and half of this
-page would read differently.
+**The hook keeps a backstop.** `scripts/commit-message.mjs` skips a merge
+commit's subject, as it always did, and rejects a conventional line in its body.
+Nothing routine produces a merge commit now, but a `git merge --no-ff` done by
+hand still reaches the hook — and the failure mode is silent enough to have cost
+a release once.
 
 ---
 
@@ -287,12 +290,12 @@ Nothing else is required; the host's read-only token is enough.
 
 ## Things that will bite you
 
-**A bad commit message lands a bad changelog entry, permanently.** Every commit
-on a branch reaches `main`, so `.githooks/commit-msg` is the last gate that runs
-before the message is a fact — and it fails open when node is missing, which
-nothing downstream compensates for. There is no rewriting `main`, so the entry is
-fixed by hand in the next release PR, which is allowed: the changelog in an open
-release PR is a normal file and can be edited before merging.
+**A merge with a bad title lands a bad changelog entry, permanently.** The PR
+title check is the last gate, and squash-merging is what makes the title the
+message. There is no rewriting `main`, so the entry is fixed by hand in the next
+release PR — which is allowed: the changelog in an open release PR is a normal
+file and can be edited before merging. downloader 0.2.0 is the standing example
+of what does not get fixed afterwards.
 
 **`INSTALL_YTDLP` is decided in CI now, not on the host.** It was a build arg,
 and a host that pulls an image no longer runs a build to pass it to. Changing it

@@ -1,13 +1,14 @@
 name: pr-title
 
-# This repo merges with merge commits, so the commits on the branch are what
-# land on `main` and what release-please reads. That makes `.githooks/commit-msg`
-# the gate for the changelog, and this check something else: the title is the
-# line a human reads in the pull request list and in a release's commit range,
-# and holding it to the same rule keeps that list legible.
+# This repo squash-merges, so the pull request title — not the commits on the
+# branch — is the message that lands on `main`, and it is what release-please
+# reads to decide a version and write a changelog entry. A branch's intermediate
+# commits are working notes; this one is the record.
 #
-# It is worth having anyway because the hook fails open — a contributor without
-# node on PATH commits whatever they like — and a bad title is the tell.
+# That was true on paper long before it was true in the repository: squash
+# merging was left switched off until 2026-08-16, so this check guarded a title
+# that never landed while merge commits quietly duplicated every entry. The
+# settings that make it load-bearing are named in docs/03-RELEASING.md.
 #
 # The rule is the same one `.githooks/commit-msg` enforces locally, from the
 # same file, so the two cannot drift.
