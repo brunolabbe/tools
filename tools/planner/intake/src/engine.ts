@@ -20,13 +20,14 @@
  * plausible, which §7 calls the worst kind of failure.
  */
 
-import type {
-  Answer,
-  Answers,
-  Condition,
-  QuestionId,
-  QuestionNode,
-  QuestionTree,
+import {
+  isRequiredSlot,
+  type Answer,
+  type Answers,
+  type Condition,
+  type QuestionId,
+  type QuestionNode,
+  type QuestionTree,
 } from "@planner/contract";
 
 /**
@@ -144,8 +145,12 @@ export type IntakeProgress = {
   /** The first reachable question with no answer. `null` means the tree is done. */
   node: QuestionNode | null;
   /**
-   * True when nothing reachable and `core` is still unanswered — the checkpoint
-   * where the wizard says the essentials are done and offers the draft.
+   * True when nothing reachable that a draft **needs** is still unanswered — the
+   * checkpoint where the wizard says the essentials are done and offers it.
+   *
+   * "Needs" is `isRequiredSlot`, not `stage`. The two were the same set until
+   * pl-18, and reading `stage` here would now hold the checkpoint open for
+   * `destination`, which is asked early precisely because it may be skipped.
    *
    * Computed here rather than by filtering the reachable set in the browser,
    * for the same reason nothing else about the tree is evaluated there: one
@@ -172,7 +177,9 @@ export function nextQuestion(tree: QuestionTree, answers: Answers): IntakeProgre
   for (const candidate of reachable(tree, answers)) {
     if (answers[candidate.id] !== undefined) continue;
     node ??= candidate;
-    if (candidate.stage === "core") {
+    // An early *optional* question does not hold the checkpoint open, so this
+    // cannot break on `stage` — it has to keep looking for a required one.
+    if (isRequiredSlot(candidate.fills)) {
       coreComplete = false;
       break;
     }

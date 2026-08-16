@@ -122,11 +122,23 @@ test("a core question gated behind a refine question", () => {
   expectProblem(broken, "a core question gated behind optional, which is refine");
 });
 
-test("a core question filling a slot no draft needs", () => {
-  expectProblem(
-    replacing("destination", (node) => ({ ...node, stage: "core" })),
-    "is not required",
-  );
+test("a core question filling a slot no draft needs is allowed", () => {
+  // The direction pl-18 retired, asserted as permission rather than deleted:
+  // an early *optional* question is a shape the tree may have, and
+  // `destination` is the checked-in one. Deleting this case instead would let
+  // the old rule come back with nothing to notice.
+  expect(validateTree(QUESTION_TREE)).toEqual([]);
+  expect(nodeById("destination").stage).toBe("core");
+});
+
+test("a core question after a refine question", () => {
+  // The other half of that trade. `stage` is a position now, so a core question
+  // the wizard would only reach past the checkpoint is the lie that rule used
+  // to catch for free.
+  const nodes = QUESTION_TREE.nodes.filter((node) => node.id !== "origin");
+  const broken = { ...QUESTION_TREE, nodes: [...nodes, nodeById("origin")] };
+
+  expectProblem(broken, "a core question after budget, which is refine");
 });
 
 test("a required slot no core question fills", () => {

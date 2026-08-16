@@ -275,9 +275,27 @@ interview less", made into behaviour rather than left as a marking.
 
 Three consequences, all of them load-bearing on tickets nobody has started:
 
-- `missingRequiredSlots` (pl-3) and the `core` marking (pl-6) describe the same
-  set, and `validateTree` fails the tree in either direction if they stop doing
-  so. Both halves are settled as of pl-7: the wizard stops there too.
+- `missingRequiredSlots` (pl-3) and the `core` marking (pl-6) described the same
+  set, and `validateTree` failed the tree in either direction if they stopped
+  doing so. Both halves were settled as of pl-7: the wizard stops there too.
+
+  **One of those two directions was retired on 2026-08-16 by
+  [pl-18](./work/pl-18-destination-asked-early.md)**, and the sentence above is
+  kept because the consequence it draws is still the load-bearing one. What
+  survives: every required slot must be filled by a `core` node, or the wizard
+  offers a draft `missingRequiredSlots` will refuse. What does not: a `core` node
+  is no longer obliged to fill a required slot, so `validateTree` does not fail
+  one that doesn't.
+
+  The reason is that `core` was carrying two decisions at once — _when a question
+  is asked_ and _whether a draft can exist without it_ — and they are not the same
+  decision. `destination` is the case that separated them: most people know where
+  they are going and were made to wait until after the checkpoint to say so,
+  while "somewhere warm, you pick" has to stay a real answer. It is asked third
+  and may be declined. `stage` now means position only, `isRequiredSlot` means
+  blocks-the-draft, and `validateTree` gained the ordering rule that keeps the
+  first honest: no `core` node after a `refine` one.
+
 - pl-7 owns the fork, and owns **re-entry**: refining is something you come back
   to after a draft exists, not a corridor you leave once. It also owns the honest
   progress line at the boundary — "the essentials are done", never a percentage.

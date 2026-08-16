@@ -585,6 +585,12 @@ export type BriefSlotId = CoreSlotId | ShapeSlotId;
  * That bar is why `destination`, `comfort`, `ages`, `accessNeeds` and
  * `dealBreakers` are absent. Each improves a plan; none of them prevents one.
  *
+ * **`destination` is absent and still asked third** (pl-18). Being off this list
+ * is what lets it be skipped — "somewhere warm, you pick" is a trip this tool
+ * plans — and where it is asked is a separate decision, made on the 95% of
+ * people who already know. Absent from here never meant asked late; it meant
+ * never blocking. See `QUESTION_STAGES` in `tree.ts`.
+ *
  * **`budget` is absent too**, removed in the content review of 2026-08-16
  * (pl-14). It is still a question — it moves hotel tier, whether flights are in
  * scope, whether an activity makes the list — but a first draft is entirely
@@ -610,10 +616,11 @@ export const REQUIRED_CORE_SLOTS = [
  * The type ties each row to that shape's own slot keys, so a slot renamed on an
  * extension breaks this table rather than silently dropping a requirement.
  *
- * **This table and `@planner/intake`'s `core` node marking describe the same
- * set**, and pl-6 tests it in both directions. A `core` node whose slot is not
- * here, or a slot here that no `core` node fills, makes the wizard's checkpoint
- * a lie in one direction or the other.
+ * **Every slot here must be filled by a `core` node** in `@planner/intake` — a
+ * required slot no `core` node fills makes the wizard offer a draft
+ * `missingRequiredSlots` will refuse. The converse stopped holding in pl-18: a
+ * `core` node whose slot is not here is an early optional question, and
+ * `destination` is one.
  */
 export const REQUIRED_SHAPE_SLOTS: {
   [S in TripShape]: readonly ShapeSlotKeys<Extract<TripShapeDetails, { shape: S }>>[];

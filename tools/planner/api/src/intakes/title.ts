@@ -1,12 +1,17 @@
 /**
  * What the list calls an intake before it is a plan.
  *
- * pl-7's brief assumed the title came from the destination. pl-6 moved that
- * further away than the brief expected: `destination` is a **refine** question —
- * §1's hard facts do not include where, and "somewhere warm, you pick" is a real
- * trip — so it is the first question *past* the checkpoint. An intake that stops
- * where the wizard invites it to stop has no destination at all, and a list of
- * rows called "Untitled" is a list nobody can read.
+ * pl-7's brief assumed the title came from the destination, and it cannot: §1's
+ * hard facts do not include where, "somewhere warm, you pick" is a real trip, and
+ * `destination` is not a slot a draft requires. So an intake can reach the
+ * checkpoint — and a plan — with no destination at all, and a list of rows called
+ * "Untitled" is a list nobody can read.
+ *
+ * pl-18 moved the question to position three, which changes how *often* there is
+ * one and changes nothing here: this reads `isAnswered(brief.destination)` and
+ * has never known or cared where the question sits. Declining it is now allowed,
+ * which is settled-but-empty and not answered — so the fallback below is the
+ * live path for a declined destination, not only an unasked one.
  *
  * So the title is the shape and the month: "A backcountry trip in February". Both
  * are `core`, so every intake past its second answer has one, and neither needs a

@@ -137,21 +137,26 @@ mistake, not a reason to refuse to start.
 
 **The e2e suite reads the screen; it never names a question.** Because the tree
 is content, a spec that types into `#field-road-trip.drive-appetite` or counts
-seven questions turns a content edit into a red build. `e2e/intake.spec.ts` fills
+eight questions turns a content edit into a red build. `e2e/intake.spec.ts` fills
 whatever control is in front of it, keeps the prompts it was shown, and asserts
 the discard warning against those — so both sides of the assertion move when the
 tree does. It is two specs over one path on purpose: it exists to prove the API
 and the browser are wired together, and branch coverage costs milliseconds in a
 component test and a browser launch here.
 
-**The intake stops at the core questions.** Every node is `core` or `refine`, and
-when nothing reachable and `core` is unanswered the wizard says the essentials are
-done and offers the draft — it does not march to the end of the tree. `core` and
-the contract's `missingRequiredSlots` describe the same set; if they can disagree,
-the checkpoint is a lie. Refining is somewhere a user comes back to after a draft,
-so it is re-entrant, and "core-complete" is computed from the answers rather than
-stored. Analysis §3's "draft early, interview less", decided as behaviour on
-2026-08-14 — the consequences are in `docs/02-ROADMAP.md`.
+**The intake stops at the questions a draft needs.** Every node is `core` or
+`refine` — where it is asked, before the checkpoint or after — and when nothing
+reachable that the draft _needs_ is unanswered the wizard says the essentials are
+done and offers it, rather than marching to the end of the tree. What a draft
+needs is `isRequiredSlot`, which reads the contract's `REQUIRED_*_SLOTS`, and it
+is also the test for whether a question may be declined. **Every required slot
+must be filled by a `core` node** or the checkpoint is a lie; the converse does
+not hold, and `destination` is why (pl-18) — asked third because most people know
+it, skippable because a plan survives without it. Refining is somewhere a user
+comes back to after a draft, so it is re-entrant, and "core-complete" is computed
+from the answers rather than stored. Analysis §3's "draft early, interview less",
+decided as behaviour on 2026-08-14 — the consequences are in
+`docs/02-ROADMAP.md`.
 
 **Never discard an answer silently.** Changing an earlier answer can strand
 everything below an abandoned branch. The user is told which answers that costs,
