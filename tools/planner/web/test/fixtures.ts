@@ -34,15 +34,17 @@ import {
  * with no cast in the middle.
  *
  * `fills` has to name a real slot — the target type is distributed over the trip
- * shapes — so it names `destination`. Nothing under test reads it; it is here
- * because the type demands a truthful one.
+ * shapes — and since pl-18 it names `origin` because something **does** read it:
+ * the wizard offers its skip button on `!isRequiredSlot(question.fills)`. This
+ * used to name `destination`, which is now the one core slot a draft does not
+ * need, so every question built from `BASE` would come out skippable.
  */
 export const BASE = {
-  prompt: "Where are you going?",
+  prompt: "Where are you leaving from?",
   help: null,
   when: null,
   stage: "core",
-  fills: { scope: "core", slot: "destination" },
+  fills: { scope: "core", slot: "origin" },
 } as const satisfies Omit<Extract<QuestionNode, { kind: "dates" }>, "id" | "kind">;
 
 export interface IntakeStateOverrides {

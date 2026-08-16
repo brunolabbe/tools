@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   AppError,
+  isRequiredSlot,
   type Answer,
   type AnswerValue,
   type DiscardedAnswer,
@@ -269,9 +270,12 @@ function QuestionCard({
           {editing ? "Save the change" : "Next"}
         </button>
 
-        {/* Never on a `core` question: the engine refuses to decline one, and
-            offering a button that cannot work is worse than not offering it. */}
-        {question.stage === "refine" && (
+        {/* Never on a question the draft needs: the engine refuses to decline
+            one, and offering a button that cannot work is worse than not
+            offering it. Keyed on the slot rather than on `stage`, or the early
+            optional questions pl-18 allows would be the only ones with no way
+            to skip them — `destination` being the first. */}
+        {!isRequiredSlot(question.fills) && (
           <button
             type="button"
             disabled={busy}

@@ -8,8 +8,10 @@
  *   they say so. The assertion that matters is the negative one: `submitAnswer`
  *   was never called. Delete the `previewAnswer` call in `Wizard.tsx` and this
  *   file goes red.
- * - **The intake stops at the core questions.** `coreComplete` with a question
- *   still to ask is the checkpoint, not a reason to march on.
+ * - **The intake stops at the questions a draft needs.** `coreComplete` with a
+ *   question still to ask is the checkpoint, not a reason to march on — and
+ *   since pl-18 the skip button follows `isRequiredSlot(fills)` rather than
+ *   `stage`, so an early optional question offers it and a required one does not.
  *
  * **The fake is the API client module, never `fetch`.** `src/api/intake.ts` is
  * the seam and it is one module; stubbing `fetch` would mean re-implementing
@@ -53,20 +55,38 @@ const CHOICES = [
   { value: "coast", label: "Coast" },
 ] as const;
 
-/** A core question, which is the one a checkpoint and a decline both hinge on. */
+/** A question the draft needs — what a checkpoint and a refused decline hinge on. */
 const CORE: QuestionNode = {
   ...BASE,
-  id: "core.where",
+  id: "core.origin",
+  prompt: "Where are you leaving from?",
+  kind: "single-choice",
+  choices: CHOICES,
+};
+
+/**
+ * Asked before the checkpoint and still skippable — the shape pl-18 added, and
+ * `destination` is the checked-in one. `stage` says core, the slot says
+ * optional, and the button follows the slot.
+ */
+const EARLY_OPTIONAL: QuestionNode = {
+  ...BASE,
+  id: "core.destination",
   prompt: "Where are you going?",
+  fills: { scope: "core", slot: "destination" },
   kind: "single-choice",
   choices: CHOICES,
 };
 
 const REFINE: QuestionNode = {
   ...BASE,
-  id: "refine.pace",
-  prompt: "How fast do you want to move?",
+  id: "refine.comfort",
+  prompt: "How rough a night would you accept?",
   stage: "refine",
+  // Its own slot, because `BASE` now fills a required one and a refine question
+  // filling that would be a tree the validator rejects — and, here, a skip
+  // button the wizard refuses to render.
+  fills: { scope: "core", slot: "comfort" },
   kind: "single-choice",
   choices: CHOICES,
 };
@@ -89,17 +109,27 @@ function mount(): void {
 }
 
 // ---------------------------------------------------------------------------
-// A core question cannot be declined, so it must not offer the button
+// A question the draft needs cannot be declined, so it must not offer the button
 // ---------------------------------------------------------------------------
 
-test("a core question offers no way to decline it", async () => {
+test("a question the draft needs offers no way to decline it", async () => {
   fetched.mockResolvedValue(intakeState({ questions: [CORE] }));
   mount();
 
   expect(await screen.findByRole("heading", { name: CORE.prompt })).toBeDefined();
-  // The engine refuses a declined core answer, so the button would be a lie.
+  // The engine refuses to decline a required slot, so the button would be a lie.
   expect(screen.queryByRole("button", { name: "Not important" })).toBeNull();
   expect(screen.getByRole("button", { name: "Next" })).toBeDefined();
+});
+
+test("an early question the draft does not need still offers the skip", async () => {
+  // Both of these are `stage: "core"`, and only one of them is skippable. If the
+  // button ever keys off `stage` again, this is the test that goes red.
+  fetched.mockResolvedValue(intakeState({ questions: [EARLY_OPTIONAL] }));
+  mount();
+
+  expect(await screen.findByRole("heading", { name: EARLY_OPTIONAL.prompt })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Not important" })).toBeDefined();
 });
 
 test("a refine question does offer it, and declining is a write", async () => {

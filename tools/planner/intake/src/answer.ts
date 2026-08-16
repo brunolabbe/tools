@@ -12,6 +12,7 @@
 
 import {
   AppError,
+  isRequiredSlot,
   MAX_TRIP_NIGHTS,
   type Answer,
   type AnswerValue,
@@ -126,16 +127,20 @@ function checkItemCount(node: QuestionNode, count: number, maxItems: number): vo
  * Throws unless the answer fits the question.
  *
  * Takes the whole `Answer` rather than only its value, because declining is one
- * of the things that can be wrong: **a `core` question cannot be declined.**
- * Its slot is one a first draft is impossible without, and a declined slot
- * counts as settled — so allowing it would let someone shrug their way past the
- * checkpoint and be told the essentials are done over an empty brief. Every
- * `refine` question can be declined, and that is where the three-state slot
- * earns its keep.
+ * of the things that can be wrong: **a question filling a required slot cannot
+ * be declined.** A declined slot counts as settled, so allowing it would let
+ * someone shrug their way past the checkpoint and be told the essentials are
+ * done over an empty brief.
+ *
+ * The test is `isRequiredSlot`, not `stage === "core"`. Those picked out the
+ * same questions until pl-18 and no longer do: `destination` is asked third and
+ * may be declined, which is the whole reason it could move up the tree. What
+ * makes a question undeclinable is that a draft is impossible without it, which
+ * is a fact about its slot rather than about its position.
  */
 export function validateAnswer(node: QuestionNode, answer: Answer, now: Date): void {
   if (answer.state === "declined") {
-    if (node.stage === "core") {
+    if (isRequiredSlot(node.fills)) {
       throw invalid(node, "This one is needed before a plan can be drafted.");
     }
     return;

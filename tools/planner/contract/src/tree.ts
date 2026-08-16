@@ -40,6 +40,8 @@ import { z } from "zod";
 import {
   MAX_CONTEXT_CHARS,
   MAX_LIST_ITEMS,
+  REQUIRED_CORE_SLOTS,
+  REQUIRED_SHAPE_SLOTS,
   tripBudgetSchema,
   tripDatesSchema,
   type CoreSlotId,
@@ -115,18 +117,39 @@ export type Condition =
 // ---------------------------------------------------------------------------
 
 /**
- * `core` marks a question without which no first draft can exist. It is
- * behaviour, not a label: the wizard stops when nothing reachable and `core` is
- * unanswered, and offers the draft there (§3's "draft early, interview less",
+ * **`stage` is where a question is asked, not whether it is needed.** `core` is
+ * before the checkpoint, `refine` after it — the point where the wizard says the
+ * essentials are done and offers the draft (§3's "draft early, interview less",
  * decided 2026-08-14).
  *
- * So the marking and `missingRequiredSlots` describe the same set — a `core`
- * node whose slot is not required, or a required slot no `core` node fills,
- * makes that checkpoint a lie in one direction or the other. `validateTree`
- * checks both.
+ * Whether a question blocks that draft is `isRequiredSlot` below, and the two
+ * are not the same question. Until pl-18 they were the same *set*, and the
+ * engine read `stage` as a proxy for both; `destination` is what separated them,
+ * because it is asked third and may be left blank.
+ *
+ * One direction of the old invariant survives and is load-bearing: **every
+ * required slot must be filled by a `core` node**, or the wizard offers a draft
+ * `missingRequiredSlots` will refuse. The other direction is gone on purpose — a
+ * `core` node whose slot is not required is an early optional question, which is
+ * a thing the tree is now allowed to have. `validateTree` checks the surviving
+ * direction, and checks that no `core` node sits behind a `refine` one.
  */
 export const QUESTION_STAGES = ["core", "refine"] as const;
 export type QuestionStage = (typeof QUESTION_STAGES)[number];
+
+/**
+ * Does this slot block a first draft?
+ *
+ * The single answer to "may this question be declined" and "does the checkpoint
+ * wait for it". It lives here rather than beside the tables in `brief.ts`
+ * because `SlotTarget` is here and this file already imports that one — the
+ * other direction is a cycle.
+ */
+export function isRequiredSlot(target: SlotTarget): boolean {
+  const required: readonly string[] =
+    target.scope === "core" ? REQUIRED_CORE_SLOTS : REQUIRED_SHAPE_SLOTS[target.shape];
+  return required.includes(target.slot);
+}
 
 /** One option of a choice question. `value` is stored; `label` is shown. */
 export type Choice = { value: string; label: string };

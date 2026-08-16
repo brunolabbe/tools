@@ -160,6 +160,45 @@ city-and-culture, and those eight answers are answers to questions nobody would
 ask. The rule is that abandoned answers are discarded, and the user is told which
 before it happens. §7's failure modes gain this one.
 
+### Amendment, 2026-08-16 — `core` marks when a question is asked, not whether it is needed
+
+The amendment above is kept as it was written, and one parenthetical in it is now
+wrong: "every node in the tree is marked `core` (needed before a first draft can
+exist) or `refine`". The marking survives; the gloss does not.
+
+**The decision** ([pl-18](./work/pl-18-destination-asked-early.md)): `core` and
+`refine` say **where a question falls** — before the checkpoint or after it — and
+a separate question, whether a first draft is possible without the slot, is
+answered by `REQUIRED_CORE_SLOTS` / `REQUIRED_SHAPE_SLOTS` in the contract. The
+same test decides whether a question may be declined. Every required slot must
+still be filled by a `core` node, or the wizard offers a draft the brief will
+refuse; a `core` node filling a slot that is not required is now legal, and is
+what an early optional question is.
+
+**What forced it** is a product complaint, not an engine one. `destination` was
+question eighteen, behind the checkpoint, because §1's hard facts do not include
+_where_ and because "somewhere warm, you pick" has to stay a real answer. Both
+still hold. What did not hold is the ordering they were used to justify: most
+people know where they are going, and were made to answer where they were leaving
+from, then five more questions, before they could say so. The minority who have
+not picked a place are better served by the help text on an early question than by
+the position of a late one.
+
+**"Draft early, interview less" is unchanged**, and the split is what lets it stay
+literal. The checkpoint is still the moment nothing a draft _needs_ is unanswered —
+seven questions for a road trip, six for a resort, exactly as before. Eight are now
+asked to get there, and the eighth may be skipped. Had the two meanings stayed
+fused, moving the question up would have made it mandatory, which is the opposite
+of this rule.
+
+**What it costs:** one more concept. A reviewer must now ask two questions of a
+node where one used to do — where does this get asked, and can a plan exist without
+it — and the tree can express a combination that used to be unrepresentable and is
+therefore newly possible to get wrong. `validateTree` gained the ordering rule that
+was previously implied (no `core` node after a `refine` one), which is the cheap
+half of the guard; the expensive half is that "asked early" is now a judgement
+someone makes per question rather than a consequence of requiredness.
+
 ---
 
 ## 4. The fan-out, and what each part is not allowed to do
