@@ -91,6 +91,13 @@ re-probing in place (dl-9)`. That is what the `dl-`/`pl-` prefix is for — see
 machine. A commit touching both tools appears in both changelogs, which is
 correct and is also a hint that it should have been two commits.
 
+The worked example is downloader 0.2.0, whose only entry reads
+`**planner:** run the fan-out as a job (pl-16)`. That commit lifted the rate
+limiter into `packages/core` and rewired `tools/downloader/api` to use it while
+adding the planner's feature — so the downloader genuinely changed and genuinely
+owed a release, and the line describing it was written for another tool. Two
+commits would have given each tool a sentence that was true of it.
+
 ### The one case that needs a footer
 
 A change to `packages/core` alone touches no tool's path, so it releases
@@ -108,6 +115,59 @@ changed.
 
 Release-As: 0.2.1
 ```
+
+---
+
+## Merging a pull request
+
+**Squash, and nothing else.** The repository allows one merge method, and the
+squash commit is titled by the pull request title with an empty body. That is
+what makes the title the message and a branch's own commits working notes —
+everything on this page assumes it. In API terms, and these four are the whole
+arrangement:
+
+```bash
+gh api repos/<owner>/<repo> --jq \
+  '{squash: .allow_squash_merge, merge: .allow_merge_commit,
+    title: .squash_merge_commit_title, body: .squash_merge_commit_message}'
+# {"squash":true,"merge":false,"title":"PR_TITLE","body":"BLANK"}
+```
+
+**It was not always configured that way, and the gap was invisible.** Until
+2026-08-16 `allow_squash_merge` was off and every pull request landed as a merge
+commit, with `merge_commit_message: PR_TITLE` writing the title into the body:
+
+```
+Merge pull request #34 from brunolabbe/worktree-pl-16-the-plan-run
+
+feat(planner): run the fan-out as a job (pl-16)
+```
+
+release-please does not stop at a merge commit's subject — it reads the body,
+and counts every line there that parses as a conventional commit as a commit in
+its own right. So that entry landed twice, once for the branch commit and once
+for the merge, and downloader 0.2.0 shipped with its single feature listed under
+two SHAs. Every merged pull request had been doing it; nothing failed, and the
+release is where it became visible.
+
+**The body could not be blanked.** GitHub accepts only three title/message
+combinations for a merge commit — `PR_TITLE`+`PR_BODY`, `PR_TITLE`+`BLANK`,
+`MERGE_MESSAGE`+`PR_TITLE` — and all three put the pull request title into the
+merge commit, as subject or as body. With conventional branch commits landing
+alongside it, every one of them duplicates. There is no merge-commit
+configuration that avoids this, which is the argument for squash and not merely
+a preference for it.
+
+**`squash_merge_commit_message` matters as much as the method.** The default is
+`COMMIT_MESSAGES`, which writes every branch commit message into the squash
+commit's body — reproducing the same duplication through the other door. `BLANK`
+is not decoration.
+
+**The hook keeps a backstop.** `scripts/commit-message.mjs` skips a merge
+commit's subject, as it always did, and rejects a conventional line in its body.
+Nothing routine produces a merge commit now, but a `git merge --no-ff` done by
+hand still reaches the hook — and the failure mode is silent enough to have cost
+a release once.
 
 ---
 
@@ -234,7 +294,8 @@ Nothing else is required; the host's read-only token is enough.
 title check is the last gate, and squash-merging is what makes the title the
 message. There is no rewriting `main`, so the entry is fixed by hand in the next
 release PR — which is allowed: the changelog in an open release PR is a normal
-file and can be edited before merging.
+file and can be edited before merging. downloader 0.2.0 is the standing example
+of what does not get fixed afterwards.
 
 **`INSTALL_YTDLP` is decided in CI now, not on the host.** It was a build arg,
 and a host that pulls an image no longer runs a build to pass it to. Changing it

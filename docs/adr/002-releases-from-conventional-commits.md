@@ -50,6 +50,21 @@ feedback, and a check on the pull request title, which is what a squash merge
 actually lands and therefore what release-please reads. Both call
 `scripts/commit-message.mjs`, so they cannot disagree.
 
+> **Amendment, 2026-08-16.** That paragraph described a squash merge the
+> repository was never configured for: `allow_squash_merge` was off from the
+> start, every pull request landed as a merge commit, and the title check
+> therefore guarded a message that never reached `main`. What did reach it was
+> the branch's commits _and_ the merge commit carrying the title in its body,
+> which release-please reads as a further commit — so every merged pull request
+> duplicated its changelog entry, and downloader 0.2.0 was released showing it.
+>
+> The decision is unchanged and the settings now match it: squash only, titled
+> by the pull request title, with a blank body. The lesson is the one this ADR
+> already argued for elsewhere — an unenforced convention drifts — applied to
+> itself. A repository setting is part of the design and nothing here checked
+> it. [03-RELEASING.md](../03-RELEASING.md) carries the four settings and why no
+> merge-commit configuration is a workable alternative.
+
 ## Alternatives considered
 
 **Changesets.** Designed for publishing packages, and its value is the intent

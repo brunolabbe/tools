@@ -60,6 +60,12 @@ export const EXTRA_SCOPES = ["core", "repo", "ci", "deps"];
 /** Anything git or an editor generates that was never meant to be conventional. */
 const BYPASS = [/^Merge /, /^Revert "/, /^fixup! /, /^squash! /, /^amend! /];
 
+/** The one bypassed subject whose *body* is still checked. See `mergeBodyErrors`. */
+const MERGE = /^Merge /;
+
+/** A line release-please would read as a commit in its own right. */
+const CONVENTIONAL_LINE = new RegExp(`^(?:${TYPES.join("|")})(?:\\([^()]+\\))?!?: \\S`);
+
 const HEADER_MAX = 100;
 
 /**
@@ -102,7 +108,9 @@ export function validate(message, options = {}) {
   const errors = [];
 
   if (header === "") return { ok: false, errors: ["the commit message is empty"] };
-  if (BYPASS.some((pattern) => pattern.test(header))) return { ok: true, errors: [] };
+  if (BYPASS.some((pattern) => pattern.test(header))) {
+    return MERGE.test(header) ? mergeBodyErrors(lines.slice(1)) : { ok: true, errors: [] };
+  }
 
   // GitHub appends " (#123)" to a squash merge's subject. The author did not
   // type it and cannot shorten it, so it does not count against the limit.
@@ -160,6 +168,35 @@ export function validate(message, options = {}) {
       );
     }
   }
+
+  return { ok: errors.length === 0, errors };
+}
+
+/**
+ * A merge commit's subject is git's, and skipped — but release-please does not
+ * stop at the subject. It reads the body too, and counts every line there that
+ * parses as a conventional commit as a commit of its own. So a body carrying a
+ * branch's message lands that message twice, under two SHAs, in one changelog:
+ * exactly what downloader 0.2.0 was released with, back when pull requests here
+ * landed as merge commits.
+ *
+ * They no longer do — the repository is squash-only now — so nothing routine
+ * produces a merge commit at all. This stays because the shape is silent: it
+ * costs a released changelog to notice, and a `git merge --no-ff` on `main`
+ * still reaches the hook. See docs/03-RELEASING.md.
+ *
+ * @param {string[]} body
+ * @returns {{ ok: boolean, errors: string[] }}
+ */
+function mergeBodyErrors(body) {
+  const errors = body
+    .filter((line) => CONVENTIONAL_LINE.test(line))
+    .map(
+      (line) =>
+        `"${line.trim()}" is a conventional commit inside a merge commit's body — ` +
+        `release-please reads it as a second commit and writes the changelog entry ` +
+        `twice. Leave the body empty`,
+    );
 
   return { ok: errors.length === 0, errors };
 }

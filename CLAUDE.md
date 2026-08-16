@@ -170,6 +170,13 @@ rejects a bad one as you write it, and the rule itself lives in
 `scripts/commit-message.mjs`. The taxonomy, the escape hatches and how a release
 is cut are in [docs/03-RELEASING.md](./docs/03-RELEASING.md).
 
+**The pull request title is the message that lands.** This repo squash-merges,
+so a branch's own commits are working notes and the title is the changelog line
+— check yours with `node scripts/commit-message.mjs --text "<title>"` before
+opening the pull request. A commit that touches two tools lands in both
+changelogs under one sentence written for one of them, which is the tell that it
+should have been two commits.
+
 ## Style
 
 TypeScript strict, ESM, `.ts` extensions in relative imports (NodeNext),

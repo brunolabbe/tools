@@ -75,6 +75,47 @@ test("passes through what git generates for merges and reverts", () => {
   expect(check("fixup! fix(downloader): stop re-probing").ok).toBe(true);
 });
 
+test("rejects a conventional line in a merge commit's body", () => {
+  // The shape GitHub wrote while this repo landed pull requests as merge
+  // commits. It cost downloader 0.2.0 a changelog with the same planner feature
+  // listed twice, once for the branch commit and once for the merge that landed
+  // it. Squash-only now, so this guards a `git merge --no-ff` done by hand.
+  const { ok, errors } = check(
+    [
+      "Merge pull request #34 from brunolabbe/worktree-pl-16-the-plan-run",
+      "",
+      "feat(planner): run the fan-out as a job (pl-16)",
+    ].join("\n"),
+  );
+  expect(ok).toBe(false);
+  expect(errors.join(" ")).toContain("writes the changelog entry twice");
+});
+
+test("leaves a merge commit with prose or no body alone", () => {
+  expect(check("Merge pull request #34 from brunolabbe/worktree-pl-16\n\n").ok).toBe(true);
+  expect(
+    check(
+      [
+        "Merge pull request #34 from brunolabbe/worktree-pl-16",
+        "",
+        "Takes the queue with it.",
+      ].join("\n"),
+    ).ok,
+  ).toBe(true);
+});
+
+test("a revert's quoted subject is not read as a body line", () => {
+  expect(
+    check(
+      [
+        'Revert "feat(planner): scaffold a second tool"',
+        "",
+        "This reverts commit 1a2b3c4, which broke the planner's intake.",
+      ].join("\n"),
+    ).ok,
+  ).toBe(true);
+});
+
 test("ignores the comment block git appends to the message buffer", () => {
   const message = [
     "chore(repo): pin the toolchain",
