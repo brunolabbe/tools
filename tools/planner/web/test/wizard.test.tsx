@@ -8,8 +8,10 @@
  *   they say so. The assertion that matters is the negative one: `submitAnswer`
  *   was never called. Delete the `previewAnswer` call in `Wizard.tsx` and this
  *   file goes red.
- * - **The intake stops at the core questions.** `coreComplete` with a question
- *   still to ask is the checkpoint, not a reason to march on.
+ * - **The intake stops at the questions a draft needs.** `coreComplete` with a
+ *   question still to ask is the checkpoint, not a reason to march on — and
+ *   since pl-18 the skip button follows `isRequiredSlot(fills)` rather than
+ *   `stage`, so an early optional question offers it and a required one does not.
  *
  * **The fake is the API client module, never `fetch`.** `src/api/intake.ts` is
  * the seam and it is one module; stubbing `fetch` would mean re-implementing

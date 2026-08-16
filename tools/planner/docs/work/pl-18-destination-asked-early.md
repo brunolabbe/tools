@@ -185,7 +185,89 @@ the spec, not about the tree.
 - `npm run check` and `npm test -- --project planner` pass; `npm run e2e:planner`
   passes with no spec edited.
 
+## Review
+
+**Gate: CONCERNS** — 2026-08-16 · `origin/main...worktree-pl-18-destination-early` · code-review at medium
+
+| Done when                                                                                                                      | Proof                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `destination` is question three, optional: wizard offers skip, `validateAnswer` accepts declined                               | `intake/test/tree.test.ts:188` ✓ (decline accepted) · `web/test/wizard.test.tsx:123` ✓ (skip button renders) — "question three" itself has no regression test, see finding                                                                |
+| Declining any `REQUIRED_CORE_SLOTS`/`REQUIRED_SHAPE_SLOTS` question still refused, message says why                            | `intake/test/tree.test.ts:170` ✓ (`toThrow(/needed/i)` over every required node)                                                                                                                                                          |
+| Checkpoint at 8 asked/7 needed (road trip), 7/6 (resort); `missingRequiredSlots` empty whether destination answered or skipped | `intake/test/tree.test.ts:116` ✓ (counts) · `:61` ✓ (answered) · `:93` ✓ (skipped)                                                                                                                                                        |
+| `validateTree` flags a `core` node after a `refine` one; allows a `core` node whose slot isn't required                        | `intake/test/validate.test.ts:134` ✓ · `intake/test/validate.test.ts:125` ✓                                                                                                                                                               |
+| v2→v3 reconcile: destination answer intact, nothing discarded                                                                  | `api/test/intakes-routes.test.ts:417` ✓                                                                                                                                                                                                   |
+| `npm run check` + `npm test -- --project planner` pass; `npm run e2e:planner` passes, no spec edited                           | `npm run check` ✓ and `npm test -- --project planner` ✓ (490/490), both run directly — `npm run e2e:planner` **unproven (gate)** (`.github/workflows/planner.yml`); spec non-edit confirmed via diff, "passes" not independently verified |
+
+- **low** · `tools/planner/api/src/intakes/title.ts:4-9`'s header comment still says `destination` "is a **refine** question... the first question _past_ the checkpoint" — pl-18 moved it to position three, pre-checkpoint and declinable, and this diff never touched the file. The function's own logic (`isAnswered(brief.destination)`, stage-agnostic) still works; the comment is simply now false, in a codebase where such comments are treated as the contract.
+- **low** · No test pins `destination` to literal position three — `validateTree`'s new rule only checks core-before-refine ordering, not exact index. The claim is true only by reading `intake/src/tree.ts` directly.
+- NFR: security n/a (no new input/auth/SSRF surface; destination reuses existing bounded `MAX_NOTE_CHARS` text validation) · performance n/a (same O(n) tree scans, one more node) · reliability ✓ (v2→v3 migration proven zero-discard; full suite 490/490 green) · maintainability mixed (clean single-source `isRequiredSlot` decoupling, but see the title.ts finding above)
+
 ## Log
+
+### 2026-08-16 — the review's two findings, fixed
+
+**The Review table's `tree.test.ts` line numbers predate the fix below and are
+now twelve lines short**, because fixing the second finding meant inserting a
+test near the top of that file. The gate's table is left exactly as the reviewer
+wrote it — a verdict the author edits is not a verdict — so read those rows as
+`:61 → :73`, `:93 → :105`, `:116 → :128`, `:170 → :182`, `:188 → :200`. The other
+files' citations are unaffected. Fixing a finding invalidating the citation that
+found it is a small structural wart in this process and worth knowing about
+before the next review.
+
+Both **low**, both mine, both fixed in the same branch. The gate stays CONCERNS
+as written: the e2e row is `unproven (gate)` and stays that way until
+`.github/workflows/planner.yml` runs it, which is the row's whole point.
+
+- **`api/src/intakes/title.ts`'s header was stale**, and the sweep that updated
+  the contract, the tree, both `CLAUDE.md` rules and six test files missed it
+  because nothing in that file mentions `stage` — it reads
+  `isAnswered(brief.destination)` and is behaviourally correct either way. The
+  comment now says what is durable (a draft never requires a destination, so the
+  fallback title exists) and notes what pl-18 changed: **declining is now
+  possible**, so the fallback is the live path for a declined destination rather
+  than only an unasked one. `api/test/intakes-routes.test.ts:105` already proves
+  exactly that, having declined it through HTTP.
+- **Nothing pinned `destination` to position three.** Added
+  `intake/test/tree.test.ts:37`. Worth naming why the gap existed: I added an
+  ordering rule to `validateTree` in this ticket and then assumed it covered the
+  claim, and it does not — core-before-refine is satisfied by a destination asked
+  eighteenth, which is the arrangement pl-18 exists to end.
+
+#### Also fixed, found by the review's finders rather than named in its gate
+
+- **`intake/test/helpers.ts` carried two contradictory doc blocks**, the old one
+  directly above the new: "`fills` is the same slot on every one of them … the
+  engine does not read [it]". Both halves false as of this ticket, and it sat
+  next to the fix it argued against. Deleted. This is the more dangerous of the
+  three stale comments — it is the one that could talk the next reader into
+  reverting the fixture change and re-breaking every synthetic core node.
+- **`web/test/wizard.test.tsx`'s header** quoted the `CLAUDE.md` rule title this
+  ticket renamed. Updated to the current wording.
+
+#### Where I disagree with a finder
+
+One finder called the "core question gated behind a refine one" check in
+`validate.ts` redundant now that the ordering check exists, on the grounds that a
+backward reference to a `refine` node means that node is already behind us. That
+is right for backward references and misses forward ones: a `core` node at index
+0 referencing a `refine` node at index 5 trips the gated check and **not** the
+ordering check, because no `refine` node has been seen yet. `validateConditions`
+reports the forward reference separately, but with a different message and for a
+different reason. Both checks stay. Left as a note rather than acted on, because
+a review is not the place to delete a rule.
+
+#### Not done here
+
+The **v2-intake-at-checkpoint** case a finder raised is real and is not covered:
+an intake saved under version 2 that never answered `destination` reconciles to
+version 3 with `coreComplete` true and `progress.question` set to `destination`,
+so the wizard shows the checkpoint rather than the question. That is the
+pre-pl-18 behaviour preserved — those intakes were already past the checkpoint —
+so it is not a regression, and both v2→v3 fixtures here answer or decline the
+question rather than leaving it unasked. Whether a resumed v2 intake should be
+shown the question it never got asked is a product decision, not a defect, and it
+belongs in its own ticket.
 
 ### 2026-08-16 — landed
 

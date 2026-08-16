@@ -49,6 +49,18 @@ test("the checked-in tree is valid", () => {
   expect(validateTree(QUESTION_TREE)).toEqual([]);
 });
 
+test("the first three questions are the shape, where from, and where to", () => {
+  // pl-18's whole claim is a position, and `validateTree` cannot check one — its
+  // ordering rule only says core-before-refine, which a destination asked
+  // eighteenth would also satisfy. Without this the claim is true only by
+  // reading the tree, which is how it silently drifts back.
+  expect(QUESTION_TREE.nodes.slice(0, 3).map((node) => node.id)).toEqual([
+    "shape",
+    "origin",
+    "destination",
+  ]);
+});
+
 test("every question comes with an answer the question itself accepts", () => {
   // The bounds a node carries are the wizard's input attributes; this is what
   // stops one drifting looser than the slot it fills.

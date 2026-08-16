@@ -97,12 +97,7 @@ export const DIVERGING_SHAPES: readonly TripShape[] = ["backcountry", "city-and-
 // ---------------------------------------------------------------------------
 
 /**
- * A text question, for suites that care about the walking and not the slots.
- * `fills` is the same slot on every one of them, which `validateTree` would
- * reject and the engine does not read.
- */
-/**
- * A synthetic text question.
+ * A synthetic text question, for suites that care about the walking.
  *
  * The slot follows the stage, and that is not arbitrary. Since pl-18 the
  * checkpoint and the decline rule read `isRequiredSlot(node.fills)` rather than
