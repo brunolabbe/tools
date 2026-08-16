@@ -22,6 +22,10 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/downloader.yml"
+      # Last, so it overrides the globs above: `tools/downloader/**` otherwise
+      # pulls this tool's own `docs/` in, and appending to a ticket's Log would
+      # spend four minutes on e2e and an image build to prove nothing.
+      - "!**.md"
   pull_request:
     paths:
       - "tools/downloader/**"
@@ -30,6 +34,10 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/downloader.yml"
+      # Last, so it overrides the globs above: `tools/downloader/**` otherwise
+      # pulls this tool's own `docs/` in, and appending to a ticket's Log would
+      # spend four minutes on e2e and an image build to prove nothing.
+      - "!**.md"
   # So a failure can be re-run without an empty commit.
   workflow_dispatch:
 

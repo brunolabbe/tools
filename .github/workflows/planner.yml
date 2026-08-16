@@ -24,6 +24,9 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/planner.yml"
+      # Last, so it overrides the globs above — `tools/planner/**` otherwise
+      # pulls this tool's own `docs/` in. See the note in `ci.yml`.
+      - "!**.md"
   pull_request:
     paths:
       - "tools/planner/**"
@@ -31,6 +34,9 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/planner.yml"
+      # Last, so it overrides the globs above — `tools/planner/**` otherwise
+      # pulls this tool's own `docs/` in. See the note in `ci.yml`.
+      - "!**.md"
   # So a failure can be re-run without an empty commit.
   workflow_dispatch:
 

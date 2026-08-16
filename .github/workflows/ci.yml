@@ -6,10 +6,22 @@ name: CI
 # runs. The pull request is the one that gates the merge; the `main` push is the
 # one that records the merged state. A branch with no pull request open yet is
 # not worth a runner.
+#
+# Markdown is skipped, and it is worth saying why that is safe here rather than
+# reflexive. Appending to a ticket's Log when work finishes is a standing rule
+# in CLAUDE.md, so documentation-only commits are routine, not rare: `d97db2c`
+# edited `docs/01-TICKETS.md` and nothing else, and bought five minutes and
+# fifty-four seconds of Linux and Windows suites for it. No `.md` in this
+# repository is a test fixture — every one is prose — and the ruleset on `main`
+# requires no status checks, so a skipped workflow cannot leave a pull request
+# pending forever. Release pull requests still run: release-please touches
+# `version.txt` and the manifest alongside the changelog.
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md"]
   pull_request:
+    paths-ignore: ["**.md"]
   # Nightly against `main`, because the failures this repo actually hits are
   # environmental and no commit triggers them. The `ffmpeg-static` SIGSEGV
   # documented below appeared when a runner image changed underneath us, not
