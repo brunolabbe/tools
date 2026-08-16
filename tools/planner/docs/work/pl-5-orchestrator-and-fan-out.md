@@ -3,7 +3,7 @@ id: pl-5
 tool: planner
 title: The orchestrator and the specialist fan-out
 kind: work-package
-status: ready
+status: in-flight
 milestone: P2
 depends_on: [pl-4, pl-15]
 ---
@@ -128,4 +128,151 @@ Traps worth knowing in advance:
 
 ## Log
 
-_Not started._
+### 2026-08-16 — the library half is built; the run-as-a-job half is blocked on the contract
+
+`@planner/agent` now does everything from the brief to the candidate set. What is
+**not** built is the run as a persisted job with an SSE surface, and the reason is
+below rather than in a commit message, because it is a decision somebody has to
+make rather than work somebody has to do.
+
+**Branched off pl-15 (PR #31), not off `main`.** `Candidate.location` is the
+union pl-15 introduced and every route candidate here is `between` two places.
+
+#### What landed
+
+- **`roster.ts` — the roster as a table.** Nine rows, each naming a specialist, the
+  shapes it has something to say about, a named condition and the sentence that
+  put it there. `rosterFor(brief)` filters; it decides nothing. Every specialist
+  that does **not** run comes back with the sentence that kept it out, and those
+  become `specialist-not-applicable` gaps — the reassurance half of §7.
+- **`budget.ts` — the cap, enforced before the fan-out.** `applyBudget` cuts from
+  the back of `SPECIALIST_ORDER`, which is the judgement about what a plan loses
+  least by losing; `rosterGaps` turns the cut into
+  `specialist-dropped-for-budget`. A cap of zero is honoured rather than clamped.
+- **`specialists.ts` — one shape for all seven**, plus `TripCapacity` and
+  `CANDIDATE_LIMIT_OF`.
+- **`prompt.ts` — the brief, and only the brief**, rendered with every unanswered
+  slot shown as `not answered` and nothing defaulted.
+- **`ask.ts` — one specialist call**, with the reply validated against
+  `candidateSchema.omit({id, specialist})` and a bounded re-ask that feeds the
+  parse failure back. `AGENT_REFUSED` is terminal, a `length` stop is re-asked
+  with that said, and past the attempts it is `AGENT_MALFORMED_REPLY`.
+- **`orchestrator.ts` — `runFanOut`.** Parallel, joined once, per-specialist
+  progress, gaps for everyone who did not contribute, and cancellation that kills
+  the whole thing.
+- **`providers/scripted-fan-out.ts` — 48 checked-in candidates**, keyed by trip
+  shape and specialist, so the whole fan-out runs offline with no key.
+
+#### Decisions worth carrying
+
+**`agent` does not import `@planner/itinerary`, and the ceilings are an
+argument.** The brief is right that the numbers a specialist must respect are in
+`itinerary/src/limits.ts`, and `01-ARCHITECTURE.md`'s dependency table says
+`agent` depends on `contract`. Both are kept: `runFanOut` takes a **required**
+`TripCapacity`, and a caller writes
+`{ dayCount: tripSpan(dates).dayCount, ...dayCapacity(brief) }`. Required rather
+than optional on purpose — a caller who forgets it writes the exact bug pl-9
+found, and forgetting should be a compile error.
+
+The one thing that had to be restated is which of the day's two budgets a
+specialist's output is charged to, which is `itinerary`'s `BUCKET_OF` seen from
+the proposing side. It is `CANDIDATE_LIMIT_OF`, and the drift is not left to
+care: `placeable.test.ts` imports both tables and asserts they agree.
+`@planner/itinerary` is therefore a **devDependency** of `agent`, used by two
+test files and by no production file.
+
+**The scripted provider answers by name.** Every specialist prompt opens with
+`Trip shape: <shape>` and `Specialist: <id>`, which the model needs anyway — a
+specialist that does not know which specialist it is answers as all of them — and
+which `readMarkers` reads back. `ScriptedProvider` looks the pair up in
+`SCRIPTED_FAN_OUT` and falls through to its plain reply list for anything else,
+so the existing script behaviour is untouched. A pair with no entry gets an empty
+list, never a plausible one.
+
+**The turn counter is not advanced for a fan-out reply.** Specialists run
+concurrently, so "the third reply" would depend on which of them the event loop
+reached first, and a script that differs per run is not a script.
+
+**Ids are derived, not generated.** `<runId>-<specialist>-<n>`, the same argument
+the composer's day ids make: this package has no clock and no randomness, so the
+same run composed twice produces the same plan.
+
+**A cancellation is not a gap.** "Lodging was not checked because you stopped the
+run" would leave a canceled draft looking like a completed one with holes, so the
+per-specialist catch rethrows a cancellation instead of recording it.
+
+#### What the brief got wrong, and what composing turned up
+
+- **`depends_on` said `[pl-4]`.** It is `[pl-4, pl-15]` in practice and the
+  front matter now says so — every route candidate here is `between` two places
+  and none of this compiles against `Candidate.place`.
+- **pl-4's resort fixture has a `route-and-logistics` candidate, and §4 says it
+  should not exist.** "A resort week needs lodging, food and practicalities, and
+  a route specialist would produce noise about airport transfers" is the
+  analysis's own sentence, so the roster has no route row for `resort` — which
+  means the fixture's 5-hour Ottawa→Cancún transfer is a candidate this fan-out
+  would never propose. pl-9 separately found that the composer drops it. Two
+  independent mechanisms agreeing that a candidate should not be there is a
+  reason to believe the roster, not the fixture; the fixture is pl-4's realistic
+  _candidate set_ rather than a claim about who ran, so it is left alone.
+- **At the architecture's `MAX_SPECIALISTS` default of 5, the budget specialist
+  is dropped on every six-specialist shape** — backcountry, motorised-touring and
+  multi-city. That is the cap working as designed and it is recorded as a gap on
+  each of those plans, but it is worth a content review: the default was chosen
+  before there was a roster to apply it to, and "budget is always the one we
+  cannot afford" is a sentence somebody should either accept or change the number
+  over.
+- **`empty-day` is common and it is honest.** Composing the scripted fan-out
+  leaves five empty days of eight on the resort week and six of thirteen on the
+  multi-city trip, because the script proposes a handful of good options rather
+  than one per day. Soft findings, they ship, and they are a fair description of
+  what a scripted provider knows.
+- **A plan can still be `PLAN_INFEASIBLE` from the cost side and it very nearly
+  was.** The resort script proposes two properties, the packer places each as its
+  own day's anchor, and the party is charged for both — two low ends summed past
+  the 7,000 CAD budget. The critic's first round drops the dearest and the plan
+  ships, so nothing fails; but "propose two hotels for one week and be billed for
+  both" is a real modelling gap between what a lodging specialist means and what
+  the packer does with it. Not this ticket's to fix — it is a property of
+  `BUCKET_OF`'s one-anchor-per-day rule — and it is written down here because the
+  next person to see a doubled hotel bill should not have to rediscover it.
+
+#### What is not built, and why it stopped here
+
+Build steps 4 (the run as a job with SSE) and the `web` progress view are **not
+done**. Both need `@planner/contract` to grow, and the preamble for this ticket
+is explicit that the contract is not to be edited unilaterally — the repo's rule
+and this ticket's instructions agree, so the work stopped at the seam rather than
+crossing it.
+
+Concretely, the remaining half needs four additions to the contract, none of
+which changes anything that exists:
+
+1. **`RunStatus` and its `TransitionTable`** — `queued → fanning-out → composing
+→ reviewing → done | failed | canceled`, on `@webtools/core`'s machinery. It
+   belongs in `contract` for the reason the downloader's job FSM does: `web`
+   renders the state and `api` enforces it, and neither should own it.
+2. **A `RunEvent` union and its zod schema** — the SSE frames. The
+   per-specialist shape is already settled and tested as `FanOutProgress` in
+   `@planner/agent`; the wire type is the same information plus a run id and a
+   timestamp, and the agent's version should probably be dropped in favour of it
+   rather than mapped between.
+3. **`ROUTES.plans`, `ROUTES.plan`, `ROUTES.runEvents`** and their url helpers.
+4. **A `Run` summary type** for `POST /api/plans`'s response.
+
+The api-side work behind those is: migration 4 for a `plan_runs` table (migration
+2 already has `plans`, `plan_candidates`, `plan_revisions`, `plan_days` and
+`plan_items`, and its comments already anticipate pl-5 adding the run a candidate
+came from), an in-process queue bounded by `MAX_CONCURRENT_RUNS`, the SSE route,
+and `createModelProvider`'s existing seam passing `RUN_TOKEN_BUDGET` and
+`MAX_SPECIALISTS` down as the `RunBudget` this package already takes. None of it
+is large; all of it is downstream of the contract question.
+
+It probably wants a ticket of its own rather than a checklist here — the format
+doc's own advice — but which of the four the contract should actually carry is a
+decision for whoever owns it, not one to make by writing the file.
+
+#### Green
+
+`npm run check` passes. `npm test -- --project planner` is 420 tests across 31
+files, 84 of them new here.

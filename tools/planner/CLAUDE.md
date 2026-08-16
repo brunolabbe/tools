@@ -105,6 +105,17 @@ and the output schema both say otherwise. Travel time between consecutive items,
 a detour weighed off a leg, and conditions along one corridor rather than
 another are each unbuildable without both ends, and none of them is built.
 
+**An appetite answer bounds what a specialist may propose.** `driveAppetite`,
+`pace` and `effort` are constraints, not flavour for a prompt: a leg longer than
+the day allows is split or not proposed, and the numbers those answers translate
+into are `itinerary/src/limits.ts`. `agent` does not import them — `runFanOut`
+takes a required `TripCapacity` and `api` assembles it from `dayCapacity` and
+`tripSpan`, so a day's length stays decided in one place. Enforced after the
+reply as well as stated in the prompt, because a rule a model was merely asked to
+follow is not a rule (§2). pl-9 found the failure by composing pl-4's fixtures:
+ignore the appetite and every route candidate is dropped, and a road trip comes
+out with no drives in it.
+
 **A specialist reads the brief, and only the brief.** Not the raw answers, not
 the tree, not another specialist's output. The `TripBrief` indirection is what
 makes the fan-out testable from a fixture, and it is what made swapping the
