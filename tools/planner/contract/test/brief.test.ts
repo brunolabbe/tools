@@ -27,13 +27,12 @@ const CORE_ANSWERS = {
     nights: 3,
   }),
   travellers: slot.answered(2),
-  budget: slot.answered({ kind: "band" as const, band: "moderate" as const }),
   effort: slot.answered("moderate" as const),
 } satisfies Partial<TripBrief>;
 
 /** The required extension slots per shape, answered. */
 const SHAPE_ANSWERS: { [S in TripShape]: Partial<Extract<TripShapeDetails, { shape: S }>> } = {
-  "road-trip": { maxDailyDriveHours: slot.answered(4), vehicle: slot.answered("own-car") },
+  "road-trip": { driveAppetite: slot.answered("half-day"), vehicleKind: slot.answered("car") },
   backcountry: { nightsOut: slot.answered(2), shelter: slot.answered("hut") },
   "motorised-touring": {
     machine: slot.answered("snowmobile"),
@@ -122,7 +121,33 @@ describe("missingRequiredSlots", () => {
     const brief = draftable("city-and-culture");
     expect(isSettled(brief.destination)).toBe(false);
     expect(isSettled(brief.comfort)).toBe(false);
+    // Budget joined them on 2026-08-16: a draft is possible from a moderate
+    // default, so an unanswered budget must not hold the checkpoint shut.
+    expect(isSettled(brief.budget)).toBe(false);
     expect(missingRequiredSlots(brief)).toEqual([]);
+  });
+});
+
+describe("the road trip's vehicle", () => {
+  test("holds what it is and whose it is as two facts", () => {
+    // The case the old single enum could not express: a rented camper van, which
+    // in most markets is the commonest camper trip there is.
+    const brief = draftable("road-trip");
+    const details = {
+      ...brief.details,
+      vehicleKind: slot.answered("camper-van" as const),
+      vehicleSource: slot.answered("rental" as const),
+    } as TripShapeDetails;
+
+    const rented = { ...brief, details };
+    expect(tripBriefSchema.safeParse(rented).success).toBe(true);
+    // And only the kind is required — renting moves a pickup point and a fee.
+    expect(
+      missingRequiredSlots({
+        ...rented,
+        details: { ...details, vehicleSource: slot.unknown() } as TripShapeDetails,
+      }),
+    ).toEqual([]);
   });
 });
 
@@ -154,7 +179,6 @@ describe("changing the trip's shape", () => {
       "origin",
       "dates",
       "travellers",
-      "budget",
       "effort",
       "boardBasis",
     ]);

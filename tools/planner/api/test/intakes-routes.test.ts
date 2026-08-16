@@ -170,17 +170,17 @@ describe("changing an earlier answer", () => {
     // The road trip's own questions are answers to questions nobody would now
     // ask, and the user is told so by prompt rather than by id.
     expect(after.discarded.map((entry) => entry.question).toSorted()).toEqual([
-      "road-trip.drive-hours",
-      "road-trip.vehicle",
+      "road-trip.drive-appetite",
+      "road-trip.vehicle-kind",
     ]);
     for (const entry of after.discarded) expect(entry.prompt).toBeTruthy();
 
     // Gone from the store as well as from the response — same transaction.
-    expect(after.answers["road-trip.vehicle"]).toBeUndefined();
+    expect(after.answers["road-trip.vehicle-kind"]).toBeUndefined();
     expect(answerRows(started, id)).toBe(Object.keys(after.answers).length);
 
-    // What did not depend on the shape is untouched. That is the whole reason
-    // the fixed core sits after `shape` in the tree.
+    // What did not depend on the shape is untouched — every fixed-core node
+    // carries `when: null`, so `prune` cannot reach one whatever the shape says.
     expect(after.answers["origin"]).toEqual(before.answers["origin"]);
     expect(after.answers["travellers"]).toEqual(before.answers["travellers"]);
   });
@@ -300,6 +300,92 @@ function saveStaleIntake(started: App): string {
   write("retired.question", { state: "answered", value: { kind: "text", value: "gone" } });
   return id;
 }
+
+/**
+ * A road trip saved against tree version 1 — the tree as it stood before the
+ * content review of 2026-08-16.
+ *
+ * Written straight to the store for the same reason as `saveStaleIntake`: two of
+ * these ids no longer exist, so no route could produce them. This is what a
+ * *release* leaves behind, and version 2 is the first bump with real answers
+ * under it.
+ */
+function saveVersionOneRoadTrip(started: App): string {
+  const { db } = started.context;
+  const id = "v1-road-trip";
+  db.prepare(
+    "INSERT INTO intakes (id, title, tree_version, created_at, updated_at) VALUES (?, NULL, ?, ?, ?)",
+  ).run(id, 1, NOW.toISOString(), NOW.toISOString());
+
+  const write = (question: string, value: unknown): void => {
+    db.prepare(
+      "INSERT INTO answers (intake_id, question_id, value, answered_at) VALUES (?, ?, ?, ?)",
+    ).run(id, question, JSON.stringify(value), NOW.toISOString());
+  };
+
+  write("shape", { state: "answered", value: { kind: "single-choice", value: "road-trip" } });
+  write("origin", { state: "answered", value: { kind: "text", value: "Montréal" } });
+  write("travellers", { state: "answered", value: { kind: "number", value: 2 } });
+  // Budget changed stage, not id, so this one must survive the bump.
+  write("budget", {
+    state: "answered",
+    value: { kind: "budget", value: { kind: "band", band: "moderate" } },
+  });
+  // The two retired ids: a decimal number of hours, and one enum that conflated
+  // what you drive with whose it is.
+  write("road-trip.drive-hours", { state: "answered", value: { kind: "number", value: 4.5 } });
+  write("road-trip.vehicle", {
+    state: "answered",
+    value: { kind: "single-choice", value: "camper-van" },
+  });
+  return id;
+}
+
+describe("the version 1 tree meeting version 2", () => {
+  test("drops exactly the two retired road-trip answers and keeps the budget", async () => {
+    const started = await startApp();
+    const id = saveVersionOneRoadTrip(started);
+
+    const state = await readIntake(started.server, id);
+
+    expect(state.discarded.map((entry) => entry.question).toSorted()).toEqual([
+      "road-trip.drive-hours",
+      "road-trip.vehicle",
+    ]);
+    // Neither can be named: the tree no longer has the question, so the UI says
+    // "some earlier answers no longer apply" rather than printing an id.
+    for (const entry of state.discarded) expect(entry.prompt).toBeNull();
+
+    // Budget moved from `core` to `refine` and kept its id. If this is gone, the
+    // node was re-created rather than moved.
+    expect(state.answers["budget"]).toEqual({
+      state: "answered",
+      value: { kind: "budget", value: { kind: "band", band: "moderate" } },
+    });
+    expect(state.brief.budget).toEqual({
+      state: "answered",
+      value: { kind: "band", band: "moderate" },
+    });
+
+    expect(state.intake.treeVersion).toBe(QUESTION_TREE.version);
+    expect(answerRows(started, id)).toBe(4);
+  });
+
+  test("leaves it answerable rather than 500ing, and asks the new questions", async () => {
+    const started = await startApp();
+    const id = saveVersionOneRoadTrip(started);
+    await readIntake(started.server, id);
+
+    // The two retired answers are gone, so the checkpoint has re-opened on their
+    // replacements — which is the honest state, not an error.
+    const state = await answerThroughCore(started.server, id, {});
+
+    expect(state.progress.coreComplete).toBe(true);
+    expect(missingRequiredSlots(state.brief)).toEqual([]);
+    expect(state.answers["road-trip.drive-appetite"]).toBeDefined();
+    expect(state.answers["road-trip.vehicle-kind"]).toBeDefined();
+  });
+});
 
 describe("a tree that moved under a saved intake", () => {
   test("prunes what no longer fits, says so, and does not throw", async () => {

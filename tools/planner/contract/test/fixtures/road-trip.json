@@ -22,8 +22,9 @@
     },
     "details": {
       "shape": "road-trip",
-      "maxDailyDriveHours": { "state": "answered", "value": 4 },
-      "vehicle": { "state": "answered", "value": "own-car" },
+      "driveAppetite": { "state": "answered", "value": "half-day" },
+      "vehicleKind": { "state": "answered", "value": "car" },
+      "vehicleSource": { "state": "answered", "value": "own" },
       "routeStyle": { "state": "answered", "value": "loop" },
       "mustSee": { "state": "answered", "value": ["Percé Rock", "Forillon National Park"] },
       "context": {

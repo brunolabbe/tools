@@ -41,6 +41,12 @@ describe("declining", () => {
   test("a refine question can be", () => {
     accepts(nodeById("access-needs"), DECLINED);
   });
+
+  test("budget can be, now that it is one", () => {
+    // The visible half of moving budget out of `REQUIRED_CORE_SLOTS` on
+    // 2026-08-16: "I have no idea yet" became an answer to it.
+    accepts(nodeById("budget"), DECLINED);
+  });
 });
 
 describe("the answer's kind", () => {
@@ -60,6 +66,16 @@ describe("choices", () => {
     expect(refusal(effort, answered({ kind: "single-choice", value: "heroic" }))).toBe(
       "INVALID_ANSWER",
     );
+  });
+
+  test("drive tolerance is a band, so a number of hours is not an answer to it", () => {
+    // It was `road-trip.drive-hours`, a number with `integer: false`, until
+    // 2026-08-16. The id changed with the control, so an old 4.5 does not
+    // silently become a choice value that is not on the list.
+    const appetite = nodeById("road-trip.drive-appetite");
+
+    accepts(appetite, answered({ kind: "single-choice", value: "half-day" }));
+    expect(refusal(appetite, answered({ kind: "number", value: 4.5 }))).toBe("INVALID_ANSWER");
   });
 
   test("a multi-choice answer may not repeat, invent or be empty", () => {
@@ -115,9 +131,9 @@ describe("numbers", () => {
     expect(refusal(travellers, answered({ kind: "number", value: 31 }))).toBe("INVALID_ANSWER");
   });
 
-  test("a fraction of a person is refused; a fraction of an hour is not", () => {
+  test("a fraction of a person is refused; a fraction of a kilometre is not", () => {
     expect(refusal(travellers, answered({ kind: "number", value: 2.5 }))).toBe("INVALID_ANSWER");
-    accepts(nodeById("road-trip.drive-hours"), answered({ kind: "number", value: 4.5 }));
+    accepts(nodeById("backcountry.daily-distance"), answered({ kind: "number", value: 12.5 }));
   });
 
   test("a list of ages is bounded item by item", () => {

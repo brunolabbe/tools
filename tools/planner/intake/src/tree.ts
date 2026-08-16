@@ -11,17 +11,39 @@
  *
  * Every `core` node comes before every `refine` node, because the wizard stops
  * at the checkpoint: when nothing reachable and `core` is unanswered it says the
- * essentials are done and offers the draft. Eight questions get most shapes
- * there — §3's "perhaps eight to ten".
+ * essentials are done and offers the draft. Seven questions get most shapes
+ * there, and six a resort — inside §3's "perhaps eight to ten".
  *
  * ## Shape first
  *
- * `shape` is question one because every branch hangs off it, and a condition may
- * only reference a question that came earlier. It also makes a shape change
- * cheap in the direction that matters: the fixed core sits *after* it and is
- * shape-independent, so switching from a road trip to a hiking trip costs the
- * shape's own answers and nothing else — the same rule `withShape` encodes in
- * the contract, and the one `prune` generalises.
+ * `shape` is question one for three reasons, and none of them is that it makes
+ * changing shape cheap. That property is real and it is not the order's doing:
+ * `withShape` swaps `details` and nothing else, and every fixed-core node
+ * carries `when: null`, which puts it permanently out of `prune`'s reach. A
+ * `shape` asked sixth would cost exactly the same answers as a `shape` asked
+ * first. Do not re-derive that argument — the data model already makes the
+ * guarantee unconditionally.
+ *
+ * The reasons that hold:
+ *
+ * - **It has the highest information gain of any question here.** It decides
+ *   which questions are asked at all, and which specialists eventually run.
+ * - **A half-finished intake is worth something.** Someone who leaves after
+ *   three questions has left "a road trip from Montréal, ten nights in
+ *   September", which is a trip. Core-first would leave "two people, moderate
+ *   effort", which describes nobody.
+ * - **It reads as an invitation rather than as a form**, which no other question
+ *   in the tree does.
+ *
+ * Then the part that *is* structural: a condition may only reference a question
+ * that came earlier, so every shape-gated node necessarily falls after this one.
+ *
+ * The alternative — the whole fixed core first, then shape and its follow-ups —
+ * was considered on 2026-08-16 (pl-14) and rejected on those three grounds. It
+ * is legal: nothing is conditioned on the fixed core, so the
+ * earlier-references-only rule would survive it. It loses on the product, not on
+ * the engine, and it will be proposed again by anyone who only checks the
+ * engine.
  */
 
 import {
@@ -29,6 +51,7 @@ import {
   BOARD_BASES,
   CITY_PACES,
   COMFORT_FLOORS,
+  DRIVE_APPETITES,
   EFFORT_APPETITES,
   INTER_CITY_TRANSPORT,
   MACHINE_SOURCES,
@@ -39,10 +62,11 @@ import {
   MAX_PARTY_SIZE,
   MAX_TRIP_NIGHTS,
   RESORT_SETTINGS,
-  ROAD_VEHICLES,
+  ROAD_VEHICLE_KINDS,
   ROUTE_STYLES,
   SHELTER_KINDS,
   TRIP_SHAPES,
+  VEHICLE_SOURCES,
   type Choice,
   type Condition,
   type QuestionNode,
@@ -121,15 +145,6 @@ const NODES: readonly QuestionNode[] = [
     unit: "people",
   },
   {
-    id: "budget",
-    prompt: "What is the budget?",
-    help: "A figure or a feeling. Either is an answer, and neither is a price we will quote back.",
-    when: null,
-    fills: { scope: "core", slot: "budget" },
-    stage: "core",
-    kind: "budget",
-  },
-  {
     id: "effort",
     prompt: "How full should a day be?",
     help: "This is the number behind “not too much”, and the composer plans to it.",
@@ -149,31 +164,45 @@ const NODES: readonly QuestionNode[] = [
   // The shape's own essentials — still `core`, so they come before the draft
   // -------------------------------------------------------------------------
   {
-    id: "road-trip.drive-hours",
-    prompt: "How many hours behind the wheel on a normal day?",
-    help: "Four is a comfortable day. Eight is a day you remember for the wrong reason.",
+    // A band, not a decimal, and a **new id**: this replaced
+    // `road-trip.drive-hours` on 2026-08-16, and a band is a different question
+    // from a number of hours. Reusing the id would reinterpret every saved
+    // answer as a choice value that is not on the list.
+    id: "road-trip.drive-appetite",
+    prompt: "How much driving is a normal day?",
+    help: "It decides how far apart two nights can be, and how much of a day is left when you arrive.",
     when: ofShape("road-trip"),
-    fills: { scope: "shape", shape: "road-trip", slot: "maxDailyDriveHours" },
-    stage: "core",
-    kind: "number",
-    min: 1,
-    // Below the slot's 24: a plan that puts sixteen hours of driving in a day is
-    // not a plan, and refusing the answer is cheaper than composing around it.
-    max: 14,
-    integer: false,
-    unit: "hours",
-  },
-  {
-    id: "road-trip.vehicle",
-    prompt: "What are you driving?",
-    help: "A camper sleeps you; a rental has a one-way fee. Both change where a day can end.",
-    when: ofShape("road-trip"),
-    fills: { scope: "shape", shape: "road-trip", slot: "vehicle" },
+    fills: { scope: "shape", shape: "road-trip", slot: "driveAppetite" },
     stage: "core",
     kind: "single-choice",
-    choices: choicesOf(ROAD_VEHICLES, {
-      "own-car": "Our own car",
-      "rental-car": "A rental car",
+    // Both anchors in every label. Hours are what is stored and what the composer
+    // plans to; the distance is there because it is the half most people can
+    // actually picture, and picking a band should not require arithmetic.
+    //
+    // The kilometres are an illustration at an unremarkable highway speed, not a
+    // second answer — which is the whole reason distance is not the unit. On a
+    // mountain pass the same band is half the distance, and the band still holds
+    // because it was never a promise about how far.
+    choices: choicesOf(DRIVE_APPETITES, {
+      "short-hops": "Short hops — a couple of hours, about 150 km",
+      "half-day": "Half a day — three or four hours, about 300 km",
+      "long-day": "A long day — five or six hours, about 500 km",
+      "all-day": "We eat miles — seven hours and up, 600 km or more",
+    }),
+  },
+  {
+    // Split out of `road-trip.vehicle`, same date and same rule: two new ids,
+    // because "what" and "whose" are two questions and the old enum could not
+    // say *rented camper van*.
+    id: "road-trip.vehicle-kind",
+    prompt: "What are you driving?",
+    help: "A camper sleeps you, which turns lodging from hotels into campsites.",
+    when: ofShape("road-trip"),
+    fills: { scope: "shape", shape: "road-trip", slot: "vehicleKind" },
+    stage: "core",
+    kind: "single-choice",
+    choices: choicesOf(ROAD_VEHICLE_KINDS, {
+      car: "A car",
       "camper-van": "A camper van",
       motorhome: "A motorhome",
     }),
@@ -317,6 +346,20 @@ const NODES: readonly QuestionNode[] = [
   // none of them prevents one, which is the bar `REQUIRED_*` draws.
   // -------------------------------------------------------------------------
   {
+    // First past the checkpoint, and `refine` since 2026-08-16: a draft is
+    // entirely possible from a moderate default, and this is the question people
+    // are least able to answer before they have seen what it buys. Being
+    // `refine` also means "I have no idea yet" is now an available answer,
+    // which a `core` question cannot accept.
+    id: "budget",
+    prompt: "What is the budget?",
+    help: "A figure or a feeling. Either is an answer, and neither is a price we will quote back.",
+    when: null,
+    fills: { scope: "core", slot: "budget" },
+    stage: "refine",
+    kind: "budget",
+  },
+  {
     id: "destination",
     prompt: "Where are you going?",
     help: "“Somewhere warm, you pick” is a real answer — skip this and we will treat choosing as part of the job.",
@@ -393,9 +436,22 @@ const NODES: readonly QuestionNode[] = [
     maxItems: 10,
   },
   {
+    id: "road-trip.vehicle-source",
+    prompt: "Is it yours, or are you renting?",
+    help: "A rental adds a pickup point and a drop-off the route has to reach.",
+    when: ofShape("road-trip"),
+    fills: { scope: "shape", shape: "road-trip", slot: "vehicleSource" },
+    stage: "refine",
+    kind: "single-choice",
+    choices: choicesOf(VEHICLE_SOURCES, {
+      own: "It is ours",
+      rental: "We will be renting",
+    }),
+  },
+  {
     id: "road-trip.route-style",
     prompt: "Does the drive come back to where it started?",
-    help: "A one-way rental carries a fee worth planning around.",
+    help: "A loop ends where the car started; one way has to get everyone home from somewhere else.",
     when: ofShape("road-trip"),
     fills: { scope: "shape", shape: "road-trip", slot: "routeStyle" },
     stage: "refine",
@@ -590,6 +646,6 @@ const NODES: readonly QuestionNode[] = [
  * to something else.
  */
 export const QUESTION_TREE: QuestionTree = {
-  version: 1,
+  version: 2,
   nodes: NODES,
 };

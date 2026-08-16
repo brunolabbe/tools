@@ -108,8 +108,8 @@ every saved answer under that id silently becomes an answer to something else.
 mistake, not a reason to refuse to start.
 
 **The e2e suite reads the screen; it never names a question.** Because the tree
-is content, a spec that types into `#field-road-trip.drive-hours` or counts eight
-questions turns a content edit into a red build. `e2e/intake.spec.ts` fills
+is content, a spec that types into `#field-road-trip.drive-appetite` or counts
+seven questions turns a content edit into a red build. `e2e/intake.spec.ts` fills
 whatever control is in front of it, keeps the prompts it was shown, and asserts
 the discard warning against those — so both sides of the assertion move when the
 tree does. It is two specs over one path on purpose: it exists to prove the API
