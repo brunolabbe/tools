@@ -102,7 +102,15 @@ function reduce(current: Progress, event: RunEvent): Progress {
   }
 }
 
-export function RunView({ run, onExit }: { run: Run; onExit: () => void }): React.ReactElement {
+export function RunView({
+  run,
+  onExit,
+  onOpenPlan,
+}: {
+  run: Run;
+  onExit: () => void;
+  onOpenPlan: (planId: string) => void;
+}): React.ReactElement {
   const [progress, setProgress] = useState<Progress>({
     status: run.status,
     total: run.rosterSize,
@@ -125,7 +133,10 @@ export function RunView({ run, onExit }: { run: Run; onExit: () => void }): Reac
     if (!finished) return;
     const controller = new AbortController();
     fetchPlan(run.planId, controller.signal)
-      .then(setPlan)
+      // The route answers with a `PlanView` as of pl-10. What this screen shows
+      // of a finished run is still only its outcome — the document, its
+      // provenance and what nothing checked are `PlanView.tsx`'s.
+      .then((view) => setPlan(view.plan))
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setProgress((current) => ({ ...current, message: AppError.from(error).message }));
@@ -147,7 +158,7 @@ export function RunView({ run, onExit }: { run: Run; onExit: () => void }): Reac
       <h2>{LABELS[progress.status]}</h2>
 
       {progress.status === "done" ? (
-        <Finished revision={revision} onExit={onExit} />
+        <Finished revision={revision} onExit={onExit} onOpenPlan={() => onOpenPlan(run.planId)} />
       ) : progress.status === "failed" || progress.status === "canceled" ? (
         <>
           <p className="bad">{progress.message ?? "The run did not finish."}</p>
@@ -189,9 +200,11 @@ export function RunView({ run, onExit }: { run: Run; onExit: () => void }): Reac
 function Finished({
   revision,
   onExit,
+  onOpenPlan,
 }: {
   revision: ReturnType<typeof latestRevision>;
   onExit: () => void;
+  onOpenPlan: () => void;
 }): React.ReactElement {
   if (revision === null) {
     return (
@@ -229,7 +242,10 @@ function Finished({
       )}
 
       <div className="actions">
-        <button type="button" className="primary" onClick={onExit}>
+        <button type="button" className="primary" onClick={onOpenPlan}>
+          Read the plan
+        </button>
+        <button type="button" onClick={onExit}>
           Back to the trip
         </button>
       </div>

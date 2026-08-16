@@ -1,0 +1,412 @@
+// @vitest-environment jsdom
+
+/**
+ * The plan view's claims, held to.
+ *
+ * Every one of these is an honesty rule with a place in the analysis, and each
+ * fails silently if it is dropped — a plan that has quietly stopped saying
+ * which lines were checked still renders perfectly.
+ *
+ * - **A dateless day renders as a day.** `PlanDay.date` is null on every
+ *   flexible-dates trip, which is a normal trip. No invented dates anywhere.
+ * - **Provenance is per claim, and the two may disagree.** A real place with a
+ *   guessed price is the common case.
+ * - **A cost is a band, never a figure.** §5.
+ * - **A gap says which of the two things happened**, from its own `detail`.
+ * - **What was not checked is on the page**, beside the days.
+ * - **A leg carries both its ends** (pl-15).
+ * - **A plan is never a clearance to go** (§8).
+ *
+ * **The fake is the API client module, never `fetch`** — the same rule
+ * `wizard.test.tsx` states and for the same reason.
+ */
+
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { location, type Provenance } from "@planner/contract";
+import { fetchPlan, pinItem } from "../src/api/plan.ts";
+import { PlanView } from "../src/plan/PlanView.tsx";
+import { brief, candidate, day, item, planView, revision } from "./plan-fixtures.ts";
+
+vi.mock("../src/api/plan.ts", () => ({
+  fetchPlan: vi.fn(),
+  pinItem: vi.fn(),
+  fetchPlans: vi.fn(),
+}));
+
+const fetched = vi.mocked(fetchPlan);
+const pinned = vi.mocked(pinItem);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+// `globals: false`, so Testing Library registers no cleanup of its own.
+afterEach(cleanup);
+
+const GROUNDED: Provenance = {
+  kind: "grounded",
+  sources: [
+    {
+      url: "https://example.org/museum",
+      title: "The museum",
+      fetchedAt: "2027-01-01T00:00:00.000Z",
+    },
+  ],
+};
+
+function show(): ReturnType<typeof render> {
+  return render(<PlanView planId="plan-1" onExit={() => undefined} />);
+}
+
+describe("the days", () => {
+  /**
+   * A brief whose dates are a window or open has no calendar to hang a plan on,
+   * and the day's identity is its index. A view that assumed one would break on
+   * every flexible trip — and worse, would show a date nobody chose.
+   */
+  test("a dateless day renders by its index, and invents no date", async () => {
+    const activity = candidate({ title: "A long walk" });
+    fetched.mockResolvedValue(
+      planView({
+        brief: brief({ dates: { kind: "open", nights: 2 } }),
+        candidates: [activity],
+        revisions: [revision([day(0, [item({ candidateId: activity.id })], null)])],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText("Day 1")).toBeDefined();
+    // Nothing that looks like a date is on the page.
+    expect(screen.queryByText(/\d{4}-\d{2}-\d{2}/)).toBeNull();
+  });
+
+  test("a day with a date shows it beside the index", async () => {
+    const activity = candidate({ title: "A long walk" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [activity],
+        revisions: [revision([day(0, [item({ candidateId: activity.id })], "2027-07-05")])],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText("Day 1 · 2027-07-05")).toBeDefined();
+  });
+
+  /**
+   * pl-15 made `location` a union so a drive stops hiding its endpoints in its
+   * title. Rendering only `from` silently drops where it goes.
+   */
+  test("a leg shows both of its ends", async () => {
+    const leg = candidate({
+      specialist: "route-and-logistics",
+      title: "The drive north",
+      location: location.between(
+        { name: "Montréal", locality: null, coordinates: null },
+        { name: "Rimouski", locality: null, coordinates: { latitude: 48.4, longitude: -68.5 } },
+      ),
+    });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [leg],
+        revisions: [revision([day(0, [item({ candidateId: leg.id })])])],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/Montréal → Rimouski/)).toBeDefined();
+    // A leg can be half-grounded — coordinates on one end and not the other —
+    // and the decision is to say nothing about coordinates until Phase 3 uses
+    // them, rather than to report a distinction a reader cannot act on.
+    expect(screen.queryByText(/48\.4|-68\.5|coordinate/i)).toBeNull();
+  });
+});
+
+describe("provenance", () => {
+  /**
+   * §5's product decision: the UI can mark which lines were verified instead of
+   * presenting everything with the same confidence. A candidate's provenance
+   * and its cost's are **separate** and may disagree — a real place with a
+   * guessed price — and the view has to be able to say exactly that.
+   */
+  test("a verified place with a guessed price says both", async () => {
+    const museum = candidate({
+      title: "The city museum",
+      provenance: GROUNDED,
+      cost: {
+        currency: "EUR",
+        low: 12,
+        high: 18,
+        basis: "per-person",
+        provenance: { kind: "model-asserted" },
+      },
+    });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [museum],
+        revisions: [revision([day(0, [item({ candidateId: museum.id })])])],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/this was read from/i)).toBeDefined();
+    expect(screen.getByText(/the cost is the assistant talking/i)).toBeDefined();
+    // The source is a link, and the page it points at is untrusted text.
+    const link = screen.getByRole("link", { name: "The museum" });
+    expect(link.getAttribute("href")).toBe("https://example.org/museum");
+    expect(link.getAttribute("rel")).toContain("noreferrer");
+  });
+
+  test("an ungrounded candidate says so plainly", async () => {
+    const guess = candidate({ title: "Some restaurant" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [guess],
+        revisions: [revision([day(0, [item({ candidateId: guess.id })])])],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/this is the assistant talking/i)).toBeDefined();
+  });
+});
+
+describe("costs", () => {
+  /**
+   * §5 ranks prices the fastest-ageing thing this tool touches, which is why
+   * `CostEstimate` has no field for a single number. Rendering the midpoint or
+   * the low end turns an estimate into a quote.
+   */
+  test("a cost renders as a band and never as one figure", async () => {
+    const priced = candidate({
+      title: "A boat trip",
+      cost: {
+        currency: "EUR",
+        low: 40,
+        high: 60,
+        basis: "per-person",
+        provenance: { kind: "model-asserted" },
+      },
+    });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [priced],
+        revisions: [revision([day(0, [item({ candidateId: priced.id })])])],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/40–60 EUR, per person/)).toBeDefined();
+    // The midpoint is the quote this rule exists to prevent.
+    expect(screen.queryByText(/\b50 EUR\b/)).toBeNull();
+  });
+
+  test("a candidate nobody costed says so rather than showing nothing", async () => {
+    const free = candidate({ title: "A wander" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [free],
+        revisions: [revision([day(0, [item({ candidateId: free.id })])])],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/nobody put a cost on this/i)).toBeDefined();
+  });
+});
+
+describe("what is missing", () => {
+  /**
+   * `no-candidates-found` has two producers and two sentences: a specialist
+   * that ran and returned nothing at all, and one that returned candidates and
+   * got none of them onto a day. Both write `detail` for a reader, so the view
+   * renders the gap's own words — a sentence per *reason* would throw away the
+   * half that says which happened.
+   */
+  test("a gap shows its own sentence, in the plan body", async () => {
+    const activity = candidate({ title: "A long walk" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [activity],
+        revisions: [
+          revision(
+            [day(0, [item({ candidateId: activity.id })])],
+            [
+              {
+                specialist: "lodging",
+                reason: "no-candidates-found",
+                detail:
+                  "Nothing from this part of the plan made it onto a day: nothing it found fitted the days this trip has.",
+              },
+            ],
+          ),
+        ],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/What this draft does not cover/i)).toBeDefined();
+    expect(screen.getByText(/nothing it found fitted the days this trip has/i)).toBeDefined();
+  });
+
+  test("distinct reasons read as distinct sentences", async () => {
+    const activity = candidate({ title: "A long walk" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [activity],
+        revisions: [
+          revision(
+            [day(0, [item({ candidateId: activity.id })])],
+            [
+              {
+                specialist: "lodging",
+                reason: "specialist-failed",
+                detail: "We could not reach the part of the plan that finds places to sleep.",
+              },
+              {
+                specialist: "budget",
+                reason: "specialist-not-applicable",
+                detail: "This trip had nothing for the budget specialist to say.",
+              },
+            ],
+          ),
+        ],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/We tried and could not/)).toBeDefined();
+    expect(screen.getByText(/Nothing to say on this trip/)).toBeDefined();
+  });
+
+  /**
+   * The one that matters most and is easiest to lose: a packed plan looks
+   * equally finished whether every constraint was enforced or three were
+   * skipped for want of data.
+   */
+  test("what was not checked is rendered beside the days", async () => {
+    const activity = candidate({ title: "A long walk" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [activity],
+        revisions: [revision([day(0, [item({ candidateId: activity.id })])])],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/What was not checked/i)).toBeDefined();
+    expect(screen.getByText(/Nothing here measured a distance/i)).toBeDefined();
+  });
+
+  test("a constraint about particular items names them by title, never by id", async () => {
+    const vague = candidate({ title: "An unmarked trail", id: "cand-vague" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [vague],
+        revisions: [revision([day(0, [item({ candidateId: vague.id })])])],
+        unchecked: [
+          {
+            kind: "season-unknown",
+            detail: "Nobody established when these are open, so they were left in.",
+            candidateIds: [vague.id],
+          },
+        ],
+      }),
+    );
+
+    show();
+
+    // Twice: once as the item's own title, once naming what the constraint
+    // applies to. The id appears neither time.
+    expect(await screen.findAllByText(/An unmarked trail/)).toHaveLength(2);
+    expect(screen.queryByText(/cand-vague/)).toBeNull();
+  });
+});
+
+describe("safety", () => {
+  /**
+   * §8, and it is permanent. The tool plans and hands off; it never implies it
+   * has checked conditions.
+   */
+  test("a backcountry plan points at the authority and claims no clearance", async () => {
+    const hike = candidate({ title: "The col" });
+    fetched.mockResolvedValue(
+      planView({
+        brief: brief({ shape: "backcountry" }),
+        candidates: [hike],
+        revisions: [revision([day(0, [item({ candidateId: hike.id })])])],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/avalanche bulletin/i)).toBeDefined();
+    expect(screen.getByText(/Nothing here has looked at conditions/i)).toBeDefined();
+  });
+
+  test("an ordinary road trip carries no such notice", async () => {
+    const stop = candidate({ title: "A diner" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [stop],
+        revisions: [revision([day(0, [item({ candidateId: stop.id })])])],
+      }),
+    );
+
+    show();
+
+    await screen.findByText("A diner");
+    expect(screen.queryByText(/avalanche|marine forecast/i)).toBeNull();
+  });
+});
+
+describe("pinning", () => {
+  test("pins through the client and renders what comes back", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const placed = item({ candidateId: activity.id });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [activity],
+        revisions: [revision([day(0, [placed])])],
+      }),
+    );
+    pinned.mockResolvedValue(
+      planView({
+        candidates: [activity],
+        revisions: [revision([day(0, [{ ...placed, pinned: true }])])],
+      }),
+    );
+
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Pin" }));
+
+    expect(pinned).toHaveBeenCalledWith("plan-1", placed.id, true);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Pinned" })).toBeDefined();
+    });
+  });
+});
+
+describe("a plan whose run has not finished", () => {
+  test("says it has no draft rather than rendering an empty one", async () => {
+    fetched.mockResolvedValue(planView({ revisions: [] }));
+
+    show();
+
+    expect(await screen.findByText(/no draft yet/i)).toBeDefined();
+  });
+});

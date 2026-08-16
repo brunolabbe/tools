@@ -24,6 +24,7 @@ import {
   planGapSchema,
   tripBriefSchema,
   type Candidate,
+  type Plan,
   type PlanDay,
   type PlanDetail,
   type PlanGap,
@@ -40,6 +41,14 @@ interface PlanRow {
   brief_json: string;
   created_at: string;
   updated_at: string;
+}
+
+interface PlanListRow {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  latest_revision: number;
 }
 
 interface CandidateRow {
@@ -214,9 +223,76 @@ export function touchPlan(db: Database, planId: string, now: string): void {
   db.prepare("UPDATE plans SET updated_at = ? WHERE id = ?").run(now, planId);
 }
 
+/**
+ * Pin or unpin one placed item, scoped to the plan that owns it.
+ *
+ * The `WHERE` walks days and revisions back to the plan rather than trusting
+ * the item id alone: item ids are unique across the table, but a request that
+ * named someone else's item would otherwise write to it. Returns false when
+ * nothing matched, which the caller turns into `ITEM_NOT_FOUND`.
+ *
+ * This is the one update the schema's trigger allows — `pinned` is named column
+ * by column in `plan_items_only_pinned_is_mutable`, so a statement that tried to
+ * move an item as well would be refused by the database rather than by care
+ * taken here.
+ */
+export function updateItemPin(
+  db: Database,
+  input: { planId: string; itemId: string; pinned: boolean },
+): boolean {
+  const result = db
+    .prepare(
+      `UPDATE plan_items SET pinned = ?
+       WHERE id = ?
+         AND day_id IN (
+           SELECT plan_days.id FROM plan_days
+           JOIN plan_revisions ON plan_revisions.id = plan_days.revision_id
+           WHERE plan_revisions.plan_id = ?
+         )`,
+    )
+    .run(input.pinned ? 1 : 0, input.itemId, input.planId);
+
+  return result.changes > 0;
+}
+
 // ---------------------------------------------------------------------------
 // Reading
 // ---------------------------------------------------------------------------
+
+/**
+ * The list: one row per plan, and **not one document per plan**.
+ *
+ * This is what `plans_updated_at` is indexed for, and the reason `Plan` and
+ * `PlanDetail` are separate types at all — loading every revision of every plan
+ * to print a page of titles is the read the split exists to prevent. So the
+ * revisions are not touched here beyond `MAX`, which the
+ * `plan_revisions_plan (plan_id, revision DESC)` index answers without a scan.
+ *
+ * A plan with no revisions is included, with `latestRevision` 0. It is a real
+ * state — the plan row is written before the fan-out — and a list that hid it
+ * would lose the plan whose first run is still going, which is precisely the
+ * one someone is waiting to see.
+ */
+export function selectPlans(db: Database): Plan[] {
+  const rows = db
+    .prepare(
+      `SELECT plans.id, plans.title, plans.created_at, plans.updated_at,
+              COALESCE(MAX(plan_revisions.revision), 0) AS latest_revision
+       FROM plans
+       LEFT JOIN plan_revisions ON plan_revisions.plan_id = plans.id
+       GROUP BY plans.id
+       ORDER BY plans.updated_at DESC`,
+    )
+    .all() as PlanListRow[];
+
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    latestRevision: row.latest_revision,
+  }));
+}
 
 export function planExists(db: Database, id: string): boolean {
   return db.prepare("SELECT 1 FROM plans WHERE id = ?").get(id) !== undefined;

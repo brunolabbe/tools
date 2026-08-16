@@ -45,22 +45,27 @@ import {
   latestRevision,
   missingRequiredSlots,
   TERMINAL_RUN_STATUSES,
+  type Plan,
   type PlanDetail,
+  type PlanView,
   type Run,
   type RunProgress,
   type RunStatus,
   type TripBrief,
 } from "@planner/contract";
 import type { TripCapacity } from "@planner/agent";
-import { compose, dayCapacity, tripSpan } from "@planner/itinerary";
+import { compose, dayCapacity, tripSpan, uncheckedForRevision } from "@planner/itinerary";
 import type { ApiConfig } from "../config.ts";
 import type { AppContext } from "../context.ts";
 import {
   insertCandidates,
   insertPlan,
   insertRevision,
+  planExists,
   selectPlan,
+  selectPlans,
   touchPlan,
+  updateItemPin,
 } from "../db/plans.ts";
 import {
   insertRun,
@@ -387,6 +392,66 @@ export function readPlan(context: AppContext, id: string): PlanDetail {
     throw new AppError("PLAN_NOT_FOUND", undefined, { details: { plan: id } });
   }
   return plan;
+}
+
+/**
+ * The plan, and what nothing checked about it.
+ *
+ * `unchecked` is derived here rather than stored, and derived from the stored
+ * revision rather than by re-composing — see `uncheckedForRevision`. That is
+ * what makes the honesty a property of the plan instead of a property of having
+ * watched the run that produced it: the same list comes back on the tenth read,
+ * a week later, in a different browser.
+ *
+ * A plan with no revisions yet — the state between `POST /api/plans` and the
+ * composer finishing — has an empty list rather than a made-up one. There is no
+ * draft to have failed to check anything about.
+ */
+export function readPlanView(context: AppContext, id: string): PlanView {
+  const plan = readPlan(context, id);
+  const revision = latestRevision(plan);
+
+  return {
+    plan,
+    unchecked:
+      revision === null
+        ? []
+        : uncheckedForRevision({ brief: plan.brief, candidates: plan.candidates, revision }),
+  };
+}
+
+export function listPlans(context: AppContext): Plan[] {
+  return selectPlans(context.db);
+}
+
+/**
+ * Pin or unpin one placed item.
+ *
+ * **No revision is appended**, which is the point: a pin is a statement about
+ * what the next re-plan may not move, not an edit to this draft (§6). The
+ * plan's `updatedAt` still moves, because the list orders by it and a pin is a
+ * change someone made to the plan.
+ *
+ * Returns the whole view rather than the item, so an open tab that pinned
+ * something is holding the same document the next reader gets.
+ */
+export function pinItem(
+  context: AppContext,
+  input: { planId: string; itemId: string; pinned: boolean },
+): PlanView {
+  const now = context.now().toISOString();
+
+  context.db.transaction((): void => {
+    if (!planExists(context.db, input.planId)) {
+      throw new AppError("PLAN_NOT_FOUND", undefined, { details: { plan: input.planId } });
+    }
+    if (!updateItemPin(context.db, input)) {
+      throw new AppError("ITEM_NOT_FOUND", undefined, { details: { item: input.itemId } });
+    }
+    touchPlan(context.db, input.planId, now);
+  })();
+
+  return readPlanView(context, input.planId);
 }
 
 /**

@@ -8,12 +8,16 @@
  */
 
 import {
+  planItemPinUrl,
   planUrl,
   ROUTES,
   runCancelUrl,
   runEventsUrl,
   runEventSchema,
-  type PlanDetail,
+  type PinItemRequest,
+  type Plan,
+  type PlanListResponse,
+  type PlanView,
   type Run,
   type RunEvent,
 } from "@planner/contract";
@@ -23,8 +27,41 @@ export async function startRun(intakeId: string): Promise<Run> {
   return await requestJson<Run>(ROUTES.plans, { method: "POST", body: { intakeId } });
 }
 
-export async function fetchPlan(id: string, signal?: AbortSignal): Promise<PlanDetail> {
-  return await requestJson<PlanDetail>(planUrl(id), { signal });
+/**
+ * The plans list.
+ *
+ * `Plan` rows and not documents — the server does the same split, and a client
+ * that fetched each plan to show a title would undo the point of it.
+ */
+export async function fetchPlans(signal?: AbortSignal): Promise<readonly Plan[]> {
+  return (await requestJson<PlanListResponse>(ROUTES.plans, { signal })).plans;
+}
+
+/**
+ * One plan, with what nothing checked about it.
+ *
+ * The `unchecked` half is computed server-side and comes down the wire for the
+ * same reason the intake's progress does: it is decided where the composer's
+ * rules live, and a browser working it out for itself would be a second
+ * implementation of them that could quietly disagree.
+ */
+export async function fetchPlan(id: string, signal?: AbortSignal): Promise<PlanView> {
+  return await requestJson<PlanView>(planUrl(id), { signal });
+}
+
+/**
+ * Pin or unpin one item, and take back the whole view.
+ *
+ * Absolute and not a toggle, matching the request type: what comes back is
+ * authoritative, so two tabs on one plan converge instead of flipping each
+ * other. This appends no revision — that is the database's rule as much as this
+ * client's expectation.
+ */
+export async function pinItem(planId: string, itemId: string, pinned: boolean): Promise<PlanView> {
+  return await requestJson<PlanView>(planItemPinUrl(planId, itemId), {
+    method: "POST",
+    body: { pinned } satisfies PinItemRequest,
+  });
 }
 
 export async function cancelRun(id: string): Promise<Run> {

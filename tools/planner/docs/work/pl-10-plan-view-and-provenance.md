@@ -3,7 +3,7 @@ id: pl-10
 tool: planner
 title: The plan view — days, gaps, and what was actually verified
 kind: work-package
-status: ready
+status: done
 milestone: P2
 depends_on: [pl-4, pl-9]
 ---
@@ -173,4 +173,114 @@ Traps worth knowing in advance:
 
 ## Log
 
-_Not started._
+### 2026-08-16 — done
+
+The plan is readable: a list, a document, provenance on every line, the gaps in
+the body, what nothing checked beside the days, and pinning. Branched off
+`origin/main` at `abe2397`, alongside pl-18 in another session — the overlap was
+agreed up front and came to almost nothing (see _Coordination_ below).
+
+**`unchecked` survives a reload by being derived, which was neither of the two
+options the brief offered.** Bullet 7 named persisting it — a `PlanGapReason`
+member, a contract change — or re-composing on read. There is a third, and it is
+better than both: **the list is a function of the brief, the candidates and which
+of them were placed**, and a stored revision says which were placed. So
+`uncheckedFor` was lifted out of `compose.ts` into `unchecked.ts`, given the
+placed set instead of a `PackResult`, and a `uncheckedForRevision` wrapper reads
+that set off a stored revision.
+
+- Against **persisting**: a stored list can disagree with the days it is printed
+  beside. A derived one cannot.
+- Against **re-composing**: no re-pack per read, and no drift. Re-composing runs
+  the packer against today's `limits.ts` _and today's date_ — a booking deadline
+  that has since passed changes what packs — so it would print a list about a
+  plan the reader is not looking at. The brief called out the `limits.ts` half;
+  the clock half is worse and was not mentioned.
+
+`itinerary/test/unchecked.test.ts` asserts the two lists are equal across six
+shapes of trip, and `api/test/plan-view.test.ts` asserts travel-time on a plan
+read back **over HTTP from the database**, twice, which is the assertion the
+brief said was the one that can silently go missing.
+
+**A dead branch fell out of that.** `uncheckedFor` took `untilDeparture` and only
+ever tested it for `null` — which happens exactly when the dates are `open`,
+which the branch above it had already handled. It was unreachable. Removing it is
+what makes the derivation clock-free, which is what makes deriving-on-read
+honest rather than merely cheap.
+
+**Four contract additions, all additive.** Nothing existing changed shape, was
+renamed or was removed.
+
+1. **`ROUTES.plans` answers `GET` too**, and **`ROUTES.planItemPin`** is new
+   (`/plans/:id/items/:itemId/pin`), with `planItemPinUrl`. The pin is under the
+   plan because an item id is only meaningful within the plan that owns it.
+2. **`PlanListResponse`**, **`PlanView`** (`{ plan, unchecked }`) and
+   **`PinItemRequest` + `pinItemRequestSchema`**. `PinItemRequest` is absolute
+   rather than a toggle so two tabs on one plan converge.
+3. **`contract/src/unchecked.ts`** — `UNCHECKED_CONSTRAINTS`,
+   `UncheckedConstraintKind`, `UncheckedConstraint` and a zod schema, **moved
+   from `@planner/itinerary`**, which now imports and re-exports them. It became
+   a wire type the moment the API sent it, and a wire type defined in the package
+   that computes it would have to be redefined by every reader. The deriving
+   stayed in `itinerary`; only the vocabulary moved.
+4. **`ITEM_NOT_FOUND`** in `PLANNER_ERROR_CODES`. Neither `PLAN_NOT_FOUND` nor
+   `REVISION_NOT_FOUND` fits — the plan _is_ there and so is the revision, so
+   both would have to be re-worded at the raise site, which the root `CLAUDE.md`
+   names as the tell that the code is wrong. It is also a different next step for
+   the reader: reload the plan, not go back to the list.
+
+**A bug found on the way, unrelated to the view.** `REVISION_NOT_FOUND` had no
+entry in `api/src/http-errors.ts`'s status table, so the table's `?? 500`
+fallback would have reported a server fault for a stale link the first time
+anything raised it. Mapped to 404 beside the new `ITEM_NOT_FOUND`. Nothing raises
+it yet; that is why nothing had noticed.
+
+**Decisions the brief asked for by name.**
+
+- **The half-grounded leg** renders _nothing_ about coordinates. The brief
+  guessed this was the honest answer and it is: a reader cannot act on "we know
+  where one end of this is", and Phase 3 is when coordinates start meaning
+  something. Asserted negatively, so a future template that starts leaking them
+  turns the suite red.
+- **Two hotels in one week** is not rendered as a continuous stay. Items belong
+  to the day they are on and nothing says a stay continues into the next one.
+  Fixing the packer's side of it is still not pl-10's.
+- **A fixed price** (`low === high`) reads as "20 EUR, a posted price" rather
+  than bare. The rule is that no _estimate_ is shown as one figure, and the way
+  to keep it while honouring `low === high`'s distinct meaning is to say which of
+  the two a figure is. A band is `40–60 EUR`; the midpoint appears nowhere, and a
+  test asserts its absence.
+- **The revision list is the count and the current one**, read-only. Switching to
+  an older revision was left out on purpose: the API sends one `unchecked` list
+  and it describes the latest, so a revision picker would have shown the wrong
+  list against an older draft. `uncheckedForRevision` already takes any revision,
+  so Phase 4 gets this for the price of a second field.
+
+**Two things in the brief were already true.**
+`tools/planner/web/test/tsconfig.json` exists — pl-12 created it, and the brief's
+bullet about creating it and narrowing the glob is stale. Neither it nor the root
+`tsconfig.tests.json` needed touching. And the plan _detail_ route already
+existed from pl-16; what was missing was the list, the pin, and `unchecked` on
+the response.
+
+**Coordination.** pl-18 (PR #43) was in flight in a parallel session and the
+overlap was checked before either of us was deep in: it touches
+`contract/src/tree.ts` and `brief.ts` comments, `web/src/wizard/Wizard.tsx` and
+`api/test/intakes-routes.test.ts`, none of which this ticket goes near. Its one
+reach into here is that **`stage` no longer implies required** — use
+`isRequiredSlot(node.fills)`. Nothing in the plan view reads `stage`. Plan-view
+fixtures went in a new `web/test/plan-fixtures.ts` rather than into
+`web/test/fixtures.ts`, whose `BASE` pl-18 changes.
+
+**Not done, deliberately: `03-STATUS.md`.** PR #42 is rewriting that file's
+ticket table and pl-18's log records further edits it needs, so all three of us
+editing it now is three conflicts for one paragraph. Agreed with the pl-18
+session that whoever lands last rewrites it. That is the follow-up.
+
+**Not done: an e2e spec.** The brief did not ask for one and the suite is two
+specs over the intake on purpose — branch coverage costs milliseconds in a
+component test and a browser launch there. The plan view's claims are asserted in
+`web/test/plan-view.test.tsx` (15 tests) against the real components.
+
+512 tests pass in the planner project, 1078 across the repo, `npm run check`
+green.

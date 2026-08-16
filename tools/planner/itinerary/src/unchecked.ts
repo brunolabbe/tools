@@ -1,99 +1,58 @@
 /**
- * What the composer did **not** check, said out loud.
+ * Working out what the composer did **not** check.
  *
- * The repo's _never fake progress_ rule reaches further here than it does
- * anywhere else in the tool. A packed plan looks equally finished whether every
- * constraint was enforced or three of them were skipped for want of data, and
- * the difference is invisible to the reader — which makes silence about it the
- * most consequential lie this package could tell. So every constraint the
- * composer could not evaluate comes back as data on the result, and pl-10
- * renders it beside the days.
+ * The vocabulary — `UNCHECKED_CONSTRAINTS`, `UncheckedConstraint` and why it is
+ * emphatically not a `PlanGap` — moved to `@planner/contract` in pl-10, when the
+ * plan view started rendering it and the API started sending it. Read that file
+ * for what the list *is*. This one derives it, which is still this package's
+ * job: it is a statement about what the packing and the constraint checks in
+ * here could not do.
  *
- * **This is not `PlanGap`, and the two must not be merged.** A `PlanGap` says a
- * *specialist* did not contribute — it names one, and every one of its reasons
- * is about the fan-out. "We could not check travel time" is not a statement
- * about a specialist at all: route-and-logistics ran perfectly and returned
- * good candidates, and the thing missing is a distance nobody has. Reaching for
- * `specialist-not-applicable` to carry it would put a false sentence in front
- * of a user about a specialist that worked.
+ * ## It survives a reload without being stored (pl-10)
  *
- * It therefore lives on the composer's result rather than on the persisted
- * revision, which is the honest shape available without a contract change —
- * see the log on pl-9. If it should survive a reload, `PlanGapReason` needs a
- * member that is about a constraint rather than about a specialist, and that is
- * a contract change with its own ticket.
+ * pl-9 left two ways to keep the list across a read: give `PlanGapReason` a
+ * member that is about a constraint, or re-run `compose` on every read.
+ * `uncheckedFor` below is a third and is the one taken, because **the list is a
+ * function of the brief, the candidates and which of them were placed** — and a
+ * stored revision says which were placed. So it is derived from the revision the
+ * reader is looking at, which beats both:
+ *
+ * - Against **storing** it: a stored list can disagree with the days it is
+ *   printed beside. This one cannot, because it is read off them.
+ * - Against **re-composing**: no re-pack per read, and no drift. Re-composing
+ *   re-runs the packer against today's `limits.ts` and today's date — a booking
+ *   deadline that has since passed changes what packs — so it would print a list
+ *   about a plan the reader is not looking at.
+ *
+ * The function reads **no clock**, which is what makes that claim hold. The one
+ * clock-dependent input the composer had was `daysUntilDeparture`, and it turned
+ * out to be dead: it was only tested for `null`, which happens exactly when the
+ * dates are `open`, which the branch above it had already handled.
  */
 
-export const UNCHECKED_CONSTRAINTS = [
-  /**
-   * Travel time between consecutive items. §2's failure 1, and the one this
-   * list exists for.
-   *
-   * `Place.coordinates` is `null` until grounding lands, so a leg has no
-   * measured length — decided 2026-08-16 for Phase 2 (roadmap, _Still open_):
-   * pack without it and name the gap, rather than invent a duration or pull
-   * grounding forward. A drive a specialist *stated* a duration for is still
-   * bounded by the day's drive budget; what is unchecked is the distance
-   * between one item and the next.
-   *
-   * **A leg is no longer the thing that is missing.** pl-15 made a candidate
-   * either `at` a place or `between` two, so a drive now carries both of its
-   * ends. What is still absent is a distance along one, and that is grounding.
-   * The conclusion here did not move when the premise did — this list is
-   * unchanged — but the reason it holds is narrower than it was.
-   */
-  "travel-time",
-  /** A backcountry party's `maxDailyDistanceKm`. Same cause: ends without a distance between them. */
-  "daily-distance",
-  /** A machine's `rangeKm` between fuel stops. Same cause. */
-  "machine-range",
-  /** Whether a place is open on the day it was placed. Opening hours are Phase 3. */
-  "opening-hours",
-  /**
-   * The brief's deal-breakers.
-   *
-   * `dealBreakers` is free text — "no more than one night in any campground
-   * without showers" — and no arithmetic decides whether a candidate violates
-   * it. §7 puts a deal-breaker check "in code", and in code is exactly where
-   * this one cannot happen: a keyword match against a sentence would fail both
-   * ways and would look like a check while being none. So it is stated as
-   * unchecked, the specialists that read the brief carry it, and the honest
-   * fix is a structured constraint the composer can evaluate rather than a
-   * cleverer string search.
-   */
-  "deal-breakers",
-  /** Costs arrived in more than one currency, and this package converts nothing. */
-  "budget-currency",
-  /** The budget is a band ("moderate"), so there is no figure to sum against. */
-  "budget-band",
-  /** A placed candidate whose `season` is `null` — not established, not all-year. */
-  "season-unknown",
-  /** The brief has no calendar, so no season could be compared to a day at all. */
-  "season-no-calendar",
-  /** The brief has no departure, so no booking lead time could be counted back from it. */
-  "booking-no-departure",
-  /** A placed candidate with no `durationMinutes` — it consumed no part of the day's budget. */
-  "duration-unknown",
-  /** `effort` was declined, so the day's size is an assumption. See `ASSUMED_EFFORT`. */
-  "effort-assumed",
-  /** The trip is longer than `MAX_PLAN_DAYS` and the plan stops short of its last day. */
-  "trip-truncated",
-] as const;
-
-export type UncheckedConstraintKind = (typeof UNCHECKED_CONSTRAINTS)[number];
+import {
+  AppError,
+  isAnswered,
+  revisionItems,
+  type Candidate,
+  type PlanRevision,
+  type TripBrief,
+  type TripDates,
+  type UncheckedConstraint,
+  type UncheckedConstraintKind,
+} from "@planner/contract";
+import { tripSpan } from "./dates.ts";
+import { dayCapacity } from "./pack.ts";
 
 /**
- * One constraint that was not enforced, and what it applies to.
- *
- * `detail` is written for a reader of the plan, not for a log — the same bar
- * `PlanGap.detail` sets. `candidateIds` is empty when the constraint is about
- * the whole plan rather than about particular items.
+ * Re-exported so a caller that already depends on this package for the composer
+ * does not need a second import for the type of what it returns.
  */
-export interface UncheckedConstraint {
-  kind: UncheckedConstraintKind;
-  detail: string;
-  candidateIds: string[];
-}
+export {
+  UNCHECKED_CONSTRAINTS,
+  type UncheckedConstraint,
+  type UncheckedConstraintKind,
+} from "@planner/contract";
 
 /** Constructor, so no caller assembles one with a missing array. */
 export function unchecked(
@@ -102,4 +61,191 @@ export function unchecked(
   candidateIds: readonly string[] = [],
 ): UncheckedConstraint {
   return { kind, detail, candidateIds: [...candidateIds] };
+}
+
+// ---------------------------------------------------------------------------
+// Deriving the list
+// ---------------------------------------------------------------------------
+
+/**
+ * What a plan did not check, from the plan itself.
+ *
+ * `placedIds` is the whole of what this needs to know about the schedule —
+ * which candidates made it onto a day. The composer passes the pack it has just
+ * built; a reader passes a stored revision through `uncheckedForRevision`. Both
+ * get the same list for the same plan, which is the property that makes this
+ * survive a reload.
+ *
+ * Everything else is read off the brief and the candidates, so nothing here
+ * depends on the packer's numbers or on today's date.
+ */
+export function uncheckedFor(input: {
+  brief: TripBrief;
+  /** The trip's dates, already narrowed — this package never invents a calendar. */
+  dates: TripDates;
+  /** Every candidate the plan draws on, placed or not. */
+  candidates: readonly Candidate[];
+  /** The candidates that made it onto a day. */
+  placedIds: ReadonlySet<string>;
+}): UncheckedConstraint[] {
+  const { brief, dates, candidates, placedIds } = input;
+  const placed = candidates.filter((candidate) => placedIds.has(candidate.id));
+
+  const notes: UncheckedConstraint[] = [
+    // Always, and first. A leg carries both its ends since pl-15, but Phase 2
+    // has no coordinates, so nothing measured the distance along one — decided
+    // 2026-08-16, roadmap _Still open_.
+    unchecked(
+      "travel-time",
+      "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",
+    ),
+    unchecked(
+      "opening-hours",
+      "Whether these places are open on the days they were put on was not checked.",
+    ),
+  ];
+
+  if (isAnswered(brief.dealBreakers) && brief.dealBreakers.value.length > 0) {
+    notes.push(
+      unchecked(
+        "deal-breakers",
+        "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
+      ),
+    );
+  }
+
+  const details = brief.details;
+  if (details?.shape === "backcountry" && isAnswered(details.maxDailyDistanceKm)) {
+    notes.push(
+      unchecked(
+        "daily-distance",
+        "How far each day actually goes was not checked — see travel time.",
+      ),
+    );
+  }
+  if (details?.shape === "motorised-touring" && isAnswered(details.rangeKm)) {
+    notes.push(
+      unchecked(
+        "machine-range",
+        "Whether each day stays inside your range was not checked — see travel time.",
+      ),
+    );
+  }
+
+  if (dayCapacity(brief).effortAssumed) {
+    notes.push(
+      unchecked(
+        "effort-assumed",
+        "You did not say how full you like a day, so these are ordinary ones.",
+      ),
+    );
+  }
+
+  // `open` dates are the only kind with no departure to count back from, which
+  // is why there is no second branch here — see the header.
+  if (dates.kind === "open") {
+    notes.push(
+      unchecked(
+        "season-no-calendar",
+        "There are no dates yet, so nothing was checked against a season.",
+      ),
+    );
+    notes.push(
+      unchecked(
+        "booking-no-departure",
+        "There are no dates yet, so no booking deadline could be checked.",
+      ),
+    );
+  }
+
+  // `null` is *not established*, never "all year" — the two must not collapse,
+  // which is the whole reason `ALL_YEAR` exists.
+  const seasonUnknown = placed.filter((candidate) => candidate.season === null);
+  if (seasonUnknown.length > 0) {
+    notes.push(
+      unchecked(
+        "season-unknown",
+        "Nobody established when these are open, so they were left in.",
+        seasonUnknown.map((candidate) => candidate.id),
+      ),
+    );
+  }
+
+  const durationUnknown = placed.filter((candidate) => candidate.durationMinutes === null);
+  if (durationUnknown.length > 0) {
+    notes.push(
+      unchecked(
+        "duration-unknown",
+        "How long these take was never established, so they were not counted against the day.",
+        durationUnknown.map((candidate) => candidate.id),
+      ),
+    );
+  }
+
+  if (isAnswered(brief.budget) && brief.budget.value.kind === "band") {
+    notes.push(
+      unchecked(
+        "budget-band",
+        "You gave a feel for the budget rather than a figure, so nothing was summed against it.",
+      ),
+    );
+  }
+
+  const currencies = new Set(
+    placed
+      .map((candidate) => candidate.cost?.currency)
+      .filter((currency): currency is string => currency !== undefined),
+  );
+  if (currencies.size > 1) {
+    notes.push(
+      unchecked(
+        "budget-currency",
+        `Costs came back in ${[...currencies].toSorted().join(" and ")}, and nothing here converts between them, so the total was not summed.`,
+      ),
+    );
+  }
+
+  if (tripSpan(dates).truncated) {
+    notes.push(
+      unchecked(
+        "trip-truncated",
+        "This trip is longer than a plan can hold, so the last days are not here.",
+      ),
+    );
+  }
+
+  return notes;
+}
+
+/**
+ * The same list, for a plan read back out of storage.
+ *
+ * This is what makes the honesty a property of the plan rather than of how the
+ * reader arrived at it. Rendering `unchecked` only on the run that produced it
+ * was the third option pl-10 named and refused: a plan opened from the list a
+ * day later would look like one where everything had been checked.
+ *
+ * It takes the revision rather than a plan so a caller can ask about any of
+ * them, which is what the revision picker needs.
+ */
+export function uncheckedForRevision(input: {
+  brief: TripBrief;
+  candidates: readonly Candidate[];
+  revision: PlanRevision;
+}): UncheckedConstraint[] {
+  const { brief, candidates, revision } = input;
+
+  // The same guard `compose` makes, and the same sentence: a brief with no
+  // dates has no days, so there was never a plan to say anything about. A
+  // stored plan always passes it — `startRun` refuses the brief otherwise.
+  if (!isAnswered(brief.dates)) {
+    throw new AppError("BRIEF_INCOMPLETE", undefined, { details: { missing: ["dates"] } });
+  }
+
+  return uncheckedFor({
+    brief,
+    dates: brief.dates.value,
+    candidates,
+    placedIds: new Set(revisionItems(revision).map((item) => item.candidateId)),
+  });
 }

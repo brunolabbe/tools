@@ -13,6 +13,8 @@ import { z } from "zod";
 import type { TripBrief } from "./brief.ts";
 import { ERROR_CODES } from "./errors.ts";
 import type { AppErrorPayload } from "./errors.ts";
+import type { Plan, PlanDetail } from "./plan.ts";
+import type { UncheckedConstraint } from "./unchecked.ts";
 import type { Answers, QuestionId, QuestionNode } from "./tree.ts";
 
 /** One prefix, named once, so the UI and the dev proxy cannot disagree about it. */
@@ -35,10 +37,27 @@ export const ROUTES = {
   intakeAnswer: `${API_PREFIX}/intakes/:id/answers/:questionId`,
   /** The same transaction as a dry run: what it would discard, written nowhere. */
   intakeAnswerPreview: `${API_PREFIX}/intakes/:id/answers/:questionId/preview`,
-  /** `POST` an intake id to draft it: creates the plan and starts the run. */
+  /**
+   * `POST` an intake id to draft it: creates the plan and starts the run.
+   * `GET` for the list, which is `Plan` rows and **not** `PlanDetail` — see
+   * `PlanListResponse`.
+   */
   plans: `${API_PREFIX}/plans`,
-  /** `GET` the whole document — brief, candidates and every revision. */
+  /**
+   * `GET` the whole document — brief, candidates and every revision — with what
+   * nothing checked about it. A `PlanView`.
+   */
   plan: `${API_PREFIX}/plans/:id`,
+  /**
+   * `POST` to pin or unpin one placed item.
+   *
+   * The only write in this API that changes a stored revision, and it is a
+   * write the database allows exactly one column of: pinning says what the
+   * *next* re-plan may not move, so it is not an edit to this draft and does
+   * not append a revision. Under `/plans/:id/` rather than at the item alone
+   * because an item id is only unique within the plan that owns it.
+   */
+  planItemPin: `${API_PREFIX}/plans/:id/items/:itemId/pin`,
   /** `GET`, SSE. The run's progress, keyed by the run and not by the plan. */
   runEvents: `${API_PREFIX}/runs/:id/events`,
   /**
@@ -68,6 +87,12 @@ export function intakeAnswerUrl(
 
 export function planUrl(id: string): string {
   return ROUTES.plan.replace(":id", encodeURIComponent(id));
+}
+
+export function planItemPinUrl(planId: string, itemId: string): string {
+  return ROUTES.planItemPin
+    .replace(":id", encodeURIComponent(planId))
+    .replace(":itemId", encodeURIComponent(itemId));
 }
 
 export function runEventsUrl(id: string): string {
@@ -193,6 +218,49 @@ export interface CreatePlanRequest {
 export const createPlanRequestSchema = z.object({
   intakeId: z.string().min(1),
 }) satisfies z.ZodType<CreatePlanRequest>;
+
+/**
+ * The plans list: `Plan` rows, newest change first.
+ *
+ * `Plan` and not `PlanDetail`, which is the whole reason the two types are
+ * split — a list that loaded every revision of every plan to print a row of
+ * titles is the read `plans_updated_at` is indexed to avoid.
+ */
+export interface PlanListResponse {
+  plans: readonly Plan[];
+}
+
+/**
+ * A plan to read, and what nothing checked about it.
+ *
+ * The two travel together because they are one honest answer: the days on their
+ * own read as though every constraint behind them had been enforced, and
+ * `unchecked` is the half that says which were not. Sending the document without
+ * it would leave every client to decide whether to ask for the other half, and a
+ * client that forgot would render a plan that merely looks finished.
+ *
+ * `unchecked` is **derived on read**, not stored — see `uncheckedForRevision` in
+ * `@planner/itinerary`. It describes `plan`'s latest revision.
+ */
+export interface PlanView {
+  plan: PlanDetail;
+  unchecked: readonly UncheckedConstraint[];
+}
+
+/**
+ * Pin or unpin one item. The whole body, because it is the whole write.
+ *
+ * Absolute rather than a toggle: two tabs open on one plan both sending "flip
+ * it" end up disagreeing about the result, and a pin is a statement about what
+ * a re-plan may touch — it should mean the same thing whatever arrived first.
+ */
+export interface PinItemRequest {
+  pinned: boolean;
+}
+
+export const pinItemRequestSchema = z.object({
+  pinned: z.boolean(),
+}) satisfies z.ZodType<PinItemRequest>;
 
 export const errorPayloadSchema = z.object({
   code: z.enum(ERROR_CODES),

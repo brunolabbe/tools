@@ -80,6 +80,22 @@ export const PLANNER_ERROR_CODES = [
    */
   "REVISION_NOT_FOUND",
   /**
+   * No such placed item on that plan — a pin aimed at an item id the plan does
+   * not have, or at one belonging to a different plan.
+   *
+   * Neither `PLAN_NOT_FOUND` nor `REVISION_NOT_FOUND` fits, and the tell is the
+   * one the root `CLAUDE.md` names: both would have to be re-worded where they
+   * are raised, because the plan *is* there and so is the revision. It is also
+   * a different sentence to a user — a stale item is a draft that moved on
+   * underneath an open tab, and the useful next step is to reload the plan
+   * rather than to go back to the list.
+   *
+   * Added by pl-10, which is the first thing that addresses an item at all.
+   * It stays a planner code rather than going to core for the reason core's
+   * `NOT_FOUND` exists: this is about a *document's* part, not about a route.
+   */
+  "ITEM_NOT_FOUND",
+  /**
    * The plan's own constraints cannot all be satisfied: a day that cannot hold
    * its legs and its activities, a deal-breaker that nothing survives, a
    * budget no candidate set fits inside.
@@ -159,6 +175,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   INTAKE_NOT_FOUND: "That trip could not be found.",
   PLAN_NOT_FOUND: "That plan could not be found.",
   REVISION_NOT_FOUND: "That version of the plan could not be found.",
+  ITEM_NOT_FOUND: "That item is no longer part of this plan — reload it to see the current draft.",
   PLAN_INFEASIBLE: "This trip cannot be planned as described — something has to give.",
   BRIEF_INCOMPLETE: "There are still a few essentials to answer before this trip can be planned.",
   INVALID_ANSWER: "That answer does not fit the question.",
