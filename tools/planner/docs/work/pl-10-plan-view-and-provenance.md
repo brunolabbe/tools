@@ -394,3 +394,21 @@ reviewer's table, which is not mine to rewrite.
 the rule has one home.
 
 514 tests in the planner project, 1080 across the repo, `npm run check` green.
+
+### 2026-08-16 — the status page, as the branch landing last
+
+pl-18 (#43) merged and main came into this branch, which settles the hand-off
+the two sessions agreed: **this branch is last, so the pl-18 half of
+`03-STATUS.md` is written here.** Four sites — the tree is version 3 (37
+questions unchanged), "stops at the core questions" is now "stops at the
+checkpoint" because `core` no longer means needed, pl-18 has a ticket-table row,
+and the "`core` marking and `REQUIRED_SHAPE_SLOTS` agree in both directions"
+paragraph is rewritten: pl-18 kept one direction and deliberately dropped the
+other, so a `core` node whose slot is not required is legal now rather than a
+tree error.
+
+**The counts were measured, not copied, and it is as well.** The agreement was
+that whoever landed last runs the suite; the two branches' own figures were 512
+over 40 here and 491 over 37 there, my arithmetic predicted 524, and the real
+answer after the merge is **526 over 40** in the planner project and **1092 over
+79** repo-wide. Every one of the three numbers on offer was wrong.

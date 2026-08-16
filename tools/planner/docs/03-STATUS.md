@@ -32,14 +32,14 @@ reasoning, including what the decision costs, is an amendment to
 argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
-**512 unit tests pass across 40 files, plus 2 e2e specs.** `npm run check` is
+**526 unit tests pass across 40 files, plus 2 e2e specs.** `npm run check` is
 green. The repo-wide CI runs the unit suite on every push, and
 `.github/workflows/planner.yml` now carries two gates — the e2e suite in a real
 browser, and the image, which is built, started, and asked for both `/api/health`
 and the page. Both are path-filtered, so downloader work does not pay for them.
 
 What exists: the error taxonomy, the `TripBrief` and its schemas, the question
-tree and the engine over it (`@planner/intake` — version 2, 37 questions, reachability,
+tree and the engine over it (`@planner/intake` — version 3, 37 questions, reachability,
 invalidation, brief assembly, answer validation, all pure), the plan document —
 `Candidate`, `Provenance`, `Plan`, `PlanRevision`, `PlanDay`, `PlanItem`,
 `PlanGap`, with migration 2 behind it and a checked-in candidate set per trip
@@ -49,7 +49,7 @@ a per-run budget that degrades the roster before anything is sent, and
 `runFanOut` over them** — an API
 that opens SQLite, answers `/api/health` and serves the UI same-origin, **an
 intake that persists — `intakes` and `answers` from migration 3, four routes over
-them, and a wizard that stops at the core questions and never discards an answer
+them, and a wizard that stops at the checkpoint and never discards an answer
 without saying so** — a container image the release pipeline publishes, and **the
 composer: `@planner/itinerary`, which turns a brief and a candidate set into a
 plan revision** (season filter, day packer, budget arithmetic over bands,
@@ -120,6 +120,7 @@ still unwritten.
 | [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two        |
 | [pl-16](./work/pl-16-the-plan-run.md)                       | done      | The run over HTTP; its image gate produced pl-17         |
 | [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | ready     | The image's workspace list is kept by hand and unchecked |
+| [pl-18](./work/pl-18-destination-asked-early.md)            | done      | Destination asked third; `core` is position, not need    |
 
 ## Known gaps and risks
 
@@ -240,12 +241,19 @@ routes and the progress view. `agent/test/placeable.test.ts` still composes the
 real fan-out for all six briefs; what changed is that it is no longer the only
 place that does.
 
-**`REQUIRED_SHAPE_SLOTS` and the tree's `core` marking now agree, and a test
-says so in both directions** — a `core` question whose slot is not required, or
-a required slot no `core` question fills, fails `validateTree`. Both ends are
-closed as of pl-7: the wizard renders `nextQuestion`'s `coreComplete` rather
-than filtering the reachable set itself, and a route test asserts that the
-checkpoint and `missingRequiredSlots` agree on the same intake.
+**`core` marks when a question is asked, not whether it is needed** — changed by
+[pl-18](./work/pl-18-destination-asked-early.md), and the reason this paragraph
+no longer says the two agree in both directions. It used to: a `core` question
+whose slot was not required failed `validateTree`, and so did a required slot no
+`core` question filled. pl-18 kept the second direction and **deliberately
+dropped the first**, because `destination` has to be asked early and be
+declinable at the same time — a combination the old equivalence made
+unrepresentable. So `stage` is position and `isRequiredSlot(node.fills)` is
+need, and a `core` node whose slot is not required is now legal rather than a
+tree error. The half that still holds is enforced: a required slot nothing asks
+for still fails the tree, and a route test still asserts the checkpoint and
+`missingRequiredSlots` agree on the same intake. Anything reading `node.stage`
+to infer "the user had to answer this" is wrong as of pl-18.
 
 **A model reply is untrusted input**, and from Phase 3 a grounded source is
 hostile text. As of pl-5 this is enforced rather than intended: `askSpecialist`
