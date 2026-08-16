@@ -118,6 +118,23 @@ _produce_ a document nobody can read.
 
 Traps worth knowing in advance:
 
+- **`no-candidates-found` has two producers and two sentences**, as of
+  [pl-5](./pl-5-orchestrator-and-fan-out.md). The orchestrator raises it for a
+  specialist that ran and returned nothing at all; the composer raises it for one
+  that returned candidates and got none of them onto a day. Same
+  `PlanGapReason`, and the `detail` is already written for a reader in both
+  cases. A view that renders a sentence per _reason_ rather than the gap's own
+  `detail` throws away the half that says which happened — which is the
+  difference between "there is nothing there" and "there was, and none of it
+  fitted".
+- **A plan can hold two hotels for one week, and the view must not pretend
+  otherwise.** `BUCKET_OF` makes a lodging candidate one day's anchor, so a
+  specialist that proposes two properties gets both placed on different days and
+  the cost arithmetic charges for both — visible in pl-5's resort fan-out, where
+  the critic drops one to bring the total back under budget. It is a real gap
+  between what a lodging specialist means and what the packer does with it, and
+  it is not pl-10's to fix; it _is_ pl-10's not to render as though the party
+  were staying in both.
 - **A `web` package's tests need their own compiler surface.** The root
   `CLAUDE.md` is explicit and the trap is live: `tsconfig.tests.json`'s glob picks
   up `tools/planner/web/test/**` and it will fail against the node surface with no

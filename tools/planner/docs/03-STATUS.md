@@ -100,6 +100,7 @@ still unwritten.
 | [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI               |
 | [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2                 |
 | [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two                     |
+| [pl-16](./work/pl-16-the-plan-run.md)                       | ready     | The run as a job; step 1 is what the contract carries                 |
 
 ## Known gaps and risks
 
@@ -197,8 +198,9 @@ that `CANDIDATE_LIMIT_OF` and `@planner/itinerary`'s `BUCKET_OF` still agree,
 which is the one thing `agent` had to restate to avoid depending on `itinerary`.
 
 **What still produces nothing is the run.** Nothing starts a fan-out over HTTP,
-nothing persists its output, and no UI shows it happening — see the next
-paragraph and pl-5's log, which names the four contract additions it waits on.
+nothing persists its output, and no UI shows it happening. That is
+[pl-16](./work/pl-16-the-plan-run.md), split out of pl-5 because it starts with a
+decision about what `@planner/contract` carries for a run rather than with code.
 
 **`REQUIRED_SHAPE_SLOTS` and the tree's `core` marking now agree, and a test
 says so in both directions** — a `core` question whose slot is not required, or

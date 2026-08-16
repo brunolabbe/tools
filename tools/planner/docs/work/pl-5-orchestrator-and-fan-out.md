@@ -268,9 +268,16 @@ and `createModelProvider`'s existing seam passing `RUN_TOKEN_BUDGET` and
 `MAX_SPECIALISTS` down as the `RunBudget` this package already takes. None of it
 is large; all of it is downstream of the contract question.
 
-It probably wants a ticket of its own rather than a checklist here — the format
-doc's own advice — but which of the four the contract should actually carry is a
-decision for whoever owns it, not one to make by writing the file.
+It is [pl-16](./pl-16-the-plan-run.md), split out rather than left as a checklist
+on a ticket whose other seven steps are done — the format doc's own advice.
+**Which of the four the contract should carry is that ticket's first step and is
+deliberately not answered there either**: it names the options and the argument
+each way, which is as far as this work can honestly go.
+
+The brief above is left as it was written rather than trimmed to match, the way
+§3 and §7 are kept and overridden rather than rewritten. This ticket stays
+`in-flight` until somebody who owns the roadmap decides whether it closes here,
+with step 4 and the `web` half now pl-16's.
 
 #### Green
 
