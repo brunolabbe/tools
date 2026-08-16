@@ -30,8 +30,10 @@ import {
   type IntakeState,
   type QuestionId,
   type QuestionNode,
+  type Run,
 } from "@planner/contract";
 import { fetchIntake, previewAnswer, submitAnswer } from "../api/intake.ts";
+import { startRun } from "../api/plan.ts";
 import { Brief } from "./Brief.tsx";
 import { QuestionField } from "./controls.tsx";
 import { describeAnswer } from "./format.ts";
@@ -40,6 +42,8 @@ interface WizardProps {
   intakeId: string;
   /** Leaving with a complete intake behind, which is what this phase can offer. */
   onExit: () => void;
+  /** The other half of the checkpoint's fork: draft a plan from these answers. */
+  onDraft: (run: Run) => void;
 }
 
 /** An answer waiting on the user's confirmation, and what it would cost. */
@@ -49,7 +53,7 @@ interface PendingWrite {
   discarded: readonly DiscardedAnswer[];
 }
 
-export function Wizard({ intakeId, onExit }: WizardProps): React.ReactElement {
+export function Wizard({ intakeId, onExit, onDraft }: WizardProps): React.ReactElement {
   const [state, setState] = useState<IntakeState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -150,7 +154,13 @@ export function Wizard({ intakeId, onExit }: WizardProps): React.ReactElement {
         ) : atCheckpoint ? (
           <Checkpoint
             hasMore={state.progress.question !== null}
+            busy={busy}
             onRefine={() => setRefining(true)}
+            onDraft={() => {
+              void run(async () => {
+                onDraft(await startRun(intakeId));
+              });
+            }}
             onExit={onExit}
           />
         ) : current === null ? (
@@ -288,11 +298,15 @@ function QuestionCard({
 
 function Checkpoint({
   hasMore,
+  busy,
   onRefine,
+  onDraft,
   onExit,
 }: {
   hasMore: boolean;
+  busy: boolean;
   onRefine: () => void;
+  onDraft: () => void;
   onExit: () => void;
 }): React.ReactElement {
   return (
@@ -303,17 +317,21 @@ function Checkpoint({
         making one possible{hasMore ? "" : " — and there is nothing left to sharpen"}.
       </p>
       <div className="actions">
+        {/*
+          The fork, both ways on at last. Drafting is primary because "draft
+          early, interview less" is the whole argument for stopping at the core
+          questions — refining is somewhere a user comes back to *after* seeing a
+          plan, not the thing the checkpoint pushes them towards.
+        */}
+        <button type="button" className="primary" onClick={onDraft} disabled={busy}>
+          {busy ? "Starting…" : "Draft a plan"}
+        </button>
         {hasMore && (
-          <button type="button" className="primary" onClick={onRefine}>
+          <button type="button" onClick={onRefine} disabled={busy}>
             Keep refining
           </button>
         )}
-        {/*
-          Phase 2 owns the other half of this fork — the button that drafts a
-          plan. Until it exists, the honest second way on is out, with a complete
-          intake left behind and nothing pretending a plan was made.
-        */}
-        <button type="button" className={hasMore ? undefined : "primary"} onClick={onExit}>
+        <button type="button" onClick={onExit} disabled={busy}>
           That is enough for now
         </button>
       </div>

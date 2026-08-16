@@ -35,6 +35,20 @@ export const ROUTES = {
   intakeAnswer: `${API_PREFIX}/intakes/:id/answers/:questionId`,
   /** The same transaction as a dry run: what it would discard, written nowhere. */
   intakeAnswerPreview: `${API_PREFIX}/intakes/:id/answers/:questionId/preview`,
+  /** `POST` an intake id to draft it: creates the plan and starts the run. */
+  plans: `${API_PREFIX}/plans`,
+  /** `GET` the whole document — brief, candidates and every revision. */
+  plan: `${API_PREFIX}/plans/:id`,
+  /** `GET`, SSE. The run's progress, keyed by the run and not by the plan. */
+  runEvents: `${API_PREFIX}/runs/:id/events`,
+  /**
+   * `POST` to stop a run.
+   *
+   * Not among the three routes pl-16's brief named, and added anyway: a cancel
+   * that never reaches the provider leaves the fan-out running and the bill
+   * accruing, so the route is what makes `RunStatus.canceled` mean anything.
+   */
+  runCancel: `${API_PREFIX}/runs/:id/cancel`,
 } as const;
 
 export function intakeUrl(id: string): string {
@@ -50,6 +64,18 @@ export function intakeAnswerUrl(
   return pattern
     .replace(":id", encodeURIComponent(id))
     .replace(":questionId", encodeURIComponent(questionId));
+}
+
+export function planUrl(id: string): string {
+  return ROUTES.plan.replace(":id", encodeURIComponent(id));
+}
+
+export function runEventsUrl(id: string): string {
+  return ROUTES.runEvents.replace(":id", encodeURIComponent(id));
+}
+
+export function runCancelUrl(id: string): string {
+  return ROUTES.runCancel.replace(":id", encodeURIComponent(id));
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +173,26 @@ export interface IntakeListResponse {
 export interface DiscardPreview {
   discarded: readonly DiscardedAnswer[];
 }
+
+// ---------------------------------------------------------------------------
+// The plan
+// ---------------------------------------------------------------------------
+
+/**
+ * What starting a run needs told: the intake to draft, and nothing else.
+ *
+ * The brief is derived from that intake's answers server-side rather than sent —
+ * a client that posted its own brief would be a second implementation of
+ * `toBrief`, and the plan's stored snapshot would then record what the browser
+ * thought the answers meant.
+ */
+export interface CreatePlanRequest {
+  intakeId: string;
+}
+
+export const createPlanRequestSchema = z.object({
+  intakeId: z.string().min(1),
+}) satisfies z.ZodType<CreatePlanRequest>;
 
 export const errorPayloadSchema = z.object({
   code: z.enum(ERROR_CODES),

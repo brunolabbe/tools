@@ -1,19 +1,22 @@
 /**
- * Per-IP admission control, as this service refuses it.
+ * Per-client admission control on starting a run.
  *
- * `/api/probe` runs a browser probe costing ~15 s and ~300 MB. Without a limit
- * that is a one-line denial of service, which is why the brief calls this out
- * separately from the SSRF work: the guard stops us reaching places we should
- * not, this stops anyone reaching *us* faster than we can serve.
+ * The mechanism is `@webtools/core`'s — the token bucket, the client key and the
+ * /64 rule all moved there when this tool became its second real consumer
+ * (pl-16), which is the moment the repo's rule says shared code is allowed to be
+ * shared. What is here is the part that is genuinely ours: refusing with *this*
+ * tool's `AppError` and logging through *this* tool's logger.
  *
- * The mechanism — the token bucket, the client key and the concurrency gate —
- * moved to `@webtools/core` when the planner became its second real consumer
- * (pl-16); the reasoning is on that file. What stayed here is the only part that
- * is genuinely this tool's: turning a refusal into *this* tool's `AppError`,
- * with *this* tool's logger, in a Fastify hook.
+ * **Why a plan run needs one at all.** A run is a roster of model calls plus a
+ * critic pass — roughly an order of magnitude more than a single request — so an
+ * unlimited `POST /api/plans` is an open form spending someone else's budget.
+ * The architecture lists it under the security posture rather than under cost
+ * for exactly that reason. It is the second of two controls and not a substitute
+ * for the first: `RunBudget` bounds what one run may spend, this bounds how many
+ * runs one client may start.
  */
 
-import { AppError } from "@downloader/contract";
+import { AppError } from "@planner/contract";
 import { clientKey, type RateLimiter } from "@webtools/core/rate-limit";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AppLogger } from "./logger.ts";
@@ -27,7 +30,8 @@ export interface RateLimitHookOptions {
 
 /**
  * A Fastify `onRequest` hook. Runs before the body is parsed, so a refused
- * request costs almost nothing.
+ * request costs almost nothing — which is the point when the thing being
+ * refused is expensive.
  *
  * `RateLimit-*` are the IETF draft header names; `Retry-After` is the one every
  * HTTP client already understands, and is what the UI reads.

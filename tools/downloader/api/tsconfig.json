@@ -5,5 +5,10 @@
     "outDir": "./dist"
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../contract" }, { "path": "../resolvers" }, { "path": "../engine" }]
+  "references": [
+    { "path": "../../../packages/core" },
+    { "path": "../contract" },
+    { "path": "../resolvers" },
+    { "path": "../engine" }
+  ]
 }

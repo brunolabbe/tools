@@ -340,6 +340,39 @@ ul.answers li + li {
   padding-left: 1.2rem;
 }
 
+/* --- Watching a run --- */
+
+/*
+ * With no `value` attribute the element renders indeterminate on its own, which
+ * is exactly what is wanted while the roster is still being decided: the total
+ * genuinely is unknown, and a bar sitting at a made-up percentage would be the
+ * one place in this UI it is easiest to fake progress.
+ */
+.run-progress {
+  width: 100%;
+  height: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.run .gaps {
+  margin-top: 1rem;
+}
+
+.run .gaps h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.run .gaps ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+}
+
+.run .gaps li {
+  margin-bottom: 0.35rem;
+}
+
 /* --- The health readout, now a footnote rather than the page --- */
 
 .health {

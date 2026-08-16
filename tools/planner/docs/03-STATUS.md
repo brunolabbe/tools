@@ -6,20 +6,21 @@ each piece of work did lives in its ticket under [work/](./work/).
 **Last updated:** 2026-08-16 · **Phase 0 (scaffold) ✅ · Phase 1 ✅ — the
 `TripBrief`, the question tree, and the persistence and wizard over them, driven
 end to end in a browser. The tool produces a brief with no model involved
-anywhere. Phase 2 has its contract, the composer that turns candidates into days,
-and — as of pl-5 — the fan-out that produces them. The two halves meet in a test
-and not yet over HTTP: there is no run, no SSE and no progress view**
+anywhere. Phase 2 now produces a plan: as of [pl-16](./work/pl-16-the-plan-run.md)
+a run started over HTTP fans out, composes and persists a revision, streams its
+progress over SSE, and can be canceled in a way that reaches the provider. What
+is missing is the plan _view_ (pl-10) and grounding (Phase 3)**
 
 ---
 
 ## Where things stand
 
-| Phase                            | State         | Evidence                                                                                                                                                                                                                                                                                                                                                        |
-| -------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Phase 0 — Scaffold               | ✅ complete   | `0f8583e`                                                                                                                                                                                                                                                                                                                                                       |
-| Phase 1 — The intake             | ✅ complete   | [pl-3](./work/pl-3-trip-brief-contract.md), [pl-6](./work/pl-6-question-tree-and-engine.md) and [pl-7](./work/pl-7-intake-persistence-and-wizard.md) — the brief, the tree, and an intake that survives a reload                                                                                                                                                |
-| Phase 2 — The first plan         | in flight     | [pl-4](./work/pl-4-plan-document-contract.md) and [pl-9](./work/pl-9-composer-and-critic.md) done — the plan document, and a composer that fills it from a candidate set; [pl-5](./work/pl-5-orchestrator-and-fan-out.md) has the roster, the specialists and the fan-out and stops before the run; [pl-10](./work/pl-10-plan-view-and-provenance.md) unblocked |
-| Phases 3–4 — Grounding, revision | designed only | no tickets yet, on purpose                                                                                                                                                                                                                                                                                                                                      |
+| Phase                            | State         | Evidence                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 0 — Scaffold               | ✅ complete   | `0f8583e`                                                                                                                                                                                                                                                                                                                                                                                               |
+| Phase 1 — The intake             | ✅ complete   | [pl-3](./work/pl-3-trip-brief-contract.md), [pl-6](./work/pl-6-question-tree-and-engine.md) and [pl-7](./work/pl-7-intake-persistence-and-wizard.md) — the brief, the tree, and an intake that survives a reload                                                                                                                                                                                        |
+| Phase 2 — The first plan         | in flight     | [pl-4](./work/pl-4-plan-document-contract.md), [pl-9](./work/pl-9-composer-and-critic.md) and [pl-16](./work/pl-16-the-plan-run.md) done, [pl-5](./work/pl-5-orchestrator-and-fan-out.md) all but its own close-out — the plan document, the composer, the fan-out, and the run that joins them over HTTP and stores what comes back; [pl-10](./work/pl-10-plan-view-and-provenance.md) is what remains |
+| Phases 3–4 — Grounding, revision | designed only | no tickets yet, on purpose                                                                                                                                                                                                                                                                                                                                                                              |
 
 **The tool is not a chat, as of 2026-08-14.** It was scaffolded as one. The
 intake now asks predetermined questions from an authored, versioned tree, and no
@@ -29,7 +30,7 @@ reasoning, including what the decision costs, is an amendment to
 argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
-**420 unit tests pass across 31 files, plus 2 e2e specs.** `npm run check` is
+**457 unit tests pass across 35 files, plus 2 e2e specs.** `npm run check` is
 green. The repo-wide CI runs the unit suite on every push, and
 `.github/workflows/planner.yml` now carries two gates — the e2e suite in a real
 browser, and the image, which is built, started, and asked for both `/api/health`
@@ -50,7 +51,11 @@ them, and a wizard that stops at the core questions and never discards an answer
 without saying so** — a container image the release pipeline publishes, and **the
 composer: `@planner/itinerary`, which turns a brief and a candidate set into a
 plan revision** (season filter, day packer, budget arithmetic over bands,
-constraint check, bounded critic, all pure).
+constraint check, bounded critic, all pure) — and **the run: `plan_runs` from
+migration 4, an in-process queue with `MAX_CONCURRENT_RUNS`, `POST /api/plans`
+behind a per-client rate limit, `GET /api/plans/:id`, `POST /api/runs/:id/cancel`
+and `GET /api/runs/:id/events` over SSE, with the whole `runFanOut` → `compose` →
+`appendRevision` sequence persisted and a progress view over it**.
 
 **P1 is reached.** Someone can answer into a branch, be told the essentials are
 done, go back and change an early answer, be shown exactly what that costs, and
@@ -58,12 +63,10 @@ reload to find the intake where they left it — with no model involved anywhere
 which is what makes the whole claim checkable without a key. Two Playwright specs
 assert that whole paragraph against the built bundle.
 
-What does not exist: **the run** — no `plan_runs` table, no HTTP route that
-starts one, no SSE, no progress in the UI, and nothing persisting a plan — plus
-grounding of any kind and any hostname pointing at the image. The two halves of
-Phase 2 now meet in a unit test rather than over a wire: `agent/test/placeable.test.ts`
-runs the real fan-out for each of the six checked-in briefs and composes its
-output, and pl-10 renders a result nothing yet stores.
+What does not exist: **the plan view** — pl-16 renders the run's outcome (how
+many days, what it could not cover) and nothing more, because the document, its
+provenance and its diff are [pl-10](./work/pl-10-plan-view-and-provenance.md)'s —
+plus grounding of any kind and any hostname pointing at the image.
 
 **Nothing in the contract describes a conversation any more.**
 [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) deleted the
@@ -73,8 +76,8 @@ and `CONVERSATION_NOT_FOUND` — the vocabulary that outlived the tables migrati
 about a route rather than a document. Migration 1 still creates the tables and
 migration 3 still drops them: applied migrations are history and are not edited.
 
-**The documentation leads the code by two phases**, down from four: Phase 1 is
-built, and Phase 2 has its contract and its composer. That gap is the intended state after a design
+**The documentation leads the code by one phase**, down from four: Phase 1 is
+built and Phase 2 produces a plan end to end. That gap is the intended state after a design
 pass and a liability if it lasts, so read
 [00-ANALYSIS.md](./00-ANALYSIS.md) and
 [01-ARCHITECTURE.md](./01-ARCHITECTURE.md) as _design_ rather than as
@@ -83,24 +86,24 @@ still unwritten.
 
 ## Open tickets
 
-| Ticket                                                      | Status    | Note                                                                  |
-| ----------------------------------------------------------- | --------- | --------------------------------------------------------------------- |
-| [pl-1](./work/pl-1-conversation-loop.md)                    | dropped   | The chat premise. Read the log before rebuilding it                   |
-| [pl-2](./work/pl-2-container-image.md)                      | in-flight | Image and release component landed; no subdomain yet                  |
-| [pl-3](./work/pl-3-trip-brief-contract.md)                  | done      | The brief, its slots and `missingRequiredSlots` are in                |
-| [pl-4](./work/pl-4-plan-document-contract.md)               | done      | The plan document, migration 2, and pl-5's fixtures                   |
-| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)             | in-flight | Roster, specialists and fan-out in; the run needs a contract decision |
-| [pl-6](./work/pl-6-question-tree-and-engine.md)             | done      | `@planner/intake`: the tree, reachability, invalidation               |
-| [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them                         |
-| [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER`              |
-| [pl-9](./work/pl-9-composer-and-critic.md)                  | done      | `@planner/itinerary`: season, packing, budget, critic                 |
-| [pl-10](./work/pl-10-plan-view-and-provenance.md)           | ready     | Renders the plan, its gaps and what was verified                      |
-| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | done      | The vocabulary is gone; `NOT_FOUND` lifted to core                    |
-| [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | ready     | 1,100 lines of `.tsx` and no test renders any of it                   |
-| [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI               |
-| [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2                 |
-| [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two                     |
-| [pl-16](./work/pl-16-the-plan-run.md)                       | ready     | The run as a job; step 1 is what the contract carries                 |
+| Ticket                                                      | Status    | Note                                                             |
+| ----------------------------------------------------------- | --------- | ---------------------------------------------------------------- |
+| [pl-1](./work/pl-1-conversation-loop.md)                    | dropped   | The chat premise. Read the log before rebuilding it              |
+| [pl-2](./work/pl-2-container-image.md)                      | in-flight | Image and release component landed; no subdomain yet             |
+| [pl-3](./work/pl-3-trip-brief-contract.md)                  | done      | The brief, its slots and `missingRequiredSlots` are in           |
+| [pl-4](./work/pl-4-plan-document-contract.md)               | done      | The plan document, migration 2, and pl-5's fixtures              |
+| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)             | in-flight | Roster, specialists, fan-out; its run half landed as pl-16       |
+| [pl-6](./work/pl-6-question-tree-and-engine.md)             | done      | `@planner/intake`: the tree, reachability, invalidation          |
+| [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them                    |
+| [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER`         |
+| [pl-9](./work/pl-9-composer-and-critic.md)                  | done      | `@planner/itinerary`: season, packing, budget, critic            |
+| [pl-10](./work/pl-10-plan-view-and-provenance.md)           | ready     | Renders the plan, its gaps and what was verified                 |
+| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | done      | The vocabulary is gone; `NOT_FOUND` lifted to core               |
+| [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | ready     | 1,100 lines of `.tsx` and no test renders any of it              |
+| [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI          |
+| [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2            |
+| [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two                |
+| [pl-16](./work/pl-16-the-plan-run.md)                       | done      | The run as a job: queue, FSM, SSE, cancel, and a stored revision |
 
 ## Known gaps and risks
 
@@ -197,10 +200,13 @@ schedulable specialist gets at least one candidate onto a day; it also asserts
 that `CANDIDATE_LIMIT_OF` and `@planner/itinerary`'s `BUCKET_OF` still agree,
 which is the one thing `agent` had to restate to avoid depending on `itinerary`.
 
-**What still produces nothing is the run.** Nothing starts a fan-out over HTTP,
-nothing persists its output, and no UI shows it happening. That is
-[pl-16](./work/pl-16-the-plan-run.md), split out of pl-5 because it starts with a
-decision about what `@planner/contract` carries for a run rather than with code.
+**The run exists, and the two halves of Phase 2 now meet over a wire rather than
+in a unit test.** [pl-16](./work/pl-16-the-plan-run.md) added `RunStatus` and its
+transition table, one `RunProgress` payload the agent emits and `web` renders,
+the `RunEvent` envelope `api` stamps a clock onto, `plan_runs`, the queue, the
+routes and the progress view. `agent/test/placeable.test.ts` still composes the
+real fan-out for all six briefs; what changed is that it is no longer the only
+place that does.
 
 **`REQUIRED_SHAPE_SLOTS` and the tree's `core` marking now agree, and a test
 says so in both directions** — a `core` question whose slot is not required, or
@@ -219,20 +225,25 @@ field `Candidate` carries so that question stays answerable. A specialist still
 has no credentials and no tools, so there is nothing yet for a hostile page to
 reach; that is Phase 3's to keep true.
 
-**The budget exists; the run does not.** `RunBudget` is a required argument to
-`runFanOut` and `applyBudget` degrades the roster from the back of
+**The budget is in force, both halves of it.** `RunBudget` is a required argument
+to `runFanOut` and `applyBudget` degrades the roster from the back of
 `SPECIALIST_ORDER` before anything is sent, recording each cut as a
-`specialist-dropped-for-budget` gap. What is missing is the layer that would give
-it a number from the environment and a job to bound: no `plan_runs` table, no
-queue, no `MAX_CONCURRENT_RUNS`, no rate limit on run creation. Until that
-exists the DoS half of the control is not in force, because there is no endpoint
-to spend anything through.
+`specialist-dropped-for-budget` gap. As of pl-16 `api` fills it from
+`MAX_SPECIALISTS` and `RUN_TOKEN_BUDGET` — the latter **divides down into a
+specialist count** rather than stopping a run partway, because a run that
+discovered its ceiling halfway through would have paid for a plan it cannot ship
+— and `MAX_CONCURRENT_RUNS` bounds the queue. The DoS half is in force too:
+`POST /api/plans` is rate-limited per client, and the token bucket behind it
+moved to `@webtools/core` when this tool became its second real consumer.
 
 **At `MAX_SPECIALISTS = 5` the budget specialist is always the one dropped**, on
-each of the three shapes that roster six. That is the cap working as designed and
-is a gap on those plans rather than a silence — but the default was chosen before
-there was a roster to apply it to, and the number is worth reviewing as content
-the way `limits.ts` is.
+each of the three shapes that roster six. Reviewed as content in pl-16 and
+**kept**: the cap has to stay a constraint something actually reaches (§9 — "run
+every specialist every time is not the design"), the composer sums the cost bands
+in code whether or not a budget specialist ran, and the drop is a
+`specialist-dropped-for-budget` gap on the stored revision rather than a silence.
+A test asserts the degradation on a `multi-city` brief, so the path stays
+exercised rather than becoming theoretical.
 
 **The transcript risk is gone**, not deferred — there is no transcript, so nothing
 is re-sent turn over turn. The per-run budget replaces it as the cost control, and
@@ -269,6 +280,23 @@ not this tool's to fix.
 **The SSRF guard is the downloader's.** The planner becomes its second real
 consumer the first time it fetches a URL a search result handed it; that is when
 it lifts to `packages/core`, not by copy-paste before then.
+
+**The rate limiter is no longer the downloader's.** pl-16 answered the
+second-consumer question the other way, because a plan run is a roster of model
+calls and needed one for real: `RateLimiter`, `clientKey` and `ConcurrencyGate`
+now live in `@webtools/core/rate-limit`, and each `api` keeps its own
+`createRateLimitHook` — refusing means throwing _that_ tool's `AppError` through
+_that_ tool's logger, which is the part that was never shared. It has its own
+subpath rather than the barrel because it imports `node:net` and core's root is
+in every `web` bundle's graph by way of the contracts.
+
+**The run queue was weighed for the same lift and stayed put.** The downloader's
+`InProcessJobQueue` is the same shape, but its `QueuedTask` is keyed on a job and
+it aborts with the downloader's `AppError` — and the error a cancellation carries
+is the one thing about a queue that is not generic. `01-ARCHITECTURE.md` had
+already committed this tool to "an in-process queue, as the downloader chose",
+which is the same decision rather than the same code. A third consumer is when to
+pay for the type parameter.
 
 ## Running things
 

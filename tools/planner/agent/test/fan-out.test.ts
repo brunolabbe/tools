@@ -10,14 +10,9 @@
 
 import { describe, expect, test, vi } from "vitest";
 import { AppError, MODEL_ASSERTED, slot } from "@planner/contract";
-import type { TripBrief } from "@planner/contract";
+import type { RunProgress, TripBrief } from "@planner/contract";
 import { loadFixture } from "../../contract/test/fixtures.ts";
-import {
-  DEFAULT_RUN_BUDGET,
-  runFanOut,
-  ScriptedProvider,
-  type FanOutProgress,
-} from "../src/index.ts";
+import { DEFAULT_RUN_BUDGET, runFanOut, ScriptedProvider } from "../src/index.ts";
 import { candidates, capacityOf, content, FakeProvider } from "./helpers.ts";
 
 const brief = loadFixture("road-trip").brief;
@@ -88,7 +83,7 @@ describe("a run against the scripted provider", () => {
 
 describe("progress", () => {
   test("reports the roster before the fan-out, and then one event per specialist", async () => {
-    const events: FanOutProgress[] = [];
+    const events: RunProgress[] = [];
     const result = await run(new ScriptedProvider(), { onProgress: (event) => events.push(event) });
 
     const first = events[0];
@@ -112,7 +107,7 @@ describe("when one specialist fails", () => {
       { lodging: [{ kind: "throw", error: new AppError("AGENT_UNAVAILABLE") }] },
       candidates(),
     );
-    const events: FanOutProgress[] = [];
+    const events: RunProgress[] = [];
     const result = await run(provider, { onProgress: (event) => events.push(event) });
 
     const gap = result.gaps.find((entry) => entry.specialist === "lodging");

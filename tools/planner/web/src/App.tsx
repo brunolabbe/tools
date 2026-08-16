@@ -14,9 +14,10 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { AppError } from "@planner/contract";
+import { AppError, type Run } from "@planner/contract";
 import { fetchHealth } from "./api/health.ts";
 import type { HealthSummary } from "./api/health.ts";
+import { RunView } from "./plan/RunView.tsx";
 import { Trips } from "./wizard/Trips.tsx";
 import { Wizard } from "./wizard/Wizard.tsx";
 
@@ -44,9 +45,20 @@ function rememberOpenIntake(id: string | null): void {
 
 export function App(): React.ReactElement {
   const [openIntake, setOpenIntake] = useState<string | null>(readOpenIntake);
+  /**
+   * The run being watched, if any.
+   *
+   * Deliberately **not** remembered across a reload the way the open intake is.
+   * A run is a job with a live stream attached and a cancel button beside it,
+   * and restoring one from `localStorage` would mean re-attaching to something
+   * that may have finished, failed or never existed on this server. Coming back
+   * to a finished plan is a plan-list problem, which is pl-10's.
+   */
+  const [watching, setWatching] = useState<Run | null>(null);
 
   const open = useCallback((id: string | null): void => {
     rememberOpenIntake(id);
+    setWatching(null);
     setOpenIntake(id);
   }, []);
 
@@ -66,7 +78,15 @@ export function App(): React.ReactElement {
               ← All trips
             </button>
           </p>
-          <Wizard intakeId={openIntake} onExit={() => open(null)} />
+          {watching === null ? (
+            <Wizard
+              intakeId={openIntake}
+              onExit={() => open(null)}
+              onDraft={(run) => setWatching(run)}
+            />
+          ) : (
+            <RunView run={watching} onExit={() => setWatching(null)} />
+          )}
         </>
       )}
 
