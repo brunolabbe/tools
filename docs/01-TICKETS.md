@@ -168,7 +168,10 @@ they are the three ways a correct change fails here.
   dependency to `api`, `npm run check` and 1,020 tests passed, and the image
   would not boot — because a `Dockerfile` lists its workspaces by hand, twice,
   and nothing type-checks that list. The honest report is "green locally, and the
-  image gate is the proof I do not have".
+  image gate is the proof I do not have". The list is unchecked for now and that
+  is filed as
+  [pl-17](../tools/planner/docs/work/pl-17-dockerfile-workspace-scan.md) — read
+  it before writing a ticket for it.
 - **The pull request title is the commit.** The rule and its reasoning are in
   [03-RELEASING.md](./03-RELEASING.md), which an agent handed a ticket has no
   reason to open — so the check for it goes here, where it will be read. A title
