@@ -11,10 +11,12 @@
 
 import type { CandidateLocation, CostEstimate, PlanDay, Place } from "@planner/contract";
 
-/** Enum members are kebab-case on the wire and prose on the page. */
-export function humanise(value: string): string {
-  return value.replaceAll("-", " ");
-}
+/**
+ * Re-exported rather than redefined. A second copy of "kebab-case becomes
+ * prose" is one the next edit to the rule will miss, and the plan and the
+ * wizard would then render the same enum two ways.
+ */
+export { humanise } from "../wizard/format.ts";
 
 /**
  * A day's heading.

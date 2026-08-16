@@ -24,7 +24,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { location, type Provenance } from "@planner/contract";
+import { AppError, location, type Provenance } from "@planner/contract";
 import { fetchPlan, pinItem } from "../src/api/plan.ts";
 import { PlanView } from "../src/plan/PlanView.tsx";
 import { brief, candidate, day, item, planView, revision } from "./plan-fixtures.ts";
@@ -207,6 +207,38 @@ describe("costs", () => {
     expect(await screen.findByText(/40–60 EUR, per person/)).toBeDefined();
     // The midpoint is the quote this rule exists to prevent.
     expect(screen.queryByText(/\b50 EUR\b/)).toBeNull();
+  });
+
+  /**
+   * `low === high` is a genuinely fixed price — a museum's posted admission —
+   * and the contract allows it as a *different claim* from a narrow estimate.
+   * The acceptance line is about no **estimate** being shown as one figure, so
+   * the figure is kept and labelled as posted. Flagged as an untested
+   * interpretation by pl-10's review; this is the test that pins it.
+   */
+  test("a genuinely fixed price is labelled as posted, not shown as a bare figure", async () => {
+    const museum = candidate({
+      title: "The city museum",
+      cost: {
+        currency: "EUR",
+        low: 20,
+        high: 20,
+        basis: "per-person",
+        provenance: { kind: "model-asserted" },
+      },
+    });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [museum],
+        revisions: [revision([day(0, [item({ candidateId: museum.id })])])],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/20 EUR, a posted price, per person/)).toBeDefined();
+    // Never as a band it is not: "20–20" would read as an estimate.
+    expect(screen.queryByText(/20–20/)).toBeNull();
   });
 
   test("a candidate nobody costed says so rather than showing nothing", async () => {
@@ -398,6 +430,38 @@ describe("pinning", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Pinned" })).toBeDefined();
     });
+  });
+
+  /**
+   * The error most likely to arrive here is `ITEM_NOT_FOUND`, whose own copy
+   * tells the reader to reload the plan and see the current draft. Throwing the
+   * loaded document away over one stale item is the single response that makes
+   * that advice impossible to follow — found by pl-10's review.
+   */
+  test("a pin that fails keeps the plan on screen and reports beside it", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const placed = item({ candidateId: activity.id });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [activity],
+        revisions: [revision([day(0, [placed])])],
+      }),
+    );
+    pinned.mockRejectedValue(
+      new AppError("ITEM_NOT_FOUND", "That item is no longer part of this plan."),
+    );
+
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Pin" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toMatch(/no longer part of this plan/i);
+    });
+    // The document is still there, and so is the item the pin was aimed at.
+    expect(screen.getByText("A long walk")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Pin" })).toBeDefined();
   });
 });
 

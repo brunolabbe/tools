@@ -104,6 +104,18 @@ export function PlanView({
 }): React.ReactElement {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
+  /**
+   * A pin that did not take, reported **beside the document rather than instead
+   * of it.**
+   *
+   * Separate from `state` on purpose. Folding it into the page-level `failed`
+   * threw the whole loaded plan away over one stale item — and the error most
+   * likely to arrive here is `ITEM_NOT_FOUND`, whose own copy tells the reader
+   * to reload the plan to see the current draft. Replacing the plan with a bare
+   * message and a "back to the plans" button is the one response that makes
+   * that advice impossible to follow.
+   */
+  const [pinFailed, setPinFailed] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -122,10 +134,11 @@ export function PlanView({
   const pin = useCallback(
     (item: PlanItem): void => {
       setBusy(item.id);
+      setPinFailed(null);
       pinItem(planId, item.id, !item.pinned)
         .then((view) => setState({ kind: "ready", view }))
         .catch((error: unknown) => {
-          setState({ kind: "failed", message: AppError.from(error).message });
+          setPinFailed(AppError.from(error).message);
         })
         .finally(() => setBusy(null));
     },
@@ -153,18 +166,22 @@ export function PlanView({
     );
   }
 
-  return <Document view={state.view} onPin={pin} busyItem={busy} onExit={onExit} />;
+  return (
+    <Document view={state.view} onPin={pin} busyItem={busy} pinFailed={pinFailed} onExit={onExit} />
+  );
 }
 
 function Document({
   view,
   onPin,
   busyItem,
+  pinFailed,
   onExit,
 }: {
   view: PlanViewDocument;
   onPin: (item: PlanItem) => void;
   busyItem: string | null;
+  pinFailed: string | null;
   onExit: () => void;
 }): React.ReactElement {
   const { plan } = view;
@@ -186,6 +203,13 @@ function Document({
           <p className="crumb">
             Version {String(revision.revision)} of {String(plan.latestRevision)} · {revision.reason}
           </p>
+
+          {/* Beside the plan, never instead of it — see `pinFailed`. */}
+          {pinFailed !== null && (
+            <p className="bad" role="alert">
+              {pinFailed}
+            </p>
+          )}
 
           {caution !== undefined && (
             <p className="notice caution" role="note">

@@ -171,6 +171,32 @@ Traps worth knowing in advance:
   the glob excludes exactly that path.
 - `npm run check` and `npm test -- --project planner` pass.
 
+## Review
+
+**Gate: CONCERNS** — 2026-08-16 · `origin/main...HEAD` · code-review at medium
+
+| Done when                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A plan list and a plan detail render from real data, list not loading revisions                                 | `api/test/plan-view.test.ts:137` (list omits `revisions`/`candidates`/`brief`), `api/test/plan-view.test.ts:56` (detail) ✓                                                                                                                                                                                                                                                                |
+| Open-dates brief renders correctly, no invented dates                                                           | `web/test/plan-view.test.tsx:69` ✓                                                                                                                                                                                                                                                                                                                                                        |
+| Every item shows grounded/model-asserted; cost provenance divergence rendered honestly                          | `web/test/plan-view.test.tsx:137` (grounded place + guessed cost), `:166` (ungrounded) ✓                                                                                                                                                                                                                                                                                                  |
+| A `PlanGap` shows in the plan body, distinct sentence per `PlanGapReason`                                       | `web/test/plan-view.test.tsx:235`, `:262` — 3 of 4 reasons exercised directly; the 4th (`specialist-dropped-for-budget`) is covered only by `GAP_LABELS`'s TS-exhaustive `Record`, not a render assertion ✓                                                                                                                                                                               |
+| Every plan says travel time was not checked, asserted on a plan loaded from the database, not one just composed | `api/test/plan-view.test.ts:79` — real SQLite, over HTTP, after `runToCompletion`, read twice ✓ (strong; exactly the trap named)                                                                                                                                                                                                                                                          |
+| Pinning from the UI persists and creates no revision, asserted                                                  | **unproven (gate)** — `web/test/plan-view.test.tsx:376` mocks `../src/api/plan.ts` wholesale, so it only proves the button calls `pinItem(planId, itemId, true)` and re-renders a fabricated response; "persists, appends no revision" is proven only at `api/test/plan-view.test.ts:178`, which never touches the UI. The two tests don't compose into the claim as written.             |
+| No cost is displayed as a single figure anywhere                                                                | **unproven (gate)** — `format.ts:68-74` renders `low === high` as `"20 EUR, a posted price"`, a bare single figure with a label. No test anywhere exercises this branch: the one cost test uses `low:40/high:60` (`plan-view.test.tsx:187`), and the default candidate fixture has `cost: null`. The interpretation is defensible but untested and, read literally, contradicts the line. |
+| `web/test/tsconfig.json` exists, referenced from root, glob excludes exactly that path                          | Verified independently, not from the Log: file created in pl-12 (`7dde7ba`), `tsconfig.json:29` references it, `tsconfig.tests.json`'s `exclude` names exactly `tools/downloader/web/test/**` and `tools/planner/web/test/**`. Untouched by this diff (`git diff` on the three files is empty) ✓                                                                                          |
+| `npm run check` and `npm test -- --project planner` pass                                                        | Verified directly: `npx tsc --build --force` clean, `npm run check` exit 0, `vitest run --project planner` → 512/512 passed, 40 files ✓                                                                                                                                                                                                                                                   |
+
+- **med** · `describeCost` bends "no cost as a single figure": a fixed price (`low === high`) prints as one number, and the acceptance line's only interesting branch has zero test coverage. `web/src/plan/format.ts:68-74`.
+- **med** · The "from the UI" half of the pinning acceptance line is not actually proven from the UI — the web test mocks the API client, so persistence/no-revision is only checked at the HTTP layer. `web/test/plan-view.test.tsx:375-401` vs `api/test/plan-view.test.ts:178-207`.
+- **low** · `uncheckedFor`'s currency detection silently changed behavior: the removed code looked placed ids up in `season.kept`, dropping a pinned-out-of-season candidate's currency; the new code looks the same ids up in the full candidate list, so it now counts. Very likely more correct, but unacknowledged in the Log and untested (no `compose.test.ts` case combines `previous`/pinned items with mixed currencies). Unreachable today — nothing calls `compose()` with `previous` outside tests, since re-plan is Phase 4. `tools/planner/itinerary/src/unchecked.ts:194-206`.
+- **low** · `updateItemPin` scopes only by `plan_id`, not by latest revision, so a pin aimed at an item on a superseded revision succeeds silently while `pinnedPlacements` only ever reads pins off the revision passed as `previous` — a write that looks successful but has no effect once Phase 4 exists. Unreachable today (no revise flow, no multi-revision plan in production). `tools/planner/api/src/db/plans.ts:239-256`.
+- **info** · `UncheckedConstraint`/`UncheckedConstraintKind` moved from `@planner/itinerary` into `@planner/contract`, plus `ITEM_NOT_FOUND` and three new wire types added to `contract/src/api.ts`. All additive and well-justified in the Log and in-file docs; the root `CLAUDE.md`'s "not unilateral" rule is satisfied by the ticket recording the decision, but it's the kind of package-boundary move worth a second pair of eyes given this was reviewed by the same model class that wrote it. Not a gate issue.
+- Structural note (not a finding): the core "same list" claim between `compose()`'s own `unchecked` and `uncheckedForRevision` is not merely tested on 6 shapes — it's guaranteed by construction, since both call sites route through the identical `uncheckedFor` over the same candidate pool and semantically-identical `placedIds`. The dead-branch removal (`untilDeparture === null ⟺ dates.kind === "open"`) checks out independently against `daysUntilDeparture` in `dates.ts:103-109`.
+- `selectPlans`' `GROUP BY plans.id` with non-aggregated `title`/`created_at`/`updated_at` is safe: those columns are functionally dependent on `plans.id` (one row per id on the "one" side of the join), so SQLite's bare-column extension can't pick an inconsistent value.
+- Untrusted input (candidate titles, summaries, source titles/URLs) reaches the DOM only through React text nodes (auto-escaped) and a schema-restricted `https?` `href`; no `dangerouslySetInnerHTML` anywhere in `PlanView.tsx`/`Provenance.tsx`. No `console`, no `any`, `import type` and relative `.ts` extensions used throughout the diff.
+- NFR: security ✓ (no new subprocess/fetch of user URLs; existing SSRF/redaction paths untouched; DOM escaping verified) · performance ✓ (derivation is O(candidates), no re-pack, indexed list query) · reliability ✓ (transactional pin, defensive `REVISION_NOT_FOUND` mapping) with the two low-severity latent gaps noted above for Phase 4 · maintainability ✓ with the currency-behavior-change note above being the one place the Log's account is incomplete.
+
 ## Log
 
 ### 2026-08-16 — done
@@ -302,3 +328,69 @@ component test and a browser launch there. The plan view's claims are asserted i
 
 512 tests pass in the planner project, 1078 across the repo, `npm run check`
 green.
+
+### 2026-08-16 — answering the review
+
+The gate above came back **CONCERNS** and is appended unedited. What I changed
+in response, and what I did not.
+
+**Two defects the gate's own `code-review` pass surfaced that did not make the
+section, both real and both fixed.** Recording them here rather than editing the
+reviewer's table, which is not mine to rewrite.
+
+- **`App.read()` cleared `watching`, so closing a plan reached from a finished
+  run re-opened the wizard.** The two ways into a plan are the list and a
+  finished run's "Read the plan"; clearing the run meant backing out fell
+  through to `openIntake` still being set, and an already-drafted trip started
+  asking its questions again with the run's outcome no longer reachable. One
+  line, and it was mine — I added that path. **Fixed with no regression test:**
+  `App.tsx` has never had a suite, and standing one up needs three client-module
+  mocks and would collide with pl-18's `Wizard.tsx`. A known gap, stated rather
+  than papered over.
+- **A failed pin threw the whole loaded document away.** The `.catch` reused the
+  page-level `failed` state, so one stale item replaced the rendered plan with a
+  bare message — and the error most likely to arrive there is `ITEM_NOT_FOUND`,
+  whose own copy tells the reader to _reload the plan and see the current
+  draft_. That was the one response making its own advice impossible to follow.
+  Now a separate `pinFailed` reports beside the document. Asserted in
+  `web/test/plan-view.test.tsx`.
+
+**The two `med` findings.**
+
+- **The fixed-price branch is now tested, and the interpretation is stated.**
+  `low === high` renders as "20 EUR, a posted price". The acceptance line is
+  about no _estimate_ being shown as one figure, and the contract allows
+  `low === high` deliberately as a **different claim** — a museum's posted
+  admission is a quote, legitimately. The reviewer is right that this was an
+  untested reading of the line; it is a decision, so it now has a test naming it
+  as one. Keeping the figure and labelling it beats rendering "20–20", which
+  would read as an estimate.
+- **"Pinning from the UI" stays `unproven (gate)`, and that is the honest
+  state.** The web test mocks the API client, because this repo's rule is that
+  the fake is the client module and never `fetch`; the HTTP test proves persist
+  and no-revision. The two meet at a mocked seam, so neither proves the sentence
+  end to end. Closing it properly means an e2e spec, which the brief did not ask
+  for and which costs a browser launch in CI — **that is a scope call for a human,
+  not one to take quietly**, so the row stays as the reviewer wrote it.
+
+**The two `low` findings, both accepted and neither fixed.**
+
+- **The currency behaviour did change, and the Log was incomplete.** The old code
+  looked placed ids up in `season.kept`; the new code uses the full candidate
+  list. They differ for exactly one input — a candidate pinned in a previous
+  revision whose season falls outside the trip, which is placed because a pin
+  outranks the season filter but is absent from `kept`. The new answer is the
+  correct one: a placed item's currency counts. It is unreachable until Phase 4
+  wires re-plan, which is why no test covers it, and it should get one when that
+  lands.
+- **`updateItemPin` scopes by plan, not by latest revision**, so once a second
+  revision exists a pin aimed at a superseded item will succeed and do nothing.
+  Also Phase 4's, and left deliberately: narrowing it now would be guessing at
+  what re-plan wants from pinning, and the affordance is unreachable today
+  because the UI only ever renders the latest revision's items.
+
+**One reuse point from the same pass, fixed:** `humanise` had been copied into
+`web/src/plan/format.ts` from `web/src/wizard/format.ts`. Now re-exported, so
+the rule has one home.
+
+514 tests in the planner project, 1080 across the repo, `npm run check` green.

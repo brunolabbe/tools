@@ -74,8 +74,18 @@ export function App(): React.ReactElement {
     setOpenIntake(id);
   }, []);
 
+  /**
+   * Read a plan, **without forgetting where the reader came from.**
+   *
+   * `watching` is deliberately left alone. Clearing it here looked tidy and was
+   * a bug: the two ways into a plan are the list and a finished run's "Read the
+   * plan", and closing the plan has to go back to whichever it was. With
+   * `watching` cleared, backing out of a plan reached from a finished run fell
+   * through to `openIntake` still being set and re-opened the *wizard* — an
+   * already-drafted trip asking its questions again, with the run's outcome no
+   * longer reachable at all.
+   */
   const read = useCallback((planId: string): void => {
-    setWatching(null);
     setReading(planId);
   }, []);
 
