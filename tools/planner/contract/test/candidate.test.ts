@@ -1,14 +1,17 @@
 import { describe, expect, test } from "vitest";
 import {
   ALL_YEAR,
+  candidateLocationSchema,
   candidateSchema,
   costEstimateSchema,
+  location,
   MODEL_ASSERTED,
   provenanceSchema,
   seasonWindowSchema,
   sourceSchema,
   SPECIALISTS,
   type Candidate,
+  type Place,
   type Source,
 } from "../src/index.ts";
 
@@ -18,13 +21,16 @@ const SOURCE: Source = {
   fetchedAt: "2026-08-14T18:12:04.000Z",
 };
 
+const SOMEWHERE: Place = { name: "Somewhere", locality: null, coordinates: null };
+const ELSEWHERE: Place = { name: "Elsewhere", locality: null, coordinates: null };
+
 function candidate(overrides: Partial<Candidate> = {}): Candidate {
   return {
     id: "cand-1",
     specialist: "activities",
     title: "A thing to do",
     summary: "Why it is worth doing.",
-    place: { name: "Somewhere", locality: null, coordinates: null },
+    location: location.at(SOMEWHERE),
     durationMinutes: 90,
     cost: null,
     season: null,
@@ -112,15 +118,56 @@ describe("season", () => {
   });
 });
 
+describe("location", () => {
+  test("a leg carries both ends, and one end is not a leg", () => {
+    // The property the union exists for. A drive's endpoints used to live in
+    // its title — "Montréal to Rimouski via the 132" — where nothing could read
+    // them, and travel time, a detour and conditions along a corridor all need
+    // two points before they mean anything.
+    expect(candidateLocationSchema.safeParse(location.between(SOMEWHERE, ELSEWHERE)).success).toBe(
+      true,
+    );
+    expect(candidateLocationSchema.safeParse({ kind: "between", from: SOMEWHERE }).success).toBe(
+      false,
+    );
+    expect(candidateLocationSchema.safeParse({ kind: "between", to: ELSEWHERE }).success).toBe(
+      false,
+    );
+  });
+
+  test("a leg that starts and ends in the same place is legal", () => {
+    // A scenic loop out of a town and back. Rejecting it would make the loop
+    // unrepresentable, the way ordering a SeasonWindow would make winter one.
+    expect(candidateLocationSchema.safeParse(location.between(SOMEWHERE, SOMEWHERE)).success).toBe(
+      true,
+    );
+  });
+
+  test("the two kinds do not accept each other's fields", () => {
+    expect(candidateLocationSchema.safeParse({ kind: "at", from: SOMEWHERE }).success).toBe(false);
+    expect(candidateLocationSchema.safeParse({ place: SOMEWHERE }).success).toBe(false);
+  });
+
+  test("every specialist may be at a place or run between two", () => {
+    // Which of the two makes sense for a given specialist is the packer's
+    // business — `BUCKET_OF` in `@planner/itinerary` — and deliberately not
+    // this schema's. The contract says what is representable.
+    for (const specialist of SPECIALISTS) {
+      const leg = candidate({ specialist, location: location.between(SOMEWHERE, ELSEWHERE) });
+      expect(candidateSchema.safeParse(leg).success).toBe(true);
+    }
+  });
+});
+
 describe("candidate", () => {
   test("a well-formed candidate round-trips", () => {
     const full = candidate({
       specialist: "lodging",
-      place: {
+      location: location.at({
         name: "A hut",
         locality: "Québec",
         coordinates: { latitude: 48.9, longitude: -66.1 },
-      },
+      }),
       cost: {
         currency: "CAD",
         low: 30,

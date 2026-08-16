@@ -31,10 +31,14 @@
       "specialist": "route-and-logistics",
       "title": "Vienna to Ljubljana by direct rail",
       "summary": "A single train rather than a change at Villach, which is the difference between a travel morning and a travel day. Book at the ninety-day mark for the cheap fare bucket.",
-      "place": {
-        "name": "Wien Hauptbahnhof",
-        "locality": "Vienna, Austria",
-        "coordinates": { "latitude": 48.1854, "longitude": 16.3765 }
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Wien Hauptbahnhof",
+          "locality": "Vienna, Austria",
+          "coordinates": { "latitude": 48.1854, "longitude": 16.3765 }
+        },
+        "to": { "name": "Ljubljana", "locality": "Slovenia", "coordinates": null }
       },
       "durationMinutes": 360,
       "cost": {
@@ -53,10 +57,14 @@
       "specialist": "route-and-logistics",
       "title": "Ljubljana to Trieste by bus, not train",
       "summary": "The rail link is slow and involves a change; the coach is under two hours and runs several times a day. Worth naming because the party asked for trains and this is the one leg where the train is the wrong answer.",
-      "place": {
-        "name": "Ljubljana bus station",
-        "locality": "Ljubljana, Slovenia",
-        "coordinates": { "latitude": 46.0583, "longitude": 14.5108 }
+      "location": {
+        "kind": "between",
+        "from": {
+          "name": "Ljubljana bus station",
+          "locality": "Ljubljana, Slovenia",
+          "coordinates": { "latitude": 46.0583, "longitude": 14.5108 }
+        },
+        "to": { "name": "Trieste", "locality": "Italy", "coordinates": null }
       },
       "durationMinutes": 110,
       "cost": {
@@ -75,10 +83,13 @@
       "specialist": "activities",
       "title": "Lake Bled as a day out of Ljubljana",
       "summary": "An hour and a bit each way by bus, and it does not need a night of its own — which is what keeps the three-nights-per-city floor intact.",
-      "place": {
-        "name": "Lake Bled",
-        "locality": "Slovenia",
-        "coordinates": { "latitude": 46.3625, "longitude": 14.0936 }
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Lake Bled",
+          "locality": "Slovenia",
+          "coordinates": { "latitude": 46.3625, "longitude": 14.0936 }
+        }
       },
       "durationMinutes": 480,
       "cost": {
@@ -97,10 +108,13 @@
       "specialist": "food",
       "title": "Osmize in the Carso above Trieste",
       "summary": "Farmhouses licensed to sell their own wine and cured meat for a few weeks a year, announced when they open rather than scheduled. Which are open during the trip cannot be known this far out.",
-      "place": {
-        "name": "Carso",
-        "locality": "Trieste, Italy",
-        "coordinates": null
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Carso",
+          "locality": "Trieste, Italy",
+          "coordinates": null
+        }
       },
       "durationMinutes": 180,
       "cost": {

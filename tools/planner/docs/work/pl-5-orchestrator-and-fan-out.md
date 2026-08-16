@@ -5,7 +5,7 @@ title: The orchestrator and the specialist fan-out
 kind: work-package
 status: ready
 milestone: P2
-depends_on: [pl-4]
+depends_on: [pl-4, pl-15]
 ---
 
 # pl-5 — The orchestrator and the specialist fan-out
@@ -94,6 +94,14 @@ Traps worth knowing in advance:
   schedulable specialist that returned candidates and got none of them onto a
   day. It also returns an `unchecked` list that **does not persist**; see
   [pl-10](./pl-10-plan-view-and-provenance.md).
+- **A route candidate is a leg, and a leg has two ends.** `Candidate.location`
+  is a union as of [pl-15](./pl-15-candidate-legs.md): `at` a place, or
+  `between` two. A route specialist that returns `at` has put its endpoints in
+  its prose, which is the shape the fixtures had before pl-15 and the shape a
+  model will produce again unless the prompt and the output schema both say
+  otherwise. Travel time, a detour off a leg, and conditions along one corridor
+  rather than another are all unbuildable without both ends — none of them is in
+  this ticket, and all of them are foreclosed by getting this wrong here.
 - **Cancel must kill the whole fan-out.** In-flight provider calls take the
   `AbortSignal` that `ModelRequest` already carries.
 
@@ -101,6 +109,10 @@ Traps worth knowing in advance:
 
 - `rosterFor` is table-driven and tested per trip shape, including a shape where a
   specialist is deliberately absent.
+- **Every candidate the route specialist returns is a `between`**, asserted per
+  checked-in brief. The fixture side of this is already asserted in
+  `contract/test/fixtures.test.ts`; this is the same rule held against the
+  fan-out's own output.
 - A run against the checked-in briefs produces candidates from every rostered
   specialist, streams per-specialist progress, and survives one specialist being
   made to fail — with the gap present in the output and no fabricated content.

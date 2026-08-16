@@ -40,10 +40,13 @@
       "specialist": "lodging",
       "title": "All-inclusive family property, Riviera Maya",
       "summary": "A zero-entry pool the youngest can stand in, a kids' club with a stated minimum age of four, and family rooms rather than two doubles that must be booked separately.",
-      "place": {
-        "name": "Riviera Maya",
-        "locality": "Quintana Roo, Mexico",
-        "coordinates": null
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Riviera Maya",
+          "locality": "Quintana Roo, Mexico",
+          "coordinates": null
+        }
       },
       "durationMinutes": null,
       "cost": {
@@ -62,10 +65,14 @@
       "specialist": "route-and-logistics",
       "title": "Direct Ottawa to Cancún, and the resort transfer",
       "summary": "There is a seasonal non-stop, which is what keeps this inside the party's two-hour connection rule. The airport transfer is normally sold with the package and is about an hour each way.",
-      "place": {
-        "name": "Cancún International Airport",
-        "locality": "Quintana Roo, Mexico",
-        "coordinates": { "latitude": 21.0365, "longitude": -86.8771 }
+      "location": {
+        "kind": "between",
+        "from": { "name": "Ottawa", "locality": "Ontario, Canada", "coordinates": null },
+        "to": {
+          "name": "Cancún International Airport",
+          "locality": "Quintana Roo, Mexico",
+          "coordinates": { "latitude": 21.0365, "longitude": -86.8771 }
+        }
       },
       "durationMinutes": 300,
       "cost": {
@@ -84,10 +91,13 @@
       "specialist": "practicalities",
       "title": "Passports for the children, and the entry form",
       "summary": "A child's passport is valid five years and the two-year-old may not have one. This is the longest lead time on the trip and the only one that cannot be bought late.",
-      "place": {
-        "name": "Ottawa",
-        "locality": "Ontario, Canada",
-        "coordinates": null
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Ottawa",
+          "locality": "Ontario, Canada",
+          "coordinates": null
+        }
       },
       "durationMinutes": null,
       "cost": {

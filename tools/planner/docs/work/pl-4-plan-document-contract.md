@@ -250,3 +250,20 @@ fixture set would let that path rot unnoticed.
   error that looks nothing like the actual cause.
 - Backticks inside the migration's SQL comments terminate the template literal.
   Cost one confusing `TS1005`; the comments use double quotes now.
+
+#### Amended 2026-08-16 by pl-15
+
+**`Candidate.place` is now `Candidate.location`**, a discriminated union of
+`at` a place and `between` two — see [pl-15](./pl-15-candidate-legs.md). The
+shape this ticket shipped could not say where a drive started and ended, so the
+six candidate sets checked in here carried a leg's endpoints in its title and a
+corridor in its `Place`. Travel time, a detour and conditions along a route all
+need both ends as structure, and none of them was buildable until this changed.
+
+Two things this ticket got away with that pl-15 had to pay for: the field had
+**no reader anywhere in the tool** — the packer buckets by `specialist`, so a
+candidate's location was written and never consulted — and four of the six route
+candidates here carry real coordinates, which the first pass at the migration
+overwrote with `null`. The fixtures are more grounded than the roadmap's
+"coordinates are null until Phase 3" suggests; that sentence is about what the
+tool _produces_.

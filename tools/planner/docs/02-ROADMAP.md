@@ -100,7 +100,9 @@ The three pieces that turn a brief into a document, in the order the code forces
 
 1. **The contract for a plan** — `Candidate`, `Plan`, `PlanRevision`, `PlanDay`,
    `PlanItem`, provenance, `pinned`. Contract-first because four packages depend
-   on it. → [pl-4](./work/pl-4-plan-document-contract.md)
+   on it. → [pl-4](./work/pl-4-plan-document-contract.md), amended by
+   [pl-15](./work/pl-15-candidate-legs.md), which made a candidate either `at` a
+   place or `between` two so a leg's endpoints stop living in its prose.
 2. **The orchestrator and the fan-out** — roster as a pure function of the brief,
    specialists in parallel, each returning candidates and never a schedule, the
    run as a job with real progress. → [pl-5](./work/pl-5-orchestrator-and-fan-out.md)
@@ -184,8 +186,12 @@ Short, and each one is a real decision someone has to make rather than a gap:
 2026-08-16, and the answer is **no — pack without it and name the gap.** The
 question was raised by pl-4 and is the one that shaped pl-9: §5 ranks distances
 and travel times as the first thing grounding buys, Phase 2 has no grounding,
-and `Place.coordinates` is null until Phase 3, so there was nothing to compute a
-leg from. The alternatives were a straight-line floor from coordinates —
+and `Place.coordinates` is null until Phase 3, so there was nothing to measure a
+leg with — and, until [pl-15](./work/pl-15-candidate-legs.md), no leg to measure
+either, since a candidate had one place rather than two. That half is closed and
+the answer is unchanged: a leg with both ends and no distance along it is still
+not something the composer can pack under. The alternatives were a
+straight-line floor from coordinates —
 coordinates are themselves grounding, so that is Phase 3 wearing a hat — and
 pulling travel-time grounding forward, which buys the most and costs the
 cleanliness of "Phase 2 is a claim about machinery, not about a model".

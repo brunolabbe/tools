@@ -28,7 +28,7 @@ reasoning, including what the decision costs, is an amendment to
 argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
-**330 unit tests pass across 25 files, plus 2 e2e specs.** `npm run check` is
+**336 unit tests pass across 25 files, plus 2 e2e specs.** `npm run check` is
 green. The repo-wide CI runs the unit suite on every push, and
 `.github/workflows/planner.yml` now carries two gates — the e2e suite in a real
 browser, and the image, which is built, started, and asked for both `/api/health`
@@ -94,6 +94,7 @@ still unwritten.
 | [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | ready     | 1,100 lines of `.tsx` and no test renders any of it      |
 | [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI  |
 | [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2    |
+| [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two        |
 
 ## Known gaps and risks
 
@@ -131,7 +132,9 @@ comes back as `UNCHECKED_CONSTRAINTS` on the result rather than as silence.
 
 **Phase 2 does not pack under travel time, and that is now decided rather than
 open.** `Place.coordinates` is null until grounding and §5 puts distances in
-Phase 3, so there is no leg to compute. Decided 2026-08-16: **pack without it
+Phase 3, so a leg has no measured length. (Until
+[pl-15](./work/pl-15-candidate-legs.md) it had no ends either; that half is
+closed and this one is not.) Decided 2026-08-16: **pack without it
 and name the gap**, which narrowed the P2 milestone's wording — see the
 roadmap. Every plan carries `travel-time` on its unchecked list, without
 exception, and a test per trip shape says so. Daily distance (backcountry) and
@@ -156,6 +159,25 @@ brief carry it. Making it real means a structured constraint on the brief, not a
 cleverer string search over the free-text one. Recorded as an amendment to
 [00-ANALYSIS.md §7](./00-ANALYSIS.md), which had claimed otherwise — the second
 section of the analysis to be overridden by building the thing it describes.
+
+**A candidate can now say where it goes, not only where it is.**
+[pl-15](./work/pl-15-candidate-legs.md) replaced `Candidate.place` with
+`Candidate.location`, a union of `at` a place and `between` two, and moved the
+six checked-in sets onto it. Nothing consumes the endpoints yet — `travel-time`
+is still unchecked on every plan — so this is a claim about what is
+representable and not about what is true. It was taken before pl-5 because a
+route specialist that puts its endpoints in prose is the shape the fixtures had,
+and fixing it afterwards would cost a re-run of every stored candidate rather
+than six files. Three things it unblocks and none of which is built: travel
+time between consecutive items, a detour weighed off a leg, and conditions along
+one corridor rather than another.
+
+Two findings from it are worth carrying: **the field had no reader anywhere in
+the tool** before this — the packer buckets by `specialist`, so a candidate's
+location was written and never consulted, which is why a breaking union was
+cheap — and **the fixtures already carry coordinates on eleven places**, four of
+them on route candidates. "Coordinates are null until Phase 3" is true of what
+the tool produces, not of what pl-4 checked in.
 
 **Nothing produces real candidates.** The composer's only input in the repo is
 pl-4's six checked-in sets, which is enough to build and test it against and is

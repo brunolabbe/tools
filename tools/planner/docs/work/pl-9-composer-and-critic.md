@@ -171,3 +171,19 @@ than approximated. No `startsAt` on any item: a wall-clock start is a claim that
 something outside the plan fixes it, and without opening hours nothing could.
 No currency conversion, ever — a rate is a fact with an age, which makes it
 grounding.
+
+#### Amended 2026-08-16 by pl-15
+
+**A leg now has both its ends, and nothing here changes.** This log argues that
+travel time, `daily-distance` and `machine-range` are unchecked because
+`Place.coordinates` is null and so there is no leg to compute.
+[pl-15](./pl-15-candidate-legs.md) made a candidate either `at` a place or
+`between` two, so the second half of that premise is gone: a drive carries its
+origin and its destination as structure. What is still missing is a **distance
+along** one, which is grounding and is Phase 3.
+
+The conclusion is untouched — all three stay on `UNCHECKED_CONSTRAINTS`, the
+composer reads no endpoints, and the tests that assert `travel-time` on every
+trip shape are unchanged. Recorded because the reason is now narrower than the
+sentence that carried it, and a right conclusion resting on a dead premise is
+what rots first. The wording in `unchecked.ts` and `compose.ts` moved with it.

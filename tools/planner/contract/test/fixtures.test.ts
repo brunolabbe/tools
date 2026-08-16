@@ -47,6 +47,29 @@ describe("the checked-in fixtures", () => {
     }
   });
 
+  test("every route candidate is a leg, and carries both of its ends", () => {
+    // The fixture-side half of pl-15. A drive with one point is the shape these
+    // files had before it — "Montréal to Rimouski via the 132" with the 132 in
+    // the `place` and the two towns readable only by a human — and it is the
+    // shape a specialist will produce again unless something says otherwise.
+    // pl-5's route specialist is held to the same rule; this is what its
+    // fixtures have to look like for that assertion to mean anything.
+    for (const shape of TRIP_SHAPES) {
+      for (const candidate of loadFixture(shape).candidates) {
+        if (candidate.specialist !== "route-and-logistics") continue;
+        expect(candidate.location.kind).toBe("between");
+      }
+    }
+  });
+
+  test("the set covers both location kinds", () => {
+    const kinds = TRIP_SHAPES.flatMap((shape) =>
+      loadFixture(shape).candidates.map((candidate) => candidate.location.kind),
+    );
+    expect(kinds).toContain("at");
+    expect(kinds).toContain("between");
+  });
+
   test("the set covers both provenance kinds", () => {
     // Grounding does not exist yet, so almost everything here is the model
     // talking — which is honest. But the UI has to render a grounded line too,

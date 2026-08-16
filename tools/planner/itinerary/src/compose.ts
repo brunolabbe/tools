@@ -294,8 +294,9 @@ function uncheckedFor(context: {
 }): UncheckedConstraint[] {
   const { brief, dates, span, packed, season, untilDeparture } = context;
   const notes: UncheckedConstraint[] = [
-    // Always, and first. Phase 2 has no coordinates, so no leg between two
-    // items was measured — decided 2026-08-16, roadmap _Still open_.
+    // Always, and first. A leg carries both its ends since pl-15, but Phase 2
+    // has no coordinates, so nothing measured the distance along one — decided
+    // 2026-08-16, roadmap _Still open_.
     unchecked(
       "travel-time",
       "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",

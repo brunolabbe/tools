@@ -39,10 +39,10 @@
       "specialist": "route-and-logistics",
       "title": "Montréal to Rimouski via the 132",
       "summary": "The slow river road rather than the autoroute. Adds about an hour over the 20 and turns the drive into the first day of the trip rather than a transfer.",
-      "place": {
-        "name": "Route 132, Bas-Saint-Laurent",
-        "locality": "Québec, Canada",
-        "coordinates": null
+      "location": {
+        "kind": "between",
+        "from": { "name": "Montréal", "locality": "Québec, Canada", "coordinates": null },
+        "to": { "name": "Rimouski", "locality": "Québec, Canada", "coordinates": null }
       },
       "durationMinutes": 330,
       "cost": null,
@@ -55,10 +55,13 @@
       "specialist": "activities",
       "title": "Forillon National Park — Cap Bon Ami and the Mont-Saint-Alban loop",
       "summary": "A half-day on foot with a lookout the children can actually reach, and seals on the beach below most mornings.",
-      "place": {
-        "name": "Forillon National Park",
-        "locality": "Gaspé, Québec",
-        "coordinates": { "latitude": 48.7594, "longitude": -64.1889 }
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Forillon National Park",
+          "locality": "Gaspé, Québec",
+          "coordinates": { "latitude": 48.7594, "longitude": -64.1889 }
+        }
       },
       "durationMinutes": 240,
       "cost": {
@@ -77,10 +80,13 @@
       "specialist": "lodging",
       "title": "Motel on the water at Sainte-Anne-des-Monts",
       "summary": "Simple rooms, private bathrooms, and a kitchenette that makes a cheap dinner possible after a long day.",
-      "place": {
-        "name": "Sainte-Anne-des-Monts",
-        "locality": "Québec, Canada",
-        "coordinates": null
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Sainte-Anne-des-Monts",
+          "locality": "Québec, Canada",
+          "coordinates": null
+        }
       },
       "durationMinutes": null,
       "cost": {
@@ -99,10 +105,13 @@
       "specialist": "food",
       "title": "Poissonnerie counter lunch, Sainte-Thérèse-de-Gaspé",
       "summary": "Buy shrimp off the boat and eat it at a picnic table. Cheap, fast, and the thing the children will remember.",
-      "place": {
-        "name": "Sainte-Thérèse-de-Gaspé",
-        "locality": "Québec, Canada",
-        "coordinates": null
+      "location": {
+        "kind": "at",
+        "place": {
+          "name": "Sainte-Thérèse-de-Gaspé",
+          "locality": "Québec, Canada",
+          "coordinates": null
+        }
       },
       "durationMinutes": 60,
       "cost": {
