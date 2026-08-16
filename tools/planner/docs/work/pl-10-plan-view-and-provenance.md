@@ -28,6 +28,16 @@ on the roster. A plan that says "we could not check lodging" is useful; the same
 plan with the gap silently omitted is the failure the rule exists to prevent.
 The plan document can express it, and nothing shows it.
 
+**And a third arrived with [pl-9](./pl-9-composer-and-critic.md):** the list of
+constraints the composer **could not evaluate**. Travel time on every plan,
+because `Place.coordinates` is null until grounding — §2's failure 1, unchecked
+— plus opening hours, deal-breakers, daily distance, machine range, an assumed
+effort appetite, a band budget with no figure to sum against, mixed currencies.
+This is the one of the three that matters most and is easiest to lose, because
+**a packed plan looks equally finished whether every constraint was enforced or
+three were skipped for want of data.** The reader cannot see the difference, so
+silence about it is the most consequential thing this view could get wrong.
+
 [pl-7](./pl-7-intake-persistence-and-wizard.md) owns the intake wizard and stops
 at the brief. Nothing owns rendering the plan, which leaves Phase 2 able to
 _produce_ a document nobody can read.
@@ -58,11 +68,36 @@ _produce_ a document nobody can read.
    applicable to this trip" is reassurance, "we tried and could not" is a warning.
    They belong in the document's flow where the missing section would have been —
    not in a toast that disappears.
-6. **Pinning, from the UI.** Pin and unpin an item. This is the one write that
+6. **Show what was not checked, beside the days.** `ComposeResult.unchecked` from
+   `@planner/itinerary` — each entry a kind, a sentence already written for a
+   reader, and the candidate ids it applies to when it applies to particular
+   items rather than to the whole plan. Travel time is on every plan and is the
+   one to render most plainly.
+
+   **It does not survive a reload, and that is the trap.** Every `PlanGapReason`
+   is about a _specialist_ — failed, dropped, not applicable, found nothing — and
+   "nothing measured the distance" is not: route-and-logistics ran perfectly and
+   returned good candidates. So the list has nowhere to live on `PlanRevision`
+   and comes back only from the `compose()` call, which means a plan read back
+   out of the database has lost it. Two ways to close that, and it is a decision
+   rather than a detail:
+   - **Persist it**, which needs a `PlanGapReason` member that is about a
+     constraint rather than about a specialist — a contract change, coordinated,
+     and pl-9 deliberately did not make it unilaterally.
+   - **Re-derive it** on read by re-composing from the stored brief and
+     candidates. The composer is pure and deterministic, so this genuinely
+     works; it costs a re-pack per read and drifts the moment `limits.ts`
+     changes under a stored plan.
+
+   Rendering it only on the run that produced it is the third option and it is
+   the one to refuse: it makes the honesty a property of how you arrived at the
+   page.
+
+7. **Pinning, from the UI.** Pin and unpin an item. This is the one write that
    does **not** create a revision, and the database enforces it: `plan_items`
    rejects an update of every column but `pinned`. A pin is a statement about what
    the next re-plan may touch.
-7. **Surface the revision list, read-only.** Which revision is showing, and how
+8. **Surface the revision list, read-only.** Which revision is showing, and how
    many there are. **The diff is Phase 4 and is out of scope here** — this ticket
    is the honest read of one document, not the revision experience.
 
@@ -94,6 +129,10 @@ Traps worth knowing in advance:
   whose cost provenance differs from its own is rendered honestly, asserted.
 - A revision carrying a `PlanGap` shows it in the plan body, with a distinct
   sentence per `PlanGapReason`.
+- **Every plan says travel time was not checked**, and the assertion is on a plan
+  loaded from the database rather than on one just composed — that is the half
+  that can silently go missing. Whichever of the two options above is taken, this
+  test is what proves it was.
 - Pinning from the UI persists and creates no revision, asserted.
 - No cost is displayed as a single figure anywhere.
 - `tools/planner/web/test/tsconfig.json` exists, is referenced from the root, and

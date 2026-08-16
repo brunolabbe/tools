@@ -76,6 +76,24 @@ Traps worth knowing in advance:
   the declined case, which is the point: there is one path, not two.
 - **Season filtering happens before the composer**, not inside it: a candidate
   outside its own season window should never reach packing (§7).
+- **A specialist that ignores the brief's appetite answers writes candidates the
+  composer throws away.** Found by [pl-9](./pl-9-composer-and-critic.md) on
+  2026-08-16, composing the six checked-in fixture sets: the route candidates are
+  routinely over the day's drive budget and get dropped. The road-trip fixture
+  proposes a 5½-hour leg to a party that answered `half-day`, and the resort
+  fixture a 5-hour transfer — so a road trip comes out with no drives in it and a
+  `no-candidates-found` gap where its route should be. The composer is right to
+  refuse them; the fix is upstream. **`driveAppetite`, `pace` and `effort` are
+  constraints on what a specialist may propose, not context for its prose**, and
+  the numbers those answers translate into are in `itinerary/src/limits.ts`. A
+  leg longer than the day allows has to be split or not proposed.
+- **The composer is built and it takes the gaps from here.** `compose()` in
+  `@planner/itinerary` accepts a `gaps` array and carries it onto the revision
+  untouched, because it cannot tell "never on the roster" from "failed" — those
+  are this ticket's to know. It adds only `no-candidates-found`, for a
+  schedulable specialist that returned candidates and got none of them onto a
+  day. It also returns an `unchecked` list that **does not persist**; see
+  [pl-10](./pl-10-plan-view-and-provenance.md).
 - **Cancel must kill the whole fan-out.** In-flight provider calls take the
   `AbortSignal` that `ModelRequest` already carries.
 
@@ -89,6 +107,11 @@ Traps worth knowing in advance:
 - The budget path is tested: a roster that exceeds the cap is degraded before the
   fan-out and the drop is recorded.
 - Nothing in this ticket packs a day or writes a schedule.
+- **The candidates a specialist returns are placeable.** For each checked-in
+  brief, `compose()` over the fan-out's output places at least one candidate from
+  every rostered schedulable specialist, or the test says which one it dropped and
+  why. This is the assertion that catches a specialist ignoring `driveAppetite`,
+  and it is cheap because the composer is already pure.
 - `npm run check` and `npm test -- --project planner` pass.
 
 ## Log

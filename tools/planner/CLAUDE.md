@@ -5,8 +5,11 @@ and are not repeated here.
 
 Read `tools/planner/docs/00-ANALYSIS.md` before touching intake, roster,
 specialist or composer code — the non-obvious decisions are justified there and
-not repeated here. **Read §3 with its amendment**: the section argues for a model
-interview and the amendment overrules it, and the pair is deliberate. `01-ARCHITECTURE.md` beside it is the structure that follows;
+not repeated here. **Read §3 and §7 with their amendments**: §3 argues for a
+model interview and its amendment overrules it; §7's failure table promises a
+deal-breaker check "in code" that free text cannot support, and its amendment
+says so. Both pairs are deliberate — the argument is kept and overridden rather
+than rewritten. `01-ARCHITECTURE.md` beside it is the structure that follows;
 `02-ROADMAP.md` is what is planned and what is still open; `03-STATUS.md` is what
 actually exists today, which is much less. Each ticket keeps its brief and its
 log in `docs/work/`.

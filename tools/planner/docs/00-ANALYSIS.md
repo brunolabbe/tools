@@ -301,6 +301,36 @@ The "name the gap" row is the repo's _never fake progress_ rule in this domain: 
 plan with "we could not check lodging availability" is useful, and a plan that
 quietly invents a hotel is worse than no plan.
 
+### Amendment, 2026-08-16 — one of these rows cannot be built as written
+
+Building the composer ([pl-9](./work/pl-9-composer-and-critic.md)) proved the
+**deal-breaker** row aspirational. Its response column says "constraint check in
+code", and in code is exactly where that check cannot happen: `dealBreakers` is
+`Slot<string[]>` of free text — _"no more than one night in any campground
+without showers"_ — and no arithmetic decides whether a candidate violates it.
+A keyword match would fail in both directions while _looking_ like a check,
+which is worse than not checking, because the plan would then claim a guarantee
+it does not have.
+
+So the composer states it as unchecked, on every plan that has deal-breakers,
+and the specialists that read the brief carry it instead. Making the row true
+means giving the brief a **structured** constraint the composer can evaluate —
+not a cleverer string search over the free-text one. The free-text slot stays
+either way: it is what a user actually says, and §3's amendment already accepts
+that some of what they say cannot be turned into a field.
+
+Two smaller corrections from the same work, neither of which changes a response:
+
+- **"Infeasible day"** is real but almost never reached by the packer, which
+  refuses to place a candidate that would break a day. What actually produces one
+  is a **pin**: the user's placement is an input constraint and bypasses every fit
+  check, which is what the critic is for.
+- **Rows 1–3 are only as good as the data behind them.** Travel time (row 1's
+  "legs") and opening hours (row 2) are both grounding, so in Phase 2 neither is
+  checked at all. The honest form is a named unchecked constraint on the plan
+  rather than a quiet omission — see the roadmap's answered question of the same
+  date.
+
 ---
 
 ## 8. Scope boundaries

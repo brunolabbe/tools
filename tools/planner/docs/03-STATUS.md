@@ -140,18 +140,22 @@ machine range (motorised) are unchecked for the same reason.
 **The unchecked list does not survive a reload.** Every `PlanGapReason` is about
 a _specialist_ — failed, dropped, not applicable, found nothing — and "we could
 not check travel time" is not: route-and-logistics ran perfectly and what is
-missing is a distance nobody has. So the list lives on `ComposeResult` and pl-10
-must render it from the compose call. Persisting it needs a `PlanGapReason`
-member that is about a constraint rather than about a specialist, which is a
-contract change nobody has made; the argument is in
-[pl-9](./work/pl-9-composer-and-critic.md)'s log.
+missing is a distance nobody has. So the list lives on `ComposeResult`, and a
+plan read back out of the database has lost it. Two ways to close that — persist
+it behind a new `PlanGapReason` member that is about a constraint, or re-derive
+it on read, which genuinely works because the composer is pure — and neither has
+been chosen. It is [pl-10](./work/pl-10-plan-view-and-provenance.md)'s decision
+and is laid out in that ticket; the argument for why `PlanGap` cannot carry it as
+it stands is in [pl-9](./work/pl-9-composer-and-critic.md)'s log.
 
-**Deal-breakers are not machine-checkable, and §7 assumes they are.**
+**Deal-breakers are not machine-checkable, and §7 assumed they were.**
 `dealBreakers` is free text, so no arithmetic decides whether a candidate
 violates one, and a keyword match would fail both ways while looking like a
 check. The composer states it as unchecked and the specialists that read the
-brief carry it. Making it real means a structured constraint, not a cleverer
-string search.
+brief carry it. Making it real means a structured constraint on the brief, not a
+cleverer string search over the free-text one. Recorded as an amendment to
+[00-ANALYSIS.md §7](./00-ANALYSIS.md), which had claimed otherwise — the second
+section of the analysis to be overridden by building the thing it describes.
 
 **Nothing produces real candidates.** The composer's only input in the repo is
 pl-4's six checked-in sets, which is enough to build and test it against and is
@@ -159,7 +163,9 @@ not a fan-out. pl-5 is what closes this, and composing those six turned up
 something it needs to know: **the route candidates are routinely over the day's
 drive budget and get dropped** — the road-trip fixture proposes a 5½-hour leg to
 a party that answered `half-day`. A specialist that ignores `driveAppetite`
-writes legs the composer will throw away.
+writes legs the composer will throw away — ticketed onto
+[pl-5](./work/pl-5-orchestrator-and-fan-out.md) as a trap and an acceptance
+criterion rather than left in this paragraph.
 
 **`REQUIRED_SHAPE_SLOTS` and the tree's `core` marking now agree, and a test
 says so in both directions** — a `core` question whose slot is not required, or
