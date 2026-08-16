@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0](https://github.com/brunolabbe/tools/compare/planner-v0.2.0...planner-v0.3.0) (2026-08-16)
+
+
+### Features
+
+* **planner:** choose a roster and fan out over it (pl-5) ([7dc236b](https://github.com/brunolabbe/tools/commit/7dc236b9a00085515a64c6e08aeef3b1846ef073))
+* **planner:** choose a roster and fan out over it (pl-5) ([cabdbb9](https://github.com/brunolabbe/tools/commit/cabdbb98b48e64fa769d081d921a16344cb6a649))
+* **planner:** let a candidate run between two places (pl-15) ([80fff44](https://github.com/brunolabbe/tools/commit/80fff448f66fa307d1845a6652897102b55fb230))
+* **planner:** let a candidate run between two places (pl-15) ([1ac6de6](https://github.com/brunolabbe/tools/commit/1ac6de6b7f56d839d8e7acbe904ccf13ed4c145e))
+* **planner:** run the fan-out as a job (pl-16) ([09bd161](https://github.com/brunolabbe/tools/commit/09bd161435c596920039ead5a339729b1126e3ac))
+* **planner:** run the fan-out as a job (pl-16) ([a112cd4](https://github.com/brunolabbe/tools/commit/a112cd46751880762d44bf70bec79082ba230b89))
+
+
+### Fixes
+
+* **planner:** carry the composer into the image (pl-16) ([b69a93a](https://github.com/brunolabbe/tools/commit/b69a93a899bfdf599f49aacd3efb26f49556bdf7))
+* **planner:** stop the fence pattern backtracking on a hostile reply (pl-5) ([d986e02](https://github.com/brunolabbe/tools/commit/d986e0284923443e0fc6702f7488e6d8767ddd59))
+
 ## [0.2.0](https://github.com/brunolabbe/tools/compare/planner-v0.1.0...planner-v0.2.0) (2026-08-16)
 
 
