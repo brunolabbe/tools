@@ -272,10 +272,28 @@ reach into here is that **`stage` no longer implies required** — use
 fixtures went in a new `web/test/plan-fixtures.ts` rather than into
 `web/test/fixtures.ts`, whose `BASE` pl-18 changes.
 
-**Not done, deliberately: `03-STATUS.md`.** PR #42 is rewriting that file's
-ticket table and pl-18's log records further edits it needs, so all three of us
-editing it now is three conflicts for one paragraph. Agreed with the pl-18
-session that whoever lands last rewrites it. That is the follow-up.
+**`03-STATUS.md` was held, then rebased onto and written.** PR #42 was rewriting
+that file's ticket table when this branch opened, so it was left alone until #42
+merged; this branch then rebased onto it and wrote the pl-10 half — Phase 2
+complete, the routes, the plan-view paragraph, and the unchecked-list paragraph
+that pl-10 made false.
+
+**What is left in that file belongs to pl-18 (#43) and is unclaimed at the time
+of writing:** line 40's "version 2, 37 questions" (version **3** now, same 37),
+line 52's "stops at the core questions" (which wants the same softening the
+`CLAUDE.md` rule got, because `core` no longer means needed), and the
+"`REQUIRED_SHAPE_SLOTS` and the tree's `core` marking now agree ... in both
+directions" claim at 243-248, which is the one most likely to be missed because
+it sits far from the summary. Agreed with the pl-18 session that **whoever lands
+last writes them**, and that is the right rule for a second reason: an amendment
+describes code, so it cannot land before the branch that moves the code.
+
+**The test-count line is branch-local and must be re-measured, not copied.**
+This branch's `**512 unit tests pass across 40 files**` is true of #44 alone;
+pl-18's is 491 over 37, true of #43 alone. Main was 479 over 37 before either.
+Whoever lands second **runs the suite and reads the number off it** — the
+arithmetic says 524 over 40, and arithmetic is not a measurement of the thing
+anyone can check in thirty seconds.
 
 **Not done: an e2e spec.** The brief did not ask for one and the suite is two
 specs over the intake on purpose — branch coverage costs milliseconds in a
