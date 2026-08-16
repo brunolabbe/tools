@@ -106,11 +106,22 @@ check` holds a fake to the signature of the thing it fakes, and there is no
 second command to remember. `tsconfig.tests.json` at the root covers every suite
 that runs under node — its `include` is a glob, so **a new package's tests cost
 one reference line there, not a file**. Only a genuinely different compiler surface earns a file of
-its own, and there are three: `tools/downloader/web/test` (Bundler + DOM + JSX),
-`tools/downloader/e2e` (DOM + Playwright's types) and `scripts/test`
-(`allowJs`). They split on `lib` and `types` being per-project, which is what
-keeps `document` out of scope in an API test — enforced, not aspirational. Do
-not add a `test/tsconfig.json` back per package; that shape existed briefly and
+its own, and there are three beyond the default: `tools/downloader/web/test`
+(Bundler + DOM + JSX), the Playwright surface (DOM + Playwright's types) and
+`scripts/test` (`allowJs`). They split on `lib` and `types` being per-project,
+which is what keeps `document` out of scope in an API test — enforced, not
+aspirational.
+
+**A surface is shared; a project file is not.** `tools/downloader/e2e` and
+`tools/planner/e2e` are the same surface and still need one file each, because a
+project's `include` is rooted at its own directory — there is no way to write one
+that spans both without moving the specs. So the count of surfaces is three and
+the count of files is four, and a second tool's e2e suite costs a file of its own
+copied from the first. That is not the per-package `test/tsconfig.json` shape
+below returning: it is one file per _tool's_ e2e suite, of which there are as
+many as there are tools with one.
+
+Do not add a `test/tsconfig.json` back per package; that shape existed briefly and
 was eight copies of the same five lines. Do not reach for `node:test`: the pinned Node (22.15)
 cannot strip TypeScript types without a flag, so `.ts` tests fail under it.
 
@@ -172,6 +183,14 @@ No `console` — use the logger. Comment _why_, not _what_.
    names `tools/downloader/web/test/**` and nothing wider on purpose — a pattern
    that pre-excluded every tool's `web` would drop a new one into no project at
    all, and pass green while checking nothing.
+
+   An `e2e` package is the quieter exception: its specs are `*.spec.ts` and sit
+   outside any `test/` directory, so the glob never sees them and nothing fails
+   to tell you they are unchecked. Copy `tools/planner/e2e/tsconfig.json`, which
+   also pulls in the tool's `playwright.config.ts` from a directory up, and add
+   the reference from the root. Skipping this is silent, which is exactly why it
+   is listed here.
+
 4. `tools/<name>/CLAUDE.md` — what the tool is, and only the rules specific to
    it. Do not restate anything on this page.
 5. `tools/<name>/docs/02-ROADMAP.md` and an empty `work/`, plus a row in

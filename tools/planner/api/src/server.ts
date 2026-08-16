@@ -24,6 +24,7 @@ import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
 import { registerHealthRoute } from "./routes/health.ts";
 import { registerIntakeRoutes } from "./routes/intakes.ts";
+import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 
 export interface CreateAppOptions {
   config?: Partial<ApiConfig>;
@@ -96,7 +97,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerCors(server, config);
   registerHealthRoute(server, context);
   registerIntakeRoutes(server, context);
-  registerNotFoundHandler(server);
+  // After the API routes, so a file in the bundle can never answer where a
+  // route should have, and before the not-found handler, which needs the
+  // static plugin's `reply.sendFile` to exist.
+  const servingWeb = await registerWebRoutes(server, context);
+  registerNotFoundHandler(server, servingWeb);
 
   await server.ready();
 
@@ -141,8 +146,19 @@ function registerErrorHandling(server: FastifyInstance, context: AppContext): vo
   });
 }
 
-function registerNotFoundHandler(server: FastifyInstance): void {
+/**
+ * Split from `registerErrorHandling` because it has to be registered *after*
+ * the static plugin: the SPA fallback needs `reply.sendFile`, which only exists
+ * once that plugin has decorated the reply.
+ *
+ * The `CONVERSATION_NOT_FOUND` below is wrong and is not fixed here — the code
+ * is being retired wholesale by pl-11, which owns naming an unknown endpoint
+ * properly. Carrying the bug across a rename is how it survives one.
+ */
+function registerNotFoundHandler(server: FastifyInstance, servingWeb: boolean): void {
   server.setNotFoundHandler((request, reply) => {
+    if (servingWeb && serveIndexForUnknownPath(request, reply)) return;
+
     const { status, body } = toErrorResponse(
       new AppError("CONVERSATION_NOT_FOUND", "No such endpoint.", {
         details: { path: request.url.slice(0, 200) },

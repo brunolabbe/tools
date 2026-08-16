@@ -38,7 +38,7 @@ agent        everything that talks to a model: prompts, roster, specialists, sea
 itinerary    everything that must be exact: day packing, constraints, critic — no model, no network
 api          Fastify, persistence, HTTP, run orchestration
 web          React + Vite UI
-e2e          Playwright specs (empty until there is a flow worth driving)
+e2e          Playwright specs — the intake, in a browser, against the built bundle (pl-13)
 ```
 
 `itinerary` is designed and not yet built — see `01-ARCHITECTURE.md`. Until it
@@ -56,10 +56,12 @@ npm run dev:planner          # API (8090) + web (5183) together, both in watch m
 npm run dev:planner:api      # just the API
 npm run dev:planner:web      # just the UI
 npm test -- --project planner
+npm run e2e:planner          # Chromium over the real bundle; `npm run e2e:install` once first
 ```
 
 The ports are 8090/5183 rather than 8080/5173 so both tools can run at once
-without either being reconfigured.
+without either being reconfigured. The e2e suite takes 8098 for the same reason —
+not 8090, where a dev API usually is, and not 8099, which is the downloader's.
 
 The API's dev script is `node --watch --import tsx`, not `tsx watch` — see the
 downloader's note; the same Windows failure applies.
@@ -104,6 +106,15 @@ whenever the nodes change, and **never reuse an id for a different question** �
 every saved answer under that id silently becomes an answer to something else.
 `validateTree` runs as a test, not at boot: a malformed tree is a review
 mistake, not a reason to refuse to start.
+
+**The e2e suite reads the screen; it never names a question.** Because the tree
+is content, a spec that types into `#field-road-trip.drive-hours` or counts eight
+questions turns a content edit into a red build. `e2e/intake.spec.ts` fills
+whatever control is in front of it, keeps the prompts it was shown, and asserts
+the discard warning against those — so both sides of the assertion move when the
+tree does. It is two specs over one path on purpose: it exists to prove the API
+and the browser are wired together, and branch coverage costs milliseconds in a
+component test and a browser launch here.
 
 **The intake stops at the core questions.** Every node is `core` or `refine`, and
 when nothing reachable and `core` is unanswered the wizard says the essentials are
