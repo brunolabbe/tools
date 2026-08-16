@@ -6,18 +6,19 @@ each piece of work did lives in its ticket under [work/](./work/).
 **Last updated:** 2026-08-16 · **Phase 0 (scaffold) ✅ · Phase 1 ✅ — the
 `TripBrief`, the question tree, and the persistence and wizard over them, driven
 end to end in a browser. The tool produces a brief with no model involved
-anywhere. Phase 2 has its contract and nothing that fills it**
+anywhere. Phase 2 has its contract and, as of pl-9, the half of it that turns
+candidates into days — with nothing yet producing the candidates**
 
 ---
 
 ## Where things stand
 
-| Phase                            | State         | Evidence                                                                                                                                                                                                                                                          |
-| -------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Phase 0 — Scaffold               | ✅ complete   | `0f8583e`                                                                                                                                                                                                                                                         |
-| Phase 1 — The intake             | ✅ complete   | [pl-3](./work/pl-3-trip-brief-contract.md), [pl-6](./work/pl-6-question-tree-and-engine.md) and [pl-7](./work/pl-7-intake-persistence-and-wizard.md) — the brief, the tree, and an intake that survives a reload                                                  |
-| Phase 2 — The first plan         | in flight     | [pl-4](./work/pl-4-plan-document-contract.md) done — the plan document exists and nothing writes one; [pl-5](./work/pl-5-orchestrator-and-fan-out.md), [pl-9](./work/pl-9-composer-and-critic.md) and [pl-10](./work/pl-10-plan-view-and-provenance.md) unblocked |
-| Phases 3–4 — Grounding, revision | designed only | no tickets yet, on purpose                                                                                                                                                                                                                                        |
+| Phase                            | State         | Evidence                                                                                                                                                                                                                                                                                  |
+| -------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 0 — Scaffold               | ✅ complete   | `0f8583e`                                                                                                                                                                                                                                                                                 |
+| Phase 1 — The intake             | ✅ complete   | [pl-3](./work/pl-3-trip-brief-contract.md), [pl-6](./work/pl-6-question-tree-and-engine.md) and [pl-7](./work/pl-7-intake-persistence-and-wizard.md) — the brief, the tree, and an intake that survives a reload                                                                          |
+| Phase 2 — The first plan         | in flight     | [pl-4](./work/pl-4-plan-document-contract.md) and [pl-9](./work/pl-9-composer-and-critic.md) done — the plan document, and a composer that fills it from a candidate set; [pl-5](./work/pl-5-orchestrator-and-fan-out.md) and [pl-10](./work/pl-10-plan-view-and-provenance.md) unblocked |
+| Phases 3–4 — Grounding, revision | designed only | no tickets yet, on purpose                                                                                                                                                                                                                                                                |
 
 **The tool is not a chat, as of 2026-08-14.** It was scaffolded as one. The
 intake now asks predetermined questions from an authored, versioned tree, and no
@@ -27,7 +28,7 @@ reasoning, including what the decision costs, is an amendment to
 argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
-**218 unit tests pass across 19 files, plus 2 e2e specs.** `npm run check` is
+**330 unit tests pass across 25 files, plus 2 e2e specs.** `npm run check` is
 green. The repo-wide CI runs the unit suite on every push, and
 `.github/workflows/planner.yml` now carries two gates — the e2e suite in a real
 browser, and the image, which is built, started, and asked for both `/api/health`
@@ -42,7 +43,10 @@ shape — the `ModelProvider` seam with the scripted provider behind it, an API
 that opens SQLite, answers `/api/health` and serves the UI same-origin, **an
 intake that persists — `intakes` and `answers` from migration 3, four routes over
 them, and a wizard that stops at the core questions and never discards an answer
-without saying so** — and a container image the release pipeline publishes.
+without saying so** — a container image the release pipeline publishes, and **the
+composer: `@planner/itinerary`, which turns a brief and a candidate set into a
+plan revision** (season filter, day packer, budget arithmetic over bands,
+constraint check, bounded critic, all pure).
 
 **P1 is reached.** Someone can answer into a branch, be told the essentials are
 done, go back and change an early answer, be shown exactly what that costs, and
@@ -50,10 +54,11 @@ reload to find the intake where they left it — with no model involved anywhere
 which is what makes the whole claim checkable without a key. Two Playwright specs
 assert that whole paragraph against the built bundle.
 
-What does not exist: the roster, a single specialist, the `itinerary` package,
-grounding of any kind, and any hostname pointing at the image. **The plan
-document is built and nothing writes one** — pl-5 fills it from a fan-out, pl-9
-packs the days, pl-10 renders the result.
+What does not exist: the roster, a single specialist, grounding of any kind, and
+any hostname pointing at the image. **A plan can now be built and nothing feeds
+the builder** — the composer turns candidates into days, and the only candidates
+in the repo are pl-4's six checked-in sets. pl-5 produces real ones from a
+fan-out; pl-10 renders the result.
 
 What exists but is **wrong for the current design**: the contract's
 `Conversation` / `Message` types, `MAX_MESSAGE_CHARS`, and
@@ -64,7 +69,7 @@ removing a code is a contract change that also has to fix
 [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md).
 
 **The documentation leads the code by two phases**, down from four: Phase 1 is
-built and Phase 2 has its contract. That gap is the intended state after a design
+built, and Phase 2 has its contract and its composer. That gap is the intended state after a design
 pass and a liability if it lasts, so read
 [00-ANALYSIS.md](./00-ANALYSIS.md) and
 [01-ARCHITECTURE.md](./01-ARCHITECTURE.md) as _design_ rather than as
@@ -83,7 +88,7 @@ still unwritten.
 | [pl-6](./work/pl-6-question-tree-and-engine.md)             | done      | `@planner/intake`: the tree, reachability, invalidation  |
 | [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them            |
 | [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER` |
-| [pl-9](./work/pl-9-composer-and-critic.md)                  | ready     | The `itinerary` package. Needs only pl-4, so start now   |
+| [pl-9](./work/pl-9-composer-and-critic.md)                  | done      | `@planner/itinerary`: season, packing, budget, critic    |
 | [pl-10](./work/pl-10-plan-view-and-provenance.md)           | ready     | Renders the plan, its gaps and what was verified         |
 | [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | ready     | Delete what migration 3 outlived; `NOT_FOUND` to core    |
 | [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | ready     | 1,100 lines of `.tsx` and no test renders any of it      |
@@ -116,25 +121,45 @@ everyone's intakes, and the list route shows all of them. That is the honest gap
 rather than one to paper over with an unguessable id — see the traps in
 [pl-2](./work/pl-2-container-image.md).
 
-**Nothing enforces the plan's constraints, because nothing composes a plan.**
-The document can now _express_ the honest answers — a `PlanGap` for a section
-that could not be covered, `null` for a season nobody established, a cost band
-rather than a price — but expressing them is not producing them. Until pl-5 and
-the composer land, every one of those is a shape with no writer.
+**The plan's constraints are enforced, and the plan says which ones were not.**
+`@planner/itinerary` filters on season before packing, bounds a day by the
+party's own effort and drive answers, sums cost bands without ever collapsing
+one to a figure, drops anything past its booking deadline, and refuses to ship a
+plan that violates a hard constraint — `PLAN_INFEASIBLE`, kept carefully
+distinct from a plan with a `PlanGap`, which ships. What it _cannot_ evaluate
+comes back as `UNCHECKED_CONSTRAINTS` on the result rather than as silence.
 
-**The `itinerary` package does not exist**, and it is where the design says the
-plan is actually decided — day packing, budget sums, opening-hour conflicts.
-Until it does, there is nothing to stop a model being asked to do arithmetic,
-which is the failure the analysis is mostly about. It is now ticketed as
-[pl-9](./work/pl-9-composer-and-critic.md), which depends only on pl-4 and can
-start immediately.
+**Phase 2 does not pack under travel time, and that is now decided rather than
+open.** `Place.coordinates` is null until grounding and §5 puts distances in
+Phase 3, so there is no leg to compute. Decided 2026-08-16: **pack without it
+and name the gap**, which narrowed the P2 milestone's wording — see the
+roadmap. Every plan carries `travel-time` on its unchecked list, without
+exception, and a test per trip shape says so. Daily distance (backcountry) and
+machine range (motorised) are unchecked for the same reason.
 
-**Phase 2 cannot pack under travel time, and that is undecided rather than
-missed.** `Place.coordinates` is null until grounding, and §5 puts distances in
-Phase 3 — so the composer can pack under hours, season, budget and effort, and
-not under legs. Travel time is §2's failure 1, so this narrows what the P2
-milestone may claim. The options are laid out in the roadmap's _Still open_;
-nobody has chosen.
+**The unchecked list does not survive a reload.** Every `PlanGapReason` is about
+a _specialist_ — failed, dropped, not applicable, found nothing — and "we could
+not check travel time" is not: route-and-logistics ran perfectly and what is
+missing is a distance nobody has. So the list lives on `ComposeResult` and pl-10
+must render it from the compose call. Persisting it needs a `PlanGapReason`
+member that is about a constraint rather than about a specialist, which is a
+contract change nobody has made; the argument is in
+[pl-9](./work/pl-9-composer-and-critic.md)'s log.
+
+**Deal-breakers are not machine-checkable, and §7 assumes they are.**
+`dealBreakers` is free text, so no arithmetic decides whether a candidate
+violates one, and a keyword match would fail both ways while looking like a
+check. The composer states it as unchecked and the specialists that read the
+brief carry it. Making it real means a structured constraint, not a cleverer
+string search.
+
+**Nothing produces real candidates.** The composer's only input in the repo is
+pl-4's six checked-in sets, which is enough to build and test it against and is
+not a fan-out. pl-5 is what closes this, and composing those six turned up
+something it needs to know: **the route candidates are routinely over the day's
+drive budget and get dropped** — the road-trip fixture proposes a 5½-hour leg to
+a party that answered `half-day`. A specialist that ignores `driveAppetite`
+writes legs the composer will throw away.
 
 **`REQUIRED_SHAPE_SLOTS` and the tree's `core` marking now agree, and a test
 says so in both directions** — a `core` question whose slot is not required, or

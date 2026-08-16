@@ -97,9 +97,10 @@ The three pieces that turn a brief into a document, in the order the code forces
 2. **The orchestrator and the fan-out** — roster as a pure function of the brief,
    specialists in parallel, each returning candidates and never a schedule, the
    run as a job with real progress. → [pl-5](./work/pl-5-orchestrator-and-fan-out.md)
-3. **The composer and the critic** — the `itinerary` package: packing days under
-   hours, season and budget, and an adversarial feasibility pass over the result.
-   Ordinary TypeScript, ordinary unit tests, no model.
+3. **The composer and the critic** ✅ — the `itinerary` package: packing days
+   under hours, season, budget and effort, an adversarial feasibility pass over
+   the result, and a list of every constraint it could not evaluate. Ordinary
+   TypeScript, ordinary unit tests, no model.
    → [pl-9](./work/pl-9-composer-and-critic.md)
 4. **The plan, read honestly** — the days, the gaps, and which lines were
    verified rather than asserted. Costs as bands, and a plan that admits what it
@@ -112,7 +113,7 @@ run in parallel.
 All of Phase 2 runs against the scripted provider and no grounding. That is
 deliberate: it makes the first plan a claim about the machinery — roster,
 fan-out, packing, feasibility, persistence — rather than about a model. **It also
-costs Phase 2 travel time**, which is the open question below.
+costs Phase 2 travel time**, decided 2026-08-16 and recorded below.
 
 ## Phase 3 — Grounding behind a seam
 
@@ -146,8 +147,11 @@ authority for backcountry, marine or winter motorised travel. The reasons are in
   **No model is involved**, so it is a claim about the tree, the invalidation
   rules and persistence — and it is checkable without a key.
 - **P2 — It produces a plan.** A brief chooses a roster, specialists return
-  candidates, the composer packs days that survive their own constraints. Still
-  scripted and ungrounded: a claim about machinery.
+  candidates, the composer packs days that survive **the constraints it can
+  evaluate** — hours, season, budget, effort, booking deadlines — and the plan
+  names every constraint it could not, travel time first among them. Still
+  scripted and ungrounded: a claim about machinery, and a narrower claim than
+  this line made before 2026-08-16.
 - **P3 — The plan is true.** Grounded facts with provenance, against a real model,
   with the run's bill bounded.
 - **P4 — The plan is revisable.** Pin, re-plan a slice, read the diff.
@@ -156,32 +160,37 @@ authority for backcountry, marine or winter motorised travel. The reasons are in
 
 Short, and each one is a real decision someone has to make rather than a gap:
 
-- **Whether Phase 2's composer can pack under travel time at all**, raised by
-  pl-4 on 2026-08-15 and unresolved. Phase 2 above promised packing "under travel
-  time"; §5 ranks distances and travel times as the **first** thing grounding
-  buys, and Phase 2 has no grounding. `Place.coordinates` is null until Phase 3,
-  so there is nothing to compute a leg from. This matters more than it sounds:
-  travel time is §2's failure 1, the single most common way an AI itinerary is
-  wrong, so a P2 that silently omits it is claiming more than it checked. Three
-  ways out, and it is a product decision rather than a technical one:
-  - **Pack without it and name the gap.** Consistent with _never fake progress_,
-    and it makes P2's "days that survive their own constraints" narrower than it
-    currently reads. The milestone's wording would have to change with it.
-  - **Allow a straight-line floor from coordinates.** Does not actually escape —
-    coordinates are themselves grounding, so this is Phase 3 wearing a hat.
-  - **Move travel-time grounding earlier**, letting one seam straddle the phase
-    boundary. Buys the most and costs the cleanliness of "Phase 2 is a claim about
-    machinery, not about a model".
-
-  Until it is decided, [pl-9](./work/pl-9-composer-and-critic.md) packs under
-  hours, season, budget and effort, and says travel time was not accounted for.
-  Whatever is chosen, an invented duration is not on the list.
-
 - **Which grounding backend first.** §5 ranks what to buy; it does not pick a
   vendor. Whichever it is, the fixtures come from its real payloads.
 - **Whether a specialist streams.** The chat seam does not stream, and adding it
   before a caller needs it was deferred once already. The fan-out's progress is
   per-specialist, which may be enough.
+
+**Whether Phase 2's composer can pack under travel time at all** was answered on
+2026-08-16, and the answer is **no — pack without it and name the gap.** The
+question was raised by pl-4 and is the one that shaped pl-9: §5 ranks distances
+and travel times as the first thing grounding buys, Phase 2 has no grounding,
+and `Place.coordinates` is null until Phase 3, so there was nothing to compute a
+leg from. The alternatives were a straight-line floor from coordinates —
+coordinates are themselves grounding, so that is Phase 3 wearing a hat — and
+pulling travel-time grounding forward, which buys the most and costs the
+cleanliness of "Phase 2 is a claim about machinery, not about a model".
+
+Three consequences, all landed in [pl-9](./work/pl-9-composer-and-critic.md):
+
+- **P2's milestone is narrower**, and the wording above changed with it. "Days
+  that survive their own constraints" was claiming more than the composer
+  checks; it now says which constraints, and that the rest are named.
+- **Every plan carries the list**, as `UNCHECKED_CONSTRAINTS` on the composer's
+  result — travel time always, and beside it opening hours, deal-breakers,
+  daily distance, machine range and the rest. A plan looks equally finished
+  whether every constraint was enforced or three were skipped for want of data,
+  which is what makes silence about it the most consequential lie this package
+  could tell.
+- **The list does not persist**, and that is a known limit rather than an
+  oversight. Every `PlanGapReason` is about a specialist, and "we could not
+  check travel time" is not — route-and-logistics ran perfectly. Putting it on
+  the revision needs a contract change; pl-9's log has the argument.
 
 **What a tree version change does to a saved intake** was answered on 2026-08-15,
 as pl-7 proposed: **re-run the engine against the current tree and prune what no

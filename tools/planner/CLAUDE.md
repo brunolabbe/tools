@@ -35,16 +35,17 @@ shape, and revising a plan touches a slice of it rather than regenerating it.
 contract     types, error taxonomy, zod schemas — no logic
 intake       the question tree, what it opens, what an edit discards — no model, no network, no clock (pl-6)
 agent        everything that talks to a model: prompts, roster, specialists, seams
-itinerary    everything that must be exact: day packing, constraints, critic — no model, no network
+itinerary    season filter, day packing, budget arithmetic, constraints, critic — no model, no network, no clock (pl-9)
 api          Fastify, persistence, HTTP, run orchestration
 web          React + Vite UI
 e2e          Playwright specs — the intake, in a browser, against the built bundle (pl-13)
 ```
 
-`itinerary` is designed and not yet built — see `01-ARCHITECTURE.md`. Until it
-exists, do not solve its problems in `agent` or in `intake`. The two are
-separate on purpose: an intake engine inside a package named for the output
-document is a name that lies, and they are exact for unrelated reasons.
+`intake` and `itinerary` are separate on purpose despite sharing that "must be
+exact" character: an intake engine inside a package named for the output
+document is a name that lies, and they are exact for unrelated reasons. Do not
+solve `itinerary`'s problems in `agent` — the moment a prompt asks a model to
+add something up, §2 has been lost.
 
 `api` is the only place that reads `process.env`. The agent is a library and
 takes its configuration — including which provider to talk to — as arguments.
@@ -138,6 +139,22 @@ agents ran, and why" is the first question anyone debugging a bad plan asks.
 **Name the gap; never fake a section.** A specialist that fails or times out
 leaves a plan that says lodging was not checked. A quietly invented hotel is worse
 than an admitted hole — the repo's _never fake progress_ rule, in this domain.
+
+**Name what you did not check, not only what you did not cover.** A packed plan
+looks equally finished whether every constraint was enforced or three were
+skipped for want of data, so `@planner/itinerary` returns
+`UNCHECKED_CONSTRAINTS` on every result — travel time always, because
+`Place.coordinates` is null until grounding. A caller that drops that list on the
+floor turns an honest plan into one that merely looks finished. It is **not** a
+`PlanGap`: a gap names a specialist that did not contribute, and "nothing
+measured the distance" is not a statement about a specialist.
+
+**The packing limits are content, and they are reviewed as content** — the same
+standing the question tree has. They live in `itinerary/src/limits.ts`: how many
+minutes of activity an appetite means, how much road a drive appetite means, how
+many things a pace means. Argue with the number rather than adding a branch that
+works around it, and keep them tables rather than conditionals — "why only two
+things on Tuesday" has to be answerable by reading one value.
 
 **Never book, never pay, and never claim a safety clearance.** The tool plans and
 hands off: no transactions, no card details, no filling a booking form, no driving
