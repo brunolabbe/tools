@@ -13,8 +13,6 @@ import { z } from "zod";
 import type { TripBrief } from "./brief.ts";
 import { ERROR_CODES } from "./errors.ts";
 import type { AppErrorPayload } from "./errors.ts";
-import { MESSAGE_ROLES } from "./conversation.ts";
-import type { Conversation, ConversationDetail, Message } from "./conversation.ts";
 import type { Answers, QuestionId, QuestionNode } from "./tree.ts";
 
 /** One prefix, named once, so the UI and the dev proxy cannot disagree about it. */
@@ -53,34 +51,6 @@ export function intakeAnswerUrl(
     .replace(":id", encodeURIComponent(id))
     .replace(":questionId", encodeURIComponent(questionId));
 }
-
-/**
- * Ceiling on one user turn.
- *
- * Not a guess about how much someone might type: every character here is
- * re-sent to the model on every subsequent turn, so an unbounded field is an
- * unbounded bill as well as an unbounded request body.
- */
-export const MAX_MESSAGE_CHARS = 8_000;
-
-export const messageSchema = z.object({
-  id: z.string().min(1),
-  conversationId: z.string().min(1),
-  role: z.enum(MESSAGE_ROLES),
-  content: z.string().max(MAX_MESSAGE_CHARS),
-  createdAt: z.iso.datetime(),
-}) satisfies z.ZodType<Message>;
-
-export const conversationSchema = z.object({
-  id: z.string().min(1),
-  title: z.string().max(200).nullable(),
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
-}) satisfies z.ZodType<Conversation>;
-
-export const conversationDetailSchema = conversationSchema.extend({
-  messages: z.array(messageSchema),
-}) satisfies z.ZodType<ConversationDetail>;
 
 // ---------------------------------------------------------------------------
 // The intake

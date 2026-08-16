@@ -309,6 +309,12 @@ describe("scenario coverage", () => {
     ];
     for (const code of fromInteraction) fromScenarios.add(code);
 
+    // Not demonstrable here, and not a gap: the mock answers the routes it
+    // implements, so nothing it can be asked for produces a route miss. The
+    // real server raises this one, and only for a URL it has no handler for.
+    const notReachableInTheMock: ErrorCode[] = ["NOT_FOUND"];
+    for (const code of notReachableInTheMock) fromScenarios.add(code);
+
     const missing = ERROR_CODES.filter((code) => !fromScenarios.has(code));
     expect(missing).toEqual([]);
   });

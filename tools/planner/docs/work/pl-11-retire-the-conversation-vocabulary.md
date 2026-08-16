@@ -3,7 +3,7 @@ id: pl-11
 tool: planner
 title: Retire the conversation vocabulary, and name an unknown endpoint properly
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: [pl-7]
 ---
@@ -97,4 +97,65 @@ until a second tool talks to a model is a decision already recorded in
 
 ## Log
 
-_Not started._
+**2026-08-16 — done.** All six build steps landed, and the acceptance grep for
+`Conversation|MAX_MESSAGE_CHARS` under `tools/planner --include=*.ts` is empty.
+`npm run check` and `npm test` are green: 781 tests across 58 files repo-wide,
+218 across 19 for the planner — unchanged, because nothing here added a test.
+
+**The brief was wrong about what breaks, and it broke somewhere better.** It
+predicted "both tools will stop compiling until each catalog carries a message
+for it". Neither catalog did: both spread `CORE_ERROR_MESSAGES`, so a core code
+with a core message needs nothing from either tool's `errors.ts`. What actually
+failed to compile was two `Record<ErrorCode, …>` tables the brief did not
+mention, and both are the better tripwire:
+
+- `tools/downloader/api/src/http-errors.ts` maps every code to a status **totally**
+  — the planner's is `Partial` — so a new code is a compile error there until
+  someone decides its status. 404, with a comment naming dl-17 as the ticket that
+  will actually raise it.
+- `tools/downloader/web/src/lib/error-presentation.ts` is a total record too, and
+  `web/test/error-presentation.test.ts` additionally demands **distinct** title
+  and detail per code. So the downloader now has copy for a code it never raises.
+  That is the right shape — the day dl-17 lands, the UI is already honest — and
+  the copy says version skew, because a route miss in that UI means the bundle
+  asked for something this server does not have.
+
+**One test needed a judgement rather than an entry.** `web/test/mock-api.test.ts`
+asserts every `ErrorCode` is demonstrable, from the scenario table plus a
+hand-listed `fromInteraction` set. `NOT_FOUND` is in neither and adding it to
+`fromInteraction` would have been false — the mock answers the routes it
+implements, so nothing you can do to it produces a route miss. It gets a second
+list, `notReachableInTheMock`, with the reason. dl-17 says it stays there.
+
+**The 404's message is now the catalog's**, not an override. `registerNotFoundHandler`
+passed `"No such endpoint."` as a per-call message precisely because the code it
+was using said "conversation"; with a code whose default copy is already about a
+route, the override is what was papering over the wrong code. `health.test.ts`
+asserts the message equals `DEFAULT_ERROR_MESSAGES.NOT_FOUND` for that reason —
+without it, the assertion passes on the code alone and the copy could drift back
+to naming a document.
+
+**Three assertions the brief missed.** It named `api/test/health.test.ts` as the
+one place asserting `CONVERSATION_NOT_FOUND`; `api/test/web-serving.test.ts` has
+three more, from pl-13. All four now say `NOT_FOUND`.
+
+**One thing was widened on purpose, and it is small.** `CONTEXT_LIMIT`'s user copy
+read "This conversation has grown too long to continue. Start a new one." — a
+sentence about a thing that does not exist, offering an action the UI has no
+button for. The code stays (a brief plus a candidate set plus a critic's working
+can still overflow a window); its message and doc comment now say so without
+invoking a transcript. This is not the "tidy the taxonomy" the traps warn against
+— no code moved, none was added or removed — but it is beyond the six steps, so
+it is called out here rather than left to be found.
+
+**Migration 1 still creates `conversations` and `messages`, and migration 3 still
+drops them.** Applied migrations are history: editing one changes what a database
+that has already run it thinks it has. `api/test/migrations.test.ts` and
+`api/test/schema.test.ts` still name the tables for the same reason — they assert
+the drop happened, which needs the word.
+
+**dl-17 raised**, as step 6 required:
+[dl-17](../../../downloader/docs/work/dl-17-name-an-unknown-endpoint.md). Its two
+prerequisites — the core code and the downloader's status mapping and UI copy —
+are already in, because keeping the build green required them; all it has left is
+the call site and its test. The downloader's `03-STATUS.md` carries the row.
