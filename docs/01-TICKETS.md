@@ -86,6 +86,35 @@ substitute the tool's name.
 > from `@<tool>/contract` — do not redefine them, and do not edit that package;
 > if you believe the contract is wrong, stop and say so rather than changing it.
 > Use `AppError` with a code from the taxonomy for every failure. Ship unit
-> tests with checked-in fixtures, never live network calls. `npm run check` must
-> pass. Append what you did, and anything the brief got wrong, to the ticket's
-> Log before you call it done.
+> tests with checked-in fixtures, never live network calls. In a fresh worktree
+> run `npm install` **and `npm run build`** before anything else. `npm run check`
+> and `npm test` must pass — and neither runs that tool's slow gates, so if you
+> changed what the container ships or what the browser loads, say that CI has not
+> proved it rather than reporting green. The pull request title is itself a
+> conventional commit, because this repo squash-merges and the title is the
+> message that lands on `main`; check yours with
+> `node scripts/commit-message.mjs --text "<title>"` before opening it. Append
+> what you did, and anything the brief got wrong, to the ticket's Log before you
+> call it done.
+
+**The three sentences in the middle are there because each one was missed by an
+agent that was otherwise finished**, on 2026-08-16, and each cost a red build
+that the ticket itself could not have predicted. They are not general advice —
+they are the three ways a correct change fails here.
+
+- **Build before you test.** Every workspace is consumed through its `dist`, so
+  an unbuilt worktree fails on `@webtools/core` with a Vite resolve error naming
+  nothing that has anything to do with the cause. It is the first thing to do and
+  it looks like the last.
+- **`check` and `test` are not the whole gate.** A tool's e2e suite and its
+  container build live in `.github/workflows/<tool>.yml` and run nowhere else, so
+  a green local tree is silent about both. The worked example is
+  [pl-16](../tools/planner/docs/work/pl-16-the-plan-run.md): it added a workspace
+  dependency to `api`, `npm run check` and 1,020 tests passed, and the image
+  would not boot — because a `Dockerfile` lists its workspaces by hand, twice,
+  and nothing type-checks that list. The honest report is "green locally, and the
+  image gate is the proof I do not have".
+- **The pull request title is the commit.** The rule and its reasoning are in
+  [03-RELEASING.md](./03-RELEASING.md), which an agent handed a ticket has no
+  reason to open — so the check for it goes here, where it will be read. A title
+  that reads like a heading is a guaranteed red `pr-title`.
