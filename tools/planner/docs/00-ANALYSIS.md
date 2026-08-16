@@ -280,22 +280,68 @@ The conversation and the plan stay separate aggregates. The conversation is how 
 plan gets edited; it is not where the plan lives. Fusing them is how you end up
 re-reading a chat log to find out what you are doing on Tuesday.
 
+### Amendment, 2026-08-16 — there is no conversation here either
+
+The paragraph above is kept as it was argued, on the same grounds as §3's
+amendment: the record is more useful than a rewrite that reads as though the
+debate never happened.
+
+**The decision:** a plan is revised through **structured operations on the
+document**. There is no conversation in this tool, in the intake or after it, and
+no revision surface that accepts an utterance.
+
+§3's amendment claimed that "§4 through §6 stand untouched" when the intake
+stopped being an interview. That was very nearly right and wrong in one place —
+here. §6's _mechanisms_ stood: pinning is an act on an item and slicing is a
+selection of days, and neither was ever a sentence anyone types. It is only the
+closing paragraph that named a conversation as the editing surface, and it
+contradicted the two bullets above it in its own section. It was the last
+surviving piece of the chat premise, and it survived precisely because nobody
+read this far when §3 was amended.
+
+The examples this section opens with — "move the hike to Thursday", "we cannot
+afford the second hotel", "add a day in Trieste" — are still the right examples.
+They describe a user's **intent**, not the interface. Each maps to an operation:
+move an item and re-plan the days it touches; lower the budget slot on the brief
+and re-plan; extend the dates and re-plan the slice that opens. The plan document
+is the editing surface, and a revision names what it may touch.
+
+**What it costs** is the same trade §3 made, and it is named here so nobody
+rediscovers it either: **an intent nobody built a control for cannot be expressed
+at all.** A model asked in prose would attempt anything; a set of operations
+attempts what it has. The mitigation is the same one and it is equally weaker — a
+free-text note carried on the revision and read by the specialists on the re-run,
+as context and never as an instruction to a scheduler.
+
+**What it buys** is what the intake's version bought, plus one thing the intake
+did not have. Revision becomes diffable, replayable and testable without a model
+in the loop: "which days did this revision touch, and why" is answerable from the
+revision itself rather than by re-reading what someone typed. And a re-plan reads
+the brief, the pinned items and its slice — never a history — so the cost of a
+revision does not grow with how many revisions came before it.
+
+That last point retires a failure mode §7 still listed. **Revision history cannot
+outgrow a context window, because it never reaches a model.** `CONTEXT_LIMIT`
+survives for an unrelated reason — a large brief, a large candidate set and a
+critic's working can still overflow one — and its copy was corrected to say so in
+[pl-11](./work/pl-11-retire-the-conversation-vocabulary.md).
+
 ---
 
 ## 7. Failure modes to design for from day one
 
-| Failure                           | Signal                                 | Response                                                                             |
-| --------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------ |
-| Infeasible day                    | Legs + activities exceed the day       | Composer rejects and repacks — code, not a re-prompt                                 |
-| Venue closed on the planned day   | Opening hours from grounding           | Critic finding → repack; if unverified, say so on the item                           |
-| Season mismatch                   | Candidate's season window vs the dates | Hard filter before the composer ever sees it                                         |
-| Booking window already passed     | Lead time > days until departure       | Surface as a deadline, never silently propose it                                     |
-| Deal-breaker violated             | Brief's hard constraints vs the plan   | Constraint check in code; a plan that violates one is not shipped                    |
-| Specialist returns prose          | Schema validation fails                | Bounded re-ask inside the agent, then `AGENT_MALFORMED_REPLY`                        |
-| Injected instruction in a source  | —                                      | Never detectable in general: no credentials, no write tools, schema-validated output |
-| One specialist fails or times out | Partial roster                         | Ship the plan with the gap **named**. Never fake a section                           |
-| Run costs too much                | Token/call budget for the run          | Orchestrator degrades the roster before it starts, and says which                    |
-| Revision history outgrows context | `CONTEXT_LIMIT`                        | Summarise older turns; the brief and the plan are the real state                     |
+| Failure                              | Signal                                 | Response                                                                             |
+| ------------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------ |
+| Infeasible day                       | Legs + activities exceed the day       | Composer rejects and repacks — code, not a re-prompt                                 |
+| Venue closed on the planned day      | Opening hours from grounding           | Critic finding → repack; if unverified, say so on the item                           |
+| Season mismatch                      | Candidate's season window vs the dates | Hard filter before the composer ever sees it                                         |
+| Booking window already passed        | Lead time > days until departure       | Surface as a deadline, never silently propose it                                     |
+| Deal-breaker violated                | Brief's hard constraints vs the plan   | Constraint check in code; a plan that violates one is not shipped                    |
+| Specialist returns prose             | Schema validation fails                | Bounded re-ask inside the agent, then `AGENT_MALFORMED_REPLY`                        |
+| Injected instruction in a source     | —                                      | Never detectable in general: no credentials, no write tools, schema-validated output |
+| One specialist fails or times out    | Partial roster                         | Ship the plan with the gap **named**. Never fake a section                           |
+| Run costs too much                   | Token/call budget for the run          | Orchestrator degrades the roster before it starts, and says which                    |
+| One re-plan's input outgrows context | `CONTEXT_LIMIT`                        | Narrow the slice. Revision _history_ never reaches a model — §6's amendment          |
 
 The "name the gap" row is the repo's _never fake progress_ rule in this domain: a
 plan with "we could not check lodging availability" is useful, and a plan that
