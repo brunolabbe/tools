@@ -18,7 +18,7 @@ depends_on: [pl-6, pl-7]
 against three questions: does it earn its place, would a real person know the
 answer, does the answer change what a specialist would do. It was authored in
 pl-6 and has not been reviewed since. This is that review, held on 2026-08-16,
-and the four changes it agreed.
+and the five changes it agreed.
 
 **Now is the cheapest moment there will ever be.** Nothing outside `intake` and
 `web` reads a brief slot yet — `agent/src` and `api/src` name none of them, and
@@ -30,7 +30,7 @@ once a specialist reads the brief it is a migration with a plan attached.
 "stop and say so": three of the four changes below are contract changes, agreed
 in review before the work starts rather than during it.
 
-### The four, and the argument for each
+### The five, and the argument for each
 
 **1. `budget` is not required for a first draft.** It stays a question — it
 changes hotel tier, whether flights are in scope, whether an activity makes the
@@ -62,6 +62,20 @@ it: what you are driving, and whether it is yours.
 time pl-7's `reconcileWithin` runs against saved answers for a reason other than
 a test.
 
+**5. The header's argument for asking `shape` first is wrong, and the ordering it
+defends is right.** The file says shape is question one partly because "the fixed
+core sits _after_ it and is shape-independent, so switching from a road trip to a
+hiking trip costs the shape's own answers and nothing else". That property is not
+produced by the ordering. It comes from `withShape` swapping only `details`, and
+from every fixed-core node carrying `when: null`, which puts it permanently out
+of `prune`'s reach — so a `shape` asked sixth would cost exactly the same answers
+as a `shape` asked first. The comment credits the order with a guarantee the data
+model already makes unconditionally, and a reviewer who believes it will defend
+the order for a reason that would survive its removal.
+
+The ordering keeps its place on the arguments that are actually load-bearing, and
+they belong in the comment instead — see below.
+
 ### Considered and not done
 
 **`backcountry.daily-distance` stays a number.** It is the same shape of
@@ -69,6 +83,29 @@ complaint — a numeric field where a band would do — and the answer is differ
 km on foot does not vary with the surface the way road speed does (the node
 already promises the climb is ours to account for), a hiker does think in km, and
 it is a `refine` question behind the checkpoint so only an engaged user meets it.
+
+**The fixed core does not move ahead of `shape`.** Proposed in the same review:
+ask everything common to every trip first — party, origin, dates, budget,
+effort — then the kind of trip and its follow-ups, then the optional ones. That
+is already the tree's structure; the whole proposal reduces to moving one node
+from position one to position six, and it is legal — nothing is conditioned on
+the fixed core, and every shape-gated node would still fall after `shape`, so the
+earlier-references-only rule survives it.
+
+It is not taken, for three reasons that are about the product rather than the
+engine. `shape` has the highest information gain of any question in the tree — it
+decides which questions are asked at all and which specialists eventually run —
+and it costs the user nothing, so it goes first. Abandonment favours it: someone
+who leaves after three questions has left "a road trip from Montreal, ten nights
+in September", which is a trip, where the other order leaves "two people, moderate
+budget, moderate effort", which describes nobody. And it is the one question that
+reads as an invitation rather than as a form.
+
+One argument was raised for it and withdrawn: that asking `shape` first lets the
+wizard say how many questions remain. It does not — `ProgressLine` in
+`web/src/wizard/Wizard.tsx` shows a count of answers with no denominator, and the
+comment above it says that is deliberate. Shape-first is what would make a
+denominator _possible_; nothing spends it today, so it is not a reason.
 
 **`travellers` stays core and required.** Argued on the same axis as budget — it
 is about stage, not about cutting the question — and left as it is because the
@@ -137,6 +174,18 @@ Contract first, because the tree will not compile until the slots exist.
    - `road-trip.route-style`'s help currently reads "A one-way rental carries a
      fee worth planning around." Rental is now its own question, so this should
      say what the loop-or-not answer decides on its own terms.
+   - **Rewrite the header's "Shape first" block.** Drop the claim that the fixed
+     core sitting after `shape` is what makes a shape change cheap — that is
+     `withShape` and `when: null`, not the order, and the block should say so
+     plainly so the next reviewer does not re-derive it. Replace the argument with
+     the three that hold: highest information gain, what a half-finished intake is
+     worth, and that it is the question a person answers gladly. Then keep the
+     part that is true and load-bearing — a condition may only reference a
+     question that came earlier, so every shape-gated node falls after this one.
+
+     Note in the block that the alternative was considered on 2026-08-16 and why
+     it lost, or the same proposal arrives again with the same reasoning.
+
    - The header comment's "Eight questions get most shapes there" is now seven,
      and six for a resort. Fix the number where it appears.
    - **`version: 2`.**
