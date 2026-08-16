@@ -308,3 +308,8 @@ A cheap way to stop this recurring, not built and offered rather than assumed
 wanted: the check above is a dozen lines and is the same shape as
 `packages/core/test/spawn-safety.test.ts` — a source scan asserting a rule the
 comments currently carry. It would have failed on this PR before CI did.
+
+**That check is now filed as [pl-17](./pl-17-dockerfile-workspace-scan.md)**, and
+it is `ready` rather than open — so this section is a description of a problem
+that already has a ticket, not an invitation to write one. It covers both tools'
+`Dockerfile`s, and the scan itself belongs in `packages/core`.

@@ -103,6 +103,7 @@ still unwritten.
 | [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI  |
 | [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2    |
 | [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two        |
+| [pl-16](./work/pl-16-the-plan-run.md)                       | done      | The run over HTTP; its image gate produced pl-17         |
 | [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | ready     | The image's workspace list is kept by hand and unchecked |
 
 ## Known gaps and risks
