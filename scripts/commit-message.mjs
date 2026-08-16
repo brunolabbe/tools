@@ -4,11 +4,12 @@
  * Two callers, deliberately sharing this file so they cannot drift:
  *
  *   - `.githooks/commit-msg`, which rejects a bad message while the author —
- *     usually an agent — still has the context to fix it.
- *   - `.github/workflows/pr-title.yml`, which checks the pull request title,
- *     because this repo squash-merges and the *title* is what lands on `main`.
- *     That is the message release-please reads, so it is the one that must be
- *     right; the intermediate commits on a branch are working notes.
+ *     usually an agent — still has the context to fix it. This repo merges with
+ *     merge commits, so every commit on a branch reaches `main` and is read by
+ *     release-please. There are no working notes; this hook is the real gate.
+ *   - `.github/workflows/pr-title.yml`, which checks the pull request title.
+ *     The title is not what lands, so that check is about a legible pull request
+ *     list rather than about the changelog.
  *
  * Plain `.mjs`, no dependencies, no build step. The hook has to run in a fresh
  * clone before anyone has typed `npm install`, and anything needing `tsx` or a
@@ -60,6 +61,12 @@ export const EXTRA_SCOPES = ["core", "repo", "ci", "deps"];
 /** Anything git or an editor generates that was never meant to be conventional. */
 const BYPASS = [/^Merge /, /^Revert "/, /^fixup! /, /^squash! /, /^amend! /];
 
+/** The one bypassed subject whose *body* is still checked. See `mergeBodyErrors`. */
+const MERGE = /^Merge /;
+
+/** A line release-please would read as a commit in its own right. */
+const CONVENTIONAL_LINE = new RegExp(`^(?:${TYPES.join("|")})(?:\\([^()]+\\))?!?: \\S`);
+
 const HEADER_MAX = 100;
 
 /**
@@ -102,7 +109,9 @@ export function validate(message, options = {}) {
   const errors = [];
 
   if (header === "") return { ok: false, errors: ["the commit message is empty"] };
-  if (BYPASS.some((pattern) => pattern.test(header))) return { ok: true, errors: [] };
+  if (BYPASS.some((pattern) => pattern.test(header))) {
+    return MERGE.test(header) ? mergeBodyErrors(lines.slice(1)) : { ok: true, errors: [] };
+  }
 
   // GitHub appends " (#123)" to a squash merge's subject. The author did not
   // type it and cannot shorten it, so it does not count against the limit.
@@ -160,6 +169,34 @@ export function validate(message, options = {}) {
       );
     }
   }
+
+  return { ok: errors.length === 0, errors };
+}
+
+/**
+ * A merge commit's subject is git's, and skipped — but release-please does not
+ * stop at the subject. It reads the body too, and counts every line there that
+ * parses as a conventional commit as a commit of its own. So a body carrying
+ * the branch's message lands that message twice, under two SHAs, in one
+ * changelog: exactly what downloader 0.2.0 was released with.
+ *
+ * GitHub writes that body itself when a repository's `merge_commit_message` is
+ * `PR_TITLE`, which no hook can prevent — the setting is where that is fixed,
+ * and docs/03-RELEASING.md says which switch. This is the backstop for a merge
+ * made by hand, where the body is whatever the author left in the buffer.
+ *
+ * @param {string[]} body
+ * @returns {{ ok: boolean, errors: string[] }}
+ */
+function mergeBodyErrors(body) {
+  const errors = body
+    .filter((line) => CONVENTIONAL_LINE.test(line))
+    .map(
+      (line) =>
+        `"${line.trim()}" is a conventional commit inside a merge commit's body — ` +
+        `release-please reads it as a second commit and writes the changelog entry ` +
+        `twice. Leave the body empty; the commit on the branch is the record`,
+    );
 
   return { ok: errors.length === 0, errors };
 }

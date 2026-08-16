@@ -170,6 +170,15 @@ rejects a bad one as you write it, and the rule itself lives in
 `scripts/commit-message.mjs`. The taxonomy, the escape hatches and how a release
 is cut are in [docs/03-RELEASING.md](./docs/03-RELEASING.md).
 
+**Nothing is squashed, and a merge commit's body is empty.** Every commit on a
+branch lands on `main` as itself, so each one is a changelog line rather than a
+working note. release-please reads a merge commit's body too, counting each
+conventional line in it as a further commit — so a body repeating what the
+branch already said lands that entry twice, which is how the downloader's 0.2.0
+changelog came to list one planner feature two times. Merging is GitHub's job,
+and blanking the body is a repository setting, not something a hook can do;
+`03-RELEASING.md` names the switch.
+
 ## Style
 
 TypeScript strict, ESM, `.ts` extensions in relative imports (NodeNext),

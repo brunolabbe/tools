@@ -90,10 +90,11 @@ substitute the tool's name.
 > run `npm install` **and `npm run build`** before anything else. `npm run check`
 > and `npm test` must pass — and neither runs that tool's slow gates, so if you
 > changed what the container ships or what the browser loads, say that CI has not
-> proved it rather than reporting green. The pull request title is itself a
-> conventional commit, because this repo squash-merges and the title is the
-> message that lands on `main`; check yours with
-> `node scripts/commit-message.mjs --text "<title>"` before opening it. Append
+> proved it rather than reporting green. Nothing here is squashed: every commit
+> you write lands on `main` as itself and is read as a changelog line, so each
+> one is a conventional commit and so is the pull request title — check either
+> with `node scripts/commit-message.mjs --text "<title>"` before opening it, and
+> if you merge it yourself leave the merge commit's **body empty**. Append
 > what you did, and anything the brief got wrong, to the ticket's Log before you
 > call it done.
 
@@ -114,7 +115,11 @@ they are the three ways a correct change fails here.
   would not boot — because a `Dockerfile` lists its workspaces by hand, twice,
   and nothing type-checks that list. The honest report is "green locally, and the
   image gate is the proof I do not have".
-- **The pull request title is the commit.** The rule and its reasoning are in
+- **Every commit is a commit that lands.** The rule and its reasoning are in
   [03-RELEASING.md](./03-RELEASING.md), which an agent handed a ticket has no
   reason to open — so the check for it goes here, where it will be read. A title
-  that reads like a heading is a guaranteed red `pr-title`.
+  that reads like a heading is a guaranteed red `pr-title`, and a message that
+  reads like a note to yourself is a changelog line saying that to everyone. The
+  merge commit's body belongs to the same rule from the other side: a
+  conventional line left in it is read as a second commit, and downloader 0.2.0
+  shipped with its one feature listed twice because of it.

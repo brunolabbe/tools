@@ -14,10 +14,10 @@ work it.
            │  feat(downloader): …
            ▼
    ┌────────────────────┐
-   │  pull request      │   the *title* is checked, because a squash
-   │                    │   merge lands the title, not the commits
+   │  pull request      │   merged with a merge commit, so every
+   │                    │   commit on the branch lands as itself
    └─────────┬──────────┘
-             │ merged
+             │ merged — body empty, see below
              ▼
    ┌────────────────────────────────────────────────┐
    │  main                                          │
@@ -56,6 +56,11 @@ type(scope): subject
 pull request title. Both run [`scripts/commit-message.mjs`](../scripts/commit-message.mjs),
 which is the actual specification — this table is a summary of it.
 
+**Every commit on a branch lands on `main` as itself**, because this repo merges
+with merge commits and nothing collapses a branch into one message. So a commit
+is not a working note: it is the changelog line. The hook is the gate that
+matters, and the title check exists so the pull request list reads well.
+
 | Type                                                      | Version                            | In the changelog |
 | --------------------------------------------------------- | ---------------------------------- | ---------------- |
 | `feat`                                                    | minor                              | yes              |
@@ -91,6 +96,13 @@ re-probing in place (dl-9)`. That is what the `dl-`/`pl-` prefix is for — see
 machine. A commit touching both tools appears in both changelogs, which is
 correct and is also a hint that it should have been two commits.
 
+The worked example is downloader 0.2.0, whose only entry reads
+`**planner:** run the fan-out as a job (pl-16)`. That commit lifted the rate
+limiter into `packages/core` and rewired `tools/downloader/api` to use it while
+adding the planner's feature — so the downloader genuinely changed and genuinely
+owed a release, and the line describing it was written for another tool. Two
+commits would have given each tool a sentence that was true of it.
+
 ### The one case that needs a footer
 
 A change to `packages/core` alone touches no tool's path, so it releases
@@ -108,6 +120,51 @@ changed.
 
 Release-As: 0.2.1
 ```
+
+---
+
+## Merging a pull request
+
+**A merge commit's body must be empty.** release-please does not stop at a merge
+commit's subject. It reads the body, and counts every line there that parses as
+a conventional commit as a commit in its own right — which is the behaviour that
+makes a merge-commit workflow work at all, and the behaviour that bites when the
+body repeats what the branch already said. Land this:
+
+```
+Merge pull request #34 from brunolabbe/worktree-pl-16-the-plan-run
+
+feat(planner): run the fan-out as a job (pl-16)
+```
+
+and the changelog gets the line twice, under two SHAs — once for the branch
+commit, once for the merge that landed it. That is downloader 0.2.0, and it cost
+one line of body.
+
+**GitHub writes that body for you.** It is the repository's
+`merge_commit_message` setting, and `PR_TITLE` — the value that puts the pull
+request title in the body — is not the default this repo wants. Set it to
+`BLANK`, in _Settings → General → Pull Requests → Default merge commit message_,
+or:
+
+```bash
+gh api -X PATCH repos/<owner>/<repo> -f merge_commit_message=BLANK
+```
+
+Nothing local can enforce that: the merge commit is made on GitHub's side, after
+every hook has run. The setting is the fix.
+
+**The hook is the backstop for a merge made by hand.**
+`scripts/commit-message.mjs` skips a merge commit's subject, as it always did,
+and now rejects a conventional line in its body — which catches a local
+`git merge --no-ff` whose buffer still held the branch's message. It cannot
+catch GitHub's, so it is a second line of defence and not the first.
+
+**Squash merging is off**, and the docs assume it stays off. Turning it on is a
+coherent alternative — one commit per pull request, titled by the title, which
+is what [`pr-title.yml`](../.github/workflows/pr-title.yml) would then be
+guarding — but it is the opposite arrangement, not a tweak, and half of this
+page would read differently.
 
 ---
 
@@ -230,11 +287,12 @@ Nothing else is required; the host's read-only token is enough.
 
 ## Things that will bite you
 
-**A merge with a bad title lands a bad changelog entry, permanently.** The PR
-title check is the last gate, and squash-merging is what makes the title the
-message. There is no rewriting `main`, so the entry is fixed by hand in the next
-release PR — which is allowed: the changelog in an open release PR is a normal
-file and can be edited before merging.
+**A bad commit message lands a bad changelog entry, permanently.** Every commit
+on a branch reaches `main`, so `.githooks/commit-msg` is the last gate that runs
+before the message is a fact — and it fails open when node is missing, which
+nothing downstream compensates for. There is no rewriting `main`, so the entry is
+fixed by hand in the next release PR, which is allowed: the changelog in an open
+release PR is a normal file and can be edited before merging.
 
 **`INSTALL_YTDLP` is decided in CI now, not on the host.** It was a build arg,
 and a host that pulls an image no longer runs a build to pass it to. Changing it

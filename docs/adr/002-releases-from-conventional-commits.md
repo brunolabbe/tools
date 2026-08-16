@@ -50,6 +50,15 @@ feedback, and a check on the pull request title, which is what a squash merge
 actually lands and therefore what release-please reads. Both call
 `scripts/commit-message.mjs`, so they cannot disagree.
 
+> **Amendment, 2026-08-16.** The squash merge in that paragraph never existed:
+> `allow_squash_merge` was off from the start and every pull request landed as a
+> merge commit, so the commits on the branch — not the title — are what
+> release-please reads. The decision above is unaffected, and the enforcement is
+> still two calls into one file; which of the two is load-bearing is what
+> changes, and `.githooks/commit-msg` is the one. The rest of the correction,
+> including why a merge commit's body must be empty, is in
+> [03-RELEASING.md](../03-RELEASING.md).
+
 ## Alternatives considered
 
 **Changesets.** Designed for publishing packages, and its value is the intent

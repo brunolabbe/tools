@@ -88,10 +88,12 @@ tool.
 ## Contributing
 
 Commits are conventional and it is enforced — `type(scope): subject`, with the
-scope naming a tool or `core` · `repo` · `ci` · `deps`. This repo squash-merges,
-so the **pull request title** is the message that lands and the one CI checks.
-Versions and changelogs are generated from it, per tool. The taxonomy and the
-release flow are in [docs/03-RELEASING.md](./docs/03-RELEASING.md).
+scope naming a tool or `core` · `repo` · `ci` · `deps`. Nothing is squashed, so
+**every commit on a branch lands on `main`** and is read as a changelog line;
+the pull request title is checked too. Versions and changelogs are generated
+from those commits, per tool. The taxonomy, the release flow and why a merge
+commit's body has to be empty are in
+[docs/03-RELEASING.md](./docs/03-RELEASING.md).
 
 Security reports go through GitHub's private vulnerability reporting, not a
 public issue — see [SECURITY.md](./SECURITY.md).
