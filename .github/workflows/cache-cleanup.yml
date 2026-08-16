@@ -1,0 +1,66 @@
+name: cache-cleanup
+
+# A repository gets 10 GB of Actions cache and no way to raise it. Past that,
+# GitHub evicts least-recently-used — which is a policy that punishes exactly
+# the caches worth keeping, because a cache that hits often is a cache nothing
+# needs to re-save, while a stale one written yesterday looks fresher.
+#
+# The entries are ref-scoped, so a cache written while a pull request was open
+# is readable from `refs/pull/<n>/merge` and from nowhere else. The moment the
+# pull request closes it is unreachable and pure ballast, and this repository's
+# working style — a short-lived `worktree-*` branch per ticket — produces a lot
+# of it. Nothing else ever deletes them; they sit there until they push
+# something useful out.
+#
+# The image layer caches are handled at the source instead: `downloader.yml` and
+# `planner.yml` only export from `main`. This is for what remains — the npm
+# cache `setup-node` writes and the Windows browser cache in `ci.yml`.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    # A fork's pull request gets a read-only GITHUB_TOKEN, so the delete below
+    # would fail rather than skip. It also cannot have written a cache into this
+    # repository in the first place, so there is nothing to collect.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      # The one thing this workflow does. It reads no code and checks nothing
+      # out — `gh` talks to the API and never needs the tree.
+      actions: write
+    steps:
+      - name: Delete the caches this pull request left behind
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          REF: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: |
+          set -euo pipefail
+          # Listed by id and deleted by id. `gh cache delete` matches on a key,
+          # and keys are not unique across refs — `main`'s copy of a lockfile
+          # hash and this branch's copy are the same string, and deleting the
+          # wrong one would cost every later run a cold start.
+          ids="$(gh api --paginate \
+            "/repos/$REPO/actions/caches?ref=$REF&per_page=100" \
+            --jq '.actions_caches[].id')"
+
+          if [ -z "$ids" ]; then
+            echo "no caches were scoped to $REF"
+            exit 0
+          fi
+
+          count=0
+          for id in $ids; do
+            # Best-effort per entry: a cache can be evicted between the list and
+            # the delete, and that race is the job succeeding early, not failing.
+            if gh api --method DELETE "/repos/$REPO/actions/caches/$id" > /dev/null 2>&1; then
+              count=$((count + 1))
+            fi
+          done
+          echo "deleted $count cache(s) scoped to $REF"
