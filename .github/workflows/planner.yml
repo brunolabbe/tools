@@ -66,14 +66,12 @@ jobs:
       # Playwright reports a web server that would not start, which reads as an
       # e2e failure rather than as a missing build.
       - run: npm run build
-      # Keyed on the lockfile, so a Playwright bump invalidates it; the install
-      # below still runs on a hit and finds the browser already there. Same
-      # pattern and same key as `ci.yml`.
-      - name: Cache the Playwright browsers
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      # No browser cache here, deliberately, and `ci.yml` now caches on Windows
+      # only for the same reason. Measured on this runner: restoring 282 MB took
+      # three seconds and the install still took eleven, against twenty with no
+      # cache at all. Six seconds is not worth a copy per branch out of the
+      # repository's 10 GB cache quota — which was over budget, and evicting
+      # the caches that do pay for themselves.
       - run: npx playwright install --with-deps chromium
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
