@@ -60,13 +60,13 @@ the builder** — the composer turns candidates into days, and the only candidat
 in the repo are pl-4's six checked-in sets. pl-5 produces real ones from a
 fan-out; pl-10 renders the result.
 
-What exists but is **wrong for the current design**: the contract's
-`Conversation` / `Message` types, `MAX_MESSAGE_CHARS`, and
-`CONVERSATION_NOT_FOUND`. Migration 3 dropped the tables under them in
-[pl-7](./work/pl-7-intake-persistence-and-wizard.md); the types stayed, because
-removing a code is a contract change that also has to fix
-`registerNotFoundHandler`'s abuse of it for unknown URLs. That is
-[pl-11](./work/pl-11-retire-the-conversation-vocabulary.md).
+**Nothing in the contract describes a conversation any more.**
+[pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) deleted the
+`Conversation` / `Message` types, their three zod schemas, `MAX_MESSAGE_CHARS`
+and `CONVERSATION_NOT_FOUND` — the vocabulary that outlived the tables migration
+3 dropped. An unknown URL now answers `NOT_FOUND` from `@webtools/core`, which is
+about a route rather than a document. Migration 1 still creates the tables and
+migration 3 still drops them: applied migrations are history and are not edited.
 
 **The documentation leads the code by two phases**, down from four: Phase 1 is
 built, and Phase 2 has its contract and its composer. That gap is the intended state after a design
@@ -90,7 +90,7 @@ still unwritten.
 | [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER` |
 | [pl-9](./work/pl-9-composer-and-critic.md)                  | done      | `@planner/itinerary`: season, packing, budget, critic    |
 | [pl-10](./work/pl-10-plan-view-and-provenance.md)           | ready     | Renders the plan, its gaps and what was verified         |
-| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | ready     | Delete what migration 3 outlived; `NOT_FOUND` to core    |
+| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | done      | The vocabulary is gone; `NOT_FOUND` lifted to core       |
 | [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | ready     | 1,100 lines of `.tsx` and no test renders any of it      |
 | [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI  |
 | [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2    |
@@ -184,10 +184,9 @@ specialists, grounding calls and tokens per run, enforced before the fan-out. It
 is a cost control and a DoS control at once, and it lands with pl-5 or not at all.
 
 **The transcript risk is gone**, not deferred — there is no transcript, so nothing
-is re-sent turn over turn. The per-run budget replaces it as the cost control.
-`MAX_MESSAGE_CHARS` is a constant with no job: migration 3 has landed and it
-outlived the table, so it goes with the removal below rather than with a
-migration.
+is re-sent turn over turn. The per-run budget replaces it as the cost control, and
+`MAX_MESSAGE_CHARS` — the ceiling that bounded one turn of the thing that no
+longer exists — went with pl-11.
 
 **The error codes the design needs are all in.** The intake's half: `BRIEF_INCOMPLETE`
 for a brief too thin to draft from (pl-3), `INVALID_ANSWER` for an answer that
@@ -202,15 +201,16 @@ revision sends a user to the plan, not to the list). A failed specialist is
 deliberately **not** an error: it is a `PlanGap` on the revision, and the plan
 ships.
 
-`TRIP_NOT_FOUND` is already gone: the vocabulary is settled (a trip is the
-journey, a plan is the document) and the code is now `PLAN_NOT_FOUND`.
-`CONVERSATION_NOT_FOUND` is next, and pl-7 deliberately did not take it: removing
-a code is a contract change rather than an addition, and it has to fix
-`registerNotFoundHandler`'s abuse of it for unknown URLs in the same move rather
-than carry the bug across. pl-13 left that abuse in place for the same reason
-while changing the function's signature around it. It is ticketed as
-[pl-11](./work/pl-11-retire-the-conversation-vocabulary.md), along with
-`Conversation`, `Message` and `MAX_MESSAGE_CHARS`.
+`TRIP_NOT_FOUND` and `CONVERSATION_NOT_FOUND` are both gone. The first because
+the vocabulary is settled (a trip is the journey, a plan is the document) and the
+code is now `PLAN_NOT_FOUND`; the second with
+[pl-11](./work/pl-11-retire-the-conversation-vocabulary.md), which could only
+remove it by giving `registerNotFoundHandler` something true to raise instead.
+That is `NOT_FOUND`, and it is **core's**: this tool and the downloader had each
+re-worded their nearest domain code to describe a missing route, which is the
+second consumer the lifting rule asks for. The downloader's call site is still
+wrong and is [dl-17](../../downloader/docs/work/dl-17-name-an-unknown-endpoint.md),
+not this tool's to fix.
 
 **The `AGENT_*` codes are the planner's, provisionally.** They belong in
 `@webtools/core` the day a second tool talks to a model.

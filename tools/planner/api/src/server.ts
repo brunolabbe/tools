@@ -151,16 +151,17 @@ function registerErrorHandling(server: FastifyInstance, context: AppContext): vo
  * the static plugin: the SPA fallback needs `reply.sendFile`, which only exists
  * once that plugin has decorated the reply.
  *
- * The `CONVERSATION_NOT_FOUND` below is wrong and is not fixed here — the code
- * is being retired wholesale by pl-11, which owns naming an unknown endpoint
- * properly. Carrying the bug across a rename is how it survives one.
+ * `NOT_FOUND` is core's, not ours: a URL that matches no route is a fact about
+ * the transport, and a code about a missing *document* used to describe one is
+ * how the taxonomy stops meaning anything. It said `CONVERSATION_NOT_FOUND`
+ * until pl-11 retired that whole vocabulary.
  */
 function registerNotFoundHandler(server: FastifyInstance, servingWeb: boolean): void {
   server.setNotFoundHandler((request, reply) => {
     if (servingWeb && serveIndexForUnknownPath(request, reply)) return;
 
     const { status, body } = toErrorResponse(
-      new AppError("CONVERSATION_NOT_FOUND", "No such endpoint.", {
+      new AppError("NOT_FOUND", undefined, {
         details: { path: request.url.slice(0, 200) },
       }),
     );

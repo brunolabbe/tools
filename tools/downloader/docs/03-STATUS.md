@@ -45,14 +45,22 @@ nobody could check.)
 
 ## Open tickets
 
-Two, and both are coverage debt on code that already shipped rather than new
-capability. They are independent of each other; the order below is the order
-worth doing them in, not a dependency chain.
+Three. Two are coverage debt on code that already shipped rather than new
+capability; the third is a one-line correctness fix left ready by another tool's
+work. They are independent of each other; the order below is the order worth
+doing them in, not a dependency chain.
 
-| Ticket                                           | What it closes                                    |
-| ------------------------------------------------ | ------------------------------------------------- |
-| [dl-15](./work/dl-15-component-render-tests.md)  | No component in `web` is ever rendered by a test  |
-| [dl-16](./work/dl-16-e2e-through-the-sniffer.md) | Nothing drives sniffer → engine → UI in one piece |
+| Ticket                                            | What it closes                                     |
+| ------------------------------------------------- | -------------------------------------------------- |
+| [dl-15](./work/dl-15-component-render-tests.md)   | No component in `web` is ever rendered by a test   |
+| [dl-16](./work/dl-16-e2e-through-the-sniffer.md)  | Nothing drives sniffer → engine → UI in one piece  |
+| [dl-17](./work/dl-17-name-an-unknown-endpoint.md) | An unknown URL answers `JOB_NOT_FOUND`, which lies |
+
+**dl-17 is unblocked and small.** `NOT_FOUND` landed in `@webtools/core` with the
+planner's pl-11 — two tools had independently re-worded their nearest domain code
+to mean "no such route", which is the second consumer the lifting rule asks for.
+The status mapping and the UI copy for it are already in this tool; only the call
+site in `registerNotFoundHandler` still says `JOB_NOT_FOUND`.
 
 [dl-13](./work/dl-13-typecheck-the-tests.md) closed: every `test/` directory in
 the repo and `e2e/` are projects in `tsc --build` now, so `npm run check` holds

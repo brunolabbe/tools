@@ -21,10 +21,14 @@ ride up north, a slow week of history in Europe — answer a guided set of
 questions about it, have the specialists that trip actually needs work on it, and
 keep the plan.
 
-**This is not a chat.** The intake asks predetermined questions from an authored,
-versioned tree, and no model is in it; a model is involved later, in the fan-out.
-The tool was scaffolded as a chat and stopped being one on 2026-08-14 — read the
-log on `docs/work/pl-1-conversation-loop.md` before reaching for a transcript.
+**This is not a chat, at either end.** The intake asks predetermined questions
+from an authored, versioned tree, and no model is in it; a model is involved
+later, in the fan-out. A plan is then revised through **structured operations on
+the document** — pin an item, name the days a re-plan may touch — and never
+through an utterance. The tool was scaffolded as a chat and stopped being one on
+2026-08-14 — read the log on `docs/work/pl-1-conversation-loop.md` before
+reaching for a transcript. Analysis §3's amendment settles the intake half and
+§6's the revision half; there is no third place a conversation could come back.
 
 The interesting problem is that **a trip is an under-specified constraint
 problem** whose constraints the user cannot state up front, and that **a plan is

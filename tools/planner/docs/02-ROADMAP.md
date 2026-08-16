@@ -15,11 +15,15 @@ Three claims carry the whole plan, all argued in [00-ANALYSIS.md](./00-ANALYSIS.
   question tree, branching on the trip's shape, producing the same `TripBrief`
   an interviewer would have (§3 amendment).
 
-**This tool is not a chat.** It was scaffolded as one, and the transcript premise
-was retired on 2026-08-14 — see [pl-1](./work/pl-1-conversation-loop.md) before
-reaching for a conversation loop here. The §3 amendment records what the decision
-costs as well as what it buys, and the cost is real: a tree cannot follow up on
-something nobody anticipated.
+**This tool is not a chat**, at either end. It was scaffolded as one, and the
+transcript premise was retired on 2026-08-14 — see
+[pl-1](./work/pl-1-conversation-loop.md) before reaching for a conversation loop
+here. Two amendments to [00-ANALYSIS.md](./00-ANALYSIS.md) carry it: **§3** for
+the intake, and **§6** for revision, decided 2026-08-16 once the vocabulary
+removal surfaced the one paragraph §3 had missed. Both record what the decision
+costs as well as what it buys, and the cost is the same both times and real: a
+tree cannot follow up on something nobody anticipated, and an operation nobody
+built cannot be asked for.
 
 The domain used to be deliberately absent from this page. It is now designed at
 the level of shape — [00-ANALYSIS.md](./00-ANALYSIS.md) for why, and
@@ -44,9 +48,12 @@ about it. The persisted aggregate is the plan, everywhere, including
 | `api`      | Fastify, SQLite with numbered migrations, config, logging, `/api/health`   |
 | `web`      | The app shell and a health call — no intake UI                             |
 
-The `contract` row is history, not a description of where this is going:
-`Conversation` and `Message` are superseded by the brief and the intake, and
-migration 1's tables go with them.
+The `contract` row is history in the strict sense — none of it is still there.
+The brief and the intake replaced `Conversation` and `Message`, migration 3
+dropped the tables under them, and
+[pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) deleted the types,
+the schemas and `CONVERSATION_NOT_FOUND` themselves. Migrations 1 and 3 both
+remain in the file: an applied migration is not edited.
 
 Two decisions from Phase 0 survive the domain landing, and are not up for
 revisiting casually:
@@ -127,6 +134,13 @@ SSRF guard lifted to `packages/core` as the second real consumer claims it.
 Pin an item, name the days a re-plan may touch, re-run a slice with two
 specialists instead of the fleet, and show a diff (§6). Everything before this
 produces a first draft; this is what makes the tool worth returning to.
+
+**Every one of those is an operation on the document, and that is the whole
+interface** — §6's amendment. A revision names what it may touch, so a re-plan
+reads the brief, the pinned items and its slice and never a history: the cost of
+revising does not grow with how many revisions came before. A free-text note may
+ride along on a revision for the specialists to read as context; it is never an
+instruction to the composer.
 
 ## Later, and not soon
 

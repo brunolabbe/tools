@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { ROUTES } from "@planner/contract";
+import { DEFAULT_ERROR_MESSAGES, ROUTES } from "@planner/contract";
 import type { App } from "../src/server.ts";
 import { createApp } from "../src/server.ts";
 import type { HealthResponse } from "../src/routes/health.ts";
@@ -57,6 +57,11 @@ describe("GET /api/health", () => {
 
     const response = await server.inject({ method: "GET", url: "/api/nope" });
     expect(response.statusCode).toBe(404);
-    expect(response.json<{ error: { code: string } }>().error.code).toBe("CONVERSATION_NOT_FOUND");
+
+    const { error } = response.json<{ error: { code: string; message: string } }>();
+    // Core's code and core's copy: a missing *route*. Answering this with a
+    // code about a missing document is what pl-11 retired.
+    expect(error.code).toBe("NOT_FOUND");
+    expect(error.message).toBe(DEFAULT_ERROR_MESSAGES.NOT_FOUND);
   });
 });

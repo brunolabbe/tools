@@ -25,6 +25,16 @@ export const CORE_ERROR_CODES = [
   "BLOCKED_TARGET",
   /** DNS failure, connection refused, TLS failure, or non-2xx on the target itself. */
   "UNREACHABLE",
+  /**
+   * The request reached us and matched no route.
+   *
+   * About *the transport*, never about a document: a missing job is
+   * `JOB_NOT_FOUND` and a missing anything-else belongs to the tool's own
+   * taxonomy. It lives here because both tools reached for their nearest domain
+   * code and re-worded it to mean this, which is the second consumer the repo's
+   * lifting rule asks for.
+   */
+  "NOT_FOUND",
 
   // --- Artifacts ---
   /** Output would exceed the configured per-job or global size cap. */
@@ -61,6 +71,7 @@ export const CORE_ERROR_MESSAGES: Readonly<Record<CoreErrorCode, string>> = {
   INVALID_URL: "That does not look like a valid web address.",
   BLOCKED_TARGET: "That address points somewhere this service is not allowed to reach.",
   UNREACHABLE: "The site could not be reached.",
+  NOT_FOUND: "That endpoint does not exist.",
   SIZE_LIMIT_EXCEEDED: "The result is larger than the configured size limit.",
   DISK_FULL: "The server has run out of storage.",
   FILE_EXPIRED: "That file has been removed. Results are kept for a limited time.",

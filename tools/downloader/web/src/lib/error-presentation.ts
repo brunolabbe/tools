@@ -171,6 +171,15 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
     allowRetry: false,
     final: true,
   },
+  // A code the UI cannot cause and should never render prettily: it means this
+  // build asked for a path the server does not have, which is a version skew
+  // between the bundle and the API rather than anything the user did.
+  NOT_FOUND: {
+    title: "This page is out of date",
+    detail: "The server does not recognise the request this page made. Reload and try again.",
+    tone: "internal",
+    allowRetry: false,
+  },
   FILE_EXPIRED: {
     title: "File removed",
     detail: "Finished files are kept for a limited time and this one is past its retention window.",

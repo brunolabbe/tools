@@ -16,8 +16,8 @@
  * shared code moves to `packages/` on the second real consumer, not the first
  * guess. When a second tool needs them, lift them.
  *
- * This catalog is a starting point, sized to what the tool certainly does —
- * hold a conversation, remember a trip. Extend it here as the domain lands.
+ * This catalog covers what the tool certainly does — ask an intake, draft a
+ * plan, revise it. Extend it here as the domain lands.
  */
 
 import {
@@ -46,13 +46,16 @@ export const PLANNER_ERROR_CODES = [
   "AGENT_REFUSED",
   /** The reply did not parse into the shape the caller asked for, past the retry budget. */
   "AGENT_MALFORMED_REPLY",
-  /** The conversation no longer fits the model's context window. */
+  /**
+   * What we sent the model does not fit its context window — a brief plus a
+   * candidate set plus a critic's working, not a transcript: there is no
+   * transcript to grow.
+   */
   "CONTEXT_LIMIT",
 
   // --- The trip ---
   // "Trip" is the journey the user is taking; "Plan" is the document this tool
   // keeps about it. The aggregate, and therefore the code, is the plan.
-  "CONVERSATION_NOT_FOUND",
   /**
    * No intake under that id.
    *
@@ -152,8 +155,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   AGENT_UNAVAILABLE: "The planning assistant is not answering right now.",
   AGENT_REFUSED: "The assistant declined to answer that.",
   AGENT_MALFORMED_REPLY: "The assistant’s answer could not be understood.",
-  CONTEXT_LIMIT: "This conversation has grown too long to continue. Start a new one.",
-  CONVERSATION_NOT_FOUND: "That conversation could not be found.",
+  CONTEXT_LIMIT: "There is too much here for the assistant to take in at once.",
   INTAKE_NOT_FOUND: "That trip could not be found.",
   PLAN_NOT_FOUND: "That plan could not be found.",
   REVISION_NOT_FOUND: "That version of the plan could not be found.",
