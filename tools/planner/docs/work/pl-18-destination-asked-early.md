@@ -274,12 +274,27 @@ sweep does not find a claim stated in prose about the code.** The grep that foun
 it was for the words, not the symbols — `"describe the same set"`, not
 `REQUIRED_CORE_SLOTS`.
 
-Three more sites were found in the same pass and deliberately left to the docs
-session already in them: `00-ANALYSIS.md:139-141`'s parenthetical definition of
-`core` (which wants an amendment in that file's voice, not an edit), and
-`03-STATUS.md` in three places — line 40's "version 2, 37 questions", line 50,
-and lines 224-227, which still claim both directions are closed and cite a route
-test as proof. `01-ARCHITECTURE.md` was checked and is clean.
+`00-ANALYSIS.md` §3's amendment had the same problem in one parenthetical —
+"every node in the tree is marked `core` (needed before a first draft can exist)"
+— and it now carries **a second amendment** rather than an edit, per the
+convention that section already demonstrates twice. It was nearly left to the
+pl-10 session on the grounds that the file's voice is better set by whoever is
+already in it. That was the wrong reason, and the pl-10 session gave the right
+one: **an amendment describes code, so it belongs on the branch that moves the
+code.** Written into a pl-10 PR, it would put semantics into main that only exist
+if this branch lands as-is, and it would put a pl-18 line in a pl-10 release.
+
+`03-STATUS.md` is left to whoever lands last, which is the standing agreement:
+line 40's "version 2, 37 questions", line 52's "stops at the core questions", and
+the "agree in both directions" claim — which has moved to 243-248 under the pl-10
+docs work and is the one most likely to be missed, being far from the summary
+paragraph everyone reads. **The test counts in it must be measured, not carried
+over from either branch.** 491/37 is right for this branch alone and wrong the
+moment #44 lands; whoever writes that line runs the suite and reads the number
+off it.
+
+`01-ARCHITECTURE.md` never states the equivalence and needed nothing from this
+ticket. It is not untouched in general — pl-10 edits two lines of it.
 
 #### Not done here
 
