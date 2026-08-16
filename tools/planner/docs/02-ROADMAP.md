@@ -115,9 +115,11 @@ The three pieces that turn a brief into a document, in the order the code forces
    the result, and a list of every constraint it could not evaluate. Ordinary
    TypeScript, ordinary unit tests, no model.
    → [pl-9](./work/pl-9-composer-and-critic.md)
-5. **The plan, read honestly** — the days, the gaps, and which lines were
+5. **The plan, read honestly** ✅ — the days, the gaps, and which lines were
    verified rather than asserted. Costs as bands, and a plan that admits what it
-   could not check. → [pl-10](./work/pl-10-plan-view-and-provenance.md)
+   could not check — including after a reload, which is the half that could most
+   easily have gone missing.
+   → [pl-10](./work/pl-10-plan-view-and-provenance.md)
 
 pl-9 depends only on pl-4, not on pl-5: the candidate sets are checked in, so the
 composer can be built and tested with no fan-out and no model. It and pl-5 ran in
@@ -176,9 +178,11 @@ authority for backcountry, marine or winter motorised travel. The reasons are in
 - **P2 — It produces a plan.** A brief chooses a roster, specialists return
   candidates, the composer packs days that survive **the constraints it can
   evaluate** — hours, season, budget, effort, booking deadlines — and the plan
-  names every constraint it could not, travel time first among them. Still
-  scripted and ungrounded: a claim about machinery, and a narrower claim than
-  this line made before 2026-08-16.
+  names every constraint it could not, travel time first among them — and the
+  plan can be **read**, with the verified lines marked as such and the unchecked
+  ones still named on the tenth read rather than only on the run that produced
+  it. Still scripted and ungrounded: a claim about machinery, and a narrower
+  claim than this line made before 2026-08-16.
 - **P3 — The plan is true.** Grounded facts with provenance, against a real model,
   with the run's bill bounded.
 - **P4 — The plan is revisable.** Pin, re-plan a slice, read the diff.
@@ -233,10 +237,17 @@ Three consequences, all landed in [pl-9](./work/pl-9-composer-and-critic.md):
   whether every constraint was enforced or three were skipped for want of data,
   which is what makes silence about it the most consequential lie this package
   could tell.
-- **The list does not persist**, and that is a known limit rather than an
-  oversight. Every `PlanGapReason` is about a specialist, and "we could not
-  check travel time" is not — route-and-logistics ran perfectly. Putting it on
-  the revision needs a contract change; pl-9's log has the argument.
+- **The list is derived, not stored** — settled by
+  [pl-10](./work/pl-10-plan-view-and-provenance.md), which is where it stopped
+  being a known limit. It does not persist and does not need to: it is a
+  function of the brief, the candidates and which of them were _placed_, and a
+  stored revision says which were placed, so `uncheckedForRevision` reads it off
+  the revision being looked at. pl-9 had offered a contract change or a
+  re-compose on read; the third option beats both, because a stored list can
+  disagree with the days beside it and a re-composed one drifts with
+  `limits.ts` **and with the clock** — a booking deadline that has since passed
+  changes what packs. `PlanGapReason` gained no member, and the two types stay
+  separate for the reason pl-9's log gives.
 
 **What a tree version change does to a saved intake** was answered on 2026-08-15,
 as pl-7 proposed: **re-run the engine against the current tree and prune what no

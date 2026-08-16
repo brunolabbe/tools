@@ -169,12 +169,20 @@ than an admitted hole — the repo's _never fake progress_ rule, in this domain.
 
 **Name what you did not check, not only what you did not cover.** A packed plan
 looks equally finished whether every constraint was enforced or three were
-skipped for want of data, so `@planner/itinerary` returns
-`UNCHECKED_CONSTRAINTS` on every result — travel time always, because
-`Place.coordinates` is null until grounding. A caller that drops that list on the
-floor turns an honest plan into one that merely looks finished. It is **not** a
-`PlanGap`: a gap names a specialist that did not contribute, and "nothing
-measured the distance" is not a statement about a specialist.
+skipped for want of data, so every plan carries an `UncheckedConstraint` list —
+travel time always, because `Place.coordinates` is null until grounding. A caller
+that drops that list on the floor turns an honest plan into one that merely looks
+finished. It is **not** a `PlanGap`: a gap names a specialist that did not
+contribute, and "nothing measured the distance" is not a statement about a
+specialist.
+
+The vocabulary is `@planner/contract`'s (`unchecked.ts`) because it goes over the
+wire; `@planner/itinerary` derives it and re-exports the type. **It is derived,
+never stored** — `compose` returns it for the plan it just built and
+`uncheckedForRevision` reads it off a stored revision, and the two agree by
+construction because both are the same function over the placed set. Do not add a
+column for it: a stored list can disagree with the days it is printed beside, and
+re-composing on read would drift with `limits.ts` and with the clock.
 
 **The packing limits are content, and they are reviewed as content** — the same
 standing the question tree has. They live in `itinerary/src/limits.ts`: how many

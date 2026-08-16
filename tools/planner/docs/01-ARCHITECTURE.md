@@ -37,7 +37,7 @@ Every package named below lives under `tools/planner/`.
 │  no model, no network  │  │                          │  │  critic · diff         │
 └────────────────────────┘  └──────────────────────────┘  └────────────────────────┘
               └──────────────────── contract ───────────────────────┘
-              tree · brief · candidate · plan · errors · schemas
+          tree · brief · candidate · plan · unchecked · errors · schemas
                                      │
                              @webtools/core
                      error machinery · transitions · redaction
@@ -52,7 +52,7 @@ Every package named below lives under `tools/planner/`.
 | `agent`     | Everything that talks to a model: prompts, roster, specialists, seams.                              | contract                           |
 | `itinerary` | Everything that must be exact: composer, constraint checks, critic, diff. **No model, no network.** | contract                           |
 | `api`       | Fastify surface, persistence, run orchestration, SSE, provider selection.                           | contract, intake, agent, itinerary |
-| `web`       | Wizard, plan, revision and diff UI.                                                                 | contract                           |
+| `web`       | Wizard, plan and revision UI. The diff is Phase 4 and is not built.                                 | contract                           |
 
 `intake` exists as of [pl-6](./work/pl-6-question-tree-and-engine.md) and
 `itinerary` as of [pl-9](./work/pl-9-composer-and-critic.md). Both are additions

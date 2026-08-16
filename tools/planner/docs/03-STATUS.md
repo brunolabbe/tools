@@ -8,19 +8,21 @@ each piece of work did lives in its ticket under [work/](./work/).
 end to end in a browser. The tool produces a brief with no model involved
 anywhere. Phase 2 now produces a plan: as of [pl-16](./work/pl-16-the-plan-run.md)
 a run started over HTTP fans out, composes and persists a revision, streams its
-progress over SSE, and can be canceled in a way that reaches the provider. What
-is missing is the plan _view_ (pl-10) and grounding (Phase 3)**
+progress over SSE, and can be canceled in a way that reaches the provider, and as
+of [pl-10](./work/pl-10-plan-view-and-provenance.md) that plan can be read — its
+days, which lines were verified, what it does not cover and what nothing checked.
+**Phase 2 is complete.** What is missing is grounding (Phase 3)**
 
 ---
 
 ## Where things stand
 
-| Phase                            | State         | Evidence                                                                                                                                                                                                                                                                                                                                                                                                |
-| -------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Phase 0 — Scaffold               | ✅ complete   | `0f8583e`                                                                                                                                                                                                                                                                                                                                                                                               |
-| Phase 1 — The intake             | ✅ complete   | [pl-3](./work/pl-3-trip-brief-contract.md), [pl-6](./work/pl-6-question-tree-and-engine.md) and [pl-7](./work/pl-7-intake-persistence-and-wizard.md) — the brief, the tree, and an intake that survives a reload                                                                                                                                                                                        |
-| Phase 2 — The first plan         | in flight     | [pl-4](./work/pl-4-plan-document-contract.md), [pl-9](./work/pl-9-composer-and-critic.md) and [pl-16](./work/pl-16-the-plan-run.md) done, [pl-5](./work/pl-5-orchestrator-and-fan-out.md) all but its own close-out — the plan document, the composer, the fan-out, and the run that joins them over HTTP and stores what comes back; [pl-10](./work/pl-10-plan-view-and-provenance.md) is what remains |
-| Phases 3–4 — Grounding, revision | designed only | no tickets yet, on purpose                                                                                                                                                                                                                                                                                                                                                                              |
+| Phase                            | State         | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Phase 0 — Scaffold               | ✅ complete   | `0f8583e`                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Phase 1 — The intake             | ✅ complete   | [pl-3](./work/pl-3-trip-brief-contract.md), [pl-6](./work/pl-6-question-tree-and-engine.md) and [pl-7](./work/pl-7-intake-persistence-and-wizard.md) — the brief, the tree, and an intake that survives a reload                                                                                                                                                                                                         |
+| Phase 2 — The first plan         | ✅ complete   | [pl-4](./work/pl-4-plan-document-contract.md), [pl-9](./work/pl-9-composer-and-critic.md), [pl-16](./work/pl-16-the-plan-run.md) and [pl-10](./work/pl-10-plan-view-and-provenance.md) done, [pl-5](./work/pl-5-orchestrator-and-fan-out.md) all but its own close-out — the plan document, the composer, the fan-out, the run that joins them over HTTP and stores what comes back, and the view that reads it honestly |
+| Phases 3–4 — Grounding, revision | designed only | no tickets yet, on purpose                                                                                                                                                                                                                                                                                                                                                                                               |
 
 **The tool is not a chat, as of 2026-08-14.** It was scaffolded as one. The
 intake now asks predetermined questions from an authored, versioned tree, and no
@@ -30,7 +32,7 @@ reasoning, including what the decision costs, is an amendment to
 argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
-**457 unit tests pass across 35 files, plus 2 e2e specs.** `npm run check` is
+**512 unit tests pass across 40 files, plus 2 e2e specs.** `npm run check` is
 green. The repo-wide CI runs the unit suite on every push, and
 `.github/workflows/planner.yml` now carries two gates — the e2e suite in a real
 browser, and the image, which is built, started, and asked for both `/api/health`
@@ -55,7 +57,11 @@ constraint check, bounded critic, all pure) — and **the run: `plan_runs` from
 migration 4, an in-process queue with `MAX_CONCURRENT_RUNS`, `POST /api/plans`
 behind a per-client rate limit, `GET /api/plans/:id`, `POST /api/runs/:id/cancel`
 and `GET /api/runs/:id/events` over SSE, with the whole `runFanOut` → `compose` →
-`appendRevision` sequence persisted and a progress view over it**.
+`appendRevision` sequence persisted and a progress view over it** — and **the
+plan view: `GET /api/plans` for the list, a `PlanView` on the detail route
+carrying what nothing checked alongside the document, `POST
+/api/plans/:id/items/:itemId/pin` for the one write that appends no revision, and
+the React view over all three**.
 
 **P1 is reached.** Someone can answer into a branch, be told the essentials are
 done, go back and change an early answer, be shown exactly what that costs, and
@@ -63,10 +69,19 @@ reload to find the intake where they left it — with no model involved anywhere
 which is what makes the whole claim checkable without a key. Two Playwright specs
 assert that whole paragraph against the built bundle.
 
-What does not exist: **the plan view** — pl-16 renders the run's outcome (how
-many days, what it could not cover) and nothing more, because the document, its
-provenance and its diff are [pl-10](./work/pl-10-plan-view-and-provenance.md)'s —
-plus grounding of any kind and any hostname pointing at the image.
+**A plan can be read, as of [pl-10](./work/pl-10-plan-view-and-provenance.md).** A
+list of plans, and one document: the latest revision's days in order — a dateless
+day rendering by its index, because a flexible-dates trip has no calendar and
+inventing one is the thing `PlanDay.date` is nullable to prevent — each item
+resolved against the plan's candidates, legs carrying both ends, provenance
+marked separately on a candidate and on its cost because a real place with a
+guessed price is the common case, costs as bands and never as a figure, the gaps
+in the plan's own body, and what nothing checked beside the days. Pinning is
+there and appends no revision, which the database enforces from below. The diff
+is Phase 4 and is deliberately absent; the revision count is surfaced read-only.
+
+What does not exist: grounding of any kind, and any hostname pointing at the
+image.
 
 **Nothing in the contract describes a conversation any more.**
 [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) deleted the
@@ -76,8 +91,8 @@ and `CONVERSATION_NOT_FOUND` — the vocabulary that outlived the tables migrati
 about a route rather than a document. Migration 1 still creates the tables and
 migration 3 still drops them: applied migrations are history and are not edited.
 
-**The documentation leads the code by one phase**, down from four: Phase 1 is
-built and Phase 2 produces a plan end to end. That gap is the intended state after a design
+**The documentation leads the code by one phase**, down from four: Phases 1 and 2
+are built, and a plan is produced and read end to end. That gap is the intended state after a design
 pass and a liability if it lasts, so read
 [00-ANALYSIS.md](./00-ANALYSIS.md) and
 [01-ARCHITECTURE.md](./01-ARCHITECTURE.md) as _design_ rather than as
@@ -97,7 +112,7 @@ still unwritten.
 | [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them            |
 | [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER` |
 | [pl-9](./work/pl-9-composer-and-critic.md)                  | done      | `@planner/itinerary`: season, packing, budget, critic    |
-| [pl-10](./work/pl-10-plan-view-and-provenance.md)           | ready     | Renders the plan, its gaps and what was verified         |
+| [pl-10](./work/pl-10-plan-view-and-provenance.md)           | done      | The plan reads: provenance, gaps, and what was unchecked |
 | [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | done      | The vocabulary is gone; `NOT_FOUND` lifted to core       |
 | [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | done      | 1,100 lines of `.tsx` and no test renders any of it      |
 | [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI  |
@@ -160,16 +175,22 @@ roadmap. Every plan carries `travel-time` on its unchecked list, without
 exception, and a test per trip shape says so. Daily distance (backcountry) and
 machine range (motorised) are unchecked for the same reason.
 
-**The unchecked list does not survive a reload.** Every `PlanGapReason` is about
-a _specialist_ — failed, dropped, not applicable, found nothing — and "we could
-not check travel time" is not: route-and-logistics ran perfectly and what is
-missing is a distance nobody has. So the list lives on `ComposeResult`, and a
-plan read back out of the database has lost it. Two ways to close that — persist
-it behind a new `PlanGapReason` member that is about a constraint, or re-derive
-it on read, which genuinely works because the composer is pure — and neither has
-been chosen. It is [pl-10](./work/pl-10-plan-view-and-provenance.md)'s decision
-and is laid out in that ticket; the argument for why `PlanGap` cannot carry it as
-it stands is in [pl-9](./work/pl-9-composer-and-critic.md)'s log.
+**The unchecked list survives a reload, and is not stored.** It was the
+composer's return value and nothing else until
+[pl-10](./work/pl-10-plan-view-and-provenance.md), so a plan read back out of the
+database had lost it — and since travel time is on every plan, losing it turned
+an honest plan into one that merely looks finished. pl-9 left two ways to close
+that: persist it behind a new `PlanGapReason` member that is about a constraint,
+or re-derive it by re-composing on read. **Neither was taken.** The list is a
+function of the brief, the candidates and which of them were _placed_, and a
+stored revision says which were placed — so `uncheckedForRevision` derives it
+from the revision being read. That beats storing it, which would let a stored
+list disagree with the days beside it, and beats re-composing, which re-runs the
+packer against today's `limits.ts` and today's date. It also made the derivation
+clock-free, which is what makes the claim hold at all. The argument for why
+`PlanGap` still cannot carry it is in
+[pl-9](./work/pl-9-composer-and-critic.md)'s log, and it is unchanged — the two
+types stay separate.
 
 **Deal-breakers are not machine-checkable, and §7 assumed they were.**
 `dealBreakers` is free text, so no arithmetic decides whether a candidate
