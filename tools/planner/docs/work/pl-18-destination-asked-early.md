@@ -257,6 +257,30 @@ reports the forward reference separately, but with a different message and for a
 different reason. Both checks stay. Left as a note rather than acted on, because
 a review is not the place to delete a rule.
 
+#### The roadmap said the retired invariant was load-bearing
+
+`02-ROADMAP.md` listed "`missingRequiredSlots` and the `core` marking describe the
+same set, and `validateTree` fails the tree in either direction" under **"Three
+consequences, all of them load-bearing on tickets nobody has started"** — which
+is the strongest standing a claim has in these docs, and it was false in one
+direction the moment this ticket landed. Amended rather than rewritten, per the
+convention `00-ANALYSIS.md` §3 and §7 already use: the original sentence is kept
+in the past tense and the amendment says which half died and why.
+
+Worth stating as a lesson rather than a chore. This ticket swept the contract,
+the tree, the wizard, both `CLAUDE.md` rules and six test files, and still left
+the design document that would be used to argue the change back out. **A code
+sweep does not find a claim stated in prose about the code.** The grep that found
+it was for the words, not the symbols — `"describe the same set"`, not
+`REQUIRED_CORE_SLOTS`.
+
+Three more sites were found in the same pass and deliberately left to the docs
+session already in them: `00-ANALYSIS.md:139-141`'s parenthetical definition of
+`core` (which wants an amendment in that file's voice, not an edit), and
+`03-STATUS.md` in three places — line 40's "version 2, 37 questions", line 50,
+and lines 224-227, which still claim both directions are closed and cite a route
+test as proof. `01-ARCHITECTURE.md` was checked and is clean.
+
 #### Not done here
 
 The **v2-intake-at-checkpoint** case a finder raised is real and is not covered:
