@@ -107,7 +107,11 @@ jobs:
           load: true
           tags: planner:ci
           cache-from: type=gha,scope=planner
-          cache-to: type=gha,mode=max,scope=planner
+          # Read always, written only from `main` — see the note in
+          # `downloader.yml`. A pull request branch's export is readable from
+          # that branch alone, so it was a full copy of the layers written for
+          # one build and never read again.
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=planner' || '' }}
 
       - name: Wait for the service to report healthy
         run: |

@@ -104,7 +104,14 @@ jobs:
           tags: downloader:local
           build-args: INSTALL_YTDLP=false
           cache-from: type=gha,scope=downloader
-          cache-to: type=gha,mode=max,scope=downloader
+          # Read on every run, written only from `main`. A cache written on a
+          # pull request branch is scoped to that branch and readable from
+          # nowhere else, so each short-lived `worktree-*` branch was exporting
+          # a full copy of this image's layers for a single build and then
+          # abandoning it. 716 blob entries and 5.3 GB of the repository's 10 GB
+          # quota were that. `main`'s copy is readable from every branch, which
+          # is the one that was doing the work all along.
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=downloader' || '' }}
       - run: docker compose up -d --no-build
       - name: Wait for the service to report healthy
         run: |
