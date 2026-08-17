@@ -51,10 +51,10 @@ import {
 } from "@planner/contract";
 import { daysUntilDeparture, tripSpan } from "./dates.ts";
 import { filterBySeason } from "./season.ts";
-import { BUCKET_OF, dayCapacity, pack, type PackResult, type PinnedPlacement } from "./pack.ts";
+import { BUCKET_OF, pack, type PackResult, type PinnedPlacement } from "./pack.ts";
 import { critique, isHard, type CriticFinding } from "./critic.ts";
 import { MAX_CRITIC_ROUNDS } from "./limits.ts";
-import { unchecked, type UncheckedConstraint } from "./unchecked.ts";
+import { uncheckedFor, type UncheckedConstraint } from "./unchecked.ts";
 
 export interface ComposeInput {
   brief: TripBrief;
@@ -206,7 +206,15 @@ export function compose(input: ComposeInput): ComposeResult {
       days: toPlanDays(packed, input.revision.id),
       gaps: [...(input.gaps ?? []), ...gapsFor(input.candidates, packed)],
     },
-    unchecked: uncheckedFor({ brief, dates, span, packed, season, untilDeparture }),
+    // Derived from what was placed, not from the pack — so a reader of the
+    // stored revision gets the identical list without re-composing. See
+    // `unchecked.ts`.
+    unchecked: uncheckedFor({
+      brief,
+      dates,
+      candidates: input.candidates,
+      placedIds: new Set(packed.days.flatMap((day) => day.items.map((item) => item.candidateId))),
+    }),
     findings: findings.filter((finding) => !isHard(finding)),
     excluded,
   };
@@ -281,141 +289,4 @@ function gapsFor(candidates: readonly Candidate[], packed: PackResult): PlanGap[
   }
 
   return gaps;
-}
-
-/** Everything this composer did not check, assembled once, on every plan. */
-function uncheckedFor(context: {
-  brief: TripBrief;
-  dates: NonNullable<Extract<TripBrief["dates"], { state: "answered" }>["value"]>;
-  span: ReturnType<typeof tripSpan>;
-  packed: PackResult;
-  season: ReturnType<typeof filterBySeason>;
-  untilDeparture: number | null;
-}): UncheckedConstraint[] {
-  const { brief, dates, span, packed, season, untilDeparture } = context;
-  const notes: UncheckedConstraint[] = [
-    // Always, and first. A leg carries both its ends since pl-15, but Phase 2
-    // has no coordinates, so nothing measured the distance along one — decided
-    // 2026-08-16, roadmap _Still open_.
-    unchecked(
-      "travel-time",
-      "How long it takes to get from one of these to the next was not checked. Nothing here measured a distance.",
-    ),
-    unchecked(
-      "opening-hours",
-      "Whether these places are open on the days they were put on was not checked.",
-    ),
-  ];
-
-  if (isAnswered(brief.dealBreakers) && brief.dealBreakers.value.length > 0) {
-    notes.push(
-      unchecked(
-        "deal-breakers",
-        "The things you said would rule a trip out were passed to the people proposing it, but nothing here could check the plan against them.",
-      ),
-    );
-  }
-
-  const details = brief.details;
-  if (details?.shape === "backcountry" && isAnswered(details.maxDailyDistanceKm)) {
-    notes.push(
-      unchecked(
-        "daily-distance",
-        "How far each day actually goes was not checked — see travel time.",
-      ),
-    );
-  }
-  if (details?.shape === "motorised-touring" && isAnswered(details.rangeKm)) {
-    notes.push(
-      unchecked(
-        "machine-range",
-        "Whether each day stays inside your range was not checked — see travel time.",
-      ),
-    );
-  }
-
-  if (dayCapacity(brief).effortAssumed) {
-    notes.push(
-      unchecked(
-        "effort-assumed",
-        "You did not say how full you like a day, so these are ordinary ones.",
-      ),
-    );
-  }
-
-  if (dates.kind === "open") {
-    notes.push(
-      unchecked(
-        "season-no-calendar",
-        "There are no dates yet, so nothing was checked against a season.",
-      ),
-    );
-    notes.push(
-      unchecked(
-        "booking-no-departure",
-        "There are no dates yet, so no booking deadline could be checked.",
-      ),
-    );
-  } else if (untilDeparture === null) {
-    notes.push(unchecked("booking-no-departure", "No booking deadline could be checked."));
-  }
-
-  const placedIds = new Set(
-    packed.days.flatMap((day) => day.items.map((item) => item.candidateId)),
-  );
-  const seasonUnknown = season.seasonUnknown.filter((id) => placedIds.has(id));
-  if (seasonUnknown.length > 0) {
-    notes.push(
-      unchecked(
-        "season-unknown",
-        "Nobody established when these are open, so they were left in.",
-        seasonUnknown,
-      ),
-    );
-  }
-
-  const durationUnknown = packed.durationUnknown.filter((id) => placedIds.has(id));
-  if (durationUnknown.length > 0) {
-    notes.push(
-      unchecked(
-        "duration-unknown",
-        "How long these take was never established, so they were not counted against the day.",
-        durationUnknown,
-      ),
-    );
-  }
-
-  if (isAnswered(brief.budget) && brief.budget.value.kind === "band") {
-    notes.push(
-      unchecked(
-        "budget-band",
-        "You gave a feel for the budget rather than a figure, so nothing was summed against it.",
-      ),
-    );
-  }
-
-  const currencies = new Set(
-    [...placedIds]
-      .map((id) => season.kept.find((candidate) => candidate.id === id)?.cost?.currency)
-      .filter((currency): currency is string => currency !== undefined),
-  );
-  if (currencies.size > 1) {
-    notes.push(
-      unchecked(
-        "budget-currency",
-        `Costs came back in ${[...currencies].toSorted().join(" and ")}, and nothing here converts between them, so the total was not summed.`,
-      ),
-    );
-  }
-
-  if (span.truncated) {
-    notes.push(
-      unchecked(
-        "trip-truncated",
-        "This trip is longer than a plan can hold, so the last days are not here.",
-      ),
-    );
-  }
-
-  return notes;
 }

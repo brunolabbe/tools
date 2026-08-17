@@ -21,6 +21,7 @@ import {
   planUrl,
   runCancelUrl,
   type PlanDetail,
+  type PlanView,
   type Run,
 } from "@planner/contract";
 import { AppError } from "@planner/contract";
@@ -37,10 +38,16 @@ import {
   type RunHarness,
 } from "./helpers/runs.ts";
 
+/**
+ * The document half of the plan route. It answers with a `PlanView` as of
+ * pl-10 — the plan *and* what nothing checked about it — and these tests are
+ * about the run, so they unwrap it. `plan-view.test.ts` is where the other half
+ * is asserted.
+ */
 async function readPlan(harness: RunHarness, planId: string): Promise<PlanDetail> {
   const response = await harness.app.server.inject({ method: "GET", url: planUrl(planId) });
   expect(response.statusCode).toBe(200);
-  return response.json<PlanDetail>();
+  return response.json<PlanView>().plan;
 }
 
 describe("starting a run", () => {

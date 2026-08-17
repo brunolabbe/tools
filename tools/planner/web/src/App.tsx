@@ -17,6 +17,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AppError, type Run } from "@planner/contract";
 import { fetchHealth } from "./api/health.ts";
 import type { HealthSummary } from "./api/health.ts";
+import { PlanView } from "./plan/PlanView.tsx";
+import { Plans } from "./plan/Plans.tsx";
 import { RunView } from "./plan/RunView.tsx";
 import { Trips } from "./wizard/Trips.tsx";
 import { Wizard } from "./wizard/Wizard.tsx";
@@ -55,11 +57,36 @@ export function App(): React.ReactElement {
    * to a finished plan is a plan-list problem, which is pl-10's.
    */
   const [watching, setWatching] = useState<Run | null>(null);
+  /**
+   * The plan being read, if any.
+   *
+   * Not remembered across a reload either, and for a plainer reason than the
+   * run: a plan is addressable and the list is one click away, so restoring one
+   * would only be guessing at what someone wanted to see. pl-10 stops at the
+   * list and the document; routing is not its business.
+   */
+  const [reading, setReading] = useState<string | null>(null);
 
   const open = useCallback((id: string | null): void => {
     rememberOpenIntake(id);
     setWatching(null);
+    setReading(null);
     setOpenIntake(id);
+  }, []);
+
+  /**
+   * Read a plan, **without forgetting where the reader came from.**
+   *
+   * `watching` is deliberately left alone. Clearing it here looked tidy and was
+   * a bug: the two ways into a plan are the list and a finished run's "Read the
+   * plan", and closing the plan has to go back to whichever it was. With
+   * `watching` cleared, backing out of a plan reached from a finished run fell
+   * through to `openIntake` still being set and re-opened the *wizard* — an
+   * already-drafted trip asking its questions again, with the run's outcome no
+   * longer reachable at all.
+   */
+  const read = useCallback((planId: string): void => {
+    setReading(planId);
   }, []);
 
   return (
@@ -69,8 +96,23 @@ export function App(): React.ReactElement {
         Describe a trip, answer what the plan actually needs, and keep what comes back.
       </p>
 
-      {openIntake === null ? (
-        <Trips onOpen={(id) => open(id)} />
+      {reading !== null ? (
+        <>
+          <p className="crumb">
+            <button type="button" className="link inline" onClick={() => setReading(null)}>
+              ← Back
+            </button>
+          </p>
+          <PlanView planId={reading} onExit={() => setReading(null)} />
+        </>
+      ) : openIntake === null ? (
+        <>
+          <Trips onOpen={(id) => open(id)} />
+          <section className="panel">
+            <h2>Plans</h2>
+            <Plans onOpen={read} />
+          </section>
+        </>
       ) : (
         <>
           <p className="crumb">
@@ -85,7 +127,7 @@ export function App(): React.ReactElement {
               onDraft={(run) => setWatching(run)}
             />
           ) : (
-            <RunView run={watching} onExit={() => setWatching(null)} />
+            <RunView run={watching} onExit={() => setWatching(null)} onOpenPlan={read} />
           )}
         </>
       )}

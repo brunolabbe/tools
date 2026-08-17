@@ -373,6 +373,131 @@ ul.answers li + li {
   margin-bottom: 0.35rem;
 }
 
+/* --- The plan (pl-10) --- */
+
+.plans {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.plans li {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.day {
+  margin: 1.25rem 0;
+}
+
+.day h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.items {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.item {
+  margin-bottom: 1rem;
+}
+
+.item h4 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.item p {
+  margin: 0.15rem 0;
+}
+
+.item-head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.pin {
+  flex: none;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.5rem;
+}
+
+.pin.on {
+  font-weight: 600;
+}
+
+.where {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.cost {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The two provenance states are deliberately different to look at, not two
+ * shades of the same thing: §5's whole point is that a reader can tell a
+ * verified line from the model talking at a glance.
+ */
+.provenance {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.provenance .mark {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  margin-right: 0.25rem;
+}
+
+.provenance.grounded .mark {
+  color: var(--ok, #2f6f4f);
+}
+
+.provenance.asserted .mark {
+  color: var(--warn, #8a6d1f);
+}
+
+/*
+ * Gaps and unchecked constraints sit in the plan's own flow. Neither is an
+ * error panel and neither disappears: a plan that says lodging was not checked
+ * is the product, and a warning the reader cannot come back to is not.
+ */
+.gaps,
+.unchecked {
+  margin-top: 1.25rem;
+}
+
+.gaps h3,
+.unchecked h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.gaps ul,
+.unchecked ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+}
+
+.gaps li,
+.unchecked li {
+  margin-bottom: 0.35rem;
+}
+
+/* §8: pointing at the authority, never standing in for it. */
+.notice.caution {
+  font-weight: 500;
+}
+
 /* --- The health readout, now a footnote rather than the page --- */
 
 .health {

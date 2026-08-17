@@ -76,6 +76,8 @@ export {
 } from "./dates.ts";
 export {
   unchecked,
+  uncheckedFor,
+  uncheckedForRevision,
   UNCHECKED_CONSTRAINTS,
   type UncheckedConstraint,
   type UncheckedConstraintKind,

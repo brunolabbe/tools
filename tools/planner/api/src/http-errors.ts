@@ -21,6 +21,11 @@ const STATUS_BY_CODE: Partial<Record<ErrorCode, number>> = {
   NOT_FOUND: 404,
   INTAKE_NOT_FOUND: 404,
   PLAN_NOT_FOUND: 404,
+  ITEM_NOT_FOUND: 404,
+  // Unraised until something addresses a revision, and mapped anyway: the table
+  // falls back to 500, so the first caller to throw it would report a server
+  // fault for a stale link.
+  REVISION_NOT_FOUND: 404,
   JOB_NOT_FOUND: 404,
   CONTEXT_LIMIT: 413,
   RATE_LIMITED: 429,

@@ -126,6 +126,18 @@ plan read back out of the database has lost it. If it should persist,
 `PlanGapReason` needs a member that is about a constraint rather than about a
 specialist. That is a contract change and it is deliberately not made here.
 
+> **Closed by [pl-10](./pl-10-plan-view-and-provenance.md), 2026-08-16, and not
+> by that contract change.** The premise above is right — `PlanGap` still cannot
+> carry it and gained no member — but the conclusion that the list therefore
+> cannot survive a reload was wrong. It is a function of the brief, the
+> candidates and which of them were _placed_, and a stored revision says which
+> were placed, so `uncheckedForRevision` derives it from the revision being read.
+> The vocabulary moved to `@planner/contract`; the deriving stayed in this
+> package. Removing the last clock-dependent input on the way exposed a dead
+> branch here: `untilDeparture` was only ever tested for `null`, which happens
+> exactly when the dates are `open`, which the branch above it had already
+> handled.
+
 **What the brief had wrong or left open, in the order it bit:**
 
 - **Deal-breakers cannot be checked in code, and §7 says they can.**
