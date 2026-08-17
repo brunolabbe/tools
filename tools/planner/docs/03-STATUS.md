@@ -3,7 +3,7 @@
 Where the planner stands. Phases live in [02-ROADMAP.md](./02-ROADMAP.md); what
 each piece of work did lives in its ticket under [work/](./work/).
 
-**Last updated:** 2026-08-16 · **Phase 0 (scaffold) ✅ · Phase 1 ✅ — the
+**Last updated:** 2026-08-17 · **Phase 0 (scaffold) ✅ · Phase 1 ✅ — the
 `TripBrief`, the question tree, and the persistence and wizard over them, driven
 end to end in a browser. The tool produces a brief with no model involved
 anywhere. Phase 2 now produces a plan: as of [pl-16](./work/pl-16-the-plan-run.md)
@@ -101,28 +101,42 @@ still unwritten.
 
 ## Open tickets
 
-| Ticket                                                      | Status    | Note                                                     |
-| ----------------------------------------------------------- | --------- | -------------------------------------------------------- |
-| [pl-1](./work/pl-1-conversation-loop.md)                    | dropped   | The chat premise. Read the log before rebuilding it      |
-| [pl-2](./work/pl-2-container-image.md)                      | in-flight | Image and release component landed; no subdomain yet     |
-| [pl-3](./work/pl-3-trip-brief-contract.md)                  | done      | The brief, its slots and `missingRequiredSlots` are in   |
-| [pl-4](./work/pl-4-plan-document-contract.md)               | done      | The plan document, migration 2, and pl-5's fixtures      |
-| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)             | in-flight | The roster is a table, not conditionals                  |
-| [pl-6](./work/pl-6-question-tree-and-engine.md)             | done      | `@planner/intake`: the tree, reachability, invalidation  |
-| [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them            |
-| [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER` |
-| [pl-9](./work/pl-9-composer-and-critic.md)                  | done      | `@planner/itinerary`: season, packing, budget, critic    |
-| [pl-10](./work/pl-10-plan-view-and-provenance.md)           | done      | The plan reads: provenance, gaps, and what was unchecked |
-| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | done      | The vocabulary is gone; `NOT_FOUND` lifted to core       |
-| [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | done      | 1,100 lines of `.tsx` and no test renders any of it      |
-| [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI  |
-| [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2    |
-| [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two        |
-| [pl-16](./work/pl-16-the-plan-run.md)                       | done      | The run over HTTP; its image gate produced pl-17         |
-| [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | ready     | The image's workspace list is kept by hand and unchecked |
-| [pl-18](./work/pl-18-destination-asked-early.md)            | done      | Destination asked third; `core` is position, not need    |
+| Ticket                                                      | Status    | Note                                                         |
+| ----------------------------------------------------------- | --------- | ------------------------------------------------------------ |
+| [pl-1](./work/pl-1-conversation-loop.md)                    | dropped   | The chat premise. Read the log before rebuilding it          |
+| [pl-2](./work/pl-2-container-image.md)                      | in-flight | Image and release component landed; no subdomain yet         |
+| [pl-3](./work/pl-3-trip-brief-contract.md)                  | done      | The brief, its slots and `missingRequiredSlots` are in       |
+| [pl-4](./work/pl-4-plan-document-contract.md)               | done      | The plan document, migration 2, and pl-5's fixtures          |
+| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)             | in-flight | The roster is a table, not conditionals                      |
+| [pl-6](./work/pl-6-question-tree-and-engine.md)             | done      | `@planner/intake`: the tree, reachability, invalidation      |
+| [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them                |
+| [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER`     |
+| [pl-9](./work/pl-9-composer-and-critic.md)                  | done      | `@planner/itinerary`: season, packing, budget, critic        |
+| [pl-10](./work/pl-10-plan-view-and-provenance.md)           | done      | The plan reads: provenance, gaps, and what was unchecked     |
+| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | done      | The vocabulary is gone; `NOT_FOUND` lifted to core           |
+| [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | done      | 1,100 lines of `.tsx` and no test renders any of it          |
+| [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI      |
+| [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2        |
+| [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two            |
+| [pl-16](./work/pl-16-the-plan-run.md)                       | done      | The run over HTTP; its image gate produced pl-17             |
+| [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | ready     | The image's workspace list is kept by hand and unchecked     |
+| [pl-18](./work/pl-18-destination-asked-early.md)            | done      | Destination asked third; `core` is position, not need        |
+| [pl-19](./work/pl-19-pin-through-the-browser.md)            | ready     | Pinning is proven at the button and at the write, not across |
+| [pl-20](./work/pl-20-intake-fixture-builders.md)            | ready     | Three hand-written `INSERT` fixtures in one test file        |
 
 ## Known gaps and risks
+
+**Pinning is proven at each end and not across the middle.**
+[pl-10](./work/pl-10-plan-view-and-provenance.md)'s gate left that acceptance
+line `unproven (gate)` rather than proven, and the row is honest rather than
+pedantic: the component test proves the button and mocks the API client — which
+is this tool's rule, not a shortcut — and the route test proves the write
+persists and appends no revision. Nothing crosses between them, so the two
+compose into the claim only if the client module does what its type says.
+Pinning is also the **only write in this API that mutates a stored revision**,
+permitted by one column of one table, so a regression there is silent — the
+button still depresses.
+[pl-19](./work/pl-19-pin-through-the-browser.md) is the e2e that closes it.
 
 **The image serves the UI as of
 [pl-13](./work/pl-13-drive-the-intake-end-to-end.md).** `WEB_DIR` had been parsed
