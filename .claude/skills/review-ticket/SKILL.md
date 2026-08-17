@@ -77,8 +77,23 @@ These are the reviewing subagent's steps, not the caller's.
    unstated range cannot be reproduced.
 
 3. **Hunt defects with the existing skill.** Invoke `code-review` at `level`
-   against that range. Do not re-run its analysis yourself; carry its findings
-   into the table below with its severities.
+   against that range. Do not re-run its analysis yourself — that is the one
+   thing this step delegates.
+
+   **Read what its finders actually returned, not only the summary it hands
+   back, and account for every finding.** Carrying is a decision per finding, not
+   transcription: keep it, or drop it and **say in your own section that you
+   dropped it and why** — wrong, already fixed, out of the reviewed range, a
+   product decision rather than a defect. All three are good answers; silence is
+   not, because a finding that vanishes between the finder and the table leaves a
+   gate that reads exactly like one that found nothing.
+
+   This paragraph is here because it has already happened twice, in consecutive
+   reviews, in both directions: pl-10's gate lost two defects its finders had
+   reported — one of them a navigation bug that re-asked an already-drafted
+   trip's questions — and pl-18's lost a duplicated-SQL finding, which its author
+   then did not record in the Log either. Neither reviewer was careless. Both
+   summarised a summary, which is what the old wording of this step invited.
 
 4. **Trace every acceptance line to its proof.** One row per **Done when** line,
    each naming the test that proves it — `file.test.ts:88`, not "covered". A line
@@ -169,8 +184,14 @@ writes it.
 - **med** · `Dockerfile` lists workspaces by hand in two places and nothing
   typechecks the list; the build-stage half fails differently from the runtime half.
 - **low** · `nfr:maintainability` — no fixture for the empty-roster branch.
+- **dropped** · finder reported the retry loop as unbounded; it is bounded by
+  `maxAttempts` two frames up. Not a defect.
 - NFR: security ✓ · performance n/a · reliability ✓ · maintainability — above.
 ```
+
+A `dropped` line costs one sentence and is the difference between a gate that
+found nothing and a gate that decided something was not worth carrying. It has
+no severity, and it never changes the verdict.
 
 ## What this is not
 
