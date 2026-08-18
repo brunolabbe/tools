@@ -24,6 +24,16 @@
  * that file's bar in shape too — read the text, match plainly, name the file and
  * the missing line. A Dockerfile parser is a project; this is a scan.
  *
+ * Which is why nothing here throws or asserts while the module is loading. A
+ * scan that cannot read what it was pointed at has found something, and that
+ * something deserves a named failing test like anything else it finds: an
+ * `expect` at module scope takes the whole file down at collection instead, so
+ * every test below vanishes from the report together and the run reads as a
+ * broken suite rather than as a Dockerfile this scan did not understand — the
+ * same mistaken-for-something-else failure the rule itself exists to stop.
+ * Reading therefore only gathers, and what it could not read is asserted like
+ * everything else.
+ *
  * **It does not replace the image gate.** A scan over text proves the list is
  * complete. It cannot prove the image boots, that the native `better-sqlite3`
  * binary meets the glibc it was linked against, or that `/api/health` answers.
@@ -33,14 +43,9 @@
  * an infrastructure flake.
  */
 
-import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
-
-/** A workspace scope this repo owns. Anything else is an ordinary npm package. */
-const WORKSPACE_SCOPE = /^@(?:webtools|downloader|planner)\//u;
+import { readFileOrNull, REPO_ROOT, sourcesUnder, workspaceDirs } from "./support/workspaces.ts";
 
 interface Workspace {
   /** Repo-relative, forward slashes — the form both Dockerfiles use. */
@@ -49,42 +54,79 @@ interface Workspace {
   readonly dependencies: readonly string[];
 }
 
-async function readWorkspaces(): Promise<Map<string, Workspace>> {
-  const dirs: string[] = [];
-
-  for (const pkg of await fs.readdir(path.join(REPO_ROOT, "packages")).catch(() => [])) {
-    dirs.push(`packages/${pkg}`);
-  }
-  for (const tool of await fs.readdir(path.join(REPO_ROOT, "tools")).catch(() => [])) {
-    // oxlint-disable-next-line no-await-in-loop
-    for (const pkg of await fs.readdir(path.join(REPO_ROOT, "tools", tool)).catch(() => [])) {
-      dirs.push(`tools/${tool}/${pkg}`);
-    }
-  }
-
-  const workspaces = new Map<string, Workspace>();
-  await Promise.all(
-    dirs.map(async (dir) => {
-      const text = await fs
-        .readFile(path.join(REPO_ROOT, dir, "package.json"), "utf8")
-        .catch(() => null);
-      // A stray file beside the workspaces — `playwright.config.ts` — has no
-      // manifest, and neither does a directory that is not a workspace.
-      if (text === null) return;
-      const manifest = JSON.parse(text) as { name?: string; dependencies?: Record<string, string> };
-      if (manifest.name === undefined) return;
-      workspaces.set(manifest.name, {
-        dir,
-        dependencies: Object.keys(manifest.dependencies ?? {}).filter((dep) =>
-          WORKSPACE_SCOPE.test(dep),
-        ),
-      });
-    }),
-  );
-  return workspaces;
+interface WorkspaceScan {
+  readonly workspaces: ReadonlyMap<string, Workspace>;
+  /** The scopes this repo owns, read off the workspaces rather than listed here twice. */
+  readonly scopes: ReadonlySet<string>;
+  readonly problems: readonly string[];
 }
 
-const WORKSPACES = await readWorkspaces();
+/** `@webtools/core/rate-limit` and `@webtools/core` share a scope: `@webtools`. */
+function scopeOf(specifier: string): string {
+  return specifier.split("/")[0] ?? specifier;
+}
+
+/**
+ * A subpath is not a package. `@webtools/core/rate-limit` resolves through
+ * `@webtools/core`'s `exports` map and ships inside that package's `dist`, so a
+ * specifier is reduced to its package name before it is looked up — otherwise the
+ * scan reports a workspace that does not exist and blocks on it.
+ */
+function packageNameOf(specifier: string): string {
+  const [scope, name] = specifier.split("/");
+  return `${scope}/${name}`;
+}
+
+async function readWorkspaces(): Promise<WorkspaceScan> {
+  const found = await Promise.all(
+    (await workspaceDirs()).map(async (dir) => {
+      const text = await readFileOrNull(path.join(REPO_ROOT, dir, "package.json"));
+      // A directory beside the workspaces that is not one has no manifest.
+      if (text === null) return null;
+      const manifest = JSON.parse(text) as { name?: string; dependencies?: Record<string, string> };
+      if (manifest.name === undefined) return null;
+      return { dir, name: manifest.name, dependencies: Object.keys(manifest.dependencies ?? {}) };
+    }),
+  );
+
+  // Sorted, so which of two colliding directories is reported as the intruder
+  // does not depend on which read happened to finish first.
+  const manifests = found
+    .filter((manifest) => manifest !== null)
+    .toSorted((a, b) => a.dir.localeCompare(b.dir));
+  const scopes = new Set(manifests.map((manifest) => scopeOf(manifest.name)));
+
+  const workspaces = new Map<string, Workspace>();
+  const problems: string[] = [];
+  for (const { dir, name, dependencies } of manifests) {
+    const first = workspaces.get(name);
+    // Two directories claiming one name shadow each other, and the loser is then
+    // never checked against either Dockerfile list — a gate that passes because
+    // it quietly stopped looking at one of the things it was pointed at.
+    if (first !== undefined) {
+      problems.push(
+        `${dir}/package.json and ${first.dir}/package.json both call themselves ${name}`,
+      );
+      continue;
+    }
+    workspaces.set(name, {
+      dir,
+      dependencies: dependencies.filter((dep) => scopes.has(scopeOf(dep))),
+    });
+  }
+  return { workspaces, scopes, problems };
+}
+
+const {
+  workspaces: WORKSPACES,
+  scopes: SCOPES,
+  problems: WORKSPACE_PROBLEMS,
+} = await readWorkspaces();
+
+interface Closure {
+  readonly dirs: readonly string[];
+  readonly problems: readonly string[];
+}
 
 /**
  * Every workspace Node has to resolve at runtime, walked declaratively from the
@@ -94,31 +136,41 @@ const WORKSPACES = await readWorkspaces();
  * A closure computed from `package.json` is only as good as those files, which is
  * what `declares every workspace it imports` below is for.
  */
-function closureFrom(root: string): string[] {
+function closureFrom(root: string): Closure {
   // The root is named by convention — `tools/<tool>/api` is where every tool
   // here puts its service — and a tool that puts it somewhere else should be
   // told that, rather than told its own API is a dependency it never declared.
   if (!WORKSPACES.has(root)) {
-    throw new Error(
-      `${root} is not a workspace: this scan finds a tool's service by name, so a tool whose ` +
-        `API package is called something else needs that convention taught to closureFrom`,
-    );
+    return {
+      dirs: [],
+      problems: [
+        `${root} is not a workspace: this scan finds a tool's service by name, so a tool whose ` +
+          `API package is called something else needs that convention taught to closureFrom`,
+      ],
+    };
   }
 
   const seen = new Set<string>();
-  const queue = [root];
-  for (let name = queue.pop(); name !== undefined; name = queue.pop()) {
+  // Order is irrelevant — the answer is a set of directories — so this pops from
+  // the end, which makes it depth-first rather than the queue it reads like.
+  const pending = [root];
+  for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
     if (seen.has(name)) continue;
     seen.add(name);
-    queue.push(...(WORKSPACES.get(name)?.dependencies ?? []));
+    pending.push(...(WORKSPACES.get(name)?.dependencies ?? []));
   }
-  return [...seen].map((name) => {
+
+  const dirs: string[] = [];
+  const problems: string[] = [];
+  for (const name of seen) {
     const workspace = WORKSPACES.get(name);
     if (workspace === undefined) {
-      throw new Error(`${name} is depended on by a workspace in this repo but is not one`);
+      problems.push(`${name} is depended on by a workspace in this repo but is not one`);
+      continue;
     }
-    return workspace.dir;
-  });
+    dirs.push(workspace.dir);
+  }
+  return { dirs, problems };
 }
 
 interface ToolImage {
@@ -136,6 +188,11 @@ interface ToolImage {
   readonly runtime: string;
 }
 
+interface ImageScan {
+  readonly images: readonly ToolImage[];
+  readonly problems: readonly string[];
+}
+
 /** Whitespace is not the subject; a line differing only in spacing is the same line. */
 function copyLines(section: string): string[] {
   return section
@@ -144,42 +201,94 @@ function copyLines(section: string): string[] {
     .filter((line) => line.startsWith("COPY "));
 }
 
-async function readImages(): Promise<ToolImage[]> {
-  const tools = await fs.readdir(path.join(REPO_ROOT, "tools")).catch(() => []);
-  const images = await Promise.all(
-    tools.map(async (tool) => {
-      const text = await fs
-        .readFile(path.join(REPO_ROOT, "tools", tool, "Dockerfile"), "utf8")
-        .catch(() => null);
-      if (text === null) return null;
-
-      // The build stage copies the whole tool directory further down, so the only
-      // manifests that matter are the ones `npm ci` can see: the install is what
-      // creates the workspace symlinks, and it runs before that copy.
-      const install = text.search(/^\s*RUN npm ci\b/mu);
-      // The two Dockerfiles are not the same file and must not become one — the
-      // downloader's is built on Playwright's image and carries Chromium and
-      // ffmpeg, the planner's is a plain Node base. Each is read rather than
-      // assumed; what they share is naming their last stage.
-      const runtime = text.search(/^FROM .* AS runtime$/mu);
-      expect(install, `tools/${tool}/Dockerfile has no \`RUN npm ci\``).toBeGreaterThan(-1);
-      expect(runtime, `tools/${tool}/Dockerfile has no runtime stage`).toBeGreaterThan(install);
-
-      return {
-        tool,
-        closure: closureFrom(`@${tool}/api`),
-        bundledOnly: `tools/${tool}/web`,
-        preInstall: text.slice(0, install),
-        runtime: text.slice(runtime),
-      };
-    }),
-  );
-  return images.filter((image) => image !== null);
+/**
+ * Where a named stage begins. Docker stage names are case-insensitive and the
+ * line may carry a trailing comment, so both are tolerated — neither is this
+ * scan's business to legislate. The name still has to end the line, because
+ * `AS runtime-arm64` is a different stage rather than a spelling of this one.
+ */
+function stageStart(text: string, stage: string): number {
+  return text.search(new RegExp(String.raw`^FROM\b.+\bAS\s+${stage}\s*(?:#.*)?$`, "imu"));
 }
 
-const IMAGES = await readImages();
+async function readImages(): Promise<ImageScan> {
+  const tools = [
+    ...new Set(
+      (await workspaceDirs())
+        .filter((dir) => dir.startsWith("tools/"))
+        .map((dir) => dir.split("/")[1] ?? ""),
+    ),
+  ].toSorted();
+
+  const problems: string[] = [];
+  const images: ToolImage[] = [];
+
+  for (const tool of tools) {
+    // oxlint-disable-next-line no-await-in-loop
+    const text = await readFileOrNull(path.join(REPO_ROOT, "tools", tool, "Dockerfile"));
+    // A tool with no image is not releasable yet; that is step 7 of adding one
+    // rather than something for this scan to fail over.
+    if (text === null) continue;
+
+    const where = `tools/${tool}/Dockerfile`;
+    // The two Dockerfiles are not the same file and must not become one — the
+    // downloader's is built on Playwright's image and carries Chromium and
+    // ffmpeg, the planner's is a plain Node base. Each is read rather than
+    // assumed; what they share is naming their two stages.
+    const build = stageStart(text, "build");
+    const runtime = stageStart(text, "runtime");
+    if (build === -1) {
+      problems.push(`${where}: no \`AS build\` stage, so this scan cannot find its manifest list`);
+      continue;
+    }
+    if (runtime <= build) {
+      problems.push(`${where}: no \`AS runtime\` stage after the build stage`);
+      continue;
+    }
+
+    // The build stage copies the whole tool directory further down, so the only
+    // manifests that matter are the ones `npm ci` can see: the install is what
+    // creates the workspace symlinks, and it runs before that copy. Searched
+    // from the build stage rather than from the top of the file, so an install
+    // in some earlier stage cannot silently truncate the section — and tolerant
+    // of `npm ci` sharing its `RUN` with something else, which is a layer-count
+    // decision rather than anything this rule has an opinion about.
+    const offset = text.slice(build).search(/^\s*RUN\b[^\n]*\bnpm ci\b/mu);
+    const install = offset === -1 ? -1 : build + offset;
+    if (install === -1 || install > runtime) {
+      problems.push(`${where}: no \`npm ci\` in the build stage`);
+      continue;
+    }
+
+    const closure = closureFrom(`@${tool}/api`);
+    if (closure.problems.length > 0) {
+      problems.push(...closure.problems.map((problem) => `${where}: ${problem}`));
+      continue;
+    }
+
+    images.push({
+      tool,
+      closure: closure.dirs,
+      bundledOnly: `tools/${tool}/web`,
+      preInstall: text.slice(build, install),
+      runtime: text.slice(runtime),
+    });
+  }
+
+  return { images, problems };
+}
+
+const { images: IMAGES, problems: IMAGE_PROBLEMS } = await readImages();
 
 describe("each tool's image carries every workspace its API resolves", () => {
+  test("the scan could read every workspace and every Dockerfile it found", () => {
+    // First, because each of these is a way for the lists below to be checked
+    // against less than they were meant to be — and a Dockerfile this scan does
+    // not understand should say so in those words rather than as a suite that
+    // would not load.
+    expect([...WORKSPACE_PROBLEMS, ...IMAGE_PROBLEMS]).toEqual([]);
+  });
+
   test("the scan found the repo it is meant to check", () => {
     // A silently empty scan passes every assertion below. Both tools have an
     // image today; asserting the shape rather than the names keeps a third tool
@@ -251,43 +360,6 @@ describe("each tool's image carries every workspace its API resolves", () => {
   });
 });
 
-async function sourcesUnder(dir: string): Promise<{ file: string; text: string }[]> {
-  const found: { file: string; text: string }[] = [];
-
-  async function walk(current: string): Promise<void> {
-    const entries = await fs.readdir(current, { withFileTypes: true }).catch(() => []);
-    for (const entry of entries) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === "dist") continue;
-        // oxlint-disable-next-line no-await-in-loop
-        await walk(full);
-        continue;
-      }
-      if (!/\.(?:ts|tsx)$/u.test(entry.name)) continue;
-      found.push({
-        file: path.relative(REPO_ROOT, full).replaceAll("\\", "/"),
-        // oxlint-disable-next-line no-await-in-loop
-        text: await fs.readFile(full, "utf8"),
-      });
-    }
-  }
-
-  await walk(path.join(REPO_ROOT, dir, "src"));
-  return found;
-}
-
-/**
- * A subpath is not a package. `@webtools/core/rate-limit` resolves through
- * `@webtools/core`'s `exports` map and ships inside that package's `dist`, so a
- * specifier is reduced to its package name before it is looked up — otherwise the
- * scan reports a workspace that does not exist and blocks on it.
- */
-function packageNameOf(specifier: string): string {
-  const [scope, name] = specifier.split("/");
-  return `${scope}/${name}`;
-}
-
 async function readImports(): Promise<{ offenders: string[]; crossed: number }> {
   const offenders: string[] = [];
   let crossed = 0;
@@ -298,12 +370,13 @@ async function readImports(): Promise<{ offenders: string[]; crossed: number }> 
         // Blunt on purpose: within these scopes a quoted string is an import
         // specifier, and matching the quotes rather than the import syntax covers
         // `import`, `import type`, `export … from` and `await import()` without
-        // four patterns to keep in step.
-        for (const match of source.text.matchAll(
-          /["'](@(?:webtools|downloader|planner)\/[^"']+)["']/gu,
-        )) {
+        // four patterns to keep in step. Which scopes those are comes from the
+        // workspaces themselves, so a new tool is in scope the day it has a
+        // manifest rather than the day somebody remembers this line.
+        for (const match of source.text.matchAll(/["'](@[^"'/]+\/[^"']+)["']/gu)) {
           const specifier = match[1];
           if (specifier === undefined) continue;
+          if (!SCOPES.has(scopeOf(specifier))) continue;
           const dependency = packageNameOf(specifier);
           if (dependency === name) continue;
           crossed += 1;

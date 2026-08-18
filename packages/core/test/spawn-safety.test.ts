@@ -15,63 +15,15 @@
  * A source scan is a blunt instrument and it is the right one.
  */
 
-import fs from "node:fs/promises";
-import path from "node:path";
 import { describe, expect, test } from "vitest";
+import { sourcesUnder, workspaceDirs } from "./support/workspaces.ts";
 
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
-
-/** Every `<workspace>/src` in the repo: one level under `packages`, two under `tools`. */
-async function sourceRoots(): Promise<string[]> {
-  const roots: string[] = [];
-
-  for (const pkg of await fs.readdir(path.join(REPO_ROOT, "packages")).catch(() => [])) {
-    roots.push(path.join(REPO_ROOT, "packages", pkg, "src"));
-  }
-
-  for (const tool of await fs.readdir(path.join(REPO_ROOT, "tools")).catch(() => [])) {
-    // oxlint-disable-next-line no-await-in-loop
-    for (const pkg of await fs.readdir(path.join(REPO_ROOT, "tools", tool)).catch(() => [])) {
-      roots.push(path.join(REPO_ROOT, "tools", tool, pkg, "src"));
-    }
-  }
-
-  // Non-directories (a stray `playwright.config.ts` beside the workspaces) turn
-  // into paths that do not exist, and the walk below simply finds nothing there.
-  return roots;
-}
-
-async function collectSources(): Promise<{ file: string; text: string }[]> {
-  const files: string[] = [];
-
-  async function walk(dir: string): Promise<void> {
-    const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === "dist") continue;
-        // oxlint-disable-next-line no-await-in-loop
-        await walk(full);
-        continue;
-      }
-      if (/\.(?:ts|tsx)$/u.test(entry.name)) files.push(full);
-    }
-  }
-
-  for (const root of await sourceRoots()) {
-    // oxlint-disable-next-line no-await-in-loop
-    await walk(root);
-  }
-
-  return Promise.all(
-    files.map(async (file) => ({
-      file: path.relative(REPO_ROOT, file).replaceAll("\\", "/"),
-      text: await fs.readFile(file, "utf8"),
-    })),
-  );
-}
-
-const SOURCES = await collectSources();
+/**
+ * Every workspace's `src`, walked by the same helper the image-closure scan uses:
+ * one level under `packages`, two under `tools`, including the workspaces that do
+ * not exist yet.
+ */
+const SOURCES = (await Promise.all((await workspaceDirs()).map((dir) => sourcesUnder(dir)))).flat();
 
 /** Strips comments, so a doc block explaining the rule is not a violation of it. */
 function code(text: string): string {

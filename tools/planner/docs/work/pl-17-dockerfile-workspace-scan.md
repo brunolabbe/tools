@@ -252,3 +252,91 @@ means.
 #### Green
 
 `npm run check` passes. `npm test` is 1,098 tests across 80 files.
+
+### 2026-08-18 — the scan's own failure modes, found by its gate
+
+The review above returned CONCERNS: every acceptance line proven by mutation,
+and three `med` findings, none of them about the rule and all three about the
+scan enforcing it. They are worth recording together, because they are the same
+mistake in three costumes — **a checker that fails in a way nobody reads, or
+that passes because it stopped looking.** That is the failure this ticket was
+written about, turned back on the ticket's own work.
+
+**`expect()` ran while the module loaded, so an unreadable Dockerfile took the
+file down at collection.** `readImages` asserted its stage boundaries inline and
+was called from a top-level `await`. A `Dockerfile` matching neither pattern
+therefore did not fail the test that would have named it; it failed the _suite_,
+all six tests vanishing from the report together, reading as a broken file
+rather than as a Dockerfile the scan did not understand. The Why section above
+complains that the pl-16 regression surfaced as `curl: (7)` and read like an
+infrastructure flake. This was the same trick, one layer up. Reading now only
+gathers, every unreadable thing lands in a `problems` list, and a test named
+_the scan could read every workspace and every Dockerfile it found_ asserts it
+is empty — first in the file, because everything after it checks less than it
+claims when it is not.
+
+**The stage patterns were stricter than any rule this repo states.**
+`/^\s*RUN npm ci\b/` refused `RUN apt-get update && npm ci`, and
+`/^FROM .* AS runtime$/` refused a lower-case `as` and a trailing comment — both
+ordinary Dockerfile edits that violate nothing written down anywhere, and both of
+which used to trip the crash above. Stage names are matched case-insensitively
+now, with a trailing comment allowed and the name still required to end the line
+so `AS runtime-arm64` stays a different stage. The `npm ci` search is scoped to
+the build stage rather than the whole file, which also closes the case where an
+install added to an earlier stage would have truncated the manifest section and
+reported every workspace missing.
+
+**Two ways to pass by having looked at less.** `fs.readdir(...).catch(() => [])`
+swallowed every error, not only "no such directory" — so a workspace whose `src`
+was briefly unreadable passed the declares-what-it-imports check vacuously, on
+zero files. And `workspaces.set(manifest.name, …)` overwrote silently, so two
+directories claiming one name left the loser unchecked against either Dockerfile
+list, non-deterministically depending on which read finished first. Absent is now
+an answer and unreadable is not; a duplicate name is a `problem` naming both
+directories, and the manifests are sorted so which one is reported does not
+depend on IO ordering. Neither needs a likely precondition to matter — they need
+an unlikely one to fire, and a gate that reports clean because it could not look
+is worth less than no gate.
+
+The two smaller ones went the same way. The workspace scope list
+(`webtools|downloader|planner`) was written out twice, and the second copy was
+the one whose absence would have been silent — a fourth tool's cross-workspace
+imports simply invisible. Both are gone: the scopes are read off the workspaces
+that exist, so a new tool is in scope the day it has a manifest. And
+`closureFrom`'s `queue` is `pending`, because it pops from the end and was never
+a queue.
+
+**`spawn-safety.test.ts` was cited as precedent and then reimplemented.** The two
+scans walked the same tree with the same two-level readdir, the same
+`node_modules`/`dist` skip and the same path normalisation, in two copies — the
+layout of this repo encoded twice in the same directory, which is the shape of
+thing that gets changed in one of them. Both now import
+`packages/core/test/support/workspaces.ts`. It is scaffolding for two tests and
+deliberately not a `src` module: `vitest` collects `*.test.ts`, so it is never
+mistaken for a suite, and `tsconfig.tests.json`'s glob typechecks it with them.
+
+The planner `Dockerfile`'s comment lost its retelling of how the two lists fail
+differently, which by then existed in full in three places. It states the rule
+and points at the test, which is what the downloader's already did.
+
+#### What the gate did not ask for
+
+Two `low`s are left alone, both because this ticket already decided them. Exact
+string matching on `COPY` lines is brittle to `--chown=` and to a continued
+line, and a generator would produce those lines correctly rather than catching
+them afterwards — both are the "do not make it clever / a Dockerfile parser is a
+project" call in the brief, and neither is a defect in it.
+
+#### Green
+
+`npm run check` passes. `npm test` is 1,099 tests across 80 files — one more than
+before, the read-the-repo assertion.
+
+Every acceptance line was re-verified by mutation after the rewrite, including
+the two that are the reason this ticket exists, plus the two new failure modes
+and two edits that must _not_ fail: deleting either `itinerary` line, deleting a
+downloader `dist` line, and undeclaring `@planner/itinerary` each turn exactly
+one or two named tests red with the missing line quoted; removing `npm ci` from
+the build stage and giving two workspaces one name now fail _the scan could read_
+test by name with all eleven tests still collected; and `RUN apt-get update &&
+npm ci` and a lower-case `as runtime  # comment` both stay green.

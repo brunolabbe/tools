@@ -238,4 +238,4 @@ No `console` — use the logger. Comment _why_, not _what_.
    against what your `api` actually resolves as soon as the file exists, so it
    will tell you what to delete and what you forgot — but it finds your service
    by name, at `@<name>/api`. A tool that calls it something else has to teach
-   the scan that, and the test says so when it throws.
+   the scan that, and the test fails by name saying so.
