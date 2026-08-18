@@ -18,6 +18,7 @@ import {
   NOW,
   postAnswer,
   readIntake,
+  saveIntake,
   startIntake,
 } from "./helpers/intakes.ts";
 
@@ -285,24 +286,17 @@ describe("refusals", () => {
  * the routes, which is the point — they are what a *release* produces.
  */
 function saveStaleIntake(started: App): string {
-  const { db } = started.context;
-  const id = "stale-intake";
-  db.prepare(
-    "INSERT INTO intakes (id, title, tree_version, created_at, updated_at) VALUES (?, NULL, ?, ?, ?)",
-  ).run(id, QUESTION_TREE.version - 1, NOW.toISOString(), NOW.toISOString());
-
-  const write = (question: string, value: unknown): void => {
-    db.prepare(
-      "INSERT INTO answers (intake_id, question_id, value, answered_at) VALUES (?, ?, ?, ?)",
-    ).run(id, question, JSON.stringify(value), NOW.toISOString());
-  };
-
-  write("shape", { state: "answered", value: { kind: "single-choice", value: "resort" } });
-  // Inside the party-size bound the question had when it was answered, outside
-  // the one it has now — a bound tightened in a release.
-  write("travellers", { state: "answered", value: { kind: "number", value: 999 } });
-  write("retired.question", { state: "answered", value: { kind: "text", value: "gone" } });
-  return id;
+  return saveIntake(started, {
+    id: "stale-intake",
+    treeVersion: QUESTION_TREE.version - 1,
+    answers: {
+      shape: answered({ kind: "single-choice", value: "resort" }),
+      // Inside the party-size bound the question had when it was answered,
+      // outside the one it has now — a bound tightened in a release.
+      travellers: answered({ kind: "number", value: 999 }),
+      "retired.question": answered({ kind: "text", value: "gone" }),
+    },
+  });
 }
 
 /**
@@ -315,34 +309,21 @@ function saveStaleIntake(started: App): string {
  * under it.
  */
 function saveVersionOneRoadTrip(started: App): string {
-  const { db } = started.context;
-  const id = "v1-road-trip";
-  db.prepare(
-    "INSERT INTO intakes (id, title, tree_version, created_at, updated_at) VALUES (?, NULL, ?, ?, ?)",
-  ).run(id, 1, NOW.toISOString(), NOW.toISOString());
-
-  const write = (question: string, value: unknown): void => {
-    db.prepare(
-      "INSERT INTO answers (intake_id, question_id, value, answered_at) VALUES (?, ?, ?, ?)",
-    ).run(id, question, JSON.stringify(value), NOW.toISOString());
-  };
-
-  write("shape", { state: "answered", value: { kind: "single-choice", value: "road-trip" } });
-  write("origin", { state: "answered", value: { kind: "text", value: "Montréal" } });
-  write("travellers", { state: "answered", value: { kind: "number", value: 2 } });
-  // Budget changed stage, not id, so this one must survive the bump.
-  write("budget", {
-    state: "answered",
-    value: { kind: "budget", value: { kind: "band", band: "moderate" } },
+  return saveIntake(started, {
+    id: "v1-road-trip",
+    treeVersion: 1,
+    answers: {
+      shape: answered({ kind: "single-choice", value: "road-trip" }),
+      origin: answered({ kind: "text", value: "Montréal" }),
+      travellers: answered({ kind: "number", value: 2 }),
+      // Budget changed stage, not id, so this one must survive the bump.
+      budget: answered({ kind: "budget", value: { kind: "band", band: "moderate" } }),
+      // The two retired ids: a decimal number of hours, and one enum that
+      // conflated what you drive with whose it is.
+      "road-trip.drive-hours": answered({ kind: "number", value: 4.5 }),
+      "road-trip.vehicle": answered({ kind: "single-choice", value: "camper-van" }),
+    },
   });
-  // The two retired ids: a decimal number of hours, and one enum that conflated
-  // what you drive with whose it is.
-  write("road-trip.drive-hours", { state: "answered", value: { kind: "number", value: 4.5 } });
-  write("road-trip.vehicle", {
-    state: "answered",
-    value: { kind: "single-choice", value: "camper-van" },
-  });
-  return id;
 }
 
 describe("the version 1 tree meeting version 2", () => {
@@ -392,25 +373,18 @@ describe("the version 1 tree meeting version 2", () => {
 });
 
 function saveVersionTwoRoadTrip(started: App): string {
-  const { db } = started.context;
-  const id = "v2-road-trip";
-  db.prepare(
-    "INSERT INTO intakes (id, title, tree_version, created_at, updated_at) VALUES (?, NULL, ?, ?, ?)",
-  ).run(id, 2, NOW.toISOString(), NOW.toISOString());
-
-  const write = (question: string, value: unknown): void => {
-    db.prepare(
-      "INSERT INTO answers (intake_id, question_id, value, answered_at) VALUES (?, ?, ?, ?)",
-    ).run(id, question, JSON.stringify(value), NOW.toISOString());
-  };
-
-  write("shape", { state: "answered", value: { kind: "single-choice", value: "road-trip" } });
-  write("origin", { state: "answered", value: { kind: "text", value: "Montréal" } });
-  // Answered when the question sat eighteenth, behind the checkpoint. pl-18
-  // moved it to third without touching its id, so it must come through intact.
-  write("destination", { state: "answered", value: { kind: "text", value: "Gaspésie" } });
-  write("travellers", { state: "answered", value: { kind: "number", value: 2 } });
-  return id;
+  return saveIntake(started, {
+    id: "v2-road-trip",
+    treeVersion: 2,
+    answers: {
+      shape: answered({ kind: "single-choice", value: "road-trip" }),
+      origin: answered({ kind: "text", value: "Montréal" }),
+      // Answered when the question sat eighteenth, behind the checkpoint. pl-18
+      // moved it to third without touching its id, so it must come through intact.
+      destination: answered({ kind: "text", value: "Gaspésie" }),
+      travellers: answered({ kind: "number", value: 2 }),
+    },
+  });
 }
 
 describe("the version 2 tree meeting version 3", () => {

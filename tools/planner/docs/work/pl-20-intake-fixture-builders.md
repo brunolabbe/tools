@@ -3,7 +3,7 @@ id: pl-20
 tool: planner
 title: One builder for a saved intake, instead of three copies of its SQL
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -85,4 +85,39 @@ Traps worth knowing in advance:
 
 ## Log
 
-_Not started._
+**2026-08-18 — done.** `saveIntake` in `api/test/helpers/intakes.ts` takes
+`{ id, treeVersion, answers }` and writes the two `INSERT`s; the three fixtures
+in `intakes-routes.test.ts` are now one call each and keep the comments that say
+what each answer is for, which is the part of them worth reading. `answers` is
+`Answers` from `@planner/contract`, so the values go through `answered()` and a
+change to `Answer` breaks `npm run check` rather than a later assertion.
+
+`npm run check` green, `npm test -- --project planner` 526 tests over 40 files —
+the same count as `main`, checked by stashing and re-running rather than by
+trusting that nothing moved.
+
+**The brief was wrong about the timestamps.** It said they vary "for the stale
+case"; all three fixtures wrote `NOW` for `created_at` and `updated_at`, and one
+test asserts exactly that (`expect(second.intake.updatedAt).toBe(NOW.toISOString())`
+— the tree moved, nobody touched the intake). So the builder takes no timestamp
+argument and stamps `NOW`, which is the "resist a parameter per column" rule
+applied to the one parameter the brief itself asked for. Only `id`, the tree
+version and the answers vary; `title` is `NULL` in all three.
+
+**Two hand-written `INSERT`s remain in the planner's suites, on purpose**, so
+the grep behind the first acceptance line returns more than this builder and the
+next reader should not have to re-derive why:
+
+- `intakes-store.test.ts:105,108` writes `"{not json"` and `{"state":"shrugged"}`
+  to prove `selectAnswers` reports an unreadable row instead of throwing over it.
+  A builder typed against `Answer` cannot express either by construction — that
+  is what typing it was for — so routing this through it would delete the test.
+  Its valid rows already go through `insertIntake`/`upsertAnswer`.
+- `migrations.test.ts:61` writes one row into a raw database at a pinned
+  `user_version` to prove `migrate` twice is a no-op. There is no `App` there and
+  no answers; pointing a migration test at an intake fixture helper would couple
+  the schema's test to the tree's.
+
+Both are the store's or the schema's own tests rather than intake fixtures, which
+is the line the acceptance line was drawing. The three that shared a shape now
+share a function.
