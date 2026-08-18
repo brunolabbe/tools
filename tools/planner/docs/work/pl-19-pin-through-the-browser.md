@@ -196,3 +196,39 @@ over one path", with `e2e/intake.spec.ts` named as the file that carries the
 never-name-a-question rule. That rule now lives in `intake-walk.ts`, which is the
 whole reason the walk was extracted, so the page pointing at the old file was the
 one sentence most likely to send the next agent to the wrong place.
+
+**2026-08-18, after the review — the four `low` findings, all fixed.** The gate
+above is left exactly as written: it is the record of what the branch looked like
+when it was read, and a review edited to match its own fixes stops being one. So
+this is the answer to it rather than a revision of it.
+
+Two were duplication. The shell wait — `getByRole("heading", { name: "Planner" })`
+— was typed in `pin.spec.ts:80` and again inside `startATrip`; it is now
+`waitForShell` in `intake-walk.ts`, exported beside the walk, because two files
+asserting the same heading text is precisely the second copy that module exists
+to prevent, and a rename would have fixed one and left the other timing out on a
+string nothing renders. The `button.pin` locator was bound once and then
+re-derived at six later call sites; it is bound once now and used through both
+reloads, along with the item heading beside it. That is safe for the reason the
+re-derivation was hiding: a Playwright locator is a lazy selector, not a handle
+to a node, so it re-queries on every call and does not care that the page was
+thrown away underneath it.
+
+Two were latent couplings that no assertion states, and both are now comments at
+the line that would go red. `intakeTitle` is a pure function of shape, dates and
+destination and this walk answers identically every time, so a **second** spec
+that drafts a plan would put an identically-named button in `ul.plans` and strict
+mode would refuse both — scoping to `ul.plans` fixed the intake/plan collision
+and not that one. The note says what the next author needs, which is that the fix
+is a title that spec can tell apart, not a tiebreaker here. And `li.item` being
+non-empty is a fact about `limits.ts` and the scripted fixtures together: the
+walk takes the first radio, which means `short-hops`, and every scripted drive
+leg is longer than a `short-hops` day allows, so route-and-logistics places
+nothing and lodging, food and activities are what keep the count above zero. Edit
+either side and this spec reports "no items" for something with nothing to do
+with pinning.
+
+None of it moves the gate, and that is the point worth keeping: CONCERNS here is
+three `unproven (gate)` rows, which no amount of tidying touches. They come back
+proven the day `.github/workflows/planner.yml` runs on this branch and not before
+— `npm run e2e:planner` passing on a laptop is the same evidence pl-16 had.

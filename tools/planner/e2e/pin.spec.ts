@@ -27,7 +27,7 @@
 
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
-import { answerThroughCore, CHECKPOINT, startATrip } from "./intake-walk.ts";
+import { answerThroughCore, CHECKPOINT, startATrip, waitForShell } from "./intake-walk.ts";
 
 /** The plan document, wherever the reader arrived at it from. */
 function planPanel(page: Page): Locator {
@@ -77,13 +77,21 @@ function firstItem(page: Page): Locator {
  */
 async function reloadAndReopen(page: Page, title: string): Promise<void> {
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Planner", exact: true })).toBeVisible();
+  await waitForShell(page);
 
   const leaveTheWizard = page.getByRole("button", { name: "All trips" });
   if ((await leaveTheWizard.count()) > 0) await leaveTheWizard.click();
 
   // Scoped to the plans, because the trip it came from is listed above under
   // exactly the same name — both are `intakeTitle` over the same brief.
+  //
+  // Scoping fixes that collision and not the other one: `intakeTitle` is a pure
+  // function of shape, dates and destination, and this walk answers the same
+  // way every time, so a *second* spec that drafts a plan would put a second
+  // identically-named button in this list and strict mode would refuse both.
+  // Today this spec is the only one that clicks "Draft a plan". A second one
+  // needs a title it can tell apart — an answer of its own, not a tiebreaker
+  // here.
   await page.locator("ul.plans").getByRole("button", { name: title, exact: true }).click();
 
   await expect(planPanel(page).getByRole("heading", { level: 2, name: title })).toBeVisible();
@@ -118,6 +126,14 @@ test("a pin survives a reload, appends no revision, and can be taken back", asyn
   // A first draft, and there is something on it to pin. Both would be a plan
   // bug rather than a pinning one, and finding out here beats a timeout on a
   // locator that never had a chance.
+  //
+  // That the day is non-empty is a fact about `limits.ts` and the scripted
+  // fixtures together, not a given: this walk takes the first radio every time,
+  // which means `short-hops`, and every scripted drive leg is longer than a
+  // `short-hops` day allows — so route-and-logistics places nothing and the
+  // lodging, food and activity buckets are what keep this above zero. Edit
+  // either side and this is the assertion that goes red, reporting "no items"
+  // for something that has nothing to do with pinning.
   await expect(versionLine(page)).toHaveText(/^Version 1 of 1\b/u);
   const version = (await versionLine(page).innerText()).trim();
   await expect(planPanel(page).locator("li.item")).not.toHaveCount(0);
@@ -127,7 +143,11 @@ test("a pin survives a reload, appends no revision, and can be taken back", asyn
   // the days happen to start with afterwards.
   const item = (await firstItem(page).getByRole("heading", { level: 4 }).innerText()).trim();
 
+  // Bound once and used through both reloads: a Playwright locator is a lazy
+  // selector, not a handle to a node, so it re-queries on every call and
+  // survives the page being thrown away underneath it.
   const pin = firstItem(page).locator("button.pin");
+  const itemHeading = firstItem(page).getByRole("heading", { level: 4 });
   await expect(pin).toHaveAttribute("aria-pressed", "false");
   await expect(pin).toHaveText("Pin");
 
@@ -142,9 +162,9 @@ test("a pin survives a reload, appends no revision, and can be taken back", asyn
   // --- The reload ---------------------------------------------------------
   await reloadAndReopen(page, title);
 
-  await expect(firstItem(page).getByRole("heading", { level: 4 })).toHaveText(item);
-  await expect(firstItem(page).locator("button.pin")).toHaveAttribute("aria-pressed", "true");
-  await expect(firstItem(page).locator("button.pin")).toHaveText("Pinned");
+  await expect(itemHeading).toHaveText(item);
+  await expect(pin).toHaveAttribute("aria-pressed", "true");
+  await expect(pin).toHaveText("Pinned");
   // Still one version after a round trip through SQLite — a pin that quietly
   // drafted a revision would show up here and nowhere else on this screen.
   await expect(versionLine(page)).toHaveText(version);
@@ -152,14 +172,14 @@ test("a pin survives a reload, appends no revision, and can be taken back", asyn
   // --- Taking it back -----------------------------------------------------
   // A pin that cannot be undone is a different bug, and one the "Pinned" label
   // above would happily keep reporting.
-  await firstItem(page).locator("button.pin").click();
-  await expect(firstItem(page).locator("button.pin")).toHaveAttribute("aria-pressed", "false");
-  await expect(firstItem(page).locator("button.pin")).toHaveText("Pin");
+  await pin.click();
+  await expect(pin).toHaveAttribute("aria-pressed", "false");
+  await expect(pin).toHaveText("Pin");
 
   await reloadAndReopen(page, title);
 
-  await expect(firstItem(page).getByRole("heading", { level: 4 })).toHaveText(item);
-  await expect(firstItem(page).locator("button.pin")).toHaveAttribute("aria-pressed", "false");
-  await expect(firstItem(page).locator("button.pin")).toHaveText("Pin");
+  await expect(itemHeading).toHaveText(item);
+  await expect(pin).toHaveAttribute("aria-pressed", "false");
+  await expect(pin).toHaveText("Pin");
   await expect(versionLine(page)).toHaveText(version);
 });

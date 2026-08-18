@@ -160,9 +160,22 @@ export function answeredPrompts(page: Page): Locator {
   return page.locator("aside .answers .prompt");
 }
 
+/**
+ * Wait for the app shell, which is what "the page is ready" means here.
+ *
+ * The `h1` is the first thing React renders in every state, so it is the wait
+ * after any `goto` or `reload`. It lives here rather than in the spec that
+ * reloads because two files asserting the same heading text is the same second
+ * copy this module exists to prevent — a rename would fix one and leave the
+ * other timing out on a string nothing renders.
+ */
+export async function waitForShell(page: Page): Promise<void> {
+  await expect(page.getByRole("heading", { name: "Planner", exact: true })).toBeVisible();
+}
+
 export async function startATrip(page: Page): Promise<void> {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Planner", exact: true })).toBeVisible();
+  await waitForShell(page);
 
   await page.getByRole("button", { name: "Describe a new trip" }).click();
   await expect(page.locator("section.panel.question")).toBeVisible();
