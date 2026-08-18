@@ -4,11 +4,15 @@
  * Not a test file — vitest collects `*.test.ts` only. Everything here exists
  * because a suite that hand-builds a set of answers is asserting against its own
  * idea of the tree rather than against the tree.
+ *
+ * `saveIntake` at the bottom is the one thing here that does not drive the
+ * wizard, and it says why.
  */
 
-import type { Answer, AnswerValue, IntakeState, QuestionNode } from "@planner/contract";
+import type { Answer, Answers, AnswerValue, IntakeState, QuestionNode } from "@planner/contract";
 import { intakeAnswerUrl, intakeUrl, ROUTES } from "@planner/contract";
 import type { FastifyInstance } from "fastify";
+import type { App } from "../../src/index.ts";
 
 /** Fixed, so anything the engine decides from the calendar is assertable. */
 export const NOW = new Date("2026-08-15T12:00:00.000Z");
@@ -97,4 +101,40 @@ export async function answerThroughCore(
   }
 
   return state;
+}
+
+/**
+ * An intake written straight to the store, under whatever tree version it
+ * claims.
+ *
+ * Deliberately not `db/intakes.ts`. The rows these fixtures need are rows the
+ * current code would refuse to write — an intake at an older `tree_version`, an
+ * answer to a question the tree has since dropped, an answer outside the bound
+ * its question carries today — and they are the only way to test what happens
+ * when a saved intake is read back under a newer tree. Routing this through the
+ * real writer would not tidy the fixtures; it would delete the test cases.
+ *
+ * What it will not let you write is a malformed one. `answers` is typed against
+ * the contract, so a change to `Answer` fails at `npm run check` rather than
+ * quietly writing a subtly wrong row for an assertion to agree with later.
+ */
+export function saveIntake(
+  app: App,
+  intake: { id: string; treeVersion: number; answers: Answers },
+): string {
+  const { db } = app.context;
+  const at = NOW.toISOString();
+
+  db.prepare(
+    "INSERT INTO intakes (id, title, tree_version, created_at, updated_at) VALUES (?, NULL, ?, ?, ?)",
+  ).run(intake.id, intake.treeVersion, at, at);
+
+  const write = db.prepare(
+    "INSERT INTO answers (intake_id, question_id, value, answered_at) VALUES (?, ?, ?, ?)",
+  );
+  for (const [question, answer] of Object.entries(intake.answers)) {
+    write.run(intake.id, question, JSON.stringify(answer), at);
+  }
+
+  return intake.id;
 }
