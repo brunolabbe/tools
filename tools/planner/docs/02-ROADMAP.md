@@ -196,18 +196,16 @@ Short, and each one is a real decision someone has to make rather than a gap:
   vendor. Whichever it is, the fixtures come from its real payloads.
 - **Whether a specialist streams.** The chat seam does not stream, and adding it
   before a caller needs it was deferred once already. The fan-out's progress is
-  per-specialist, which may be enough — pl-5 built exactly that and nothing has
-  yet asked for finer, because there is no page watching a run to ask.
-  Two entries that stood here are answered rather than open, both by
-  [pl-16](./work/pl-16-the-plan-run.md), and both are recorded in
-  [03-STATUS.md](./03-STATUS.md) where the code is. **What the contract carries for
-  a run**: `RunStatus` and its transition table, one `RunProgress` payload the agent
-  emits and `web` renders, and a `RunEvent` envelope `api` stamps a clock onto —
-  one name for one event, which was the half that mattered. **Whether
-  `MAX_SPECIALISTS = 5` is right now that there is a roster**: reviewed as content
-  and **kept**, because a cap has to stay a constraint something reaches, the
-  composer sums the cost bands whether or not a budget specialist ran, and the drop
-  is a `specialist-dropped-for-budget` gap rather than a silence.
+  per-specialist, which may be enough — pl-5 built exactly that and pl-16 now
+  streams it to a page that watches it, and nothing has yet asked for finer than
+  a specialist.
+
+**Two questions that stood here are answered rather than open**, both by
+[pl-16](./work/pl-16-the-plan-run.md): **what the contract carries for a run**,
+which it settled before building anything on top of it, and **whether
+`MAX_SPECIALISTS = 5` is right now that there is a roster**, which it reviewed as
+content and **kept**. What each answer is, and what it cost, is in that ticket's
+log; what the code looks like now is in [03-STATUS.md](./03-STATUS.md).
 
 **Whether Phase 2's composer can pack under travel time at all** was answered on
 2026-08-16, and the answer is **no — pack without it and name the gap.** The

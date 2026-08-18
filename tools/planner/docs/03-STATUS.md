@@ -174,14 +174,11 @@ sentence rather than an id, and a half-filled `dates` or `budget` staying
 unsubmittable.
 
 **The bare fields still have no accessible name.** `text`, `text-list`, `number`
-and `number-list` render an input with an `id` and no `label`; the prompt is an
-`h2` a level up in `QuestionCard`, which a screen reader does not connect to the
-field. The choice controls, `dates` and `budget` are all labelled properly, so
-this is four kinds and not a systemic gap. pl-12 found it and left it alone
-rather than widen its own diff — it wants an `aria-labelledby` on each field and
-a test that asks for the control by its prompt, which is also this tool's own
-"read the screen, never name a question" rule applied to the field. It is now
-[pl-21](./work/pl-21-name-the-bare-fields.md).
+and `number-list` render an input with an `id` and no `label`, so a screen reader
+announces a box and never says what it is for. Found by
+[pl-12](./work/pl-12-render-the-wizard-in-tests.md), and it is
+[pl-21](./work/pl-21-name-the-bare-fields.md) — which is four kinds and not a
+systemic gap, and carries the argument and the fix.
 
 **No owner model.** Every visitor shares one store and can read and edit
 everyone's intakes, and the list route shows all of them. That is the honest gap

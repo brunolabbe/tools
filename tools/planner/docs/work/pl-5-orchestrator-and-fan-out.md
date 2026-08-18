@@ -338,30 +338,85 @@ here"_. Decided on 2026-08-18 — **it closes here.**
 
 Nothing was built for this entry and nothing needed to be. The two things this
 ticket stopped short of are both done, under the ticket that was split out to
-carry them: [pl-16](./pl-16-the-plan-run.md) answered the contract question
-(`RunStatus` and its transition table, one `RunProgress` payload the agent emits
-and `web` renders, the `RunEvent` envelope `api` stamps a clock onto, the routes
-and the `Run` summary), then built `plan_runs`, the queue, the SSE route and the
-progress view on top of it. Phase 2 is complete as of pl-10.
+carry them: [pl-16](./pl-16-the-plan-run.md) answered the contract question the
+entry above left open — which of the four additions the contract carries, and in
+what shape, is written down in that ticket's log — and then built `plan_runs`,
+the queue, the SSE route and the progress view on top of the answer. Phase 2 is
+complete as of pl-10.
 
 **Why this is a close-out and not a re-scope.** The alternative was to widen this
 ticket's `Done when` to say "or pl-16 does it", which would leave two files
-claiming the same work and neither able to be read on its own. The split was the
-right call and the format doc recommends it; what was left undone was the
-bookkeeping. So the brief above is unchanged — including its Build steps 4 and the
-`web` half, which this ticket did not do — and this entry is the record that they
-were done elsewhere rather than dropped.
+claiming the same work and neither able to be read on its own. So the brief above
+is unchanged — including its Build step 4 and the `web` half, which this ticket
+did not do — and this entry is the record that they were done elsewhere rather
+than dropped.
 
-Every `Done when` line on this ticket was already met by the 2026-08-16 entry:
-`rosterFor` is table-driven and tested per shape, every route candidate is a
-`between`, the budget path degrades and records it, nothing here packs a day, and
-`placeable.test.ts` composes the real fan-out for all six briefs. What that entry
-could not claim — that a run streams per-specialist progress over a wire — is
-pl-16's, and it holds there.
+**All but one of the `Done when` lines were met by this ticket's own work**, in
+the 2026-08-16 entry: `rosterFor` is table-driven and tested per shape, every
+route candidate is a `between`, the budget path degrades and records it, nothing
+here packs a day, and `placeable.test.ts` composes the real fan-out for all six
+briefs. The exception is one clause of the third line — **a run streams
+per-specialist progress**. `runFanOut` emits that progress per specialist and
+`agent/test/fan-out.test.ts` asserts it, but nothing here carries it over a wire,
+because the run was not a job yet and that was the seam this ticket stopped at.
+[pl-16](./pl-16-the-plan-run.md) holds that clause and it holds it in full: the
+SSE route, the frames on it, and a page that shows the specialists working.
 
 The one finding this ticket raised and left open was resolved elsewhere too:
 **`MAX_SPECIALISTS = 5` drops the budget specialist on every six-specialist
-shape**, reviewed as content in pl-16 and **kept**, because the cap has to stay a
-constraint something actually reaches, the composer sums the cost bands in code
-regardless, and the drop is a `specialist-dropped-for-budget` gap on the stored
-revision rather than a silence.
+shape** was reviewed as content in pl-16 and **kept**. The argument is in that
+ticket's log, beside the code it decides.
+
+### 2026-08-18 — the close-out corrected after its own gate
+
+The `## Review` above gated the close-out at CONCERNS. Every finding was about
+the record rather than about the code — this branch is documentation only and
+what the fan-out does is unchanged — but a record that reads wrong is the only
+thing a close-out has to offer, so they are all fixed here.
+
+**The close-out claimed more than it had.** It opened with "every `Done when`
+line on this ticket was already met by the 2026-08-16 entry" and then, three
+sentences later, conceded that streaming over a wire was pl-16's — which is a
+clause of the third `Done when` line. Both cannot be true, and a reader who
+stopped at the first sentence would believe this ticket met its own acceptance
+unaided. It now says all but one line were met here, names the clause that was
+not, and says pl-16 holds it and by what. The brief itself is untouched: leaving
+it as written was a deliberate decision recorded above, and correcting a claim
+_about_ the brief is not the same as editing it. The close-vs-re-scope argument,
+which the same paragraph made twice in consecutive sentences, is now made once.
+
+**Two facts were being restated in four places.** The `RunProgress` / `RunEvent`
+shape and the `MAX_SPECIALISTS = 5` verdict each appeared in full in pl-16's log,
+in `03-STATUS.md`, in `02-ROADMAP.md` and in this ticket's close-out. pl-16 did
+that work, so its log keeps the detail; the roadmap and this entry are cut back
+to the fact that the question is answered and a link to where the answer is
+argued. The format doc's rule is that the roadmap links to tickets and does not
+describe work, and the reason is exactly this: four copies is four places for one
+of them to drift. `03-STATUS.md`'s bare-fields paragraph had become a second copy
+of pl-21's Why the moment pl-21 existed, and is now a pointer at it.
+
+**The roadmap's _Still open_ list rendered as the opposite of its meaning.** The
+replacement paragraph was indented two spaces with no blank line and no marker,
+so CommonMark took it as a lazy continuation of the "Whether a specialist
+streams" bullet — and the two questions that pl-16 _answered_ rendered as part of
+the one that is genuinely still open. It is now a paragraph outside the list,
+which is the shape the section's other resolved questions already use.
+
+**pl-21 was seeded with a trap that is not true.** It warned that `number-list`
+renders more than one input. `NumberList` renders exactly one
+`<input type="text" inputMode="numeric">` over comma-separated text, structurally
+the same as `TextList`'s single textarea, so the warning would have cost whoever
+picks that chore up either a re-verification or a per-item `aria-labelledby`
+scheme for items that do not exist. The honest version is the inverse and is now
+what the ticket says: all four bare kinds are the single-control case, and the
+trap is that two of them are named as though they were not. Its Why also
+mis-remembered why pl-12 left the gap — pl-16 was editing `web/src` in parallel,
+not diff size — and now carries the real reason together with the note that it
+has since expired.
+
+One gate finding is deliberately left: the `Done when` bullet is not struck or
+annotated in place. Striking it would edit the brief, which is the one thing this
+close-out decided not to do, and the log now answers the same question in the
+sentence a reader reaches next.
+
+`npm run check` passes. No test changed and no source file was touched.

@@ -23,8 +23,11 @@ lands on the field and announces an unlabelled text box: the user is told there 
 something to type into and never told what.
 
 Found by [pl-12](./pl-12-render-the-wizard-in-tests.md) while building the
-component suite, and **deliberately left alone there** rather than widening that
-ticket's diff. This is that finding, written down as work.
+component suite, and **deliberately left alone there** — pl-16 was editing
+`web/src` in parallel, the component suite could be written without it, and the
+gap was written up in [03-STATUS.md](../03-STATUS.md) rather than fixed in
+passing. That reason has since expired: pl-16 landed, and nothing is editing
+those files now. This is that finding, written down as work.
 
 **It is four kinds and not a systemic gap**, which is the reason it is a chore and
 not a work package. The choice controls wrap their input in a `<label>`, and
@@ -78,9 +81,14 @@ Traps worth knowing in advance:
   question at a time today, so a fixed `id="question-prompt"` would work and would
   be a trap set for whoever renders two — derive it from `question.id` the way
   the field does.
-- **`number-list` renders more than one input.** Look at it before assuming a
-  single `aria-labelledby` is right; if it repeats a control per item, each needs
-  a name that distinguishes it, and "Prompt" three times is not that.
+- **All four kinds are the simple one-control case, and the trap is that two of
+  them look like they might not be.** "List" suggests a control per item, each
+  needing a name that distinguishes it from its siblings. Neither list kind is
+  that: `TextList` is a single `<textarea>` of newline-separated values and
+  `NumberList` a single `<input type="text" inputMode="numeric">` of
+  comma-separated ones, both parsed in the control's own `update`. So one
+  `aria-labelledby` per control is right in all four places — check that before
+  building a per-item scheme for items that do not exist.
 - **This is not an accessibility audit.** Contrast, focus order, keyboard traps,
   live regions and the discard dialog's focus management are all out of scope. The
   finding is four controls with no accessible name; widening it is how a chore
