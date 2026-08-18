@@ -155,3 +155,22 @@ written. Its _other_ `unproven (gate)` row, `describeCost` rendering
 "Pinning is proven at each end and not across the middle" gap rewritten as
 closed. `tools/planner/e2e/README.md` was still the placeholder written before
 pl-13 landed a spec in it, and now lists what is there.
+
+**2026-08-18, after the pull request was open — two corrections.**
+
+The re-gate note first appended to pl-10 said its _other_ `unproven (gate)` row,
+`describeCost` rendering `low === high` as a single figure, was still open. It is
+not: `web/test/plan-view.test.tsx:219` asserts exactly that branch — "a genuinely
+fixed price is labelled as posted, not shown as a bare figure" — and it arrived in
+pl-10's own merge (`6291ee5`, #44), after the review was written against an
+earlier state of the branch. So both `med` findings and both gate rows are closed,
+one by this ticket and one by pl-10 itself, and the note now says so. **The lesson
+is narrow and worth writing down: a review gate is a statement about the branch it
+was read on, not about the ticket**, and a follow-up that quotes it has to re-check
+it rather than trust it.
+
+`tools/planner/CLAUDE.md` also described the suite it no longer had — "two specs
+over one path", with `e2e/intake.spec.ts` named as the file that carries the
+never-name-a-question rule. That rule now lives in `intake-walk.ts`, which is the
+whole reason the walk was extracted, so the page pointing at the old file was the
+one sentence most likely to send the next agent to the wrong place.

@@ -192,23 +192,35 @@ Traps worth knowing in advance:
 - **low** · `uncheckedFor`'s currency detection silently changed behavior: the removed code looked placed ids up in `season.kept`, dropping a pinned-out-of-season candidate's currency; the new code looks the same ids up in the full candidate list, so it now counts. Very likely more correct, but unacknowledged in the Log and untested (no `compose.test.ts` case combines `previous`/pinned items with mixed currencies). Unreachable today — nothing calls `compose()` with `previous` outside tests, since re-plan is Phase 4. `tools/planner/itinerary/src/unchecked.ts:194-206`.
 - **low** · `updateItemPin` scopes only by `plan_id`, not by latest revision, so a pin aimed at an item on a superseded revision succeeds silently while `pinnedPlacements` only ever reads pins off the revision passed as `previous` — a write that looks successful but has no effect once Phase 4 exists. Unreachable today (no revise flow, no multi-revision plan in production). `tools/planner/api/src/db/plans.ts:239-256`.
 - **info** · `UncheckedConstraint`/`UncheckedConstraintKind` moved from `@planner/itinerary` into `@planner/contract`, plus `ITEM_NOT_FOUND` and three new wire types added to `contract/src/api.ts`. All additive and well-justified in the Log and in-file docs; the root `CLAUDE.md`'s "not unilateral" rule is satisfied by the ticket recording the decision, but it's the kind of package-boundary move worth a second pair of eyes given this was reviewed by the same model class that wrote it. Not a gate issue.
-  **Follow-up, 2026-08-18 —** the `unproven (gate)` row for "pinning from the UI
-  persists and creates no revision" is now **proven**, by
-  [pl-19](./pl-19-pin-through-the-browser.md)'s `e2e/pin.spec.ts`: one browser from
-  the intake to a drafted plan, pin, reload, re-open from the plan list, still
-  pinned, "Version 1 of 1" unchanged, and the unpin surviving the same round trip
-  with nothing mocked. The gate table above is left as it was written — it was
-  true on 2026-08-16, and a review that edits itself later is not a record. The
-  second `med` finding below is closed by the same spec. **The other
-  `unproven (gate)` row is not**: `describeCost` still renders `low === high` as a
-  single figure and no test exercises that branch. The proof of this one runs in
-  `.github/workflows/planner.yml` and nowhere else, so `npm test` stays silent
-  about it.
-
 - Structural note (not a finding): the core "same list" claim between `compose()`'s own `unchecked` and `uncheckedForRevision` is not merely tested on 6 shapes — it's guaranteed by construction, since both call sites route through the identical `uncheckedFor` over the same candidate pool and semantically-identical `placedIds`. The dead-branch removal (`untilDeparture === null ⟺ dates.kind === "open"`) checks out independently against `daysUntilDeparture` in `dates.ts:103-109`.
 - `selectPlans`' `GROUP BY plans.id` with non-aggregated `title`/`created_at`/`updated_at` is safe: those columns are functionally dependent on `plans.id` (one row per id on the "one" side of the join), so SQLite's bare-column extension can't pick an inconsistent value.
 - Untrusted input (candidate titles, summaries, source titles/URLs) reaches the DOM only through React text nodes (auto-escaped) and a schema-restricted `https?` `href`; no `dangerouslySetInnerHTML` anywhere in `PlanView.tsx`/`Provenance.tsx`. No `console`, no `any`, `import type` and relative `.ts` extensions used throughout the diff.
 - NFR: security ✓ (no new subprocess/fetch of user URLs; existing SSRF/redaction paths untouched; DOM escaping verified) · performance ✓ (derivation is O(candidates), no re-pack, indexed list query) · reliability ✓ (transactional pin, defensive `REVISION_NOT_FOUND` mapping) with the two low-severity latent gaps noted above for Phase 4 · maintainability ✓ with the currency-behavior-change note above being the one place the Log's account is incomplete.
+
+**Follow-up, 2026-08-18 —** the `unproven (gate)` row for **"pinning from the UI
+persists and creates no revision"** is now **proven**, by
+[pl-19](./pl-19-pin-through-the-browser.md)'s `e2e/pin.spec.ts`: one browser from
+the intake to a drafted plan, pin, reload, re-open from the plan list, still
+pinned, "Version 1 of 1" unchanged, and the unpin surviving the same round trip
+with nothing mocked. Its proof runs in `.github/workflows/planner.yml` and
+nowhere else, so `npm test` stays silent about it. The second `med` finding is
+closed by the same spec.
+
+**The other two were already closed inside this ticket's own pull request**, and
+this review did not see it because it was written against an earlier state of the
+branch. `describeCost`'s `low === high` branch is asserted at
+`web/test/plan-view.test.tsx:219` — "a genuinely fixed price is labelled as
+posted, not shown as a bare figure", which checks for `20 EUR, a posted price`
+and for the absence of `20–20` — and `format.ts` now carries the reasoning: a
+posted price is a _different claim_ from a narrow estimate, and the acceptance
+line is about no **estimate** being shown as one figure. So that row is proven
+too, by a unit test rather than by a gate, and the first `med` goes with it. Both
+arrived in `6291ee5` (#44).
+
+The gate table above is left exactly as written. It was true of the branch it was
+written against, and a review that edits itself afterwards is not a record — this
+paragraph is what makes the difference legible, which is the same reason the
+table exists at all.
 
 ## Log
 

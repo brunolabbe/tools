@@ -45,7 +45,7 @@ agent        everything that talks to a model: prompts, roster, specialists, sea
 itinerary    season filter, day packing, budget arithmetic, constraints, critic — no model, no network, no clock (pl-9)
 api          Fastify, persistence, HTTP, run orchestration
 web          React + Vite UI
-e2e          Playwright specs — the intake, in a browser, against the built bundle (pl-13)
+e2e          Playwright specs — the intake (pl-13) and pinning (pl-19), in a browser, against the built bundle
 ```
 
 `intake` and `itinerary` are separate on purpose despite sharing that "must be
@@ -137,12 +137,20 @@ mistake, not a reason to refuse to start.
 
 **The e2e suite reads the screen; it never names a question.** Because the tree
 is content, a spec that types into `#field-road-trip.drive-appetite` or counts
-eight questions turns a content edit into a red build. `e2e/intake.spec.ts` fills
-whatever control is in front of it, keeps the prompts it was shown, and asserts
-the discard warning against those — so both sides of the assertion move when the
-tree does. It is two specs over one path on purpose: it exists to prove the API
-and the browser are wired together, and branch coverage costs milliseconds in a
-component test and a browser launch here.
+eight questions turns a content edit into a red build. The walk down the tree —
+`e2e/intake-walk.ts`, shared by every spec that needs a described trip since
+pl-19 — fills whatever control is in front of it and keeps the prompts it was
+shown, so both sides of an assertion move when the tree does. **It is shared
+rather than copied because the rule is**: a second copy puts it somewhere the
+next person to edit the tree would not think to look.
+
+It is deliberately thin — two paths, three specs. `intake.spec.ts` proves the API
+and the browser are wired to each other over one walk and one refusal;
+`pin.spec.ts` proves the one write that mutates a stored revision, across the
+seam that a mocked API client cannot cross. Branch coverage belongs in a
+component test, where it costs milliseconds instead of a browser launch. **No
+spec here reads the database** — what they must see is what a user sees, so a
+revision count comes off the page.
 
 **The intake stops at the questions a draft needs.** Every node is `core` or
 `refine` — where it is asked, before the checkpoint or after — and when nothing
