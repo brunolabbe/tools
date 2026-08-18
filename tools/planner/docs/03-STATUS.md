@@ -11,7 +11,7 @@ a run started over HTTP fans out, composes and persists a revision, streams its
 progress over SSE, and can be canceled in a way that reaches the provider, and as
 of [pl-10](./work/pl-10-plan-view-and-provenance.md) that plan can be read — its
 days, which lines were verified, what it does not cover and what nothing checked.
-**Phase 2 is complete.** What is missing is grounding (Phase 3)**
+Phase 2 is complete. What is missing is grounding (Phase 3).**
 
 ---
 
