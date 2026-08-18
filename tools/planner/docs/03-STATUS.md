@@ -3,7 +3,7 @@
 Where the planner stands. Phases live in [02-ROADMAP.md](./02-ROADMAP.md); what
 each piece of work did lives in its ticket under [work/](./work/).
 
-**Last updated:** 2026-08-17 · **Phase 0 (scaffold) ✅ · Phase 1 ✅ — the
+**Last updated:** 2026-08-18 · **Phase 0 (scaffold) ✅ · Phase 1 ✅ — the
 `TripBrief`, the question tree, and the persistence and wizard over them, driven
 end to end in a browser. The tool produces a brief with no model involved
 anywhere. Phase 2 now produces a plan: as of [pl-16](./work/pl-16-the-plan-run.md)
@@ -32,7 +32,7 @@ reasoning, including what the decision costs, is an amendment to
 argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
-**526 unit tests pass across 40 files, plus 2 e2e specs.** `npm run check` is
+**526 unit tests pass across 40 files, plus 3 e2e specs.** `npm run check` is
 green. The repo-wide CI runs the unit suite on every push, and
 `.github/workflows/planner.yml` now carries two gates — the e2e suite in a real
 browser, and the image, which is built, started, and asked for both `/api/health`
@@ -121,22 +121,27 @@ still unwritten.
 | [pl-16](./work/pl-16-the-plan-run.md)                       | done      | The run over HTTP; its image gate produced pl-17             |
 | [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | ready     | The image's workspace list is kept by hand and unchecked     |
 | [pl-18](./work/pl-18-destination-asked-early.md)            | done      | Destination asked third; `core` is position, not need        |
-| [pl-19](./work/pl-19-pin-through-the-browser.md)            | ready     | Pinning is proven at the button and at the write, not across |
+| [pl-19](./work/pl-19-pin-through-the-browser.md)            | done      | Pinning driven through a browser: pin, reload, unpin, reload |
 | [pl-20](./work/pl-20-intake-fixture-builders.md)            | ready     | Three hand-written `INSERT` fixtures in one test file        |
 
 ## Known gaps and risks
 
-**Pinning is proven at each end and not across the middle.**
-[pl-10](./work/pl-10-plan-view-and-provenance.md)'s gate left that acceptance
-line `unproven (gate)` rather than proven, and the row is honest rather than
-pedantic: the component test proves the button and mocks the API client — which
-is this tool's rule, not a shortcut — and the route test proves the write
-persists and appends no revision. Nothing crosses between them, so the two
-compose into the claim only if the client module does what its type says.
-Pinning is also the **only write in this API that mutates a stored revision**,
-permitted by one column of one table, so a regression there is silent — the
-button still depresses.
-[pl-19](./work/pl-19-pin-through-the-browser.md) is the e2e that closes it.
+**Pinning is proven across the middle as of
+[pl-19](./work/pl-19-pin-through-the-browser.md).** It was proven at each end and
+not between: [pl-10](./work/pl-10-plan-view-and-provenance.md)'s gate left that
+acceptance line `unproven (gate)`, because the component test proves the button
+and mocks the API client — this tool's rule, not a shortcut — while the route
+test proves the write persists and appends no revision, and nothing crossed
+between them. `e2e/pin.spec.ts` now drives one browser from the intake to a
+drafted plan, pins an item, reloads, re-opens the plan from the list and finds it
+still pinned, with the "Version 1 of 1" line unchanged and unpinning surviving
+the same round trip. It reads the revision count off the page rather than out of
+SQLite, deliberately: a spec that queried the database would be an integration
+test wearing a browser. Pinning is the **only write in this API that mutates a
+stored revision**, permitted by one column of one table, so a regression there is
+silent — the button still depresses — which is why it is the write most worth a
+real browser. **The proof runs in `.github/workflows/planner.yml` and nowhere
+else**, so `npm test` is still silent about it.
 
 **The image serves the UI as of
 [pl-13](./work/pl-13-drive-the-intake-end-to-end.md).** `WEB_DIR` had been parsed
@@ -362,7 +367,7 @@ npm test -- --project planner
 npm run check
 
 npm run e2e:install            # once, for the browser
-npm run e2e:planner            # the intake, in Chromium, against the built bundle
+npm run e2e:planner            # the intake and pinning, in Chromium, against the built bundle
 ```
 
 Ports are 8090/5183 rather than 8080/5173 so both tools can run at once. The e2e

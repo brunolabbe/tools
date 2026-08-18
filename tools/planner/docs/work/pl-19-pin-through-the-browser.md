@@ -3,7 +3,7 @@ id: pl-19
 tool: planner
 title: Prove pinning through the browser, not at a mocked seam
 kind: work-package
-status: ready
+status: done
 milestone: P2
 depends_on: [pl-10]
 ---
@@ -97,4 +97,61 @@ Traps worth knowing in advance:
 
 ## Log
 
-_Not started._
+**2026-08-18 — done.** `tools/planner/e2e/pin.spec.ts`, one test, one browser:
+answer the intake to the checkpoint, draft, wait for the run against the scripted
+provider, open the plan, pin the first item, reload, come back to it, unpin,
+reload, come back again. `npm run e2e:planner` is green — three specs, 10.6s
+locally, of which the new one is 2.3s. `npm run check` is green. **Neither runs
+in CI's default gate**: this proof lives in `.github/workflows/planner.yml`, which
+is the same thing pl-10's row said about the claim it replaces.
+
+**The walk down the tree moved to `e2e/intake-walk.ts`.** The brief said "a spec
+beside `intake.spec.ts`, in the same style" and the style is 120 lines of
+question-agnostic filling that the new spec needs before it has anything to pin.
+Copying it would have put a second copy of _the rule_ — never name a question —
+in a file where the next person to edit the tree would not think to look, which
+is the failure the rule exists to prevent. So the helpers moved unchanged and
+both specs import them. It is not a spec file, so Playwright's `testMatch`
+ignores it while `e2e/tsconfig.json`'s `**/*.ts` still type-checks it; the
+file-level `oxlint-disable no-await-in-loop` moved with the loop that earned it,
+and `intake.spec.ts` no longer needs one.
+
+**What the brief did not know: getting back to a plan is not one screen, and it
+is not the same number of screens twice.** A plan being open is deliberately not
+remembered across a reload (`App.tsx` — a plan is addressable and the list is one
+click away), while the open _intake_ is, in `localStorage`. So the first reload
+lands on the wizard at its checkpoint and needs "← All trips" before the plan
+list; clicking that is what forgets the intake, so the second reload lands on the
+trip list already and there is no such button. The first version of the helper
+clicked it unconditionally and hung for the full timeout on the second reload —
+which is the whole four minutes of the first red run. It now reads which screen
+it is on rather than counting its own calls, because asserting either would be
+asserting the last thing the helper did.
+
+**The plan list had to be scoped.** A plan's title and its intake's title are
+both `intakeTitle` over the same brief, so "Montréal — a road trip for 5 nights"
+matches a button in `Your trips` and a button in `Plans`. The reopen is scoped to
+`ul.plans`, and the title is read off the plan's own `h2` rather than composed
+from the answers — it is made of the shape, the dates and the destination, all
+three of which are tree content.
+
+**The revision count is read from `p.crumb` inside `section.panel.plan`**, not
+from the database and not from the plan list. The whole line is captured before
+the pin and compared after each pin, unpin and reload, so the `· first draft`
+reason is part of the assertion too. There is a second `p.crumb` on the page —
+the `← Back` breadcrumb — which is why it is scoped rather than global.
+
+Traps in the brief that held up exactly as written: the scripted provider needed
+no configuration, the spec names no question and counts none, and no new project
+or `tsconfig` was needed.
+
+**pl-10 re-gated.** Its `unproven (gate)` row for pinning is now marked proven in
+a dated follow-up appended under its Review, and its second `med` finding closed
+with it. The gate table itself is left as written — it was true when it was
+written. Its _other_ `unproven (gate)` row, `describeCost` rendering
+`low === high` as a single figure, is untouched and still unproven.
+
+`tools/planner/docs/03-STATUS.md`: spec count 2 → 3, this row to `done`, and the
+"Pinning is proven at each end and not across the middle" gap rewritten as
+closed. `tools/planner/e2e/README.md` was still the placeholder written before
+pl-13 landed a spec in it, and now lists what is there.
