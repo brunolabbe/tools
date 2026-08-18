@@ -119,7 +119,7 @@ still unwritten.
 | [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2        |
 | [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two            |
 | [pl-16](./work/pl-16-the-plan-run.md)                       | done      | The run over HTTP; its image gate produced pl-17             |
-| [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | ready     | The image's workspace list is kept by hand and unchecked     |
+| [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | done      | Both images' workspace lists are checked against the closure |
 | [pl-18](./work/pl-18-destination-asked-early.md)            | done      | Destination asked third; `core` is position, not need        |
 | [pl-19](./work/pl-19-pin-through-the-browser.md)            | ready     | Pinning is proven at the button and at the write, not across |
 | [pl-20](./work/pl-20-intake-fixture-builders.md)            | ready     | Three hand-written `INSERT` fixtures in one test file        |
@@ -147,6 +147,19 @@ asked for. `api/src/routes/web.ts` now serves it same-origin, and the workflow
 asks the running container for the page as well as for health. That closes
 [pl-2](./work/pl-2-container-image.md)'s "serves the UI" acceptance, which was
 the thing this had falsified.
+
+**The image's workspace list is no longer kept by memory.**
+[pl-17](./work/pl-17-dockerfile-workspace-scan.md) added
+`packages/core/test/image-closure.test.ts`, which walks the workspace graph from
+each tool's `api` manifest and asserts both hand-kept `Dockerfile` lists against
+it — the manifests copied before `npm ci`, and the `package.json` + `dist` pair
+per workspace in the runtime stage — in both directions, plus the rule that makes
+the walk trustworthy: a workspace imported under `src` is declared in that
+package's own `dependencies`. It found nothing to fix, because pl-16 had already
+fixed the planner by hand and the downloader was correct, so its value is
+prospective and it was proved by breaking both Dockerfiles on purpose — see the
+ticket's log for the five mutations. **It does not replace the image gate**: a
+scan over text cannot prove the container boots.
 
 **The wizard's components render in tests as of
 [pl-12](./work/pl-12-render-the-wizard-in-tests.md).** `tools/planner/web/test`

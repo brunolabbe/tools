@@ -85,6 +85,11 @@ COPY --from=build /app/tools/planner/contract/dist tools/planner/contract/dist
 # workspace symlink at all, so nothing is there to copy in the first place —
 # which is the half that actually broke pl-16 and the reason the list above is
 # not merely a cache optimisation.
+#
+# Both lists are now checked against what `api` actually resolves —
+# `packages/core/test/image-closure.test.ts`, in seconds, with no Docker. It
+# does not replace the image gate in `.github/workflows/planner.yml`: a scan
+# over text cannot prove the container boots.
 COPY --from=build /app/tools/planner/intake/package.json tools/planner/intake/
 COPY --from=build /app/tools/planner/intake/dist tools/planner/intake/dist
 COPY --from=build /app/tools/planner/itinerary/package.json tools/planner/itinerary/

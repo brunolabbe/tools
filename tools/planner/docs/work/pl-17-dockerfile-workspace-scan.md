@@ -3,7 +3,7 @@ id: pl-17
 tool: planner
 title: A Dockerfile's workspace list is maintained by memory
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -117,4 +117,84 @@ Traps worth knowing in advance:
 
 ## Log
 
-_Not started._
+### 2026-08-18 — the gate is in, and it found nothing to fix
+
+`packages/core/test/image-closure.test.ts`, beside `spawn-safety.test.ts` and in
+the `core` vitest project. Six tests, no Docker, no build, no network, ~30ms.
+
+#### What it asserts
+
+- **The closure**, walked from `tools/<tool>/api`'s own manifest through
+  `dependencies` — `api` → `agent` → `contract` → `@webtools/core` — with only
+  workspace-scoped members kept.
+- **The build-stage manifest list**, scoped to the lines _before_ `RUN npm ci`.
+  That boundary is the whole point rather than a convenience: the build stage
+  copies `tools/<tool>` wholesale further down, so every manifest is present by
+  the end regardless — but `npm ci` is what creates the workspace symlinks, and
+  it only sees what was copied before it ran. A check over the whole stage would
+  have passed on the exact file that broke pl-16.
+- **The runtime-stage pair** — `package.json` and `dist` — per closure member.
+- **The reverse direction**, per stage: a workspace named in either list that is
+  not in the closure fails, so one that stops being used stops being shipped.
+- **The hygiene rule under it**: every `@webtools/*` / `@<tool>/*` specifier
+  quoted anywhere under a workspace's `src` is in that package's own
+  `dependencies`.
+
+#### What the brief got right, and the one thing it did not anticipate
+
+Every trap it names was real and every one of them was hit. The subpath case is
+live — `@webtools/core/rate-limit` appears in `api/src` and normalises to
+`@webtools/core`. `web` is in both Dockerfiles' lists and in neither closure, so
+without the exemption the reverse direction fails on both tools; it is exempted
+by name, in the type, with the reason beside it.
+
+What the brief did not anticipate: **`dependencies` and not
+`devDependencies`, and the reason is specific rather than stylistic.** The
+runtime stage is built after `npm prune --omit=dev`, so a workspace import
+declared as a dev dependency resolves in the repo, in CI and in the build stage
+and is missing from the image _alone_ — the same failure as pl-16's with one
+fewer place to notice it. `@planner/agent` depends on `@planner/itinerary` this
+way today and legitimately: two test files use it and no production file does,
+which is exactly why the scan reads `src` and not `test`.
+
+#### It found nothing, and that is the honest outcome
+
+Build step 4 says "fix whatever it finds", and it found nothing: pl-16 had
+already fixed the planner by hand, and the downloader was correct. **So the value
+here is entirely prospective**, and the only way to say anything true about a
+gate that passes on arrival is to break the thing on purpose. Five mutations,
+each reverted:
+
+| Mutation                                                         | Result                                                                           |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| drop `itinerary`'s `dist` from the planner's runtime stage       | ✅ red, naming the exact missing line                                            |
+| drop `itinerary`'s manifest from before `npm ci`                 | ✅ red, the pl-16 regression proper                                              |
+| drop `resolvers` from the downloader's Dockerfile                | ✅ red, three lines across both stages                                           |
+| add `tools/planner/e2e` to the build-stage list                  | ✅ red, reverse direction                                                        |
+| delete `@planner/itinerary` from `@planner/api`'s `package.json` | ✅ red: `orchestrator.ts imports @planner/itinerary, undeclared in @planner/api` |
+
+The last one fails **two** tests, not one — with the dependency undeclared the
+closure shrinks, so the Dockerfile's correct `itinerary` lines start reading as
+stale. Both messages are true and the undeclared one names the cause, so this is
+left as it is rather than papered over with a skip; a reader who sees only the
+"ships a workspace the API does not resolve" failure should look above it.
+
+#### What it does not do, kept deliberately
+
+It is a scan, not a Dockerfile parser: lines are whitespace-normalised, filtered
+to `COPY`, and matched as strings. It does not resolve `ARG`s, understand
+`--from` targets beyond the literal `build`, or know a stage graph — it finds
+`RUN npm ci` and `FROM … AS runtime` by regex and asserts both exist, which is
+the one structural assumption and it fails loudly rather than silently if a
+Dockerfile stops holding it.
+
+**The image gate stays.** `.github/workflows/<tool>.yml` still builds, starts and
+curls each container. This catches the commonest failure in seconds; it cannot
+prove the native `better-sqlite3` binary meets its glibc or that `/api/health`
+answers. A pointer to the test is now in both Dockerfiles, beside the hand-kept
+lists, so the next person to add a workspace finds it where they are already
+looking.
+
+#### Green
+
+`npm run check` passes. `npm test` is 1,098 tests across 80 files.

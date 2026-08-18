@@ -94,6 +94,12 @@ RUN if [ "${INSTALL_YTDLP}" = "true" ]; then \
 # fixtures. The manifests are not optional: they are how Node resolves the
 # `@downloader/*` workspace symlinks, and `/api/health` reads the API's version
 # out of its own.
+#
+# This list and the manifest list in the build stage are both checked against
+# what `api` actually resolves — `packages/core/test/image-closure.test.ts`,
+# which walks the workspace graph from `@downloader/api` and fails naming the
+# missing line. It does not replace the image gate: a scan over text cannot
+# prove the container boots.
 COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/package.json ./
 COPY --from=build /app/packages/core/package.json packages/core/
