@@ -195,6 +195,31 @@ answers. A pointer to the test is now in both Dockerfiles, beside the hand-kept
 lists, so the next person to add a workspace finds it where they are already
 looking.
 
+#### The rule is in the root `CLAUDE.md`, which is where it was missing
+
+The Dockerfile pointers help somebody already editing one. They do not help
+somebody about to write their first, and _Adding a tool_ step 7 is exactly where
+that happens. So the rule now sits in the repo-wide Rules beside **never invoke a
+shell** — the precedent this ticket followed, and the only other repo-wide scan —
+naming `image-closure.test.ts` the same way that one names `spawn-safety.test.ts`,
+and step 7 says the scan will tell you what a copied `Dockerfile` brought along
+that your tool does not use.
+
+It is one page and not each tool's, deliberately: the rule is repo-wide, and a
+document that describes two tools is where two tools start to fuse. The
+downloader's docs say nothing about this and should not.
+
+#### One sharp edge, found by writing that down
+
+The scan finds a tool's service **by name**, at `@<tool>/api`. A third tool that
+called it something else got
+`@foo/api is depended on but is not a workspace` — confusing, and wrong in the
+specific way that costs time: that name is the _root_ of the walk, not a
+dependency anybody failed to declare. It now fails saying the convention exists
+and where to teach it, checked by standing up a `tools/faketool/Dockerfile` with
+no package behind it. The remaining throw was re-worded to mean only what it now
+means.
+
 #### Green
 
 `npm run check` passes. `npm test` is 1,098 tests across 80 files.

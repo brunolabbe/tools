@@ -95,6 +95,16 @@ const WORKSPACES = await readWorkspaces();
  * what `declares every workspace it imports` below is for.
  */
 function closureFrom(root: string): string[] {
+  // The root is named by convention — `tools/<tool>/api` is where every tool
+  // here puts its service — and a tool that puts it somewhere else should be
+  // told that, rather than told its own API is a dependency it never declared.
+  if (!WORKSPACES.has(root)) {
+    throw new Error(
+      `${root} is not a workspace: this scan finds a tool's service by name, so a tool whose ` +
+        `API package is called something else needs that convention taught to closureFrom`,
+    );
+  }
+
   const seen = new Set<string>();
   const queue = [root];
   for (let name = queue.pop(); name !== undefined; name = queue.pop()) {
@@ -104,7 +114,9 @@ function closureFrom(root: string): string[] {
   }
   return [...seen].map((name) => {
     const workspace = WORKSPACES.get(name);
-    if (workspace === undefined) throw new Error(`${name} is depended on but is not a workspace`);
+    if (workspace === undefined) {
+      throw new Error(`${name} is depended on by a workspace in this repo but is not one`);
+    }
     return workspace.dir;
   });
 }
