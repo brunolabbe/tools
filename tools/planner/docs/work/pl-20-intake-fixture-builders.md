@@ -83,6 +83,25 @@ Traps worth knowing in advance:
 - `npm run check` and `npm test -- --project planner` pass, with the same number
   of tests as before.
 
+## Review
+
+**Gate: PASS** — 2026-08-18 · `origin/main...HEAD` · code-review at medium
+
+Diff reviewed: `git diff origin/main...HEAD` (one commit, 102fc65), touching `tools/planner/api/test/helpers/intakes.ts`, `tools/planner/api/test/intakes-routes.test.ts`, and the ticket file.
+
+| Done when                                                                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One typed builder in `helpers/intakes.ts` is the only place in the planner's suites that hand-writes `INSERT INTO intakes`/`INSERT INTO answers` | `grep -rn "INSERT INTO (intakes                                                                                                                                                                                                                                                                                                                                                                               | answers)" tools/planner`→ only`api/test/helpers/intakes.ts:129,133`(the builder) plus the two documented exceptions the ticket's Log names:`intakes-store.test.ts:105,108`(malformed-JSON case, can't be typed) and`migrations.test.ts:61`(schema test, no`App`/tree). This line says "asserted by reading the file, not by a scan," so verified by inspection rather than a test, as intended. ✓ |
+| All three call sites use it, and each still asserts what it asserted before                                                                      | `saveStaleIntake`/`saveVersionOneRoadTrip`/`saveVersionTwoRoadTrip` now call `saveIntake` (`intakes-routes.test.ts:288,313,376`); assertions unchanged — `discarded`, `answerRows`, `brief` and `updatedAt` checks at `intakes-routes.test.ts:335-356` (v1↔v2), `393-408` (v2↔v3), `460` (`expect(second.intake.updatedAt).toBe(NOW.toISOString())`, the stale-intake case) all read identically to `main`. ✓ |
+| Answers typed against `@planner/contract`                                                                                                        | `helpers/intakes.ts:123` — `saveIntake(app: App, intake: { id: string; treeVersion: number; answers: Answers })`, `Answers` imported from `@planner/contract`; values built through `answered()` which returns `Answer`. `npm run check` typechecks this under `tsconfig.tests.json` (verbose build log shows `intakes-routes.test.ts` as that project's newest input) — clean. ✓                             |
+| `npm run check` and `npm test -- --project planner` pass, same test count as before                                                              | Ran both: `npm run check` clean (only pre-existing, unrelated `no-await-in-loop` warnings in downloader/agent files); `npm test -- --project planner` → 526 tests, 40 files, matching the ticket Log's claim of the same count as `main`. ✓                                                                                                                                                                   |
+
+- No findings. The `code-review` skill at medium returned `[]` after an explicit line-by-line diff of each old inline `write()` block against the new `saveIntake` call (SQL text, parameter order, JSON payloads byte-identical), plus checks on the `App` type re-export path, `Answers`/`QuestionId` typing of retired ids, and `Object.entries` ordering. Nothing to carry or drop.
+
+Invariants checked: tool-import boundary (only `@planner/contract`/`fastify`, no cross-tool import), contract not edited (only consumed), test registration (`tsconfig.tests.json:124` already references `tools/planner/api`; the helper file is part of that project's build per `tsc --build --verbose`), style (`import type` used correctly, no `any`/`console`, `.ts` relative-import extensions). Invariants skipped as not plausibly touched by a test-fixture-only diff: `AppError`/error-code taxonomy, shell/spawn safety, `redactHeaders`/`redactUrl`, SSRF checks, faked-progress rule, new-dependency-and-Dockerfile rule (no new workspace dependency added).
+
+- NFR: security n/a (test-only fixture code) · performance n/a (test-only) · reliability ✓ (behavior proven identical, assertion-by-assertion, test count unchanged) · maintainability ✓ (exactly what the ticket set out to do — three duplicated SQL blocks now one typed function)
+
 ## Log
 
 **2026-08-18 — done.** `saveIntake` in `api/test/helpers/intakes.ts` takes
@@ -91,6 +110,16 @@ in `intakes-routes.test.ts` are now one call each and keep the comments that say
 what each answer is for, which is the part of them worth reading. `answers` is
 `Answers` from `@planner/contract`, so the values go through `answered()` and a
 change to `Answer` breaks `npm run check` rather than a later assertion.
+
+**What it does not type is the question id.** `QuestionId` is `string`, so
+`Answers` constrains the value and not the key: a change to `Answer` breaks the
+build, but a wrong or mistyped id still writes a row and nothing says so. That is
+deliberate rather than an oversight — `retired.question`, `road-trip.drive-hours`
+and `road-trip.vehicle` are ids the tree no longer has, and a key typed as a union
+of the live ones would make these three fixtures unwritable, for the same reason
+the builder bypasses `db/intakes.ts` at all. So the builder is no help against
+reusing an id for a different question; the tree's own content review is still the
+only thing standing there.
 
 `npm run check` green, `npm test -- --project planner` 526 tests over 40 files —
 the same count as `main`, checked by stashing and re-running rather than by
