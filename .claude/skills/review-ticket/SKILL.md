@@ -66,7 +66,8 @@ opinion, it is two gates and no rule saying which one counts.
 
 ## Steps
 
-These are the reviewing subagent's steps, not the caller's.
+These are the reviewing subagent's steps, not the caller's — except step 8, which
+is the caller's alone.
 
 1. **Read the ticket** — `tools/<tool>/docs/work/<id>-*.md`. Its **Done when**
    lines are the acceptance criteria; its **Build** steps and traps are what the
@@ -144,6 +145,27 @@ These are the reviewing subagent's steps, not the caller's.
 
 7. **Decide the gate by the rule below, not by feel**, and append the section.
 
+8. **Report the gate, then say what would clear it.** This step is the caller's,
+   after the section is appended. A verdict is a record; the repair is work that
+   has not happened — and a report that ends in a list of findings reads exactly
+   like a report of work done. So name both acts. Give the gate, say plainly that
+   **nothing has been fixed**, and then what clearing it would take, per finding
+   or per cluster and concrete enough that the user can say yes to some and no to
+   others. Then offer to do that work now, and wait for the answer. The findings
+   are the author's to accept, argue with or defer: a CONCERNS gate is not a work
+   order, and FAIL is a report rather than a decision to stop.
+
+   A finding the ticket has already settled — a `low` it recorded as a deliberate
+   product decision — is not work to propose. Say that it is settled and move on.
+   That is the `dropped` line's honesty applied to a finding that lives but is
+   not going to be acted on.
+
+   This step exists because a review of pl-5 and pl-17 appended two CONCERNS
+   gates naming seven `med` findings between them, reported the verdicts and
+   stopped there, the last instruction having been carried out. The user had to
+   ask twice — the second time "or you are saying it's already fixed?" — to learn
+   which of the two acts had taken place.
+
 ## Severity and the gate
 
 | Severity | Means                                                                    |
@@ -199,3 +221,8 @@ It does not run the slow gates for you, and it must not report them as run. If a
 acceptance line needs the e2e suite or the image, the honest row is
 `unproven (gate)` and the honest sentence is that the gate is the proof you do not
 have.
+
+It does not fix what it finds unasked. The reviewing subagent fixes nothing at
+all — a model asked to both judge and repair is back on the wrong side of the
+split this skill exists to draw — and the caller proposes the work in step 8
+rather than starting it.
