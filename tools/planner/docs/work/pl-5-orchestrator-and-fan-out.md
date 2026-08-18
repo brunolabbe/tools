@@ -3,7 +3,7 @@ id: pl-5
 tool: planner
 title: The orchestrator and the specialist fan-out
 kind: work-package
-status: in-flight
+status: done
 milestone: P2
 depends_on: [pl-4, pl-15]
 ---
@@ -299,3 +299,39 @@ untrusted input, and the pattern that reads it was one a stranger's reply could
 choose the cost of. The regression test in `agent/test/ask.test.ts` asserts a
 time bound rather than a result, which is the only thing that would fail if the
 `\s*` came back.
+
+### 2026-08-18 — closed here, with step 4 and the `web` half owned by pl-16
+
+The previous entry left this `in-flight` on one open question and named who had
+to answer it: _"until somebody who owns the roadmap decides whether it closes
+here"_. Decided on 2026-08-18 — **it closes here.**
+
+Nothing was built for this entry and nothing needed to be. The two things this
+ticket stopped short of are both done, under the ticket that was split out to
+carry them: [pl-16](./pl-16-the-plan-run.md) answered the contract question
+(`RunStatus` and its transition table, one `RunProgress` payload the agent emits
+and `web` renders, the `RunEvent` envelope `api` stamps a clock onto, the routes
+and the `Run` summary), then built `plan_runs`, the queue, the SSE route and the
+progress view on top of it. Phase 2 is complete as of pl-10.
+
+**Why this is a close-out and not a re-scope.** The alternative was to widen this
+ticket's `Done when` to say "or pl-16 does it", which would leave two files
+claiming the same work and neither able to be read on its own. The split was the
+right call and the format doc recommends it; what was left undone was the
+bookkeeping. So the brief above is unchanged — including its Build steps 4 and the
+`web` half, which this ticket did not do — and this entry is the record that they
+were done elsewhere rather than dropped.
+
+Every `Done when` line on this ticket was already met by the 2026-08-16 entry:
+`rosterFor` is table-driven and tested per shape, every route candidate is a
+`between`, the budget path degrades and records it, nothing here packs a day, and
+`placeable.test.ts` composes the real fan-out for all six briefs. What that entry
+could not claim — that a run streams per-specialist progress over a wire — is
+pl-16's, and it holds there.
+
+The one finding this ticket raised and left open was resolved elsewhere too:
+**`MAX_SPECIALISTS = 5` drops the budget specialist on every six-specialist
+shape**, reviewed as content in pl-16 and **kept**, because the cap has to stay a
+constraint something actually reaches, the composer sums the cost bands in code
+regardless, and the drop is a `specialist-dropped-for-budget` gap on the stored
+revision rather than a silence.

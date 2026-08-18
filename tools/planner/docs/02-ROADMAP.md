@@ -98,7 +98,7 @@ milestone and an exit; the fork gains its other half in Phase 2.
 
 The three pieces that turn a brief into a document, in the order the code forces:
 
-1. **The contract for a plan** — `Candidate`, `Plan`, `PlanRevision`, `PlanDay`,
+1. **The contract for a plan** ✅ — `Candidate`, `Plan`, `PlanRevision`, `PlanDay`,
    `PlanItem`, provenance, `pinned`. Contract-first because four packages depend
    on it. → [pl-4](./work/pl-4-plan-document-contract.md), amended by
    [pl-15](./work/pl-15-candidate-legs.md), which made a candidate either `at` a
@@ -106,7 +106,7 @@ The three pieces that turn a brief into a document, in the order the code forces
 2. **The orchestrator and the fan-out** ✅ — roster as a pure function of the
    brief, specialists in parallel, each returning candidates and never a
    schedule. → [pl-5](./work/pl-5-orchestrator-and-fan-out.md)
-3. **The run that carries it** — the same fan-out as a job with real progress:
+3. **The run that carries it** ✅ — the same fan-out as a job with real progress:
    a table, a queue, an SSE stream, a stored plan, and a page that shows seven
    specialists working. Split out of pl-5, which stopped at the contract seam.
    → [pl-16](./work/pl-16-the-plan-run.md)
@@ -128,9 +128,10 @@ is what found the appetite bug pl-5 then had to fix.
 
 **The list is five pieces rather than four because pl-5 was two.** The fan-out is
 a library and the run is a service, they fail differently, and the second needs a
-contract decision the first did not — so 2 landed and 3 has not started. Nothing
-about the phase changed; the seam was always there and pl-5's brief did not name
-it.
+contract decision the first did not. Nothing about the phase changed; the seam was
+always there and pl-5's brief did not name it. Both landed — 3 under pl-16, which
+answered the contract question first — and pl-5 was closed on 2026-08-18 with its
+brief left as written and the record of where the rest went in its log.
 
 All of Phase 2 runs against the scripted provider and no grounding. That is
 deliberate: it makes the first plan a claim about the machinery — roster,
@@ -197,20 +198,16 @@ Short, and each one is a real decision someone has to make rather than a gap:
   before a caller needs it was deferred once already. The fan-out's progress is
   per-specialist, which may be enough — pl-5 built exactly that and nothing has
   yet asked for finer, because there is no page watching a run to ask.
-- **What the contract carries for a run.** pl-5 stopped at this rather than
-  answering it: a `RunStatus` and its transition table, a `RunEvent` union, three
-  routes and a `Run` summary all want a home, and `@planner/agent` already has a
-  tested `FanOutProgress` carrying the same information. The choice that actually
-  matters is whether that type moves into the contract or stays and gets wrapped
-  — **not both**, because two names for one event is how a frame gains a field on
-  one side only. It is [pl-16](./work/pl-16-the-plan-run.md)'s first step.
-- **Whether `MAX_SPECIALISTS = 5` is the right number now that there is a
-  roster.** The default predates one. Applied to the roster pl-5 built it drops
-  the budget specialist on all three shapes that roster six — backcountry,
-  motorised touring and multi-city — every time. That may be exactly right, since
-  the composer sums the cost bands in code whether or not a budget specialist
-  ran; it is a number to argue with as content, the way `limits.ts` is, rather
-  than a branch to add somewhere.
+  Two entries that stood here are answered rather than open, both by
+  [pl-16](./work/pl-16-the-plan-run.md), and both are recorded in
+  [03-STATUS.md](./03-STATUS.md) where the code is. **What the contract carries for
+  a run**: `RunStatus` and its transition table, one `RunProgress` payload the agent
+  emits and `web` renders, and a `RunEvent` envelope `api` stamps a clock onto —
+  one name for one event, which was the half that mattered. **Whether
+  `MAX_SPECIALISTS = 5` is right now that there is a roster**: reviewed as content
+  and **kept**, because a cap has to stay a constraint something reaches, the
+  composer sums the cost bands whether or not a budget specialist ran, and the drop
+  is a `specialist-dropped-for-budget` gap rather than a silence.
 
 **Whether Phase 2's composer can pack under travel time at all** was answered on
 2026-08-16, and the answer is **no — pack without it and name the gap.** The
