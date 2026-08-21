@@ -220,3 +220,11 @@ No `console` — use the logger. Comment _why_, not _what_.
    `.release-please-manifest.json`. Nothing in `release.yml` changes — it builds
    whatever was released. Add the image gate in step 6 _before_ the first
    release, so that release is not the first time the image is built.
+
+   A `Dockerfile` lists its workspaces by hand and twice — the manifests before
+   `npm ci`, and a `package.json` + `dist` pair per workspace in the runtime
+   stage — and `packages/core/test/image-workspaces.test.ts` holds both lists to
+   what the API actually resolves, so a new tool's image is covered the moment
+   the file exists. Miss a runtime pair and the container boots and throws on
+   first use; miss a build-stage manifest and `npm ci` never made the symlink.
+   The scan proves the list, never the image: keep the workflow job.
