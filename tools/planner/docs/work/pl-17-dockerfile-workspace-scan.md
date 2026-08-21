@@ -3,7 +3,7 @@ id: pl-17
 tool: planner
 title: A Dockerfile's workspace list is maintained by memory
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -117,4 +117,85 @@ Traps worth knowing in advance:
 
 ## Log
 
-_Not started._
+**2026-08-21 — done.** `packages/core/test/image-workspaces.test.ts`, six tests,
+beside `spawn-safety.test.ts` and in the `core` vitest project. No Docker, no
+build, no network; it runs in about 20 ms.
+
+**Both Dockerfiles already passed, and the import hygiene did too.** That is the
+finding worth recording, because the brief's step 4 — "fix whatever it finds" —
+had nothing to do. pl-16 fixed its own regression when it hit it, so this landed
+as a pure gate rather than as a gate plus a repair. It means nothing here is
+proven by having gone red on real code, which is why every assertion was
+mutation-tested instead; the six mutations are listed below.
+
+### What it checks
+
+Three tests per image, discovered by globbing `tools/*/Dockerfile`:
+
+- **The closure.** Start at the workspace the image's `CMD` runs — read off the
+  `CMD` line rather than assumed to be `api`, so a tool that names it something
+  else is still checked — and walk `dependencies` through the workspace graph.
+  `devDependencies` are deliberately not followed: the build stage ends with
+  `npm prune --omit=dev`, so a dev dependency is gone before the runtime stage
+  copies anything. `@planner/agent` depending on `@planner/itinerary` for one
+  test is the live case, and it must not pull `itinerary` into the closure by
+  that route — it is in anyway, via `api`.
+- **Three lines per member**, since the two lists fail differently: a build-stage
+  `COPY <dir>/package.json`, and a runtime `COPY --from=build /app/<dir>/package.json`
+  and `/app/<dir>/dist`.
+- **The reverse**, so a workspace that stops being used stops being shipped.
+
+Then three over the source, which is what makes the closure trustworthy rather
+than circular — it is computed from `package.json` files, and pl-16's actual bug
+was `@planner/api` importing two workspaces it declared neither of:
+
+- every workspace specifier under any `src` is declared in that package's own
+  manifest, and
+- a specifier that **survives compilation** is in `dependencies` specifically. An
+  `import type` is erased and never resolved, so it may sit in `devDependencies`;
+  anything else has to be in the image. Nothing in the repo uses that allowance
+  today — it is there because forcing a type-only import into `dependencies`
+  would put a package in the image to satisfy a lint rule, which is the wrong
+  direction.
+
+### Mutation-tested, since nothing was broken to begin with
+
+Each of these was applied, run, and reverted. All six turn the suite red with a
+message naming the file and the missing line:
+
+1. drop the runtime `itinerary/dist` line from the planner → `runtime stage does not COPY tools/planner/itinerary/dist`
+2. drop the build-stage `itinerary/package.json` line → `build stage does not COPY …`
+3. drop `engine` from the downloader entirely → all three lines reported at once
+4. copy `tools/downloader/engine/dist` into the planner's image → reported as stale
+5. `import type { PlanDay } from "@planner/contract"` in `downloader/engine/src` → undeclared
+6. a **value** import of `@planner/itinerary` in `agent/src`, where it is a devDependency → not in `dependencies`
+
+6 is the pl-16 shape exactly: it resolves in the monorepo, typechecks, passes
+every test, and is pruned out of the image.
+
+### Two things the brief did not anticipate
+
+**A `COPY` scan needs a trailing slash, and that is not a detail.** Both files
+carry a whole-tool source copy — `COPY tools/planner tools/planner` — and a
+substring match on `tools/planner/api` would have read that one line as shipping
+every workspace under it, so the reverse test would have passed no matter what
+the per-workspace lines said. Matching `<dir>/` is what separates a directory
+copy from a workspace copy.
+
+**`e2e` is not a workspace and the first attempt at mutation 4 silently passed.**
+`tools/planner/e2e` has a `tsconfig.json` and no `package.json`, so adding a
+`COPY` line for it was invisible to a scan keyed on manifests — which is correct
+(it is not resolvable and cannot be shipped) but was not obvious, and a weaker
+version of this test would have been "verified" by a mutation that could never
+fail. The real stale case is a cross-tool copy, which is mutation 4 above.
+
+### What it does not do
+
+It proves the list is complete. It cannot prove the image boots, that the native
+`better-sqlite3` binary meets its glibc, or that `/api/health` answers — the
+image job in `.github/workflows/<tool>.yml` still owns all three and was not
+touched. Both Dockerfiles gained a comment pointing at the test, because the
+paragraph in the planner's runtime stage explaining that two edits are needed
+now reads as if nothing checks that, and something does.
+
+1,100 tests pass across 80 files. `npm run check` is green.
