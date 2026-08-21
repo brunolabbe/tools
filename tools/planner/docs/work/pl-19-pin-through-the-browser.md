@@ -3,7 +3,7 @@ id: pl-19
 tool: planner
 title: Prove pinning through the browser, not at a mocked seam
 kind: work-package
-status: ready
+status: done
 milestone: P2
 depends_on: [pl-10]
 ---
@@ -97,4 +97,85 @@ Traps worth knowing in advance:
 
 ## Log
 
-_Not started._
+**2026-08-21 — done.** `e2e/pin.spec.ts`, two specs, in the suite the planner
+workflow already runs. Four specs in the tool now, over two paths.
+
+### The walk had to be extracted, not copied
+
+The brief said "in the same style" and "borrow that approach" for getting to the
+checkpoint. Borrowing it by copy would have been ~120 lines of `fillField` and
+`answerThroughCore` duplicated, and **the duplicated part is the fragile part**:
+the rule those helpers encode is that the tree is content and a spec must never
+name a question, so a second copy is a second place to get that wrong — and the
+one nobody reads before editing the tree. So the walk moved to
+`e2e/intake-walk.ts` and both specs import it. `intake.spec.ts` lost its helpers
+and kept its two tests unchanged; nothing about the walk itself changed.
+
+A `.ts` and not a `.spec.ts`, so `testMatch: "**/*.spec.ts"` does not try to run
+it as a suite with no tests in it. No tsconfig change: `e2e/tsconfig.json`
+already includes `**/*.ts`.
+
+### What the specs do
+
+Draft a plan from a fresh intake, read it, pin the first item, **reload**, come
+back to it from the plan list, and find it still pinned. Then the same for
+unpinning, which the brief asked for and which is worth its extra step — the
+column is written through the one route either way, and a route that only ever
+wrote `1` passes everything else.
+
+Three things the brief did not anticipate:
+
+**A reload does not land back on the plan.** `App.tsx` remembers which _intake_
+was open in `localStorage` and deliberately does not remember which plan is being
+read — pl-10 stops at the list and the document, and restoring one would be
+guessing at what someone wanted to see. So the reload comes back to the _wizard_
+at its checkpoint, and getting to the plan means the crumb out to the list and
+then the plan by its title. That is a truer test than the brief's wording
+implies: it goes through `GET /api/plans` and `GET /api/plans/:id` as a returning
+user would, rather than re-rendering a component with the same props.
+
+**The plan's title is read, never named.** It is derived from the brief, so
+writing it into the spec would be the tree's content copied in — the mistake
+`intake-walk.ts` exists to prevent. Same for the item: it is found by its own
+heading rather than by index, so the assertions after the reload are about the
+same item and not merely about the first one on the page.
+
+**The version line carries the reason too.** `p.crumb` renders
+`Version 1 of 1 · The first draft.`, and the spec captures the whole string
+before the pin and asserts the whole string after. Stronger than matching
+"Version 1 of 1", and it is what caught mutation 3 below with a legible message.
+
+An assertion the brief did not ask for and that is cheap here: **only the item
+that was pinned is pinned.** A write that set the column on every row of the
+revision passes every other assertion in the file.
+
+### Mutation-tested, because nothing was broken to begin with
+
+1. **Reads never report a pin** (`row.pinned === 1` → `false`) — both specs fail
+   after the reload; both intake specs still pass.
+2. **A pin that only reaches React state** — `pinItem` in `web/src/api/plan.ts`
+   re-fetches the plan and returns it with the item flipped locally, never
+   calling the route. **This is the one that matters.** Every pre-reload
+   assertion passes — the button flips, the label says "Pinned" — and the failure
+   lands on the post-reload line. `web/test/plan-view.test.tsx` passes this
+   mutation unchanged, because the mock _is_ the client module. That is exactly
+   the seam pl-10's gate described, demonstrated rather than argued.
+3. **A pin that appends a revision** — `pinItem` in the orchestrator appends a
+   real revision through `appendRevision` + `insertRevision`. Fails on
+   `Expected: "Version 1 of 1 · The first draft." Received: "Version 2 of 2 · pinned"`.
+
+The first attempt at 3 reused the latest revision's day and item ids and failed
+with a 500 from the `UNIQUE` constraint — a red suite for the wrong reason, and
+not a proof that the version line does anything. Worth recording: a mutation that
+fails somewhere other than the assertion under test proves nothing about it.
+
+### What is not here
+
+No database access from the spec, as the brief required — "no revision was
+appended" is read off the page's own version line. It runs only in
+`.github/workflows/planner.yml`, not in `npm test`; that is unchanged and is why
+pl-10's row said `unproven (gate)` rather than `unproven`, and it stays true of
+this proof too.
+
+`npm run e2e:planner` passes, 4 specs in 13 s. `npm run check` green, 1,092 unit
+tests pass across 79 files.
