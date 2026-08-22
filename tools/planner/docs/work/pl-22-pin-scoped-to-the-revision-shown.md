@@ -95,4 +95,57 @@ Traps worth knowing in advance:
 
 ## Log
 
-_Not started._
+**2026-08-22 — done.** `updateItemPin` now scopes its `UPDATE` to the plan's
+latest revision, in the same statement, and the two new tests are in
+`api/test/plan-view.test.ts` beside the existing pin ones. Nothing outside `api`
+was touched.
+
+**Step 1, decided: refuse it, with `ITEM_NOT_FOUND`** — the brief's own
+recommendation, taken as written. Nothing argued against it. The alternative
+needs an answer to "what does a pin on a day that no longer exists pin", and
+that answer belongs with the re-plan that first makes the question askable, not
+with a repair to a write that currently reports success and does nothing. The
+copy on `ITEM_NOT_FOUND` already says to reload to see the current draft, which
+is the correct advice for a reader looking at a superseded revision, so a stale
+id and an id that never existed now arrive at the same place and are
+indistinguishable at the caller — the test asserts equal status _and_ equal
+message, not merely equal code.
+
+**The brief got one thing wrong, and it is the trap.** There is no
+`plans.latest_revision` column to join against — the `plans` table is
+`id · title · brief_json · created_at · updated_at` and nothing else
+(`api/src/db/schema.ts`, migration 2, never altered since). `latest_revision` is
+an _alias_ for `COALESCE(MAX(plan_revisions.revision), 0)` inside `selectPlans`,
+which is where the `PlanListRow` field of that name comes from. So the scope is a
+correlated `MAX` over the plan's own revisions:
+
+```sql
+AND plan_revisions.revision = (
+  SELECT MAX(sibling.revision) FROM plan_revisions AS sibling
+  WHERE sibling.plan_id = plan_revisions.plan_id
+)
+```
+
+Correlated rather than a second bound `?` so the plan id is still passed once,
+and it is the read `plan_revisions_plan (plan_id, revision DESC)` was indexed
+for. The spirit of the trap holds and was followed: the write never reads the
+document to find the number, and there is no statement between the decision and
+the update.
+
+**Making a second revision in a test costs a helper**, because re-plan is Phase
+4 and no route appends one. `supersedeDraft` does what the orchestrator's
+`persist` does — `appendRevision` from the contract for the number and the
+parent, `insertRevision` for the rows — and copies the superseded draft item for
+item with fresh day and item ids and the same candidate ids, which the
+`plan_items.candidate_id` foreign key requires. Delete it when a re-plan route
+exists and the test can use that instead.
+
+**Confirmed the test fails without the fix**, by reverting the `AND` and running
+the file: the refusal test fails 200-vs-404. The companion test (pinning on the
+latest revision, with an older one present) passes either way by design — it is
+the guard against over-scoping, not a second reproduction.
+
+Gates: `npm run check` and `npm test -- --project planner` both pass (528 tests,
+40 files). Neither runs the planner's e2e suite or the container build, and
+neither needed to — the change is one SQL statement inside `api`, no route, no
+contract, no bundle and no image content moved.

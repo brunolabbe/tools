@@ -10,8 +10,10 @@
  * HTTP, from the database**, never from the `compose` call that made it.
  */
 
+import { randomUUID } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import {
+  appendRevision,
   latestRevision,
   planUrl,
   planItemPinUrl,
@@ -20,11 +22,14 @@ import {
   type ErrorResponse,
   type PlanItem,
   type PlanListResponse,
+  type PlanRevision,
   type PlanView,
 } from "@planner/contract";
+import { insertRevision, selectPlan } from "../src/db/plans.ts";
 import {
   createRunHarness,
   intakeReadyToDraft,
+  NOW,
   runToCompletion,
   startRunOver,
   type RunHarness,
@@ -50,6 +55,47 @@ async function draftedPlan(harness: RunHarness): Promise<string> {
   const finished = await runToCompletion(harness.app, run.id);
   expect(finished.status).toBe("done");
   return run.planId;
+}
+
+/**
+ * Append a second revision, so the first one is superseded.
+ *
+ * Re-plan is Phase 4 and no route appends a revision yet, so this does what the
+ * orchestrator's `persist` does — `appendRevision` for the number and the
+ * parent, `insertRevision` for the rows — and copies the draft it supersedes
+ * item for item with fresh ids and the same candidates. What the copy contains
+ * does not matter; that the older revision's item ids stop being the ones
+ * anybody reads is the whole point.
+ */
+function supersedeDraft(harness: RunHarness, planId: string): PlanRevision {
+  const plan = selectPlan(harness.app.context.db, planId);
+  if (plan === undefined) throw new Error(`no plan ${planId}`);
+  const previous = latestRevision(plan);
+  if (previous === null) throw new Error("the plan has no revision to supersede");
+
+  const appended = appendRevision(plan, {
+    id: randomUUID(),
+    reason: "A second draft, so the first is no longer the one being read.",
+    createdAt: NOW.toISOString(),
+    gaps: previous.gaps,
+    days: previous.days.map((day) => ({
+      ...day,
+      id: randomUUID(),
+      items: day.items.map((item) => ({ ...item, id: randomUUID(), pinned: false })),
+    })),
+  });
+
+  const next = latestRevision(appended);
+  if (next === null) throw new Error("the appended revision did not appear");
+  insertRevision(harness.app.context.db, next);
+  return previous;
+}
+
+/** One revision of the plan as it reads back over HTTP, by id. */
+function revisionById(view: PlanView, id: string): PlanRevision {
+  const revision = view.plan.revisions.find((each) => each.id === id);
+  if (revision === undefined) throw new Error(`the plan has no revision ${id}`);
+  return revision;
 }
 
 describe("reading a plan", () => {
@@ -245,6 +291,80 @@ describe("pinning", () => {
       // The plan is right there — saying it could not be found would be a lie,
       // and it would send the reader to the list instead of to a reload.
       expect(response.json<ErrorResponse>().error.code).toBe("ITEM_NOT_FOUND");
+    } finally {
+      await harness.close();
+    }
+  });
+
+  /**
+   * pl-22: a pin lands on the revision the reader is looking at, or nowhere.
+   *
+   * A pin is only ever read back off the latest revision, so one written to a
+   * superseded revision is a 200 that changes nothing on screen — the failure
+   * the _never fake progress_ rule is about. It is refused instead, and refused
+   * with the same code and body as an item id that never existed, because
+   * "reload the plan" is the same advice.
+   */
+  test("an item on a superseded revision is refused exactly like a missing one", async () => {
+    const harness = await createRunHarness();
+    try {
+      const planId = await draftedPlan(harness);
+      const stale = itemsOf(await readView(harness, planId))[0];
+      if (stale === undefined) throw new Error("the draft placed nothing");
+
+      const superseded = supersedeDraft(harness, planId);
+      expect(superseded.days.some((day) => day.items.some((each) => each.id === stale.id))).toBe(
+        true,
+      );
+
+      const response = await harness.app.server.inject({
+        method: "POST",
+        url: planItemPinUrl(planId, stale.id),
+        payload: { pinned: true },
+      });
+      expect(response.statusCode).toBe(404);
+      expect(response.json<ErrorResponse>().error.code).toBe("ITEM_NOT_FOUND");
+
+      // Indistinguishable at the caller: a stale id and an id that names
+      // nothing at all answer with the same status and the same message.
+      const missing = await harness.app.server.inject({
+        method: "POST",
+        url: planItemPinUrl(planId, "no-such-item"),
+        payload: { pinned: true },
+      });
+      expect(missing.statusCode).toBe(response.statusCode);
+      expect(missing.json<ErrorResponse>().error.message).toBe(
+        response.json<ErrorResponse>().error.message,
+      );
+
+      // Refused, not merely reported as refused: the old row is untouched.
+      const after = await readView(harness, planId);
+      const items = revisionItems(revisionById(after, superseded.id));
+      expect(items.find((each) => each.id === stale.id)?.pinned).toBe(false);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test("an item on the latest revision still pins once an older one exists", async () => {
+    const harness = await createRunHarness();
+    try {
+      const planId = await draftedPlan(harness);
+      supersedeDraft(harness, planId);
+
+      const item = itemsOf(await readView(harness, planId))[0];
+      if (item === undefined) throw new Error("the second draft placed nothing");
+
+      const response = await harness.app.server.inject({
+        method: "POST",
+        url: planItemPinUrl(planId, item.id),
+        payload: { pinned: true },
+      });
+      expect(response.statusCode).toBe(200);
+
+      const after = await readView(harness, planId);
+      expect(after.plan.latestRevision).toBe(2);
+      expect(itemsOf(after).find((each) => each.id === item.id)?.pinned).toBe(true);
     } finally {
       await harness.close();
     }
