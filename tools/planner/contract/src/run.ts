@@ -54,6 +54,12 @@ export const RUN_STATUSES = [
   "queued",
   /** The specialists are working. Almost all wall-clock time goes here. */
   "fanning-out",
+  /**
+   * What the specialists proposed is being measured against something outside
+   * the model. Skipped entirely where there is nothing to measure — see the
+   * note on `RUN_TRANSITIONS`.
+   */
+  "grounding",
   /** Every specialist has answered; the composer is packing days. */
   "composing",
   /** The critic is reading the draft. See the note on `RUN_TRANSITIONS`. */
@@ -83,10 +89,21 @@ export type RunStatus = (typeof RUN_STATUSES)[number];
  * So the state is kept — it is the architecture's, and a critic pass with its own
  * rounds and its own cost is a thing this tool will want to show — and the edge
  * that skips it is legal so that nothing has to lie in the meantime.
+ *
+ * **`fanning-out → composing` is legal without passing through `grounding`**,
+ * and that is the paragraph above applied a second time rather than a new
+ * argument. A run configured with a grounding provider that knows nothing, or
+ * one whose fan-out proposed no leg to measure, does no grounding at all;
+ * emitting a state it spent no time in, to make a diagram come true, is the
+ * repo's _never fake progress_ rule broken for decoration. The state is kept for
+ * the same reason `reviewing` is — grounding has its own cost and its own count,
+ * and this tool will want to show both — and the edge past it is legal so that
+ * nothing has to lie in the meantime.
  */
 export const RUN_TRANSITIONS: TransitionTable<RunStatus> = {
   queued: ["fanning-out", "failed", "canceled"],
-  "fanning-out": ["composing", "failed", "canceled"],
+  "fanning-out": ["grounding", "composing", "failed", "canceled"],
+  grounding: ["composing", "failed", "canceled"],
   composing: ["reviewing", "done", "failed", "canceled"],
   reviewing: ["done", "failed", "canceled"],
   done: [],
@@ -115,6 +132,13 @@ export function canRunTransition(from: RunStatus, to: RunStatus): boolean {
  * inventing one would be _never fake progress_ broken in the one place it is
  * easiest to break.
  *
+ * **A grounding frame's total may be `null`**, which is the same rule read the
+ * other way rather than an exception to it. The pass decides how many lookups it
+ * will make before the first one goes out — that is what lets it count at all,
+ * and it is what `MAX_GROUNDING_CALLS` is checked against — but a backend that
+ * discovers work as it goes has no honest total, and §7's answer there is `null`
+ * and an indeterminate bar, never a number that moves while you watch it.
+ *
  * This was `FanOutProgress` in `@planner/agent` until pl-16. It moved rather
  * than being mirrored: the agent still emits it, `api` still forwards it and
  * `web` now renders it, and one type is what keeps a field from being added to
@@ -136,6 +160,13 @@ export type RunProgress =
       code: ErrorCode;
       done: number;
       total: number;
+    }
+  | {
+      type: "grounding";
+      /** Lookups answered, whether or not the backend knew the answer. */
+      done: number;
+      /** Lookups this pass decided to make, or `null` where that is not knowable. */
+      total: number | null;
     };
 
 const specialistSchema = z.enum(SPECIALISTS);
@@ -165,6 +196,11 @@ export const runProgressSchema = z.discriminatedUnion("type", [
     code: z.enum(ERROR_CODES),
     done: z.number().int().min(0),
     total: z.number().int().min(0),
+  }),
+  z.object({
+    type: z.literal("grounding"),
+    done: z.number().int().min(0),
+    total: z.number().int().min(0).nullable(),
   }),
 ]) satisfies z.ZodType<RunProgress>;
 
@@ -247,8 +283,9 @@ export type RunEvent =
    *
    * A client that attached after the roster was decided would otherwise be
    * staring at `queued` until the next specialist finished, and there is no
-   * honest `RunProgress` to replay for it: every variant but `roster` names a
-   * specialist, and inventing one to carry a count would be a fabricated frame.
+   * honest `RunProgress` to replay for it: the specialist variants each name one,
+   * and inventing a specialist to carry a count would be a fabricated frame,
+   * while `roster` and `grounding` describe a moment that has already passed.
    * The `Run` already carries the count, so it is sent as itself.
    */
   | { type: "snapshot"; runId: string; run: Run; at: string }

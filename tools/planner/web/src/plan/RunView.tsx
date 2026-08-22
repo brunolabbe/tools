@@ -41,6 +41,7 @@ interface Progress {
 const LABELS: Record<Run["status"], string> = {
   queued: "Waiting for a slot",
   "fanning-out": "Asking the specialists",
+  grounding: "Checking the details",
   composing: "Packing the days",
   reviewing: "Checking the draft",
   done: "Done",
@@ -61,6 +62,25 @@ const SPECIALISTS: Record<string, string> = {
 
 function name(specialist: string): string {
   return SPECIALISTS[specialist] ?? specialist;
+}
+
+/**
+ * The line under the bar.
+ *
+ * The counts change meaning with the status — specialists while the fan-out
+ * runs, lookups once grounding starts — so the noun has to change with them.
+ * One sentence for both would be wrong for one of them, and it is the header
+ * above that would contradict it.
+ */
+function progressLine(progress: Progress): string {
+  if (progress.status === "grounding") {
+    return progress.total === null
+      ? "Checking what the specialists proposed…"
+      : `${String(progress.done)} of ${String(progress.total)} details checked.`;
+  }
+  return progress.total === null
+    ? "Working out which specialists this trip needs…"
+    : `${String(progress.done)} of ${String(progress.total)} specialists done.`;
 }
 
 function reduce(current: Progress, event: RunEvent): Progress {
@@ -89,6 +109,18 @@ function reduce(current: Progress, event: RunEvent): Progress {
           return { ...current, done: event.progress.done, total: event.progress.total };
         case "specialist-failed":
           return { ...current, done: event.progress.done, total: event.progress.total };
+        case "grounding":
+          // The counts change meaning when the status does: specialists while
+          // the fan-out runs, lookups from here. The label above the bar
+          // changes with them, so the number under it stays true. `running` is
+          // emptied because no specialist is being asked any more — leaving the
+          // last roster on screen would say otherwise.
+          return {
+            ...current,
+            done: event.progress.done,
+            total: event.progress.total,
+            running: [],
+          };
       }
       return current;
     case "done":
@@ -178,11 +210,7 @@ export function RunView({
             className="run-progress"
             {...(progress.total === null ? {} : { value: progress.done, max: progress.total })}
           />
-          <p aria-live="polite">
-            {progress.total === null
-              ? "Working out which specialists this trip needs…"
-              : `${String(progress.done)} of ${String(progress.total)} specialists done.`}
-          </p>
+          <p aria-live="polite">{progressLine(progress)}</p>
           {progress.running.length > 0 && (
             <p className="muted">Looking at {progress.running.join(", ")}.</p>
           )}

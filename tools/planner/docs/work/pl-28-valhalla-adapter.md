@@ -77,27 +77,35 @@ second seam, and `createGroundingProvider` stays the only file naming either.
    negotiable here and the reason is sharper than usual: a hand-written fixture
    for a routing engine is a fixture that agrees with your parser by
    construction.
-4. **Failure maps to core codes, and never to a thrown run.** Unreachable is
+4. **Index anything keyed by a model-produced string with a `Map`, and hand
+   back copies, not internals.** Both are pl-24 review findings and both are
+   about a lookup table, which this adapter will have more of than the fixture
+   did — a place-id cache, a response index, whatever `/sources_to_targets` gets
+   keyed by. A plain object answers for `constructor`, `__proto__` and
+   `toString`; and `Object.freeze` is shallow, so returning a table's own entry
+   lets a caller that adjusts coordinates in place corrupt it for the rest of
+   the process. pl-24's log has the worked example of each.
+5. **Failure maps to core codes, and never to a thrown run.** Unreachable is
    `UNREACHABLE`, a slow instance is `TIMEOUT`, both from `@webtools/core`, both
    already retryable there. An unroutable pair — an island, a seasonal road
    closed in the direction asked — is a **`null` cell, not an error**: the
    backend answered, and the answer is that there is no route. pl-27 step 4 is
    what happens next, and it is a plan with a named gap rather than a failure.
-5. **A timeout on every request**, and it is short. A run holds a queue slot
+6. **A timeout on every request**, and it is short. A run holds a queue slot
    while it grounds, `MAX_CONCURRENT_RUNS` is 2, and an instance rebuilding its
    tiles will hang rather than refuse.
-6. **This endpoint does not go through the SSRF guard**, and
+7. **This endpoint does not go through the SSRF guard**, and
    [pl-26](./pl-26-lift-the-ssrf-guard.md) explains why at length: it is an
    address this deployment wrote down, not one a stranger handed us. Do not
    reach for `allowPrivateAddresses` to make a guarded fetch work against a LAN
    address — that switch disables the check for everything.
-7. **Ops, written down where an operator will find it** — `docs/02-DEPLOYMENT.md`
+8. **Ops, written down where an operator will find it** — `docs/02-DEPLOYMENT.md`
    and `compose.prod.yaml`: which extract, how tiles are built and how long it
    takes, roughly what the tiles cost on disk, and what re-running the build for
    fresher OSM data involves. This is the half of a self-hosted decision that
    gets skipped and then has to be rediscovered a year later by whoever notices
    the roads are out of date.
-8. **`/api/health` names the provider and never the endpoint.** pl-24 step 7
+9. **`/api/health` names the provider and never the endpoint.** pl-24 step 7
    already says so; it matters more here, because now there is something behind
    it worth not advertising.
 
