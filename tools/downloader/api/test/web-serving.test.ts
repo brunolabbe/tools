@@ -86,7 +86,7 @@ describe("with WEB_DIR set", () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toMatchObject({ error: { code: "JOB_NOT_FOUND" } });
+    expect(response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
   });
 
   test("a fetch for JSON gets the error too, whatever the path", async () => {
@@ -98,7 +98,7 @@ describe("with WEB_DIR set", () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toMatchObject({ error: { code: "JOB_NOT_FOUND" } });
+    expect(response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
   });
 
   test("the API still answers on its own paths", async () => {
@@ -137,7 +137,7 @@ describe("without WEB_DIR", () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toMatchObject({ error: { code: "JOB_NOT_FOUND" } });
+    expect(response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
   });
 
   test("a WEB_DIR with no index.html is refused at boot rather than 404ing per request", async () => {

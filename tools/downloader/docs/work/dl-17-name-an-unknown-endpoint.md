@@ -3,7 +3,7 @@ id: dl-17
 tool: downloader
 title: Answer an unknown endpoint with NOT_FOUND, not JOB_NOT_FOUND
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -65,4 +65,31 @@ Only the unknown-route call site is wrong.
 
 ## Log
 
-_Not started._
+**2026-08-22 — done.** `registerNotFoundHandler` in `api/src/server.ts` now
+raises `new AppError("NOT_FOUND", undefined, { details: { path: ... } })`,
+dropping the `"No such endpoint."` override so the catalog's own message is
+used — matching the `undefined`-message pattern already used elsewhere in this
+file (`dispatcher.ts`, `ssrf.ts`, `routes/probe.ts`). `JOB_NOT_FOUND` is
+untouched everywhere else: `JobStore.get`, the job/job-events routes, and their
+tests all still mean "no such job" and still say so.
+
+Both prerequisites named in the ticket were already in place from pl-11 — the
+`NOT_FOUND` code, its `http-errors.ts` mapping, and its `error-presentation.ts`
+copy — so this ticket was only the call site and its tests. One thing the brief
+undersold: it named "`api/test/` has an unknown-path test asserting
+`JOB_NOT_FOUND`" as singular, but — same as pl-11 found for the planner's
+`web-serving.test.ts` equivalent — there were three, all in
+`tools/downloader/api/test/web-serving.test.ts` (an unknown `/api` path with an
+HTML `Accept`, the same with a JSON `Accept`, and an unknown path with no
+`WEB_DIR` set). All three now assert `NOT_FOUND`. `routes.test.ts`'s "an
+unknown job id" cases and `job-store.test.ts`'s lookup-miss case are genuine
+`JOB_NOT_FOUND` and were left alone, as were `web/test/mock-api.test.ts`'s
+`notReachableInTheMock` list (already carrying `NOT_FOUND`, per pl-11).
+
+Also updated the stale comment in `api/src/http-errors.ts` that pointed at this
+ticket as still-open ("Nothing raises it here yet ... which is dl-17's to
+fix") — it now just says where `NOT_FOUND` is raised.
+
+`npm run check` and `npm test -- --project downloader` (543 tests, 37 files)
+are both green. Nothing in `packages/` was touched, so its suite was not
+re-run.

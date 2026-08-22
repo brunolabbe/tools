@@ -35,8 +35,8 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   TIMEOUT: 504,
   RATE_LIMITED: 429,
   JOB_NOT_FOUND: 404,
-  // The route, not the document. Nothing raises it here yet — `setNotFoundHandler`
-  // still says `JOB_NOT_FOUND`, which is dl-17's to fix.
+  // The route, not the document. Raised by `registerNotFoundHandler` for any
+  // URL that matches no route.
   NOT_FOUND: 404,
   JOB_CANCELED: 409,
   CANCELED: 409,
