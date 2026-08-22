@@ -1,0 +1,293 @@
+// @vitest-environment jsdom
+
+/**
+ * One job, rendered in every state the FSM can put it in — plus the list around it.
+ *
+ * See `progress-bar.test.tsx` for why the DOM arrives as a docblock rather than a
+ * vitest project of its own.
+ *
+ * **The clock is faked with `vi.setSystemTime`, not with `helpers.ts`'s fake clock.**
+ * dl-15's brief points at `createFakeClock` and it does not reach here: that fake
+ * implements the injectable `Clock` from `src/lib/clock.ts`, which `job-stream`
+ * takes as an option, while `useNow` and `useElapsed` call `Date.now()` and
+ * `setInterval` directly and take no clock at all. The retention countdown on a
+ * finished job is a function of `Date.now()`, so without a fixed system time this
+ * file would pass until the fixture's `expiresAt` slipped into the past — the
+ * delay fuse the brief is warning about, just armed by a different mechanism.
+ *
+ * Queried by role and accessible name throughout, the way `e2e/download.spec.ts`
+ * queries: a test that matched on `.job--failed` would stay green while the e2e
+ * suite went red, which is the worst of both.
+ */
+
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import type { Job } from "@downloader/contract";
+import { JobCard } from "../src/components/JobCard.tsx";
+import { JobList } from "../src/components/JobList.tsx";
+import type { StreamState } from "../src/lib/job-stream.ts";
+import { NOW, job, progress, result, variant } from "./fixtures.ts";
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
+interface Handlers {
+  onCancel: ReturnType<typeof vi.fn<(id: string) => void>>;
+  onRemove: ReturnType<typeof vi.fn<(id: string) => void>>;
+  onRetry: ReturnType<typeof vi.fn<(job: Job) => void>>;
+}
+
+function handlers(): Handlers {
+  return {
+    onCancel: vi.fn<(id: string) => void>(),
+    onRemove: vi.fn<(id: string) => void>(),
+    onRetry: vi.fn<(job: Job) => void>(),
+  };
+}
+
+// `streamState` is `StreamState | undefined` and **required** on the props, not
+// optional — so it is passed every time rather than spread in conditionally,
+// which under `exactOptionalPropertyTypes` would make it an optional property
+// the component does not declare.
+function mount(value: Job, streamState?: StreamState): Handlers {
+  const spies = handlers();
+  render(
+    <ul>
+      <JobCard
+        job={value}
+        streamState={streamState}
+        onCancel={spies.onCancel}
+        onRemove={spies.onRemove}
+        onRetry={spies.onRetry}
+      />
+    </ul>,
+  );
+  return spies;
+}
+
+/** The card's own accessible name for the bar, which encodes the stage and the figure. */
+function barLabel(): string {
+  return screen.getByRole("progressbar").getAttribute("aria-label") ?? "";
+}
+
+// ---------------------------------------------------------------------------
+// The rule: an unknown total is never a number
+// ---------------------------------------------------------------------------
+
+test("an unknown total says so, and shows no percentage anywhere", () => {
+  mount(job("downloading", { progress: { percent: null, totalBytes: null } }));
+
+  expect(screen.getByRole("progressbar").hasAttribute("value")).toBe(false);
+  expect(barLabel()).toBe("Downloading: in progress, total unknown");
+
+  // The figure the card would otherwise print. "unknown total" is the whole
+  // point: not "0%", not "0.0%", and not a bar that looks finished-ish.
+  expect(screen.getByText("unknown total")).toBeDefined();
+  expect(screen.queryByText(/%/u)).toBeNull();
+  expect(screen.queryByText("0.0%")).toBeNull();
+});
+
+test("a known total is rendered as a figure and a determinate bar", () => {
+  mount(
+    job("downloading", {
+      progress: {
+        percent: 41.6,
+        totalBytes: 420_000_000,
+        speedBps: 13_000_000,
+        etaSec: 90,
+        segmentsDone: 120,
+        segmentsTotal: 300,
+      },
+    }),
+  );
+
+  const bar = screen.getByRole("progressbar") as HTMLProgressElement;
+  expect(bar.value).toBeCloseTo(41.6);
+  expect(screen.getByText("41.6%")).toBeDefined();
+  expect(screen.getByText("120 / 300")).toBeDefined();
+  expect(barLabel()).toMatch(/42 percent, 12 MB\/s/u);
+});
+
+// ---------------------------------------------------------------------------
+// The statuses
+// ---------------------------------------------------------------------------
+
+test("each active status names itself and says why the job is sitting there", () => {
+  const cases = [
+    ["queued", "Queued", "Waiting for a free worker slot."],
+    ["probing", "Re-analysing", "Fetching fresh stream links — signed URLs expire within minutes."],
+    ["downloading", "Downloading", "Pulling the video data."],
+    ["muxing", "Assembling", "Joining audio and video into a playable file."],
+  ] as const;
+
+  for (const [status, label, hint] of cases) {
+    mount(job(status));
+    expect(barLabel()).toMatch(new RegExp(`^${label}:`, "u"));
+    expect(screen.getByText(hint)).toBeDefined();
+    // The pipeline is spelled out for an active job, in FSM order.
+    const steps = within(screen.getByRole("list", { name: "Pipeline" })).getAllByRole("listitem");
+    expect(steps.map((step) => step.textContent)).toEqual([
+      "Queued",
+      "Re-analysing",
+      "Downloading",
+      "Assembling",
+      "Ready",
+    ]);
+    cleanup();
+  }
+});
+
+test("the downloading → probing back edge keeps the work, and is not an error", () => {
+  // dl-9 made this transition legal: a signed URL that expired mid-download
+  // sends the job back to `probing` rather than failing it. What must not
+  // happen is the card reading as a reset — the bytes already fetched are still
+  // reported, and nothing on screen claims something went wrong.
+  const downloading = job("downloading", {
+    progress: { percent: null, downloadedBytes: 41_000_000 },
+  });
+  const reprobing: Job = {
+    ...downloading,
+    status: "probing",
+    progress: progress({ stage: "probing", percent: null, downloadedBytes: 41_000_000 }),
+    attempts: 2,
+  };
+
+  mount(downloading);
+  expect(screen.getByText("39 MB")).toBeDefined();
+  cleanup();
+
+  mount(reprobing);
+  expect(screen.getByText("39 MB")).toBeDefined();
+  expect(
+    screen.getByText("Fetching fresh stream links — signed URLs expire within minutes."),
+  ).toBeDefined();
+  expect(barLabel()).toBe("Re-analysing: in progress, total unknown");
+  // Not a failure, and not finished: no notice of either kind is on screen.
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(screen.queryByRole("link", { name: "Download file" })).toBeNull();
+});
+
+test("a completed job offers the file, its size and how long it will be kept", () => {
+  mount(job("completed"));
+
+  const link = screen.getByRole("link", { name: "Download file" });
+  expect(link.getAttribute("href")).toBe("/api/files/opaque-token/a-sample-recording.mp4");
+  expect(link.getAttribute("download")).toBe("a-sample-recording.mp4");
+  expect(screen.getByText("expires in 2 h 0 min")).toBeDefined();
+  expect(screen.getByText(/^399 MB · MP4 · 12:34$/u)).toBeDefined();
+  // Terminal: no bar, no pipeline, nothing to cancel.
+  expect(screen.queryByRole("progressbar")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+});
+
+test("a completed job past its retention window offers the reason, not a dead link", () => {
+  mount(job("completed", { result: result({ expiresAt: "2026-08-20T11:00:00.000Z" }) }));
+
+  expect(screen.queryByRole("link", { name: "Download file" })).toBeNull();
+  // `FILE_EXPIRED` is not `final` in the presentation table, so it is an alert
+  // rather than a status — the file is gone and there is nothing to click.
+  const notice = screen.getByRole("alert");
+  expect(within(notice).getByRole("heading", { name: "File removed" })).toBeDefined();
+  expect(within(notice).getByText("FILE_EXPIRED")).toBeDefined();
+});
+
+test("a failed job explains itself and offers a retry that carries the job back", () => {
+  const failed = job("failed");
+  const spies = mount(failed);
+
+  const notice = screen.getByRole("alert");
+  expect(within(notice).getByRole("heading", { name: "Download failed" })).toBeDefined();
+  fireEvent.click(within(notice).getByRole("button", { name: "Analyse and retry" }));
+  expect(spies.onRetry).toHaveBeenCalledWith(failed);
+});
+
+test("a canceled job is presented as an answer, not an alarm", () => {
+  mount(job("canceled"));
+
+  // `final` in the presentation table: role="status", no retry affordance.
+  const notice = screen.getByRole("status");
+  expect(within(notice).getByRole("heading", { name: "Canceled" })).toBeDefined();
+  expect(within(notice).queryByRole("button")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+});
+
+test("a reconnecting stream is announced without disturbing the job's own state", () => {
+  mount(job("downloading"), "reconnecting");
+
+  expect(screen.getByRole("status")).toHaveProperty("textContent", "reconnecting…");
+  expect(screen.getByRole("progressbar")).toBeDefined();
+});
+
+test("cancel and remove report the job they were pressed on", () => {
+  const spies = mount(job("downloading"));
+
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(spies.onCancel).toHaveBeenCalledWith("job-1");
+
+  fireEvent.click(screen.getByRole("button", { name: "Remove from list" }));
+  expect(spies.onRemove).toHaveBeenCalledWith("job-1");
+});
+
+// ---------------------------------------------------------------------------
+// The list around it
+// ---------------------------------------------------------------------------
+
+test("an empty job list renders nothing at all", () => {
+  const { container } = render(
+    <JobList
+      jobs={[]}
+      streamStates={{}}
+      onCancel={vi.fn()}
+      onRemove={vi.fn()}
+      onRetry={vi.fn()}
+      onClearFinished={vi.fn()}
+    />,
+  );
+  expect(container.innerHTML).toBe("");
+});
+
+test("the list counts what has finished and offers to clear only those", () => {
+  const onClearFinished = vi.fn<() => void>();
+  render(
+    <JobList
+      jobs={[
+        job("downloading", { id: "job-1", variant: variant({ label: "Still going" }) }),
+        job("completed", { id: "job-2", variant: variant({ label: "Finished" }) }),
+        job("failed", { id: "job-3", variant: variant({ label: "Gave up" }) }),
+      ]}
+      streamStates={{ "job-1": "open" }}
+      onCancel={vi.fn()}
+      onRemove={vi.fn()}
+      onRetry={vi.fn()}
+      onClearFinished={onClearFinished}
+    />,
+  );
+
+  for (const title of ["Still going", "Finished", "Gave up"]) {
+    expect(screen.getByRole("heading", { name: title })).toBeDefined();
+  }
+  fireEvent.click(screen.getByRole("button", { name: "Clear 2 finished" }));
+  expect(onClearFinished).toHaveBeenCalledOnce();
+});
+
+test("a list with nothing finished offers no clear button", () => {
+  render(
+    <JobList
+      jobs={[job("downloading")]}
+      streamStates={{}}
+      onCancel={vi.fn()}
+      onRemove={vi.fn()}
+      onRetry={vi.fn()}
+      onClearFinished={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: /Clear/u })).toBeNull();
+});
