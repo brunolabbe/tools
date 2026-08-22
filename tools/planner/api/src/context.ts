@@ -6,7 +6,7 @@
  * provider and drive it through `inject()` with no socket at all.
  */
 
-import type { ModelProvider } from "@planner/agent";
+import type { GroundingProvider, ModelProvider } from "@planner/agent";
 import type { RateLimiter } from "@webtools/core/rate-limit";
 import type { Database } from "better-sqlite3";
 import type { ApiConfig } from "./config.ts";
@@ -19,6 +19,8 @@ export interface AppContext {
   logger: AppLogger;
   db: Database;
   model: ModelProvider;
+  /** Everything that reaches outside, behind one seam. The default reaches nothing. */
+  grounding: GroundingProvider;
   /** Where a plan run waits for a slot, and where cancelling it reaches it. */
   runs: RunQueue;
   /** One run in, N SSE subscribers out. Also the only place a frame's clock is read. */

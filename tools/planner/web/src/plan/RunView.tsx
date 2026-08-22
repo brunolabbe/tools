@@ -41,6 +41,7 @@ interface Progress {
 const LABELS: Record<Run["status"], string> = {
   queued: "Waiting for a slot",
   "fanning-out": "Asking the specialists",
+  grounding: "Checking the details",
   composing: "Packing the days",
   reviewing: "Checking the draft",
   done: "Done",
@@ -63,15 +64,52 @@ function name(specialist: string): string {
   return SPECIALISTS[specialist] ?? specialist;
 }
 
+/**
+ * The line under the bar.
+ *
+ * The counts change meaning with the status — specialists while the fan-out
+ * runs, lookups once grounding starts — so the noun has to change with them.
+ * One sentence for both would be wrong for one of them, and it is the header
+ * above that would contradict it.
+ */
+function progressLine(progress: Progress): string {
+  if (progress.status === "grounding") {
+    return progress.total === null
+      ? "Checking what the specialists proposed…"
+      : `${String(progress.done)} of ${String(progress.total)} details checked.`;
+  }
+  return progress.total === null
+    ? "Working out which specialists this trip needs…"
+    : `${String(progress.done)} of ${String(progress.total)} specialists done.`;
+}
+
+/**
+ * The counts a `Run` on its own can honestly supply.
+ *
+ * `rosterSize` and `specialistsDone` are the **fan-out's** counters and they are
+ * the only ones a `Run` carries. Once a run has moved on to grounding they
+ * describe work that is already finished, so handing them to `progressLine`
+ * under grounding's label renders "5 of 5 details checked" before a single
+ * lookup has gone out — a fabricated frame, and the same _never fake progress_
+ * rule this file already broke once by calling a lookup a specialist.
+ *
+ * There is no grounding count to fall back to, so the honest answer is the one
+ * §7 gives for a total nobody knows: `null`, and an indeterminate bar until the
+ * first real frame arrives. Giving `Run` a grounding count is pl-27's to decide,
+ * when there is finally something doing the counting.
+ *
+ * Used by both the mount state and the `snapshot` frame, which are the two ways
+ * a client can arrive mid-run and the two places this went wrong.
+ */
+function countsFrom(run: Run): { total: number | null; done: number } {
+  if (run.status === "grounding") return { total: null, done: 0 };
+  return { total: run.rosterSize, done: run.specialistsDone };
+}
+
 function reduce(current: Progress, event: RunEvent): Progress {
   switch (event.type) {
     case "snapshot":
-      return {
-        ...current,
-        status: event.run.status,
-        total: event.run.rosterSize,
-        done: event.run.specialistsDone,
-      };
+      return { ...current, status: event.run.status, ...countsFrom(event.run) };
     case "status":
       return { ...current, status: event.status };
     case "progress":
@@ -89,6 +127,18 @@ function reduce(current: Progress, event: RunEvent): Progress {
           return { ...current, done: event.progress.done, total: event.progress.total };
         case "specialist-failed":
           return { ...current, done: event.progress.done, total: event.progress.total };
+        case "grounding":
+          // The counts change meaning when the status does: specialists while
+          // the fan-out runs, lookups from here. The label above the bar
+          // changes with them, so the number under it stays true. `running` is
+          // emptied because no specialist is being asked any more — leaving the
+          // last roster on screen would say otherwise.
+          return {
+            ...current,
+            done: event.progress.done,
+            total: event.progress.total,
+            running: [],
+          };
       }
       return current;
     case "done":
@@ -113,8 +163,7 @@ export function RunView({
 }): React.ReactElement {
   const [progress, setProgress] = useState<Progress>({
     status: run.status,
-    total: run.rosterSize,
-    done: run.specialistsDone,
+    ...countsFrom(run),
     running: [],
     message: null,
   });
@@ -178,11 +227,7 @@ export function RunView({
             className="run-progress"
             {...(progress.total === null ? {} : { value: progress.done, max: progress.total })}
           />
-          <p aria-live="polite">
-            {progress.total === null
-              ? "Working out which specialists this trip needs…"
-              : `${String(progress.done)} of ${String(progress.total)} specialists done.`}
-          </p>
+          <p aria-live="polite">{progressLine(progress)}</p>
           {progress.running.length > 0 && (
             <p className="muted">Looking at {progress.running.join(", ")}.</p>
           )}

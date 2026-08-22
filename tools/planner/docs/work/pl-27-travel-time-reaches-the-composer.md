@@ -68,6 +68,18 @@ and making that sentence conditional is the visible half of this ticket.
    - Move the run through `grounding` and emit `{ done, total }` frames. Skip
      the state entirely when there is nothing to measure, per pl-24 step 1.
 
+   **The counts change meaning when the status does** — specialists during the
+   fan-out, lookups from `grounding` onward — and pl-24's review caught the UI
+   still saying "N of M specialists done" underneath them. `progressLine` in
+   `RunView.tsx` now switches its noun on the status, so the frames this pass
+   emits are already rendered correctly; the trap is only worth knowing if you
+   add a third thing that counts.
+
+   Deduplicate the place list with the provider's own normalisation rather than
+   a second one — `fixturePlaceKey` is exported for exactly this. Two spellings
+   of one place sent as two rows is a wider matrix than the run needs to pay
+   for, and a normaliser reimplemented at the call site is one that will drift.
+
 4. **A place that will not locate is not a failure.** It has no coordinates, its
    legs have no measurement, and it is still a perfectly good candidate — the
    plan says travel time was unchecked _for those items_, and packs the rest

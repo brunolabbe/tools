@@ -34,6 +34,26 @@ describe("GET /api/health", () => {
     expect(context.model.name).toBe("scripted");
   });
 
+  test("names the grounding provider too, and says nothing else about it", async () => {
+    const { server, context } = await startApp();
+
+    const body = (
+      await server.inject({ method: "GET", url: ROUTES.health })
+    ).json<HealthResponse>();
+
+    // The default reaches nothing and answers from a checked-in table. A
+    // deployment that meant to configure a real backend has to be able to see
+    // that it did not.
+    expect(body.grounding).toEqual({ provider: "fixtures" });
+    expect(context.grounding.name).toBe("fixtures");
+
+    // This route is unauthenticated. The name is all it may say — no key, no
+    // endpoint, no host. Asserted as the whole key set rather than as an absence
+    // of one field, so a later addition has to come past this test.
+    expect(Object.keys(body.grounding)).toEqual(["provider"]);
+    expect(JSON.stringify(body.grounding)).not.toMatch(/key|token|secret|http|endpoint|host/i);
+  });
+
   test("releases the database on shutdown, and can be asked twice", async () => {
     const started = await startApp();
     expect(started.context.isShuttingDown()).toBe(false);

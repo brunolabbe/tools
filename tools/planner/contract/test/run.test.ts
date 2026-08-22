@@ -60,6 +60,26 @@ describe("the transition table", () => {
     expect(canRunTransition("reviewing", "done")).toBe(true);
   });
 
+  test("lets the fan-out reach grounding, and grounding reach the composer", () => {
+    expect(canRunTransition("fanning-out", "grounding")).toBe(true);
+    expect(canRunTransition("grounding", "composing")).toBe(true);
+
+    // Grounding measures what the fan-out proposed and hands it to the packer.
+    // It cannot finish a run on its own, and it cannot go back for more
+    // specialists.
+    expect(canRunTransition("grounding", "done")).toBe(false);
+    expect(canRunTransition("grounding", "reviewing")).toBe(false);
+    expect(canRunTransition("grounding", "fanning-out")).toBe(false);
+  });
+
+  test("lets `fanning-out` reach `composing` without passing through `grounding`", () => {
+    // The same argument as `composing → done` one state earlier. A run with a
+    // provider that knows nothing, or with no leg to measure, does no grounding
+    // — and emitting a state it spent no time in, to make the diagram come
+    // true, is _never fake progress_ broken for decoration.
+    expect(canRunTransition("fanning-out", "composing")).toBe(true);
+  });
+
   test("every non-terminal status can fail and can be canceled", () => {
     const live = RUN_STATUSES.filter((status) => !TERMINAL_RUN_STATUSES.has(status));
     for (const status of live) {
@@ -186,6 +206,31 @@ describe("the wire", () => {
 
     expect(isTerminalRunEvent({ type: "heartbeat", at: AT })).toBe(false);
     expect(isTerminalRunEvent({ type: "status", runId: "r", status: "queued", at: AT })).toBe(
+      false,
+    );
+  });
+});
+
+describe("the grounding progress frame", () => {
+  test("carries a count the bar can show", () => {
+    expect(runProgressSchema.safeParse({ type: "grounding", done: 2, total: 6 }).success).toBe(
+      true,
+    );
+  });
+
+  test("accepts a null total, because §7's answer to an unknowable one is null", () => {
+    // A backend that discovers work as it goes has no honest total. `null` and
+    // an indeterminate bar, never a number that moves while you watch it.
+    expect(runProgressSchema.safeParse({ type: "grounding", done: 2, total: null }).success).toBe(
+      true,
+    );
+  });
+
+  test("refuses a done count that is not a whole number of lookups", () => {
+    expect(runProgressSchema.safeParse({ type: "grounding", done: -1, total: 6 }).success).toBe(
+      false,
+    );
+    expect(runProgressSchema.safeParse({ type: "grounding", done: 1.5, total: 6 }).success).toBe(
       false,
     );
   });

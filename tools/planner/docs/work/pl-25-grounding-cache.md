@@ -41,6 +41,14 @@ we read, and when".
    different questions start sharing an answer, which is a cache that lies
    rather than a cache that misses.
 
+   **The key comes from a candidate a model wrote, so any in-memory index over
+   it must be a `Map` and never a plain object.** pl-24's review found this the
+   expensive way: its gazetteer was `Record<string, Coordinates>`, and
+   `{}["constructor"]` is a function rather than `undefined`, so a place called
+   "Constructor" came back located, and the leg to it came back measured at
+   zero. A SQLite row is not exposed to that, but the read-through map in front
+   of it and any per-run memo would be. See pl-24's log.
+
 2. **`expires_at` is computed on write, from the kind.**
    `GROUNDING_CACHE_TTL_*` in the architecture's config table, hours for an
    opening time and months for a distance. Storing the deadline rather than
@@ -79,6 +87,8 @@ we read, and when".
   between the write and the read.
 - An expired row is not served, and is gone after eviction runs.
 - A cache hit does not decrement the run's grounding budget; a miss does.
+- A key of `constructor`, `__proto__` or `toString` misses like any other unknown
+  question, rather than returning something that is not an answer.
 - `locate` and `travel` for the same place text differing only in case and
   surrounding whitespace share a row; anything else the normaliser touches is
   named in a test.

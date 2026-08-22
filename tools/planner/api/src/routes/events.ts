@@ -21,9 +21,12 @@
  * The fourth thing is this tool's: the current state goes out **immediately**,
  * as a `snapshot` carrying the whole `Run`. A client that connected after the
  * roster was decided must not be left staring at `queued`, and there is no
- * honest progress frame to replay for it — every `RunProgress` variant but
- * `roster` names a specialist, and naming one to carry a count would be a frame
- * this server made up.
+ * honest progress frame to replay for it — the specialist variants each name
+ * one, and naming a specialist to carry a count would be a frame this server
+ * made up, while `roster` describes a moment already past. The `Run` carries the
+ * fan-out's count and no other, so a client attaching during `grounding` gets a
+ * status it can label and no number to put under it, which is the honest render
+ * rather than a missing one.
  */
 
 import {
