@@ -298,6 +298,34 @@ const MIGRATIONS: readonly string[] = [
   -- through the primary key.
   CREATE INDEX grounding_cache_expires_at ON grounding_cache (expires_at);
   `,
+  // 6 — what the days were packed against (pl-27).
+  //
+  // Grounding measures the transition between one item and the next, and the
+  // composer packs under it. That measurement is **evidence** rather than a
+  // derivation — it came from outside, at a moment, from a source — so unlike
+  // `UncheckedConstraint` it is stored: its cache row will expire, and a plan
+  // has to keep being able to say what it was packed against and when that was
+  // read. See the header on `contract/src/travel.ts`.
+  //
+  // JSON by migration 2's rule: a `MeasuredTravel` is read whole, validated by
+  // a schema on the way out, and has no field SQL would ever filter on. NULL
+  // means nothing measured it, which covers no backend, no answer, and no
+  // previous item on the day.
+  `
+  ALTER TABLE plan_items ADD COLUMN travel_json TEXT;
+
+  -- The append-only trigger names the frozen columns one by one rather than
+  -- leaving a gap, so a new column is not covered until it is listed. Recreated
+  -- rather than left alone: a measurement is frozen with the revision that
+  -- packed under it, and "only pinned may change" has to keep meaning that.
+  DROP TRIGGER plan_items_only_pinned_is_mutable;
+
+  CREATE TRIGGER plan_items_only_pinned_is_mutable
+  BEFORE UPDATE OF day_id, candidate_id, position, starts_at, note, travel_json ON plan_items
+  BEGIN
+    SELECT RAISE(ABORT, 'only pinned may change on a placed item');
+  END;
+  `,
 ];
 
 export function migrate(db: Database): void {

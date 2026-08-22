@@ -41,21 +41,46 @@ export const UNCHECKED_CONSTRAINTS = [
    * Travel time between consecutive items. §2's failure 1, and the one this
    * list exists for.
    *
-   * `Place.coordinates` is `null` until grounding lands, so a leg has no
-   * measured length — decided 2026-08-16 for Phase 2 (roadmap, _Still open_):
-   * pack without it and name the gap, rather than invent a duration or pull
-   * grounding forward. A drive a specialist *stated* a duration for is still
-   * bounded by the day's drive budget; what is unchecked is the distance
-   * between one item and the next.
+   * **It is conditional as of pl-27, and it was not before.** It was on every
+   * plan from pl-9 until then, and the reason was true at the time:
+   * `Place.coordinates` was `null`, so a leg had no measured length — decided
+   * 2026-08-16 for Phase 2 (roadmap, _Still open_), pack without it and name
+   * the gap rather than invent a duration or pull grounding forward. pl-15 gave
+   * a leg both of its ends and pl-24 gave the tool something that can measure
+   * between them, so an entry now says something about **one plan** instead of
+   * about the phase: it carries the candidates whose transition nothing could
+   * measure, or the ones a run could not afford to look up, and it still stands
+   * plan-wide in its original words when nothing was measured at all.
    *
-   * **A leg is no longer the thing that is missing.** pl-15 made a candidate
-   * either `at` a place or `between` two, so a drive now carries both of its
-   * ends. What is still absent is a distance along one, and that is grounding.
+   * **It is the one kind that may appear more than once in a list**, because
+   * those are different sentences about different items, and wherever a plan
+   * has placed items on two or more days at least one is present: a transition
+   * is a pair of items within one day, so the overnight hop between days is
+   * measured by nothing and named whatever the backend said about the rest. A
+   * plan whose placed items all land on one day has no such hop, and may
+   * legitimately carry no entry at all.
+   *
+   * A reader that assumed one entry per kind — a renderer keying a list by it,
+   * say — stops being right here. `uncheckedConstraintKey` below is the
+   * identity to use instead.
+   *
+   * A drive a specialist *stated* a duration for was always bounded by the
+   * day's drive budget. What this entry has always been about is the distance
+   * between one item and the next, and that is what a measured transition —
+   * `PlanItem.travelFromPrevious` — now answers where it is present.
    */
   "travel-time",
-  /** A backcountry party's `maxDailyDistanceKm`. Same cause: ends without a distance between them. */
+  /**
+   * A backcountry party's `maxDailyDistanceKm`.
+   *
+   * Still unconditional after pl-27, and the reason is a **mode** rather than a
+   * missing distance: `TravelMode` has one member, `driving`, and how far a
+   * party walks in a day is not answered by asking a routing engine how one
+   * would drive it. See the note beside this entry in `itinerary`'s
+   * `unchecked.ts`.
+   */
   "daily-distance",
-  /** A machine's `rangeKm` between fuel stops. Same cause. */
+  /** A machine's `rangeKm` between fuel stops. Same reason as `daily-distance`: no trail mode. */
   "machine-range",
   /** Whether a place is open on the day it was placed. Opening hours are Phase 3. */
   "opening-hours",
@@ -110,3 +135,34 @@ export const uncheckedConstraintSchema = z.object({
   detail: z.string().trim().min(1).max(MAX_UNCHECKED_DETAIL_CHARS),
   candidateIds: z.array(z.string().min(1)),
 }) satisfies z.ZodType<UncheckedConstraint>;
+
+/**
+ * Which entry this is — its identity within one plan's list.
+ *
+ * **The `kind` used to be that identity and stopped being it in pl-27.** A list
+ * held at most one entry per kind until then, so every reader could and did use
+ * the kind: the plan view keyed its `<li>` by it. `travel-time` now arrives up
+ * to three times on one plan, because "nothing could measure this", "this run
+ * stopped asking" and "nothing ever measures the hop between days" are three
+ * different sentences about three different sets of items — and a list whose
+ * whole job is saying which applies to what cannot collapse them.
+ *
+ * It lives here rather than in the renderer that first needed it, for the
+ * reason this whole file lives here: the vocabulary belongs with the type, and
+ * a second reader that invented its own would be free to disagree about when
+ * two entries are the same entry. Where that matters most is React
+ * reconciliation — a duplicate key can carry one entry's text under another's
+ * position, or drop one — but the statement is about the data, not about React.
+ *
+ * The parts are joined by NUL, and that is not decoration. A separator a value
+ * can contain is a separator a value can forge: with a comma between candidate
+ * ids, `["a,b"]` and `["a", "b"]` are one key. Nothing that reaches here can
+ * hold a NUL — `detail` is trimmed prose and an id is a `Candidate.id` — and
+ * the same argument is made at greater length in `api`'s `place-key.ts`.
+ */
+export function uncheckedConstraintKey(constraint: UncheckedConstraint): string {
+  const separator = "\u0000";
+  return [constraint.kind, constraint.detail, constraint.candidateIds.join(separator)].join(
+    separator,
+  );
+}

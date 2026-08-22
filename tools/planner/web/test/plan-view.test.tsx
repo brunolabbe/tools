@@ -24,7 +24,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AppError, location, type Provenance } from "@planner/contract";
+import {
+  AppError,
+  location,
+  uncheckedConstraintKey,
+  type Provenance,
+  type UncheckedConstraint,
+} from "@planner/contract";
 import { fetchPlan, pinItem } from "../src/api/plan.ts";
 import { PlanView } from "../src/plan/PlanView.tsx";
 import { brief, candidate, day, item, planView, revision } from "./plan-fixtures.ts";
@@ -340,6 +346,82 @@ describe("what is missing", () => {
 
     expect(await screen.findByText(/What was not checked/i)).toBeDefined();
     expect(screen.getByText(/Nothing here measured a distance/i)).toBeDefined();
+  });
+
+  /**
+   * Two entries of one kind, which pl-27 made ordinary.
+   *
+   * `uncheckedFor` emitted at most one entry per kind until then, so the list
+   * was keyed by `kind` and that was safe. `travel-time` now arrives up to
+   * three times on one plan — moves within a day nothing could measure, the
+   * overnight hops nothing ever measures, and lookups a run could not afford —
+   * and **every plan a default deployment produces today has at least two**.
+   *
+   * Keyed by kind, React reconciles the second under the first: it warns on
+   * every render, and on a re-render one entry's text can appear under the
+   * other's position or an entry can vanish.
+   *
+   * Three assertions, and the middle one is load-bearing. Both sentences must
+   * be on the page — but duplicate keys still render both children on a first
+   * mount, so that alone proves nothing. The keys must be **distinct**, which
+   * is a fact about the data and depends on no library's behaviour. And React
+   * must have had nothing to say, which is the belt to that braces: kept, but
+   * on its own it is a filter over a warning's prose, and a reworded message
+   * would empty it silently.
+   *
+   * The same distinctness is asserted over the entries the composer actually
+   * emits, for all six checked-in sets, in `@planner/itinerary`'s suite. This
+   * one covers the pair this component renders.
+   */
+  test("renders two entries of the same kind, with no duplicate keys", async () => {
+    const stop = candidate({ title: "The ferry at Matane", id: "cand-ferry" });
+    const entries: UncheckedConstraint[] = [
+      {
+        kind: "travel-time",
+        detail: "How long it takes to get to these from the thing before them was not checked.",
+        candidateIds: [stop.id],
+      },
+      {
+        kind: "travel-time",
+        detail: "Getting from the end of one day to the start of the next was not checked.",
+        candidateIds: [stop.id],
+      },
+    ];
+    const warnings: unknown[][] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      warnings.push(args);
+    });
+
+    try {
+      fetched.mockResolvedValue(
+        planView({
+          candidates: [stop],
+          revisions: [revision([day(0, [item({ candidateId: stop.id })])])],
+          unchecked: entries,
+        }),
+      );
+
+      show();
+
+      expect(await screen.findByText(/from the thing before them/)).toBeDefined();
+      expect(screen.getByText(/end of one day to the start of the next/)).toBeDefined();
+      expect(screen.getAllByText(/Travel time/i)).toHaveLength(2);
+
+      // What the rendering above actually depends on, asserted directly: two
+      // entries are two keys. Keyed by `kind` — what this component did until
+      // pl-27 — they are one, which the second line states as a counterfactual
+      // so the first cannot be mistaken for something trivially true.
+      const keys = entries.map(uncheckedConstraintKey);
+      expect(keys).toHaveLength(new Set(keys).size);
+      expect(new Set(entries.map((each) => each.kind)).size).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
+
+    const duplicates = warnings.filter((args) =>
+      args.some((arg) => typeof arg === "string" && arg.includes("same key")),
+    );
+    expect(duplicates).toEqual([]);
   });
 
   test("a constraint about particular items names them by title, never by id", async () => {

@@ -14,6 +14,9 @@
  *                       │
  *                       ▼  fanning-out    runFanOut ─► candidates + gaps
  *                       │                 progress ─► SSE, one frame per specialist
+ *                       ▼  grounding      measureTravel ─► located places + a
+ *                       │                 travel table; skipped when there is
+ *                       │                 nothing to measure (pl-27)
  *                       ▼  composing      compose   ─► NewRevision
  *                       ▼  done           appendRevision, persisted
  * ```
@@ -36,7 +39,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { runFanOut, type RunBudget } from "@planner/agent";
+import { groundingBudget, runFanOut, type RunBudget } from "@planner/agent";
 import {
   AppError,
   appendRevision,
@@ -54,7 +57,13 @@ import {
   type TripBrief,
 } from "@planner/contract";
 import type { TripCapacity } from "@planner/agent";
-import { compose, dayCapacity, tripSpan, uncheckedForRevision } from "@planner/itinerary";
+import {
+  compose,
+  dayCapacity,
+  NOTHING_MEASURED,
+  tripSpan,
+  uncheckedForRevision,
+} from "@planner/itinerary";
 import type { ApiConfig } from "../config.ts";
 import type { AppContext } from "../context.ts";
 import {
@@ -74,9 +83,10 @@ import {
   updateRunRoster,
   updateRunStatus,
 } from "../db/runs.ts";
-import { evictExpiredGrounding } from "../grounding/cache.ts";
+import { evictExpiredGrounding, groundingForRun } from "../grounding/cache.ts";
 import { intakeTitle } from "../intakes/title.ts";
 import { readIntake } from "../intakes/state.ts";
+import { measureTravel, runPlaces } from "./travel.ts";
 
 /**
  * What the first draft's revision says it is.
@@ -293,13 +303,46 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
       },
     });
 
+    // --- Grounding, between the fan-out and the composer (pl-27).
+    //
+    // The state is entered only when there is something to measure, and the
+    // `fanning-out → composing` edge stays legal for exactly that: emitting a
+    // state the run spends no time in, to make a diagram come true, is _never
+    // fake progress_ broken for decoration (see `RUN_TRANSITIONS`).
+    const places = runPlaces(result.candidates);
+    if (places.all.length > 0 && !moveTo(context, runId, "grounding")) return;
+
+    const measured =
+      places.all.length === 0
+        ? { candidates: [...result.candidates], travel: NOTHING_MEASURED }
+        : await measureTravel({
+            candidates: result.candidates,
+            places,
+            // The cache with this run's budget inside it (pl-25): a hit costs
+            // nothing, a miss claims a call, and a refusal makes none. The
+            // budget is not held here because holding it here is what would
+            // charge for hits.
+            provider: groundingForRun(
+              context.grounding,
+              groundingBudget(context.config.maxGroundingCalls),
+            ),
+            logger: context.logger.child({ run: runId }),
+            signal,
+            onProgress: (event) => {
+              record(context, runId, event);
+            },
+          });
+
     const composedAt = context.now();
     const timestamp = composedAt.toISOString();
 
+    // Written after grounding, not before: the places the pass located now
+    // carry their coordinates, and a candidate stored before that would have
+    // to be re-read and re-written to gain them.
     insertCandidates(context.db, {
       planId,
       runId,
-      candidates: result.candidates,
+      candidates: measured.candidates,
       now: timestamp,
     });
 
@@ -307,17 +350,19 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
 
     const composed = compose({
       brief,
-      candidates: result.candidates,
+      candidates: measured.candidates,
+      travel: measured.travel,
       gaps: result.gaps,
       revision: { id: `${runId}-1`, reason: FIRST_DRAFT_REASON, createdAt: timestamp },
       now: composedAt,
     });
 
-    // `unchecked` is deliberately not persisted here. What a plan did not
-    // *check* — travel time, always, while `Place.coordinates` is null — is
-    // pl-10's decision to store or to recompute, and solving half of it would
-    // make its other half harder. It reaches this run's SSE client through
-    // nothing today, and a reload loses it.
+    // `unchecked` is deliberately not persisted here, and pl-27 did not change
+    // that: what a plan did not *check* is a derivation from the revision, and
+    // `uncheckedForRevision` reads it back off the days on every read. What is
+    // persisted is the *evidence* underneath it — each item's measured
+    // transition — because a cache row expires and a plan still has to be able
+    // to say what its days were packed against.
     const revisionId = persist(context, planId, composed.revision, timestamp);
 
     if (!moveTo(context, runId, "done")) return;
@@ -362,6 +407,15 @@ function record(context: AppContext, runId: string, event: RunProgress): void {
       updateRunProgress(context.db, runId, event.done);
       break;
     case "specialist-started":
+      break;
+    case "grounding":
+      // Nothing is written down. `Run` carries the fan-out's counters and no
+      // others (see `RunEvent`'s `snapshot`), so a client that attaches during
+      // grounding has no number to catch up on and shows an indeterminate bar
+      // until the next frame — which is §7's answer to a total nobody knows,
+      // and is honest in a way replaying `rosterSize` under grounding's label
+      // would not be. A column here would be a second thing to keep true; the
+      // frame is the one that matters and it is forwarded below.
       break;
   }
   context.events.progress(runId, event);

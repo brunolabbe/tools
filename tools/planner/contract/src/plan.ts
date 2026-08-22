@@ -34,6 +34,8 @@ import { candidateSchema, SPECIALISTS } from "./candidate.ts";
 import type { Candidate, Specialist } from "./candidate.ts";
 import { tripBriefSchema } from "./brief.ts";
 import type { TripBrief } from "./brief.ts";
+import { itemTravelSchema } from "./travel.ts";
+import type { ItemTravel } from "./travel.ts";
 
 // ---------------------------------------------------------------------------
 // Bounds
@@ -88,6 +90,28 @@ export interface PlanItem {
   pinned: boolean;
   /** The composer's or the critic's note about this placement, if any. */
   note: string | null;
+  /**
+   * Getting here from the item before it on the same day, as this revision was
+   * packed (pl-27).
+   *
+   * `null` means exactly one thing: **there is nothing before it on this day**,
+   * so there was no transition to know anything about. Every other answer is a
+   * named member of `ItemTravel` — measured, nobody could say, or never asked
+   * for want of budget — because those are three different sentences to a
+   * reader and a `null` that meant all of them would be a plan that cannot tell
+   * a road nobody has mapped from a question this run stopped asking.
+   *
+   * **It is stored rather than derived**, which is the opposite of what pl-10
+   * decided for `UncheckedConstraint` and deliberately so — see the header on
+   * `travel.ts`. A cache row expires; the plan still has to be able to say what
+   * its days were packed against.
+   *
+   * The day's **anchor** — where you sleep — carries one and is not charged for
+   * it: getting to your bed is real travel worth recording, and pl-9's rule that
+   * the anchor consumes no part of the day is about what the day fits around.
+   * See `transitionTo` in `@planner/itinerary`'s packer.
+   */
+  travelFromPrevious: ItemTravel | null;
 }
 
 export const planItemSchema = z.object({
@@ -107,6 +131,7 @@ export const planItemSchema = z.object({
     .nullable(),
   pinned: z.boolean(),
   note: z.string().trim().min(1).max(MAX_ITEM_NOTE_CHARS).nullable(),
+  travelFromPrevious: itemTravelSchema.nullable(),
 }) satisfies z.ZodType<PlanItem>;
 
 // ---------------------------------------------------------------------------

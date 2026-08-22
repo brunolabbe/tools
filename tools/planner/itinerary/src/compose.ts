@@ -54,6 +54,7 @@ import { filterBySeason } from "./season.ts";
 import { BUCKET_OF, pack, type PackResult, type PinnedPlacement } from "./pack.ts";
 import { critique, isHard, type CriticFinding } from "./critic.ts";
 import { MAX_CRITIC_ROUNDS } from "./limits.ts";
+import type { TravelTable } from "./travel.ts";
 import { uncheckedFor, type UncheckedConstraint } from "./unchecked.ts";
 
 export interface ComposeInput {
@@ -72,6 +73,19 @@ export interface ComposeInput {
    * adds only the gaps it can see for itself.
    */
   gaps?: readonly PlanGap[];
+  /**
+   * What the grounding pass measured between these candidates (pl-27).
+   *
+   * **Required**, the way `TripCapacity` is required by `runFanOut` and for the
+   * same reason: a caller that forgot it would pack a plan under nothing and
+   * nothing would say so. A run with no grounding passes `NOTHING_MEASURED`,
+   * which packs exactly the days this composer packed before pl-27 — and that
+   * identity is what makes the change additive rather than a re-tuning.
+   *
+   * The pass that fills it lives in `api`, between the fan-out and the
+   * composer, because this package has no network. See `travel.ts`.
+   */
+  travel: TravelTable;
   /** Identity and timestamp for the revision to build. This package has no clock. */
   revision: { id: string; reason: string; createdAt: string };
   /** Today. Booking lead times are counted back from the departure to here. */
@@ -83,8 +97,11 @@ export interface ComposeResult {
   /** Ready for `appendRevision`, which derives the number and the parent. */
   revision: NewRevision;
   /**
-   * Constraints the composer could not evaluate, and why. Never empty in
-   * Phase 2 — travel time is always on it. See `unchecked.ts`.
+   * Constraints the composer could not evaluate, and why. See `unchecked.ts`.
+   *
+   * Travel time was on it unconditionally until pl-27 and is now on it only
+   * where a transition actually went unmeasured — which is the whole of that
+   * ticket, read from this end.
    */
   unchecked: UncheckedConstraint[];
   /** Findings that ship with the plan: an empty day, and anything else soft. */
@@ -155,6 +172,7 @@ export function compose(input: ComposeInput): ComposeResult {
     brief,
     candidates: forPacking,
     span,
+    travel: input.travel,
     daysUntilDeparture: untilDeparture,
     pinned,
   });
@@ -173,6 +191,7 @@ export function compose(input: ComposeInput): ComposeResult {
       brief,
       candidates: forPacking,
       span,
+      travel: input.travel,
       daysUntilDeparture: untilDeparture,
       pinned,
       excluded: dropped,
@@ -198,23 +217,24 @@ export function compose(input: ComposeInput): ComposeResult {
     ...droppedByFilter.map((candidateId) => ({ candidateId, reason: "out-of-season" as const })),
   ];
 
+  // The days as they will be stored, built once. `uncheckedFor` then reads the
+  // very same structure a reader of the revision hands it, which is what makes
+  // the two agree by construction rather than by two implementations being
+  // careful — including about which transitions were measured.
+  const days = toPlanDays(packed, input.revision.id);
+
   return {
     revision: {
       id: input.revision.id,
       reason: input.revision.reason,
       createdAt: input.revision.createdAt,
-      days: toPlanDays(packed, input.revision.id),
+      days,
       gaps: [...(input.gaps ?? []), ...gapsFor(input.candidates, packed)],
     },
     // Derived from what was placed, not from the pack — so a reader of the
     // stored revision gets the identical list without re-composing. See
     // `unchecked.ts`.
-    unchecked: uncheckedFor({
-      brief,
-      dates,
-      candidates: input.candidates,
-      placedIds: new Set(packed.days.flatMap((day) => day.items.map((item) => item.candidateId))),
-    }),
+    unchecked: uncheckedFor({ brief, dates, candidates: input.candidates, days }),
     findings: findings.filter((finding) => !isHard(finding)),
     excluded,
   };
@@ -243,6 +263,9 @@ function toPlanDays(packed: PackResult, revisionId: string): PlanDay[] {
       startsAt: null,
       pinned: item.pinned,
       note: item.note,
+      // Evidence rather than a derivation, so it is carried onto the document
+      // and stored with it — see the header on `contract/src/travel.ts`.
+      travelFromPrevious: item.travelFromPrevious,
     })),
   }));
 }

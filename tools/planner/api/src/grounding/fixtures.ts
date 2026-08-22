@@ -26,7 +26,6 @@
  */
 
 import { AppError } from "@planner/contract";
-import type { Place } from "@planner/contract";
 import type {
   GroundingProvider,
   LocatedPlace,
@@ -135,13 +134,21 @@ function estimate(from: string, to: string, at: Date): TravelEstimate | null {
 }
 
 /**
- * A `Place` as this provider would key it, exported so a caller assembling a
- * matrix can deduplicate its list the same way the lookup will.
+ * There is deliberately **no exported "key a `Place` the way this provider
+ * does"** here, and there was one until pl-27.
  *
- * Without it pl-27 has to either send the same place twice under two spellings
- * — paying for a wider matrix than it needs — or reimplement the normalisation
- * and drift from it.
+ * It existed so a caller assembling a matrix could deduplicate its list "the
+ * same way the lookup will", and pl-27 took the invitation. That was the wrong
+ * question to answer with this file's normaliser: `placeKey` drops `locality`
+ * and strips accents, which is right for deciding whether one small checked-in
+ * table happens to hold an answer — the licence its own comment claims, earned
+ * by being small enough that no two places in it share a name — and wrong for
+ * deciding that two candidates mean the same place. It merged Saint-Jean in
+ * Québec with Saint-Jean in New Brunswick, and the plan reported a `measured`,
+ * `grounded` transition to the wrong province.
+ *
+ * **A caller that needs a place's identity wants `placeIdentity` in
+ * `place-key.ts`**, which the seam owns and the cache keys by. That includes
+ * pl-28: a second backend will key places too, and the export removed here is
+ * the one that would have made it key them wrongly.
  */
-export function fixturePlaceKey(place: Place): string {
-  return placeKey(place.name);
-}

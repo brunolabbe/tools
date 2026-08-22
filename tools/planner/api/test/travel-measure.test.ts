@@ -1,0 +1,240 @@
+/**
+ * The measuring pass itself, over candidates a run could plausibly produce.
+ *
+ * `travel-pass.test.ts` drives the whole run and reads the plan back, which is
+ * the claim that matters; this file is the other half — the cases the six
+ * checked-in candidate sets cannot express, chiefly two different places that
+ * share a name. Nothing here goes near the database or a route.
+ */
+
+import { describe, expect, test } from "vitest";
+import { location, MODEL_ASSERTED, type Candidate, type Place } from "@planner/contract";
+import type { LocateRequest, TravelRequest } from "@planner/agent";
+import {
+  answered,
+  REFUSED,
+  UNKNOWN,
+  type GroundingOutcome,
+  type RunGrounding,
+  type TravelOutcomeMatrix,
+} from "../src/grounding/cache.ts";
+import { placeIdentity } from "../src/grounding/place-key.ts";
+import { createLogger } from "../src/logger.ts";
+import { measureTravel, runPlaces } from "../src/runs/travel.ts";
+
+const logger = createLogger({ level: "silent" });
+
+function place(name: string, locality: string | null): Place {
+  return { name, locality, coordinates: null };
+}
+
+let sequence = 0;
+function at(name: string, locality: string | null): Candidate {
+  sequence += 1;
+  return {
+    id: `cand-${String(sequence)}`,
+    specialist: "activities",
+    title: name,
+    summary: "A thing a specialist proposed.",
+    location: location.at(place(name, locality)),
+    durationMinutes: 60,
+    cost: null,
+    season: null,
+    bookingLeadTimeDays: null,
+    provenance: MODEL_ASSERTED,
+  };
+}
+
+/** A gazetteer keyed the way the seam keys places: name **and** locality. */
+function gazetteer(entries: Record<string, { latitude: number; longitude: number }>): RunGrounding {
+  const table = new Map(Object.entries(entries));
+  return {
+    name: "test",
+    refused: 0,
+    async locate(request: LocateRequest): Promise<
+      GroundingOutcome<{
+        coordinates: { latitude: number; longitude: number };
+        source: { url: string; title: string | null; fetchedAt: string };
+      }>
+    > {
+      const found = table.get(placeIdentity(request.place));
+      if (found === undefined) return UNKNOWN;
+      return answered({
+        coordinates: found,
+        source: {
+          url: "https://fixtures.invalid/planner/test",
+          title: "A test double, not a measurement",
+          fetchedAt: "2027-01-01T00:00:00.000Z",
+        },
+      });
+    },
+    async travel(request: TravelRequest): Promise<TravelOutcomeMatrix> {
+      return request.origins.map(() => request.destinations.map(() => UNKNOWN));
+    },
+  };
+}
+
+async function measure(
+  candidates: readonly Candidate[],
+  provider: RunGrounding,
+): Promise<Awaited<ReturnType<typeof measureTravel>>> {
+  return measureTravel({
+    candidates,
+    places: runPlaces(candidates),
+    provider,
+    logger,
+    signal: new AbortController().signal,
+    onProgress: () => {},
+  });
+}
+
+/** Every place on a candidate, so a test can read what the pass wrote back. */
+function coordinatesOf(candidate: Candidate): (readonly [number, number] | null)[] {
+  const { location: where } = candidate;
+  const places = where.kind === "at" ? [where.place] : [where.from, where.to];
+  return places.map((each) =>
+    each.coordinates === null
+      ? null
+      : ([each.coordinates.latitude, each.coordinates.longitude] as const),
+  );
+}
+
+describe("two places that share a name", () => {
+  /**
+   * The defect this file was written for.
+   *
+   * Deduplicating by name alone merged these two into one lookup, and then
+   * `withCoordinates` wrote the survivor's point onto both — persisted, so no
+   * later run would re-locate them — and both ends indexed the same matrix
+   * cell. The plan reported a grounded transition to the wrong province.
+   */
+  test("are located separately and keep their own coordinates", async () => {
+    const quebec = at("Saint-Jean", "Québec, Canada");
+    const newBrunswick = at("Saint-Jean", "New Brunswick, Canada");
+
+    const asked: string[] = [];
+    const provider = gazetteer({
+      [placeIdentity(place("Saint-Jean", "Québec, Canada"))]: {
+        latitude: 45.3168,
+        longitude: -73.2624,
+      },
+      [placeIdentity(place("Saint-Jean", "New Brunswick, Canada"))]: {
+        latitude: 45.2733,
+        longitude: -66.0633,
+      },
+    });
+    const watched: RunGrounding = {
+      ...provider,
+      locate: (request) => {
+        asked.push(placeIdentity(request.place));
+        return provider.locate(request);
+      },
+    };
+
+    const result = await measure([quebec, newBrunswick], watched);
+
+    expect(asked).toHaveLength(2);
+    expect(coordinatesOf(result.candidates[0] as Candidate)).toEqual([[45.3168, -73.2624]]);
+    expect(coordinatesOf(result.candidates[1] as Candidate)).toEqual([[45.2733, -66.0633]]);
+  });
+
+  /**
+   * The one case the inputs can settle by themselves.
+   *
+   * Same name, same locality, different known points — so these are provably
+   * two places, and the earlier shape threw the proof away: it kept the first
+   * `RunPlace` and dropped the second, wrote the survivor's coordinates onto
+   * both candidates and indexed both to one matrix cell. Coordinates are the
+   * only evidence a `Place` carries beyond its prose.
+   */
+  test("that carry different coordinates are two places, not one", async () => {
+    const first = at("Le Manoir", null);
+    const second = at("Le Manoir", null);
+    first.location = location.at({
+      name: "Le Manoir",
+      locality: null,
+      coordinates: { latitude: 48.45, longitude: -68.52 },
+    });
+    second.location = location.at({
+      name: "Le Manoir",
+      locality: null,
+      coordinates: { latitude: 45.5, longitude: -73.57 },
+    });
+
+    expect(runPlaces([first, second]).all).toHaveLength(2);
+
+    const result = await measure([first, second], gazetteer({}));
+    expect(coordinatesOf(result.candidates[0] as Candidate)).toEqual([[48.45, -68.52]]);
+    expect(coordinatesOf(result.candidates[1] as Candidate)).toEqual([[45.5, -73.57]]);
+  });
+
+  /**
+   * And the one the inputs cannot, recorded so nobody reads the test above as
+   * closing the class. Two inns of one name with no locality and no point are
+   * one question, and asking it twice would return one answer twice — see
+   * `runPlaceKey` and `place-key.ts`. What must **not** happen is a plan
+   * claiming a measurement it did not earn, and it does not: with no gazetteer
+   * entry the leg is `not-established`.
+   */
+  test("that carry no coordinates at all are one question, and it stays unanswered", async () => {
+    const first = at("Le Manoir", null);
+    const second = at("Le Manoir", null);
+
+    expect(runPlaces([first, second]).all).toHaveLength(1);
+
+    const result = await measure([first, second], gazetteer({}));
+    expect(result.travel.between(first, second)).toEqual({ kind: "not-established" });
+  });
+
+  test("and one spelling of one place is still asked about once", async () => {
+    // The other half of the same rule: deduplication has to still happen, or
+    // the run pays for a wider matrix than it needs.
+    const first = at("Québec  City", "Québec, Canada");
+    const second = at("québec city", " Québec, Canada ");
+
+    const asked: string[] = [];
+    const provider = gazetteer({});
+    const result = await measure([first, second], {
+      ...provider,
+      locate: (request) => {
+        asked.push(placeIdentity(request.place));
+        return provider.locate(request);
+      },
+    });
+
+    expect(asked).toHaveLength(1);
+    expect(result.candidates).toHaveLength(2);
+  });
+});
+
+describe("what a leg says when there is no measurement", () => {
+  test("a refused lookup is not a leg nobody knows about", async () => {
+    const here = at("Rimouski", "Québec, Canada");
+    const there = at("Percé", "Québec, Canada");
+    const provider = gazetteer({});
+
+    const spent = await measure([here, there], {
+      ...provider,
+      locate: async () => REFUSED,
+    });
+    expect(spent.travel.between(here, there)).toEqual({ kind: "over-budget" });
+
+    const silent = await measure([here, there], provider);
+    expect(silent.travel.between(here, there)).toEqual({ kind: "not-established" });
+  });
+
+  test("a backend that throws is not a refusal — nobody declined to pay", async () => {
+    const here = at("Alma", "Québec, Canada");
+    const there = at("Saguenay", "Québec, Canada");
+    const provider = gazetteer({});
+
+    const broken = await measure([here, there], {
+      ...provider,
+      locate: () => {
+        throw new Error("the routing service refused the connection");
+      },
+    });
+
+    expect(broken.travel.between(here, there)).toEqual({ kind: "not-established" });
+  });
+});
