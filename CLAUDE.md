@@ -172,6 +172,19 @@ Append to a ticket's Log when you finish work on it, including whatever the
 brief turned out to have wrong. That is the note the next agent needs, and the
 roadmap and status pages are deliberately too thin to hold it.
 
+**A ticket file does not know about a branch.** It says `status: ready` until
+something merges, so "what is next" is `gh pr list` first and the ticket files
+second — otherwise a ticket that has been in review for four days reads as
+untouched, and gets built twice. Check the base branch too: a pull request
+opened against another feature branch disappears with it, and its own page still
+says merged.
+
+**Rebase before merging anything that touches a status table.** Those tables are
+one line per ticket and every ticket touches them, so a branch cut a few days ago
+re-widens the whole table and silently restores every row that moved since —
+which reads as plausible rather than as a conflict, because the file still
+parses and the statuses are all still words.
+
 **Commits are conventional, and it is enforced.** `type(scope): subject`, with
 the scope naming a tool (`downloader`, `planner`) or `core` · `repo` · `ci` ·
 `deps`, and the ticket id in the subject: `fix(downloader): stop re-probing in
