@@ -93,3 +93,22 @@ fix") — it now just says where `NOT_FOUND` is raised.
 `npm run check` and `npm test -- --project downloader` (543 tests, 37 files)
 are both green. Nothing in `packages/` was touched, so its suite was not
 re-run.
+
+**2026-08-22 — review follow-ups.** Review's point stood: the first pass was a
++3/-3 substitution inside existing assertions, and nothing pinned the
+_distinction_ the ticket exists to establish — a refactor that quietly
+re-merged the two codes would have left every existing suite green. Added
+`tools/downloader/api/test/not-found.test.ts`, a small dedicated file with two
+tests side by side: an unrecognised route (`GET /api/nope` → `NOT_FOUND`, 404)
+and a recognised job route naming an id the store has no record of
+(`GET /api/jobs/nope` → `JOB_NOT_FOUND`, 404). Chose a new file over folding
+into `web-serving.test.ts` or `routes.test.ts` because the contrast is the
+point of the test — splitting it across the two existing suites (which cover
+route-serving and the HTTP surface respectively, for reasons of their own)
+would bury the side-by-side read this ticket needs. `npm run check` and
+`npm test -- --project downloader` re-run green: 545 tests, 38 files.
+
+**`tools/downloader/docs/03-STATUS.md` was deliberately left alone.** Review
+found stale prose below the generated region describing dl-17 as still open;
+that cleanup belongs to repo-1's retirement of that hand-written narrative, not
+to this ticket, and is being tracked there.
