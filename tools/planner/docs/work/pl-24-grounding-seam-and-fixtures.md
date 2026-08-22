@@ -160,6 +160,45 @@ letting the next ticket discover it.
 - `npm run check` and `npm test -- --project planner` pass. The suite count goes
   up; no existing test changes meaning.
 
+## Review
+
+**Gate: CONCERNS, since addressed** — 2026-08-22 · `origin/main...HEAD` ·
+`review-ticket` on Opus, delegating to `code-review` at medium on Sonnet. Both
+findings are fixed in the round below; the verdict is left as it was given
+rather than rewritten, because a gate that edits itself once the work is done
+records nothing.
+
+| Done when                                                                                                                    | Proof                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/health` reports the grounding provider by name; a test asserts no key, no endpoint                                     | `tools/planner/api/test/health.test.ts:37` "names the grounding provider too, and says nothing else about it" ✓                                                                                                                                                                                                                         |
+| Unknown `GROUNDING_PROVIDER` yields the fixture provider, beside the `MODEL_PROVIDER` case                                   | `tools/planner/api/test/config.test.ts:47` "falls back to the fixture provider when the grounding name is unknown" ✓                                                                                                                                                                                                                    |
+| Fixture provider: located place + `Source` for a known place, `null` for unknown — both for `locate` and for a matrix cell   | `tools/planner/api/test/grounding-fixtures.test.ts:29` "finds a place the checked-in candidate sets name, with a source", `:62` "answers null — not a guess, not a throw", `:104` "measures a leg the candidate sets actually propose", `:140` "has no driving answer for a walking leg, and says so with null" ✓                       |
+| `canRunTransition` accepts `fanning-out→grounding`, `grounding→composing`, `fanning-out→composing`; rejects `grounding→done` | `tools/planner/contract/test/run.test.ts:63` "lets the fan-out reach grounding, and grounding reach the composer", `:75` "lets `fanning-out` reach `composing` without passing through `grounding`" ✓                                                                                                                                   |
+| `npm run check` and `npm test -- --project planner` pass; suite count up; no existing test changes meaning                   | verified directly: `npm run check` exit 0; `npm test -- --project planner` → 566/566, 42 files; baseline at `origin/main` → 532/40 files (confirmed by running the suite there); the only pre-existing test files touched (`config.test.ts`, `health.test.ts`, `run.test.ts`) received insertions only, no deleted/altered assertions ✓ |
+
+- **med · fixed** · `web/src/plan/RunView.tsx:88` — the `snapshot` reducer case
+  set `total`/`done` from `run.rosterSize`/`run.specialistsDone`, the fan-out's
+  counters and the only ones a `Run` carries. A client landing via `snapshot`
+  while `status === "grounding"` therefore rendered "5 of 5 details checked"
+  with zero lookups done. **The same line of the same bug was also in the
+  mount-time `useState` initialiser**, which the review did not name and which
+  is the more likely path in practice — a reload, not a reconnect. Both now go
+  through one `countsFrom(run)` helper that answers `{ total: null, done: 0 }`
+  during grounding, so the bar is indeterminate until a real frame arrives.
+- **med · fixed** · `contract/src/run.ts:288` and `api/src/routes/events.ts:24`
+  — both doc comments claimed `grounding`, like `roster`, "describes a moment
+  that has already passed" and that "the `Run` already carries the count", which
+  the diff never made true. Narrowed to say the `Run` carries the fan-out's
+  count _and no other_, and that a client attaching during grounding has no
+  number to put under the label. Giving `Run` a grounding count is left to
+  pl-27, named there.
+- **Coverage the gate asked for, added:** `web/test/run-view.test.tsx`, 8 tests.
+  `RunView` had no test file at all, which is why this component absorbed two
+  _never fake progress_ defects in one branch without a red build. Both defects
+  above now have a case that fails without the fix.
+
+- NFR: security — fixture provider fetches nothing (no SSRF surface), health leaks no key/endpoint (tested), gazetteer/leg lookups moved to `Map` closing a prototype-pollution hole (fixed in review round, tested against `constructor`/`__proto__`/`toString`) · performance — one matrix call replaces n² pairwise calls, budget checked before spend, no issue · reliability — `AbortSignal` honoured between lookups, `NaN`/`Infinity` ceiling closed; the snapshot/reconnect gap above is the one live reliability gap · maintainability — extensively commented on the `ModelProvider` precedent, budget and matrix accessor are unit-tested; `RunView`'s reducer had zero test coverage of its own, which is the gap that let both findings through; closed by `run-view.test.tsx`
+
 ## Log
 
 **2026-08-22 — built.** The seam, the fixture provider behind it, and the
@@ -289,3 +328,39 @@ rule that no longer holds.
 **566 in the planner suite, 1139 repo-wide, `npm run check` green.** The four
 fixes cost four tests. Nothing in the seam's shape changed, so pl-25, pl-26,
 pl-27 and pl-28 are unaffected.
+
+**2026-08-22 — gate round.** `review-ticket` on the finished branch, which is a
+different thing from the code review that preceded it: it traced each of the five
+"Done when" lines to the test that proves it, checked the Build steps against
+what was actually built, and re-ran the suite at `origin/main` to confirm the
+Log's own numbers. All five trace. Both disclosed deviations — step 5's fixture
+location and step 8's fully-built budget — match the code. The baseline was 532
+across 40 files, so 562 and then 566 are right, and the three pre-existing test
+files took insertions only.
+
+It also found a defect the defect-hunt had missed, and it is the third instance
+of one root cause in this branch. **`Run` carries the fan-out's counters and no
+others.** `RunView` fed them to `progressLine` unconditionally, so a client that
+arrived while the run was grounding rendered "5 of 5 details checked" with zero
+lookups done. The review named the `snapshot` reducer; the mount-time `useState`
+initialiser had it too, and that is the likelier path — a reload rather than a
+reconnect. Both now go through one `countsFrom(run)`, which answers
+`{ total: null, done: 0 }` during grounding: there is no grounding count to show,
+and §7's answer to a total nobody knows is an indeterminate bar.
+
+The two doc comments I narrowed in the review round were still wrong. They said
+`grounding`, like `roster`, "describes a moment that has already passed" and that
+"the `Run` already carries the count" — asserting an invariant this diff never
+established. They now say the `Run` carries the fan-out's count _and no other_,
+and hand the question of a grounding count to pl-27.
+
+**The real finding is that `RunView` had no test file at all.** It absorbed two
+_never fake progress_ defects in one branch without a red build, and both were
+found by reading rather than by running. `web/test/run-view.test.tsx` is 8 tests
+covering both, plus the indeterminate-bar cases at each end. **Any component that
+renders a count wants a test before it renders a second kind of count** — that is
+the transferable half, and it is why the gate is a separate pass from the defect
+hunt: a defect hunt finds what is wrong in the diff, a gate asks what the diff
+left unproven.
+
+**574 in the planner suite, 1147 repo-wide, `npm run check` green.**

@@ -83,15 +83,33 @@ function progressLine(progress: Progress): string {
     : `${String(progress.done)} of ${String(progress.total)} specialists done.`;
 }
 
+/**
+ * The counts a `Run` on its own can honestly supply.
+ *
+ * `rosterSize` and `specialistsDone` are the **fan-out's** counters and they are
+ * the only ones a `Run` carries. Once a run has moved on to grounding they
+ * describe work that is already finished, so handing them to `progressLine`
+ * under grounding's label renders "5 of 5 details checked" before a single
+ * lookup has gone out — a fabricated frame, and the same _never fake progress_
+ * rule this file already broke once by calling a lookup a specialist.
+ *
+ * There is no grounding count to fall back to, so the honest answer is the one
+ * §7 gives for a total nobody knows: `null`, and an indeterminate bar until the
+ * first real frame arrives. Giving `Run` a grounding count is pl-27's to decide,
+ * when there is finally something doing the counting.
+ *
+ * Used by both the mount state and the `snapshot` frame, which are the two ways
+ * a client can arrive mid-run and the two places this went wrong.
+ */
+function countsFrom(run: Run): { total: number | null; done: number } {
+  if (run.status === "grounding") return { total: null, done: 0 };
+  return { total: run.rosterSize, done: run.specialistsDone };
+}
+
 function reduce(current: Progress, event: RunEvent): Progress {
   switch (event.type) {
     case "snapshot":
-      return {
-        ...current,
-        status: event.run.status,
-        total: event.run.rosterSize,
-        done: event.run.specialistsDone,
-      };
+      return { ...current, status: event.run.status, ...countsFrom(event.run) };
     case "status":
       return { ...current, status: event.status };
     case "progress":
@@ -145,8 +163,7 @@ export function RunView({
 }): React.ReactElement {
   const [progress, setProgress] = useState<Progress>({
     status: run.status,
-    total: run.rosterSize,
-    done: run.specialistsDone,
+    ...countsFrom(run),
     running: [],
     message: null,
   });

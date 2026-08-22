@@ -23,7 +23,10 @@
  * roster was decided must not be left staring at `queued`, and there is no
  * honest progress frame to replay for it — the specialist variants each name
  * one, and naming a specialist to carry a count would be a frame this server
- * made up, while `roster` and `grounding` describe a moment already past.
+ * made up, while `roster` describes a moment already past. The `Run` carries the
+ * fan-out's count and no other, so a client attaching during `grounding` gets a
+ * status it can label and no number to put under it, which is the honest render
+ * rather than a missing one.
  */
 
 import {

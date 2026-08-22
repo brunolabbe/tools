@@ -285,8 +285,15 @@ export type RunEvent =
    * staring at `queued` until the next specialist finished, and there is no
    * honest `RunProgress` to replay for it: the specialist variants each name one,
    * and inventing a specialist to carry a count would be a fabricated frame,
-   * while `roster` and `grounding` describe a moment that has already passed.
-   * The `Run` already carries the count, so it is sent as itself.
+   * while `roster` describes a moment that has already passed. The `Run` carries
+   * the fan-out's count, so it is sent as itself.
+   *
+   * **That is the only count it carries**, and a client attaching during
+   * `grounding` therefore has no number to show. Replaying `rosterSize` under
+   * grounding's label would be the fabricated frame this paragraph exists to
+   * refuse, so the UI shows an indeterminate bar until the first real grounding
+   * frame arrives. Giving `Run` a grounding count belongs to pl-27, when
+   * something is finally counting.
    */
   | { type: "snapshot"; runId: string; run: Run; at: string }
   | { type: "status"; runId: string; status: RunStatus; at: string }

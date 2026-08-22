@@ -38,7 +38,7 @@ reasoning, including what the decision costs, is an amendment to
 argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
-**566 unit tests pass across 42 files, plus 4 e2e specs.** `npm run check` is
+**574 unit tests pass across 43 files, plus 4 e2e specs.** `npm run check` is
 green. Seven of the repo-wide tests in `packages/core` are
 [pl-17](./work/pl-17-dockerfile-workspace-scan.md)'s — see the paragraph below.
 The repo-wide CI runs the unit suite on every push, and
