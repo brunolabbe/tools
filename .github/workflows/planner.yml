@@ -48,10 +48,15 @@ permissions:
   contents: read
 
 jobs:
-  # The intake, through a browser, against the bundle the API serves. The unit
-  # suites prove each half of it — `inject()` for the server, a faked client for
-  # the browser — and neither can prove the two are wired to each other, or that
-  # a reload resumes. See `tools/planner/e2e/intake.spec.ts`.
+  # The intake and pinning, through a browser, against the bundle the API
+  # serves. The unit suites prove each half of both — `inject()` for the server,
+  # a faked client for the browser — and neither can prove the two are wired to
+  # each other, that a reload resumes, or that a pin reached SQLite rather than
+  # React state. See `tools/planner/e2e/README.md`.
+  #
+  # This job is the *only* place either claim is checked, which is why pl-10's
+  # review gate called the pinning row `unproven (gate)` rather than `unproven`
+  # — and why pl-19's proof of it is a gate too.
   #
   # Not in `ci.yml`: it costs a browser download and a Vite build, and this file
   # is where the planner's slow gates live, path-filtered so downloader work
