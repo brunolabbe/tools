@@ -96,9 +96,9 @@ RUN if [ "${INSTALL_YTDLP}" = "true" ]; then \
 # out of its own.
 #
 # This list and the manifest list above are both checked as of pl-17, by
-# `packages/core/test/image-workspaces.test.ts` — every workspace `api` resolves
-# has a manifest `COPY` in each stage and a `dist` here, and nothing outside that
-# closure is copied. It reads this file as text and assumes nothing about the
+# `packages/core/test/image-closure.test.ts` — every workspace `@downloader/api`
+# resolves has its manifest copied before `npm ci`, its pair here, and nothing
+# outside that closure is copied. It reads this file as text and assumes nothing about the
 # planner's, which is built on a different base and must stay a separate file.
 COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/package.json ./

@@ -102,6 +102,18 @@ and including URLs that came back out of your own code.
 **Never fake progress.** When the total is unknown, report `null` and let the UI
 show an indeterminate state.
 
+**An image ships every workspace its API resolves**, and **a package declares
+every workspace it imports under `src`** — in `dependencies`, not
+`devDependencies`, because the runtime stage is built after `npm prune
+--omit=dev`. Each `Dockerfile` keeps that list by hand twice, once as manifests
+before `npm ci` and once as a `package.json` + `dist` pair per workspace, and the
+two fail differently: miss the runtime pair and the container boots and throws on
+first use, miss the manifest and `npm ci` never made the symlink at all. Enforced
+repo-wide by a scan in `packages/core/test/image-closure.test.ts`, which walks the
+graph from each tool's `api` and fails naming the missing line. It does not
+replace the per-tool image gate — a scan over text cannot prove a container
+boots.
+
 ## Testing
 
 **vitest**, configured once in the root `vitest.config.ts` as one project per
@@ -221,10 +233,11 @@ No `console` — use the logger. Comment _why_, not _what_.
    whatever was released. Add the image gate in step 6 _before_ the first
    release, so that release is not the first time the image is built.
 
-   A `Dockerfile` lists its workspaces by hand and twice — the manifests before
-   `npm ci`, and a `package.json` + `dist` pair per workspace in the runtime
-   stage — and `packages/core/test/image-workspaces.test.ts` holds both lists to
-   what the API actually resolves, so a new tool's image is covered the moment
-   the file exists. Miss a runtime pair and the container boots and throws on
-   first use; miss a build-stage manifest and `npm ci` never made the symlink.
-   The scan proves the list, never the image: keep the workflow job.
+   Copy a `Dockerfile` from an existing tool and its two hand-kept workspace
+   lists come with it. `packages/core/test/image-closure.test.ts` checks both
+   against what your `api` actually resolves as soon as the file exists, so it
+   will tell you what to delete and what you forgot — but **it finds your service
+   by name, at `@<name>/api`**, and a tool that calls it something else has to
+   teach the scan that; the test fails by name saying so. It also expects the two
+   stages to be `AS build` and `AS runtime`. The scan proves the list, never the
+   image: keep the workflow job.

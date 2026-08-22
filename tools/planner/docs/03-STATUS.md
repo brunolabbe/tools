@@ -33,7 +33,9 @@ argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
 **526 unit tests pass across 40 files, plus 4 e2e specs.** `npm run check` is
-green. The repo-wide CI runs the unit suite on every push, and
+green. Seven of the repo-wide tests in `packages/core` are
+[pl-17](./work/pl-17-dockerfile-workspace-scan.md)'s — see the paragraph below.
+The repo-wide CI runs the unit suite on every push, and
 `.github/workflows/planner.yml` now carries two gates — the e2e suite in a real
 browser, and the image, which is built, started, and asked for both `/api/health`
 and the page. Both are path-filtered, so downloader work does not pay for them.
@@ -154,6 +156,27 @@ asked for. `api/src/routes/web.ts` now serves it same-origin, and the workflow
 asks the running container for the page as well as for health. That closes
 [pl-2](./work/pl-2-container-image.md)'s "serves the UI" acceptance, which was
 the thing this had falsified.
+
+**The image's workspace list is no longer kept by memory.**
+[pl-17](./work/pl-17-dockerfile-workspace-scan.md) added
+`packages/core/test/image-closure.test.ts`, which walks the workspace graph from
+each tool's `api` manifest and asserts both hand-kept `Dockerfile` lists against
+it — the manifests copied **before `npm ci`**, and the `package.json` + `dist`
+pair per workspace in the runtime stage — in both directions, plus the rule that
+makes the walk trustworthy: a workspace imported under `src` is declared in that
+package's own `dependencies`. It found nothing to fix, because pl-16 had already
+fixed the planner by hand and the downloader was correct, so its value is
+prospective and it was proved by breaking both Dockerfiles on purpose — see the
+ticket's log for the mutations. **It does not replace the image gate**: a scan
+over text cannot prove the container boots.
+
+The scan is also written not to pass by having looked at less. It reads without
+asserting, so a `Dockerfile` it cannot parse is a named failing test rather than
+a suite that will not load; a `readdir` that fails for any reason other than the
+directory not existing is raised rather than read as empty; and two workspaces
+claiming one name are reported rather than shadowing each other. Those three
+came out of the ticket's own review gate, which found the scan making the
+mistake the ticket was written about.
 
 **The wizard's components render in tests as of
 [pl-12](./work/pl-12-render-the-wizard-in-tests.md).** `tools/planner/web/test`
