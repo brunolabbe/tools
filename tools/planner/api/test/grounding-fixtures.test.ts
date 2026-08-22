@@ -63,6 +63,29 @@ describe("the fixture grounding provider", () => {
       await expect(grounding.locate({ place: place("Chibougamau") })).resolves.toBeNull();
     });
 
+    test("does not answer for a name that is only on Object's prototype", async () => {
+      // A plain-object table would answer here: `{}["constructor"]` is a
+      // function, not `undefined`, so a candidate naming a place called
+      // "Constructor" would come back located with something that is not a
+      // coordinate. The gazetteer is a `Map` so that a miss can only mean
+      // "not in the table".
+      for (const name of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+        await expect(grounding.locate({ place: place(name) })).resolves.toBeNull();
+      }
+    });
+
+    test("hands back a copy, so a caller cannot rewrite the gazetteer", async () => {
+      // `Object.freeze` on the table is shallow. Returning the entry itself
+      // would let a caller that rounds or converts coordinates in place corrupt
+      // every later lookup in the process.
+      const first = await grounding.locate({ place: place("Alma") });
+      if (first === null) throw new Error("expected Alma to be in the gazetteer");
+      first.coordinates.latitude = 0;
+
+      const second = await grounding.locate({ place: place("Alma") });
+      expect(second?.coordinates.latitude).toBeCloseTo(48.55, 3);
+    });
+
     test("has nothing to say about a region that is a scope rather than a place", async () => {
       // A candidate really is proposed "across Central Europe". Where that *is*
       // has no answer, and inventing a centroid for it would be the same lie in
@@ -148,6 +171,19 @@ describe("the fixture grounding provider", () => {
       const matrix = await grounding.travel({
         origins: [place("Québec")],
         destinations: [place("City Rimouski")],
+        mode: "driving",
+      });
+
+      expect(travelCell(matrix, 0, 0)).toBeNull();
+    });
+
+    test("does not measure a leg to a name that is only on Object's prototype", async () => {
+      // The same hole, one method over, and worse: the diagonal would report a
+      // confident zero-distance leg for a place the table does not hold —
+      // exactly the fabrication this provider exists not to commit.
+      const matrix = await grounding.travel({
+        origins: [place("constructor")],
+        destinations: [place("constructor")],
         mode: "driving",
       });
 

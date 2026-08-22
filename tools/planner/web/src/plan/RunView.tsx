@@ -64,6 +64,25 @@ function name(specialist: string): string {
   return SPECIALISTS[specialist] ?? specialist;
 }
 
+/**
+ * The line under the bar.
+ *
+ * The counts change meaning with the status — specialists while the fan-out
+ * runs, lookups once grounding starts — so the noun has to change with them.
+ * One sentence for both would be wrong for one of them, and it is the header
+ * above that would contradict it.
+ */
+function progressLine(progress: Progress): string {
+  if (progress.status === "grounding") {
+    return progress.total === null
+      ? "Checking what the specialists proposed…"
+      : `${String(progress.done)} of ${String(progress.total)} details checked.`;
+  }
+  return progress.total === null
+    ? "Working out which specialists this trip needs…"
+    : `${String(progress.done)} of ${String(progress.total)} specialists done.`;
+}
+
 function reduce(current: Progress, event: RunEvent): Progress {
   switch (event.type) {
     case "snapshot":
@@ -191,11 +210,7 @@ export function RunView({
             className="run-progress"
             {...(progress.total === null ? {} : { value: progress.done, max: progress.total })}
           />
-          <p aria-live="polite">
-            {progress.total === null
-              ? "Working out which specialists this trip needs…"
-              : `${String(progress.done)} of ${String(progress.total)} specialists done.`}
-          </p>
+          <p aria-live="polite">{progressLine(progress)}</p>
           {progress.running.length > 0 && (
             <p className="muted">Looking at {progress.running.join(", ")}.</p>
           )}

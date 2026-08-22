@@ -202,7 +202,10 @@ export interface GroundingBudget {
 /** The only constructor, so no caller keeps its own counter beside the cap. */
 export function groundingBudget(maxCalls: number): GroundingBudget {
   let spent = 0;
-  const ceiling = Math.max(0, Math.trunc(maxCalls));
+  // `Math.trunc(NaN)` is `NaN`, and `spent >= NaN` is false — so a NaN ceiling
+  // would grant unlimited calls from the one construct whose entire job is to
+  // refuse them. Anything that is not a finite number grounds nothing.
+  const ceiling = Number.isFinite(maxCalls) ? Math.max(0, Math.trunc(maxCalls)) : 0;
   return {
     remaining: () => ceiling - spent,
     claim: () => {

@@ -49,6 +49,15 @@ describe("the grounding budget", () => {
     expect(groundingBudget(2.9).remaining()).toBe(2);
   });
 
+  test("a ceiling that is not a number grounds nothing, rather than everything", () => {
+    // `Math.trunc(NaN)` is `NaN` and `spent >= NaN` is false, so the naive
+    // clamp would grant unlimited calls from the one construct whose whole
+    // job is to refuse them.
+    expect(groundingBudget(Number.NaN).claim()).toBe(false);
+    expect(groundingBudget(Number.NaN).remaining()).toBe(0);
+    expect(groundingBudget(Number.POSITIVE_INFINITY).claim()).toBe(false);
+  });
+
   test("two budgets do not share a counter", () => {
     const one = groundingBudget(1);
     const other = groundingBudget(1);

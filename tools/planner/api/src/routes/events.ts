@@ -21,9 +21,9 @@
  * The fourth thing is this tool's: the current state goes out **immediately**,
  * as a `snapshot` carrying the whole `Run`. A client that connected after the
  * roster was decided must not be left staring at `queued`, and there is no
- * honest progress frame to replay for it — every `RunProgress` variant but
- * `roster` names a specialist, and naming one to carry a count would be a frame
- * this server made up.
+ * honest progress frame to replay for it — the specialist variants each name
+ * one, and naming a specialist to carry a count would be a frame this server
+ * made up, while `roster` and `grounding` describe a moment already past.
  */
 
 import {

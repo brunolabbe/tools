@@ -107,8 +107,15 @@ export function placeKey(name: string): string {
  * for it deserves an answer rather than a `null` that means "we have no table".
  * `Central Europe` is deliberately absent: it is a candidate's *scope*, not a
  * place, and the honest answer to "where is Central Europe" is nothing.
+ *
+ * Written as a literal and served as a `Map`, like `FIXTURE_DRIVING` below.
+ * **A plain object would answer for names it does not hold**: the key comes from
+ * a candidate a model wrote, and `{}["constructor"]` is a function rather than
+ * `undefined`, so a place called "Constructor" would come back located and a leg
+ * to it would come back measured at zero. A `Map` has no prototype chain to
+ * walk, so "not in the table" is the only thing a miss can mean.
  */
-export const FIXTURE_PLACES: Readonly<Record<string, Coordinates>> = Object.freeze({
+const FIXTURE_PLACE_TABLE: Readonly<Record<string, Coordinates>> = Object.freeze({
   // --- The road trip and the Gaspésie ---
   montreal: { latitude: 45.5019, longitude: -73.5674 },
   "quebec city": { latitude: 46.8139, longitude: -71.208 },
@@ -167,6 +174,10 @@ export const FIXTURE_PLACES: Readonly<Record<string, Coordinates>> = Object.free
   "riviera maya": { latitude: 20.6296, longitude: -87.0739 },
   "punta cana": { latitude: 18.582, longitude: -68.4055 },
 });
+
+export const FIXTURE_PLACES: ReadonlyMap<string, Coordinates> = new Map(
+  Object.entries(FIXTURE_PLACE_TABLE),
+);
 
 // ---------------------------------------------------------------------------
 // The legs

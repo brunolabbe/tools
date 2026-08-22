@@ -244,3 +244,48 @@ thing look expensive and push you back to n² pairwise requests to stay under th
 cap. `fixturePlaceKey` is exported so a caller can deduplicate its place list
 the same way the lookup will, rather than paying for a wider matrix than it
 needs.
+
+**2026-08-22 — review round.** A code review over the branch found four defects,
+all confirmed by hand before fixing and all now covered by a test.
+
+**The gazetteer answered for names it does not hold.** `FIXTURE_PLACES` was a
+plain object indexed by a normalised place name, and that name comes from a
+candidate a model wrote. `{}["constructor"]` is a function rather than
+`undefined`, so a place called "Constructor" came back _located_, carrying the
+`Object` constructor where a caller expects a coordinate — and worse, `estimate`
+read the same prototype hit as a table entry and reported a confident
+zero-distance leg for it. That is exactly the fabrication the file's own doc
+comment says it must never commit, arriving through the one door nobody was
+watching. It is a `Map` now, like `FIXTURE_DRIVING` beside it, so a miss can only
+mean "not in the table". Worth carrying into pl-28: **any table keyed by a string
+a model produced wants a `Map`, not an object.**
+
+**`locate` handed out the table's own object.** `Object.freeze` is shallow, so a
+caller rounding or converting coordinates in place would have rewritten the
+gazetteer for the rest of the process — and every later lookup in that worker.
+It returns a copy now, which is what `estimate` was already doing; the two were
+inconsistent rather than deliberate.
+
+**The run view called a lookup a specialist.** The line under the bar was
+hard-coded to "N of M specialists done", so the whole grounding phase would have
+rendered "2 of 6 specialists done" directly beneath a header reading "Checking
+the details" — and with a null total, "Working out which specialists this trip
+needs…" while it was doing nothing of the sort. The reducer comment added in the
+first round claimed the count "stays true" across the new case; it did not. The
+noun now switches on the status, in `progressLine`.
+
+**A `NaN` ceiling disabled the budget.** `Math.trunc(NaN)` is `NaN` and
+`spent >= NaN` is false, so the naive clamp granted unlimited calls from the one
+construct whose whole job is to refuse them. Latent — `int()` in the config
+always yields a finite number — but it is a hole in a spend guard, so it is
+closed rather than argued about.
+
+Also fixed: `run.ts` and `routes/events.ts` both justified the `snapshot` frame
+with "every `RunProgress` variant but `roster` names a specialist", which the new
+`grounding` variant made false. No code misbehaved; the sentence was simply no
+longer true, and a stale justification is how the next change gets made against a
+rule that no longer holds.
+
+**566 in the planner suite, 1139 repo-wide, `npm run check` green.** The four
+fixes cost four tests. Nothing in the seam's shape changed, so pl-25, pl-26,
+pl-27 and pl-28 are unaffected.

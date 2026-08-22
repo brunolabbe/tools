@@ -65,12 +65,18 @@ export class FixtureGroundingProvider implements GroundingProvider {
   async locate(request: LocateRequest): Promise<LocatedPlace | null> {
     throwIfAborted(request.signal);
 
-    const coordinates = FIXTURE_PLACES[placeKey(request.place.name)];
+    const key = placeKey(request.place.name);
+    const coordinates = FIXTURE_PLACES.get(key);
     if (coordinates === undefined) return null;
 
     return {
-      coordinates,
-      source: fixtureSource(`places/${placeKey(request.place.name)}`),
+      // A copy, not the table's own object. `Object.freeze` on the table is
+      // shallow, so handing out the entry lets a caller that adjusts
+      // coordinates in place — rounding, a unit conversion — rewrite the
+      // gazetteer for the rest of the process. `estimate` below already builds
+      // a fresh object; this is the same rule, not a different one.
+      coordinates: { ...coordinates },
+      source: fixtureSource(`places/${key}`),
     };
   }
 
@@ -99,7 +105,7 @@ export class FixtureGroundingProvider implements GroundingProvider {
  */
 function estimate(from: string, to: string): TravelEstimate | null {
   if (from === to) {
-    if (FIXTURE_PLACES[from] === undefined) return null;
+    if (!FIXTURE_PLACES.has(from)) return null;
     return { distanceMeters: 0, durationMinutes: 0, source: fixtureSource(`legs/${from}`) };
   }
 

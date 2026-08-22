@@ -283,8 +283,9 @@ export type RunEvent =
    *
    * A client that attached after the roster was decided would otherwise be
    * staring at `queued` until the next specialist finished, and there is no
-   * honest `RunProgress` to replay for it: every variant but `roster` names a
-   * specialist, and inventing one to carry a count would be a fabricated frame.
+   * honest `RunProgress` to replay for it: the specialist variants each name one,
+   * and inventing a specialist to carry a count would be a fabricated frame,
+   * while `roster` and `grounding` describe a moment that has already passed.
    * The `Run` already carries the count, so it is sent as itself.
    */
   | { type: "snapshot"; runId: string; run: Run; at: string }
