@@ -291,6 +291,70 @@ Three consequences that shape the code:
   planner fetches its first URL is the day it becomes the second real consumer
   and it lifts to `packages/core`.
 
+### Amendment, 2026-08-22 — grounding also proposes, and the corridor is the case that proves it
+
+The section above is kept as argued and nothing in it is withdrawn: one seam, a
+fixture default, the four-item ranking, the cache, the provenance rule and the
+hostile-input rule all stand. What it is missing is a job, not a correction.
+
+**Every one of the four things §5 ranks is a _check_.** Distances check a leg a
+specialist proposed; opening hours check a place it named; existence checks that
+the place is real; prices check what it costs. In each case a model proposes and
+grounding verifies, and the pipeline in §4 runs one way.
+
+That leaves a failure §2 does not list. Its five are all ways a proposed thing is
+**wrong**; none of them is the good thing never being **proposed**. Ask a model
+for stops between Montréal and Percé and it returns the famous ones, because
+famous is what its training weights over-represent — and the waterfall six
+kilometres off the 132 that every local knows about is not in the reply. Nothing
+anywhere in the current design would ever surface it. Call it **failure 6:
+omission**, and note that it is the one a traveller actually notices, because §1
+is explicit that a trip is under-specified and the user cannot state the
+constraints up front. What they wanted was the thing they had not heard of.
+
+**The decision:** grounding may be a **source** of candidates and not only a
+check on them. A corridor query over map data proposes; a specialist judges and
+writes the prose; code measures what the detour costs. The direction of §4's
+arrow is unchanged for everything else and reversed for this one thing, which is
+why it is an amendment rather than a footnote.
+
+The ranking gains no fifth line. **Discovery is item 3 read in the other
+direction** — the same dataset that answers "is this place real" answers "what
+places are near this line", and a deployment that has one has both. It ranks
+where existence ranks and it depends on item 1, because a detour has no cost
+until something can measure it.
+
+**What it costs**, stated so nobody meets it as a surprise:
+
+- **Coverage is thinnest exactly where this tool is most interesting.** OSM is
+  dense in Europe and along the Saint Lawrence and sparse north of Chibougamau —
+  so the skidoo weekend in §1's table, the trip with the least competition from
+  ordinary guidebooks, is the one discovery helps least. A tool that quietly
+  works better in Rome than in Nunavik while looking identical in both is the
+  _never fake progress_ rule broken at the level of a whole feature. The plan has
+  to say how thin the ground was.
+- **"Grounded" starts carrying two meanings.** `Provenance` distinguishes what we
+  read somewhere from what a model asserted, and the plan view renders the first
+  as _verified_. A row in a POI database is genuinely read somewhere and is
+  genuinely nobody's recommendation: verified to exist, unjudged as to whether it
+  is worth an hour of your day. The word has to survive that, in the copy if not
+  in the type.
+- **Map data is user-generated, so it is hostile text like any other.** A `name`
+  tag is a string a stranger wrote, and it reaches a specialist's prompt. §5's
+  last bullet already covers it; it is worth saying that a database feels safer
+  than a web page and is not.
+
+**What it buys** is the sentence §1 opens with. A vacation is not only the
+destination, and a plan that gets you there efficiently past everything worth
+stopping for has solved the arithmetic and missed the trip.
+
+The measuring half was anticipated: `CandidateLocation`'s note in
+`contract/src/candidate.ts` lists _"is a 40-minute diversion worth this
+attraction"_ as one of three things a leg's two endpoints exist to make
+possible. This is that one.
+
+→ [pl-29](./work/pl-29-detours-along-a-leg.md)
+
 ---
 
 ## 6. The plan is a document, and revision is the whole product

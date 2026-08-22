@@ -3,7 +3,7 @@ id: pl-23
 tool: planner
 title: A pinned out-of-season candidate's currency changed meaning, and nothing tests it
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -129,3 +129,7 @@ reader:
   fixture — the test uses `helpers.ts`'s `briefFor`/`candidate` builders and
   `compose.test.ts`'s own `asRevision`, which is what the surrounding
   mixed-currency and re-planning tests already do.
+
+**2026-08-22 — `status` corrected to `done`.** Merged on the day the log above
+was written; the frontmatter was left at `ready`, which is the state that gets a
+ticket built twice.

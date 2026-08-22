@@ -145,6 +145,56 @@ travel times first, opening hours and seasons second, existence third, prices
 last and always as bands (§5). Provenance on every item; the cache table; the
 SSRF guard lifted to `packages/core` as the second real consumer claims it.
 
+**Only the first of §5's four is ticketed**, as of 2026-08-22, and that is the
+phase's shape rather than an omission. Distances buy the most, they are what the
+composer has been packing without since 2026-08-16, and the three that follow
+each want something this slice will have taught us — most of all whether
+grounding belongs in a pass beside the fan-out or inside a specialist's own call,
+which is a question about tool use on `ModelProvider` and is not answerable yet.
+A brief written for the prices slice today would be fiction in the way this
+format exists to avoid.
+
+1. **The seam and its fixture default** — `GroundingProvider`, the offline
+   implementation behind it, the config and health reporting, and the run state a
+   run shows while it grounds. Contract-first, because pl-27 and pl-28 are meant
+   to run in parallel over it. → [pl-24](./work/pl-24-grounding-seam-and-fixtures.md)
+2. **The cache** — a table with a TTL that varies by kind, hours for an opening
+   time and months for a distance, keyed by the question and inspectable when a
+   plan cites something surprising. What makes Phase 4's re-planning affordable.
+   → [pl-25](./work/pl-25-grounding-cache.md)
+3. **Travel time reaches the composer** — locate the places, measure the matrix,
+   pack the days under it, and stop naming travel time as unchecked when it was
+   in fact checked. This is the one that closes the gap Phase 2 promised to name.
+   → [pl-27](./work/pl-27-travel-time-reaches-the-composer.md)
+4. **A real backend** — Valhalla, self-hosted, with a geocoder beside it. →
+   [pl-28](./work/pl-28-valhalla-adapter.md)
+5. **What is worth stopping for** — a corridor query beside the route, notability
+   signals on what it finds, and the detour each one costs. The one piece where
+   grounding _proposes_ rather than checks, which is §5's amendment of
+   2026-08-22. → [pl-29](./work/pl-29-detours-along-a-leg.md)
+
+**pl-29 is the one that moves the pipeline**, and it is listed last because it
+depends on the other four rather than because it matters least. Discovery has to
+run _before_ the fan-out — the finds are what a specialist reads — where every
+other grounding call in this phase happens after it. So the run grounds twice,
+and §5's amendment records why that is a shape change rather than an extra call.
+
+pl-27 depends only on pl-24, not on pl-28: the fixture provider answers, so the
+pass and the packing arithmetic can be built and tested with no instance running
+and no network. That is deliberately the pl-9-and-pl-5 arrangement again, which
+worked twice — composing against checked-in data is what found the appetite bug.
+
+**The SSRF lift is written up and is not part of this slice.**
+[pl-26](./work/pl-26-lift-the-ssrf-guard.md) holds the argument, and its first
+section says not to pick it up yet. The repo's rule is that shared code moves on
+the second real _consumer_, and a routing endpoint an operator configured is not
+a URL a stranger handed us — running it through a guard whose job is refusing
+addresses somebody else picked would be the guard doing nothing while appearing
+to do something. What earns the lift is §5's third item, existence, because that
+one means search results and search results mean URLs from outside. Filed early
+because the lift is the interesting part of that work and is worth having thought
+through before the ticket that needs it exists.
+
 ## Phase 4 — Revision is the product
 
 Pin an item, name the days a re-plan may touch, re-run a slice with two
@@ -192,13 +242,31 @@ authority for backcountry, marine or winter motorised travel. The reasons are in
 
 Short, and each one is a real decision someone has to make rather than a gap:
 
-- **Which grounding backend first.** §5 ranks what to buy; it does not pick a
-  vendor. Whichever it is, the fixtures come from its real payloads.
+- **Whether a specialist grounds for itself.** The travel-time slice puts
+  grounding in a pass between the fan-out and the composer, because a distance
+  is the composer's input and nothing else needs it earlier. Opening hours and
+  existence are not that shape — a specialist wants them while it is proposing —
+  and reaching them from inside a specialist means tool use on `ModelProvider`,
+  which that seam deliberately does not have. Do not answer it before pl-27 has
+  run: the pass is the cheap half and it may be enough for more than it looks.
 - **Whether a specialist streams.** The chat seam does not stream, and adding it
   before a caller needs it was deferred once already. The fan-out's progress is
   per-specialist, which may be enough — pl-5 built exactly that and pl-16 now
   streams it to a page that watches it, and nothing has yet asked for finer than
   a specialist.
+
+**Which grounding backend goes first was answered on 2026-08-22: Valhalla,
+self-hosted, with a geocoder beside it.** §5 ranked what to buy and declined to
+pick a vendor; the vendor was picked on ops rather than on accuracy, because the
+load is 40 calls a run behind a cache and no engine would notice it. What decided
+it was the deployment target's 16 GB ceiling — Valhalla's tiles are mmap'd and
+OSRM's contraction is not, so OSRM would have meant building the graph on a
+second machine — and the fact that a metered vendor's terms restrict retaining
+route data, which §5's year-long distance cache directly contradicts. The full
+argument, including what it costs, is in
+[pl-28](./work/pl-28-valhalla-adapter.md); the thing it costs is that this is two
+services rather than one, since Valhalla does not geocode. The fixtures still
+come from its real payloads.
 
 **Two questions that stood here are answered rather than open**, both by
 [pl-16](./work/pl-16-the-plan-run.md): **what the contract carries for a run**,

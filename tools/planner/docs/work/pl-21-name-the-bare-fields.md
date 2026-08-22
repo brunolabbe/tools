@@ -3,7 +3,7 @@ id: pl-21
 tool: planner
 title: Four field kinds render an input a screen reader cannot name
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: [pl-12]
 ---
@@ -151,3 +151,7 @@ over 40 files, 42 of them in `web`, up from 39). Neither runs the planner's e2e 
 container build — this changes what the browser loads, so CI's `planner.yml` is
 the first thing to prove the built bundle. Removing the four spreads makes two
 of the three new tests fail, which is the check that they are load-bearing.
+
+**2026-08-22 — `status` corrected to `done`.** Merged on the day the log above
+was written; the frontmatter was left at `ready`, which is the state that gets a
+ticket built twice.

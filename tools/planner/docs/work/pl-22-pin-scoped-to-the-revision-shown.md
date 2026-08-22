@@ -3,7 +3,7 @@ id: pl-22
 tool: planner
 title: A pin is scoped to the plan, not to the revision the reader was looking at
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -149,3 +149,7 @@ Gates: `npm run check` and `npm test -- --project planner` both pass (528 tests,
 40 files). Neither runs the planner's e2e suite or the container build, and
 neither needed to — the change is one SQL statement inside `api`, no route, no
 contract, no bundle and no image content moved.
+
+**2026-08-22 — `status` corrected to `done`.** Merged on the day the log above
+was written; the frontmatter was left at `ready`, which is the state that gets a
+ticket built twice.
