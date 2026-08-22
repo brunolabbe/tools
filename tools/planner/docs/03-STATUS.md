@@ -190,13 +190,6 @@ offering no way to decline it, a discarded answer with no prompt reading as a
 sentence rather than an id, and a half-filled `dates` or `budget` staying
 unsubmittable.
 
-**The bare fields still have no accessible name.** `text`, `text-list`, `number`
-and `number-list` render an input with an `id` and no `label`, so a screen reader
-announces a box and never says what it is for. Found by
-[pl-12](./work/pl-12-render-the-wizard-in-tests.md), and it is
-[pl-21](./work/pl-21-name-the-bare-fields.md) — which is four kinds and not a
-systemic gap, and carries the argument and the fix.
-
 **No owner model.** Every visitor shares one store and can read and edit
 everyone's intakes, and the list route shows all of them. That is the honest gap
 rather than one to paper over with an unguessable id — see the traps in

@@ -22,6 +22,7 @@ import {
   type AnswerValue,
   type BudgetBand,
   type BudgetBasis,
+  type QuestionId,
   type QuestionNode,
 } from "@planner/contract";
 
@@ -58,6 +59,49 @@ export function QuestionField({ question, initial, onChange }: FieldProps): Reac
     case "budget":
       return <BudgetEntry initial={initial} onChange={onChange} />;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Naming a bare control
+// ---------------------------------------------------------------------------
+
+/**
+ * The id of the element that already renders this question's prompt — the `h2`
+ * in `QuestionCard`, a level up — and of the one that renders its help text.
+ *
+ * Derived from the question rather than fixed, because `QuestionCard` renders
+ * one question at a time only for now and a constant id is a trap set for
+ * whoever renders two.
+ */
+export function promptId(question: QuestionId): string {
+  return `prompt-${question}`;
+}
+
+export function helpId(question: QuestionId): string {
+  return `help-${question}`;
+}
+
+/**
+ * What names a control that has no `<label>` of its own: the heading that is
+ * already the prompt, and the paragraph beside it that elaborates on it.
+ *
+ * The prompt names the field and the help describes it, so a screen reader
+ * announces the question and then the elaboration rather than a run-on of both.
+ * Neither is copied into an `aria-label` — a second copy of the tree's content
+ * in the browser is the thing this package avoids everywhere else, and it would
+ * be the stale one.
+ *
+ * The choice controls do not need this (their inputs sit inside a `<label>`) and
+ * neither do `dates` and `budget` (every sub-field has its own `htmlFor`).
+ */
+function namedByCard(question: QuestionNode): {
+  "aria-labelledby": string;
+  "aria-describedby"?: string;
+} {
+  return {
+    "aria-labelledby": promptId(question.id),
+    ...(question.help === null ? {} : { "aria-describedby": helpId(question.id) }),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -166,6 +210,7 @@ function TextEntry({ question, initial, onChange }: FieldProps): React.ReactElem
   return (
     <textarea
       id={`field-${question.id}`}
+      {...namedByCard(question)}
       className="field"
       rows={maxLength !== undefined && maxLength > 500 ? 5 : 2}
       {...(maxLength === undefined ? {} : { maxLength })}
@@ -193,6 +238,7 @@ function TextList({ question, initial, onChange }: FieldProps): React.ReactEleme
     <>
       <textarea
         id={`field-${question.id}`}
+        {...namedByCard(question)}
         className="field"
         rows={4}
         value={text}
@@ -232,6 +278,7 @@ function NumberEntry({ question, initial, onChange }: FieldProps): React.ReactEl
     <span className="measure">
       <input
         id={`field-${question.id}`}
+        {...namedByCard(question)}
         className="field"
         type="number"
         inputMode={bounds?.integer === true ? "numeric" : "decimal"}
@@ -271,6 +318,7 @@ function NumberList({ question, initial, onChange }: FieldProps): React.ReactEle
     <>
       <input
         id={`field-${question.id}`}
+        {...namedByCard(question)}
         className="field"
         type="text"
         inputMode="numeric"

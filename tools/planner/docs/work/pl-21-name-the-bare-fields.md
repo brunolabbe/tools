@@ -106,4 +106,48 @@ Traps worth knowing in advance:
 
 ## Log
 
-_Not started._
+**2026-08-22 — built.** `QuestionCard` gives its `h2` `id={promptId(question.id)}`
+and its help paragraph `id={helpId(question.id)}`; the four bare controls spread
+`namedByCard(question)`, which is `aria-labelledby` on the prompt plus
+`aria-describedby` on the help _only when the node has one_. Both id helpers are
+exported from `controls.tsx` and imported by `Wizard.tsx`, so the two sides of
+the reference are derived in one place rather than agreeing by coincidence — the
+same reason the field's own `id` is built from `question.id`. No prompt text is
+copied into an `aria-label`.
+
+Three things the brief did not say, and one it had slightly wrong:
+
+- **The assertion could not go in `controls.test.tsx`.** Build step 3 says "in
+  the `web` suite" without naming a file, and the obvious reading is the file
+  that owns the controls. It cannot be: that suite mounts `QuestionField` on its
+  own, and the element `aria-labelledby` points at lives in `QuestionCard`, a
+  level up — the name computes to empty there. The three new tests are in
+  `wizard.test.tsx`, which renders the real card, and `controls.test.tsx`'s
+  docblock now says where they went instead of describing the gap as permanent.
+  Nothing in `controls.test.tsx` had to change otherwise: every query there is by
+  role alone or by a name the field carries itself.
+- **`getByRole` cannot ask for a `dates` sub-field by name in the general case.**
+  Build step 4 wants "the same query" against one, but `<input type="date">` has
+  no mapped ARIA role, so `date-departure` and `date-earliest` are unreachable by
+  role — `getByLabelText` is the only way to them, which is what the existing
+  tests use. The sub-field asserted by role and name is therefore `Nights`
+  (`type="number"` → `spinbutton`), reached by first choosing the "However long,
+  whenever" mode. It is a real `dates` sub-field with a real `htmlFor`, so the
+  claim holds; it just is not the departure date.
+- **The help text earned a test of its own.** `aria-describedby` is omitted
+  rather than pointed at an id that was never rendered when `help` is null, and
+  the second new test holds that — a dangling `aria-describedby` is invisible in
+  every way an unlabelled field is.
+- The trap about the two list kinds being single controls was correct and worth
+  the paragraph: one `aria-labelledby` per control is right in all four places.
+
+`03-STATUS.md`'s "The bare fields still have no accessible name" paragraph is
+gone, since it stops being true when this lands. The status table row still says
+`ready`, per the convention in `docs/01-TICKETS.md` that a ticket file does not
+know about a branch.
+
+Gates: `npm run check` and `npm test -- --project planner` both pass (529 tests
+over 40 files, 42 of them in `web`, up from 39). Neither runs the planner's e2e suite or the
+container build — this changes what the browser loads, so CI's `planner.yml` is
+the first thing to prove the built bundle. Removing the four spreads makes two
+of the three new tests fail, which is the check that they are load-bearing.
