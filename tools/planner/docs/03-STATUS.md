@@ -101,28 +101,30 @@ still unwritten.
 
 ## Open tickets
 
-| Ticket                                                      | Status    | Note                                                      |
-| ----------------------------------------------------------- | --------- | --------------------------------------------------------- |
-| [pl-1](./work/pl-1-conversation-loop.md)                    | dropped   | The chat premise. Read the log before rebuilding it       |
-| [pl-2](./work/pl-2-container-image.md)                      | in-flight | Image and release component landed; no subdomain yet      |
-| [pl-3](./work/pl-3-trip-brief-contract.md)                  | done      | The brief, its slots and `missingRequiredSlots` are in    |
-| [pl-4](./work/pl-4-plan-document-contract.md)               | done      | The plan document, migration 2, and pl-5's fixtures       |
-| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)             | in-flight | The roster is a table, not conditionals                   |
-| [pl-6](./work/pl-6-question-tree-and-engine.md)             | done      | `@planner/intake`: the tree, reachability, invalidation   |
-| [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them             |
-| [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER`  |
-| [pl-9](./work/pl-9-composer-and-critic.md)                  | done      | `@planner/itinerary`: season, packing, budget, critic     |
-| [pl-10](./work/pl-10-plan-view-and-provenance.md)           | done      | The plan reads: provenance, gaps, and what was unchecked  |
-| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | done      | The vocabulary is gone; `NOT_FOUND` lifted to core        |
-| [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | done      | 1,100 lines of `.tsx` and no test renders any of it       |
-| [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI   |
-| [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2     |
-| [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two         |
-| [pl-16](./work/pl-16-the-plan-run.md)                       | done      | The run over HTTP; its image gate produced pl-17          |
-| [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | done      | The image's workspace list is kept by hand and unchecked  |
-| [pl-18](./work/pl-18-destination-asked-early.md)            | done      | Destination asked third; `core` is position, not need     |
-| [pl-19](./work/pl-19-pin-through-the-browser.md)            | done      | Pinning proven across the seam: pin, reload, still pinned |
-| [pl-20](./work/pl-20-intake-fixture-builders.md)            | ready     | Three hand-written `INSERT` fixtures in one test file     |
+| Ticket                                                      | Status    | Note                                                         |
+| ----------------------------------------------------------- | --------- | ------------------------------------------------------------ |
+| [pl-1](./work/pl-1-conversation-loop.md)                    | dropped   | The chat premise. Read the log before rebuilding it          |
+| [pl-2](./work/pl-2-container-image.md)                      | in-flight | Image and release component landed; no subdomain yet         |
+| [pl-3](./work/pl-3-trip-brief-contract.md)                  | done      | The brief, its slots and `missingRequiredSlots` are in       |
+| [pl-4](./work/pl-4-plan-document-contract.md)               | done      | The plan document, migration 2, and pl-5's fixtures          |
+| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)             | in-flight | The roster is a table, not conditionals                      |
+| [pl-6](./work/pl-6-question-tree-and-engine.md)             | done      | `@planner/intake`: the tree, reachability, invalidation      |
+| [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them                |
+| [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER`     |
+| [pl-9](./work/pl-9-composer-and-critic.md)                  | done      | `@planner/itinerary`: season, packing, budget, critic        |
+| [pl-10](./work/pl-10-plan-view-and-provenance.md)           | done      | The plan reads: provenance, gaps, and what was unchecked     |
+| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | done      | The vocabulary is gone; `NOT_FOUND` lifted to core           |
+| [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | done      | 1,100 lines of `.tsx` and no test renders any of it          |
+| [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI      |
+| [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2        |
+| [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two            |
+| [pl-16](./work/pl-16-the-plan-run.md)                       | done      | The run over HTTP; its image gate produced pl-17             |
+| [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | done      | The image's workspace list is kept by hand and unchecked     |
+| [pl-18](./work/pl-18-destination-asked-early.md)            | done      | Destination asked third; `core` is position, not need        |
+| [pl-19](./work/pl-19-pin-through-the-browser.md)            | done      | Pinning is proven at the button and at the write, not across |
+| [pl-20](./work/pl-20-intake-fixture-builders.md)            | ready     | Three hand-written `INSERT` fixtures in one test file        |
+| [pl-22](./work/pl-22-pin-scoped-to-the-revision-shown.md)   | ready     | A pin on a superseded revision succeeds and does nothing     |
+| [pl-23](./work/pl-23-pinned-out-of-season-currency.md)      | ready     | The pinned out-of-season case that no currency test builds   |
 
 ## Known gaps and risks
 
