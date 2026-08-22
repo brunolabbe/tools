@@ -32,6 +32,8 @@
     "// e2e:serve": "The downloader's, from before there was a second tool to disambiguate against. Its playwright.config.ts names it.",
     "e2e:serve": "npm run build -w @downloader/web && node --import tsx tools/downloader/api/src/main.ts",
     "e2e:planner:serve": "npm run build -w @planner/web && node --import tsx tools/planner/api/src/main.ts",
+    "// status": "The ticket tables, computed from ticket frontmatter. `--write` is for `main` only — see docs/adr/003-the-status-page-is-generated.md.",
+    "status": "node scripts/status.mjs",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "format": "oxfmt",

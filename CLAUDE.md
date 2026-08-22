@@ -47,6 +47,7 @@ npm test -- --project <tool>  # just one tool's suite — seconds, not a minute
 npm run lint:fix              # oxlint --fix
 npm run format                # oxfmt
 npm run build                 # every workspace
+npm run status                # open tickets per tool, computed from their frontmatter
 ```
 
 Per-tool commands (`dev`, `e2e`) live in that tool's `CLAUDE.md`.
@@ -164,13 +165,28 @@ the tool index, the ticket format, and ADRs for decisions binding more than one
 tool. A document that describes two tools is where two tools start to fuse.
 
 **Work is one file per ticket** in `tools/<tool>/docs/work/`, carrying its brief
-and its log together. Ids are prefixed per tool (`dl-`, `pl-`). The format, the
-fields and the preamble to hand an agent are in
+and its log together. Ids are prefixed per tool (`dl-`, `pl-`), and repo-wide
+work — the toolchain, the conventions, CI — is `repo-` in `docs/work/`. The
+format, the fields and the preamble to hand an agent are in
 [docs/01-TICKETS.md](./docs/01-TICKETS.md).
 
 Append to a ticket's Log when you finish work on it, including whatever the
 brief turned out to have wrong. That is the note the next agent needs, and the
 roadmap and status pages are deliberately too thin to hold it.
+
+**A ticket's frontmatter is the only place its state is recorded**, and
+`npm run status` is the view over it — `-- --ready` for what is ready and
+unblocked, `-- --json` for an agent, `-- --prs` to fold in what is in review.
+Move a ticket to `done` by editing the ticket, in the commit that earns it.
+
+**Never edit a `<!-- generated:tickets -->` region.** Those tables are written on
+`main` from the frontmatter, by `.github/workflows/status.yml`. A branch that
+edits one fails its pull request, and the reason is the failure that came before
+the rule: a table with one line per ticket, touched by every ticket, means a
+branch cut a few days ago silently restores every row that moved since — which
+reads as plausible rather than as a conflict, because the file still parses and
+the statuses are all still words. See
+[adr/003](./docs/adr/003-the-status-page-is-generated.md).
 
 **A ticket file does not know about a branch.** It says `status: ready` until
 something merges, so "what is next" is `gh pr list` first and the ticket files
@@ -178,12 +194,6 @@ second — otherwise a ticket that has been in review for four days reads as
 untouched, and gets built twice. Check the base branch too: a pull request
 opened against another feature branch disappears with it, and its own page still
 says merged.
-
-**Rebase before merging anything that touches a status table.** Those tables are
-one line per ticket and every ticket touches them, so a branch cut a few days ago
-re-widens the whole table and silently restores every row that moved since —
-which reads as plausible rather than as a conflict, because the file still
-parses and the statuses are all still words.
 
 **Commits are conventional, and it is enforced.** `type(scope): subject`, with
 the scope naming a tool (`downloader`, `planner`) or `core` · `repo` · `ci` ·

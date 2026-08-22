@@ -38,6 +38,7 @@ honest description of a young tool rather than a gap to fill with guesses.
 | [02-DEPLOYMENT.md](./02-DEPLOYMENT.md) | Putting a tool on a public subdomain from a host behind a router  |
 | [03-RELEASING.md](./03-RELEASING.md)   | Commit conventions, versions, changelogs, and the images they cut |
 | [adr/](./adr/)                         | Decisions binding more than one tool                              |
+| [work/](./work/)                       | Repo-wide tickets, `repo-` prefixed — the toolchain and the rules |
 
 Deployment and releasing are here rather than under a tool because the tunnel,
 the login policy, `compose.prod.yaml` and the version scheme are one story for
@@ -52,6 +53,7 @@ release-please rewrites on every release does not belong in the middle of it.
 
 - [001 — Documentation and tickets live under the tool](./adr/001-per-tool-docs-and-tickets.md)
 - [002 — Each tool releases itself, from conventional commits](./adr/002-releases-from-conventional-commits.md)
+- [003 — The status tables are generated from the tickets](./adr/003-the-status-page-is-generated.md)
 
 An ADR belongs here only when the decision constrains **two or more tools** —
 what earns a place in `packages/core`, which runtime the repo targets, how CI is

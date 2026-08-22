@@ -1,8 +1,14 @@
 # Tickets
 
-A ticket is one markdown file in `tools/<tool>/docs/work/`. It carries the brief
-that starts the work and the record of what the work did — the same file, from
-"someone should do this" to "here is what happened and why".
+A ticket is one markdown file in `tools/<tool>/docs/work/`, or in `docs/work/`
+when the work belongs to no single tool. It carries the brief that starts the
+work and the record of what the work did — the same file, from "someone should
+do this" to "here is what happened and why".
+
+**Its frontmatter is the only place the ticket's state is recorded**, and every
+status table in the repo is generated from it —
+[adr/003](./adr/003-the-status-page-is-generated.md). Move a ticket to `done` by
+editing the ticket, in the commit that earns it.
 
 That is the whole point of the format. Splitting a plan across a roadmap row, a
 brief and a status entry means three places to keep in sync by hand, and they
@@ -53,17 +59,27 @@ wrong in the brief. This is what a future reader actually needs.
 
 ### Fields
 
-| Field        | Values                                                              |
-| ------------ | ------------------------------------------------------------------- |
-| `id`         | `<prefix>-<n>`, monotonic per tool. `dl-` downloader, `pl-` planner |
-| `tool`       | The directory name under `tools/`                                   |
-| `kind`       | `work-package` · `fix` · `chore`                                    |
-| `status`     | `ready` · `in-flight` · `done` · `dropped`                          |
-| `milestone`  | A milestone from that tool's roadmap, or `null`                     |
-| `depends_on` | Ticket ids that must land first                                     |
+| Field        | Values                                                                        |
+| ------------ | ----------------------------------------------------------------------------- |
+| `id`         | `<prefix>-<n>`, monotonic. `dl-` downloader, `pl-` planner, `repo-` repo-wide |
+| `tool`       | The directory name under `tools/`, or `repo`                                  |
+| `kind`       | `work-package` · `fix` · `chore`                                              |
+| `status`     | `ready` · `in-flight` · `done` · `dropped`                                    |
+| `milestone`  | A milestone from that tool's roadmap, or `null`                               |
+| `depends_on` | Ticket ids that must land first                                               |
+| `note`       | Optional. What the generated table says instead of the title                  |
 
 The id prefix exists so `dl-8` means something in a commit message and in
 conversation, where the directory is not there to disambiguate it.
+
+`note` is the one editorial field, and it should stay rare: a title that reads
+badly in a table column is usually a title worth fixing.
+
+**These six fields are parsed, and strictly.** `scripts/status.mjs` fails by
+file and line on a key nobody has agreed on, a `status` or `kind` outside the
+lists above, an `id` that disagrees with its own filename, or a `depends_on`
+naming a ticket that does not exist. A parser that shrugs at what it does not
+understand reports a clean status page having read half the tickets.
 
 **`dropped` tickets stay.** A ticket that was considered and rejected is worth
 more than a deleted file: the next person to have the idea finds the reason it
@@ -130,6 +146,24 @@ the first one's confidence.
   are.
 - **`03-STATUS.md`** — a dashboard: what is in flight, what is known to be
   rough, how to check the tree is green. Not a log — the log is in the tickets.
+  Its ticket tables sit between `<!-- generated:tickets -->` markers and are
+  **written on `main`, from the frontmatter**. Never edit that region on a
+  branch: `.github/workflows/status.yml` fails the pull request, and the reason
+  is [adr/003](./adr/003-the-status-page-is-generated.md).
+
+## Asking what is next
+
+```bash
+npm run status                # open tickets per tool, with what blocks each
+npm run status -- --ready     # ready, and nothing open in its depends_on
+npm run status -- --json      # the same data, structured
+npm run status -- --prs       # fold in `gh pr list`
+```
+
+Computed from the ticket files every time, so it cannot disagree with them.
+`--ready` is the one worth knowing: `status: ready` means nobody has picked a
+ticket up, which is not the same as it being startable — a ticket waiting on one
+that is still open is a queue, and only `--ready` separates the two.
 
 ## The agent preamble
 

@@ -1,0 +1,91 @@
+name: Status
+
+# The two halves of ADR 003. A branch never writes the generated region of a
+# `03-STATUS.md`; `main` writes it after a merge, from the ticket frontmatter.
+#
+# This is a workflow of its own rather than a job in `ci.yml`, and that is the
+# whole point rather than tidiness. `ci.yml` carries `paths-ignore: ["**.md"]`,
+# so a documentation-only pull request — a ticket flipped to `done`, a new
+# ticket filed — does not run it at all. That is exactly the pull request whose
+# frontmatter needs parsing and whose status region needs guarding, so a job
+# there would be silent in the one case it exists for.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/*/docs/work/**"
+      - "tools/*/docs/03-STATUS.md"
+      - "scripts/status.mjs"
+  pull_request:
+    paths:
+      - "tools/*/docs/**"
+      - "scripts/status.mjs"
+
+concurrency:
+  group: status-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Every pull request: the frontmatter parses, and the generated region is
+  # byte-for-byte what the base branch had. Both are fast and neither needs a
+  # build — `status.mjs` has no dependencies for the same reason
+  # `commit-message.mjs` does not.
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # `--check` compares this branch's region against the base commit's,
+          # so that commit has to be in the clone. A shallow one does not have
+          # it, and `git show` would fail as "the file does not exist at that
+          # ref" — which reads as the new-tool case and passes.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # Parses every ticket, and fails by file and line on anything it does not
+      # understand. Nothing else in CI reads them.
+      - run: node scripts/status.mjs --json > /dev/null
+      - run: node scripts/status.mjs --check --base ${{ github.event.pull_request.base.sha }}
+
+  # After a merge: rewrite the regions from what the tickets now say, and push.
+  #
+  # A push by `GITHUB_TOKEN` does not trigger workflows, so this cannot loop —
+  # that is a documented property of the token rather than something guarded
+  # here. If `main` ever requires a pull request to write, this job fails loudly
+  # and the fix is to open one instead of pushing; it must not be made to pass
+  # by ignoring the error, because a status page that silently stops updating is
+  # worse than the hand-written one it replaced.
+  regenerate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      # oxfmt formats markdown in this repo, so an unformatted table would fail
+      # the next `npm run check`. The generator pads its own tables to match,
+      # and this is the belt: if the two ever disagree, the difference lands
+      # here in one commit rather than in someone else's pull request.
+      - run: npm ci
+      - run: node scripts/status.mjs --write
+      - run: npm run format
+      - name: Commit the regenerated tables
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "the tables already match the tickets"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/*/docs/03-STATUS.md
+          git commit -m "docs(repo): regenerate the status tables from the tickets"
+          git push
