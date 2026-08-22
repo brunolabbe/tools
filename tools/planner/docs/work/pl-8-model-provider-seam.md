@@ -3,7 +3,7 @@ id: pl-8
 tool: planner
 title: Rename the chat seam to a model seam
 kind: chore
-status: in-flight
+status: done
 milestone: null
 depends_on: []
 ---
@@ -116,3 +116,12 @@ this rename was more than internal hygiene.
 The health response is unchanged: it reports `agent: { provider, model }`, which
 was never chat-flavoured, so `web/` and `contract/` were not touched at all.
 [pl-1](./pl-1-conversation-loop.md) was left as written, per step 7.
+
+**2026-08-22 — `status` corrected to `done`.** The work landed on 2026-08-14 and
+the log above says so; the frontmatter was never moved off `in-flight`, so for
+eight days this ticket read as open work. Re-checked before flipping rather than
+taken on the log's word: no identifier under `tools/planner/**/src` contains
+`Chat`, and `MODEL_PROVIDER` is the name in `api/src/config.ts`, the
+`Dockerfile`, `01-ARCHITECTURE.md`'s env table and `docs/02-DEPLOYMENT.md`. The
+surviving `CHAT_PROVIDER` strings are all in ticket prose describing what was
+renamed, which is where they belong.
