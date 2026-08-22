@@ -7,14 +7,17 @@
   // `checkJs` stays off, because the `.mjs` is not this project's to hold to
   // `strict`. `allowJs` is per-project, which is the whole reason this is one.
   //
-  // The `.mjs` is named in `include` because a composite project must list
-  // every file in its program, and it lives one level up from the tests.
+  // Both `.mjs` files are named in `include` because a composite project must
+  // list every file in its program, and they live one level up from the tests.
+  // `status.mjs` is here for the same reason and on the same terms: its
+  // `{ id, status, milestone, … }` shape is what the tests assert, and
+  // `allowJs` is what lets tsc infer it from the source.
   "extends": "../../tsconfig.tests.json",
   "compilerOptions": {
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["**/*.ts", "../commit-message.mjs"],
+  "include": ["**/*.ts", "../commit-message.mjs", "../status.mjs"],
   // Restated, not inherited — the root's exclude is about the root's program.
   "exclude": []
 }
