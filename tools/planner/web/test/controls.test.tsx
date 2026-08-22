@@ -18,11 +18,12 @@
  * `null` is what disables the Next button. `dates` and `budget` carry the weight
  * — they are the two composites where a user can be half-way through.
  *
- * Queried by role and accessible name throughout. The one thing that cannot be:
- * `text`, `text-list`, `number` and `number-list` render a bare input with an
- * `id` and no `label`, so they have no accessible name to ask for — the prompt
- * is an `h2` in `QuestionCard`, a level up. Queried by role alone here, and
- * noted in pl-12's log.
+ * Queried by role throughout, and by accessible name wherever the field carries
+ * its own. `text`, `text-list`, `number` and `number-list` do not: since pl-21
+ * they are named by `aria-labelledby` pointing at the prompt, which `QuestionCard`
+ * renders a level up and this suite does not mount. So they are queried by role
+ * alone here, and **that they answer to their prompt is asserted in
+ * `wizard.test.tsx`**, where the card that names them is on screen.
  */
 
 import { afterEach, expect, test, vi } from "vitest";

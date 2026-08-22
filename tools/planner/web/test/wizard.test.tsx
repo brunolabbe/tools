@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 /**
- * The two rules from this tool's `CLAUDE.md` that are UI claims, held to.
+ * The rules from this tool's `CLAUDE.md` that are UI claims, held to.
  *
  * - **Never discard an answer silently.** Every write past the first is
  *   previewed, the user reads a list of prompts, and nothing is written until
@@ -12,6 +12,10 @@
  *   question still to ask is the checkpoint, not a reason to march on — and
  *   since pl-18 the skip button follows `isRequiredSlot(fills)` rather than
  *   `stage`, so an early optional question offers it and a required one does not.
+ * - **Every control can be asked for by its prompt** (pl-21). The card is where
+ *   the prompt is rendered, so it is the only place the name a control answers
+ *   to can be asserted — `controls.test.tsx` mounts the field on its own, a
+ *   level below the `h2` that names it.
  *
  * **The fake is the API client module, never `fetch`.** `src/api/intake.ts` is
  * the seam and it is one module; stubbing `fetch` would mean re-implementing
@@ -310,4 +314,84 @@ test("progress is what the tool can stand behind, and no more", async () => {
 
   // A count and a milestone, never a percentage of a reachable set that moves.
   expect(await screen.findByText("1 answered, and more to come.")).toBeDefined();
+});
+
+// ---------------------------------------------------------------------------
+// Every control has a name, and the name is the prompt the tree gave it
+// ---------------------------------------------------------------------------
+
+/**
+ * The help text, on a node that has one — the sentence a screen reader should
+ * announce after the prompt rather than as part of it.
+ */
+const HELP = "Roughly is fine; we will not hold you to it.";
+
+/** The card, showing one question, with its control in front of us. */
+async function asking(question: QuestionNode): Promise<void> {
+  // Between questions in one test, since `afterEach` only runs between them and
+  // a second wizard would leave two of every control mounted.
+  cleanup();
+  fetched.mockResolvedValue(intakeState({ questions: [question] }));
+  mount();
+  await screen.findByRole("heading", { name: question.prompt });
+}
+
+const ASKED = { ...BASE, prompt: "How long have you got?", help: HELP } as const;
+
+test("the four bare controls answer to their prompt, and carry the help as a description", async () => {
+  // Asked for by the prompt the tree gave them and never by `#field-<id>`, so
+  // both sides of the assertion move when the tree does — and neither is
+  // findable this way at all unless the control has an accessible name.
+  const named = { name: ASKED.prompt, description: HELP };
+
+  await asking({ ...ASKED, id: "q.text", kind: "text", maxLength: 200 });
+  expect(screen.getByRole("textbox", named)).toBeDefined();
+
+  await asking({ ...ASKED, id: "q.text-list", kind: "text-list", maxLength: 80, maxItems: 5 });
+  expect(screen.getByRole("textbox", named)).toBeDefined();
+
+  await asking({
+    ...ASKED,
+    id: "q.number",
+    kind: "number",
+    min: 1,
+    max: 14,
+    integer: true,
+    unit: "days",
+  });
+  expect(screen.getByRole("spinbutton", named)).toBeDefined();
+
+  // A text input, not a spinbutton: it is a comma-separated list of numbers.
+  await asking({
+    ...ASKED,
+    id: "q.number-list",
+    kind: "number-list",
+    min: 0,
+    max: 110,
+    integer: true,
+    maxItems: 8,
+    unit: null,
+  });
+  expect(screen.getByRole("textbox", named)).toBeDefined();
+});
+
+test("a question with no help leaves the control described by nothing", async () => {
+  await asking({ ...ASKED, help: null, id: "q.text", kind: "text", maxLength: 200 });
+
+  // The name is still the prompt; the description is absent rather than an
+  // empty string pointing at an element that was never rendered.
+  const field = screen.getByRole("textbox", { name: ASKED.prompt, description: "" });
+  expect(field.hasAttribute("aria-describedby")).toBe(false);
+});
+
+test("the controls that were already labelled are still findable the same way", async () => {
+  // The claim is about every control, not about the four that were broken: the
+  // choice controls wrap their input in a `<label>` and `dates` labels each
+  // sub-field with an `htmlFor`, and both must keep answering to those names.
+  await asking(CORE);
+  expect(screen.getByRole("radio", { name: "Coast" })).toBeDefined();
+
+  await asking({ ...BASE, id: "core.dates", prompt: "When are you going?", kind: "dates" });
+  await userEvent.click(screen.getByRole("radio", { name: "However long, whenever" }));
+  expect(screen.getByRole("spinbutton", { name: "Nights" })).toBeDefined();
 });

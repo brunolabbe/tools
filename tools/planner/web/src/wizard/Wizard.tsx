@@ -36,7 +36,7 @@ import {
 import { fetchIntake, previewAnswer, submitAnswer } from "../api/intake.ts";
 import { startRun } from "../api/plan.ts";
 import { Brief } from "./Brief.tsx";
-import { QuestionField } from "./controls.tsx";
+import { helpId, promptId, QuestionField } from "./controls.tsx";
 import { describeAnswer } from "./format.ts";
 
 interface WizardProps {
@@ -255,8 +255,14 @@ function QuestionCard({
 
   return (
     <section className="panel question">
-      <h2>{question.prompt}</h2>
-      {question.help !== null && <p className="help">{question.help}</p>}
+      {/* The heading is what names the bare fields below — `controls.tsx` points
+          at these two ids rather than restating the prompt in an `aria-label`. */}
+      <h2 id={promptId(question.id)}>{question.prompt}</h2>
+      {question.help !== null && (
+        <p id={helpId(question.id)} className="help">
+          {question.help}
+        </p>
+      )}
 
       <QuestionField question={question} initial={initial} onChange={onDraft} />
 
