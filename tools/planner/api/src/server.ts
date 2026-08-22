@@ -20,6 +20,7 @@ import type { ApiConfig } from "./config.ts";
 import { loadApiConfig } from "./config.ts";
 import type { AppContext } from "./context.ts";
 import { migrate } from "./db/schema.ts";
+import { CachingGroundingProvider } from "./grounding/cache.ts";
 import { FixtureGroundingProvider } from "./grounding/fixtures.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import type { AppLogger } from "./logger.ts";
@@ -98,13 +99,31 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const model = options.model ?? createModelProvider(config);
   logger.info("agent configured", { provider: model.name, model: model.model });
 
-  const grounding = options.grounding ?? createGroundingProvider(config);
-  // The name only. A real backend's endpoint is infrastructure detail and its
-  // key is a credential, and neither belongs on a log line — `logger.ts`
-  // censors the obvious field names as a backstop, not as permission.
+  // Wrapped, never threaded through: the cache is a `GroundingProvider` that
+  // holds another one, so nothing above the seam — and no backend below it —
+  // learns that SQLite is involved. An injected provider is wrapped too, on
+  // purpose: a test then exercises the path production runs rather than one
+  // that only exists in tests.
+  const grounding = new CachingGroundingProvider({
+    db,
+    inner: options.grounding ?? createGroundingProvider(config),
+    ttlHours: config.groundingCacheTtlHours,
+    now,
+    logger,
+  });
+  // On boot, because a process that has been down for a month comes up holding
+  // a table of answers that expired while it was off. The other sweep is after
+  // a run; there is deliberately no timer.
+  grounding.evictExpired();
+  // The name only, and it is the backend's — `/api/health` answers "what is
+  // this deployment grounding against", and a cache is not a backend. A real
+  // backend's endpoint is infrastructure detail and its key is a credential,
+  // and neither belongs on a log line — `logger.ts` censors the obvious field
+  // names as a backstop, not as permission.
   logger.info("grounding configured", {
     provider: grounding.name,
     maxCalls: config.maxGroundingCalls,
+    cacheTtlHours: config.groundingCacheTtlHours,
   });
 
   let shuttingDown = false;

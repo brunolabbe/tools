@@ -4,7 +4,7 @@ tool: planner
 title: Cache grounding with a TTL that varies by kind
 kind: work-package
 milestone: P3
-status: ready
+status: done
 depends_on: [pl-24]
 ---
 
@@ -96,3 +96,86 @@ we read, and when".
   suites still pass against a fresh one.
 
 ## Log
+
+**2026-08-22 — built.** Migration 5, the caching provider, its TTLs and the two
+eviction points. Nothing calls `locate` or `travel` in production yet — that is
+still pl-27 — so this ticket's whole surface is the seam it wraps and the table
+behind it.
+
+`grounding_cache` is `PRIMARY KEY (kind, key)` with `payload_json`,
+`source_json`, `fetched_at` and `expires_at`, plus an index on `expires_at` for
+the sweep. `CachingGroundingProvider` in `api/src/grounding/cache.ts` is a
+`GroundingProvider` holding another one, wired in `createApp` around whichever
+backend the config named — including one a test injected, on purpose, so a test
+exercises the path production runs.
+
+**`fetched_at` is the fact's own fetch time, not the row's write time, and
+`expires_at` is computed from it.** The brief says the deadline is computed on
+write; it does not say from which instant, and the two choices are not
+equivalent. Running the TTL from the write time would let an answer a backend
+read in January be served as good for a year from whichever boot first asked for
+it. Running it from `Source.fetchedAt` gives the row one timestamp that means one
+thing — which is also what makes step 3 structurally true rather than carefully
+remembered: there is no second candidate for `Source.fetchedAt` on the way out,
+because the column _is_ it. It also makes pl-24's note come true as written —
+the fixture table's frozen `FIXTURE_FETCHED_AT` ages, and those facts age out
+like any others rather than being eternally fresh. The base is clamped to `now`
+so a backend with a fast clock cannot extend its own TTL.
+
+**A `null` is not cached, and that is a decision the brief did not make.** It has
+no `Source`, so the two columns that make the table inspectable would be empty; a
+real backend's `null` is as often a gap in _its_ coverage today as a fact about
+the world; and its lifetime is a number nobody has argued for. The cost is
+stated in the file header rather than discovered later: a question nobody can
+answer is re-asked every time, and there is a test asserting exactly that. If it
+shows up as a bill, the fix is a negative TTL argued for in the architecture's
+configuration table like every other one.
+
+**"A hit is not a call" needed a shape, because a budget cannot both refuse and
+stay silent.** `GroundingBudget.claim` deliberately does not throw and the
+planner taxonomy has no code for "out of budget" — correctly, since pl-24 says
+what a run skipped for want of budget is a `PlanGap` and not an error. So the
+budget is spent _inside_ the cache: `groundingForRun(provider, budget)` returns a
+`RunGrounding`, which is a cache whose inner provider claims one call before each
+call it makes. A hit never reaches that layer and never spends. The composition
+is the argument — a budget wrapped _around_ a cache charges for hits and looks
+identical at the call site. A refusal makes no call, answers as the table alone
+can, and increments `refused`, which is the number pl-27 needs to tell "we could
+not afford to ask" from "nobody knows" — those must not collapse into the same
+`null`.
+
+**`travel` caches per cell and re-asks only the sub-matrix it is missing.** Every
+missing cell has its row in the wanted-origins set and its column in the
+wanted-destinations set, so their product covers all of them in one call, and the
+extra cells it picks up are ones the next revision would have paid for. A matrix
+it holds in full costs no call at all.
+
+**What the normaliser drops is written down and each item has a test**: case,
+surrounding whitespace, repeated whitespace inside, and control characters — the
+last because a NUL joins the parts of a key and a name carrying one could
+otherwise be answered with a different pair's row. It does **not** strip accents,
+punctuation or abbreviations: `placeKey` in the fixture provider strips accents
+and that is its business — deciding whether its own small table holds an answer
+is not the same act as deciding two questions are one question.
+
+Eviction is a `DELETE`, on boot in `createApp` and in the run task's `finally` in
+`startRun` — not inside `execute`, which is pl-27's, and skipped while shutting
+down so a closing database cannot turn a finished run into a logged task
+rejection. Both are asserted end to end, the boot one against a file database
+because the claim under test is that the table outlives the process.
+
+Migration 5's own test winds a fresh database back to `user_version = 4` rather
+than hand-writing one, unlike `atVersionOne` in `schema.test.ts`: migration 4 is
+an `ALTER TABLE` on top of three others, so a hand-written version-4 schema would
+be a fourth copy of the whole thing and the first to rot. What it proves is that
+migration 5 is appended and arrives on a database that already ran 1 through 4.
+
+**For pl-27:** `context.grounding` is the cache, typed as the plain seam.
+`groundingForRun(context.grounding, groundingBudget(config.maxGroundingCalls))`
+is the per-run provider — one entry point whether or not a cache is in the way —
+and `refused` on what comes back is the count of lookups the budget would not
+pay for. It is a `PlanGap`, not an `UncheckedConstraint` and not a `null`.
+
+**611 in the planner suite (574 before), 1205 repo-wide, `npm run check` green.**
+Nothing existing changed meaning; `migrations.test.ts` and `schema.test.ts` moved
+from `user_version = 4` to `5` and gained `grounding_cache` in their table lists.

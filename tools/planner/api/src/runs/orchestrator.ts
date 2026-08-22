@@ -74,6 +74,7 @@ import {
   updateRunRoster,
   updateRunStatus,
 } from "../db/runs.ts";
+import { evictExpiredGrounding } from "../grounding/cache.ts";
 import { intakeTitle } from "../intakes/title.ts";
 import { readIntake } from "../intakes/state.ts";
 
@@ -187,7 +188,21 @@ export function startRun(context: AppContext, intakeId: string): Run {
   context.runs.enqueue({
     runId,
     run: async (signal) => {
-      await execute(context, { runId, planId, brief }, signal);
+      try {
+        await execute(context, { runId, planId, brief }, signal);
+      } finally {
+        // The grounding cache's other sweep — the first is on boot (pl-25).
+        // Here rather than inside `execute` because it is true of a run however
+        // it ended, including a canceled one, and because it is housekeeping
+        // rather than part of drafting a plan.
+        //
+        // Skipped while shutting down: the queue cancels what is in flight and
+        // the database closes behind it, and a failed DELETE would turn a run
+        // that finished into a logged task rejection.
+        if (!context.isShuttingDown()) {
+          evictExpiredGrounding(context.db, context.now(), context.logger);
+        }
+      }
     },
   });
 

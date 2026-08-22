@@ -33,6 +33,20 @@ export type ModelProviderName = (typeof MODEL_PROVIDERS)[number];
 export const GROUNDING_PROVIDERS = ["fixtures"] as const;
 export type GroundingProviderName = (typeof GROUNDING_PROVIDERS)[number];
 
+/**
+ * Cache lifetimes, in hours, one per kind of question the seam can ask.
+ *
+ * A record and not two loose numbers so that the day the seam grows a third
+ * method the compiler asks for its TTL, rather than a lookup quietly falling
+ * back to somebody's favourite default.
+ */
+export interface GroundingCacheTtlHours {
+  /** Where somewhere is. */
+  locate: number;
+  /** How far apart two places are, and how long that takes. */
+  travel: number;
+}
+
 export interface ApiConfig {
   host: string;
   port: number;
@@ -59,6 +73,22 @@ export interface ApiConfig {
    * roster's.
    */
   maxGroundingCalls: number;
+
+  /**
+   * How long a grounded answer stays good, in hours, per kind of question.
+   *
+   * **It varies by kind because the facts do.** §5: a distance is good for a
+   * year and an opening time is good for a day, and one number for both would
+   * either re-measure every road every week or serve last summer's hours in
+   * February. The kinds are the seam's methods, so there is a row here the day
+   * `GroundingProvider` grows an `hours` method and not before — which is the
+   * row `01-ARCHITECTURE.md`'s "hours for an opening time" is waiting for.
+   *
+   * Spent on write: `expires_at` is computed from the kind when the row is
+   * stored, so changing one of these does not retroactively resurrect or kill
+   * what is already in the table.
+   */
+  groundingCacheTtlHours: GroundingCacheTtlHours;
 
   /**
    * How many specialists one run may pay for (§9).
@@ -115,6 +145,14 @@ export const API_DEFAULTS = {
   groundingProvider: "fixtures",
   maxOutputTokens: 2_048,
   maxGroundingCalls: 40,
+  // A year for a place and six months for a road. Coordinates do not move;
+  // a driving time does — roadworks, a re-signed limit, a rebuilt interchange —
+  // so the two differ, which is the whole reason this is per-kind. Both are
+  // long because §5's argument for caching at all is that a distance is good
+  // for a year and re-measuring the same road every boot is the cost this
+  // exists to avoid.
+  groundingCacheTtlLocateHours: 8_760,
+  groundingCacheTtlTravelHours: 4_320,
   maxSpecialists: 5,
   maxConcurrentRuns: 2,
   rateLimitRunsPerMinute: 5,
@@ -213,6 +251,26 @@ export function loadApiConfig(
     maxGroundingCalls:
       overrides.maxGroundingCalls ??
       int(env["MAX_GROUNDING_CALLS"], API_DEFAULTS.maxGroundingCalls, { min: 0 }),
+    groundingCacheTtlHours: overrides.groundingCacheTtlHours ?? {
+      // `min: 0` on both: zero hours is how a deployment turns the cache off
+      // without removing it, and every write it makes is expired before it
+      // lands. Clamping up to one would keep serving an answer somebody
+      // explicitly said not to keep.
+      locate: int(
+        env["GROUNDING_CACHE_TTL_LOCATE_HOURS"],
+        API_DEFAULTS.groundingCacheTtlLocateHours,
+        {
+          min: 0,
+        },
+      ),
+      travel: int(
+        env["GROUNDING_CACHE_TTL_TRAVEL_HOURS"],
+        API_DEFAULTS.groundingCacheTtlTravelHours,
+        {
+          min: 0,
+        },
+      ),
+    },
     runTokenBudget: overrides.runTokenBudget ?? optionalInt(env["RUN_TOKEN_BUDGET"]),
     maxConcurrentRuns:
       overrides.maxConcurrentRuns ??
