@@ -54,6 +54,7 @@ release-please rewrites on every release does not belong in the middle of it.
 - [001 — Documentation and tickets live under the tool](./adr/001-per-tool-docs-and-tickets.md)
 - [002 — Each tool releases itself, from conventional commits](./adr/002-releases-from-conventional-commits.md)
 - [003 — The status tables are generated from the tickets](./adr/003-the-status-page-is-generated.md)
+- [004 — One compose fragment per tool, merged on the host](./adr/004-one-compose-fragment-per-tool.md)
 
 An ADR belongs here only when the decision constrains **two or more tools** —
 what earns a place in `packages/core`, which runtime the repo targets, how CI is
