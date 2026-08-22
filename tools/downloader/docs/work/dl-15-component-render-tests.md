@@ -111,8 +111,9 @@ is that someone once looked at it.
 - `npm run check` is green — including the test typecheck, if
   [dl-13](./dl-13-typecheck-the-tests.md) has landed. If it has not, the `.tsx`
   test files are written as though it had.
-- The "no component-render tests in `web`" entry leaves
-  [03-STATUS.md](../03-STATUS.md).
+- The gap is closed by flipping this ticket's frontmatter to `done` in the
+  commit that earns it. Nothing else records it: `03-STATUS.md` is generated
+  from that frontmatter and carries no hand-written gap list (repo-1).
 
 ## Log
 

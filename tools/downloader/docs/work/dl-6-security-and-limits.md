@@ -119,3 +119,11 @@ They are a guess at "one person using the UI normally, with room for a mistake"
 is ever pointed at a shared network where many people appear as one address,
 both want raising. `TRUST_PROXY` is the other half of that answer: set
 correctly, colleagues behind one NAT still get their own buckets.
+
+**2026-08-22 — carried here from `03-STATUS.md` (repo-1).** The limits are
+**per-process, not per-deployment.** Both buckets and the concurrency gate live
+in memory, so two replicas behind a load balancer grant two allowances. That is
+correct for the single-container deployment this targets, and the fix if it is
+ever scaled out is a shared store — the same Redis a BullMQ queue would want.
+The status page had been the only place this was written down; it is a property
+of what this ticket built, so it belongs here.

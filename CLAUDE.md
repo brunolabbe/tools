@@ -174,6 +174,13 @@ Append to a ticket's Log when you finish work on it, including whatever the
 brief turned out to have wrong. That is the note the next agent needs, and the
 roadmap and status pages are deliberately too thin to hold it.
 
+**A `03-STATUS.md` holds the generated tables and how to run the thing, and
+nothing else** — no phase table, no test count, no "what exists" paragraph, no
+gap list. Each of those is either a projection of frontmatter, which the tables
+already are, or a ticket's Log restated where nothing keeps it true; both pages
+were emptied of them in `repo-1`, and each now opens with a table saying where
+each kind of fact goes. A gap worth recording is a ticket worth filing.
+
 **A ticket's frontmatter is the only place its state is recorded**, and
 `npm run status` is the view over it — `-- --ready` for what is ready and
 unblocked, `-- --json` for an agent, `-- --prs` to fold in what is in review.

@@ -4,9 +4,12 @@ Derived from [00-ANALYSIS.md](./00-ANALYSIS.md). Every structural choice below
 traces back to a constraint in that document, and the section it comes from is
 named.
 
-Phase 0 built four packages and one seam; most of this page is not built yet.
-What is true today is in [03-STATUS.md](./03-STATUS.md) — read that before
-assuming any of it exists.
+**Read this as design, not as description.** It leads the code, and always has —
+by four phases when it was written, by one now. What is actually built is the
+closed tickets in [work/](./work/); what is not is the open ones, which
+[03-STATUS.md](./03-STATUS.md) lists. Check there before assuming anything on
+this page exists, and expect everything about specialists, grounding and
+revision to be the furthest ahead.
 
 ---
 

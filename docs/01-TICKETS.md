@@ -144,12 +144,19 @@ the first one's confidence.
 - **`02-ROADMAP.md`** — phases, milestones, and the shape of the argument. It
   links to tickets; it does not describe work. A phase is done when its tickets
   are.
-- **`03-STATUS.md`** — a dashboard: what is in flight, what is known to be
-  rough, how to check the tree is green. Not a log — the log is in the tickets.
-  Its ticket tables sit between `<!-- generated:tickets -->` markers and are
+- **`03-STATUS.md`** — the ticket tables and how to run the thing, and nothing
+  else. The tables sit between `<!-- generated:tickets -->` markers and are
   **written on `main`, from the frontmatter**. Never edit that region on a
   branch: `.github/workflows/status.yml` fails the pull request, and the reason
   is [adr/003](./adr/003-the-status-page-is-generated.md).
+
+  The page carries **no hand-written status**: no phase table, no test count, no
+  gap list, no "what exists" paragraph. Every one of those is either a
+  projection of frontmatter — in which case the tables already say it — or a
+  ticket's Log restated where nothing keeps it true. Both tools' pages were
+  emptied of it in [repo-1](./work/repo-1-generated-status-tables.md); each page
+  now opens with a table saying where each kind of fact goes instead. A gap
+  worth recording is a ticket worth filing.
 
 ## Asking what is next
 

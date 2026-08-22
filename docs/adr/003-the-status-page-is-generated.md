@@ -111,19 +111,23 @@ worse than either one.
 
 ## Consequences
 
-- **The narrative is not migrated yet.** This decision is implemented for the
-  ticket tables only; the prose paragraphs and the phase table stay where they
-  are, and both status pages carry a generated milestone rollup alongside a
-  hand-written phase table saying an overlapping thing. That is deliberate —
-  `pl-24`'s pull request is open against those exact lines — and it is filed as
-  [repo-1](../work/repo-1-generated-status-tables.md)'s second half.
-- **The test count goes when the narrative does.** "526 unit tests pass across
-  40 files" rots on every merge and asserts something CI already asserts on
-  every push.
-- **Roughly eight source comments cite `03-STATUS.md` as the home of a fact** —
-  `guarded-fetch.ts`, `dispatcher.ts`, `orchestrator.ts`, `pipeline.test.ts`.
-  They should point at the ticket, which is a more stable anchor than a
-  paragraph in a page being emptied. Part of the same follow-up.
+- **The narrative is migrated, and the pages are what is left.** Done on
+  2026-08-22, in [repo-1](../work/repo-1-generated-status-tables.md)'s second
+  half — deliberately not in the same change as the tables, because `pl-24`'s
+  pull request was open against those exact lines. What survives on a
+  `03-STATUS.md` is the generated region, a table saying where each kind of fact
+  goes instead, and "Running things". The phase table went (the roadmap defines
+  phases; the generated rollup counts them), the test count went (CI asserts it
+  on every push and prose cannot), and the gap list went: a gap worth recording
+  is a ticket worth filing, and the tables list those. Almost every narrative
+  paragraph turned out to be already present in its ticket's Log verbatim, which
+  is the second copy this ADR predicted — only two facts on either page had no
+  other home, and they moved to `dl-5` and `dl-6`.
+- **Four source comments cited `03-STATUS.md` as the home of a fact** —
+  `guarded-fetch.ts`, `dispatcher.ts`, `jobs/orchestrator.ts`,
+  `test/pipeline.test.ts` — and each now names the ticket or the code that holds
+  it. Two ticket Logs and two open tickets' acceptance criteria said the page
+  carried a gap; those were repointed with them.
 - **`docs/work/` now exists, and ids there are prefixed `repo-`.** 002 said the
   signal to create it would be "a third piece of repo-wide work with nowhere to
   live", after `dl-10` and `pl-2` had to carry the release pipeline between

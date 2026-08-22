@@ -3,7 +3,7 @@ id: repo-1
 tool: repo
 title: Generate the status tables from ticket frontmatter, and stop branches editing them
 kind: chore
-status: in-flight
+status: done
 milestone: null
 depends_on: []
 ---
@@ -125,3 +125,91 @@ was rendered when `pl-24` still said `ready`, and the `regenerate` job on `main`
 would have corrected it on the merge push regardless. Fixing it on the branch is
 for the reviewer's benefit, so the diff does not ship a table that is visibly
 wrong.
+
+**2026-08-22 — the narrative is retired, and this closes.** The second half the
+first entry deferred: `pl-24` had merged, so the lines it was open against were
+free.
+
+**What a `03-STATUS.md` is now.** Three things and no fourth: the generated
+region, a short table saying where each kind of fact goes _instead_ of onto this
+page, and "Running things". The downloader's page went from 252 lines to 120, the
+planner's from 439 to 113. The header table is the load-bearing part — the page's
+old second paragraph already said "if you find yourself writing a paragraph
+here, it belongs in a ticket" and thirty-seven commits ignored it, so the
+replacement names the destination for each kind of thing a person arrives
+wanting to write: frontmatter for state, a ticket's Log for what work did, a
+ticket for a gap, a code comment for why the code is shaped that way, an ADR for
+a cross-tool decision, `02-ROADMAP` for phases.
+
+**Retired outright.** The phase table (`02-ROADMAP` defines phases and the
+generated milestone rollup counts them — two tables saying an overlapping thing
+was the duplication this ticket exists to end), the test count on both pages,
+"Last updated", the `## Open questions for the owner` section, and both `##
+Known gaps and risks` sections. A gap worth recording is a ticket worth filing,
+and the generated table lists those with a sentence each.
+
+**Almost nothing had to move, which is the finding.** ADR 003 predicted the
+narrative paragraphs were each "that ticket's Log, restated a second time"; that
+turned out to be true of nearly all of them, checked one at a time against the
+owning ticket before deleting. Every planner paragraph was already carried
+somewhere else — its ticket's Log or Why (pl-2, pl-5, pl-9, pl-10, pl-11, pl-12,
+pl-13, pl-15, pl-16, pl-17, pl-18, pl-19, pl-26), an amendment to
+`00-ANALYSIS` §3/§7, `02-ROADMAP`'s answered-questions section, or a docblock in
+`contract/src/errors.ts`. Exactly two facts in the repo had no other home, both
+the downloader's, and both moved:
+
+| Paragraph                                                      | Moved to                                           |
+| -------------------------------------------------------------- | -------------------------------------------------- |
+| Rate limiting is per-process, not per-deployment               | `dl-6`'s Log — it is a property of what dl-6 built |
+| `Job.attempts` counts attempts, so a first success reports `1` | `dl-5`'s Log, as the open question it always was   |
+
+The rest of the downloader's gaps were already in `dl-8` (rebinding closed,
+proxy mode does not pin), `dl-11` (subprocess egress, chaining), `dl-12` (WebRTC,
+`ws://`, QUIC), `dl-14` (ffmpeg does not verify TLS — in full), `dl-13`, `dl-10`,
+`dl-15`/`dl-16` (the two open coverage gaps, which are their tickets), or in the
+code: `server.ts`'s `reconcileInterruptedJobs` docblock carries "interrupted jobs
+are failed, not resumed" almost word for word, and `engine/src/download/http.ts`
+carries the 403 ambiguity.
+
+**One paragraph moved to a document rather than a ticket.** The planner's "the
+documentation leads the code by one phase" is a warning to the reader of
+`00-ANALYSIS` and `01-ARCHITECTURE`, so it is now `01-ARCHITECTURE`'s own opening
+— where the reader it warns is standing — rather than a note on a third page they
+may not have opened.
+
+**The source comments, four not eight.** ADR 003 estimated "roughly eight"; the
+grep finds four, in the four files it named. Each now points at the fact's real
+home rather than at a page being emptied:
+
+| Site                              | Now points at                                            |
+| --------------------------------- | -------------------------------------------------------- |
+| `api/src/guarded-fetch.ts:13`     | `dl-11`, which closed the ffmpeg-egress hole it names    |
+| `api/src/dispatcher.ts:4`         | `dl-8`, which is what the "two gaps" were                |
+| `api/src/jobs/orchestrator.ts:71` | `engine/src/download/manifest.ts` and `download/http.ts` |
+| `api/test/pipeline.test.ts:259`   | the same two, plus `MAX_REPROBE_RETRIES`                 |
+
+**Four more citations were about to become false**, and are the ones a grep for
+`03-STATUS` in `*.ts` does not find. Two in closed tickets' Logs asserted the
+page carries a fact today — `dl-12`'s "both are recorded in 03-STATUS.md" and
+`dl-14`'s "and 03-STATUS.md carries it" — and now say where it really is. Two are
+acceptance criteria on **open** tickets instructing future work to edit a section
+that no longer exists: `dl-15`'s "the entry leaves 03-STATUS.md" and `dl-16`'s
+equivalent. Both now say the gap closes by flipping frontmatter, and `dl-16`
+keeps its "the container's browser tier stays smoke-tested and this ticket does
+not reach it" caveat by moving it into its Log rather than onto a page.
+Historical Why sections and the acceptance criteria of _closed_ tickets were left
+alone — they record what was true when they were written, and rewriting them
+would be revisionism.
+
+**Where the rule now lives.** Root `CLAUDE.md` and `docs/01-TICKETS.md` both
+described `03-STATUS.md` as "a dashboard: what is in flight, what is known to be
+rough" — the definition that invited every paragraph this removed. Both now say
+what the page holds and what it does not, `docs/00-TOOLS.md`'s spine listing
+matches, and ADR 003's consequences say the follow-up landed. `tools/planner/CLAUDE.md`
+pointed an agent at `03-STATUS.md` for "what actually exists today"; it points at
+`docs/work/` now, which is where that is.
+
+**One stale line fixed in passing.** The root `README.md` said the planner's
+state was "the intake produces a brief; nothing plans from it yet", which stopped
+being true at pl-16. It now says `npm run status`, which is the point: a state
+sentence maintained by hand in a fourth place is the same bug one level up.
