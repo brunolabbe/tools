@@ -168,6 +168,16 @@ format exists to avoid.
    → [pl-27](./work/pl-27-travel-time-reaches-the-composer.md)
 4. **A real backend** — Valhalla, self-hosted, with a geocoder beside it. →
    [pl-28](./work/pl-28-valhalla-adapter.md)
+5. **What is worth stopping for** — a corridor query beside the route, notability
+   signals on what it finds, and the detour each one costs. The one piece where
+   grounding _proposes_ rather than checks, which is §5's amendment of
+   2026-08-22. → [pl-29](./work/pl-29-detours-along-a-leg.md)
+
+**pl-29 is the one that moves the pipeline**, and it is listed last because it
+depends on the other four rather than because it matters least. Discovery has to
+run _before_ the fan-out — the finds are what a specialist reads — where every
+other grounding call in this phase happens after it. So the run grounds twice,
+and §5's amendment records why that is a shape change rather than an extra call.
 
 pl-27 depends only on pl-24, not on pl-28: the fixture provider answers, so the
 pass and the packing arithmetic can be built and tested with no instance running
