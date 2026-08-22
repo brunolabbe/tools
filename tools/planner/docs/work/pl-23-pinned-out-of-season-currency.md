@@ -94,4 +94,38 @@ Traps worth knowing in advance:
 
 ## Log
 
-_Not started._
+### 2026-08-22 — pinned down, behaviour unchanged
+
+Worked through the argument and agreed with it: a pinned out-of-season
+candidate is on the plan, its cost is real, and declining to sum across two
+currencies is the honest answer. So the post-pl-10 lookup stays and this ticket
+is the test that says why.
+
+- `itinerary/test/compose.test.ts` gains one test in _what it says it did not
+  check_: a `previous` revision pins a candidate whose season is `12-01`–`03-15`
+  against a July trip, carrying the only EUR cost beside a CAD lodging. It
+  asserts the item is on a day **and** that `budget-currency` names `CAD and
+EUR`, so a regression in the pin-outranks-season rule reports itself rather
+  than showing up as a missing note.
+- `itinerary/src/unchecked.ts` gains a three-line comment at the `placed`
+  lookup saying the full candidate list is deliberate.
+- Nothing else changed. Planner suite: **526 before, 527 after**, 40 files both
+  times.
+
+Checked the test earns its place rather than restating: with `compose` reverted
+to `candidates: season.kept`, `compose.test.ts` goes 48 passed / 1 failed and
+the one failure is the new test. That also confirms the brief's central claim —
+no other test in the suite can tell the two lookups apart.
+
+What the brief got wrong: nothing material. Two small notes for the next
+reader:
+
+- The brief cites `unchecked.ts:194` for the lookup; it is at line 92 in the
+  file as it stands (194 falls inside the `budget-currency` block further down,
+  which reads `placed`). The code it quotes is the right code.
+- Building the case from the checked-in per-shape fixtures was not the shortest
+  path. The fixtures are realistic trips and none has a single-currency-plus-one
+  shape that a pin could flip, so bending one would have meant editing a shared
+  fixture — the test uses `helpers.ts`'s `briefFor`/`candidate` builders and
+  `compose.test.ts`'s own `asRevision`, which is what the surrounding
+  mixed-currency and re-planning tests already do.

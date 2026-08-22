@@ -89,6 +89,9 @@ export function uncheckedFor(input: {
   placedIds: ReadonlySet<string>;
 }): UncheckedConstraint[] {
   const { brief, dates, candidates, placedIds } = input;
+  // Every candidate, not the season filter's `kept` set: a pinned candidate
+  // outranks that filter (see `compose.ts`), so it can be on a day and out of
+  // `kept` at once — and what is on the plan is what this list must speak for.
   const placed = candidates.filter((candidate) => placedIds.has(candidate.id));
 
   const notes: UncheckedConstraint[] = [
