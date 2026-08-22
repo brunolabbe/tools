@@ -224,17 +224,37 @@ export function touchPlan(db: Database, planId: string, now: string): void {
 }
 
 /**
- * Pin or unpin one placed item, scoped to the plan that owns it.
+ * Pin or unpin one placed item, scoped to the plan's **latest** revision.
  *
  * The `WHERE` walks days and revisions back to the plan rather than trusting
  * the item id alone: item ids are unique across the table, but a request that
  * named someone else's item would otherwise write to it. Returns false when
  * nothing matched, which the caller turns into `ITEM_NOT_FOUND`.
  *
+ * The revision half of that scope is pl-22, and it is about a write that
+ * succeeds and does nothing. A pin is read back off the latest revision only —
+ * `pinnedPlacements` in `@planner/itinerary` never looks at an older one — so a
+ * pin written to a superseded revision is stored, answers 200, and changes
+ * nothing the reader can see. That is the repo's _never fake progress_ rule one
+ * layer down, so a stale item id is **refused**: it lands on `changes === 0`
+ * beside an item id that does not exist at all, and `ITEM_NOT_FOUND` already
+ * tells the reader to reload to see the current draft, which is the right
+ * advice for both.
+ *
+ * It is one statement on purpose. A check before the update — here or in the
+ * route, which has only a plan id and an item id and would have to ask the
+ * store anyway — is a race the moment a re-plan can append a revision while a
+ * pin is in flight. The latest revision is found by a correlated `MAX` over the
+ * plan's own revisions rather than by reading the document for its number: the
+ * `plan_revisions_plan (plan_id, revision DESC)` index answers it, and there is
+ * no `plans.latest_revision` column to join against — the `latest_revision` in
+ * `selectPlans` is an alias for that same aggregate.
+ *
  * This is the one update the schema's trigger allows — `pinned` is named column
  * by column in `plan_items_only_pinned_is_mutable`, so a statement that tried to
  * move an item as well would be refused by the database rather than by care
- * taken here.
+ * taken here. That trigger is not this rule and does not overlap it: it governs
+ * *what* may change on a placed item, never *which* item.
  */
 export function updateItemPin(
   db: Database,
@@ -248,6 +268,10 @@ export function updateItemPin(
            SELECT plan_days.id FROM plan_days
            JOIN plan_revisions ON plan_revisions.id = plan_days.revision_id
            WHERE plan_revisions.plan_id = ?
+             AND plan_revisions.revision = (
+               SELECT MAX(sibling.revision) FROM plan_revisions AS sibling
+               WHERE sibling.plan_id = plan_revisions.plan_id
+             )
          )`,
     )
     .run(input.pinned ? 1 : 0, input.itemId, input.planId);
