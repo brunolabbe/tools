@@ -247,8 +247,12 @@ Short, and each one is a real decision someone has to make rather than a gap:
   is the composer's input and nothing else needs it earlier. Opening hours and
   existence are not that shape — a specialist wants them while it is proposing —
   and reaching them from inside a specialist means tool use on `ModelProvider`,
-  which that seam deliberately does not have. Do not answer it before pl-27 has
-  run: the pass is the cheap half and it may be enough for more than it looks.
+  which that seam deliberately does not have. **pl-27 has now run and the
+  question stays open**, with one thing learned: the pass is the right shape for
+  a distance and it is cheap — one matrix, one call — but it can only ask about
+  what the fan-out already proposed. Nothing a specialist would have proposed
+  differently _had it known_ is reachable from here, which is exactly the half
+  §5's amendment and [pl-29](./work/pl-29-detours-along-a-leg.md) are about.
 - **Whether a specialist streams.** The chat seam does not stream, and adding it
   before a caller needs it was deferred once already. The fan-out's progress is
   per-specialist, which may be enough — pl-5 built exactly that and pl-16 now
@@ -276,18 +280,39 @@ content and **kept**. What each answer is, and what it cost, is in that ticket's
 log; what the code looks like now is in [03-STATUS.md](./03-STATUS.md).
 
 **Whether Phase 2's composer can pack under travel time at all** was answered on
-2026-08-16, and the answer is **no — pack without it and name the gap.** The
+2026-08-16, and the answer was **no — pack without it and name the gap.** The
 question was raised by pl-4 and is the one that shaped pl-9: §5 ranks distances
 and travel times as the first thing grounding buys, Phase 2 has no grounding,
 and `Place.coordinates` is null until Phase 3, so there was nothing to measure a
 leg with — and, until [pl-15](./work/pl-15-candidate-legs.md), no leg to measure
-either, since a candidate had one place rather than two. That half is closed and
-the answer is unchanged: a leg with both ends and no distance along it is still
-not something the composer can pack under. The alternatives were a
+either, since a candidate had one place rather than two. The alternatives were a
 straight-line floor from coordinates —
 coordinates are themselves grounding, so that is Phase 3 wearing a hat — and
 pulling travel-time grounding forward, which buys the most and costs the
 cleanliness of "Phase 2 is a claim about machinery, not about a model".
+
+**Closed on 2026-08-23 by [pl-27](./work/pl-27-travel-time-reaches-the-composer.md),
+and the Phase 2 answer is kept rather than deleted** — it was right for the
+phase it was asked in. Both premises under it have since moved: pl-15 gave a
+candidate two ends, and [pl-24](./work/pl-24-grounding-seam-and-fixtures.md) gave
+the tool something that can measure between them. A run now locates the places
+its candidates name, asks for one matrix over them, and hands the composer a
+table; `pack.ts` charges the transition between consecutive items on a day
+alongside each candidate's own stated duration, and `travel-time` stops being a
+statement about the phase and becomes one about the plan — naming the items
+whose transition nothing could measure, the ones the run could not afford to
+look up, and standing plan-wide in its Phase 2 words when nothing was measured
+at all. A deployment with no grounding gets byte-identical days to the ones it
+got before, which is what makes the change additive.
+
+**The entry does not disappear from a plan whose placed items span two or more
+days.** A transition is a pair of items within one day; the overnight hop from
+the end of one day to the start of the next belongs to no day's budget — there
+is no order between days until every bucket has been placed — so nothing
+measures it and an entry names it whatever the backend said about the rest. Only
+a plan whose placed items all land on a single day has no such hop. The answer
+to _can the composer pack under travel time_ is therefore **yes, within a day**,
+which is where §2's failure 1 lives.
 
 Three consequences, all landed in [pl-9](./work/pl-9-composer-and-critic.md):
 

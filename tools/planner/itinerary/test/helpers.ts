@@ -15,13 +15,17 @@ import {
   emptyBrief,
   location,
   MODEL_ASSERTED,
+  NOT_ESTABLISHED,
   slot,
   type Candidate,
+  type ItemTravel,
+  type MeasuredTravel,
   type Specialist,
   type TripBrief,
   type TripDates,
   type TripShapeDetails,
 } from "@planner/contract";
+import type { TravelTable } from "../src/travel.ts";
 
 /** A draftable road-trip brief: every required slot answered, nothing else. */
 export function briefFor(overrides: {
@@ -79,6 +83,62 @@ export function candidate(overrides: Partial<Candidate> & { specialist: Speciali
     provenance: MODEL_ASSERTED,
     ...overrides,
   };
+}
+
+/**
+ * One measurement, as the grounding pass would hand it over.
+ *
+ * `grounded` with a source, because that is the only shape `provenanceSchema`
+ * accepts for a measured fact and the only shape the pass can produce.
+ */
+export function travelled(overrides: Partial<MeasuredTravel> = {}): ItemTravel {
+  return {
+    kind: "measured",
+    distanceMeters: 60_000,
+    durationMinutes: 45,
+    provenance: {
+      kind: "grounded",
+      sources: [
+        {
+          url: "https://fixtures.invalid/planner/legs/test",
+          title: "Checked-in fixture, not a measurement",
+          fetchedAt: "2026-08-22T00:00:00.000Z",
+        },
+      ],
+    },
+    ...overrides,
+  };
+}
+
+/** A backend that answered for every pair it was asked about. */
+export function measuredEverywhere(travel: ItemTravel = travelled()): TravelTable {
+  return { between: () => travel };
+}
+
+/**
+ * An ordered pair of candidate ids.
+ *
+ * Joined by an escaped NUL, which is `fixture-data.ts`'s trick and is here for
+ * the same reason: nothing an id can contain is able to forge another pair's
+ * key. Written as an escape rather than a literal so the file stays text.
+ */
+function key(from: string, to: string): string {
+  return `${from}\u0000${to}`;
+}
+
+/**
+ * A backend that answered for some pairs and not others — the case a real one
+ * is in most of the time, and the one a plan has to be able to describe.
+ *
+ * What it says about the pairs it does not hold is the caller's to choose:
+ * `not-established` by default, `OVER_BUDGET` for a run that stopped asking.
+ */
+export function measuredBetween(
+  pairs: readonly (readonly [string, string, ItemTravel])[],
+  otherwise: ItemTravel = NOT_ESTABLISHED,
+): TravelTable {
+  const known = new Map(pairs.map(([from, to, travel]) => [key(from, to), travel]));
+  return { between: (from, to) => known.get(key(from.id, to.id)) ?? otherwise };
 }
 
 /** The revision fields `compose` needs told, since the package has no clock. */

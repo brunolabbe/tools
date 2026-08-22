@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { MODEL_ASSERTED, slot } from "@planner/contract";
+import { measuredOrNull, MODEL_ASSERTED, OVER_BUDGET, slot } from "@planner/contract";
 import { tripSpan } from "../src/dates.ts";
 import {
   ACTIVITY_MINUTES_PER_DAY,
@@ -7,7 +7,15 @@ import {
   ITEMS_PER_CITY_DAY,
 } from "../src/limits.ts";
 import { pack } from "../src/pack.ts";
-import { briefFor, candidate, detailsFor, placedIds } from "./helpers.ts";
+import { NOTHING_MEASURED } from "../src/travel.ts";
+import {
+  briefFor,
+  candidate,
+  detailsFor,
+  measuredEverywhere,
+  placedIds,
+  travelled,
+} from "./helpers.ts";
 
 const FOUR_DAYS = tripSpan({ kind: "exact", departure: "2027-07-05", return: "2027-07-08" });
 
@@ -28,6 +36,7 @@ describe("buckets", () => {
       brief: briefFor({}),
       candidates: [gear, money, admin, thing],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
     });
 
@@ -49,6 +58,7 @@ describe("buckets", () => {
       brief: briefFor({}),
       candidates: [bed, other, full],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
     });
 
@@ -73,6 +83,7 @@ describe("the day's budgets", () => {
       brief: briefFor({}),
       candidates: each,
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
     });
 
@@ -89,6 +100,7 @@ describe("the day's budgets", () => {
       brief: briefFor({ effort: slot.answered("gentle") }),
       candidates: [enormous],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
     });
 
@@ -112,6 +124,7 @@ describe("the day's budgets", () => {
       brief: briefFor({}),
       candidates: [leg, outing],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
     });
 
@@ -136,6 +149,7 @@ describe("the day's budgets", () => {
       }),
       candidates: [transfer, outing],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
     });
 
@@ -155,7 +169,13 @@ describe("the day's budgets", () => {
       candidate({ specialist: "activities", durationMinutes: 30 }),
     );
 
-    const result = pack({ brief, candidates: many, span: FOUR_DAYS, daysUntilDeparture: 100 });
+    const result = pack({
+      brief,
+      candidates: many,
+      span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
+      daysUntilDeparture: 100,
+    });
 
     for (const day of result.days) {
       expect(day.items.length).toBeLessThanOrEqual(ITEMS_PER_CITY_DAY.slow);
@@ -172,6 +192,7 @@ describe("what the packer refuses", () => {
       brief: briefFor({}),
       candidates: [hut, motel],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 30,
     });
 
@@ -186,6 +207,7 @@ describe("what the packer refuses", () => {
       brief: briefFor({ dates: { kind: "open", nights: 3 } }),
       candidates: [hut],
       span: tripSpan({ kind: "open", nights: 3 }),
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: null,
     });
 
@@ -204,6 +226,7 @@ describe("what the packer refuses", () => {
       brief: briefFor({}),
       candidates: [late],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
     });
 
@@ -222,6 +245,7 @@ describe("what the packer refuses", () => {
       brief: briefFor({}),
       candidates: [never],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
     });
 
@@ -243,6 +267,7 @@ describe("unknown durations", () => {
       brief: briefFor({}),
       candidates: [vague, measured],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
     });
 
@@ -263,6 +288,7 @@ describe("pins", () => {
       brief: briefFor({}),
       candidates: [pinnedThing, filler],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
       pinned: [{ candidateId: pinnedThing.id, dayIndex: 2, position: 0 }],
     });
@@ -291,6 +317,7 @@ describe("pins", () => {
       brief: briefFor({ effort: slot.answered("gentle") }),
       candidates: [huge, alsoHuge],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
       pinned: [
         { candidateId: huge.id, dayIndex: 0, position: 0 },
@@ -314,6 +341,7 @@ describe("pins", () => {
       brief: briefFor({}),
       candidates: [winterOnly],
       span: FOUR_DAYS,
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
       pinned: [{ candidateId: winterOnly.id, dayIndex: 1, position: 0 }],
     });
@@ -330,6 +358,7 @@ describe("pins", () => {
       brief: briefFor({}),
       candidates: [newcomer, second, first],
       span: tripSpan({ kind: "exact", departure: "2027-07-05", return: "2027-07-05" }),
+      travel: NOTHING_MEASURED,
       daysUntilDeparture: 100,
       pinned: [
         { candidateId: first.id, dayIndex: 0, position: 0 },
@@ -362,10 +391,115 @@ test("a candidate the critic dropped is excluded with that reason and no other",
     brief: briefFor({}),
     candidates: [dropped],
     span: FOUR_DAYS,
+    travel: NOTHING_MEASURED,
     daysUntilDeparture: 100,
     excluded: new Set([dropped.id]),
   });
 
   expect(placedIds(result.days)).toEqual([]);
   expect(reasonFor(result, dropped.id)).toBe("dropped-by-critic");
+});
+
+/**
+ * Transitions between consecutive items (pl-27).
+ *
+ * The day's budgets used to be spent on the candidates' own stated durations
+ * and on nothing else, which is §2's failure 1 in one sentence: three things in
+ * a day that are two hours apart all "fit". They no longer do.
+ */
+describe("what it costs to get from one thing to the next", () => {
+  const ONE_DAY = tripSpan({ kind: "exact", departure: "2027-07-05", return: "2027-07-05" });
+
+  test("charges the transition to the day, so a day that fitted three now fits two", () => {
+    const brief = briefFor({});
+    const things = Array.from({ length: 3 }, () =>
+      candidate({ specialist: "activities", durationMinutes: 90 }),
+    );
+
+    // 3 × 90 is 270 against `moderate`'s 300, so all three fit with nothing
+    // between them.
+    const ungrounded = pack({
+      brief,
+      candidates: things,
+      span: ONE_DAY,
+      travel: NOTHING_MEASURED,
+      daysUntilDeparture: 100,
+    });
+    expect(placedIds(ungrounded.days)).toHaveLength(3);
+
+    // 90 + 45 + 90 + 45 + 90 is 360, and the third no longer has room.
+    const grounded = pack({
+      brief,
+      candidates: things,
+      span: ONE_DAY,
+      travel: measuredEverywhere(travelled({ durationMinutes: 45 })),
+      daysUntilDeparture: 100,
+    });
+    expect(placedIds(grounded.days)).toHaveLength(2);
+    expect(reasonFor(grounded, things[2]?.id ?? "")).toBe("no-day-had-room");
+  });
+
+  test("records on each item what getting to it was measured at", () => {
+    const first = candidate({ specialist: "activities", durationMinutes: 60 });
+    const second = candidate({ specialist: "activities", durationMinutes: 60 });
+
+    const result = pack({
+      brief: briefFor({}),
+      candidates: [first, second],
+      span: ONE_DAY,
+      travel: measuredEverywhere(travelled({ durationMinutes: 30, distanceMeters: 25_000 })),
+      daysUntilDeparture: 100,
+    });
+
+    const items = result.days[0]?.items ?? [];
+    // Nothing precedes the first item of a day, so there is no transition to
+    // record for it, and the day pays nothing for arriving at it.
+    expect(items[0]?.travelFromPrevious).toBeNull();
+    expect(measuredOrNull(items[1]?.travelFromPrevious ?? null)?.distanceMeters).toBe(25_000);
+  });
+
+  test("charges nothing for a transition the run could not afford to look up", () => {
+    // `over-budget` and `not-established` are the same zero to the packer — a
+    // day cannot be budgeted for a number that does not exist — and different
+    // sentences on the plan. This asserts the first half; `unchecked.test.ts`
+    // asserts the second.
+    const things = Array.from({ length: 3 }, () =>
+      candidate({ specialist: "activities", durationMinutes: 90 }),
+    );
+
+    const result = pack({
+      brief: briefFor({}),
+      candidates: things,
+      span: ONE_DAY,
+      travel: measuredEverywhere(OVER_BUDGET),
+      daysUntilDeparture: 100,
+    });
+
+    expect(placedIds(result.days)).toHaveLength(3);
+    expect(result.days[0]?.items[1]?.travelFromPrevious).toEqual(OVER_BUDGET);
+  });
+
+  test("does not charge the day for getting to the bed it ends at", () => {
+    const full = candidate({
+      specialist: "activities",
+      durationMinutes: ACTIVITY_MINUTES_PER_DAY.moderate,
+    });
+    const bed = candidate({ specialist: "lodging" });
+
+    const result = pack({
+      brief: briefFor({}),
+      candidates: [full, bed],
+      span: ONE_DAY,
+      travel: measuredEverywhere(travelled({ durationMinutes: 200 })),
+      daysUntilDeparture: 100,
+    });
+
+    // The day is already exactly full of activity, and a 200-minute drive to
+    // the bed does not stop the bed landing on it: where you sleep is where the
+    // day ends, not something the day has to fit around (pl-9). The measurement
+    // is still recorded, because it is true and the reader should see it — the
+    // asymmetry is deliberate and `transitionTo` says why.
+    expect(placedIds(result.days)).toEqual([full.id, bed.id]);
+    expect(measuredOrNull(result.days[0]?.items[1]?.travelFromPrevious ?? null)).not.toBeNull();
+  });
 });

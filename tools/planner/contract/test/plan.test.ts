@@ -25,6 +25,7 @@ function item(overrides: Partial<PlanItem> = {}): PlanItem {
     startsAt: null,
     pinned: false,
     note: null,
+    travelFromPrevious: null,
     ...overrides,
   };
 }
