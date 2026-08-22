@@ -22,6 +22,17 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 export const MODEL_PROVIDERS = ["scripted"] as const;
 export type ModelProviderName = (typeof MODEL_PROVIDERS)[number];
 
+/**
+ * Grounding backends this build knows how to construct.
+ *
+ * The same list, the same default and the same argument one seam over:
+ * `fixtures` answers from a checked-in table, so a fresh clone plans with no
+ * key and no bill and CI asserts against something that does not change
+ * overnight. A real backend is a deliberate act — pl-28 adds the first.
+ */
+export const GROUNDING_PROVIDERS = ["fixtures"] as const;
+export type GroundingProviderName = (typeof GROUNDING_PROVIDERS)[number];
+
 export interface ApiConfig {
   host: string;
   port: number;
@@ -32,6 +43,22 @@ export interface ApiConfig {
   modelProvider: ModelProviderName;
   /** Ceiling on one reply. See `ModelRequest.maxOutputTokens`. */
   maxOutputTokens: number;
+
+  groundingProvider: GroundingProviderName;
+  /**
+   * How many grounding calls one run may make (§9).
+   *
+   * **Calls, not lookups.** A matrix over eight places is one call and
+   * sixty-four pairs, and it is the call that costs — in latency, in rate
+   * limit, and on a metered backend in money. Counting pairs would make the
+   * cheap thing look expensive and push a caller back to n² pairwise requests
+   * to stay under the cap. `GroundingBudget` is the shape that spends it.
+   *
+   * Grounding is where this tool's bill will live once a real backend is
+   * configured, which is why it gets its own ceiling rather than sharing the
+   * roster's.
+   */
+  maxGroundingCalls: number;
 
   /**
    * How many specialists one run may pay for (§9).
@@ -85,7 +112,9 @@ export const API_DEFAULTS = {
   dataDir: "./storage/planner",
   databaseFile: "planner.db",
   modelProvider: "scripted",
+  groundingProvider: "fixtures",
   maxOutputTokens: 2_048,
+  maxGroundingCalls: 40,
   maxSpecialists: 5,
   maxConcurrentRuns: 2,
   rateLimitRunsPerMinute: 5,
@@ -144,6 +173,22 @@ function modelProvider(raw: string | undefined): ModelProviderName {
     : API_DEFAULTS.modelProvider;
 }
 
+/**
+ * Same fallback, same argument, one seam over.
+ *
+ * A typo cannot send a request anywhere it should not go — the fixture provider
+ * reaches nothing — so the worst case is a plan whose legs are unmeasured, said
+ * out loud on every affected line and reported by name at `/api/health`. That
+ * is a visible failure, and refusing to boot over it would trade a plan that
+ * admits what it did not check for no plan at all.
+ */
+function groundingProvider(raw: string | undefined): GroundingProviderName {
+  const value = (raw ?? API_DEFAULTS.groundingProvider).trim().toLowerCase();
+  return (GROUNDING_PROVIDERS as readonly string[]).includes(value)
+    ? (value as GroundingProviderName)
+    : API_DEFAULTS.groundingProvider;
+}
+
 export function loadApiConfig(
   overrides: Partial<ApiConfig> = {},
   env: NodeJS.ProcessEnv = process.env,
@@ -159,11 +204,15 @@ export function loadApiConfig(
     port: overrides.port ?? int(env["PORT"], API_DEFAULTS.port, { min: 0, max: 65_535 }),
     databasePath,
     modelProvider: overrides.modelProvider ?? modelProvider(env["MODEL_PROVIDER"]),
+    groundingProvider: overrides.groundingProvider ?? groundingProvider(env["GROUNDING_PROVIDER"]),
     maxOutputTokens:
       overrides.maxOutputTokens ??
       int(env["MAX_OUTPUT_TOKENS"], API_DEFAULTS.maxOutputTokens, { max: 32_000 }),
     maxSpecialists:
       overrides.maxSpecialists ?? int(env["MAX_SPECIALISTS"], API_DEFAULTS.maxSpecialists),
+    maxGroundingCalls:
+      overrides.maxGroundingCalls ??
+      int(env["MAX_GROUNDING_CALLS"], API_DEFAULTS.maxGroundingCalls, { min: 0 }),
     runTokenBudget: overrides.runTokenBudget ?? optionalInt(env["RUN_TOKEN_BUDGET"]),
     maxConcurrentRuns:
       overrides.maxConcurrentRuns ??

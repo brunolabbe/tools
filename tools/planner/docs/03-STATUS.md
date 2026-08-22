@@ -12,20 +12,23 @@ progress over SSE, and can be canceled in a way that reaches the provider, and a
 of [pl-10](./work/pl-10-plan-view-and-provenance.md) that plan can be read — its
 days, which lines were verified, what it does not cover and what nothing checked.
 Phase 2 is complete. What is missing is grounding (Phase 3), whose travel-time
-slice was ticketed on 2026-08-22 as pl-24 through pl-28 and none of which is
-started.**
+slice was ticketed on 2026-08-22 as pl-24 through pl-28. Its seam exists as of
+[pl-24](./work/pl-24-grounding-seam-and-fixtures.md) — one interface, a fixture
+provider behind it that answers offline, and a `grounding` state a run may pass
+through — but nothing calls it yet, so no plan is grounded and every line is
+still the model talking.**
 
 ---
 
 ## Where things stand
 
-| Phase                    | State                 | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Phase 0 — Scaffold       | ✅ complete           | `0f8583e`                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Phase 1 — The intake     | ✅ complete           | [pl-3](./work/pl-3-trip-brief-contract.md), [pl-6](./work/pl-6-question-tree-and-engine.md) and [pl-7](./work/pl-7-intake-persistence-and-wizard.md) — the brief, the tree, and an intake that survives a reload                                                                                                                                                                                                                                                    |
-| Phase 2 — The first plan | ✅ complete           | [pl-4](./work/pl-4-plan-document-contract.md), [pl-9](./work/pl-9-composer-and-critic.md), [pl-16](./work/pl-16-the-plan-run.md) and [pl-10](./work/pl-10-plan-view-and-provenance.md) and [pl-5](./work/pl-5-orchestrator-and-fan-out.md) all done — the plan document, the composer, the fan-out, the run that joins them over HTTP and stores what comes back, and the view that reads it honestly                                                               |
-| Phase 3 — Grounding      | ticketed, not started | [pl-24](./work/pl-24-grounding-seam-and-fixtures.md) the seam and its fixture default, [pl-25](./work/pl-25-grounding-cache.md) the cache, [pl-27](./work/pl-27-travel-time-reaches-the-composer.md) travel time into the composer, [pl-28](./work/pl-28-valhalla-adapter.md) Valhalla behind it, [pl-29](./work/pl-29-detours-along-a-leg.md) detours along a leg — plus [pl-26](./work/pl-26-lift-the-ssrf-guard.md) filed but deliberately not part of the slice |
-| Phase 4 — Revision       | designed only         | no tickets yet, on purpose                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Phase                    | State                        | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 0 — Scaffold       | ✅ complete                  | `0f8583e`                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Phase 1 — The intake     | ✅ complete                  | [pl-3](./work/pl-3-trip-brief-contract.md), [pl-6](./work/pl-6-question-tree-and-engine.md) and [pl-7](./work/pl-7-intake-persistence-and-wizard.md) — the brief, the tree, and an intake that survives a reload                                                                                                                                                                                                                                                       |
+| Phase 2 — The first plan | ✅ complete                  | [pl-4](./work/pl-4-plan-document-contract.md), [pl-9](./work/pl-9-composer-and-critic.md), [pl-16](./work/pl-16-the-plan-run.md) and [pl-10](./work/pl-10-plan-view-and-provenance.md) and [pl-5](./work/pl-5-orchestrator-and-fan-out.md) all done — the plan document, the composer, the fan-out, the run that joins them over HTTP and stores what comes back, and the view that reads it honestly                                                                  |
+| Phase 3 — Grounding      | seam built, nothing grounded | [pl-24](./work/pl-24-grounding-seam-and-fixtures.md) ✅ the seam and its fixture default, [pl-25](./work/pl-25-grounding-cache.md) the cache, [pl-27](./work/pl-27-travel-time-reaches-the-composer.md) travel time into the composer, [pl-28](./work/pl-28-valhalla-adapter.md) Valhalla behind it, [pl-29](./work/pl-29-detours-along-a-leg.md) detours along a leg — plus [pl-26](./work/pl-26-lift-the-ssrf-guard.md) filed but deliberately not part of the slice |
+| Phase 4 — Revision       | designed only                | no tickets yet, on purpose                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 **The tool is not a chat, as of 2026-08-14.** It was scaffolded as one. The
 intake now asks predetermined questions from an authored, versioned tree, and no
@@ -35,7 +38,7 @@ reasoning, including what the decision costs, is an amendment to
 argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
-**526 unit tests pass across 40 files, plus 4 e2e specs.** `npm run check` is
+**574 unit tests pass across 43 files, plus 4 e2e specs.** `npm run check` is
 green. Seven of the repo-wide tests in `packages/core` are
 [pl-17](./work/pl-17-dockerfile-workspace-scan.md)'s — see the paragraph below.
 The repo-wide CI runs the unit suite on every push, and
@@ -66,7 +69,13 @@ and `GET /api/runs/:id/events` over SSE, with the whole `runFanOut` → `compose
 plan view: `GET /api/plans` for the list, a `PlanView` on the detail route
 carrying what nothing checked alongside the document, `POST
 /api/plans/:id/items/:itemId/pin` for the one write that appends no revision, and
-the React view over all three**.
+the React view over all three** — and, as of
+[pl-24](./work/pl-24-grounding-seam-and-fixtures.md), **the `GroundingProvider`
+seam with a fixture provider behind it**: `locate` and a `travel` matrix, a
+checked-in gazetteer and leg table that answers `null` rather than interpolating,
+`GROUNDING_PROVIDER` and `MAX_GROUNDING_CALLS` in the config, the provider named
+at `/api/health`, and a `grounding` run state that nothing has yet had cause to
+enter.
 
 **P1 is reached.** Someone can answer into a branch, be told the essentials are
 done, go back and change an early answer, be shown exactly what that costs, and

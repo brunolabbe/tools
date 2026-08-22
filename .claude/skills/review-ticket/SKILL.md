@@ -37,29 +37,54 @@ not made this particular wrong turn.
 
 So the invoking agent's job here is to dispatch, not to review:
 
-| Wrote the code | Reviews it |
-| -------------- | ---------- |
-| Opus           | Sonnet     |
-| Sonnet         | Opus       |
-| anything else  | Opus       |
+| You are       | Dispatch to |
+| ------------- | ----------- |
+| Opus          | Sonnet      |
+| Sonnet        | Opus        |
+| anything else | Opus        |
+
+Keyed on **you**, not on whatever wrote the code, because you usually cannot know
+what wrote the code and you can always know what you are — and if you wrote it,
+you are the model whose reading is about to be re-run.
 
 **The reviewer is `sonnet` or `opus` — never `haiku`, never `fable`.** The rule
 is "a different model", not "a cheaper one": the small models are the wrong tool
 for a job whose whole content is holding a ticket, a diff and a page of
 invariants in mind at once, and a gate they produce is worth less than no gate,
-because it still reads as PASS. If you are already on one of the two, take the
-other; if you are on anything else, take Opus.
+because it still reads as PASS.
 
 Dispatch with the Agent tool — `subagent_type: general-purpose`, `model:` from
 the table — and hand it the ticket id, the diff range, and the steps below.
 
+**If the work is in a worktree, the first instruction in the prompt is to enter
+it**: call `EnterWorktree` with `path: <the worktree path>`, before anything
+else, and stop and say so if that fails. A subagent's working directory is pinned
+at launch and it will not go looking. One that skips this reviews whatever tree
+it started in — normally the default checkout, sitting on `main`, where the diff
+does not exist — and that does not fail loudly. It produces a fluent, correctly
+formatted gate that marks every acceptance line `unproven`, which reads exactly
+like a review that ran and found the work wanting. Nothing downstream catches it:
+the section still names a range and still cites the ticket.
+
+**Hand it the ticket id, the worktree path and the diff range — not your reading
+of the ticket.** A caller who summarises the acceptance into the prompt anchors
+the reviewer to its own reading of what the ticket asked, which is a quieter
+version of the thing this whole split exists to prevent. The reviewer opens the
+ticket itself; that is step 1.
+
+**Dispatch in the foreground** — `run_in_background: false`. There is nothing
+useful for the caller to do until the gate comes back, and a backgrounded review
+turns the wait into polling.
+
 **The subagent returns the `## Review` section as text, and the caller appends it
-to the ticket unedited.** Two reasons, and both matter. A subagent cannot enter a
-worktree of its own accord, so one that edited files would write them somewhere
-the parent is not looking. And a caller that rewrites the verdict has handed the
-review back to the model under review, which is the whole thing this split
-exists to prevent. Append it verbatim. If you disagree with a row, say so in the
-Log under your own name — never quietly soften one.
+to the ticket unedited.** A caller that rewrites the verdict has handed the
+review back to the model under review, which is the whole thing this split exists
+to prevent. Append it verbatim, then run `npx oxfmt` on the ticket file —
+markdown is formatted in this repo, and an unformatted table fails `npm run
+check`, which is the merge gate. That is not a rewrite and does not conflict with
+appending verbatim: it pads table cells to column width and touches nothing else.
+If you disagree with a row, say so in the Log under your own name — never quietly
+soften one.
 
 **One reviewer, not a panel.** Two models reviewing in parallel is not a second
 opinion, it is two gates and no rule saying which one counts.
@@ -89,6 +114,12 @@ is the caller's alone.
    not, because a finding that vanishes between the finder and the table leaves a
    gate that reads exactly like one that found nothing.
 
+   **Two findings that are one mechanism may share a bullet** — say so in it
+   ("two findings, one mechanism") so the arithmetic still reconciles against the
+   `findings` line below. Merging is a presentation choice and a reasonable one;
+   merging silently is how a count stops adding up, and the caller is then left
+   guessing whether one was dropped.
+
    This paragraph is here because it has already happened twice, in consecutive
    reviews, in both directions: pl-10's gate lost two defects its finders had
    reported — one of them a navigation bug that re-asked an already-drafted
@@ -99,18 +130,56 @@ is the caller's alone.
 4. **Trace every acceptance line to its proof.** One row per **Done when** line,
    each naming the test that proves it — `file.test.ts:88`, not "covered". A line
    with no test is a finding, and so is a test that asserts something narrower
-   than the line claims. Three verdicts, and the third is the one that matters:
+   than the line claims.
+
+   **Cite the line of the assertion, not the line of the `test(` that contains
+   it.** A test whose name covers half the clause — "reaches grounding, and
+   grounding reaches the composer", for a bullet that also demands `grounding →
+   done` be *rejected* — is cited correctly and is still unverifiable: the reader
+   has to open the file to find out whether the other half is asserted anywhere.
+   Cite the half you mean and the row can be checked without leaving the table.
+
+   **A line with several clauses is proven only when every clause is.**
+   Acceptance lines routinely join three or four claims with commas. Cite each,
+   and if one is unproven the row is unproven whatever the others say — a row
+   ticked on the strength of its first clause is the exact failure this step
+   exists to prevent.
+
+   Four verdicts, and the last two are the ones that matter:
 
    - **proven** — a test asserts it, and it runs in `npm test`.
    - **unproven** — nothing asserts it.
    - **unproven (gate)** — asserted only by something the local gates do not run:
      a tool's `e2e` suite or its container build, which live in
      `.github/workflows/<tool>.yml` and nowhere else.
+   - **verified** — nothing asserts it, but you re-ran it. For the bullet almost
+     every ticket ends with: the gates pass, the suite count went up, no existing
+     test changed meaning. **Give the numbers you got, not the ones the Log
+     claims** — a count is verified by running the suite at the base commit too,
+     and "no existing test changed meaning" by reading the diff of the test files
+     it touched for deletions and reworded assertions. Counts as proven for the
+     gate.
 
-   The third exists because of [pl-16](../../../tools/planner/docs/work/pl-16-the-plan-run.md):
+   `unproven (gate)` exists because of [pl-16](../../../tools/planner/docs/work/pl-16-the-plan-run.md):
    `npm run check` and 1,020 tests passed and the image would not boot. "Green
    locally" is not proof of an acceptance line whose proof is a gate you did not
    run, and this is the row that refuses to let that pass silently.
+
+   `verified` exists because that last bullet fits none of the other three —
+   nothing asserts it, it is not a CI gate, and it is plainly not unproven.
+   Without a verdict of its own a reviewer reads the Log's numbers back and ticks
+   them, which is the ticket marking its own homework.
+
+   **Then look for what has no proof at all.** A source file the diff adds a
+   branch to, with no test file of its own, is a finding in its own right — name
+   the file and the branch. It costs one `ls` of that package's `test/`, and it
+   catches what reading does not: reading covers the lines you looked at closely,
+   and nothing makes you look at all of them. pl-24 is the worked example.
+   `RunView.tsx` took 38 changed lines in a package with no `run-view.test.tsx`,
+   and absorbed two _never fake progress_ defects in one branch — a lookup
+   labelled as a specialist, and the fan-out's finished counters replayed as
+   grounding's own. Both were eventually found by eye; the second was found
+   twice, because the first reading caught one of its two call sites.
 
 5. **Walk the repo's invariants.** These are not general advice — each is a rule
    the root or tool `CLAUDE.md` states, and a generic reviewer knows none of them.
@@ -171,12 +240,12 @@ is the caller's alone.
 | Severity | Means                                                                    |
 | -------- | ------------------------------------------------------------------------ |
 | **high** | Breaks an invariant above, loses data, leaks a credential, or an acceptance line is wrong rather than merely untested |
-| **med**  | An acceptance line unproven, a rule bent with no reason given, a defect behind a condition that will occur |
+| **med**  | An acceptance line unproven, a rule bent with no reason given, a defect behind a condition that will occur, a new branch in a file with no test file of its own |
 | **low**  | Style, a missing fixture, a comment that will mislead the next reader     |
 
 - **FAIL** — any high, or any acceptance line **unproven**.
 - **CONCERNS** — any med, or any acceptance line **unproven (gate)**.
-- **PASS** — every acceptance line proven, nothing above low.
+- **PASS** — every acceptance line proven or verified, nothing above low.
 - **WAIVED** — never yours to write. A human waives, names themself and says why.
 
 `unproven (gate)` is CONCERNS rather than FAIL on purpose: the work may be
@@ -208,12 +277,21 @@ writes it.
 - **low** · `nfr:maintainability` — no fixture for the empty-roster branch.
 - **dropped** · finder reported the retry loop as unbounded; it is bounded by
   `maxAttempts` two frames up. Not a defect.
+- **findings** · code-review at medium returned 3; 2 carried, 1 dropped.
 - NFR: security ✓ · performance n/a · reliability ✓ · maintainability — above.
 ```
 
 A `dropped` line costs one sentence and is the difference between a gate that
 found nothing and a gate that decided something was not worth carrying. It has
 no severity, and it never changes the verdict.
+
+**The `findings` line is required even when nothing was dropped.** `2 returned,
+2 carried, 0 dropped` looks like a formality and is the opposite: it is the only
+line that separates a gate whose defect hunt found nothing from one whose defect
+hunt never ran. The header above hard-codes the words *code-review at medium*, so
+a reviewer that skipped step 3 entirely still writes them, and every other part
+of the section would look exactly the same. The count also has to reconcile
+against the bullets, which is what makes a merged bullet safe to write.
 
 ## What this is not
 
