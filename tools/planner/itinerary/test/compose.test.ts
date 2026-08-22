@@ -501,6 +501,74 @@ describe("what it says it did not check", () => {
     expect(entry?.detail).toContain("CAD and EUR");
   });
 
+  test("a pinned out-of-season item is placed, and its currency counts", () => {
+    // The one candidate that can be placed and filtered out at once: a pin
+    // outranks the season filter (see `compose.ts`), so this is on a day and
+    // absent from `season.kept`. Its currency is the only second one on the
+    // plan, so a currency check that read the kept set rather than every
+    // candidate would drop the note for an item the plan is really carrying.
+    const inCad = candidate({
+      specialist: "lodging",
+      cost: {
+        currency: "CAD",
+        low: 100,
+        high: 100,
+        basis: "per-party",
+        provenance: { kind: "model-asserted" },
+      },
+    });
+    // A ski season, wrapping the new year — and the trip is in July.
+    const winterOnly = candidate({
+      specialist: "activities",
+      durationMinutes: 60,
+      season: { from: "12-01", to: "03-15" },
+      cost: {
+        currency: "EUR",
+        low: 80,
+        high: 80,
+        basis: "per-party",
+        provenance: { kind: "model-asserted" },
+      },
+    });
+
+    const previous: PlanRevision = asRevision(
+      [
+        {
+          id: "day-0",
+          dayIndex: 0,
+          date: "2027-07-05",
+          items: [
+            {
+              id: "i1",
+              candidateId: winterOnly.id,
+              position: 0,
+              startsAt: null,
+              pinned: true,
+              note: null,
+            },
+          ],
+        },
+      ],
+      [],
+    );
+
+    const result = compose({
+      brief: briefFor({}),
+      candidates: [inCad, winterOnly],
+      previous,
+      revision: { ...REVISION, id: "rev-2" },
+      now: NOW,
+    });
+
+    // Assert the placement too: if the pin stopped outranking the season
+    // filter the note would disappear for an unrelated reason, and a test that
+    // only read the note would report the wrong cause.
+    expect(placedIds(result.revision.days)).toContain(winterOnly.id);
+
+    const entry = result.unchecked.find((each) => each.kind === "budget-currency");
+    expect(entry?.detail).toContain("CAD and EUR");
+  });
+
   test("an assumed effort appetite is stated rather than presented as an answer", () => {
     const result = compose({
       brief: { ...briefFor({}), effort: slot.declined() },
