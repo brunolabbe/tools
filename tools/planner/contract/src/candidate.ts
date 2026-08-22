@@ -227,6 +227,24 @@ export const ALL_YEAR: SeasonWindow = { from: "01-01", to: "12-31" };
 export const MAX_PLACE_NAME_CHARS = 200;
 
 /**
+ * A point on the earth.
+ *
+ * Named because two things now hold one — a `Place` that somebody located, and
+ * what `GroundingProvider.locate` answers with. It is structurally exactly what
+ * `Place.coordinates` has always been: a name for the shape, not a change to
+ * it, so that the seam and the contract cannot drift apart field by field.
+ */
+export interface Coordinates {
+  latitude: number;
+  longitude: number;
+}
+
+export const coordinatesSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+}) satisfies z.ZodType<Coordinates>;
+
+/**
  * One place. A candidate has one of these or two — see `CandidateLocation`.
  *
  * `coordinates` is `null` until grounding fills it (Phase 3) and the field
@@ -243,18 +261,13 @@ export const MAX_PLACE_NAME_CHARS = 200;
 export interface Place {
   name: string;
   locality: string | null;
-  coordinates: { latitude: number; longitude: number } | null;
+  coordinates: Coordinates | null;
 }
 
 export const placeSchema = z.object({
   name: z.string().trim().min(1).max(MAX_PLACE_NAME_CHARS),
   locality: z.string().trim().min(1).max(MAX_PLACE_NAME_CHARS).nullable(),
-  coordinates: z
-    .object({
-      latitude: z.number().min(-90).max(90),
-      longitude: z.number().min(-180).max(180),
-    })
-    .nullable(),
+  coordinates: coordinatesSchema.nullable(),
 }) satisfies z.ZodType<Place>;
 
 // ---------------------------------------------------------------------------

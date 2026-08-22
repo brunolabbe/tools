@@ -7,3 +7,4 @@ export * from "./specialists.ts";
 export * from "./prompt.ts";
 export * from "./ask.ts";
 export * from "./orchestrator.ts";
+export * from "./grounding.ts";

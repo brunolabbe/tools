@@ -41,6 +41,7 @@ interface Progress {
 const LABELS: Record<Run["status"], string> = {
   queued: "Waiting for a slot",
   "fanning-out": "Asking the specialists",
+  grounding: "Checking the details",
   composing: "Packing the days",
   reviewing: "Checking the draft",
   done: "Done",
@@ -89,6 +90,18 @@ function reduce(current: Progress, event: RunEvent): Progress {
           return { ...current, done: event.progress.done, total: event.progress.total };
         case "specialist-failed":
           return { ...current, done: event.progress.done, total: event.progress.total };
+        case "grounding":
+          // The counts change meaning when the status does: specialists while
+          // the fan-out runs, lookups from here. The label above the bar
+          // changes with them, so the number under it stays true. `running` is
+          // emptied because no specialist is being asked any more — leaving the
+          // last roster on screen would say otherwise.
+          return {
+            ...current,
+            done: event.progress.done,
+            total: event.progress.total,
+            running: [],
+          };
       }
       return current;
     case "done":

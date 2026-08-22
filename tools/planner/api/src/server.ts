@@ -10,7 +10,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { ScriptedProvider } from "@planner/agent";
-import type { ModelProvider } from "@planner/agent";
+import type { GroundingProvider, ModelProvider } from "@planner/agent";
 import { AppError } from "@planner/contract";
 import { RateLimiter } from "@webtools/core/rate-limit";
 import Database from "better-sqlite3";
@@ -20,6 +20,7 @@ import type { ApiConfig } from "./config.ts";
 import { loadApiConfig } from "./config.ts";
 import type { AppContext } from "./context.ts";
 import { migrate } from "./db/schema.ts";
+import { FixtureGroundingProvider } from "./grounding/fixtures.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
@@ -35,6 +36,8 @@ export interface CreateAppOptions {
   config?: Partial<ApiConfig>;
   /** Injected in tests. Overrides whatever the config would have built. */
   model?: ModelProvider;
+  /** Same, for the other seam. */
+  grounding?: GroundingProvider;
   logger?: AppLogger;
   now?: () => Date;
 }
@@ -64,6 +67,21 @@ function createModelProvider(config: ApiConfig): ModelProvider {
   }
 }
 
+/**
+ * Picks the grounding backend named in the config.
+ *
+ * Beside `createModelProvider` and for the same reason: these two are the only
+ * things in the tool that leave the process, and this file is the only one that
+ * knows either of them by name. Adding a real one — pl-28 — is a case here plus
+ * a file under `src/grounding/`, and nothing above the seam changes.
+ */
+function createGroundingProvider(config: ApiConfig): GroundingProvider {
+  switch (config.groundingProvider) {
+    case "fixtures":
+      return new FixtureGroundingProvider();
+  }
+}
+
 export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const config = loadApiConfig(options.config ?? {});
   const logger = options.logger ?? createLogger({ level: config.logLevel });
@@ -79,6 +97,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
 
   const model = options.model ?? createModelProvider(config);
   logger.info("agent configured", { provider: model.name, model: model.model });
+
+  const grounding = options.grounding ?? createGroundingProvider(config);
+  // The name only. A real backend's endpoint is infrastructure detail and its
+  // key is a credential, and neither belongs on a log line — `logger.ts`
+  // censors the obvious field names as a backstop, not as permission.
+  logger.info("grounding configured", {
+    provider: grounding.name,
+    maxCalls: config.maxGroundingCalls,
+  });
 
   let shuttingDown = false;
   const events = new RunEventHub(now);
@@ -96,6 +123,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     logger,
     db,
     model,
+    grounding,
     runs,
     events,
     runLimiter: new RateLimiter({ perMinute: config.rateLimitRunsPerMinute }),

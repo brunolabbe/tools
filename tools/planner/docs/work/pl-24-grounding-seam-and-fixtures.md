@@ -4,7 +4,7 @@ tool: planner
 title: The grounding seam, its fixture default, and the state a run grounds in
 kind: work-package
 milestone: P3
-status: ready
+status: done
 depends_on: []
 ---
 
@@ -161,3 +161,86 @@ letting the next ticket discover it.
   up; no existing test changes meaning.
 
 ## Log
+
+**2026-08-22 — built.** The seam, the fixture provider behind it, and the
+vocabulary a run needs to say it is grounding. Nothing grounds anything yet;
+that is pl-27.
+
+`GroundingProvider` is in `agent/src/grounding.ts` with `locate` and `travel`,
+both taking a request object rather than positional arguments — `ModelProvider`'s
+shape, so the two seams read alike and so a signal has somewhere to live. The
+matrix is a bare `readonly (readonly (TravelEstimate | null)[])[]` with a
+`travelCell(matrix, origin, destination)` accessor beside it, because a nested
+array is trivial to transpose by hand and the mistake is invisible on a square
+one. `GroundingBudget` and `groundingBudget(max)` are there too: the brief said
+to _decide_ the budget's shape here and leave the spending to pl-27, and fifteen
+tested lines is a firmer agreement between two tickets than a paragraph.
+
+**The brief was wrong about where the fixtures live, and it matters.** It said
+`api/test/fixtures/`. The runtime stage of `Dockerfile` copies each workspace's
+`package.json` and `dist` and nothing else, so a provider reading from `test/`
+passes the suite and throws in the shipped image — and it is the _default_
+provider, so that is every container nobody has given a real backend to. The
+data is a checked-in `.ts` table at `api/src/grounding/fixture-data.ts` instead,
+which is exactly what `scripted-fan-out.ts` already does for the scripted model
+provider and for the same reason. Anything pl-25 or pl-28 checks in that the
+running service must read belongs under `src` on this argument.
+
+**Fixture sources point at `fixtures.invalid`.** Every reply carries a `Source`
+because `provenanceSchema` refuses a grounded fact without one — and that source
+reaches the plan view as a link the user reads as "we checked this". A
+plausible URL at a real gazetteer that nothing ever fetched is precisely the
+failure the provenance mechanism exists to make visible, so the host is the TLD
+RFC 2606 reserves to never resolve, and the title says it is a fixture. Same
+argument as the scripted provider reporting itself as `scripted` in health.
+
+`fetchedAt` is frozen at the date this table was written rather than stamped
+from the clock, so the provider stays deterministic. It ages on purpose: when
+pl-25 lands, these facts age out like any others, and a fixture that stayed
+eternally fresh would be the one input the TTL could never be tested against.
+
+**Two things the brief did not mention, both forced by the contract change:**
+
+- `Place.coordinates` was an inline anonymous type. `locate` returns the same
+  shape, so it is now an exported `Coordinates` interface with a
+  `coordinatesSchema`, and `placeSchema` composes it. Structurally identical —
+  a name for what was already there, so the seam and the contract cannot drift
+  apart field by field.
+- `RUN_STATUSES` gaining a member broke `web`'s `LABELS`, which is an exhaustive
+  `Record<Run["status"], string>` — the check caught it, which is the map doing
+  its job. `RunView` gained the label and a `grounding` case in its progress
+  reducer. The counts change meaning with the status (specialists during the
+  fan-out, lookups after), so the case also clears `running`: leaving the last
+  roster on screen would say specialists were still being asked.
+
+**The fixture answers `null` far more often than it answers.** That is the
+design and the tests are mostly about it — an unknown place, a region that is a
+scope rather than a place (`Central Europe`), and the Mont-Albert plateau
+traverse, which is seven hours on foot with no road, so both ends are in the
+gazetteer and the pair is deliberately absent from the leg table. A cell that is
+asked for, exists, and has no answer is the case pl-27 has to handle honestly.
+A place is zero from _itself_ and that is the one derived answer, but only for a
+place the gazetteer holds: answering zero for a name nobody has heard of would
+invent the place and measure it in the same breath.
+
+Leg keys join the two ends with an escaped NUL. A space would let
+`"quebec city"` + `"rimouski"` collide with `"quebec"` + `"city rimouski"`;
+there is a test for it.
+
+`canRunTransition` now accepts `fanning-out → grounding` and
+`grounding → composing`, and `fanning-out → composing` stays legal — the same
+argument `composing → done` already won, one state earlier. `grounding → done`
+and `grounding → reviewing` are refused: grounding measures what the fan-out
+proposed and hands it on; it cannot finish a run.
+
+**30 new tests; the planner suite is 562 and `npm run check` is green.** No
+existing test changed meaning. Nothing was added to `01-ARCHITECTURE.md` because
+its configuration table already carried `GROUNDING_PROVIDER` and
+`MAX_GROUNDING_CALLS` — this ticket implemented rows that were already written.
+
+**For pl-27:** the budget counts _calls_, not lookups, so one matrix over eight
+places is one call and sixty-four pairs. Counting pairs would make the cheap
+thing look expensive and push you back to n² pairwise requests to stay under the
+cap. `fixturePlaceKey` is exported so a caller can deduplicate its place list
+the same way the lookup will, rather than paying for a wider matrix than it
+needs.

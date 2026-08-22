@@ -39,6 +39,28 @@ describe("loadApiConfig", () => {
     expect(loadApiConfig({}, { MODEL_PROVIDER: "gpt-9" }).modelProvider).toBe("scripted");
   });
 
+  test("defaults grounding to the fixture provider, so a fresh clone needs no key", () => {
+    expect(loadApiConfig({}, {}).groundingProvider).toBe("fixtures");
+    expect(loadApiConfig({}, {}).maxGroundingCalls).toBe(40);
+  });
+
+  test("falls back to the fixture provider when the grounding name is unknown", () => {
+    // Beside the `MODEL_PROVIDER` case above and for the same reason: a typo
+    // here cannot send a request anywhere, so the worst case is a plan whose
+    // legs are unmeasured and which says so — reported by name at
+    // `/api/health`. Refusing to boot would trade that for no plan at all.
+    expect(loadApiConfig({}, { GROUNDING_PROVIDER: "valhalla" }).groundingProvider).toBe(
+      "fixtures",
+    );
+  });
+
+  test("honours a grounding ceiling of zero rather than treating it as unset", () => {
+    // Zero is how a deployment turns grounding off without reconfiguring the
+    // provider. Clamping it up to one would spend a call it was told not to.
+    expect(loadApiConfig({}, { MAX_GROUNDING_CALLS: "0" }).maxGroundingCalls).toBe(0);
+    expect(loadApiConfig({}, { MAX_GROUNDING_CALLS: "not a number" }).maxGroundingCalls).toBe(40);
+  });
+
   test("clamps a nonsense token ceiling instead of passing it to a provider", () => {
     expect(loadApiConfig({}, { MAX_OUTPUT_TOKENS: "-5" }).maxOutputTokens).toBe(1);
     expect(loadApiConfig({}, { MAX_OUTPUT_TOKENS: "99999999" }).maxOutputTokens).toBe(32_000);
