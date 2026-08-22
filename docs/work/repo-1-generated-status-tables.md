@@ -105,3 +105,23 @@ Four things the brief did not know:
   indistinguishable from "the file is new" — which passes. `fetch-depth: 0` in
   the workflow is load-bearing, and the new-file branch of `--check` is the one
   place this design can be defeated by an environment rather than by a diff.
+
+**2026-08-22 — the bootstrap commit is the one branch that must regenerate.**
+`pl-24` merged while this was in review, and the pull request went red on its own
+check: `--check` falls back to "the region must be what `--write` produces"
+whenever the base commit has no region, and that is true of exactly one pull
+request — this one. So `main` moving under it made a correct branch wrong, and
+the fix was to merge `main` and re-run `--write`.
+
+It is worth being precise about the scope, because the obvious reading is that
+the guard is fragile. It is not: every pull request after this one compares
+against a base that _has_ a region, and passes by leaving it alone. The
+new-region branch exists for a genuinely new tool's status page, and it inherits
+this property — a tool added while something else merges has to regenerate once.
+That is a rebase, which is what it would be anyway.
+
+The other half was self-healing and needed nothing: the region committed here
+was rendered when `pl-24` still said `ready`, and the `regenerate` job on `main`
+would have corrected it on the merge push regardless. Fixing it on the branch is
+for the reviewer's benefit, so the diff does not ship a table that is visibly
+wrong.

@@ -127,7 +127,7 @@ still unwritten.
 | -------------- | ---- | ---- | ------- | ----------- |
 | P1             | 5    | 0    | 0       | complete    |
 | P2             | 7    | 0    | 0       | complete    |
-| P3             | 0    | 6    | 0       | not started |
+| P3             | 1    | 5    | 0       | in progress |
 | _no milestone_ | 9    | 1    | 1       | in progress |
 
 ### Open tickets
@@ -135,7 +135,6 @@ still unwritten.
 | Ticket                                                    | Kind         | Status    | Milestone | What it is                                                                  |
 | --------------------------------------------------------- | ------------ | --------- | --------- | --------------------------------------------------------------------------- |
 | [pl-2](./work/pl-2-container-image.md)                    | chore        | in-flight | —         | Ship the planner as a released image on its own subdomain                   |
-| [pl-24](./work/pl-24-grounding-seam-and-fixtures.md)      | work-package | ready     | P3        | The grounding seam, its fixture default, and the state a run grounds in     |
 | [pl-25](./work/pl-25-grounding-cache.md)                  | work-package | ready     | P3        | Cache grounding with a TTL that varies by kind                              |
 | [pl-26](./work/pl-26-lift-the-ssrf-guard.md)              | work-package | ready     | P3        | Lift the SSRF guard to packages/core when a second tool actually fetches    |
 | [pl-27](./work/pl-27-travel-time-reaches-the-composer.md) | work-package | ready     | P3        | Measure the legs, pack under them, and stop naming travel time as unchecked |
@@ -143,7 +142,7 @@ still unwritten.
 | [pl-29](./work/pl-29-detours-along-a-leg.md)              | work-package | ready     | P3        | Find what is worth stopping for along a leg                                 |
 
 <details>
-<summary>Closed — 22 tickets</summary>
+<summary>Closed — 23 tickets</summary>
 
 | Ticket                                                      | Kind         | Status  | What it was                                                                       |
 | ----------------------------------------------------------- | ------------ | ------- | --------------------------------------------------------------------------------- |
@@ -169,6 +168,7 @@ still unwritten.
 | [pl-21](./work/pl-21-name-the-bare-fields.md)               | chore        | done    | Four field kinds render an input a screen reader cannot name                      |
 | [pl-22](./work/pl-22-pin-scoped-to-the-revision-shown.md)   | fix          | done    | A pin is scoped to the plan, not to the revision the reader was looking at        |
 | [pl-23](./work/pl-23-pinned-out-of-season-currency.md)      | chore        | done    | A pinned out-of-season candidate's currency changed meaning, and nothing tests it |
+| [pl-24](./work/pl-24-grounding-seam-and-fixtures.md)        | work-package | done    | The grounding seam, its fixture default, and the state a run grounds in           |
 
 </details>
 
