@@ -115,31 +115,64 @@ still unwritten.
 
 ## Open tickets
 
-| Ticket                                                      | Status    | Note                                                         |
-| ----------------------------------------------------------- | --------- | ------------------------------------------------------------ |
-| [pl-1](./work/pl-1-conversation-loop.md)                    | dropped   | The chat premise. Read the log before rebuilding it          |
-| [pl-2](./work/pl-2-container-image.md)                      | in-flight | Image and release component landed; no subdomain yet         |
-| [pl-3](./work/pl-3-trip-brief-contract.md)                  | done      | The brief, its slots and `missingRequiredSlots` are in       |
-| [pl-4](./work/pl-4-plan-document-contract.md)               | done      | The plan document, migration 2, and pl-5's fixtures          |
-| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)             | done      | The roster is a table, not conditionals                      |
-| [pl-6](./work/pl-6-question-tree-and-engine.md)             | done      | `@planner/intake`: the tree, reachability, invalidation      |
-| [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them                |
-| [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER`     |
-| [pl-9](./work/pl-9-composer-and-critic.md)                  | done      | `@planner/itinerary`: season, packing, budget, critic        |
-| [pl-10](./work/pl-10-plan-view-and-provenance.md)           | done      | The plan reads: provenance, gaps, and what was unchecked     |
-| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | done      | The vocabulary is gone; `NOT_FOUND` lifted to core           |
-| [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | done      | 1,100 lines of `.tsx` and no test renders any of it          |
-| [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | done      | The intake driven in a browser; the image serves the UI      |
-| [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2        |
-| [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two            |
-| [pl-16](./work/pl-16-the-plan-run.md)                       | done      | The run over HTTP; its image gate produced pl-17             |
-| [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | done      | Both images' workspace lists are checked against the closure |
-| [pl-18](./work/pl-18-destination-asked-early.md)            | done      | Destination asked third; `core` is position, not need        |
-| [pl-19](./work/pl-19-pin-through-the-browser.md)            | done      | Pinning proven across the seam: pin, reload, still pinned    |
-| [pl-20](./work/pl-20-intake-fixture-builders.md)            | done      | One typed builder writes a saved intake fixture              |
-| [pl-21](./work/pl-21-name-the-bare-fields.md)               | ready     | Four field kinds render a control with no accessible name    |
-| [pl-22](./work/pl-22-pin-scoped-to-the-revision-shown.md)   | ready     | A pin on a superseded revision succeeds and does nothing     |
-| [pl-23](./work/pl-23-pinned-out-of-season-currency.md)      | ready     | The pinned out-of-season case that no currency test builds   |
+<!-- generated:tickets -->
+
+<!-- Written by `node scripts/status.mjs --write`, which runs on `main` after a merge.
+     Do not edit this region: a ticket's frontmatter is what it is generated from, and a
+     branch that edits it here is the merge conflict ADR 003 exists to end. -->
+
+### Milestones
+
+| Milestone      | Done | Open | Dropped | State       |
+| -------------- | ---- | ---- | ------- | ----------- |
+| P1             | 5    | 0    | 0       | complete    |
+| P2             | 7    | 0    | 0       | complete    |
+| P3             | 1    | 5    | 0       | in progress |
+| _no milestone_ | 9    | 1    | 1       | in progress |
+
+### Open tickets
+
+| Ticket                                                    | Kind         | Status    | Milestone | What it is                                                                  |
+| --------------------------------------------------------- | ------------ | --------- | --------- | --------------------------------------------------------------------------- |
+| [pl-2](./work/pl-2-container-image.md)                    | chore        | in-flight | —         | Ship the planner as a released image on its own subdomain                   |
+| [pl-25](./work/pl-25-grounding-cache.md)                  | work-package | ready     | P3        | Cache grounding with a TTL that varies by kind                              |
+| [pl-26](./work/pl-26-lift-the-ssrf-guard.md)              | work-package | ready     | P3        | Lift the SSRF guard to packages/core when a second tool actually fetches    |
+| [pl-27](./work/pl-27-travel-time-reaches-the-composer.md) | work-package | ready     | P3        | Measure the legs, pack under them, and stop naming travel time as unchecked |
+| [pl-28](./work/pl-28-valhalla-adapter.md)                 | work-package | ready     | P3        | A real routing backend behind the seam, self-hosted                         |
+| [pl-29](./work/pl-29-detours-along-a-leg.md)              | work-package | ready     | P3        | Find what is worth stopping for along a leg                                 |
+
+<details>
+<summary>Closed — 23 tickets</summary>
+
+| Ticket                                                      | Kind         | Status  | What it was                                                                       |
+| ----------------------------------------------------------- | ------------ | ------- | --------------------------------------------------------------------------------- |
+| [pl-1](./work/pl-1-conversation-loop.md)                    | work-package | dropped | The conversation loop, end to end                                                 |
+| [pl-3](./work/pl-3-trip-brief-contract.md)                  | work-package | done    | The trip brief, in the contract                                                   |
+| [pl-4](./work/pl-4-plan-document-contract.md)               | work-package | done    | The plan document — candidates, days, revisions, pinning                          |
+| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)             | work-package | done    | The orchestrator and the specialist fan-out                                       |
+| [pl-6](./work/pl-6-question-tree-and-engine.md)             | work-package | done    | The question tree, and the engine that walks it                                   |
+| [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | work-package | done    | The intake — persistence, routes, and the wizard over them                        |
+| [pl-8](./work/pl-8-model-provider-seam.md)                  | chore        | done    | Rename the chat seam to a model seam                                              |
+| [pl-9](./work/pl-9-composer-and-critic.md)                  | work-package | done    | The composer and the critic — the itinerary package                               |
+| [pl-10](./work/pl-10-plan-view-and-provenance.md)           | work-package | done    | The plan view — days, gaps, and what was actually verified                        |
+| [pl-11](./work/pl-11-retire-the-conversation-vocabulary.md) | chore        | done    | Retire the conversation vocabulary, and name an unknown endpoint properly         |
+| [pl-12](./work/pl-12-render-the-wizard-in-tests.md)         | chore        | done    | Render the wizard's components in tests, not only the routes under them           |
+| [pl-13](./work/pl-13-drive-the-intake-end-to-end.md)        | chore        | done    | Drive the intake end to end, and gate it in CI                                    |
+| [pl-14](./work/pl-14-tree-content-review.md)                | work-package | done    | Review the question tree as content — budget, drive appetite, vehicle             |
+| [pl-15](./work/pl-15-candidate-legs.md)                     | work-package | done    | A candidate is at a place or runs between two                                     |
+| [pl-16](./work/pl-16-the-plan-run.md)                       | work-package | done    | The plan run — a job, its progress, and the plan it writes                        |
+| [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | chore        | done    | A Dockerfile's workspace list is maintained by memory                             |
+| [pl-18](./work/pl-18-destination-asked-early.md)            | work-package | done    | Ask where they are going third, and let it be blank                               |
+| [pl-19](./work/pl-19-pin-through-the-browser.md)            | work-package | done    | Prove pinning through the browser, not at a mocked seam                           |
+| [pl-20](./work/pl-20-intake-fixture-builders.md)            | chore        | done    | One builder for a saved intake, instead of three copies of its SQL                |
+| [pl-21](./work/pl-21-name-the-bare-fields.md)               | chore        | done    | Four field kinds render an input a screen reader cannot name                      |
+| [pl-22](./work/pl-22-pin-scoped-to-the-revision-shown.md)   | fix          | done    | A pin is scoped to the plan, not to the revision the reader was looking at        |
+| [pl-23](./work/pl-23-pinned-out-of-season-currency.md)      | chore        | done    | A pinned out-of-season candidate's currency changed meaning, and nothing tests it |
+| [pl-24](./work/pl-24-grounding-seam-and-fixtures.md)        | work-package | done    | The grounding seam, its fixture default, and the state a run grounds in           |
+
+</details>
+
+<!-- /generated:tickets -->
 
 ## Known gaps and risks
 
