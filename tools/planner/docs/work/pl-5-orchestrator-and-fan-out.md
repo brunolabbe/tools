@@ -3,7 +3,7 @@ id: pl-5
 tool: planner
 title: The orchestrator and the specialist fan-out
 kind: work-package
-status: in-flight
+status: done
 milestone: P2
 depends_on: [pl-4, pl-15]
 ---
@@ -125,6 +125,36 @@ Traps worth knowing in advance:
   why. This is the assertion that catches a specialist ignoring `driveAppetite`,
   and it is cheap because the composer is already pure.
 - `npm run check` and `npm test -- --project planner` pass.
+
+## Review
+
+**Gate: CONCERNS** — 2026-08-18 · `origin/pl-17-image-closure...origin/pl-5-close-and-pl-21` (PR #50, commits `bcb46fe`, `c36ad74`) · code-review at medium
+
+Range reviewed is docs-only: `tools/planner/docs/02-ROADMAP.md`, `tools/planner/docs/03-STATUS.md`, `tools/planner/docs/work/pl-5-orchestrator-and-fan-out.md`, and new `tools/planner/docs/work/pl-21-name-the-bare-fields.md`. `packages/core/test/image-closure.test.ts` and the Dockerfile edits belong to pl-17 and were not touched here.
+
+| Done when                                                                                                                                                          | Proof                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rosterFor` table-driven, tested per shape incl. one deliberately absent                                                                                           | `agent/test/roster.test.ts:20` (per-shape), `agent/test/roster.test.ts:86` (food absent, backcountry) ✓                                                                                                                                                                                                                                             |
+| Every route candidate returned is `between`, per checked-in brief                                                                                                  | `agent/test/placeable.test.ts:112,123` ✓                                                                                                                                                                                                                                                                                                            |
+| Run over checked-in briefs: candidates from every rostered specialist, per-specialist progress, survives one specialist failing with gap named, nothing fabricated | `agent/test/fan-out.test.ts:51` (candidates), `:85` (progress), `:105,:122` (failure → gap, no fabrication) ✓ — wire-level SSE progress is pl-16's, landed on `main` (`09bd161`), outside this diff                                                                                                                                                 |
+| Budget path tested: over-cap roster degraded before fan-out, drop recorded                                                                                         | `agent/test/budget.test.ts:26,47,74`; `agent/test/fan-out.test.ts:206` ✓                                                                                                                                                                                                                                                                            |
+| Nothing in this ticket packs a day or writes a schedule                                                                                                            | `agent/test/fan-out.test.ts:75` ✓                                                                                                                                                                                                                                                                                                                   |
+| Candidates placeable: `compose()` over fan-out output places ≥1 candidate from every rostered schedulable specialist, or names the drop                            | `agent/test/placeable.test.ts:77` ✓                                                                                                                                                                                                                                                                                                                 |
+| `npm run check` and `npm test -- --project planner` pass                                                                                                           | Verified directly: `npm run check` exit 0; `npm test -- --project planner` → 40 files / 526 tests passed, matching `03-STATUS.md`'s own count — but only after `npm run build`; a bare `npm test` on the fresh worktree failed 35/40 files on `@planner/contract` resolution, exactly the "build before you test" trap `docs/01-TICKETS.md` names ✓ |
+
+- **med** · `pl-5-orchestrator-and-fan-out.md:325-330` contradicts itself: "Every `Done when` line on this ticket was already met by the 2026-08-16 entry" is followed three sentences later by "What that entry could not claim — that a run streams per-specialist progress over a wire — is pl-16's." The Done-when line at `:117-118` requires streaming, and the entry it cites explicitly says that was _not_ built by pl-5. The underlying substance is fine (pl-16 landed it, verified on `main`), but a reader taking the opening sentence at face value believes pl-5 met its own acceptance unaided. Two finders converged on this independently.
+- **med** · `02-ROADMAP.md:197-210`'s "Still open" list has broken nesting — the replacement paragraph is indented two spaces with no blank line and no `- ` marker, so CommonMark treats it as a lazy continuation of the preceding bullet ("Whether a specialist streams"). Rendered, the resolved `RunStatus`/`RunProgress`/`MAX_SPECIALISTS` answers appear to belong to that bullet, making the one item that is genuinely still open (streaming) read as answered. Three finders independently confirmed this by rendering it. Fix is a `- ` prefix or a blank line before the paragraph.
+- **med** · `pl-21-name-the-bare-fields.md`'s trap "`number-list` renders more than one input" is factually wrong — `web/src/wizard/controls.tsx`'s `NumberList` renders exactly one `<input>` parsing comma-separated values, the same shape as `TextList`. A future implementer either re-verifies a false claim or builds an unneeded per-item `aria-labelledby` scheme.
+- **med** · The `RunProgress`/`RunEvent` contract shape and the `MAX_SPECIALISTS = 5` "kept" verdict are each now restated in full in four places (`pl-16`'s Log, `03-STATUS.md`, the new `02-ROADMAP.md` prose, and pl-5's new Log), against `docs/01-TICKETS.md`'s "02-ROADMAP links to tickets; it does not describe work" and root `CLAUDE.md`'s "roadmap and status pages are deliberately too thin to hold it." `03-STATUS.md`'s bare-fields paragraph is likewise now a second copy of `pl-21`'s own Why section, which is content's rightful home as of this diff.
+- **low** · The Done-when bullet at `pl-5:117-118` is left unstruck/unannotated while `status` flips to `done`, so a reader checking that specific line against pl-5's own work has to first find the log entry rather than the ticket telling them directly.
+- **low** · `pl-21`'s Why section says pl-12 left the accessible-name gap alone "rather than widening that ticket's diff"; pl-12's actual stated reason was that pl-16 was editing `web/src` in parallel — a concrete, now-moot reason that got dropped in the retelling.
+- **low** · `pl-5:317-323` argues the same close-vs-rescope point twice in consecutive sentences.
+- **dropped** · A finder flagged `status: in-flight → done` with no `## Review` section as bypassing `docs/01-TICKETS.md`'s review gate. A second finder rebutted it with direct precedent: `docs/01-TICKETS.md`'s "a review appends... and never moves status" restricts _reviews_, not authors, and `pl-16` is `status: done` with no Review section either, closed the same way by a dated Log entry. The rebuttal is correct — dropped.
+- **dropped** · A finder noted the ROADMAP edit drops the analogy "a number to argue with as content, the way `limits.ts` is" with no replacement, but flagged it only as a minor rhetorical loss, not a correctness or placement issue — not worth a severity line.
+
+Invariants walked: **contract not edited unilaterally** — this diff touches no contract file; the decision itself is recorded in `pl-16`'s Log (`RunStatus`, `RunProgress`/`RunEvent`, routes, `Run`, all additive), which merged to `main` at `09bd161`, so the record shows the decision being _made_, not just deferred. **Documentation placement** — all edited/added files sit under `tools/planner/docs/`; nothing added to root `docs/`; no cross-tool document. **Ticket format** (`docs/01-TICKETS.md` vs `pl-21`) — frontmatter complete and correctly typed, section order matches, `Review` correctly absent, `depends_on: [pl-12]` satisfied (pl-12 is `done`), id `pl-21` not previously used (ids run `pl-1`…`pl-20` before this). Skipped as n/a for a docs-only diff: spawn safety, credential redaction, SSRF checks, kill-process-trees.
+
+NFR: security n/a (docs-only) · performance n/a (docs-only) · reliability n/a (docs-only) · maintainability — the four `med` findings are all maintainability concerns (a self-contradicting closing narrative, a broken-render doc bug, a wrong technical claim seeding a future ticket, and duplicated content across four files that the repo's own convention says should stay thin and link instead).
 
 ## Log
 
@@ -299,3 +329,94 @@ untrusted input, and the pattern that reads it was one a stranger's reply could
 choose the cost of. The regression test in `agent/test/ask.test.ts` asserts a
 time bound rather than a result, which is the only thing that would fail if the
 `\s*` came back.
+
+### 2026-08-18 — closed here, with step 4 and the `web` half owned by pl-16
+
+The previous entry left this `in-flight` on one open question and named who had
+to answer it: _"until somebody who owns the roadmap decides whether it closes
+here"_. Decided on 2026-08-18 — **it closes here.**
+
+Nothing was built for this entry and nothing needed to be. The two things this
+ticket stopped short of are both done, under the ticket that was split out to
+carry them: [pl-16](./pl-16-the-plan-run.md) answered the contract question the
+entry above left open — which of the four additions the contract carries, and in
+what shape, is written down in that ticket's log — and then built `plan_runs`,
+the queue, the SSE route and the progress view on top of the answer. Phase 2 is
+complete as of pl-10.
+
+**Why this is a close-out and not a re-scope.** The alternative was to widen this
+ticket's `Done when` to say "or pl-16 does it", which would leave two files
+claiming the same work and neither able to be read on its own. So the brief above
+is unchanged — including its Build step 4 and the `web` half, which this ticket
+did not do — and this entry is the record that they were done elsewhere rather
+than dropped.
+
+**All but one of the `Done when` lines were met by this ticket's own work**, in
+the 2026-08-16 entry: `rosterFor` is table-driven and tested per shape, every
+route candidate is a `between`, the budget path degrades and records it, nothing
+here packs a day, and `placeable.test.ts` composes the real fan-out for all six
+briefs. The exception is one clause of the third line — **a run streams
+per-specialist progress**. `runFanOut` emits that progress per specialist and
+`agent/test/fan-out.test.ts` asserts it, but nothing here carries it over a wire,
+because the run was not a job yet and that was the seam this ticket stopped at.
+[pl-16](./pl-16-the-plan-run.md) holds that clause and it holds it in full: the
+SSE route, the frames on it, and a page that shows the specialists working.
+
+The one finding this ticket raised and left open was resolved elsewhere too:
+**`MAX_SPECIALISTS = 5` drops the budget specialist on every six-specialist
+shape** was reviewed as content in pl-16 and **kept**. The argument is in that
+ticket's log, beside the code it decides.
+
+### 2026-08-18 — the close-out corrected after its own gate
+
+The `## Review` above gated the close-out at CONCERNS. Every finding was about
+the record rather than about the code — this branch is documentation only and
+what the fan-out does is unchanged — but a record that reads wrong is the only
+thing a close-out has to offer, so they are all fixed here.
+
+**The close-out claimed more than it had.** It opened with "every `Done when`
+line on this ticket was already met by the 2026-08-16 entry" and then, three
+sentences later, conceded that streaming over a wire was pl-16's — which is a
+clause of the third `Done when` line. Both cannot be true, and a reader who
+stopped at the first sentence would believe this ticket met its own acceptance
+unaided. It now says all but one line were met here, names the clause that was
+not, and says pl-16 holds it and by what. The brief itself is untouched: leaving
+it as written was a deliberate decision recorded above, and correcting a claim
+_about_ the brief is not the same as editing it. The close-vs-re-scope argument,
+which the same paragraph made twice in consecutive sentences, is now made once.
+
+**Two facts were being restated in four places.** The `RunProgress` / `RunEvent`
+shape and the `MAX_SPECIALISTS = 5` verdict each appeared in full in pl-16's log,
+in `03-STATUS.md`, in `02-ROADMAP.md` and in this ticket's close-out. pl-16 did
+that work, so its log keeps the detail; the roadmap and this entry are cut back
+to the fact that the question is answered and a link to where the answer is
+argued. The format doc's rule is that the roadmap links to tickets and does not
+describe work, and the reason is exactly this: four copies is four places for one
+of them to drift. `03-STATUS.md`'s bare-fields paragraph had become a second copy
+of pl-21's Why the moment pl-21 existed, and is now a pointer at it.
+
+**The roadmap's _Still open_ list rendered as the opposite of its meaning.** The
+replacement paragraph was indented two spaces with no blank line and no marker,
+so CommonMark took it as a lazy continuation of the "Whether a specialist
+streams" bullet — and the two questions that pl-16 _answered_ rendered as part of
+the one that is genuinely still open. It is now a paragraph outside the list,
+which is the shape the section's other resolved questions already use.
+
+**pl-21 was seeded with a trap that is not true.** It warned that `number-list`
+renders more than one input. `NumberList` renders exactly one
+`<input type="text" inputMode="numeric">` over comma-separated text, structurally
+the same as `TextList`'s single textarea, so the warning would have cost whoever
+picks that chore up either a re-verification or a per-item `aria-labelledby`
+scheme for items that do not exist. The honest version is the inverse and is now
+what the ticket says: all four bare kinds are the single-control case, and the
+trap is that two of them are named as though they were not. Its Why also
+mis-remembered why pl-12 left the gap — pl-16 was editing `web/src` in parallel,
+not diff size — and now carries the real reason together with the note that it
+has since expired.
+
+One gate finding is deliberately left: the `Done when` bullet is not struck or
+annotated in place. Striking it would edit the brief, which is the one thing this
+close-out decided not to do, and the log now answers the same question in the
+sentence a reader reaches next.
+
+`npm run check` passes. No test changed and no source file was touched.

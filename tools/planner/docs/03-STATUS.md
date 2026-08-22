@@ -3,7 +3,7 @@
 Where the planner stands. Phases live in [02-ROADMAP.md](./02-ROADMAP.md); what
 each piece of work did lives in its ticket under [work/](./work/).
 
-**Last updated:** 2026-08-21 · **Phase 0 (scaffold) ✅ · Phase 1 ✅ — the
+**Last updated:** 2026-08-22 · **Phase 0 (scaffold) ✅ · Phase 1 ✅ — the
 `TripBrief`, the question tree, and the persistence and wizard over them, driven
 end to end in a browser. The tool produces a brief with no model involved
 anywhere. Phase 2 now produces a plan: as of [pl-16](./work/pl-16-the-plan-run.md)
@@ -11,18 +11,18 @@ a run started over HTTP fans out, composes and persists a revision, streams its
 progress over SSE, and can be canceled in a way that reaches the provider, and as
 of [pl-10](./work/pl-10-plan-view-and-provenance.md) that plan can be read — its
 days, which lines were verified, what it does not cover and what nothing checked.
-**Phase 2 is complete.** What is missing is grounding (Phase 3)**
+Phase 2 is complete. What is missing is grounding (Phase 3).**
 
 ---
 
 ## Where things stand
 
-| Phase                            | State         | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| -------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Phase 0 — Scaffold               | ✅ complete   | `0f8583e`                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Phase 1 — The intake             | ✅ complete   | [pl-3](./work/pl-3-trip-brief-contract.md), [pl-6](./work/pl-6-question-tree-and-engine.md) and [pl-7](./work/pl-7-intake-persistence-and-wizard.md) — the brief, the tree, and an intake that survives a reload                                                                                                                                                                                                         |
-| Phase 2 — The first plan         | ✅ complete   | [pl-4](./work/pl-4-plan-document-contract.md), [pl-9](./work/pl-9-composer-and-critic.md), [pl-16](./work/pl-16-the-plan-run.md) and [pl-10](./work/pl-10-plan-view-and-provenance.md) done, [pl-5](./work/pl-5-orchestrator-and-fan-out.md) all but its own close-out — the plan document, the composer, the fan-out, the run that joins them over HTTP and stores what comes back, and the view that reads it honestly |
-| Phases 3–4 — Grounding, revision | designed only | no tickets yet, on purpose                                                                                                                                                                                                                                                                                                                                                                                               |
+| Phase                            | State         | Evidence                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 0 — Scaffold               | ✅ complete   | `0f8583e`                                                                                                                                                                                                                                                                                                                                                                                             |
+| Phase 1 — The intake             | ✅ complete   | [pl-3](./work/pl-3-trip-brief-contract.md), [pl-6](./work/pl-6-question-tree-and-engine.md) and [pl-7](./work/pl-7-intake-persistence-and-wizard.md) — the brief, the tree, and an intake that survives a reload                                                                                                                                                                                      |
+| Phase 2 — The first plan         | ✅ complete   | [pl-4](./work/pl-4-plan-document-contract.md), [pl-9](./work/pl-9-composer-and-critic.md), [pl-16](./work/pl-16-the-plan-run.md) and [pl-10](./work/pl-10-plan-view-and-provenance.md) and [pl-5](./work/pl-5-orchestrator-and-fan-out.md) all done — the plan document, the composer, the fan-out, the run that joins them over HTTP and stores what comes back, and the view that reads it honestly |
+| Phases 3–4 — Grounding, revision | designed only | no tickets yet, on purpose                                                                                                                                                                                                                                                                                                                                                                            |
 
 **The tool is not a chat, as of 2026-08-14.** It was scaffolded as one. The
 intake now asks predetermined questions from an authored, versioned tree, and no
@@ -33,7 +33,9 @@ argument was kept and overridden rather than rewritten.
 [pl-1](./work/pl-1-conversation-loop.md) was dropped without being started.
 
 **526 unit tests pass across 40 files, plus 4 e2e specs.** `npm run check` is
-green. The repo-wide CI runs the unit suite on every push, and
+green. Seven of the repo-wide tests in `packages/core` are
+[pl-17](./work/pl-17-dockerfile-workspace-scan.md)'s — see the paragraph below.
+The repo-wide CI runs the unit suite on every push, and
 `.github/workflows/planner.yml` now carries two gates — the e2e suite in a real
 browser, and the image, which is built, started, and asked for both `/api/health`
 and the page. Both are path-filtered, so downloader work does not pay for them.
@@ -107,7 +109,7 @@ still unwritten.
 | [pl-2](./work/pl-2-container-image.md)                      | in-flight | Image and release component landed; no subdomain yet         |
 | [pl-3](./work/pl-3-trip-brief-contract.md)                  | done      | The brief, its slots and `missingRequiredSlots` are in       |
 | [pl-4](./work/pl-4-plan-document-contract.md)               | done      | The plan document, migration 2, and pl-5's fixtures          |
-| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)             | in-flight | The roster is a table, not conditionals                      |
+| [pl-5](./work/pl-5-orchestrator-and-fan-out.md)             | done      | The roster is a table, not conditionals                      |
 | [pl-6](./work/pl-6-question-tree-and-engine.md)             | done      | `@planner/intake`: the tree, reachability, invalidation      |
 | [pl-7](./work/pl-7-intake-persistence-and-wizard.md)        | done      | Persistence, routes, and the wizard over them                |
 | [pl-8](./work/pl-8-model-provider-seam.md)                  | done      | The seam is `ModelProvider`; the env is `MODEL_PROVIDER`     |
@@ -119,10 +121,11 @@ still unwritten.
 | [pl-14](./work/pl-14-tree-content-review.md)                | done      | The tree reviewed as content; tree `version` is now 2        |
 | [pl-15](./work/pl-15-candidate-legs.md)                     | done      | A candidate is `at` a place or runs `between` two            |
 | [pl-16](./work/pl-16-the-plan-run.md)                       | done      | The run over HTTP; its image gate produced pl-17             |
-| [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | done      | The image's workspace list is kept by hand and unchecked     |
+| [pl-17](./work/pl-17-dockerfile-workspace-scan.md)          | done      | Both images' workspace lists are checked against the closure |
 | [pl-18](./work/pl-18-destination-asked-early.md)            | done      | Destination asked third; `core` is position, not need        |
-| [pl-19](./work/pl-19-pin-through-the-browser.md)            | done      | Pinning is proven at the button and at the write, not across |
-| [pl-20](./work/pl-20-intake-fixture-builders.md)            | ready     | Three hand-written `INSERT` fixtures in one test file        |
+| [pl-19](./work/pl-19-pin-through-the-browser.md)            | done      | Pinning proven across the seam: pin, reload, still pinned    |
+| [pl-20](./work/pl-20-intake-fixture-builders.md)            | done      | One typed builder writes a saved intake fixture              |
+| [pl-21](./work/pl-21-name-the-bare-fields.md)               | ready     | Four field kinds render a control with no accessible name    |
 | [pl-22](./work/pl-22-pin-scoped-to-the-revision-shown.md)   | ready     | A pin on a superseded revision succeeds and does nothing     |
 | [pl-23](./work/pl-23-pinned-out-of-season-currency.md)      | ready     | The pinned out-of-season case that no currency test builds   |
 
@@ -155,6 +158,27 @@ asks the running container for the page as well as for health. That closes
 [pl-2](./work/pl-2-container-image.md)'s "serves the UI" acceptance, which was
 the thing this had falsified.
 
+**The image's workspace list is no longer kept by memory.**
+[pl-17](./work/pl-17-dockerfile-workspace-scan.md) added
+`packages/core/test/image-closure.test.ts`, which walks the workspace graph from
+each tool's `api` manifest and asserts both hand-kept `Dockerfile` lists against
+it — the manifests copied **before `npm ci`**, and the `package.json` + `dist`
+pair per workspace in the runtime stage — in both directions, plus the rule that
+makes the walk trustworthy: a workspace imported under `src` is declared in that
+package's own `dependencies`. It found nothing to fix, because pl-16 had already
+fixed the planner by hand and the downloader was correct, so its value is
+prospective and it was proved by breaking both Dockerfiles on purpose — see the
+ticket's log for the mutations. **It does not replace the image gate**: a scan
+over text cannot prove the container boots.
+
+The scan is also written not to pass by having looked at less. It reads without
+asserting, so a `Dockerfile` it cannot parse is a named failing test rather than
+a suite that will not load; a `readdir` that fails for any reason other than the
+directory not existing is raised rather than read as empty; and two workspaces
+claiming one name are reported rather than shadowing each other. Those three
+came out of the ticket's own review gate, which found the scan making the
+mistake the ticket was written about.
+
 **The wizard's components render in tests as of
 [pl-12](./work/pl-12-render-the-wizard-in-tests.md).** `tools/planner/web/test`
 holds 21 tests over the wizard and all eight controls, on the same `web`
@@ -167,12 +191,11 @@ sentence rather than an id, and a half-filled `dates` or `budget` staying
 unsubmittable.
 
 **The bare fields still have no accessible name.** `text`, `text-list`, `number`
-and `number-list` render an input with an `id` and no `label`; the prompt is an
-`h2` a level up in `QuestionCard`, which a screen reader does not connect to the
-field. The choice controls, `dates` and `budget` are all labelled properly, so
-this is four kinds and not a systemic gap. pl-12 found it and left it alone
-rather than widen its own diff — it wants an `aria-labelledby` on each field and
-a test that asks for the control by its prompt.
+and `number-list` render an input with an `id` and no `label`, so a screen reader
+announces a box and never says what it is for. Found by
+[pl-12](./work/pl-12-render-the-wizard-in-tests.md), and it is
+[pl-21](./work/pl-21-name-the-bare-fields.md) — which is four kinds and not a
+systemic gap, and carries the argument and the fix.
 
 **No owner model.** Every visitor shares one store and can read and edit
 everyone's intakes, and the list route shows all of them. That is the honest gap
