@@ -71,6 +71,59 @@ match, and the workflow runs `npm run format` after `--write` as the belt.
 - `npm run check` and `npm test` are green, and the generated regions survive
   `npm run format` unchanged.
 
+## Review
+
+Two gates, both **CONCERNS**, both closed. Recorded here by the builder rather
+than by the reviewer, and that is the point: the first two gates were written in
+reviewer worktrees that were then discarded, so neither existed in the repo and
+nothing let a later reader check that the findings were addressed rather than
+only the ones worth writing about. A gate that is not committed did not happen.
+
+### Gate 1 — 2026-08-22
+
+Verified: the reviewer traced every deleted paragraph asserting a security
+property, a known gap or a risk, and read each destination rather than trusting
+the pointer — **could not falsify** the claim that nothing was lost. Generated
+regions byte-identical, markers intact, `--check` verified in both directions,
+1168 tests confirmed correct for the base, line counts exact.
+
+| #   | Finding                                                                                | Disposition                                                                                       |
+| --- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 1   | The ffmpeg-TLS gap survived only in **closed** `dl-14`, so nothing open tracked it     | **Fixed** — [dl-19](../../tools/downloader/docs/work/dl-19-ffmpeg-verifies-tls.md) filed, `ready` |
+| 2   | `docs/02-DEPLOYMENT.md:256` still cited the page for the limiter's scope               | **Fixed** — consequence inline, links `dl-6`'s Log                                                |
+| 3   | `dispatcher.ts` / `guarded-fetch.ts` cited `docs/work/dl-*`, which resolves to nothing | **Fixed** — repo-root-relative                                                                    |
+| 4   | ADR 003 said two facts had no other home; three did                                    | **Fixed** — third row added, `01-ARCHITECTURE.md`                                                 |
+| 5   | ADR 003 **replaced** its "roughly eight" estimate instead of annotating it             | **Fixed** — estimate restored verbatim, outcome annotated beneath                                 |
+| 6   | The planner's page hand-wrote "thirty-seven commits"; it was 39                        | **Fixed** — number removed, not corrected                                                         |
+
+One deleted token had no home and stays that way: Phase 0's evidence commit
+`5ab843f`, covered by `02-ROADMAP.md`'s Phase 0 section.
+
+### Gate 2 — 2026-08-23
+
+Verified: `dl-19`'s two-ffmpeg-builds premise is **true** — the image installs the
+distribution build via `apt-get` and sets `FFMPEG_PATH=/usr/bin/ffmpeg`, while
+everything else defaults to `ffmpeg-static`, the override applied only where it
+segfaults; so the **Windows CI runner** and any developer outside the dev
+container genuinely run the static build. All six of gate 1's fixes confirmed,
+both regions re-diffed byte-identical, six of gate 1's sweep conclusions
+spot-checked and none falsified, and the line-count comparison verified rather
+than taken (381 lines of prose against the architecture document's 307).
+
+| #   | Finding                                                                          | Disposition                                                                        |
+| --- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 1   | Neither gate existed in the repo — reviewer worktrees are discarded              | **Fixed** — this section, and `docs/01-TICKETS.md` now says the builder commits it |
+| 2   | A sixth dangling citation: `.env.example:58`, on `PROXY_URL` and pinning         | **Fixed** — consequence inline, links `dl-8`'s Log                                 |
+| 3   | Four comment paths still tool-relative in `orchestrator.ts` / `pipeline.test.ts` | **Fixed** — repo-root-relative; all 11 cited paths verified to resolve with `ls`   |
+| 4   | The Log's "439 to 113" read as a live figure                                     | **Fixed** — marked as this-commit figures                                          |
+
+The interesting half of finding 2 is the method, not the line. Gate 1's own
+lesson said the citations that matter are the ones a compiler and a grep over
+source both miss — and both rounds then ran an **extension-filtered** sweep
+anyway, which is exactly how `.env.example` survived two of them. ADR 003's
+lesson bullet now carries the mechanical fix: sweep with a bare `git grep -n`,
+no `--include`, no path filter, and triage afterwards.
+
 ## Log
 
 **2026-08-22 — built.** `scripts/status.mjs`, its suite (21 tests), the
@@ -132,8 +185,10 @@ free.
 
 **What a `03-STATUS.md` is now.** Three things and no fourth: the generated
 region, a short table saying where each kind of fact goes _instead_ of onto this
-page, and "Running things". The downloader's page went from 252 lines to 120, the
-planner's from 439 to 113. The header table is the load-bearing part — the page's
+page, and "Running things". As of this commit the downloader's page went from 252
+lines to 120 and the planner's from 439 to 113 — figures for this commit, not
+live ones; the review round below moved the planner's again. The header table is
+the load-bearing part — the page's
 old second paragraph already said "if you find yourself writing a paragraph
 here, it belongs in a ticket" and thirty-seven commits ignored it, so the
 replacement names the destination for each kind of thing a person arrives
@@ -285,3 +340,57 @@ invocation instead.
 One deleted token genuinely had no home and stays that way: Phase 0's evidence
 commit `5ab843f`, which `02-ROADMAP.md` covers well enough at its Phase 0
 section.
+
+**2026-08-23 — second gate: four findings, and a new process.** Recorded in
+`## Review` above rather than only here, because the first of the four findings
+was that neither gate existed in the repo at all.
+
+**The gate record is now the builder's to commit.** A reviewer works in a
+worktree that is discarded when it reports, so a `## Review` section written
+there is written into nothing — the findings travel back as a message and the
+record travels nowhere. Two gates on this ticket left no trace, and the second
+reviewer caught it by asking the obvious question: what lets a later reader check
+that six findings were addressed rather than the five worth writing about?
+`docs/01-TICKETS.md` now says the builder writes the section, in the branch under
+review, **one line per finding including the ones needing no change** — a record
+listing only the findings that produced a diff is indistinguishable from one that
+dropped the rest. It also names the weakness, which is that the author is
+transcribing a verdict on his own work; the check is that the reviewer's message
+is in the pull request thread beside it.
+
+**`.env.example:58` was the sixth dangling citation, and the method is the
+finding.** It told an operator that `PROXY_URL` turns address pinning off and
+sent them to `03-STATUS.md` to read why. The failure is specific and bad: follow
+it now, land on a generated ticket table with no mention of pinning, conclude the
+caveat was retired, and deploy believing pinning is still in force behind the
+proxy. Fixed the way `02-DEPLOYMENT.md` was — consequence inline (pinning is not
+weakened, it is not the mechanism in play; the pre-flight SSRF check still runs)
+and a link to `dl-8`'s Log for the reasoning and the tests.
+
+The method half is worth more than the line. The previous entry recorded the
+lesson that "the citations that matter are the ones a compiler and a grep over
+source both miss" — and then swept with `--include="*.ts"` anyway, and the round
+after that added markdown and still missed a file that is neither. **A bare
+`git grep -n 03-STATUS`, unfiltered, finds all seventy-odd in one call**, and
+`.env.example` is on the first line of the output. ADR 003's lesson bullet now
+carries the mechanical form: no `--include`, no path filter, triage afterwards.
+The unfiltered sweep was then run to completion here; everything it returns
+besides the six is either a correct definitional reference (`CLAUDE.md`,
+`docs/01-TICKETS.md`, `00-TOOLS.md`, both READMEs, `status.yml`, `status.mjs`,
+ADR 001), a historical Why or acceptance line in a **closed** ticket, or this
+ticket's own prose.
+
+**Four comment paths were still tool-relative** in `jobs/orchestrator.ts` and
+`api/test/pipeline.test.ts` — the other two of the four comments repointed in the
+first commit, left behind when `dispatcher.ts` and `guarded-fetch.ts` were fixed
+in the second. `engine/src/download/manifest.ts` resolves from neither the repo
+root nor the citing file's own directory. All four are `tools/downloader/…` now,
+and every path cited across the six touched files was extracted with a regex and
+run through `ls`: eleven paths, eleven hits, no ENOENT.
+
+**A figure that read as live is marked as historical.** "The downloader's page
+went from 252 lines to 120, the planner's from 439 to 113" was true of the commit
+that made it and stopped being true one commit later, at 116 — the same class of
+rot as the test count this ticket deleted, reintroduced in the entry describing
+its deletion. It now says so in the sentence rather than being re-corrected,
+because re-correcting it is what the whole ticket argues against.

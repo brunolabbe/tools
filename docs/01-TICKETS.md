@@ -49,7 +49,8 @@ produces Y", never "it works".
 ## Review
 
 The gate. One row per line above, each naming the test that proves it. Absent
-until the work is reviewed, and written by the review rather than by the author.
+until the work is reviewed. **The builder commits it**, in the branch under
+review — see below.
 
 ## Log
 
@@ -138,6 +139,23 @@ subagent on the other of Opus and Sonnet, and the caller appends what comes back
 without editing it. A model reading its own work re-runs the reasoning that
 produced it, so the blind spot is correlated and a second pass mostly re-derives
 the first one's confidence.
+
+**The builder commits the gate, in the branch under review** — not the reviewer.
+A reviewer works in a worktree that is thrown away when it reports, so a
+`## Review` section written there is written into nothing: the finding travels
+back as a message and the record does not travel at all. `repo-1` went through
+two gates and neither existed in the repo afterwards, which is how it was
+noticed. So the reviewer reports and the builder writes the section down, with
+the date, the verdict, and **one line per finding with its disposition —
+including the ones that needed no change**. The point of the record is a later
+reader checking that all of them were answered, and a section listing only the
+findings that produced a diff cannot be distinguished from one that quietly
+dropped the rest.
+
+That the author transcribes it is a real weakness and worth naming: the check on
+it is that the reviewer's message is in the pull request thread, so the two can
+be read against each other. A gate that is not committed did not happen; a gate
+that is committed and unfaithful is at least falsifiable.
 
 ## What the other documents keep
 

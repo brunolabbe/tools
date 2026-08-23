@@ -256,9 +256,10 @@ describe("re-probing", () => {
   test("a DOWNLOAD_FAILED during downloading is re-probe-worthy too", async () => {
     // ffmpeg does its own fetching and reports an expired manifest only as text
     // on stderr, so an expiry surfaces as DOWNLOAD_FAILED rather than
-    // VARIANT_GONE — engine/src/download/manifest.ts maps every ffmpeg failure
-    // to that one code. Not retrying it would leave the commonest expiry case
-    // unhandled; MAX_REPROBE_RETRIES in jobs/orchestrator.ts carries the rest.
+    // VARIANT_GONE — tools/downloader/engine/src/download/manifest.ts maps every
+    // ffmpeg failure to that one code. Not retrying it would leave the commonest
+    // expiry case unhandled; MAX_REPROBE_RETRIES in
+    // tools/downloader/api/src/jobs/orchestrator.ts carries the rest.
     harness = await createHarness({
       resolver: new StubResolver(probeResult()),
       engineOptions: {

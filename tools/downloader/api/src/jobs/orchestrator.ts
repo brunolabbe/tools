@@ -69,11 +69,11 @@ export interface OrchestratorOptions {
  * One. The brief says "on `VARIANT_GONE`, re-probe once and retry", and the
  * same reasoning covers `DOWNLOAD_FAILED` during `downloading`: a manifest
  * download is ffmpeg doing the fetching, so any failure it has is a
- * `DOWNLOAD_FAILED` (`engine/src/download/manifest.ts`) — an expiry included,
- * because ffmpeg reports HTTP status only as text on stderr. The engine's own
- * fetches classify better and raise `VARIANT_GONE`
- * (`engine/src/download/http.ts`). Refusing to retry `DOWNLOAD_FAILED` would
- * therefore leave the commonest expiry case unhandled.
+ * `DOWNLOAD_FAILED` (`tools/downloader/engine/src/download/manifest.ts`) — an
+ * expiry included, because ffmpeg reports HTTP status only as text on stderr.
+ * The engine's own fetches classify better and raise `VARIANT_GONE`
+ * (`tools/downloader/engine/src/download/http.ts`). Refusing to retry
+ * `DOWNLOAD_FAILED` would therefore leave the commonest expiry case unhandled.
  *
  * Not more than one, because if a second fresh probe also produces dead URLs
  * the problem is not expiry and looping would just burn a browser probe per
