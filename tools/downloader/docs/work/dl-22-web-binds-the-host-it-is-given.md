@@ -63,7 +63,26 @@ Traps:
 
 ## Review
 
-Pending.
+**Gate: PASS** — 2026-08-23 · `origin/main...HEAD` · code-review at medium
+
+| Done when                                                                                      | Proof                                                                                                            |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `vite-config.test.ts` proves the config binds `process.env["HOST"]` when set, `false` when not | `web/test/vite-config.test.ts:36` (set) ✓ · `:44` (unset) ✓                                                      |
+| The same suite proves `strictPort` is on and `port` is 5173                                    | `web/test/vite-config.test.ts:50` (port) ✓ · `:51` (strictPort) ✓                                                |
+| `npm run dev:downloader:web` listens on `0.0.0.0:5173`, `curl http://127.0.0.1:5173/` → 200    | **verified** — `ss -ltn`: `0.0.0.0:5173`; curl `200`. Bug reproduced with `HOST` unset: `[::1]:5173`, IPv4 `000` |
+| `npm run check` and `npm test -- --project downloader` pass                                    | **verified** — cold `check` exit 0 (tsbuildinfo cleared); 47 files / 643 tests vs 46 / 640 at `0c67b8e`          |
+
+- **low** · `vite.config.ts` is now checked on the `web/test` surface (Bundler + DOM + JSX).
+  `tsconfig.tests.json`'s own comment holds that the surface split is what keeps `document`
+  out of a node program; a Node-only config file in a DOM project loses that for itself.
+  The e2e projects already do this to `playwright.config.ts`, and there is no cheaper home.
+- **low** · `tools/planner/web/test/tsconfig.json` still omits `../vite.config.ts`, so the
+  config this was ported from remains in no tsconfig project. Pre-existing, outside this
+  range — a sibling ticket, not a change here.
+- **findings** · code-review at medium returned 0; 0 carried, 0 dropped.
+- NFR: security ✓ · performance n/a · reliability ✓ · maintainability — the two lows above,
+  plus `HOST` resolution now duplicated with the planner's config: second consumer, lift
+  declared and reasoned in the Log rather than smuggled.
 
 ## Log
 
