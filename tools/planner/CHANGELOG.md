@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.0](https://github.com/brunolabbe/tools/compare/planner-v0.3.0...planner-v0.4.0) (2026-08-23)
+
+
+### Features
+
+* **planner:** ask where they are going third, and let it be blank (pl-18) ([#43](https://github.com/brunolabbe/tools/issues/43)) ([93686e5](https://github.com/brunolabbe/tools/commit/93686e52a8f30189e95c8cfa5b032fd6b0d44134))
+* **planner:** cache grounding in a table with a TTL that varies by kind (pl-25) ([#66](https://github.com/brunolabbe/tools/issues/66)) ([6ad9de2](https://github.com/brunolabbe/tools/commit/6ad9de2da659ee5c57ee658b5abe13b7070bc463))
+* **planner:** measure legs against a real routing engine, self-hosted (pl-28) ([#74](https://github.com/brunolabbe/tools/issues/74)) ([60e48e7](https://github.com/brunolabbe/tools/commit/60e48e7b02f6a5efc3249c2c63db7c1f4950ff68))
+* **planner:** measure the legs, pack the days under them, name what went unmeasured (pl-27) ([#68](https://github.com/brunolabbe/tools/issues/68)) ([8cb1fa6](https://github.com/brunolabbe/tools/commit/8cb1fa676786eb837f8e17c6186758c508b41788))
+* **planner:** one seam for everything that reaches outside, with a fixture default (pl-24) ([#61](https://github.com/brunolabbe/tools/issues/61)) ([fa1431f](https://github.com/brunolabbe/tools/commit/fa1431f4c9ad36708627197ccbe1153d09453abb))
+* **planner:** read a plan, its provenance and what nothing checked (pl-10) ([#44](https://github.com/brunolabbe/tools/issues/44)) ([6291ee5](https://github.com/brunolabbe/tools/commit/6291ee58c530659886c9e5e861d41ab4cbf7dbb3))
+
+
+### Fixes
+
+* **core:** make the image scan fail by name, and stop it passing blind (pl-17) ([#56](https://github.com/brunolabbe/tools/issues/56)) ([2ea0631](https://github.com/brunolabbe/tools/commit/2ea06318a4dcea09c5bf181f85d2d6222cf6d357))
+* **planner:** name the four bare intake fields for a screen reader (pl-21) ([#59](https://github.com/brunolabbe/tools/issues/59)) ([e1c40d1](https://github.com/brunolabbe/tools/commit/e1c40d11bc42b2ea82c92c1a8bfd37f114f2e95b))
+* **planner:** scope a pin to the revision the reader is looking at (pl-22) ([#58](https://github.com/brunolabbe/tools/issues/58)) ([60793ed](https://github.com/brunolabbe/tools/commit/60793ed9b52f8857142427af0a21a8229588a6c1))
+
 ## [0.3.0](https://github.com/brunolabbe/tools/compare/planner-v0.2.0...planner-v0.3.0) (2026-08-16)
 
 
