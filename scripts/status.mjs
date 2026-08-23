@@ -142,7 +142,7 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
       if (!entry.endsWith(".md")) continue;
       const file = `${docs}/work/${entry}`;
       const fields = parseFrontmatter(fs.readFileSync(path.join(dir, entry), "utf8"), file);
-      tickets.push({ ...validate(fields, tool, entry, file), file, dir: docs });
+      tickets.push({ ...validate(fields, tool, entry, file), file });
     }
   }
 

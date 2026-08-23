@@ -1,9 +1,13 @@
 # 003 — The status tables are generated from the tickets
 
 **Status:** accepted; its **mechanism** superseded by
-[repo-2](../work/repo-2-retire-the-status-page.md), 2026-08-23 —
-see [the amendment](#amendment--2026-08-23) · **Date:** 2026-08-22 ·
-**Affects:** every tool
+[repo-2](../work/repo-2-retire-the-status-page.md), 2026-08-23 · **Date:**
+2026-08-22 · **Affects:** every tool
+
+> **Read `## Decision` with this in hand.** Its last two paragraphs — the
+> `--write`-on-`main` job and the `--check` guard — are the half that did not
+> hold, and they are left byte-unchanged because they are what was believed.
+> Neither ever worked. See [the amendment](#amendment--2026-08-23).
 
 ## Context
 
@@ -71,14 +75,6 @@ merge ever changes it, and there is nothing to conflict.
 **A pull request that edits the region fails.** `--check` compares the branch's
 region against the base commit's and refuses a difference. The same workflow
 parses every ticket, which is the only thing in CI that does.
-
-> _Amended by [repo-2](../work/repo-2-retire-the-status-page.md), 2026-08-23._
-> The two paragraphs above are the half of this decision that did not hold, and
-> they are left standing because they are what was believed. Neither mechanism
-> worked: the `regenerate` job was rejected by branch protection on every merge
-> it ever attempted, and `--check` compares two equally stale regions and so
-> cannot see it. The tables are no longer stored at all — `npm run status`, and
-> `--markdown` when a table is wanted. See [the amendment](#amendment--2026-08-23).
 
 **That check has a workflow of its own on purpose.** `ci.yml` carries
 `paths-ignore: ["**.md"]`, so a documentation-only pull request — a ticket
@@ -191,6 +187,13 @@ worse than either one.
   nothing is a named failure rather than a row quietly missing from a table.
   Forty-six existing tickets pass it unchanged, which is the only reason the
   strictness was affordable.
+- **Added 2026-08-23, and the reason for the amendment below.** Neither half of
+  the mechanism this ADR chose ever worked. The `regenerate` job was rejected by
+  branch protection on every merge it attempted, so it never pushed a commit;
+  `--check` compared HEAD's region to the base's, which was equally stale, so it
+  was green throughout. The tables are no longer stored at all —
+  `npm run status`, and `--markdown` when a table is actually wanted. This is a
+  consequence rather than an edit to `## Decision`, which stays as written.
 
 ## Amendment — 2026-08-23
 

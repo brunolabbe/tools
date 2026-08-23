@@ -23,7 +23,7 @@ tools/<tool>/
   api/               its HTTP service
   web/               its UI
   e2e/               its Playwright specs
-  docs/              that tool's analysis, architecture, roadmap, status, tickets
+  docs/              that tool's analysis, architecture, roadmap, tickets
 docs/                repo-wide only: the tool index, the ticket format, ADRs
 ```
 

@@ -66,7 +66,14 @@ const at = (id: string) => `tools/planner/docs/work/${id}-slug.md`;
 function run(args: string[]): { stdout: string; status: number } {
   try {
     return {
-      stdout: execFileSync("node", [CLI, ...args], { encoding: "utf8", shell: false }),
+      stdout: execFileSync("node", [CLI, ...args], {
+        encoding: "utf8",
+        shell: false,
+        // Piped, not inherited: a CLI case that asserts a *failure* would
+        // otherwise print its error into the middle of an otherwise green run
+        // and read as one. `spawnSync` captures both streams either way.
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
       status: 0,
     };
   } catch (error) {

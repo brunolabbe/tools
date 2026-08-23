@@ -129,14 +129,51 @@ the machine-written table because, here, no machine can.
 - Every unique fact from both `## Running things` sections is in that tool's
   `CLAUDE.md`, and every command that survives is one that exists in
   `package.json`.
-- `git grep -n "03-STATUS"` returns only historical references in closed
-  tickets, this ticket, and the ADRs that record the decision.
+- `git grep -n "03-STATUS"` returns nothing that sends a reader to a file which
+  no longer exists: only historical references inside `status: done` tickets,
+  the ADRs that record the decision, this ticket, and the prose that explains
+  the deletion in the documents which used to describe the page. No markdown
+  link anywhere in the repo resolves to a missing target.
 - `node scripts/status.mjs` exports no region function and accepts no `--write`
   or `--check`; `--tool`, `--show` and `--markdown` each work and each have a
   test.
 - `.github/workflows/status.yml` has one job, it runs on `pull_request` only,
   and it is `node scripts/status.mjs --json > /dev/null`.
 - `npm run check` and `npm test` are green.
+
+## Review
+
+### Gate 1 — 2026-08-23
+
+**Gate: CONCERNS** — one med, five lows. Range `origin/main...HEAD`.
+
+Verified by the reviewer: both deleted files reconstructed from `origin/main` and
+**every non-generated line accounted for**, so nothing could be silently lost.
+Each folded-in claim checked against the code rather than against the prose it
+came from — `RATE_LIMIT_*_PER_MINUTE=0` really disables, via `RateLimiter`'s
+`get enabled` being `> 0`; `planner.yml` really asks for `/api/health`, then
+`curl /` with `grep -q '<div id="root">'`, then health again; the M3 invocation
+matches `playwright.config.ts`'s actual env. The sweep reproduced at 93 hits in
+33 files with no mis-triage, all 23 ticket-file hits confirmed to be in
+`status: done` files. Links checked at 330 relative links, 0 missing. All three
+CI premises verified verbatim from the run logs, including `GH013` on three runs
+— one of which shows the commit being created immediately before the rejection —
+and the `fetch first` race; the correction from "never succeeded" to "never
+pushed a commit" was judged the accurate claim. All six defeat attempts on the
+unknown-flag guard were refused, including `--write=x`, `-w` and bare `write`.
+
+| #   | Finding                                                                                                                                                                                                                    | Disposition                                                                                                                                                                                                           |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **med** · `package.json:35` — the `"// status"` annotation still advertised `--write` as usable, one line above the `status` script. Invisible to `git grep 03-STATUS` because the ADR filename is lowercase `status-page` | **Fixed** — rewritten to describe what the script now does and to say `--write`'s pages were retired. The method half is the finding: the Log now records that the sweep needs a second pass over the _other names_   |
+| 2   | **low** · `scripts/status.mjs:145` — `dir: docs` pushed onto every ticket, read by nothing since `statusPath` went, absent from the JSDoc return type, and serialised into `--json`                                        | **Fixed** — removed. It was `statusPath`'s input and died with it; `renderMarkdown` and `describeTicket` both key off `file`                                                                                          |
+| 3   | **low** · `scripts/test/status.test.ts` — inherited stderr printed three lines mid-run that read as failures in a green suite                                                                                              | **Fixed** — `stdio: ["ignore", "pipe", "pipe"]`, with a comment saying why. `npm test` is now silent                                                                                                                  |
+| 4   | **low** · The ADR amendment was inserted **inside `## Decision`**, which Build step 6 says stays byte-unchanged                                                                                                            | **Fixed** — blockquote removed from Decision, which is now byte-identical to `origin/main`. Its content is a `## Consequences` bullet, and the header carries a blockquote warning a Decision reader before they read |
+| 5   | **low** · The ticket claimed this pull request was itself an instance of the path-filter bug; it is not, since the branch touches `tools/*/docs/`                                                                          | **Fixed** — parenthetical dropped, the finding restated without it                                                                                                                                                    |
+| 6   | **low** · Done-when line 3 was narrower than what shipped — the sweep also returns six live files of new prose explaining the deletion                                                                                     | **Fixed** — widened to "nothing that sends a reader to a file which no longer exists", with the no-dangling-link half stated as the checkable part                                                                    |
+
+**Raised and correctly not a finding:** flag precedence is silent, so
+`--json --markdown` prints JSON. Same shape `--json`/`--ready` already had, and
+no reader is misled about a removed feature. No change.
 
 ## Log
 
@@ -173,8 +210,10 @@ before `git push`. Six push runs, zero commits written. The precise claim is
 
 **The old workflow's `pull_request` filter never matched a repo-wide ticket.**
 It was `tools/*/docs/**`, so a pull request that only filed or closed something
-in `docs/work/` — this one included — ran no frontmatter check at all. The new
-filter names both directories. Found while pruning the triggers; unrelated to
+in `docs/work/` ran no frontmatter check at all. This branch is **not** an
+instance — it also touches `tools/downloader/docs/` and `tools/planner/docs/`,
+which the old filter matched — but a repo-ticket-only pull request is an ordinary
+shape here and would have been silent. The new filter names both directories. Found while pruning the triggers; unrelated to
 the deletion and fixed in passing because the fix is one line.
 
 **What was folded in before deleting.** Each `## Running things` was diffed
@@ -227,6 +266,21 @@ dated record of what that decision's scope was, it remains true, and 003's
 header now says its mechanism is superseded, so a reader following the pointer
 lands on the amendment. Rewriting it would be revisionism for no gain.
 
+**The sweep must not be anchored to one term either, and that is the third time
+this class has bitten.** repo-1 learned across three rounds that the sweep must
+not filter by _file type_ — `.env.example` survived two of them. This round found
+the seventh dangling citation with the filter removed and the **term** still
+fixed: `package.json:35`'s `"// status"` annotation advertised `--write` as
+usable, one line above the `status` script itself, and no `git grep 03-STATUS`
+could ever have seen it, because the ADR's filename is lowercase `status-page`.
+So the sweep is **two** passes now: the term, unfiltered; then **the other names
+of the thing** — `--write`, `--check`, `status-page`, `generated region`,
+`status page`, `dashboard`, and the spine listing's word `status`. The second
+pass found `package.json:35` and one more the first could not: root `CLAUDE.md`'s
+Layout block, which described a tool's `docs/` as "analysis, architecture,
+roadmap, status, tickets". Every remaining hit is either an ADR link, a `done`
+ticket's Log, or `oxfmt --check`.
+
 **`--markdown` links repo-root-relative.** The old region's links were relative
 to a `03-STATUS.md` sitting beside `work/`; there is no such page, and the
 destination is a pull request body or a message. Repo-root-relative is what
@@ -252,3 +306,23 @@ rewritten against what replaced them, and **nine added** — three for
 which repo-1's gate 4 recorded as having no test at all. Slow
 gates unrun, as always locally: no e2e suite and no container build, and neither
 tool's image is touched by this change.
+
+**2026-08-23 — gate 1: one med, five lows, all fixed.** Recorded in `## Review`
+above. The med is the one worth reading, and it is a method finding wearing a
+one-line fix: `package.json`'s `"// status"` annotation was the **seventh**
+dangling citation, and no amount of unfiltering `git grep 03-STATUS` could have
+reached it, because the ADR it pointed at is named `status-page`. repo-1's lesson
+was "do not filter the sweep by file type"; this one is "do not anchor it to one
+term". Both are now in the entry above, and the second pass caught a hit of its
+own — root `CLAUDE.md`'s Layout block, which still listed a tool's `docs/` as
+carrying "status".
+
+Finding 4 is the one I would have argued about and should not have. Build step 6
+of this very ticket says ADR 003's Context and Decision stay byte-unchanged, and
+I then inserted an eight-line blockquote into Decision. Nothing was deleted and
+the insertion was labelled, so the record survived — but a rule I wrote in the
+same file two screens up was not true of what I did, and "close enough, and
+labelled" is exactly the reasoning that lets an annotation become an edit.
+`## Decision` is now byte-identical to `origin/main`; the content is a
+`## Consequences` bullet, and a Decision reader is warned by a blockquote under
+the header before they reach the two paragraphs that did not hold.
