@@ -128,6 +128,133 @@ second seam, and `createGroundingProvider` stays the only file naming either.
   `.github/workflows/planner.yml` is what proves the container still boots, and
   it does not run locally — say so rather than reporting green.
 
+## Review
+
+### Gate 1 — 2026-08-23
+
+**Gate: CONCERNS** — landable as a partial, with the Log corrected first ·
+`origin/main...e60f5a6` · `review-ticket`, delegating its defect hunt to
+`code-review`. Transcribed by the builder, in the branch under review; the
+verdict is recorded as it was given and is **not** rewritten to
+"CONCERNS, addressed" because a gate that edits itself once the work is done
+records nothing. The round that answers it is below, and the findings carry
+their dispositions.
+
+Scope of the reviewed commit: 14 files, +1902 / −8. The tip that carries this
+section is the same 14 files at +2131 / −8.
+
+| Done when                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The adapter parses checked-in **real** payloads into the seam's types, offline, no network       | **unproven**, and deliberately recorded as the weaker of its two halves. `travel` is proven: `grounding-valhalla.test.ts:105`, `:147`, `:166`, `:180` over `fixtures/valhalla-sources-to-targets.json`. `locate` has **no payload at all** — its parser can be replaced with `return null;` and the suite stays green. A row reading `proven` for a line half of which nothing asserts is the failure this table exists to prevent. → [pl-30](./pl-30-geocoder-payload.md) |
+| An unroutable pair is a `null` cell; unreachable is `UNREACHABLE`; slow is `TIMEOUT`. No sockets | **proven** · `grounding-valhalla.test.ts:147` (four `null` cells off the captured payload, and the self-pair still a real zero), `:239` (`UNREACHABLE`, retryable), `:262` (`TIMEOUT`, `details.timeoutMs`). Every one drives an injected `fetch`; nothing in the file opens a socket                                                                                                                                                                                      |
+| `GROUNDING_PROVIDER=valhalla` with no endpoint fails at boot with a clear message                | **proven** · `health.test.ts:85` (missing) and `:102` (present but not a URL). The reviewer read the actual message rather than the matcher                                                                                                                                                                                                                                                                                                                                |
+| `/api/health` reports the provider name and **no** endpoint, asserted on the response body       | **proven** · `health.test.ts:57`. Asserted on the body, as the line requires, and the reviewer additionally grepped the whole payload for every substring of both endpoints — `valhalla.internal`, `nominatim.internal`, `8002`, `8080`, `http` — all absent                                                                                                                                                                                                               |
+| A logged config object contains no endpoint credentials, in `logging.test.ts`'s shape            | **proven** · `logging.test.ts:53`, with `:82` holding the fixture default to the same line so it is not a special case. It asserts over **every** boot line rather than the one that was tempted, and the geocoder URL carries a credential in its userinfo — so it covers the credential case and not only the hostname                                                                                                                                                   |
+| The deployment document gets an operator from a `.osm.pbf` to a running instance                 | **verified** — prose, re-read rather than executed. `docs/02-DEPLOYMENT.md` §"Grounding the planner", four steps, and `compose.planner.yaml` beside it                                                                                                                                                                                                                                                                                                                     |
+| …**and pl-2's compose service names it**                                                         | **unproven**, and unprovable as written: that service does not exist. pl-2 steps 5–6 have been open since 2026-08-14. `compose.planner.yaml` carries the three settings it will need, so pl-2 is a paste — see the Log                                                                                                                                                                                                                                                     |
+| `npm run check` and `npm test -- --project planner` pass                                         | **verified** — re-run by the reviewer, which also measured the `origin/main` baseline itself at **669 / 47 files**, agreeing with the Log                                                                                                                                                                                                                                                                                                                                  |
+| The image gate does not run locally — say so rather than reporting green                         | **verified** — said, in the Log's Gates block and again in `compose.planner.yaml`. It has not run                                                                                                                                                                                                                                                                                                                                                                          |
+
+**What the gate verified that the builder could not have.** It did not take the
+fixture-provenance claim on trust: it ran `npm pack @valhallajs/valhallajs@3.7.0`
+itself, confirmed the package ships `valhalla_build_config` and
+`valhalla_build_tiles`, wrote its **own** `.osm.pbf`, built its own tiles, took
+a matrix through `actor.matrix()`, and structurally diffed its capture against
+the checked-in one. **Top-key diff: none. Cell-shape diff: none.** Both carry
+exactly the two cell shapes and the four `time: null, distance: null` cells
+agree. It also expected `sources`/`targets` to be nested arrays and found them
+flat — checking beat remembering, which is the whole argument of step 3.
+
+**The one thing it could not reproduce, said plainly rather than left implied:**
+its `.osm.pbf` used four loop nodes, no spur and plain `Node` messages; this
+branch's used five with a spur and `DenseNodes`. The replies are structurally
+identical, so it does not matter — but this was **not** a byte-for-byte
+reproduction and the record should not read as though it were.
+
+**Step 4 passes, and the builder's report was silent on it.** Both tables are
+`Map`s — `valhalla.ts:397` and `:353`, and there is no third. `__proto__`,
+`constructor`, `toString` and `prototype` as place names all travel as ordinary
+query strings and come back as ordinary answers. `from_index: "constructor"` is
+rejected by `indexOf` at `valhalla.ts:418`. The shallow-freeze property was
+proved by mutating a nested field of a returned cell in place and re-asking:
+the second answer was identical.
+
+#### Findings
+
+- **F1 · fixed** — the Log claimed "twelve mutations, twelve red" and named the
+  `#reachFailure` ordering among them. The gate performed that exact two-line
+  swap and ran the whole planner project: **693/693, exit 0.** The mutation
+  survives.
+
+  Chasing it found something larger, and it is recorded in the Log rather than
+  here because it is a fact about the work: **all twelve were worthless.** The
+  harness passed `--reporter=basic`, which does not exist in vitest 4, fails to
+  load, and exits 1 on a clean unmutated tree — so every mutation "died"
+  regardless. The second harness opens with a control run over the unmutated
+  tree and prints its result; sixteen mutations, sixteen killed, control green.
+  The ordering is now asserted at `grounding-valhalla.test.ts:309`, the code
+  comment that reasoned about it wrongly is corrected, and the Log says what
+  happened.
+
+- **F2 · fixed** — "asserted by nothing" understated the geocoder gap. What is
+  true is that the whole of `firstCoordinates` (`valhalla.ts:464`) can be
+  replaced with `return null;` and the planner suite stays green — reproduced by
+  the builder at 698/698 — with none of its seven branches pinned. The Log now
+  says that, and adds the production reachability the gate asked for:
+  `runs/travel.ts:295` calls `locate` on every run, so the first plan a
+  `valhalla` deployment builds executes unasserted parsing code, and the failure
+  it hides is a healthy service reporting `{"grounding":{"provider":"valhalla"}}`
+  while every plan carries a `travel-time` unchecked constraint — an answer
+  shaped exactly like an honest one. The same paragraph is in pl-30, which is
+  where someone picking the gap up will look.
+
+- **F3 · no change, deliberately** — the capture is not reproducible from this
+  repo: neither `@valhallajs/valhallajs` nor `protobufjs` is in any manifest and
+  no capture script is checked in. Left alone on the gate's own recommendation.
+  pl-30 step 1 points at `mediagis/nominatim` under Docker, which is the better
+  route for the half that is still missing, and adding a dev dependency plus a
+  script to reproduce a capture that has already been made — and independently
+  verified above — buys less than it costs.
+
+- **F4 · fixed** — `compose.planner.yaml` sets `name: webtools`;
+  `compose.yaml` on `main` sets none and takes the directory basename, so
+  merging the two lands in a **different compose project** and the downloader's
+  `storage` volume and job database are orphaned. Latent, because nothing
+  instructs that merge today, and real, because adr/004 expected `name:` to
+  arrive with the repo-wide rename and this fragment landed ahead of it. The
+  fragment's "not here yet" block now says so and tells the `repo-` ticket to
+  give `compose.yaml` the same `name:` in the same change.
+
+- **F5 · fixed** — the gate's own sweep enumerated **52 decision points, applied
+  55 mutations, killed 34, survived 21.** Most survivors are benign or
+  equivalent; four were not, and all four now have a test that was watched to
+  fail before it was believed:
+
+  | Survivor                                                          | Now killed by                            |
+  | ----------------------------------------------------------------- | ---------------------------------------- |
+  | `valhalla.ts:418` — `indexOf`'s integer / non-negative validation | `grounding-valhalla.test.ts:450`, `:467` |
+  | `valhalla.ts:438` — `estimate`'s half-a-cell guard (`\|\|`→`&&`)  | `grounding-valhalla.test.ts:478`         |
+  | `valhalla.ts:439` — the negative time/distance guard              | `grounding-valhalla.test.ts:491`         |
+  | `valhalla.ts:164` — the Nominatim `User-Agent` header             | `grounding-valhalla.test.ts:363`         |
+
+  The first is the sharpest and the gate was right to rank it so: it is the
+  defence a twenty-line comment in that file argues for at length, and nothing
+  in the suite noticed its removal. The test that pins it is the collision case
+  rather than the prototype one — `from_index: "0"` and `from_index: 0` are one
+  key the moment nothing checks the type, and the later write wins, so an
+  unvalidated cell silently replaces a measured leg.
+
+- **F6 · no change, deliberately** — `.oxfmtrc.json`'s `test/fixtures/` entry is
+  root-anchored and exempts nothing, so every checked-in fixture in the repo is
+  being formatted despite an entry that says otherwise. Recorded in the Log when
+  it was found and left alone: widening it is a repo-wide toolchain change that
+  touches both tools and wants a `repo-` ticket, not a line in a planner branch.
+
+**`status` stays `ready`.** The gate agrees with the builder that this is a
+partial: step 3's geocoder half is not done, two acceptance rows above are
+`unproven`, and a review neither moves `status` nor decides whether the work
+stops.
+
 ## Log
 
 **2026-08-23 — built, with one disclosed hole.** Steps 1–9 are implemented. Step
@@ -199,10 +326,31 @@ laundering someone else's hand-written payload through their tarball would fail
 this ticket's own standard rather than meet it.
 
 So `firstCoordinates` is written against Nominatim's documented shape and
-**asserted by nothing**. `locate`'s tests cover only what needs no invented
-payload: the _question_ it asks (name and locality together — dropping locality
-is how Saint-Jean in Québec becomes Saint-Jean in New Brunswick), an unreachable
-geocoder, a slow one, and a blank place that is answered without a request.
+asserted by nothing. **"Asserted by nothing" is literal and it is worth stating
+at full strength, because it reads as "thinly tested" and it is not:** the
+entire body of `firstCoordinates` can be replaced with `return null;` and the
+planner suite stays green — 698 of 698, verified here and independently at gate
+
+1. Not one test on this branch ever receives a non-null `LocatedPlace`, and none
+   of that function's seven branches is pinned by anything.
+
+`locate`'s tests cover only what needs no invented payload: the _question_ it
+asks (name and locality together — dropping locality is how Saint-Jean in Québec
+becomes Saint-Jean in New Brunswick, and an identifying `User-Agent`, which
+Nominatim's policy requires), an unreachable geocoder, a slow one, and a blank
+place answered without a request.
+
+**And it is reachable in production, which is what makes it matter.**
+`runs/travel.ts` calls `provider.locate(...)` for every place a run's candidates
+name, so with `GROUNDING_PROVIDER=valhalla` the first plan a deployment builds
+runs unasserted parsing code. The failure has a shape worth writing down: if
+Nominatim answers something `firstCoordinates` does not expect, it returns
+`null` — every place stays uncoordinated, `pointsOf` drops all of them, `travel`
+short-circuits before any request, and the operator sees a healthy service
+reporting `{"grounding":{"provider":"valhalla"}}` while every plan it produces
+carries a `travel-time` unchecked constraint. That is an answer shaped exactly
+like an honest one, which is the hardest kind of wrong to notice.
+
 [pl-30](./pl-30-geocoder-payload.md) carries the rest. **Do not mark this ticket
 done until that lands.**
 
@@ -267,10 +415,23 @@ checked. There is a test that breaks if that is softened.
 
 **The timeout is 5 s and both signals are one signal on the wire.**
 `AbortSignal.any([caller, AbortSignal.timeout(ms)])`, and `#reachFailure` asks
-the **caller's** signal first — both causes surface as an `AbortError`, and only
-that order separates "someone stopped this run" (`CANCELED`, not retryable) from
-"the backend was too slow" (`TIMEOUT`, retryable). Reversing those two lines is
-one of the mutations below, and it goes red.
+the **caller's** signal first.
+
+The reasoning in the code comment was sloppy and gate 1 caught it. It is not
+true that "both causes surface as an `AbortError`": `AbortSignal.any`
+propagates the _aborting_ signal's own reason, so a deadline arrives as
+`TimeoutError` and a plain `controller.abort()` as `AbortError`, already
+separable by name. The order is therefore not load-bearing for the ordinary
+case, and gate 1 proved it by reversing the two lines and watching the suite
+stay green.
+
+**What the order does buy is the case where the caller's reason is itself a
+`TimeoutError`** — a run bounded upstream by its own `AbortSignal.timeout`,
+which is exactly how a caller would bound one. Asking the error's name first
+would then call a stopped run a slow backend and hand back a retryable
+`TIMEOUT`. That is now asserted, in "a caller's own reason is never
+reinterpreted as our deadline", and the pure reordering is mutation 5 below and
+now dies.
 
 ### One existing test changed meaning, deliberately
 
@@ -282,10 +443,10 @@ not about that word, and the comment says so.
 ### Gates
 
 - `npm run check` — exit 0.
-- `npm test -- --project planner` — **693 passed, 49 files**, up from **669 in
-  47 files** at `origin/main` (measured, not derived: the suite was run against
-  a stash of this branch). 24 new tests, 2 new files.
-- `npm test` — **1390 passed, 99 files**.
+- `npm test -- --project planner` — **698 passed, 49 files**, up from **669 in
+  47 files** at `origin/main` — measured here against a stash of this branch,
+  and measured independently by gate 1, which agreed. 29 new tests, 2 new files.
+- `npm test` — **1395 passed, 99 files**.
 - `npm run format` — run; the deployment doc, the adapter and the fixture were
   all reformatted by it.
 - **The image gate in `.github/workflows/planner.yml` does not run locally and
@@ -299,12 +460,45 @@ not about that word, and the comment says so.
   whether that image ships one is unchecked, and both facts are written into the
   file and into the deployment doc rather than left for someone to discover.
 
-**Twelve mutations, twelve red.** Each new assertion was checked by breaking the
-code under it and confirming the failure: dropping `estimate`'s null guard so an
-unroutable cell measures as zero; reporting seconds as minutes; reporting
-kilometres as metres; losing the `TimeoutError` branch; asking the deadline
-before the caller's signal; answering a wrong body with nulls instead of
-failing; sending a place with no coordinates anyway; dropping the locality from
-the geocoder query; starting with no endpoint; accepting an endpoint that is not
-a URL; putting the endpoint in the `/api/health` body; and logging the endpoints
-at boot. All twelve restored.
+### The first mutation sweep was worthless, and that is worse than the one finding
+
+Gate 1 found that one of the twelve claimed reds — reversing the two lines in
+`#reachFailure` — was green. Chasing it turned up something larger: **all twelve
+were.**
+
+The harness ran `npx vitest run <spec> --reporter=basic` and read the exit code.
+`--reporter=basic` does not exist in vitest 4; it fails to load and the process
+exits **1 on a clean, unmutated tree**. Every mutation therefore "died", and the
+paragraph that reported twelve reds was reporting the reporter.
+
+The transferable half: **a mutation harness needs a control run.** One execution
+of the unmutated tree, asserted green, would have caught this before the first
+claim was written — the same argument the fixture rule makes one level up, that
+a check which cannot fail is not a check. The second harness starts with that
+control and prints its result.
+
+**Second sweep, sixteen mutations, sixteen killed, control green.** No reporter
+flag, and each run is the whole `--project planner` rather than one spec:
+
+| #   | Mutation                                                                      |        |
+| --- | ----------------------------------------------------------------------------- | ------ |
+| 1   | `estimate`: drop the null guard, so an unroutable cell measures as zero       | killed |
+| 2   | `estimate`: report seconds as minutes                                         | killed |
+| 3   | `estimate`: report kilometres as metres                                       | killed |
+| 4   | `#reachFailure`: lose the `TimeoutError` branch                               | killed |
+| 5   | `#reachFailure`: **pure reorder** — deadline asked before the caller's signal | killed |
+| 6   | `indexCells`: answer a wrong body with a table of nulls instead of failing    | killed |
+| 7   | `pointsOf`: send a place with no coordinates anyway                           | killed |
+| 8   | `placeQuery`: drop the locality from the geocoder query                       | killed |
+| 9   | `requiredEndpoint`: start anyway when the endpoint is missing                 | killed |
+| 10  | `requiredEndpoint`: accept an endpoint that is not a URL                      | killed |
+| 11  | `/api/health`: report the endpoint beside the provider name                   | killed |
+| 12  | boot log: log the endpoints beside the provider                               | killed |
+| 13  | `indexOf`: remove the integer / non-negative validation                       | killed |
+| 14  | `estimate`: half-a-cell guard, `\|\|` becomes `&&`                            | killed |
+| 15  | `estimate`: remove the negative time/distance guard                           | killed |
+| 16  | `locate`: drop the `User-Agent` header                                        | killed |
+
+Rows 13–16 are gate 1's F5 — four survivors its own 55-mutation sweep found and
+mine could not have, because mine could not find anything. Row 5 is F1. All five
+are covered by tests added in the gate-1 round; every mutation was reverted.

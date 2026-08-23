@@ -41,6 +41,23 @@ memory of a JSON document: `firstCoordinates` in
 `api/src/grounding/valhalla.ts`. That is exactly the position pl-28 step 3
 exists to prevent, and it is worth a ticket rather than a paragraph.
 
+**How thin, exactly.** Its whole body can be replaced with `return null;` and
+the planner suite stays green. None of its seven branches is pinned by anything,
+and no test on that branch ever receives a non-null `LocatedPlace`.
+
+**And the failure it hides looks like an honest answer, which is the hardest
+kind to notice.** `runs/travel.ts` calls `locate` for every place a run's
+candidates name, so with `GROUNDING_PROVIDER=valhalla` the first plan a
+deployment builds executes this code. If Nominatim answers a shape it does not
+expect, it returns `null`; every place stays uncoordinated; `pointsOf` drops all
+of them; `travel` short-circuits before any request goes out. The operator then
+has a service reporting `{"grounding":{"provider":"valhalla"}}` at `/api/health`
+and producing plans that every single time carry a `travel-time` unchecked
+constraint — which is precisely the sentence an honest plan says when a backend
+genuinely could not measure something. Nothing distinguishes the two from
+outside. That is the cost of this ticket staying open, and it is why it is a
+`fix` rather than a `chore`.
+
 ## Build
 
 1. **Stand up a geocoder and capture `/search`.** A machine with Docker and

@@ -277,10 +277,19 @@ export class ValhallaGroundingProvider implements GroundingProvider {
   /**
    * Which of the three a thrown fetch was.
    *
-   * The caller's signal is asked **first**, because `AbortSignal.any` gives an
-   * `AbortError` for either cause and only the caller's own signal separates
-   * "someone stopped this run" from "the backend was too slow" — two different
-   * sentences and two different answers to whether a retry is worth anything.
+   * The caller's signal is asked **first**, and the reason is narrower than an
+   * earlier version of this comment claimed. `AbortSignal.any` propagates the
+   * *aborting* signal's own reason, so in the ordinary case the deadline
+   * arrives as a `TimeoutError` and a plain `controller.abort()` as an
+   * `AbortError` — already told apart by name, whichever order these two lines
+   * are in.
+   *
+   * What the order settles is the case where **the caller's own reason is
+   * itself a `TimeoutError`**: a run bounded upstream by its own
+   * `AbortSignal.timeout`, which is exactly how a caller would bound one. The
+   * caller's reason is not ours to reinterpret — someone stopped this run, so
+   * it is `CANCELED` and not a retryable `TIMEOUT`. Reversing these two lines
+   * fails a test that says so.
    */
   #reachFailure(error: unknown, signal: AbortSignal | undefined): AppError {
     if (signal?.aborted === true) return new AppError("CANCELED", undefined, { cause: error });

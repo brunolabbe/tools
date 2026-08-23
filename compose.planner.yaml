@@ -25,6 +25,17 @@
 # `repo-` ticket and is not started here. This fragment is additive: merging it
 # is opt-in, and nothing that works today stops working because it exists.
 #
+# **One sharp edge that rename is carrying, and it is worth knowing before you
+# merge this file with `compose.yaml`.** ADR 004 sets `name:` explicitly because
+# a project named after a directory basename is renamed by moving a file, which
+# orphans the volumes. This fragment sets it; `compose.yaml` does not, and takes
+# the basename instead. So `-f compose.yaml -f compose.planner.yaml up -d` and a
+# bare `-f compose.yaml up -d` are **two different compose projects**, and the
+# second no longer sees the downloader's `storage` volume or the job database in
+# it. Nothing in this repo instructs that merge today, which is the only reason
+# it is latent — the `repo-` ticket must give `compose.yaml` the same `name:` in
+# the same change, and until it does, do not merge the two by hand.
+#
 # ## The two images are not pinned to anything this repo has run
 #
 # Neither was pulled while this file was written — the environment pl-28 was

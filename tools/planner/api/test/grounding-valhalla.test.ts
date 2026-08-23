@@ -48,6 +48,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { AppError } from "@planner/contract";
 import type { Place } from "@planner/contract";
 import { travelCell } from "@planner/agent";
+import type { TravelEstimate } from "@planner/agent";
 import { ValhallaGroundingProvider } from "../src/grounding/valhalla.ts";
 
 const CAPTURED: unknown = JSON.parse(
@@ -305,6 +306,42 @@ describe("failure, mapped to core's codes", () => {
     expect(error.retryable).toBe(false);
   });
 
+  test("a caller's own reason is never reinterpreted as our deadline", async () => {
+    // The caller's signal is asked *first*, and this is the case that makes the
+    // order matter rather than tidy. A run bounded by its own
+    // `AbortSignal.timeout` upstream aborts with a reason whose `name` is
+    // `TimeoutError` — so a check that asked the error's name first would call
+    // a stopped run a slow backend, and hand back a `TIMEOUT` that core says is
+    // worth retrying. Someone asked for this to stop; retrying is the opposite
+    // of what they said.
+    //
+    // pl-28's first gate found this ordering unasserted, and found the claim in
+    // the Log that a mutation covered it to be wrong. This is that assertion.
+    const controller = new AbortController();
+    const fetch = vi.fn(
+      async (_input: unknown, init?: RequestInit) =>
+        await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(init.signal?.reason as Error);
+          });
+        }),
+    ) as unknown as typeof globalThis.fetch;
+
+    const pending = provider(fetch)
+      .travel({
+        origins: [LOOP_WEST],
+        destinations: [LOOP_NORTH],
+        mode: "driving",
+        signal: controller.signal,
+      })
+      .catch((thrown: unknown) => thrown);
+    controller.abort(new DOMException("upstream deadline", "TimeoutError"));
+
+    const error = (await pending) as AppError;
+    expect(error.code).toBe("CANCELED");
+    expect(error.retryable).toBe(false);
+  });
+
   test("an already-aborted signal never reaches the socket", async () => {
     const { fetch, calls } = answering(CAPTURED);
 
@@ -335,6 +372,14 @@ describe("locate", () => {
     expect(url.pathname).toBe("/search");
     expect(url.searchParams.get("q")).toBe("Rimouski, Québec");
     expect(url.searchParams.get("limit")).toBe("1");
+
+    // Nominatim's usage policy refuses a request with no identifying
+    // `User-Agent`, and pointing `GEOCODER_URL` at the public instance is on
+    // pl-28's table. A self-hosted one does not enforce it, so dropping this
+    // header breaks nothing here and everything there — which is exactly the
+    // kind of thing found in production rather than in a suite.
+    const headers = calls[0]?.init?.headers as Record<string, string> | undefined;
+    expect(headers?.["user-agent"]).toMatch(/\S/u);
   });
 
   test("a name nobody matched is null, not an error", async () => {
@@ -373,5 +418,85 @@ describe("locate", () => {
 
     await expect(provider(fetch).locate({ place: blank })).resolves.toBeNull();
     expect(calls).toHaveLength(0);
+  });
+});
+
+/**
+ * Bodies that are **not** captures and never claim to be.
+ *
+ * Everything above parses what Valhalla actually wrote. This block asks the
+ * opposite question — what happens to a reply Valhalla would never write — and
+ * a hostile body is a legitimate thing to compose by hand precisely because it
+ * makes no claim about the engine. The rule pl-28 step 3 protects is that a
+ * fixture must not agree with the parser by construction; here the whole point
+ * is that it disagrees.
+ */
+/** One origin, two destinations, and whatever cells the case is about. */
+function reply(cells: readonly unknown[]): unknown {
+  return { sources_to_targets: [cells] };
+}
+
+describe("a reply that is not what the engine writes", () => {
+  async function measure(body: unknown): Promise<TravelEstimate | null> {
+    const { fetch } = answering(body);
+    const matrix = await provider(fetch).travel({
+      origins: [LOOP_WEST],
+      destinations: [LOOP_WEST, LOOP_NORTH],
+      mode: "driving",
+    });
+    return travelCell(matrix, 0, 1);
+  }
+
+  test("an index that is a string cannot displace the cell it collides with", async () => {
+    // `"0"` and `0` are one key the moment nothing checks the type, and the
+    // later write wins — so a cell nobody validated would silently replace a
+    // measured leg with whatever it liked. That is what `indexOf`'s integer
+    // check buys, and it is why the reply is keyed by its own indices rather
+    // than read off nesting order: an index that came from outside this process
+    // reaches a lookup, and a lookup is where an unchecked key does its damage.
+    await expect(
+      measure(
+        reply([
+          { from_index: 0, to_index: 1, time: 200, distance: 3.339 },
+          { from_index: "0", to_index: "1", time: 1, distance: 99_999 },
+        ]),
+      ),
+    ).resolves.toMatchObject({ distanceMeters: 3_339, durationMinutes: 3 });
+  });
+
+  test("an index that is not a whole number is no index at all", async () => {
+    // Neither a fraction nor a negative can name a row. Both are dropped, so
+    // the pair they claimed to be about has no answer rather than a wrong one.
+    await expect(
+      measure(reply([{ from_index: 0.5, to_index: 1, time: 200, distance: 3.339 }])),
+    ).resolves.toBeNull();
+    await expect(
+      measure(reply([{ from_index: 0, to_index: -1, time: 200, distance: 3.339 }])),
+    ).resolves.toBeNull();
+  });
+
+  test("half a cell is no cell — a distance with no time, and the other way round", async () => {
+    // `TravelEstimate` says both numbers or nothing. A guard that asked for
+    // *either* would let the missing half through as `Math.round(null * 1000)`,
+    // which is a confident zero: a leg the plan reports as measured, at no
+    // distance, in no time.
+    await expect(
+      measure(reply([{ from_index: 0, to_index: 1, time: 200, distance: null }])),
+    ).resolves.toBeNull();
+    await expect(
+      measure(reply([{ from_index: 0, to_index: 1, time: null, distance: 3.339 }])),
+    ).resolves.toBeNull();
+  });
+
+  test("a negative time or distance is no answer, not a negative leg", async () => {
+    // A packer handed a negative duration packs more into a day than the day
+    // holds, and nothing downstream checks — `limits.ts` subtracts what it is
+    // given. This is the one place that can refuse it.
+    await expect(
+      measure(reply([{ from_index: 0, to_index: 1, time: -60, distance: 3.339 }])),
+    ).resolves.toBeNull();
+    await expect(
+      measure(reply([{ from_index: 0, to_index: 1, time: 200, distance: -3.339 }])),
+    ).resolves.toBeNull();
   });
 });
