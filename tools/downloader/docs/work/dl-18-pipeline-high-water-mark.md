@@ -80,6 +80,14 @@ to the marking logic should leave the state legible to assistive technology too.
    by role instead of by class, and the comment in `job-card.test.tsx` about
    there being nothing role-shaped to query comes out.
 
+   **`AnalysingPanel` has the identical gap at its own stage list**, found while
+   testing it in dl-15: `stages__item--done` / `--active` with no `aria-current`
+   and no name that changes, so `chrome.test.tsx`'s `activeStage()` helper reads
+   the class for the same reason. It is a second component and arguably a second
+   ticket — but it is the same three lines of fix, the two lists read as siblings
+   to a user, and doing one without the other leaves the tool half-narrated.
+   Take it here unless it turns out to be more than it looks.
+
 5. **Invert dl-15's characterization test.** `job-card.test.tsx` carries a test
    named `CHARACTERIZATION (dl-18): the step list walks backwards on a re-probe`
    that asserts today's wrong behaviour on purpose, so this ticket has something

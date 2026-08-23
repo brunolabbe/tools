@@ -29,6 +29,20 @@ afterEach(cleanup);
 // AnalysingPanel
 // ---------------------------------------------------------------------------
 
+/**
+ * Which stage the panel is narrating, by class name.
+ *
+ * By class because there is nothing else: the stage list marks done, active and
+ * pending with CSS alone — no `aria-current`, no name that changes — so a screen
+ * reader hears five items and no indication of which one is happening. That is
+ * the same gap dl-18 records for `JobCard`'s pipeline, at the sibling site, and
+ * it is noted in that ticket.
+ */
+function activeStage(): string {
+  const active = screen.getByRole("list").querySelector(".stages__item--active");
+  return active?.textContent ?? "";
+}
+
 function analysing(): ReturnType<typeof vi.fn<() => void>> {
   const onCancel = vi.fn<() => void>();
   render(<AnalysingPanel url={SOURCE_URL} startedAt={NOW} onCancel={onCancel} />);
@@ -64,13 +78,27 @@ test("the narration follows the clock rather than inventing progress", () => {
     expect(within(stages).getAllByRole("listitem")).toHaveLength(5);
     expect(screen.getByText("0s")).toBeDefined();
 
+    // All five stage texts are on screen at every elapsed time — only the
+    // *marking* moves. So asserting a stage's text is present proves nothing
+    // about the clock, which is what this test used to do: freezing
+    // `activeIndex` at 0 left all 162 tests green.
+    expect(activeStage()).toBe("Opening a headless browser");
+
     act(() => {
       vi.advanceTimersByTime(5_000);
     });
     expect(screen.getByText("5s")).toBeDefined();
-    // Still narration, still no figure: the stage list is keyed to elapsed time.
-    expect(screen.getByText("Provoking playback and watching network requests")).toBeDefined();
+    expect(activeStage()).toBe("Provoking playback and watching network requests");
+
+    act(() => {
+      vi.advanceTimersByTime(11_000);
+    });
+    expect(screen.getByText("16s")).toBeDefined();
+    expect(activeStage()).toBe("Still going — some sites are slow to start playing");
+
+    // Narration throughout, and never a figure.
     expect(screen.getByRole("progressbar").hasAttribute("value")).toBe(false);
+    expect(screen.queryByText(/%/u)).toBeNull();
   } finally {
     vi.useRealTimers();
   }

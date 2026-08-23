@@ -174,6 +174,68 @@ test("a late response from an abandoned analysis never overwrites the current on
   expect(screen.queryByRole("heading", { name: "Abandoned analysis" })).toBeNull();
 });
 
+test("a late *rejection* from an abandoned analysis is dropped too", async () => {
+  // The other half of the same guard, and the more likely half: a slow site is
+  // far more likely to time out than to succeed late, so the `catch` arm is the
+  // one a real abandoned probe usually takes. It was unproven — deleting the
+  // guard at the top of `catch` alone left the whole suite green, because both
+  // race tests only ever resolved.
+  //
+  // Unguarded, this late rejection runs `setPhase({ kind: "idle" })` and
+  // `setProbeError(...)`: the analysis the user is actually waiting on vanishes
+  // and is replaced by an error belonging to the one they walked away from.
+  const fake = await mountApp(true);
+
+  const scenarios = screen.getAllByRole("button", { name: /Happy path|Slow probe/u });
+  fireEvent.click(scenarios[0] as HTMLButtonElement);
+  await settle();
+  fireEvent.click(scenarios[1] as HTMLButtonElement);
+  await settle();
+  expect(fake.probes).toHaveLength(2);
+
+  await act(async () => {
+    fake.probes[0]?.reject(new fake.AppError("TIMEOUT", "The abandoned page never answered."));
+    await Promise.resolve();
+  });
+  await settle();
+
+  // No error panel, and the current analysis is still running.
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByText("TIMEOUT")).toBeNull();
+  expect(screen.getByRole("heading", { name: "Analysing" })).toBeDefined();
+
+  // And the live one still lands.
+  await act(async () => {
+    fake.probes[1]?.resolve({ probe: probe({ title: "Current analysis" }), cached: false });
+    await Promise.resolve();
+  });
+  await settle();
+  expect(screen.getByRole("heading", { name: "Current analysis" })).toBeDefined();
+});
+
+test("a rejection that arrives after the wait was abandoned raises nothing", async () => {
+  // Same guard, reached the other way: the user pressed "Stop waiting", which
+  // bumps the token without starting a second probe. The idle page must stay
+  // idle rather than sprouting an error for work nobody is waiting on.
+  const fake = await mountApp(true);
+
+  analyse("https://videos.example.com/watch/slow");
+  await settle();
+
+  fireEvent.click(screen.getByRole("button", { name: "Stop waiting" }));
+  await settle();
+
+  await act(async () => {
+    fake.probes[0]?.reject(new fake.AppError("UNREACHABLE", "Gave up on the abandoned page."));
+    await Promise.resolve();
+  });
+  await settle();
+
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByText("UNREACHABLE")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Analysing" })).toBeNull();
+});
+
 test("abandoning the wait also abandons the response that follows it", async () => {
   const fake = await mountApp(true);
 

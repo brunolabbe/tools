@@ -25,6 +25,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import type { Job } from "@downloader/contract";
 import { JobCard } from "../src/components/JobCard.tsx";
 import { JobList } from "../src/components/JobList.tsx";
+import { UNKNOWN } from "../src/lib/format.ts";
 import type { StreamState } from "../src/lib/job-stream.ts";
 import { NOW, SOURCE_URL, job, result, variant } from "./fixtures.ts";
 
@@ -77,6 +78,16 @@ function barLabel(): string {
   return screen.getByRole("progressbar").getAttribute("aria-label") ?? "";
 }
 
+/**
+ * One row of the stats list, by its label. Several of them render the same em
+ * dash when they have nothing, so "is there a dash on the card" proves nothing —
+ * the assertion has to name which figure it is looking at.
+ */
+function stat(label: string): string {
+  const term = screen.getByText(label);
+  return term.nextElementSibling?.textContent ?? "";
+}
+
 // ---------------------------------------------------------------------------
 // The rule: an unknown total is never a number
 // ---------------------------------------------------------------------------
@@ -119,6 +130,18 @@ test("a known total is rendered as a figure and a determinate bar", () => {
 // The statuses
 // ---------------------------------------------------------------------------
 
+test("an unenumerated segment count is a dash, not the word null", () => {
+  // The twin of the branch below, and the one nearly every card in this suite
+  // takes: `fixtures.ts` defaults `segmentsDone` to null, so this is the
+  // *default* render. Collapsing the null arm left all 162 tests green while
+  // the row read "Segmentsnull" — nothing was looking at the cell that almost
+  // every fixture exercised.
+  mount(job("downloading", { progress: { segmentsDone: null, segmentsTotal: null } }));
+
+  expect(stat("Segments")).toBe(UNKNOWN);
+  expect(stat("Segments")).not.toContain("null");
+});
+
 test("a half-known segment count shows what is done, not a count against null", () => {
   // Swept up with the audio-codec branch: every fixture set `segmentsDone` and
   // `segmentsTotal` together or set neither, so the middle case never rendered
@@ -131,9 +154,8 @@ test("a half-known segment count shows what is done, not a count against null", 
     }),
   );
 
-  expect(screen.getByText("120")).toBeDefined();
+  expect(stat("Segments")).toBe("120");
   expect(screen.queryByText(/null/u)).toBeNull();
-  expect(screen.queryByText("120 / null")).toBeNull();
 });
 
 test("a finished file of unknown duration is described without a trailing dash", () => {
@@ -211,6 +233,28 @@ test("the downloading → probing back edge keeps the work, and is not an error"
   expect(screen.queryByRole("alert")).toBeNull();
   expect(screen.queryByRole("status")).toBeNull();
   expect(screen.queryByRole("link", { name: "Download file" })).toBeNull();
+});
+
+test("a forward-running job marks the steps behind it done and the current one active", () => {
+  // The positive half of the step list, which nothing asserted: both predicates
+  // in `JobCard`'s className ternary could be replaced with `false` — every step
+  // rendering as plain, unmarked text — and all 162 tests stayed green. Only the
+  // *pending* class was ever asserted, by the characterization test below.
+  //
+  // On class name for the same reason that one is: done, active and pending are
+  // CSS-only, with no accessible counterpart. dl-18 changes that, and a job that
+  // has only ever moved forward renders identically under its high-water mark,
+  // so this test survives it unchanged.
+  mount(job("muxing"));
+
+  const steps = within(screen.getByRole("list", { name: "Pipeline" })).getAllByRole("listitem");
+  expect(steps.map((step) => [step.textContent, step.className])).toEqual([
+    ["Queued", "steps__item steps__item--done"],
+    ["Re-analysing", "steps__item steps__item--done"],
+    ["Downloading", "steps__item steps__item--done"],
+    ["Assembling", "steps__item steps__item--active"],
+    ["Ready", "steps__item"],
+  ]);
 });
 
 test("CHARACTERIZATION (dl-18): the step list walks backwards on a re-probe", () => {
@@ -322,6 +366,28 @@ test("a reconnecting stream is announced without disturbing the job's own state"
 
   expect(screen.getByRole("status")).toHaveProperty("textContent", "reconnecting…");
   expect(screen.getByRole("progressbar")).toBeDefined();
+});
+
+test("a healthy stream shows no pill at all", () => {
+  // Last round proved `JobList` looks the state up by job id. It did not prove
+  // `JobCard` compares it to anything: `streamState !== undefined` passed all
+  // 162 tests, because after that fix no test supplied a *healthy* state any
+  // more. Closing one seam removed the fixture that exercised the other.
+  //
+  // `useJobs` writes every `StreamState` into that record, so a healthy value is
+  // the common case. Under the mutant every job with a working stream wears a
+  // permanent orange pill and the suite says nothing.
+  for (const healthy of ["idle", "connecting", "open", "closed"] as const) {
+    mount(job("downloading"), healthy);
+    expect(screen.queryByText("reconnecting…")).toBeNull();
+    // Still rendering — this is not passing because the pill row vanished.
+    expect(screen.getByRole("progressbar")).toBeDefined();
+    cleanup();
+  }
+
+  // And with no state recorded for the job at all.
+  mount(job("downloading"));
+  expect(screen.queryByText("reconnecting…")).toBeNull();
 });
 
 test("cancel and remove report the job they were pressed on", () => {

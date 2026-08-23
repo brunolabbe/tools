@@ -118,16 +118,20 @@ test("a video rendition with no frame rate shows the resolution alone", () => {
   expect(quality.textContent).toBe("1920×1080");
 });
 
-test("a silent rendition says it has no audio, rather than naming a codec", () => {
+test("a silent rendition says 'none', not the unknown marker", () => {
   // Found by sweeping for the same shape a third time: every variant in the
   // fixture had audio one way or another — `v-2160` through its `audioUrl`, the
   // rest directly — so `hasAudio ? audioCodec : "none"` never took its false
   // branch, and dropping the guard entirely left the suite green.
   //
-  // This is not cosmetic. A video-only progressive file with a stale
-  // `audioCodec` on it would advertise "AAC" for a download that comes out
-  // silent, and the audio column is the only place a user can see that before
-  // committing to it.
+  // **What the mutant actually renders is `—`, not a codec.** `toVariantRow`
+  // computes `audioCodec` and `hasAudio` from the same predicate
+  // (`variant.hasAudio || hasSeparateAudio`), so a row with no audio always has
+  // `audioCodec === UNKNOWN` and the stale-codec story is not reachable. This
+  // test is worth keeping for the smaller, true reason: `—` means "we do not
+  // know", and "we do not know whether this has sound" is a different claim
+  // from "this has no sound". Only one of them tells a user what they are
+  // about to download.
   mount([
     variant({
       id: "v-silent",
@@ -138,11 +142,10 @@ test("a silent rendition says it has no audio, rather than naming a codec", () =
     }),
   ]);
 
-  const row = within(screen.getByRole("table")).getAllByRole("row")[1];
-  expect(row?.textContent).toContain("none");
-  expect(row?.textContent).not.toContain("AAC");
-  // And not marked for muxing either — there is no second stream to fold in.
-  expect(row?.textContent).not.toContain("+mux");
+  const audioCell = within(screen.getByRole("table")).getAllByRole("row")[1]?.children[2];
+  expect(audioCell?.textContent).toBe("none");
+  // Not marked for muxing either — there is no second stream to fold in.
+  expect(audioCell?.textContent).not.toContain("+mux");
 });
 
 test("a rendition whose audio is a separate stream is marked as needing a mux", () => {
