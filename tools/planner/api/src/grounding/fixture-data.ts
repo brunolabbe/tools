@@ -37,22 +37,21 @@ import type { Coordinates, Source } from "@planner/contract";
 // ---------------------------------------------------------------------------
 
 /**
- * When these numbers were written down. Fixed, because a provider that stamped
- * `new Date()` on a checked-in table would be claiming to have just read
- * something, and because `@planner/itinerary`'s determinism rule does not stop
- * being true one package over.
- *
- * It ages, deliberately. pl-25 gives grounding a TTL that varies by kind, and
- * when that lands these facts age out like any others — a fixture that stayed
- * eternally fresh would be the one input the cache could never be tested
- * against.
- */
-export const FIXTURE_FETCHED_AT = "2026-08-22T00:00:00.000Z";
-
-/**
  * Every fixture answer carries a source, because `provenanceSchema` refuses a
  * grounded fact without one and because the plan view renders it as "we checked
  * this, here is where".
+ *
+ * ## Why there is no `FIXTURE_FETCHED_AT` any more
+ *
+ * pl-24 stamped every answer with a constant dated the day this table was
+ * typed, on the argument that a checked-in table must not claim to have just
+ * read something. pl-25's review found what that costs once grounding has a
+ * TTL: the travel lifetime is 4,320 hours, so **from 2027-02-18 every fixture
+ * `travel` answer would have arrived already expired** — nothing cached, every
+ * lookup a miss, every miss spending budget, and nothing red to say so.
+ * `locate` would have followed on 2027-08-22. A dated constant plus a lifetime
+ * is a time bomb whichever pair of numbers you pick, so there is no date here
+ * to go stale.
  *
  * **The host is `.invalid` on purpose.** RFC 2606 reserves that TLD so it can
  * never resolve, which makes the link visibly not a citation. The alternative
@@ -60,12 +59,21 @@ export const FIXTURE_FETCHED_AT = "2026-08-22T00:00:00.000Z";
  * is precisely the failure the whole provenance mechanism exists to make
  * visible — the same argument that makes the scripted model provider report
  * itself as `scripted` in `/api/health`.
+ *
+ * **`fetchedAt` is when this answer was handed over, not when the table was
+ * typed.** It is the honest reading of the field — the fixture provider really
+ * did consult its table just now — and it is what keeps the provider from
+ * ageing into a permanently disabled cache. Nothing here pretends to be a
+ * measurement: the host cannot resolve and the title says what it is.
+ *
+ * The clock is the caller's so the provider stays deterministic under a test,
+ * which is the half of pl-24's argument that was actually load-bearing.
  */
-export function fixtureSource(what: string): Source {
+export function fixtureSource(what: string, fetchedAt: Date): Source {
   return {
     url: `https://fixtures.invalid/planner/${what}`,
     title: "Checked-in fixture, not a measurement",
-    fetchedAt: FIXTURE_FETCHED_AT,
+    fetchedAt: fetchedAt.toISOString(),
   };
 }
 

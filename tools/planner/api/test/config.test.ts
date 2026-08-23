@@ -54,6 +54,42 @@ describe("loadApiConfig", () => {
     );
   });
 
+  test("caches a place for longer than a road, because the facts age differently", () => {
+    // The whole of pl-25's title. One number for both would either re-measure
+    // every road every week or keep serving a driving time long after the road
+    // it describes was rebuilt.
+    const ttl = loadApiConfig({}, {}).groundingCacheTtlHours;
+    expect(ttl.locate).toBe(8_760);
+    expect(ttl.travel).toBe(4_320);
+    expect(ttl.locate).toBeGreaterThan(ttl.travel);
+  });
+
+  test("takes each grounding TTL from its own variable", () => {
+    const ttl = loadApiConfig(
+      {},
+      { GROUNDING_CACHE_TTL_LOCATE_HOURS: "3", GROUNDING_CACHE_TTL_TRAVEL_HOURS: "9" },
+    ).groundingCacheTtlHours;
+    expect(ttl).toEqual({ locate: 3, travel: 9 });
+  });
+
+  test("honours a grounding TTL of zero, which is how a deployment turns the cache off", () => {
+    // Beside `MAX_GROUNDING_CALLS` below and for the same reason: clamping zero
+    // up to one would keep an answer somebody explicitly said not to keep.
+    const ttl = loadApiConfig(
+      {},
+      { GROUNDING_CACHE_TTL_LOCATE_HOURS: "0", GROUNDING_CACHE_TTL_TRAVEL_HOURS: "0" },
+    ).groundingCacheTtlHours;
+    expect(ttl).toEqual({ locate: 0, travel: 0 });
+  });
+
+  test("falls back to the default TTL when the value is not a number", () => {
+    const ttl = loadApiConfig(
+      {},
+      { GROUNDING_CACHE_TTL_TRAVEL_HOURS: "a fortnight" },
+    ).groundingCacheTtlHours;
+    expect(ttl.travel).toBe(4_320);
+  });
+
   test("honours a grounding ceiling of zero rather than treating it as unset", () => {
     // Zero is how a deployment turns grounding off without reconfiguring the
     // provider. Clamping it up to one would spend a call it was told not to.

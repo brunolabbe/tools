@@ -71,9 +71,10 @@ describe("migrate", () => {
     const database = atVersionOne();
     migrate(database);
 
-    expect(database.pragma("user_version", { simple: true })).toBe(4);
+    expect(database.pragma("user_version", { simple: true })).toBe(5);
     expect(tableNames(database)).toEqual([
       "answers",
+      "grounding_cache",
       "intakes",
       "plan_candidates",
       "plan_days",
@@ -97,7 +98,7 @@ describe("migrate", () => {
     const database = fresh();
     migrate(database);
     migrate(database);
-    expect(database.pragma("user_version", { simple: true })).toBe(4);
+    expect(database.pragma("user_version", { simple: true })).toBe(5);
   });
 });
 

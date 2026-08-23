@@ -20,6 +20,7 @@ describe("migrations", () => {
 
     expect(tables(db)).toEqual([
       "answers",
+      "grounding_cache",
       "intakes",
       "plan_candidates",
       "plan_days",
@@ -28,7 +29,7 @@ describe("migrations", () => {
       "plan_runs",
       "plans",
     ]);
-    expect(userVersion(db)).toBe(4);
+    expect(userVersion(db)).toBe(5);
     db.close();
   });
 
@@ -50,7 +51,33 @@ describe("migrations", () => {
 
     expect(tables(db)).toContain("intakes");
     expect(tables(db)).not.toContain("conversations");
-    expect(userVersion(db)).toBe(4);
+    expect(userVersion(db)).toBe(5);
+    db.close();
+  });
+
+  test("migration 5 applies to a database at user_version = 4", () => {
+    // The case that actually happens for pl-25: a deployment already carrying
+    // the run tables gets the grounding cache added under it, with everything
+    // in the database left where it was.
+    //
+    // Wound back rather than hand-written, unlike `atVersionOne` in
+    // `schema.test.ts`. Migration 4 is `ALTER TABLE` on top of three earlier
+    // ones, so a hand-written version-4 database would be a fourth copy of the
+    // whole schema, and the first thing to rot. What matters here is that
+    // migration 5 is *appended* — that a database which has already applied 1
+    // through 4 receives it and nothing else.
+    const db = new Database(":memory:");
+    migrate(db);
+    db.exec("DROP TABLE grounding_cache; PRAGMA user_version = 4;");
+    db.prepare(
+      "INSERT INTO intakes (id, title, tree_version, created_at, updated_at) VALUES (?,?,?,?,?)",
+    ).run("kept", "A road trip", 1, "then", "then");
+
+    migrate(db);
+
+    expect(userVersion(db)).toBe(5);
+    expect(tables(db)).toContain("grounding_cache");
+    expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
     db.close();
   });
 
@@ -63,7 +90,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(4);
+    expect(userVersion(db)).toBe(5);
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
     db.close();
   });

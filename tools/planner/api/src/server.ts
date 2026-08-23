@@ -20,6 +20,7 @@ import type { ApiConfig } from "./config.ts";
 import { loadApiConfig } from "./config.ts";
 import type { AppContext } from "./context.ts";
 import { migrate } from "./db/schema.ts";
+import { CachingGroundingProvider } from "./grounding/cache.ts";
 import { FixtureGroundingProvider } from "./grounding/fixtures.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import type { AppLogger } from "./logger.ts";
@@ -74,11 +75,20 @@ function createModelProvider(config: ApiConfig): ModelProvider {
  * things in the tool that leave the process, and this file is the only one that
  * knows either of them by name. Adding a real one — pl-28 — is a case here plus
  * a file under `src/grounding/`, and nothing above the seam changes.
+ *
+ * **`now` is passed down and not left to default.** The fixture provider stamps
+ * the `Source.fetchedAt` it hands back, and the cache computes `expires_at`
+ * from that stamp — so a provider reading the wall clock while the cache around
+ * it reads an injected one produces answers dated after the moment they are
+ * stored, which the clamp turns into already-expired-on-write. That is the
+ * cache silently off and every lookup spending budget. Defusing the frozen
+ * timestamp inside the provider was necessary and not sufficient: the wiring is
+ * what decides which clock the two halves agree on.
  */
-function createGroundingProvider(config: ApiConfig): GroundingProvider {
+function createGroundingProvider(config: ApiConfig, now: () => Date): GroundingProvider {
   switch (config.groundingProvider) {
     case "fixtures":
-      return new FixtureGroundingProvider();
+      return new FixtureGroundingProvider(now);
   }
 }
 
@@ -98,13 +108,44 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const model = options.model ?? createModelProvider(config);
   logger.info("agent configured", { provider: model.name, model: model.model });
 
-  const grounding = options.grounding ?? createGroundingProvider(config);
-  // The name only. A real backend's endpoint is infrastructure detail and its
-  // key is a credential, and neither belongs on a log line — `logger.ts`
-  // censors the obvious field names as a backstop, not as permission.
+  // Wrapped, never threaded through: the cache is a `GroundingProvider` that
+  // holds another one, so nothing above the seam — and no backend below it —
+  // learns that SQLite is involved. An injected provider is wrapped too, on
+  // purpose: a test then exercises the path production runs rather than one
+  // that only exists in tests.
+  const grounding = new CachingGroundingProvider({
+    db,
+    inner: options.grounding ?? createGroundingProvider(config, now),
+    ttlHours: config.groundingCacheTtlHours,
+    now,
+    logger,
+  });
+  // On boot, because a process that has been down for a month comes up holding
+  // a table of answers that expired while it was off. The other sweep is after
+  // a run; there is deliberately no timer.
+  //
+  // Guarded like the one in the run's `finally`, and for the same reason taken
+  // one step further: this sweep is housekeeping that the cache itself calls
+  // not load-bearing — an expired row is refused on read whether or not it has
+  // been deleted — so a `SQLITE_BUSY` or a full disk on that DELETE must not be
+  // the thing that stops the service from booting.
+  try {
+    grounding.evictExpired();
+  } catch (error: unknown) {
+    logger.warn("grounding cache eviction failed at boot", {
+      code: AppError.from(error).code,
+      cause: error instanceof Error ? error.message : String(error),
+    });
+  }
+  // The name only, and it is the backend's — `/api/health` answers "what is
+  // this deployment grounding against", and a cache is not a backend. A real
+  // backend's endpoint is infrastructure detail and its key is a credential,
+  // and neither belongs on a log line — `logger.ts` censors the obvious field
+  // names as a backstop, not as permission.
   logger.info("grounding configured", {
     provider: grounding.name,
     maxCalls: config.maxGroundingCalls,
+    cacheTtlHours: config.groundingCacheTtlHours,
   });
 
   let shuttingDown = false;

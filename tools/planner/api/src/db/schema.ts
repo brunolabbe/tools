@@ -237,6 +237,67 @@ const MIGRATIONS: readonly string[] = [
   -- and rows written before this migration have no run at all.
   ALTER TABLE plan_candidates ADD COLUMN run_id TEXT REFERENCES plan_runs (id);
   `,
+  // 5 — the grounding cache (pl-25).
+  //
+  // A table and not a service, decided in `01-ARCHITECTURE.md` and not
+  // re-litigated here: it must survive a restart, because a distance is good
+  // for months and re-measuring the same road every boot is the entire cost
+  // this exists to avoid; and it must be answerable, because the first question
+  // about a plan citing something surprising is "what did we read, and when".
+  //
+  // **Answerable by query, not readable by browsing**, and the difference is
+  // `key` — see its own note below. Everything a `SELECT` returns about a row
+  // is honest; the column that identifies the row is the one that will not read
+  // back by eye.
+  `
+  CREATE TABLE grounding_cache (
+    -- The seam's method: \`locate\` or \`travel\` today. Deliberately not a CHECK
+    -- constraint — the methods are \`GroundingProvider\`'s in @planner/agent, and
+    -- a second half-copy of that list here is the copy that would go stale, the
+    -- same argument \`plan_runs.status\` already makes about \`RUN_TRANSITIONS\`.
+    kind         TEXT NOT NULL,
+    -- The normalised question. What the normalisation drops is written down on
+    -- \`locateKey\` and \`travelKey\` and it drops as little as it can: case,
+    -- surrounding and repeated whitespace, and control characters. Anything
+    -- more and two different questions start sharing an answer, which is a
+    -- cache that lies rather than one that misses.
+    --
+    -- **It embeds a NUL between its parts, and that costs legibility.** The
+    -- separator has to be something a place name cannot contain — the names
+    -- come from a model, and a space would let \`quebec\`+\`city rimouski\` forge
+    -- \`quebec city\`+\`rimouski\`. Storage, comparison and lookup are all exact:
+    -- two keys differing only after the NUL are two rows and each is found by
+    -- its own key. But SQLite's \`length()\`, \`substr\` and \`LIKE\`, and most
+    -- database browsers, stop at the first NUL — so \`alma<NUL>quebec\` displays
+    -- as \`alma\`, and so does \`alma<NUL>saguenay\`. Query this column by
+    -- equality with a key the code built; do not read it off a screen and do
+    -- not trust \`LIKE\` against it.
+    key          TEXT NOT NULL,
+    -- The answer, whole: coordinates for \`locate\`, a distance and a duration
+    -- for \`travel\`. JSON on migration 2's rule — read entire, never filtered
+    -- on, and validated against a schema on the way back out.
+    payload_json TEXT NOT NULL,
+    -- The \`Source\` behind it. Beside the answer rather than inside it, because
+    -- a cached fact with no provenance is one \`provenanceSchema\` refuses and
+    -- the plan view renders as unverified.
+    source_json  TEXT NOT NULL,
+    -- When the fact was read, as the backend's own \`Source\` reported it —
+    -- never when this row was written, and never \`now()\` on the way out. A hit
+    -- is the same fact read at the same moment it was read the first time, and
+    -- \`Source.fetchedAt\` is what decides whether it may still be shown.
+    fetched_at   TEXT NOT NULL,
+    -- Computed on write from the kind's TTL, so a later change to that TTL
+    -- neither resurrects nor kills what is already in here — and so the table
+    -- answers "what is still good" without the reader knowing any TTL at all.
+    expires_at   TEXT NOT NULL,
+    PRIMARY KEY (kind, key)
+  ) STRICT;
+
+  -- Eviction is \`DELETE FROM grounding_cache WHERE expires_at <= ?\`, on boot
+  -- and after a run. The index is for that sweep, not for a read: a lookup goes
+  -- through the primary key.
+  CREATE INDEX grounding_cache_expires_at ON grounding_cache (expires_at);
+  `,
 ];
 
 export function migrate(db: Database): void {
