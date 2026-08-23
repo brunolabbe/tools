@@ -111,19 +111,53 @@ worse than either one.
 
 ## Consequences
 
-- **The narrative is not migrated yet.** This decision is implemented for the
-  ticket tables only; the prose paragraphs and the phase table stay where they
-  are, and both status pages carry a generated milestone rollup alongside a
-  hand-written phase table saying an overlapping thing. That is deliberate —
-  `pl-24`'s pull request is open against those exact lines — and it is filed as
-  [repo-1](../work/repo-1-generated-status-tables.md)'s second half.
-- **The test count goes when the narrative does.** "526 unit tests pass across
-  40 files" rots on every merge and asserts something CI already asserts on
-  every push.
+- **The narrative is migrated, and the pages are what is left.** Done on
+  2026-08-22, in [repo-1](../work/repo-1-generated-status-tables.md)'s second
+  half — deliberately not in the same change as the tables, because `pl-24`'s
+  pull request was open against those exact lines. What survives on a
+  `03-STATUS.md` is the generated region, a table saying where each kind of fact
+  goes instead, and "Running things". The phase table went (the roadmap defines
+  phases; the generated rollup counts them), the test count went (CI asserts it
+  on every push and prose cannot), and the gap list went: a gap worth recording
+  is a ticket worth filing, and the tables list those. Exactly one gap on either
+  page had no ticket and needed one filed — ffmpeg not verifying TLS, now
+  `dl-19` — which is the rule working rather than an exception to it. Almost
+  every narrative
+  paragraph turned out to be already present in its ticket's Log verbatim, which
+  is the second copy this ADR predicted — only three facts in the repo had no
+  other home. Two moved to the tickets that own their subject, `dl-5`
+  (`Job.attempts` semantics) and `dl-6` (the limiter is per-process); the third,
+  the planner's "the documentation leads the code by one phase", is a warning to
+  the reader of the design documents and became `01-ARCHITECTURE.md`'s opening.
 - **Roughly eight source comments cite `03-STATUS.md` as the home of a fact** —
   `guarded-fetch.ts`, `dispatcher.ts`, `orchestrator.ts`, `pipeline.test.ts`.
   They should point at the ticket, which is a more stable anchor than a
   paragraph in a page being emptied. Part of the same follow-up.
+
+  _Outcome, 2026-08-22: four, not eight — the four files named here carried one
+  citation each rather than the two apiece this assumed, and each now points at
+  the ticket or the code that holds the fact._ The estimate is annotated rather
+  than corrected in place: an ADR that rewrites its own prediction to match the
+  result stops being a record of what was believed when the decision was taken.
+
+- **Six citations outside the source were about to become false**, and a grep
+  over `*.ts` finds none of them. Two closed tickets' Logs asserted the page
+  carries a fact _today_ (`dl-12`, `dl-14`); two **open** tickets' acceptance
+  criteria instructed future work to edit a section that would no longer exist
+  (`dl-15`, `dl-16`); `docs/02-DEPLOYMENT.md` sent an operator hardening a shared
+  instance to the page to read the rate limiter's scope; and `.env.example` sent
+  one setting `PROXY_URL` there to read why address pinning turns off. All six
+  now state the consequence inline and link the ticket that holds the reasoning.
+
+  **The lesson, and it has a mechanical half.** The citations that matter are the
+  ones a compiler and a grep over source both miss — and the way to find them is
+  a bare `git grep -n 03-STATUS` with **no `--include` and no path filter**. Each
+  of the two rounds that missed one had filtered by extension first: the first
+  swept `*.ts`/`*.tsx` and found four, the second added the markdown and missed
+  `.env.example`, which is neither. An emptied page is cited from workflows,
+  env templates, Dockerfiles and READMEs, and the filter that makes the sweep
+  fast is the same filter that makes it wrong. Sweep unfiltered, then triage.
+
 - **`docs/work/` now exists, and ids there are prefixed `repo-`.** 002 said the
   signal to create it would be "a third piece of repo-wide work with nowhere to
   live", after `dl-10` and `pl-2` had to carry the release pipeline between

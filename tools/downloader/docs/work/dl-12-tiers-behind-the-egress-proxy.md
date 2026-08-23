@@ -171,8 +171,8 @@ API that introduced a value worth hiding.
 **Where it does not reach.** WebRTC leaves Chromium over UDP and no HTTP proxy
 observes it. A `ws://` upgrade on a plain-HTTP page arrives as an `upgrade` event
 this proxy does not handle, so it dies rather than being tunnelled; `wss://` is
-unaffected. Both are recorded in [03-STATUS.md](../03-STATUS.md) rather than
-fixed. Proxy mode still does not pin, for the reason dl-8 gives.
+unaffected. Both are recorded here and in `api/src/egress-proxy.ts`'s docblock
+rather than fixed. Proxy mode still does not pin, for the reason dl-8 gives.
 
 Tests: `api/test/tiers-behind-the-proxy.test.ts` (5, one driving a real
 Chromium), `resolvers/test/browser/pool.test.ts` (3), two more in

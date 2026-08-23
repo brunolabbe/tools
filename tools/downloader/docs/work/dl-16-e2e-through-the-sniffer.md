@@ -112,9 +112,12 @@ loopback fixture — currently exists only in unit tests that stub one of the fo
   through to a tier that happens to cope.
 - The existing `npm run e2e:downloader` is unchanged in scope and in runtime.
 - CI runs both suites on a downloader change and names them separately.
-- [03-STATUS.md](../03-STATUS.md) loses "the E2E suite drives only the direct
-  resolver", and the container's browser tier is still recorded as smoke-tested
-  only — this ticket does not change that, and should not claim to.
+- "The E2E suite drives only the direct resolver" stops being true, and this
+  ticket's frontmatter goes to `done` in the commit that earns it — that is the
+  only place the gap was recorded, since `03-STATUS.md` is generated from the
+  frontmatter and carries no hand-written gap list (repo-1). **The container's
+  browser tier stays smoke-tested only**: this ticket does not reach it, and
+  should not claim to. Say so in the Log rather than leaving it unsaid.
 
 ## Log
 

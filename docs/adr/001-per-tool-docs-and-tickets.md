@@ -1,6 +1,6 @@
 # 001 — Documentation and tickets live under the tool
 
-**Status:** accepted · **Date:** 2026-08-14 · **Affects:** every tool
+**Status:** accepted, amended in part by [003](./003-the-status-page-is-generated.md) · **Date:** 2026-08-14 · **Affects:** every tool
 
 ## Context
 
@@ -26,6 +26,17 @@ files already make.
 **A ticket is one file** in `tools/<tool>/docs/work/`, carrying its brief and
 its log together — see [01-TICKETS.md](../01-TICKETS.md). The roadmap links to
 tickets instead of describing work; the status document becomes a dashboard.
+
+> _Amended by [003](./003-the-status-page-is-generated.md), 2026-08-22._ "Becomes
+> a dashboard" is where that word enters the repo, and it turned out to be the
+> half of this decision that did not hold: a dashboard nobody generates is a
+> dashboard everybody hand-edits, and both status pages accumulated phase
+> tables, test counts and gap lists that every branch then rewrote. 003 makes
+> the ticket tables generated from frontmatter and empties the rest of the page,
+> so `03-STATUS.md` is now the generated region plus how to run the tool — see
+> `docs/01-TICKETS.md` for what it keeps. The word is left standing here rather
+> than corrected, because this is the record of what was decided in August 2026
+> and the framing is the interesting part of the mistake.
 
 Ids are prefixed per tool (`dl-`, `pl-`) so they survive being quoted outside
 their directory.

@@ -19,7 +19,7 @@ where to look in the next:
 00-ANALYSIS.md      the research the design rests on — the "why it is hard"
 01-ARCHITECTURE.md  packages, pipeline, the decisions that shape them
 02-ROADMAP.md       phases and milestones for this tool only
-03-STATUS.md        where things stand right now, and what is known to be rough
+03-STATUS.md        the ticket tables, generated from frontmatter, and how to run the thing
 work/               one file per ticket — the brief and its outcome together
 ```
 

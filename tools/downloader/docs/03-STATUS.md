@@ -1,53 +1,27 @@
 # Status
 
-Where the downloader stands right now. Phases and milestones are defined in
-[02-ROADMAP.md](./02-ROADMAP.md); what each piece of work actually did is in its
-ticket under [work/](./work/). This page is a dashboard, not a log — if you find
-yourself writing a paragraph here, it belongs in a ticket.
+Where the downloader stands. The tables below are written from the tickets'
+frontmatter by `node scripts/status.mjs --write`, which runs on `main` after a
+merge — so this page cannot disagree with the tickets, and a branch never edits
+it. `npm run status` prints the same thing without opening a file.
 
-**Last updated:** 2026-08-14 · **Phases 0–3 ✅ · M1–M4 ✅ · two open tickets,
-both of them test coverage for code that already shipped**
+Nothing else here is state. If you are about to write a paragraph, it belongs
+somewhere that something keeps true:
 
----
+| What you want to say                     | Where it goes                                              |
+| ---------------------------------------- | ---------------------------------------------------------- |
+| A ticket is done, or blocked, or open    | its own frontmatter. The tables below are the view         |
+| What a piece of work did, and got wrong  | that ticket's `## Log`, in [work/](./work/)                |
+| A gap the tool still has                 | the ticket that closes it — and if there is none, file one |
+| Why the code is shaped the way it is     | a comment beside the code                                  |
+| A decision that binds more than one tool | an [ADR](../../../docs/adr/)                               |
+| What a phase or a milestone means        | [02-ROADMAP.md](./02-ROADMAP.md)                           |
+
+The reasoning is in [adr/003](../../../docs/adr/003-the-status-page-is-generated.md):
+a status page restating what the tickets already record is a file every branch
+edits and no branch owns, and it goes wrong quietly rather than loudly.
 
 ## Where things stand
-
-| Phase                    | State       | Evidence                                                                                                                                                               |
-| ------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundations    | ✅ complete | `5ab843f`                                                                                                                                                              |
-| Phase 1 — Parallel build | ✅ complete | [dl-1](./work/dl-1-resolver-registry-and-parsers.md) · [dl-2](./work/dl-2-browser-sniffer.md) · [dl-3](./work/dl-3-download-engine.md) · [dl-4](./work/dl-4-web-ui.md) |
-| Phase 2 — Integration    | ✅ complete | [dl-5](./work/dl-5-api-and-orchestration.md)                                                                                                                           |
-| Phase 3 — Hardening      | ✅ complete | [dl-6](./work/dl-6-security-and-limits.md) · [dl-7](./work/dl-7-ops-and-e2e.md)                                                                                        |
-
-**543 tests pass across 37 files in this tool's suite, plus 3 Playwright
-end-to-end tests. `npm run check` is green**, and since
-[dl-13](./work/dl-13-typecheck-the-tests.md) it typechecks the test files too.
-Zero live-network tests.
-
-(This tool's count, `npm test -- --project downloader`, rather than the repo's:
-a number on this page that moved every time the planner grew a test was one
-nobody could check.)
-
-### Milestones
-
-- **M1 — Vertical slice ✅.** Proven by `tools/downloader/engine/test/hls-e2e.test.ts`.
-- **M2 — Any-site probe ✅.** `api/src/resolvers.ts` composes the registry, and
-  `api/test/queue-and-shutdown.test.ts` asserts the expendability invariant
-  directly — with `ENABLE_YTDLP_RESOLVER=false` the chain still resolves.
-- **M3 — Functional goal ✅.** Probe → job → SSE → download link → file, against
-  an origin that 403s any request missing the captured `Referer`. Details in
-  [dl-5](./work/dl-5-api-and-orchestration.md).
-- **M4 — Deployable ✅.** `docker compose up` gives a working service, verified
-  by doing it rather than by reading the Dockerfile. Details in
-  [dl-7](./work/dl-7-ops-and-e2e.md). The Dockerfile now lives under this tool
-  rather than at the repo root, and the deployed host pulls a released image
-  instead of building one — [dl-10](./work/dl-10-release-pipeline.md).
-
-## Open tickets
-
-Two of the open three are coverage debt on code that already shipped rather than
-new capability; the third is a one-line correctness fix left ready by another
-tool's work. They are independent of each other.
 
 <!-- generated:tickets -->
 
@@ -96,112 +70,6 @@ tool's work. They are independent of each other.
 </details>
 
 <!-- /generated:tickets -->
-
-**dl-17 is unblocked and small.** `NOT_FOUND` landed in `@webtools/core` with the
-planner's pl-11 — two tools had independently re-worded their nearest domain code
-to mean "no such route", which is the second consumer the lifting rule asks for.
-The status mapping and the UI copy for it are already in this tool; only the call
-site in `registerNotFoundHandler` still says `JOB_NOT_FOUND`.
-
-[dl-13](./work/dl-13-typecheck-the-tests.md) closed: every `test/` directory in
-the repo and `e2e/` are projects in `tsc --build` now, so `npm run check` holds
-them to the same `strict` the source has always been held to.
-[dl-14](./work/dl-14-proxied-https-coverage.md) closed with it: the repo serves
-TLS in a fixture now, and the proxied-HTTPS path has the coverage it shipped
-without.
-
-[dl-10](./work/dl-10-release-pipeline.md) closed with the first release:
-`downloader-v0.1.1` is tagged, released and pushed to
-`ghcr.io/<owner>/downloader`. One thing it cannot close from here — the mini-PC
-still has to `docker compose pull && up -d` and show `0.1.1` at `/api/health`.
-
-Phase 4 adds a ticket per site-specific resolver, as and when the sniffer misses
-one.
-
-## Open questions for the owner
-
-1. **`attempts` semantics.** Currently "how many probe-and-download attempts this
-   job has made", so a first-time success reports `1`. Worth confirming that is
-   what the UI wants to render.
-2. **The rate-limit defaults** — see the closing section of
-   [dl-6](./work/dl-6-security-and-limits.md).
-
----
-
-## Known gaps and risks
-
-**Rate limiting is per-process, not per-deployment.** The buckets live in
-memory, so two replicas behind a load balancer grant two allowances. Correct for
-the single-container deployment this targets; a shared store (the same Redis
-BullMQ would want) is the fix if it is ever scaled out.
-
-**DNS rebinding: closed.** `api/src/dispatcher.ts` pins the vetted address into
-the socket for everything going through `fetch`
-([dl-8](./work/dl-8-address-pinning-and-proxy.md)), and no subprocess resolves
-anything of its own now that all three go through the proxy in
-[dl-11](./work/dl-11-guarded-egress-proxy.md) and
-[dl-12](./work/dl-12-tiers-behind-the-egress-proxy.md).
-
-**Subprocess egress: closed.** ffmpeg, Chromium and yt-dlp all fetch through the
-loopback proxy that runs the same `SsrfGuard`. The browser tier was the wide
-one — a page fetches whatever it names, and reads the timing and the errors back
-in its own JavaScript, so an unproxied Chromium was a network scanner a client
-could point anywhere.
-
-What no HTTP proxy can see is WebRTC, which leaves Chromium over UDP, and a
-`ws://` upgrade on a plain-HTTP page, which the proxy refuses rather than
-tunnels (`wss://` rides inside a `CONNECT` and is unaffected). QUIC is not a
-bypass: Chromium speaks no UDP through an HTTP proxy and falls back to TCP.
-
-The `ProbeResult` sweep stays where it is regardless. It refuses a URL before
-any socket exists, with a typed error naming a reason, which a proxy refusal
-cannot give — one proxy serves every job and nothing in a `CONNECT` says which.
-
-**Proxy mode does not pin, by design.** With `PROXY_URL` set, the target name is
-resolved by the proxy and there is no local resolution to pin; what bounds
-egress there is the proxy's own policy. The pre-flight check still runs, and
-`SSRF_ALLOW_PRIVATE_ADDRESSES` exists for the deployment whose DNS view differs
-from its proxy's. The local proxy chains to the operator's rather than replacing
-it, and reports `mode: "chained"` when it does.
-
-**`PROXY_URL` was untested until dl-11, and was broken.** ffmpeg's whitelist
-omitted `httpproxy`, so every proxied HTTPS download failed at startup and no
-test could see it, because nothing in the repo served TLS.
-[dl-14](./work/dl-14-proxied-https-coverage.md) closed that: a fixture origin
-with a per-run certificate, real ffmpeg downloading through the real egress proxy
-over a real handshake, the `CONNECT` tunnel proven to carry the origin's own
-certificate, a blocked target refused before any handshake, `guardedFetch`
-through the proxied dispatcher, and chained mode moving bytes through two
-proxies. The whitelist regression was watched failing before it was called a
-test.
-
-**ffmpeg does not verify TLS certificates.** `tls_verify` defaults to `0` in
-libavformat and nothing sets it, so segment fetches are encrypted but
-unauthenticated — a MITM on the path to a CDN can substitute what it likes. The
-egress proxy neither causes nor fixes this: it tunnels rather than intercepts, so
-the certificate arriving is the origin's, checked by nobody. dl-14 proved the
-capability works (`-tls_verify 1 -ca_file` against the fixture) without turning
-it on; doing so is a behaviour change and wants its own ticket, including which
-CA bundle the container has.
-
-**Interrupted jobs are failed, not resumed.** A job running when the process
-died cannot be resumed — the engine's tmp state is gone and the probe is stale —
-so `reconcileInterruptedJobs` fails them with a retryable `INTERNAL` at boot
-rather than leaving a progress bar that never moves.
-
-**403 is ambiguous** and **ffmpeg failures surface as `DOWNLOAD_FAILED`** —
-both handled rather than solved: `DOWNLOAD_FAILED` during `downloading` is
-treated as re-probe-worthy exactly once.
-
-**No component-render tests** in `web`, and **the E2E suite drives only the
-direct resolver** — so nothing exercises sniffer → engine → UI in one piece, and
-**the container's browser tier is only smoke-tested**. See
-[dl-2](./work/dl-2-browser-sniffer.md) and [dl-4](./work/dl-4-web-ui.md) for how
-each got here, [dl-15](./work/dl-15-component-render-tests.md) and
-[dl-16](./work/dl-16-e2e-through-the-sniffer.md) for closing them. The
-smoke-tested container tier stays as it is — dl-16 does not reach it.
-
----
 
 ## Running things
 

@@ -7,7 +7,7 @@ its own image and its own version, and none of them imports from another.
 | Tool                                             | What it does                                              | State                                                              |
 | ------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------ |
 | [**downloader**](./tools/downloader/README.md)   | Page URL in, video stream found and downloaded, link out  | Complete and deployable · [0.1.1](./tools/downloader/CHANGELOG.md) |
-| [**planner**](./tools/planner/docs/03-STATUS.md) | Describe a trip, plan it with an assistant, keep the plan | In flight — the intake produces a brief; nothing plans from it yet |
+| [**planner**](./tools/planner/docs/03-STATUS.md) | Describe a trip, plan it with an assistant, keep the plan | In flight — `npm run status` for what is open                      |
 
 ## Getting started
 

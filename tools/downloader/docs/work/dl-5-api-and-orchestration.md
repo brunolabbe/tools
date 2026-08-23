@@ -120,3 +120,12 @@ const tuples with the union derived from them — the `ERROR_CODES` pattern — 
 **Left open:** the FSM has no back-edge, so the `VARIANT_GONE` retry re-probes
 in place rather than moving the job back to `probing`. That is
 [dl-9](./dl-9-fsm-reprobe-back-edge.md).
+
+**2026-08-22 — carried here from `03-STATUS.md` (repo-1).** One question this
+ticket left open and never closed, which the status page had been holding:
+**`Job.attempts` counts probe-and-download attempts**, so a first-time success
+reports `1` rather than `0`. Nothing has confirmed that is the number the UI
+wants to render, and the field carries no doc comment in
+`contract/src/job.ts` saying either way. Whoever settles it should settle it
+there, in the contract, rather than in a page — a semantics question about a
+field belongs beside the field.
