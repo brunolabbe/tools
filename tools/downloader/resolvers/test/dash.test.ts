@@ -118,6 +118,18 @@ describe("on-demand manifest with per-representation BaseURLs", () => {
       format: "ttml",
     });
   });
+
+  // dl-24: the sample-entry code is the only thing that says which format this
+  // is — the mime type is application/mp4 and the file is .mp4, exactly like a
+  // video representation. `wvtt` used to answer `unknown` here.
+  test("classifies a WebVTT-in-mp4 representation from its codecs= sample entry", () => {
+    expect(parsed.subtitles).toHaveLength(2);
+    expect(parsed.subtitles[1]).toMatchObject({
+      url: "https://media.example.org/assets/sintel/sintel_fr.mp4",
+      language: "fr",
+      format: "vtt",
+    });
+  });
 });
 
 describe("DRM detection", () => {

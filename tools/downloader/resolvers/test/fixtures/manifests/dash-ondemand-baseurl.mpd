@@ -36,5 +36,11 @@
         <BaseURL>sintel_de.ttml</BaseURL>
       </Representation>
     </AdaptationSet>
+    <AdaptationSet mimeType="application/mp4" contentType="text" lang="fr">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
+      <Representation id="sub-fr" bandwidth="1000" codecs="wvtt">
+        <BaseURL>sintel_fr.mp4</BaseURL>
+      </Representation>
+    </AdaptationSet>
   </Period>
 </MPD>

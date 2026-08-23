@@ -220,10 +220,28 @@ export function compareVariantQuality(
   return (b.bitrateBps ?? 0) - (a.bitrateBps ?? 0);
 }
 
+/**
+ * Scanned in order. Under these boundaries no token any row names is a
+ * substring of another, so `tt$` no longer decides `text/vtt` the way it did
+ * before dl-24 — but the order is still load-bearing, because the `srt` row
+ * matches its token anywhere and a URL can carry one without claiming a
+ * format: `https://srt.cdn.net/sub.wvtt` matches rows 1 and 2 both, and
+ * answers `vtt` only because `vtt` is scanned first. Reorder with that in
+ * mind. Dropping a `(^|\W)` is the change that is never safe, and that is what
+ * dl-24 was. The `srt` row's reach over hostnames is dl-25.
+ *
+ * `wvtt` and `stpp` are the ISO-BMFF sample-entry codes for WebVTT and TTML in
+ * fragmented mp4 — what a DASH `codecs=` carries when the mime type is only
+ * `application/mp4`. The trailing `tt` gets a row of its own rather than an
+ * alternative inside the ttml row, because a bare `tt$` there both read as an
+ * anchor over the whole alternation and matched the last two letters of
+ * `wvtt`.
+ */
 const SUBTITLE_FORMATS: ReadonlyArray<readonly [RegExp, "vtt" | "srt" | "ttml"]> = [
-  [/(^|\W)(web)?vtt(\W|$)/i, "vtt"],
+  [/(^|\W)(web|w)?vtt(\W|$)/i, "vtt"],
   [/(^|\W)srt(\W|$)|subrip/i, "srt"],
-  [/ttml|dfxp|stpp|tt$/i, "ttml"],
+  [/ttml|dfxp|stpp/i, "ttml"],
+  [/(^|\W)tt$/i, "ttml"],
 ];
 
 /** Classifies a subtitle by mime type, codec or file extension. */
