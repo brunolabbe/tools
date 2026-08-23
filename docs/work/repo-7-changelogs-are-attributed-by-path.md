@@ -3,7 +3,7 @@ id: repo-7
 tool: repo
 title: A repo-scoped commit that touches one file under tools/ lands in that tool's changelog
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -120,5 +120,124 @@ path in the branch.
 
 ## Log
 
-_Not started. Filed from [repo-3](./repo-3-show-a-closed-ticket.md) on
-2026-08-23, which hit it and worked around it._
+### 2026-08-23 — measured, and the rule written down
+
+**Step 2 came back outcome 1: it does release the planner.** The inference the
+whole ticket rested on is now measured rather than reasoned. A scratch branch off
+`main` carrying exactly one commit — `fix(repo): scratch measurement, annotate a
+planner ticket only (repo-7)` (`541be9f`), whose only file is
+`tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md` — was pushed to `origin`
+and run through:
+
+```bash
+npx release-please@17.11.1 release-pr --repo-url=brunolabbe/tools \
+  --target-branch=repo-7-measure-scratch --token="$(gh auth token)" --dry-run
+```
+
+Verbatim, from the tail of that run:
+
+```
+❯ Backfilling file list for commit: 541be9ff79e2728d979567feb644c91bab0a6f5a
+❯ Found 1 files
+✔ Splitting 5 commits by path
+✔ Building candidate release pull request for path: tools/downloader
+❯ commits: 0
+✔ No commits for path: tools/downloader, skipping
+✔ Building candidate release pull request for path: tools/planner
+❯ commits: 1
+✔ Considering: 1 commits
+Would open 1 pull requests
+title: chore(planner): release 0.4.1
+...
+### Fixes
+
+* **repo:** scratch measurement, annotate a planner ticket only (repo-7) ([541be9f](...))
+```
+
+One `.md` file under `tools/planner/`, a `repo` scope, and the planner gets a
+patch release whose one changelog line is about something else. Both scratch
+branches were deleted from `origin` and locally as soon as their run finished;
+`main` never saw them, and all four workflows are `push: branches: [main]`, so
+the pushes cost no CI.
+
+**A second measurement decided step 1, and it was not in the brief.** The
+ticket's option B asserts that a `docs(...)`-typed commit is `hidden` and does not
+release — asserted, never run, and step 1 could not be chosen honestly without
+it. The identical commit retyped `docs(planner): scratch measurement two …`
+(`cafc9aa`), same single file, same command against `repo-7-measure-docs`:
+
+```
+✔ Considering: 1 commits
+✔ No user facing commits found since ece6ec0fc6410c3d19a92c120860f0982e3a396c - skipping
+Would open 0 pull requests
+```
+
+So the type is what decides, and the escape hatch is real.
+
+**Step 1: option B, and it swallows option A rather than replacing it.** The
+rule had to be written down either way — you cannot say "put the annotation in a
+`docs(<tool>)` pull request" without first saying why a `fix(repo)` one is a
+release. So B costs one extra paragraph over A and buys back the thing A leaves
+broken: this repo's standing convention that a finding about a sibling ticket is
+written onto that ticket. A alone would have documented a dead end and left every
+future annotation where repo-3 was. B's real cost also turned out smaller than
+the brief thought — a second pull request is needed **only** when the branch's own
+title is a releasing type; a `docs(repo): …` branch can carry the annotation
+itself, because nothing about the paths matters once the type is hidden.
+
+Written in two places, and only what the two runs support:
+
+- `CLAUDE.md:228-240`, beside the existing two-tools sentence — the rule, the
+  measured planner `0.4.1`, the `docs(<tool>): …` title, and a pointer out.
+- `docs/03-RELEASING.md`, under **What routes a commit to a tool** — both worked
+  examples with their commits, then a new subsection **Annotating another tool's
+  ticket, without releasing it** carrying both commands and both outputs.
+
+**Both worked examples were re-derived from the repository, not taken on trust,
+and one description in `03-RELEASING.md` was stale.**
+
+- `a112cd4` `feat(planner): run the fan-out as a job (pl-16)` —
+  `git show --name-only a112cd4 | grep tools/downloader/` returns exactly seven
+  files, all under `tools/downloader/api/`. The ticket is right.
+- `2ea0631` `fix(core): make the image scan fail by name … (pl-17)` — touches
+  `tools/downloader/Dockerfile`, `tools/planner/Dockerfile` and three of the
+  planner's documents. The ticket says "the planner's docs"; it is three files,
+  two of them tickets. It appears in **both** `tools/planner/CHANGELOG.md:18` and
+  `tools/downloader/CHANGELOG.md:14`, which is the claim.
+- Both releases have since **shipped** — `planner-v0.4.0` and `downloader-v0.2.0`
+  are tags, so the ticket's "pending" is out of date and the changelogs are the
+  released ones. `03-RELEASING.md` also said downloader 0.2.0's "only entry" was
+  the `pl-16` line, which was true while it was pending and is not now: the
+  released 0.2.0 has two Features lines and nine Fixes. Rewritten.
+- `a112cd4` is listed **twice** in downloader 0.2.0, under `09bd161` as well.
+  That is the merge-commit duplication already documented under **Merging a pull
+  request**, not a second attribution — noted in the new text so the next reader
+  does not read it as one.
+
+**This commit's own type was chosen under the rule it documents.** It touches
+`CLAUDE.md`, `docs/03-RELEASING.md`, `docs/work/repo-7-…md` and
+`docs/work/repo-9-…md` — nothing under `tools/`, so no attribution arises either
+way. The change is documentation with no behaviour in it, so `docs(repo)` is the
+honest type and it is also the non-releasing one. `fix(repo)` would have been
+defensible from the ticket's `kind: fix` and would still have released nothing
+here, but it would have put a line about a documentation edit into the next
+changelog of whatever it touched. Checked with
+`node scripts/commit-message.mjs --text "docs(repo): …"` → exit 0.
+
+**Filed [repo-9](./repo-9-close-the-pl-26-annotation-loop.md)** for the pl-26
+annotation itself. It is now affordable and it is still not written; folding it
+into this branch would have widened a ticket whose Build never asked for it.
+
+**Unmeasured, and named as such:** only `fix` and `docs` were run through
+release-please. `refactor`, `test`, `build`, `ci` and `chore` are read off
+`changelog-sections` as `hidden` and are assumed to behave like `docs`;
+`perf` and `revert` are not hidden, so the "no user facing commits" skip does not
+cover them and what they do here is untested. `03-RELEASING.md`'s existing claim
+that a `perf:` commit releases nothing was left alone rather than restated as
+measured. The dry runs also emitted
+`⚠ pullRequestTitlePattern miss the part of '${scope}'` on both branches while
+still rendering `chore(planner): release 0.4.1` correctly — noted, not
+investigated, and out of this ticket's scope.
+
+Gates: `npm run format` then `npm run check`, both green — this is a
+documentation-only branch and oxfmt formats markdown here.

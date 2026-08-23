@@ -225,6 +225,20 @@ opening the pull request. A commit that touches two tools lands in both
 changelogs under one sentence written for one of them, which is the tell that it
 should have been two commits.
 
+**Changelog attribution is by path, and the type decides whether there is one at
+all.** release-please routes a commit to a tool by the files it touched, never by
+the scope in its subject — so a `fix(repo):` whose only path under `tools/` is a
+single `.md` file releases that tool anyway, with your repo-scoped sentence as
+its changelog line. Measured: one such commit touching only
+`tools/planner/docs/work/pl-26-…md` cuts planner `0.4.1`. The way out is the
+type, not the scope: `docs` is `hidden` in `release-please-config.json`, and the
+same commit as `docs(planner): …` releases nothing. **So an annotation onto
+another tool's ticket — the sibling-finding note the review gate asks for — rides
+in a pull request titled `docs(<tool>): …`**, its own pull request when the
+branch's title is a `feat` or a `fix`. The worked examples, both measurements and
+the commands that produced them are in
+[docs/03-RELEASING.md](./docs/03-RELEASING.md).
+
 ## Style
 
 TypeScript strict, ESM, `.ts` extensions in relative imports (NodeNext),

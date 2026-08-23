@@ -91,12 +91,80 @@ re-probing in place (dl-9)`. That is what the `dl-`/`pl-` prefix is for — see
 machine. A commit touching both tools appears in both changelogs, which is
 correct and is also a hint that it should have been two commits.
 
-The worked example is downloader 0.2.0, whose only entry reads
-`**planner:** run the fan-out as a job (pl-16)`. That commit lifted the rate
-limiter into `packages/core` and rewired `tools/downloader/api` to use it while
-adding the planner's feature — so the downloader genuinely changed and genuinely
-owed a release, and the line describing it was written for another tool. Two
-commits would have given each tool a sentence that was true of it.
+Two worked examples, named with their commits so the next reader does not have to
+re-derive them:
+
+- **`a112cd4` — `feat(planner): run the fan-out as a job (pl-16)`** is what
+  decided downloader `0.2.0`, a **minor** bump from `0.1.1`, and it heads that
+  release's `### Features`. It lifted the rate limiter into `packages/core` and
+  rewired `tools/downloader/api` to use it while adding the planner's feature —
+  seven files under `tools/downloader/api/`, which is also every file it touched
+  under `tools/downloader/`. So the downloader genuinely changed and genuinely
+  owed a release, and the line describing it was written for another tool. Two
+  commits would have given each tool a sentence that was true of it. (It is
+  listed there twice, under `09bd161` as well. That is the merge-commit
+  duplication described under **Merging a pull request** below, not a second
+  attribution.)
+- **`2ea0631` — `fix(core): make the image scan fail by name … (pl-17)`** is in
+  planner `0.4.0` under `### Fixes` _and_ in
+  downloader `0.2.0` under `### Fixes`. It touched both `Dockerfile`s and three
+  of the planner's documents, so it is in both tools' notes under a `core` scope
+  that names neither of them.
+
+In both, the scope in the subject — the thing this repo enforces on every commit
+— had no part in the routing.
+
+### Annotating another tool's ticket, without releasing it
+
+This repo asks that a finding about a sibling ticket be written onto that ticket,
+in the same pull request as the fix, and
+[01-TICKETS.md](./01-TICKETS.md) makes the review gate work the same way. Under
+the rule above, doing that from a branch titled `fix(repo): …` **releases the
+other tool**: one `.md` file under `tools/<name>/` is enough, and the changelog
+line it cuts is your repo-scoped sentence.
+
+Measured on 2026-08-23, on a scratch branch off `main` carrying exactly one
+commit — `fix(repo): scratch measurement, annotate a planner ticket only
+(repo-7)` — whose only file is
+`tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md`:
+
+```bash
+npx release-please@17.11.1 release-pr --repo-url=brunolabbe/tools \
+  --target-branch=<scratch-branch> --token="$(gh auth token)" --dry-run
+```
+
+```
+✔ Considering: 1 commits
+Would open 1 pull requests
+title: chore(planner): release 0.4.1
+
+### Fixes
+
+* **repo:** scratch measurement, annotate a planner ticket only (repo-7) (541be9f)
+```
+
+**The way out is the type, not the scope.** `docs`, `refactor`, `test`, `build`,
+`ci` and `chore` are `hidden` in `changelog-sections`, and the identical commit
+retyped `docs(planner): …`, on a second scratch branch of the same shape, gives:
+
+```
+✔ Considering: 1 commits
+✔ No user facing commits found since ece6ec0 - skipping
+Would open 0 pull requests
+```
+
+So **a cross-tool documentation annotation rides in a pull request titled
+`docs(<tool>): …`**, naming the tool whose ticket is being annotated. Where the
+branch's own title is already a hidden type — most `docs(repo): …` work — the
+annotation is free and goes in that same pull request. Where the branch's title
+is a `feat` or a `fix`, the annotation is its own pull request, and that second
+pull request is the price. Splitting the branch into two _commits_ does not help:
+this repo squash-merges, so the title is the one commit that lands and it carries
+every path in the branch.
+
+Only `fix` and `docs` were run. The other four hidden types are read off
+`release-please-config.json` and are not measured; `perf` and `revert` are not
+`hidden`, so the "no user facing commits" skip above does not cover them.
 
 ### The one case that needs a footer
 
