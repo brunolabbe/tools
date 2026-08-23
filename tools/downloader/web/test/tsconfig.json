@@ -12,7 +12,12 @@
     "jsx": "react-jsx",
     "types": ["node", "vite/client"]
   },
-  "include": ["**/*.ts", "**/*.tsx"],
+  // `../vite.config.ts` is pulled in from a directory up, the way the e2e
+  // projects pull in their `playwright.config.ts`. The web project above
+  // includes `src/**` only, so until dl-22 the config was in no project at all
+  // — and it is the file that decides which interface the dev server binds,
+  // which is a poor thing to discover by loading a blank page.
+  "include": ["**/*.ts", "**/*.tsx", "../vite.config.ts"],
   // Restated, not inherited: the root excludes `tools/*/web/test/**` to keep
   // these files out of its own program, and inheriting that here would leave
   // this project with nothing in it.
