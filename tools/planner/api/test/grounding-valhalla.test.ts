@@ -132,6 +132,8 @@ describe("travel, over a payload a real Valhalla wrote", () => {
 
     // One request for the whole table — the reason the seam is matrix-shaped.
     expect(calls).toHaveLength(1);
+    // The helper's `routingUrl` ends in a slash on purpose: this is also what
+    // pins `trimSlash`, since leaving it on gives `//sources_to_targets`.
     expect(calls[0]?.url).toBe("http://valhalla.internal:8002/sources_to_targets");
     const sent = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
     expect(sent["costing"]).toBe("auto");
@@ -354,6 +356,27 @@ describe("failure, mapped to core's codes", () => {
       }),
     ).rejects.toMatchObject({ code: "CANCELED" });
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("endpoint normalisation", () => {
+  // `trimSlash` was a regex until CodeQL flagged `\/+$` as `js/polynomial-redos`
+  // and it became a scan. The single-slash case is already pinned by the
+  // request URL above; what a hand-rolled loop can get wrong and a regex could
+  // not is the boundary — a run of slashes, and a value that is nothing else.
+  test("an endpoint's trailing slashes are all removed, however many there are", async () => {
+    const { fetch, calls } = answering([]);
+    await new ValhallaGroundingProvider({
+      routingUrl: "http://valhalla.internal:8002",
+      geocoderUrl: "http://nominatim.internal:8080////",
+      timeoutMs: 5_000,
+      now: () => AT,
+      fetch,
+    }).locate({ place: { name: "Rimouski", locality: "Québec", coordinates: null } });
+
+    const url = new URL(String(calls[0]?.url));
+    expect(url.origin).toBe("http://nominatim.internal:8080");
+    expect(url.pathname).toBe("/search");
   });
 });
 

@@ -308,8 +308,21 @@ export class ValhallaGroundingProvider implements GroundingProvider {
 // Building the request
 // ---------------------------------------------------------------------------
 
+/**
+ * The configured endpoint without its trailing slashes, so that
+ * `${url}/search` is one slash whatever the operator wrote.
+ *
+ * Written as a scan rather than the obvious `url.replace(/\/+$/u, "")`, which
+ * CodeQL flags as `js/polynomial-redos`: `\/+$` has to retry from every
+ * position in a run of slashes, so a value that is mostly slashes costs
+ * quadratic time. The input is an operator's own configuration and reaches
+ * this once at construction, so the attack is an operator against themselves —
+ * but the loop is O(n), no harder to read, and leaves nothing to argue with.
+ */
 function trimSlash(url: string): string {
-  return url.replace(/\/+$/u, "");
+  let end = url.length;
+  while (end > 0 && url[end - 1] === "/") end -= 1;
+  return url.slice(0, end);
 }
 
 /**

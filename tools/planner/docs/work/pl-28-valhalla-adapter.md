@@ -372,6 +372,47 @@ gate, `compose.planner.yaml` and both third-party image tags remain
 partial: pl-28 step 3's geocoder half is not done, two acceptance rows above are
 `unproven`, and [pl-30](./pl-30-geocoder-payload.md) is what closes them.
 
+### Post-gate change — 2026-08-23
+
+**Neither gate reviewed this, and that is the point of recording it here.** Both
+gates are claims about `e60f5a6`…`ccf1c95`; this commit is after both, so the
+shipped code is outside the reviewed range.
+
+CodeQL (`security-extended`, on the pull request) raised one alert — the only
+one across the five pull requests in this batch:
+
+> `js/polynomial-redos`, high — `tools/planner/api/src/grounding/valhalla.ts:312`
+> — "This regular expression that depends on library input may run slow on
+> strings with many repetitions of `/`."
+
+`trimSlash` was `url.replace(/\/+$/u, "")`. `\/+$` retries from every position in
+a run of slashes, so a value that is mostly slashes costs quadratic time. It is
+now an O(n) scan backwards from the end.
+
+**The finding is real and the exposure is not.** The input is `routingUrl` /
+`geocoderUrl` — an operator's own configuration, read once at construction — so
+the only party who can pay the cost is the operator who wrote the value. The
+rewrite was taken anyway because it is the same length, no harder to read, and
+leaves nothing to argue with; the alternative was dismissing the alert in the
+security UI, which would have set this repo's first CodeQL suppression
+precedent, and that is not a thing to establish for a case this small.
+
+Verified rather than assumed, since a hand-rolled loop can go wrong where a
+regex could not:
+
+- **Control first** — clean tree, `npm test -- --project planner`, **699 passed
+  / 49 files**, exit 0.
+- The single-trailing-slash case was **already pinned**: the suite's `provider()`
+  helper sets `routingUrl: "http://valhalla.internal:8002/"`, so a broken
+  `trimSlash` produces `//sources_to_targets`. A comment now says so, because it
+  was load-bearing by accident.
+- One test added for the boundary a regex could not get wrong — a run of four
+  slashes (`endpoint normalisation`).
+- **Two mutations, both killed by both tests**: `trimSlash` as a no-op, and an
+  off-by-one (`slice(0, end + 1)`) leaving exactly one slash. Each rebuilt before
+  running; source restored with `touch` and `dist` re-checked afterwards, per the
+  stale-`dist`-on-restore trap.
+
 ## Log
 
 **2026-08-23 — built, with one disclosed hole.** Steps 1–9 are implemented. Step
