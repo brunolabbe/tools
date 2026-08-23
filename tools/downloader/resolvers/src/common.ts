@@ -220,10 +220,24 @@ export function compareVariantQuality(
   return (b.bitrateBps ?? 0) - (a.bitrateBps ?? 0);
 }
 
+/**
+ * Scanned in order, but no longer dependent on it: under these boundaries no
+ * token any row names is a substring of another, so the only hint whose answer
+ * the order decides is one naming two formats at once. Reordering is safe;
+ * dropping a `(^|\W)` is not, and that is what dl-24 was.
+ *
+ * `wvtt` and `stpp` are the ISO-BMFF sample-entry codes for WebVTT and TTML in
+ * fragmented mp4 — what a DASH `codecs=` carries when the mime type is only
+ * `application/mp4`. The trailing `tt` gets a row of its own rather than an
+ * alternative inside the ttml row, because a bare `tt$` there both read as an
+ * anchor over the whole alternation and matched the last two letters of
+ * `wvtt`.
+ */
 const SUBTITLE_FORMATS: ReadonlyArray<readonly [RegExp, "vtt" | "srt" | "ttml"]> = [
-  [/(^|\W)(web)?vtt(\W|$)/i, "vtt"],
+  [/(^|\W)(web|w)?vtt(\W|$)/i, "vtt"],
   [/(^|\W)srt(\W|$)|subrip/i, "srt"],
-  [/ttml|dfxp|stpp|tt$/i, "ttml"],
+  [/ttml|dfxp|stpp/i, "ttml"],
+  [/(^|\W)tt$/i, "ttml"],
 ];
 
 /** Classifies a subtitle by mime type, codec or file extension. */

@@ -3,7 +3,7 @@ id: dl-24
 tool: downloader
 title: Classify a subtitle by its codec, not by the last two letters of the hint
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -116,3 +116,51 @@ extension working — that caller gives the regex no surrounding context at all.
   Why was produced by running the three patterns against the listed hints, not
   read off the source. Sibling ticket from the same triage:
   [dl-23](./dl-23-rate-limit-the-download-route.md).
+- **2026-08-23** — Fixed. Both faults confirmed against the built code before
+  touching it: `wvtt` -> `ttml`, `application/mp4 wvtt https://…/sub.mp4` ->
+  `unknown`, exactly the Why table. New `resolvers/test/common.test.ts` pins all
+  four return values over 32 hints — every row, in all three shapes its callers
+  build (bare extension from `hls.ts`, the `mimeType codecs fileUrl` triple from
+  `dash.ts`, a whole URL from `ytdlp.ts`) — and was red on 5 of them before the
+  fix. `dash.test.ts` gained a second text AdaptationSet in
+  `dash-ondemand-baseurl.mpd` (`mimeType="application/mp4" codecs="wvtt"`,
+  `.mp4` BaseURL) asserting `format: "vtt"`; it was red with `unknown`.
+
+  Step 3 asked which shape the `ttml` row took. Neither of the two it offered:
+  the row was **split in two**, `[/ttml|dfxp|stpp/i, "ttml"]` and
+  `[/(^|\W)tt$/i, "ttml"]`. `(^|\W)tt$` inside the original alternation would
+  have closed the `wvtt` fault but left the regex mixed-anchored — the shape the
+  CodeQL alert is about, now with `^` in it as well as `$` — and giving the
+  whole alternation the siblings' `(^|\W)…(\W|$)` would have widened `tt` from
+  "ends the hint" to "appears as a token anywhere in it", which for the `dash.ts`
+  caller means a URL with a `/tt/` path segment starts classifying as TTML. Two
+  rows keep `ttml|dfxp|stpp` matching exactly as unanchored as it does today
+  (`stpp.ttml.im1t`, the real DASH codec string, still lands), keep `tt`
+  end-anchored, and leave no regex in the table with an anchor that reads as
+  applying to more than it does.
+
+  Step 4: the order is no longer load-bearing. `tt$` matching `text/vtt` was the
+  one overlap, and the left boundary removes it; no token any row names is now a
+  substring of another under these boundaries, so only a hint naming two formats
+  at once still resolves by position. Said so in a comment above the table.
+
+  The brief was right about everything it asserted, including that nothing calls
+  `subtitleFormat` in any test (`git grep -n subtitleFormat` before the change:
+  three call sites, zero tests). Two things it did not mention: the `tt$`
+  over-reach was wider than `wvtt` — `xvtt`, `swvtt` and anything else ending in
+  the letters `tt` answered `ttml` too, and all three now answer `unknown`; and
+  the on-demand fixture's subtitle assertions had no length check, so the new
+  track is pinned with `toHaveLength(2)` to stop a third one shifting the
+  indices silently.
+
+  Verified by mutation, control run first (clean tree, `npx vitest run
+tools/downloader/resolvers`, exit 0): reverting the `vtt` row's prefix to
+  `(web)?` alone fails 3 tests, reverting the `ttml` row to the fused
+  `/ttml|dfxp|stpp|tt$/i` alone fails 3 others. Neither fix covers for the
+  other, which is the thing the brief warned about.
+
+  **Done-when 5 is not proven here.** Whether CodeQL now considers
+  `js/missing-regexp-anchor` resolved can only be answered by the next
+  `security` run; nothing local evaluates that query. The change removes the
+  bare `$` the alert points at rather than suppressing the alert, which is the
+  most that can be said from this side.
