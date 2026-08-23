@@ -10,10 +10,33 @@ const root = fileURLToPath(new URL(".", import.meta.url));
 /** Where `apps/api` listens in development. Matches `API_DEFAULTS`. */
 const API_TARGET = process.env["VITE_API_PROXY_TARGET"] ?? "http://127.0.0.1:8080";
 
+/**
+ * Which interfaces the dev server binds, taken from the same `HOST` the API
+ * reads.
+ *
+ * Vite's default is `localhost`, and that is the bug this exists to avoid:
+ * inside the dev container `localhost` resolves to `::1`, so the server ends up
+ * on IPv6 loopback alone and Docker's port forwarding — which connects over
+ * IPv4 — reaches nothing. The page is simply blank, with no error anywhere to
+ * explain it. The container sets `HOST=0.0.0.0` for precisely this reason; the
+ * API honoured it and this did not.
+ *
+ * `false` is Vite's own "localhost only" and stays the default off a container,
+ * so nothing is published on a laptop's network without asking.
+ */
+const HOST = process.env["HOST"] ?? false;
+
 export default defineConfig({
   root,
   plugins: [react()],
   server: {
+    host: HOST,
+    port: 5173,
+    // Vite's default is to walk to the next free port, which is the second way
+    // to get a blank page here: 5174 is not the port that was forwarded, so the
+    // browser connects to nothing while the terminal cheerfully reports ready.
+    // Failing is the more useful answer.
+    strictPort: true,
     // Proxying `/api` keeps the dev setup same-origin, which means the API
     // needs no CORS configuration and `EventSource` — which cannot send custom
     // headers and is fussy about origins — just works.
