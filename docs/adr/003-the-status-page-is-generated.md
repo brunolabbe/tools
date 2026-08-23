@@ -119,15 +119,35 @@ worse than either one.
   goes instead, and "Running things". The phase table went (the roadmap defines
   phases; the generated rollup counts them), the test count went (CI asserts it
   on every push and prose cannot), and the gap list went: a gap worth recording
-  is a ticket worth filing, and the tables list those. Almost every narrative
+  is a ticket worth filing, and the tables list those. Exactly one gap on either
+  page had no ticket and needed one filed — ffmpeg not verifying TLS, now
+  `dl-19` — which is the rule working rather than an exception to it. Almost
+  every narrative
   paragraph turned out to be already present in its ticket's Log verbatim, which
-  is the second copy this ADR predicted — only two facts on either page had no
-  other home, and they moved to `dl-5` and `dl-6`.
-- **Four source comments cited `03-STATUS.md` as the home of a fact** —
-  `guarded-fetch.ts`, `dispatcher.ts`, `jobs/orchestrator.ts`,
-  `test/pipeline.test.ts` — and each now names the ticket or the code that holds
-  it. Two ticket Logs and two open tickets' acceptance criteria said the page
-  carried a gap; those were repointed with them.
+  is the second copy this ADR predicted — only three facts in the repo had no
+  other home. Two moved to the tickets that own their subject, `dl-5`
+  (`Job.attempts` semantics) and `dl-6` (the limiter is per-process); the third,
+  the planner's "the documentation leads the code by one phase", is a warning to
+  the reader of the design documents and became `01-ARCHITECTURE.md`'s opening.
+- **Roughly eight source comments cite `03-STATUS.md` as the home of a fact** —
+  `guarded-fetch.ts`, `dispatcher.ts`, `orchestrator.ts`, `pipeline.test.ts`.
+  They should point at the ticket, which is a more stable anchor than a
+  paragraph in a page being emptied. Part of the same follow-up.
+
+  _Outcome, 2026-08-22: four, not eight — the four files named here carried one
+  citation each rather than the two apiece this assumed, and each now points at
+  the ticket or the code that holds the fact._ The estimate is annotated rather
+  than corrected in place: an ADR that rewrites its own prediction to match the
+  result stops being a record of what was believed when the decision was taken.
+
+- **Five citations outside the source were about to become false**, and a grep
+  over `*.ts` finds none of them. Two closed tickets' Logs asserted the page
+  carries a fact _today_ (`dl-12`, `dl-14`); two **open** tickets' acceptance
+  criteria instructed future work to edit a section that would no longer exist
+  (`dl-15`, `dl-16`); and `docs/02-DEPLOYMENT.md` sent an operator hardening a
+  shared instance to the page to read the rate limiter's scope. All five now name
+  the real home. The lesson for the next page emptied this way: the citations
+  that matter are the ones a compiler and a grep over source both miss.
 - **`docs/work/` now exists, and ids there are prefixed `repo-`.** 002 said the
   signal to create it would be "a third piece of repo-wide work with nowhere to
   live", after `dl-10` and `pl-2` had to carry the release pipeline between

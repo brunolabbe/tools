@@ -12,7 +12,7 @@
  * does its own fetching and cannot be wrapped this way, which is the reason the
  * guard also vets every URL a resolver returns before the engine is handed
  * anything. That hole is closed separately, by `egress-proxy.ts` — see
- * `docs/work/dl-11-guarded-egress-proxy.md`.
+ * `tools/downloader/docs/work/dl-11-guarded-egress-proxy.md`.
  *
  * The per-hop check here and the dispatcher from `dispatcher.ts` are two halves
  * of one answer: this decides *whether* a URL may be fetched, the dispatcher

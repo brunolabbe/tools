@@ -155,13 +155,13 @@ owning ticket before deleting. Every planner paragraph was already carried
 somewhere else — its ticket's Log or Why (pl-2, pl-5, pl-9, pl-10, pl-11, pl-12,
 pl-13, pl-15, pl-16, pl-17, pl-18, pl-19, pl-26), an amendment to
 `00-ANALYSIS` §3/§7, `02-ROADMAP`'s answered-questions section, or a docblock in
-`contract/src/errors.ts`. Exactly two facts in the repo had no other home, both
-the downloader's, and both moved:
+`contract/src/errors.ts`. Three facts in the repo had no other home, and moved:
 
 | Paragraph                                                      | Moved to                                           |
 | -------------------------------------------------------------- | -------------------------------------------------- |
 | Rate limiting is per-process, not per-deployment               | `dl-6`'s Log — it is a property of what dl-6 built |
 | `Job.attempts` counts attempts, so a first success reports `1` | `dl-5`'s Log, as the open question it always was   |
+| The documentation leads the code by one phase (planner)        | `01-ARCHITECTURE.md`'s opening — see below         |
 
 The rest of the downloader's gaps were already in `dl-8` (rebinding closed,
 proxy mode does not pin), `dl-11` (subprocess egress, chaining), `dl-12` (WebRTC,
@@ -171,7 +171,7 @@ code: `server.ts`'s `reconcileInterruptedJobs` docblock carries "interrupted job
 are failed, not resumed" almost word for word, and `engine/src/download/http.ts`
 carries the 403 ambiguity.
 
-**One paragraph moved to a document rather than a ticket.** The planner's "the
+**The third moved to a document rather than a ticket.** The planner's "the
 documentation leads the code by one phase" is a warning to the reader of
 `00-ANALYSIS` and `01-ARCHITECTURE`, so it is now `01-ARCHITECTURE`'s own opening
 — where the reader it warns is standing — rather than a note on a third page they
@@ -188,7 +188,7 @@ home rather than at a page being emptied:
 | `api/src/jobs/orchestrator.ts:71` | `engine/src/download/manifest.ts` and `download/http.ts` |
 | `api/test/pipeline.test.ts:259`   | the same two, plus `MAX_REPROBE_RETRIES`                 |
 
-**Four more citations were about to become false**, and are the ones a grep for
+**Five more citations were about to become false**, and are the ones a grep for
 `03-STATUS` in `*.ts` does not find. Two in closed tickets' Logs asserted the
 page carries a fact today — `dl-12`'s "both are recorded in 03-STATUS.md" and
 `dl-14`'s "and 03-STATUS.md carries it" — and now say where it really is. Two are
@@ -196,7 +196,9 @@ acceptance criteria on **open** tickets instructing future work to edit a sectio
 that no longer exists: `dl-15`'s "the entry leaves 03-STATUS.md" and `dl-16`'s
 equivalent. Both now say the gap closes by flipping frontmatter, and `dl-16`
 keeps its "the container's browser tier stays smoke-tested and this ticket does
-not reach it" caveat by moving it into its Log rather than onto a page.
+not reach it" caveat by moving it into its Log rather than onto a page. The
+fifth is `docs/02-DEPLOYMENT.md`, and it is the one that mattered most — see the
+review round below.
 Historical Why sections and the acceptance criteria of _closed_ tickets were left
 alone — they record what was true when they were written, and rewriting them
 would be revisionism.
@@ -213,3 +215,73 @@ pointed an agent at `03-STATUS.md` for "what actually exists today"; it points a
 state was "the intake produces a brief; nothing plans from it yet", which stopped
 being true at pl-16. It now says `npm run status`, which is the point: a state
 sentence maintained by hand in a fourth place is the same bug one level up.
+
+**2026-08-23 — review round: six findings, all addressed.** The gate came back
+CONCERNS. The reviewer traced every deleted paragraph that asserted a security
+property, a known gap or a risk, read each destination rather than trusting the
+pointer, and could not falsify the claim that nothing was lost — but found five
+things the claim did not cover and one it got wrong.
+
+**[dl-19](../../tools/downloader/docs/work/dl-19-ffmpeg-verifies-tls.md) filed,
+and it is the finding worth reading.** The ffmpeg-TLS gap — `tls_verify` defaults
+to `0`, so every segment ffmpeg fetches is encrypted to a certificate nobody
+checks — was deleted from the downloader's page on the grounds that `dl-14`'s Log
+carries it more fully. True, and not sufficient: `dl-14` is **closed**, so
+`npm run status` cannot surface the gap, nothing schedules it, and `dl-14` itself
+says it "needs its own ticket". The header table this very change introduced says
+a gap goes on the ticket that closes it, "and if there is none, file one" — and
+none was filed. Leaving it would have been the exact failure this ticket exists
+to prevent, committed in the change that establishes the rule.
+
+The id is **dl-19, not dl-18**: `dl-18` was taken by a pipeline high-water-mark
+ticket filed on the `dl-15` branch while this was in review. Worth knowing that
+ids are claimed on branches, so the next free number is `git log --all` and not
+`ls docs/work/`.
+
+The brief is not "turn the flag on". Per `dl-14`, the substance is **which CA
+bundle**, and the sharpest form of it is that this repo runs two different ffmpeg
+builds: the image installs the distribution's with `apt-get`, dev and CI use
+`ffmpeg-static`, and a statically linked build may carry no default trust store
+at all. So `-tls_verify 1` can be correct in the container and break every
+download on a laptop, or the reverse — which is why the ticket's first step is to
+measure both and record the answer rather than to edit `args.ts`. It also asks
+for the failure to be classified: a verification failure arrives as ffmpeg text
+on stderr and surfaces as `DOWNLOAD_FAILED`, indistinguishable from a dead link,
+which is the same ambiguity `dl-11` hit and wrote up.
+
+**`docs/02-DEPLOYMENT.md` was the citation this missed**, and the miss says
+something about the method. Four source citations were found by
+`grep "03-STATUS" --include="*.ts"`; four more were found by reading the tickets.
+The fifth was in neither set: an operations page telling an operator hardening a
+shared instance that the in-process limiter's scope is "covered in 03-STATUS.md".
+Following it now lands on a generated ticket table, from which the reasonable
+conclusion is that the constraint no longer applies. It points at `dl-6`'s Log,
+and states the consequence inline so the link is a citation rather than the
+answer. **The lesson, recorded in the ADR: when a page is emptied, the citations
+that matter are the ones neither the compiler nor a grep over source can see.**
+
+**Two comment paths resolved to nothing.** `dispatcher.ts` and `guarded-fetch.ts`
+were repointed to `docs/work/dl-8-…` and `docs/work/dl-11-…` — tool-relative,
+where the comments they replaced were repo-root-relative. From the repo root that
+resolves into `docs/work/`, which _this ticket_ made the repo-wide directory and
+which holds no `dl-*` file, so an agent opening the path as written gets ENOENT
+and concludes the ticket was deleted. Both are `tools/downloader/docs/work/…`
+now, and `dispatcher.ts` says why in half a line. A relative path in a comment is
+only unambiguous while there is one directory it could mean; `repo-1` is the
+change that stopped that being true.
+
+**Three corrections.** ADR 003 said two facts had no other home; three did — the
+planner's "the documentation leads the code by one phase" had none either, and
+became `01-ARCHITECTURE.md`'s opening. The same ADR bullet had **replaced** its
+forward estimate of "roughly eight source comments" with the outcome; the
+estimate is restored and annotated with what it turned out to be, because an ADR
+that silently rewrites its own prediction to match the result stops being a
+record of what was believed. And the planner's page hand-wrote "thirty-seven
+commits", which was 39 — corrected by removing the number rather than by fixing
+it, since a hand-maintained count on the page whose thesis is that it keeps no
+hand-maintained numbers is the joke writing itself. It names the `git log`
+invocation instead.
+
+One deleted token genuinely had no home and stays that way: Phase 0's evidence
+commit `5ab843f`, which `02-ROADMAP.md` covers well enough at its Phase 0
+section.

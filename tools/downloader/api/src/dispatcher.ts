@@ -4,7 +4,8 @@
  * Two gaps close here, and they close together because they are the same seam —
  * undici is both the only way to pin a connection to a vetted address and the
  * only way to give Node's `fetch` a proxy. Both, and what each was, are
- * `docs/work/dl-8-address-pinning-and-proxy.md`.
+ * `tools/downloader/docs/work/dl-8-address-pinning-and-proxy.md` — repo-root
+ * relative, because `docs/work/` on its own is the repo-wide one.
  *
  * ## 1. DNS rebinding, properly this time
  *

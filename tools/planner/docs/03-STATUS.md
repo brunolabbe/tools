@@ -21,7 +21,10 @@ somewhere that something keeps true:
 The reasoning is in [adr/003](../../../docs/adr/003-the-status-page-is-generated.md):
 a status page restating what the tickets already record is a file every branch
 edits and no branch owns, and it goes wrong quietly rather than loudly. This
-page had grown to 439 lines of it, touched by thirty-seven commits.
+page had grown to hold more of it than the tool's own architecture document,
+touched by very nearly every pull request the tool has had — `git log --oneline
+-- tools/planner/docs/03-STATUS.md` is the count, and it is deliberately not
+written here.
 
 **Read [00-ANALYSIS.md](./00-ANALYSIS.md) and
 [01-ARCHITECTURE.md](./01-ARCHITECTURE.md) as design, not as description.** They
