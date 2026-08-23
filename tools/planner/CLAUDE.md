@@ -10,9 +10,11 @@ model interview and its amendment overrules it; §7's failure table promises a
 deal-breaker check "in code" that free text cannot support, and its amendment
 says so. Both pairs are deliberate — the argument is kept and overridden rather
 than rewritten. `01-ARCHITECTURE.md` beside it is the structure that follows;
-`02-ROADMAP.md` is what is planned and what is still open; `03-STATUS.md` is what
-actually exists today, which is much less. Each ticket keeps its brief and its
-log in `docs/work/`.
+`02-ROADMAP.md` is what is planned and what is still open; `03-STATUS.md` is the
+generated ticket tables and the commands, and carries no prose about what
+exists. **What actually exists today is the closed tickets** — read
+`docs/work/`, where each ticket keeps its brief and its log, and treat the
+analysis and the architecture as design until a ticket says otherwise.
 
 ## What this is
 

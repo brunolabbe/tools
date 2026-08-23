@@ -1,9 +1,11 @@
 /**
  * The egress dispatcher: what an outbound request may actually connect to.
  *
- * Two gaps in `tools/downloader/docs/03-STATUS.md` close here, and they close together because
- * they are the same seam — undici is both the only way to pin a connection to a
- * vetted address and the only way to give Node's `fetch` a proxy.
+ * Two gaps close here, and they close together because they are the same seam —
+ * undici is both the only way to pin a connection to a vetted address and the
+ * only way to give Node's `fetch` a proxy. Both, and what each was, are
+ * `tools/downloader/docs/work/dl-8-address-pinning-and-proxy.md` — repo-root
+ * relative, because `docs/work/` on its own is the repo-wide one.
  *
  * ## 1. DNS rebinding, properly this time
  *

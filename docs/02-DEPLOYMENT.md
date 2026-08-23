@@ -252,8 +252,10 @@ Consider tightening these once it is reachable by more than you. The defaults in
   between a shared instance and a full disk.
 - A Cloudflare **WAF rate limiting rule** on `/api/` as a second layer, since it
   rejects at the edge and costs the host nothing. The in-process limiter still
-  has to be right: it is per-process and does not survive a restart, which
-  [03-STATUS.md](../tools/downloader/docs/03-STATUS.md) covers.
+  has to be right: it is per-process and does not survive a restart, so two
+  replicas grant two allowances and a redeploy resets every bucket. The scope of
+  that, and the shared store that is the fix if this is ever scaled out, are in
+  [dl-6](../tools/downloader/docs/work/dl-6-security-and-limits.md)'s Log.
 
 Updating — set `DOWNLOADER_TAG` in `.env` to the version you want, then:
 

@@ -273,7 +273,7 @@ come from its real payloads.
 which it settled before building anything on top of it, and **whether
 `MAX_SPECIALISTS = 5` is right now that there is a roster**, which it reviewed as
 content and **kept**. What each answer is, and what it cost, is in that ticket's
-log; what the code looks like now is in [03-STATUS.md](./03-STATUS.md).
+log, which is where the shape of the code it produced is described too.
 
 **Whether Phase 2's composer can pack under travel time at all** was answered on
 2026-08-16, and the answer is **no — pack without it and name the gap.** The
@@ -378,5 +378,6 @@ precisely so nobody has to reconcile a stale one.
 ---
 
 Work is tracked as one file per ticket in [work/](./work/) — see
-[docs/01-TICKETS.md](../../../docs/01-TICKETS.md) for the format. Current state
-is in [03-STATUS.md](./03-STATUS.md).
+[docs/01-TICKETS.md](../../../docs/01-TICKETS.md) for the format. What is open
+is in [03-STATUS.md](./03-STATUS.md), or `npm run status`; what each closed
+ticket did is in its own Log.

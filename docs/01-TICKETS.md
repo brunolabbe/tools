@@ -48,8 +48,10 @@ produces Y", never "it works".
 
 ## Review
 
-The gate. One row per line above, each naming the test that proves it. Absent
-until the work is reviewed, and written by the review rather than by the author.
+The gate, and it has **two halves, both required**: an acceptance table with one
+row per **Done when** line naming the test that proves it, and a bullet per
+finding with its disposition. Absent until the work is reviewed. **The builder
+commits it**, in the branch under review — see below.
 
 ## Log
 
@@ -102,10 +104,16 @@ single word:
 
 | Gate         | When                                                              |
 | ------------ | ----------------------------------------------------------------- |
-| **PASS**     | Every acceptance line proven, nothing found above `low`           |
+| **PASS**     | Every acceptance line proven or `verified`, nothing above `low`   |
 | **CONCERNS** | A `med` finding, or a line proven only by a gate that has not run |
-| **FAIL**     | A `high` finding, or an acceptance line nothing asserts at all    |
+| **FAIL**     | A `high` finding, or a line nothing asserts **and nobody re-ran** |
 | **WAIVED**   | A human overrode a gate, named themself, and said why             |
+
+`verified` is the row for an acceptance line nothing asserts and the reviewer
+**re-ran** — the gates-are-green bullet almost every ticket ends with, and a
+criterion whose only proof is a command rather than a test. It counts as proven,
+and it is not a softer `unproven`: the difference is whether someone got a number
+back. The four row verdicts are the review skill's, and it defines them.
 
 The vocabulary is fixed so that the gate is a decision rather than a mood. Prose
 verdicts drift towards the reviewer's appetite for argument that afternoon; four
@@ -139,17 +147,54 @@ without editing it. A model reading its own work re-runs the reasoning that
 produced it, so the blind spot is correlated and a second pass mostly re-derives
 the first one's confidence.
 
+**The builder commits the gate, in the branch under review** — not the reviewer.
+A reviewer works in a worktree that is thrown away when it reports, so a
+`## Review` section written there is written into nothing: the finding travels
+back as a message and the record does not travel at all. `repo-1` went through
+two gates and neither existed in the repo afterwards, which is how it was
+noticed. So the reviewer reports and the builder writes the section down, with
+the date, the verdict, and **both halves named above**:
+
+- **The acceptance table** — one row per `Done when` line, each naming the test
+  that proves it (`file.test.ts:88`, not "covered"), with the verdict from the
+  skill's four: `proven`, `unproven`, `unproven (gate)`, `verified`. This is the
+  half that records the acceptance-to-test link, and it is the half a finding
+  table will silently replace if only one is asked for.
+- **A bullet per finding, with its disposition — including the ones that needed
+  no change.** A later reader's whole job is checking that all of them were
+  answered, and a section listing only the findings that produced a diff cannot
+  be distinguished from one that quietly dropped the rest.
+
+A ticket through several rounds keeps **one subsection per gate**, not a single
+overwritten one, for the same reason.
+
+That the author transcribes a verdict on his own work is a real weakness, so the
+check is a step rather than an assertion: **the builder posts the reviewer's
+report to the pull request thread** — `gh pr comment <number> --body-file <file>`
+— in the same push that commits the section, and where the branch has no pull
+request yet, that duty attaches to opening it. The two are then written by
+different models and a reader can hold one against the other. A gate that is not
+committed did not happen; a gate committed with no report beside it cannot be
+audited.
+
 ## What the other documents keep
 
 - **`02-ROADMAP.md`** — phases, milestones, and the shape of the argument. It
   links to tickets; it does not describe work. A phase is done when its tickets
   are.
-- **`03-STATUS.md`** — a dashboard: what is in flight, what is known to be
-  rough, how to check the tree is green. Not a log — the log is in the tickets.
-  Its ticket tables sit between `<!-- generated:tickets -->` markers and are
+- **`03-STATUS.md`** — the ticket tables and how to run the thing, and nothing
+  else. The tables sit between `<!-- generated:tickets -->` markers and are
   **written on `main`, from the frontmatter**. Never edit that region on a
   branch: `.github/workflows/status.yml` fails the pull request, and the reason
   is [adr/003](./adr/003-the-status-page-is-generated.md).
+
+  The page carries **no hand-written status**: no phase table, no test count, no
+  gap list, no "what exists" paragraph. Every one of those is either a
+  projection of frontmatter — in which case the tables already say it — or a
+  ticket's Log restated where nothing keeps it true. Both tools' pages were
+  emptied of it in [repo-1](./work/repo-1-generated-status-tables.md); each page
+  now opens with a table saying where each kind of fact goes instead. A gap
+  worth recording is a ticket worth filing.
 
 ## Asking what is next
 

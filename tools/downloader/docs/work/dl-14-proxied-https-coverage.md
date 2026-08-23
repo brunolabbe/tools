@@ -185,8 +185,8 @@ this either way — it tunnels rather than intercepts, so the certificate that
 arrives is the origin's, verified by nobody. This is not dl-14's to fix (turning
 `-tls_verify 1` on is a behaviour change that needs its own ticket and its own
 thought about which CA bundle a container has), but it is now written down, and
-`03-STATUS.md` carries it. The `-tls_verify 1 -ca_file` test proves the
-capability is there and that the chain survives the tunnel intact.
+this paragraph is where it is written down. The `-tls_verify 1 -ca_file` test
+proves the capability is there and that the chain survives the tunnel intact.
 
 **`connectTunnel` resolves on `close` as well as on the status line.** A refusal
 ends the socket without a tunnel, and a helper that only waited for `\r\n\r\n`

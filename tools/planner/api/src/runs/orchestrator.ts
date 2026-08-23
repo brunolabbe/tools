@@ -74,6 +74,7 @@ import {
   updateRunRoster,
   updateRunStatus,
 } from "../db/runs.ts";
+import { evictExpiredGrounding } from "../grounding/cache.ts";
 import { intakeTitle } from "../intakes/title.ts";
 import { readIntake } from "../intakes/state.ts";
 
@@ -187,7 +188,44 @@ export function startRun(context: AppContext, intakeId: string): Run {
   context.runs.enqueue({
     runId,
     run: async (signal) => {
-      await execute(context, { runId, planId, brief }, signal);
+      try {
+        await execute(context, { runId, planId, brief }, signal);
+      } finally {
+        // The grounding cache's other sweep — the first is on boot (pl-25).
+        // Here rather than inside `execute` because it is true of a run however
+        // it ended, including a canceled one, and because it is housekeeping
+        // rather than part of drafting a plan.
+        //
+        // Skipped while shutting down: the queue cancels what is in flight and
+        // the database closes behind it, and a failed DELETE would turn a run
+        // that finished into a logged task rejection.
+        //
+        // And guarded even so, though it is worth being exact about what that
+        // buys. The run row is already committed by the time `execute` returns,
+        // and the queue catches a rejected task and releases its slot — so an
+        // unguarded `SQLITE_BUSY` here does **not** lose the plan or leave the
+        // queue wedged. What it does is reject the task, which `onTaskError`
+        // logs at error level as "run task rejected": a spurious line blaming
+        // the run for a failed DELETE it had nothing to do with, on a run that
+        // succeeded. Housekeeping reports itself; the next boot sweeps whatever
+        // this missed.
+        if (!context.isShuttingDown()) {
+          try {
+            evictExpiredGrounding(context.db, context.now(), context.logger);
+          } catch (error: unknown) {
+            // The cause, not only the code. `AppError.from` wraps anything
+            // untyped as `INTERNAL` with the catalog's generic sentence, so a
+            // lock contention and a full disk would otherwise be the same log
+            // line — and this line is the only place either of them is ever
+            // mentioned.
+            context.logger.warn("grounding cache eviction failed", {
+              run: runId,
+              code: AppError.from(error).code,
+              cause: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+      }
     },
   });
 

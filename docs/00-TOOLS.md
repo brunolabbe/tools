@@ -19,7 +19,7 @@ where to look in the next:
 00-ANALYSIS.md      the research the design rests on — the "why it is hard"
 01-ARCHITECTURE.md  packages, pipeline, the decisions that shape them
 02-ROADMAP.md       phases and milestones for this tool only
-03-STATUS.md        where things stand right now, and what is known to be rough
+03-STATUS.md        the ticket tables, generated from frontmatter, and how to run the thing
 work/               one file per ticket — the brief and its outcome together
 ```
 
@@ -54,6 +54,7 @@ release-please rewrites on every release does not belong in the middle of it.
 - [001 — Documentation and tickets live under the tool](./adr/001-per-tool-docs-and-tickets.md)
 - [002 — Each tool releases itself, from conventional commits](./adr/002-releases-from-conventional-commits.md)
 - [003 — The status tables are generated from the tickets](./adr/003-the-status-page-is-generated.md)
+- [004 — One compose fragment per tool, merged on the host](./adr/004-one-compose-fragment-per-tool.md)
 
 An ADR belongs here only when the decision constrains **two or more tools** —
 what earns a place in `packages/core`, which runtime the repo targets, how CI is

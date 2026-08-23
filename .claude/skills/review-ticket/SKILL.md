@@ -11,9 +11,12 @@ break any of the rules this repo learned the hard way?** The two are complementa
 and only one of them is already built — so this skill runs `code-review` for the
 first question and spends its own effort on the rest.
 
-The output is a `## Review` section appended to the ticket file, because
-`docs/01-TICKETS.md` already holds that the file is the unit of work from brief to
-record. A verdict that lives in a terminal scrollback is not a record.
+The output is a `## Review` section **committed to the ticket file by the
+caller**, because `docs/01-TICKETS.md` already holds that the file is the unit of
+work from brief to record. A verdict that lives in a terminal scrollback is not a
+record — and neither is one written into a worktree that is about to be deleted,
+which is the sharper version of the same rule and the reason the caller commits
+it rather than the reviewer.
 
 ## Arguments
 
@@ -76,15 +79,33 @@ ticket itself; that is step 1.
 useful for the caller to do until the gate comes back, and a backgrounded review
 turns the wait into polling.
 
-**The subagent returns the `## Review` section as text, and the caller appends it
-to the ticket unedited.** A caller that rewrites the verdict has handed the
-review back to the model under review, which is the whole thing this split exists
-to prevent. Append it verbatim, then run `npx oxfmt` on the ticket file —
-markdown is formatted in this repo, and an unformatted table fails `npm run
-check`, which is the merge gate. That is not a rewrite and does not conflict with
-appending verbatim: it pads table cells to column width and touches nothing else.
-If you disagree with a row, say so in the Log under your own name — never quietly
-soften one.
+**The subagent returns the `## Review` section as text; the caller commits it to
+the ticket, on the branch under review, verbatim.** It returns it rather than
+writing it, and that is the correction repo-1 forced: a reviewer works in a
+worktree that is thrown away when it reports, so a section written *there* was
+written into nothing. Two consecutive gates on repo-1 left no trace in the repo
+at all, and the failure is silent in the worst way — the caller saw a
+correctly-formatted gate, believed it was recorded, and only the third reviewer
+thought to ask what a later reader could check it against.
+
+So the caller writes it into `tools/<tool>/docs/work/<id>-*.md` above `## Log`,
+in the branch's own commit, then runs `npx oxfmt` on the ticket file — markdown is
+formatted in this repo, and an unformatted table fails `npm run check`, which is
+the merge gate. Formatting is not a rewrite and does not conflict with committing
+it verbatim: it pads table cells to column width and touches nothing else.
+
+**Verbatim is the whole point, and it is now the caller who could break it.**
+Under the old wording a caller that edited the section had "handed the review back
+to the model under review"; under this one the caller is transcribing a verdict on
+its own work, which is the same hazard with a longer reach. Change nothing —
+not a severity, not a row, not a hedge. If you disagree with a row, say so in the
+Log under your own name, and leave the row standing.
+
+**Then post the reviewer's report to the pull request thread** — see step 8. That
+is what makes the transcription checkable: the section in the ticket and the
+report in the thread are written by different models, and a reader can hold one
+against the other. A gate that is not committed did not happen; a gate that is
+committed with no report beside it cannot be audited.
 
 **One reviewer, not a panel.** Two models reviewing in parallel is not a second
 opinion, it is two gates and no rule saying which one counts.
@@ -212,15 +233,23 @@ is the caller's alone.
    one; silence is not, because a skipped sweep and a clean one look identical
    afterwards.
 
-7. **Decide the gate by the rule below, not by feel**, and append the section.
+7. **Decide the gate by the rule below, not by feel**, and **return** the section
+   as text. Do not write it to the ticket yourself: your worktree is discarded
+   when you report, so a file you edit here goes nowhere. The caller commits it.
 
-8. **Report the gate, then say what would clear it.** This step is the caller's,
-   after the section is appended. A verdict is a record; the repair is work that
-   has not happened — and a report that ends in a list of findings reads exactly
-   like a report of work done. So name both acts. Give the gate, say plainly that
-   **nothing has been fixed**, and then what clearing it would take, per finding
-   or per cluster and concrete enough that the user can say yes to some and no to
-   others. Then offer to do that work now, and wait for the answer. The findings
+8. **Commit the section, post the report, then say what would clear it.** This
+   step is the caller's, and it has three acts. First write the returned section
+   into the ticket above `## Log`, verbatim, in the branch's own commit. Second,
+   **post the reviewer's report to the pull request thread** — `gh pr comment
+   <number> --body-file <file>` — so the transcription can be audited against
+   what the reviewer actually said; if the branch has no pull request yet, that
+   duty attaches to opening it, and the report goes in the body or as the first
+   comment. Third, report the gate to the user. A verdict is a record; the repair
+   is work that has not happened — and a report that ends in a list of findings
+   reads exactly like a report of work done. So name all three, and keep the
+   third of them honest: give the gate, say plainly that **nothing has been
+   fixed**, and then what clearing it would take, per finding or per cluster and
+   concrete enough that the user can say yes to some and no to others. Then offer to do that work now, and wait for the answer. The findings
    are the author's to accept, argue with or defer: a CONCERNS gate is not a work
    order, and FAIL is a report rather than a decision to stop.
 
@@ -254,13 +283,14 @@ because that is precisely the case that has already shipped a broken image here.
 
 **A review never edits the ticket's `status` frontmatter**, and never edits the
 brief. FAIL is a report; whether work stops is the author's call, not the
-reviewer's. Append only.
+reviewer's. The section is added, never in place of anything else in the file.
 
-## The section to append
+## The section to commit
 
-Above `## Log`, or replacing a previous `## Review` — one gate per ticket, the
-current one. Keep it short; the reasoning belongs in the Log where the author
-writes it.
+Above `## Log`. On a ticket that has been through several rounds, keep one
+subsection per gate rather than overwriting: a record that shows only the last
+gate cannot be told from one whose earlier findings were dropped. Keep it short;
+the reasoning belongs in the Log where the author writes it.
 
 ```markdown
 ## Review

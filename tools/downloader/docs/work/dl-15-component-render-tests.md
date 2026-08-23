@@ -111,12 +111,9 @@ is that someone once looked at it.
 - `npm run check` is green — including the test typecheck, if
   [dl-13](./dl-13-typecheck-the-tests.md) has landed. If it has not, the `.tsx`
   test files are written as though it had.
-- This ticket's `status` is `done` in its own frontmatter, which is the only
-  place that state is recorded and the only thing the generated tables read.
-  Nothing here edits `03-STATUS.md`: `repo-1` owns that prose and is retiring
-  the `## Known gaps and risks` section that carries the stale
-  "no component-render tests in `web`" sentence. Two branches editing it would
-  collide for no gain.
+- The gap is closed by flipping this ticket's frontmatter to `done` in the
+  commit that earns it. Nothing else records it: `03-STATUS.md` is generated
+  from that frontmatter and carries no hand-written gap list (repo-1).
 
 ## Review
 
