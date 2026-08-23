@@ -80,9 +80,21 @@ badly in a table column is usually a title worth fixing.
 
 **These six fields are parsed, and strictly.** `scripts/status.mjs` fails by
 file and line on a key nobody has agreed on, a `status` or `kind` outside the
-lists above, an `id` that disagrees with its own filename, or a `depends_on`
-naming a ticket that does not exist. A parser that shrugs at what it does not
-understand reports a clean status view having read half the tickets.
+lists above, or an `id` that disagrees with its own filename. A parser that
+shrugs at what it does not understand reports a clean status view having read
+half the tickets.
+
+**A `depends_on` naming a ticket that does not exist is the one exception, and
+it is a warning rather than an ending** ([repo-6](./work/repo-6-dangling-dependency-kills-the-view.md)).
+It is still named by file and by id, on stderr beside the view; every ticket
+still renders, and `--show` on the offending one prints
+`repo-404 (not a ticket)` where a blocker would be. Only `--json` also exits
+non-zero, which is what `.github/workflows/ci.yml`'s `check` job reads — so the
+check is not softened, it is paid for by the pipeline rather than by every
+reader. The difference from the failures above is that a dangling id is
+frequently just a forward reference: a ticket depending on one still in review
+is valid on its own branch and becomes dangling for everybody else the moment it
+merges first.
 
 **`dropped` tickets stay.** A ticket that was considered and rejected is worth
 more than a deleted file: the next person to have the idea finds the reason it

@@ -3,7 +3,7 @@ id: repo-6
 tool: repo
 title: Warn beside the table when a depends_on dangles, instead of exiting with no output
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -303,4 +303,131 @@ undefined`.
 
 ## Log
 
-_Not started._
+### 2026-08-23 — built on `repo-6-dangling-dependency`, base `4e3c48e`
+
+**Reproduced first, on unfixed code**, with `docs/work/repo-99-scratch-probe.md`
+carrying `depends_on: [repo-404]`, across every mode the script has. The brief's
+account holds exactly: eight invocations, eight times `exit 1`, 0 bytes on
+stdout, 81 bytes on stderr. `--prs`, which the brief does not enumerate, fails
+the same way. Row counts before and after, so "every other ticket still renders"
+is a number rather than a green run:
+
+| mode                | clean tree | dangling, before | dangling, after        |
+| ------------------- | ---------- | ---------------- | ---------------------- |
+| default             | 14 rows    | 0, exit 1        | 15 rows, exit 0        |
+| `--ready`           | 11 rows    | 0, exit 1        | 11 rows, exit 0        |
+| `--show dl-16`      | 271 B      | 0, exit 1        | 271 B, exit 0          |
+| `--show repo-99`    | n/a        | 0, exit 1        | 257 B, exit 0          |
+| `--markdown`        | 14 rows    | 0, exit 1        | 15 rows, exit 0        |
+| `--json`            | 61 tickets | 0, exit 1        | 62 + 1 problem, exit 1 |
+| `--tool downloader` | 5 rows     | 0, exit 1        | 5 rows, exit 0         |
+| `--prs`             | 1685 B     | 0, exit 1        | 1757 B, exit 0         |
+
+`--ready`, `--show dl-16` and `--tool downloader` are **byte-identical** to the
+clean tree afterwards. The default view and `--markdown` differ by three lines
+each: the malformed ticket's own row, and the two counts it belongs to. Nothing
+else moved.
+
+**The exit code, decided.** `--json` keeps a non-zero exit; the interactive
+views — default, `--ready`, `--show`, `--markdown`, `--tool`, `--prs` — exit 0
+with the warning on stderr. This is the brief's proposal and I agree with it
+after reading `.github/workflows/ci.yml:109`, which is
+`node scripts/status.mjs --json > /dev/null`: stdout is discarded, so the exit
+code is the entire gate, and it is the only thing in CI that reads a ticket at
+all. Two further facts settle it rather than one. First, an all-markdown pull
+request — which is what filing a ticket _is_ — skips the unit matrix through
+`ci.yml`'s `changes` job, so that step is not merely the ticket gate, it is
+frequently the only gate the change gets. Second, `ci.yml`'s own comment above
+the step already claims it "fails by file and line on … a `depends_on` pointing
+at nothing", and keeping `--json` non-zero is what lets that comment stay true
+without editing the workflow — the workflow is unchanged in this branch, which
+is the tell that the rule is the right one. The interactive half exits 0 because
+a person asked a question and got the answer; `npm run status` ending non-zero
+also prints an `npm ERR!` block under every table, which trains the reader to
+ignore the tail of the output — the opposite of what a warning is for. Payload
+and exit code are separated exactly as the brief argues: `--json` emits the
+tickets it could read **and** `problems`, and still exits 1.
+
+Checked by hand: with the scratch ticket present, `node scripts/status.mjs
+--json > /dev/null` exits 1; without it, 0.
+
+**`--json`'s shape, which is now a contract.** `{ tickets, problems }`, with
+`problems` **always present, empty included** — that is what separates "the
+board is clear" from "a ticket would not parse" from "the script never ran",
+which one empty stdout and one exit code could not. Each problem is
+`{ file, kind: "dangling-dependency", id, dependency, message }`; `message` is
+the same line stderr carries, so the text lives in one place. `problems` is
+**not** narrowed by `--tool`: a dangling edge anywhere is a fact about the graph
+the reader is being handed a slice of, and hiding it behind a narrowing would
+reintroduce the "valid on my branch" blindness that caused this.
+
+**`describeTicket`'s shape, for [repo-3](./repo-3-show-a-closed-ticket.md).** It
+now returns `{ ticket, blockers, missing }`. `blockers` is **unchanged** — the
+real, non-`done` ticket objects, nothing emptied, nothing synthesised — and
+`missing` is a `string[]` of ids no ticket carries. This is deliberately the
+first of repo-3's two options ("leave `describeTicket` returning the true
+blocker list and let `printTicket` decide"), so repo-3 is free to add a `closed`
+flag beside `missing` if it prefers the second; adding a third field to an
+object return breaks nobody. Its Build step 2's prohibition — _do not silently
+empty `blockers`_ — is respected. What repo-3 must know: `printTicket` now
+destructures `missing` and prints `repo-404 (not a ticket)` beside the real
+blockers, and the `unblocked` branch is gated on **both** lists being empty, so
+the closed-ticket branch repo-3 adds goes _in front of_ that condition rather
+than replacing it.
+
+**What the brief had wrong, or left open.**
+
+- **Nothing in the reproduction was wrong.** Both traps are real and were
+  measured here before the fix: with the throw neutered, `--show repo-99` dies
+  with `Cannot read properties of undefined (reading 'status')` and exit 1, and
+  the two readers step 3 says already cope do cope — `--ready` withheld the
+  malformed ticket, and the default view printed `(waits on repo-404)` with
+  every other row intact.
+- **The brief enumerates six modes; there are seven.** `--prs` is missing from
+  its table and fails identically. It is in the table above.
+- **The `--root` question, which the brief left to the implementer, is
+  answered: I added the flag.** Without it `main` hardcodes `DEFAULT_ROOT`, so
+  no test can ask what the _CLI_ does with a malformed ticket, and five of the
+  six acceptance lines are about the CLI. Every one of them is now proven by a
+  test rather than by my terminal. It is a plain option listed in `OPTIONS`,
+  not a hidden one — a flag the parser refuses to name is a flag the next
+  reader finds by reading the source.
+- **The test helper had to change with it.** `run()` used `execFileSync` and
+  merged stderr into stdout on failure, which cannot express this defect at
+  all: which stream carries the warning is half the fix. It is `spawnSync` now
+  and returns `{ stdout, stderr, status }` separately. Two existing tests
+  (`--tool sniffer`, `--write`/`--check`) moved their assertion from `stdout` to
+  `stderr`, which is what they always meant.
+- **One line outside the two files named in the brief had gone false**:
+  `docs/01-TICKETS.md` listed a dangling `depends_on` among the things the
+  parser "fails by file and line" on. It now says what actually happens, and
+  why the strictness is not softened but paid for by `--json`. `ci.yml`'s
+  comment needed no change, per the exit-code decision above. ADR 003 is left
+  byte-unchanged: its `## Consequences` claim is a record of what was believed
+  when it was taken, and this repo annotates those rather than rewriting them.
+
+**`readTickets` still throws on everything else**, and that is deliberate: an
+unknown field or a status outside the taxonomy means the ticket has no row to
+print, so there is nothing to fall back to, whereas a dangling edge leaves a
+perfectly renderable ticket. I considered filing the sibling ticket for it and
+did not: unlike a dangling dependency it cannot reach `main`, because `ci.yml`'s
+unfiltered `check` job runs `--json` on every push. Recorded here so the next
+reader can disagree with a reason rather than a silence.
+
+**Gates.** `npm run check` exit 0. `npx vitest run scripts` — 2 files, 66 tests,
+green (the project that owns `scripts/test`, and the only one that parses the
+ticket tree). Full `npm test` — 101 files, **1436 tests**, green, against a
+measured baseline of 101/1416 at `4e3c48e`; the 20 new tests are all in
+`scripts/test/status.test.ts`. `npm run format` run for the two `.md` files
+touched.
+
+**Mutation-checked, control first.** `npx vitest run scripts` over the
+unmutated tree exits **0** — stated explicitly because a mutation report built
+on a command that fails on a clean tree is worthless. Ten behaviours reverted in
+turn, every one red, tree restored and the control re-run at 0 afterwards:
+reader throws again (11 failed), `describeTicket` dereferences a missing id (3),
+`printTicket` drops the missing ids (1), `--json` exits 0 (2), every view exits
+1 (6), warning to stdout (9), `--json` drops `problems` (3), only the first edge
+reported (1), a healthy repo warns anyway (11), `--json` narrows `problems` to
+`--tool` (1). Separately, the new suite against `4e3c48e`'s `status.mjs`: **21
+tests fail**, so they are red against the code this fixes.

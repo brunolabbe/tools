@@ -1,9 +1,10 @@
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
 import {
+  danglingDependencies,
   describeTicket,
   milestones,
   parseFrontmatter,
@@ -52,6 +53,21 @@ const pl = (id: string, over: Record<string, string> = {}) =>
 
 const at = (id: string) => `tools/planner/docs/work/${id}-slug.md`;
 
+/** A repo-wide ticket, which is where the real dangling dependency was written. */
+const repoTicket = (id: string, over: Record<string, string> = {}) =>
+  ticket({
+    id,
+    tool: "repo",
+    title: `the ${id} thing`,
+    kind: "chore",
+    status: "ready",
+    milestone: "null",
+    depends_on: "[]",
+    ...over,
+  });
+
+const atRepo = (id: string) => `docs/work/${id}-slug.md`;
+
 /**
  * Run the CLI the way a person does.
  *
@@ -61,29 +77,51 @@ const at = (id: string) => `tools/planner/docs/work/${id}-slug.md`;
  * argument parsing and formatting, which is precisely what a pure-function
  * suite cannot see.
  *
- * Argument array, never a shell — the repo-wide rule.
+ * **The two streams are kept apart**, because repo-6 is a defect about which
+ * stream carries what: a warning that lands on stdout corrupts a `--json`
+ * consumer, and one merged into stdout by this helper could not tell the two
+ * apart. Exit code likewise — the payload and the exit code are separate
+ * decisions there, so a test has to be able to see them separately.
+ *
+ * `spawnSync` rather than `execFileSync`: it returns a non-zero exit as data
+ * instead of an exception, with both pipes intact either way. Argument array,
+ * never a shell — the repo-wide rule.
+ *
+ * `root` points the CLI at a throwaway ticket tree from `repoWith`. Without it
+ * every case runs against the real tickets, which cannot be malformed on
+ * purpose.
  */
-function run(args: string[]): { stdout: string; status: number } {
-  try {
-    return {
-      stdout: execFileSync("node", [CLI, ...args], {
-        encoding: "utf8",
-        shell: false,
-        // Piped, not inherited: a CLI case that asserts a *failure* would
-        // otherwise print its error into the middle of an otherwise green run
-        // and read as one. `spawnSync` captures both streams either way.
-        stdio: ["ignore", "pipe", "pipe"],
-      }),
-      status: 0,
-    };
-  } catch (error) {
-    const failure = error as { stdout?: string; stderr?: string; status?: number };
-    return {
-      stdout: `${failure.stdout ?? ""}${failure.stderr ?? ""}`,
-      status: failure.status ?? 1,
-    };
-  }
+function run(args: string[], root?: string): { stdout: string; stderr: string; status: number } {
+  const result = spawnSync(
+    "node",
+    [CLI, ...(root === undefined ? [] : ["--root", root]), ...args],
+    {
+      encoding: "utf8",
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  return { stdout: result.stdout, stderr: result.stderr, status: result.status ?? 1 };
 }
+
+/**
+ * Four sound tickets and one whose `depends_on` names a ticket nobody filed.
+ *
+ * The malformed one is a `repo` ticket and the sound ones are the planner's,
+ * which is the shape the defect actually arrived in: `--tool planner` narrows
+ * to a tool the bad ticket is not in, and used to fail anyway.
+ */
+function repoWithADanglingDependency(): string {
+  return repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done" }),
+    [at("pl-2")]: pl("pl-2"),
+    [at("pl-3")]: pl("pl-3", { depends_on: "[pl-1]" }),
+    [atRepo("repo-9")]: repoTicket("repo-9", { depends_on: "[repo-404]" }),
+  });
+}
+
+/** The message the reader has always produced, and the only one this asserts. */
+const DANGLING = `${atRepo("repo-9")}: depends_on "repo-404", which is not a ticket`;
 
 // ---------------------------------------------------------------------------
 // The real tickets
@@ -185,9 +223,46 @@ test("an id that disagrees with its filename is caught", () => {
   expect(() => readTickets(root)).toThrow(/does not match the filename/);
 });
 
-test("a dependency on a ticket that does not exist is caught", () => {
-  const root = repoWith({ [at("pl-1")]: pl("pl-1", { depends_on: "[pl-99]" }) });
-  expect(() => readTickets(root)).toThrow(/depends_on "pl-99", which is not a ticket/);
+// This test used to assert `readTickets` *threw* on a dangling `depends_on`,
+// which it did — three lines into `main`, before any view was chosen. One
+// ticket naming an id that had not merged yet therefore cost every reader every
+// ticket in every mode (repo-6). The condition is still detected, by name and
+// by file; what it costs is a warning rather than the command.
+test("a dependency on a ticket that does not exist is reported, not thrown", () => {
+  const root = repoWithADanglingDependency();
+  const tickets = readTickets(root);
+  expect(tickets.map((t) => t.id)).toEqual(["pl-1", "pl-2", "pl-3", "repo-9"]);
+  expect(danglingDependencies(tickets)).toEqual([
+    {
+      file: atRepo("repo-9"),
+      kind: "dangling-dependency",
+      id: "repo-9",
+      dependency: "repo-404",
+      message: DANGLING,
+    },
+  ]);
+});
+
+test("a repo whose dependencies all resolve reports no problems", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done" }),
+    [at("pl-2")]: pl("pl-2", { depends_on: "[pl-1]" }),
+  });
+  expect(danglingDependencies(readTickets(root))).toEqual([]);
+});
+
+// Every edge, not the first one: a reader told about one missing id fixes it,
+// re-runs, and is told about the next.
+test("every dangling edge is reported, including two on one ticket", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { depends_on: "[pl-98, pl-99]" }),
+    [at("pl-2")]: pl("pl-2", { depends_on: "[pl-97]" }),
+  });
+  expect(danglingDependencies(readTickets(root)).map((p) => [p.id, p.dependency])).toEqual([
+    ["pl-1", "pl-98"],
+    ["pl-1", "pl-99"],
+    ["pl-2", "pl-97"],
+  ]);
 });
 
 test("a tool with no work directory yet is a young tool, not an error", () => {
@@ -270,6 +345,47 @@ test("an id nobody filed is named rather than returning nothing", () => {
   expect(() => describeTicket(readTickets(root), "pl-42")).toThrow(/no ticket called "pl-42"/);
 });
 
+// The regression guard for repo-6's trap. Dropping the throw out of the reader
+// without touching this function made `--show` on the offending ticket *worse*:
+// `byId.get` returned `undefined` and the filter read `.status` off it, so the
+// named message became an anonymous `TypeError` naming no file at all.
+test("a dependency naming no ticket is carried out, not dereferenced", () => {
+  const root = repoWithADanglingDependency();
+  const { blockers, missing } = describeTicket(readTickets(root), "repo-9");
+  expect(blockers).toEqual([]);
+  expect(missing).toEqual(["repo-404"]);
+});
+
+// `missing` is beside `blockers`, not mixed into it: one is tickets, the other
+// is ids of things that are not tickets, and a caller wanting only the first
+// must not have to filter the second back out.
+test("a real blocker and a dangling id are reported separately, both kept", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "in-flight" }),
+    [at("pl-2")]: pl("pl-2", { status: "done" }),
+    [at("pl-3")]: pl("pl-3", { depends_on: "[pl-1, pl-2, pl-99]" }),
+  });
+  const { blockers, missing } = describeTicket(readTickets(root), "pl-3");
+  expect(blockers.map((b) => [b.id, b.status])).toEqual([["pl-1", "in-flight"]]);
+  expect(missing).toEqual(["pl-99"]);
+});
+
+test("a sound ticket in a repo that has a malformed one is described unchanged", () => {
+  const root = repoWithADanglingDependency();
+  const { ticket: shown, blockers, missing } = describeTicket(readTickets(root), "pl-3");
+  expect(shown.file).toBe(at("pl-3"));
+  expect(blockers).toEqual([]);
+  expect(missing).toEqual([]);
+});
+
+// `--ready` was already conservative — a dangling id is not in `done`, so the
+// ticket is withheld — and this pins that, because the fix was not allowed to
+// make an unstartable ticket look startable.
+test("a ticket whose dependency names nothing is withheld from --ready, and only it", () => {
+  const tickets = readTickets(repoWithADanglingDependency());
+  expect(readyTickets(tickets).map((t) => t.id)).toEqual(["pl-2", "pl-3"]);
+});
+
 // ---------------------------------------------------------------------------
 // The markdown — `--markdown`
 // ---------------------------------------------------------------------------
@@ -324,9 +440,10 @@ test("--tool narrows the view to one tool", () => {
 });
 
 test("--tool with a name no tool has is a named failure, not an empty view", () => {
-  const { stdout, status } = run(["--tool", "sniffer"]);
+  const { stdout, stderr, status } = run(["--tool", "sniffer"]);
   expect(status).toBe(1);
-  expect(stdout).toMatch(/no tickets for a tool called "sniffer"/);
+  expect(stdout).toBe("");
+  expect(stderr).toMatch(/no tickets for a tool called "sniffer"/);
 });
 
 test("--show prints a ticket's path and the dependencies still open", () => {
@@ -348,8 +465,124 @@ test("--markdown emits a table, with no generated-region markers to guard", () =
 // them believe a page had just been regenerated.
 test("--write and --check are gone, and say so rather than being ignored", () => {
   for (const flag of ["--write", "--check"]) {
-    const { stdout, status } = run([flag]);
+    const { stderr, status } = run([flag]);
     expect(status).toBe(1);
-    expect(stdout).toContain(`unrecognised argument "${flag}"`);
+    expect(stderr).toContain(`unrecognised argument "${flag}"`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// One malformed ticket, every mode — repo-6
+// ---------------------------------------------------------------------------
+
+// It used to be the whole output, on every one of these, for every tool: the
+// reader threw on the third line of `main`, before a view had been chosen. The
+// enumeration is deliberate — the defect was not "a mode misbehaves", it was
+// "the command does not run" — so each mode asserts that its own payload
+// arrived on stdout *and* that the warning arrived on stderr beside it.
+test.each([
+  ["the default view", [] as string[], "• pl-2"],
+  ["--ready", ["--ready"], "pl-2\tplanner"],
+  ["--markdown", ["--markdown"], "[pl-2](tools/planner/docs/work/pl-2-slug.md)"],
+  ["--tool, on a tool the malformed ticket is not in", ["--tool", "planner"], "• pl-2"],
+  ["--show, on an unrelated ticket", ["--show", "pl-3"], "tools/planner/docs/work/pl-3-slug.md"],
+])("%s still renders beside a dangling dependency, and exits 0", (_name, args, expected) => {
+  const { stdout, stderr, status } = run(args, repoWithADanglingDependency());
+  expect(status).toBe(0);
+  expect(stdout).toContain(expected);
+  expect(stderr.trimEnd().split("\n")).toEqual([DANGLING]);
+});
+
+// The negative half of "every other ticket still renders": the same tree minus
+// its one malformed ticket produces byte-identical stdout for the views that
+// do not list it, and for the ones that do, exactly one row more.
+test("a malformed ticket costs its own row and no other", () => {
+  const sound = {
+    [at("pl-1")]: pl("pl-1", { status: "done" }),
+    [at("pl-2")]: pl("pl-2"),
+    [at("pl-3")]: pl("pl-3", { depends_on: "[pl-1]" }),
+  };
+  const healthy = repoWith(sound);
+  const malformed = repoWith({
+    ...sound,
+    [atRepo("repo-9")]: repoTicket("repo-9", { depends_on: "[repo-404]" }),
+  });
+
+  for (const args of [["--ready"], ["--tool", "planner"], ["--show", "pl-3"]]) {
+    expect(run(args, malformed).stdout, args.join(" ")).toBe(run(args, healthy).stdout);
+  }
+  // The malformed ticket is a `repo` ticket, so the unnarrowed views gain its
+  // section and nothing else loses a line.
+  const before = run([], healthy).stdout;
+  const after = run([], malformed).stdout;
+  expect(after).toContain(before.trimEnd());
+  expect(after).toContain("· repo-9");
+});
+
+// The sharpest half of the defect: `--json` used to answer a machine with exit
+// 1 and zero bytes, which is what "no tickets at all" and "the script is not
+// installed" also look like. The payload now says which.
+test("--json emits the tickets it could read and a structured account of the one it could not", () => {
+  const { stdout, stderr, status } = run(["--json"], repoWithADanglingDependency());
+  const payload = JSON.parse(stdout);
+  expect(payload.tickets.map((t: { id: string }) => t.id)).toEqual([
+    "pl-1",
+    "pl-2",
+    "pl-3",
+    "repo-9",
+  ]);
+  expect(payload.problems).toEqual([
+    {
+      file: atRepo("repo-9"),
+      kind: "dangling-dependency",
+      id: "repo-9",
+      dependency: "repo-404",
+      message: DANGLING,
+    },
+  ]);
+  expect(stderr.trimEnd().split("\n")).toEqual([DANGLING]);
+  // `.github/workflows/ci.yml`'s `check` job is
+  // `node scripts/status.mjs --json > /dev/null`, and it is the only thing in
+  // CI that reads a ticket at all. It discards stdout, so this exit code is
+  // the whole of the strict check — the payload is for a reader, not for it.
+  expect(status).toBe(1);
+});
+
+test("--json narrowed to a tool still reports a dangling edge outside it", () => {
+  const { stdout, status } = run(["--json", "--tool", "planner"], repoWithADanglingDependency());
+  const payload = JSON.parse(stdout);
+  expect(payload.tickets.map((t: { id: string }) => t.id)).toEqual(["pl-1", "pl-2", "pl-3"]);
+  expect(payload.problems).toHaveLength(1);
+  expect(status).toBe(1);
+});
+
+// The trap in repo-6's Build step 2, end to end: dropping the throw without
+// fixing `describeTicket` replaced a named message with a `TypeError`.
+test("--show on the malformed ticket names the missing id and does not crash", () => {
+  const { stdout, stderr, status } = run(["--show", "repo-9"], repoWithADanglingDependency());
+  expect(status).toBe(0);
+  expect(stdout).toContain("blocked by  repo-404 (not a ticket)");
+  expect(stdout).not.toContain("unblocked");
+  expect(stderr).not.toContain("Cannot read properties of undefined");
+  expect(stderr.trimEnd().split("\n")).toEqual([DANGLING]);
+});
+
+// A healthy tree is silent and exits 0 everywhere, `--json` included — the
+// warning is not a thing every run now carries.
+test.each([[[] as string[]], [["--ready"]], [["--markdown"]], [["--json"]]])(
+  "%s says nothing on stderr when every dependency resolves",
+  (args) => {
+    const root = repoWith({
+      [at("pl-1")]: pl("pl-1", { status: "done" }),
+      [at("pl-2")]: pl("pl-2", { depends_on: "[pl-1]" }),
+    });
+    const { stderr, status } = run(args, root);
+    expect(stderr).toBe("");
+    expect(status).toBe(0);
+  },
+);
+
+test("--json on a healthy repo carries an empty problems list, not a missing one", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1") });
+  expect(JSON.parse(run(["--json"], root).stdout).problems).toEqual([]);
 });

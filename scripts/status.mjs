@@ -121,6 +121,10 @@ function parseList(value, file, line) {
  * only reader: a dangling `depends_on` is invisible until something walks the
  * graph, and by then it is a link in a table pointing at nothing.
  *
+ * **A dangling `depends_on` is not raised from here** — see
+ * `danglingDependencies`. Everything else still is: a ticket this function
+ * cannot parse has no row to print, so there is nothing to fall back to.
+ *
  * @param {string} [repoRoot]
  * @returns {Array<{id: string, tool: string, title: string, kind: string, status: string, milestone: string | null, depends_on: string[], note: string | null, file: string, number: number}>}
  */
@@ -152,14 +156,46 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
     const duplicate = tickets.find((ticket) => !seen.add(ticket.id));
     throw new Error(`${duplicate?.file}: "${duplicate?.id}" is used by more than one ticket`);
   }
+  return tickets.toSorted(byIdOrder);
+}
+
+/**
+ * The `depends_on` entries that name no ticket, as data rather than an ending.
+ *
+ * This used to `throw` from inside `readTickets`, three lines into `main` and
+ * before any view was selected — so one ticket naming an id that had not merged
+ * yet cost every reader every ticket in every mode, stdout empty and exit 1
+ * (repo-6). The check itself is right and stays: `depends_on` is documented as
+ * "ticket ids that must land first", so an id nothing carries is either a typo
+ * or a forward reference, and both are worth saying out loud.
+ *
+ * What changed is who decides. The reader reports; `main` prints the warning
+ * beside the view instead of instead of it, and picks the exit code per mode —
+ * see `EXIT_ON_PROBLEMS`.
+ *
+ * The message text is unchanged, deliberately: it is a good line, `ci.yml`'s
+ * `--json` step and a person's terminal both surface it, and only where it is
+ * printed was ever wrong.
+ *
+ * @param {ReturnType<typeof readTickets>} tickets
+ * @returns {Array<{file: string, kind: string, id: string, dependency: string, message: string}>}
+ */
+export function danglingDependencies(tickets) {
+  const known = new Set(tickets.map((ticket) => ticket.id));
+  const problems = [];
   for (const ticket of tickets) {
     for (const dependency of ticket.depends_on) {
-      if (!byId.has(dependency)) {
-        throw new Error(`${ticket.file}: depends_on "${dependency}", which is not a ticket`);
-      }
+      if (known.has(dependency)) continue;
+      problems.push({
+        file: ticket.file,
+        kind: "dangling-dependency",
+        id: ticket.id,
+        dependency,
+        message: `${ticket.file}: depends_on "${dependency}", which is not a ticket`,
+      });
     }
   }
-  return tickets.toSorted(byIdOrder);
+  return problems;
 }
 
 /**
@@ -267,6 +303,14 @@ export function milestones(tickets) {
  * mature ticket's dependencies landed months ago, and listing them all buries
  * the one that has not.
  *
+ * `missing` is the second half, and it is separate from `blockers` on purpose:
+ * an id no ticket carries has no status, no title and no file, so there is
+ * nothing to put in a list of tickets. It used to be one — `byId.get` returned
+ * `undefined`, the filter read `.status` off it, and `--show` on the offending
+ * ticket died with an anonymous `TypeError` naming no file (repo-6). Keeping
+ * the two apart means `blockers` stays exactly what its name says and every
+ * caller that only cares about real tickets is unaffected.
+ *
  * @param {ReturnType<typeof readTickets>} tickets All of them; the graph needs it.
  * @param {string} id
  */
@@ -274,10 +318,16 @@ export function describeTicket(tickets, id) {
   const ticket = tickets.find((t) => t.id === id);
   if (ticket === undefined) throw new Error(`no ticket called "${id}"`);
   const byId = new Map(tickets.map((t) => [t.id, t]));
-  const blockers = ticket.depends_on
-    .map((dependency) => /** @type {typeof ticket} */ (byId.get(dependency)))
-    .filter((dependency) => dependency.status !== "done");
-  return { ticket, blockers };
+  /** @type {ReturnType<typeof readTickets>} */
+  const blockers = [];
+  /** @type {string[]} */
+  const missing = [];
+  for (const dependency of ticket.depends_on) {
+    const found = byId.get(dependency);
+    if (found === undefined) missing.push(dependency);
+    else if (found.status !== "done") blockers.push(found);
+  }
+  return { ticket, blockers, missing };
 }
 
 /**
@@ -364,7 +414,20 @@ function table(headers, rows) {
 // ---------------------------------------------------------------------------
 
 const FLAGS = ["ready", "json", "prs", "markdown"];
-const OPTIONS = ["--tool", "--show"];
+
+/**
+ * `--root` is the seam the CLI tests needed and did not have.
+ *
+ * `main` used to hardcode `DEFAULT_ROOT`, so every end-to-end case ran against
+ * the real tickets — which meant no test could ever ask what the CLI does with
+ * a malformed one, short of committing a malformed ticket to the repo. repo-6
+ * is a defect about exactly that, per mode, so the alternative was to prove its
+ * acceptance by hand and leave nothing behind that would catch it coming back.
+ *
+ * It is a plain option rather than a hidden one: a flag the parser refuses to
+ * name is a flag the next reader finds by reading the source.
+ */
+const OPTIONS = ["--tool", "--show", "--root"];
 
 /**
  * Unknown flags are refused rather than ignored.
@@ -396,11 +459,52 @@ function parseArgs(argv) {
   return { flags, values };
 }
 
+/**
+ * Which views a dangling `depends_on` fails, and which merely warn.
+ *
+ * The payload and the exit code are separable and are separated: every view
+ * prints what it could read, and only `--json` also ends non-zero.
+ *
+ * `.github/workflows/ci.yml`'s `check` job runs
+ * `node scripts/status.mjs --json > /dev/null`, and it is **the only thing in
+ * CI that reads the tickets at all**. It discards stdout, so the exit code is
+ * the whole of that gate — and an all-markdown pull request, which is exactly
+ * what filing a ticket is, skips the unit matrix and leaves that step as the
+ * only check the change gets. Make `--json` exit 0 here and the strict parser
+ * stops being enforced anywhere.
+ *
+ * The interactive views exit 0 because a person asked a question and got the
+ * answer to it, with the warning on stderr beside the table. `npm run status`
+ * exiting non-zero also buys an `npm ERR!` block under every table, which
+ * teaches the reader to ignore the tail of the output — the opposite of what a
+ * warning is for.
+ */
+const EXIT_ON_PROBLEMS = ["json"];
+
 function main() {
   const { flags, values } = parseArgs(process.argv.slice(2));
-  const repoRoot = DEFAULT_ROOT;
+  const repoRoot = values.root ?? DEFAULT_ROOT;
   const all = readTickets(repoRoot);
+  const problems = danglingDependencies(all);
 
+  renderView(all, problems, flags, values, repoRoot);
+
+  // stderr, after the view: a pipeline reading stdout is unaffected, and a
+  // person reads it last rather than watching it scroll off the top.
+  for (const problem of problems) process.stderr.write(`${problem.message}\n`);
+  if (problems.length > 0 && EXIT_ON_PROBLEMS.some((flag) => flags.has(flag))) {
+    process.exitCode = 1;
+  }
+}
+
+/**
+ * @param {ReturnType<typeof readTickets>} all
+ * @param {ReturnType<typeof danglingDependencies>} problems
+ * @param {Set<string>} flags
+ * @param {Record<string, string>} values
+ * @param {string} repoRoot
+ */
+function renderView(all, problems, flags, values, repoRoot) {
   // `--show` is about one ticket and its blockers can be under another tool, so
   // it reads the whole graph and ignores `--tool` — narrowing first would
   // report that a ticket which exists does not.
@@ -415,8 +519,14 @@ function main() {
   }
   const byTool = [...new Set(selected.map((t) => t.tool))];
 
+  // `problems` is always present, empty included. A consumer that ignores it
+  // sees what it saw before; one that reads it can tell "the board is clear"
+  // from "a ticket would not parse" from "the script never ran" — which an
+  // empty stdout and an exit code cannot, and all three used to look alike.
+  // It is not narrowed by `--tool`: a dangling edge anywhere is a fact about
+  // the graph the reader is being handed a slice of.
   if (flags.has("json")) {
-    process.stdout.write(`${JSON.stringify({ tickets: selected }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ tickets: selected, problems }, null, 2)}\n`);
     return;
   }
 
@@ -462,7 +572,7 @@ function main() {
 }
 
 /** @param {ReturnType<typeof describeTicket>} described */
-function printTicket({ ticket, blockers }) {
+function printTicket({ ticket, blockers, missing }) {
   process.stdout.write(`\n${ticket.id}  ${ticket.title}\n\n`);
   for (const [key, value] of [
     ["tool", ticket.tool],
@@ -475,10 +585,15 @@ function printTicket({ ticket, blockers }) {
   ]) {
     process.stdout.write(`  ${key.padEnd(11)} ${value}\n`);
   }
+  // A dangling id is printable here and nowhere else: it has no status to
+  // report, so it says what it is. Beside the real blockers rather than instead
+  // of them — a ticket can easily have one of each.
+  const holding = [
+    ...blockers.map((blocker) => `${blocker.id} (${blocker.status})`),
+    ...missing.map((dependency) => `${dependency} (not a ticket)`),
+  ];
   process.stdout.write(
-    blockers.length === 0
-      ? "\n  unblocked\n\n"
-      : `\n  blocked by  ${blockers.map((b) => `${b.id} (${b.status})`).join(", ")}\n\n`,
+    holding.length === 0 ? "\n  unblocked\n\n" : `\n  blocked by  ${holding.join(", ")}\n\n`,
   );
 }
 
