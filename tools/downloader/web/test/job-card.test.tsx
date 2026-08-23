@@ -119,6 +119,32 @@ test("a known total is rendered as a figure and a determinate bar", () => {
 // The statuses
 // ---------------------------------------------------------------------------
 
+test("a half-known segment count shows what is done, not a count against null", () => {
+  // Swept up with the audio-codec branch: every fixture set `segmentsDone` and
+  // `segmentsTotal` together or set neither, so the middle case never rendered
+  // and collapsing it to `${done} / ${total}` left the suite green — printing
+  // the literal string "null" at a user. An HLS manifest that has not been
+  // enumerated yet is exactly this shape.
+  mount(
+    job("downloading", {
+      progress: { segmentsDone: 120, segmentsTotal: null },
+    }),
+  );
+
+  expect(screen.getByText("120")).toBeDefined();
+  expect(screen.queryByText(/null/u)).toBeNull();
+  expect(screen.queryByText("120 / null")).toBeNull();
+});
+
+test("a finished file of unknown duration is described without a trailing dash", () => {
+  mount(job("completed", { result: result({ durationSec: null }) }));
+
+  // `399 MB · MP4`, and nothing after it — the separator only earns its place
+  // when there is a duration to follow it.
+  expect(screen.getByText("399 MB · MP4")).toBeDefined();
+  expect(screen.queryByText(/MP4 · —/u)).toBeNull();
+});
+
 test("each active status names itself and says why the job is sitting there", () => {
   const cases = [
     ["queued", "Queued", "Waiting for a free worker slot."],
@@ -335,7 +361,7 @@ test("the list counts what has finished and offers to clear only those", () => {
         job("completed", { id: "job-2", variant: variant({ label: "Finished" }) }),
         job("failed", { id: "job-3", variant: variant({ label: "Gave up" }) }),
       ]}
-      streamStates={{ "job-1": "open" }}
+      streamStates={{ "job-1": "reconnecting" }}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
       onRetry={vi.fn()}
@@ -348,6 +374,37 @@ test("the list counts what has finished and offers to clear only those", () => {
   }
   fireEvent.click(screen.getByRole("button", { name: "Clear 2 finished" }));
   expect(onClearFinished).toHaveBeenCalledOnce();
+});
+
+test("each card is handed its own stream state, looked up by job id", () => {
+  // `streamStates[job.id]` was proven by nothing: the old fixture said
+  // `{ "job-1": "open" }`, and `"open"` is the one value that renders nothing —
+  // only `"reconnecting"` produces a pill. So `streamState={undefined}` passed
+  // the whole suite. The value has to be the visible one, and it has to be
+  // wrong for the *other* card, or a lookup keyed by array index still passes.
+  render(
+    <JobList
+      jobs={[
+        job("downloading", { id: "job-1", variant: variant({ label: "First" }) }),
+        job("downloading", { id: "job-2", variant: variant({ label: "Second" }) }),
+      ]}
+      streamStates={{ "job-2": "reconnecting" }}
+      onCancel={vi.fn()}
+      onRemove={vi.fn()}
+      onRetry={vi.fn()}
+      onClearFinished={vi.fn()}
+    />,
+  );
+
+  const cards = screen.getAllByRole("listitem").filter((item) => item.querySelector("h3"));
+  const [first, second] = cards;
+  expect(cards).toHaveLength(2);
+  expect(within(first as HTMLElement).getByRole("heading", { name: "First" })).toBeDefined();
+  expect(within(second as HTMLElement).getByRole("heading", { name: "Second" })).toBeDefined();
+
+  // In the second card, and only there.
+  expect(within(second as HTMLElement).getByText("reconnecting…")).toBeDefined();
+  expect(within(first as HTMLElement).queryByText("reconnecting…")).toBeNull();
 });
 
 test("a list with nothing finished offers no clear button", () => {

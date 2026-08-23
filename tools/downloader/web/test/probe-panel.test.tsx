@@ -104,6 +104,19 @@ test("the header names what was found and which resolver found it", () => {
   expect(screen.getByText(/12:34 · 3 renditions/u)).toBeDefined();
 });
 
+test("a fresh probe is not labelled cached", () => {
+  // Both directions, because only the true branch was ever asserted: forcing
+  // the badge to render unconditionally left the suite green. A fresh probe
+  // wearing a "cached" badge tells the user its signed links may already be
+  // stale when they were fetched a second ago.
+  mount(probe(), { cached: false });
+
+  expect(screen.queryByText("cached")).toBeNull();
+  // The resolver badge beside it is not conditional and must still be there,
+  // so this is not passing because the pill row vanished.
+  expect(screen.getByText("direct")).toBeDefined();
+});
+
 test("a single rendition is not pluralised", () => {
   mount(probe({ variants: variants().slice(1, 2) }));
   expect(screen.getByText(/1 rendition$/u)).toBeDefined();

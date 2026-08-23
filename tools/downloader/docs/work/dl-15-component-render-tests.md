@@ -127,23 +127,49 @@ gate existed only in a scrollback and was already unrecoverable when the second
 reviewer went looking for it, which is how a carried-or-dropped finding goes
 missing. **The builder commits the gate.**
 
+### Acceptance
+
+A row per line of `## Done when`, naming what proves it. Line numbers are as of
+the branch tip.
+
+| Acceptance line                                                       | Proven by                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every component in `web/src/components/` rendered at least once       | `ProgressBar` `progress-bar.test.tsx:40` · `JobCard` `job-card.test.tsx:84` · `JobList` `job-card.test.tsx:341` · `VariantTable` `variant-table.test.tsx:56` · `ProbePanel` `probe-panel.test.tsx:86` · `ErrorPanel` `error-panel.test.tsx:60` · `UrlForm` `url-form.test.tsx:52` · `AnalysingPanel` `chrome.test.tsx:38` · `ScenarioHints` `chrome.test.tsx:95` · `ThemeToggle` `chrome.test.tsx:122` · `App` `app.test.tsx:119` |
+| Step 4 — `ProgressBar`/`JobCard` with `total: null`                   | `progress-bar.test.tsx:40`, `job-card.test.tsx:84`                                                                                                                                                                                                                                                                                                                                                                                |
+| Step 4 — `JobCard` across the statuses, terminal ones included        | `job-card.test.tsx:148` (active four), `job-card.test.tsx:177` (all three terminal)                                                                                                                                                                                                                                                                                                                                               |
+| Step 4 — the `downloading → probing` back edge (dl-9)                 | `job-card.test.tsx:191`; today's step-list defect pinned separately at `job-card.test.tsx:216`                                                                                                                                                                                                                                                                                                                                    |
+| Step 4 — `VariantTable` selection changes                             | `variant-table.test.tsx:188`                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Step 4 — `VariantTable` audio-only rendition                          | `variant-table.test.tsx:77`                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Step 4 — `VariantTable` variant with no resolution                    | `variant-table.test.tsx:159`                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Step 4 — default selection matching `lib/variants.ts`                 | `variant-table.test.tsx:196`, and the panel actually opening there at `probe-panel.test.tsx:86`                                                                                                                                                                                                                                                                                                                                   |
+| Step 4 — `ErrorPanel` retryable with `retryAfterSec`                  | `error-panel.test.tsx:76`                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Step 4 — `ErrorPanel` `DRM_PROTECTED`                                 | `error-panel.test.tsx:60`                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Step 4 — `UrlForm` submit disabled on empty                           | `url-form.test.tsx:52`. **Partial by design:** an _invalid_ URL does not disable submit, and should not — `url-form.test.tsx:137` pins the native `type="url"` guard that stops it instead. See the first Log entry.                                                                                                                                                                                                              |
+| Step 4 — `sourceUrlSchema` rejection surfacing, not swallowed         | `url-form.test.tsx:119` (reaches the parent), `app.test.tsx:201` (becomes an `INVALID_URL` panel)                                                                                                                                                                                                                                                                                                                                 |
+| Step 4 — `App`'s `USING_MOCK_API` banner                              | `app.test.tsx:119` (present when mocked), `app.test.tsx:129` (absent when not)                                                                                                                                                                                                                                                                                                                                                    |
+| Step 4 — `App`'s `probeToken` race                                    | `app.test.tsx:142`, and the abandon path at `app.test.tsx:177`                                                                                                                                                                                                                                                                                                                                                                    |
+| A test fails if a `null` total renders determinate or as `0%`         | `progress-bar.test.tsx:40`, `job-card.test.tsx:84`, `chrome.test.tsx:38` — watched failing: an unconditional `value` on `ProgressBar` reddens 4 across 3 files                                                                                                                                                                                                                                                                    |
+| Node-environment suites unaffected; wall clock unmoved                | `vitest.config.ts` unchanged; jsdom is a per-file docblock. Measured at gate 1: 38.25 s without the new files, 38.03 s with                                                                                                                                                                                                                                                                                                       |
+| `npm run check` green, test typecheck included                        | Green at the tip. dl-13 had landed, so the `.tsx` suites are typechecked — it caught two real errors during the build                                                                                                                                                                                                                                                                                                             |
+| `status: done` in this ticket's frontmatter, `03-STATUS.md` untouched | Frontmatter reads `done`; `git diff origin/main -- tools/downloader/docs/03-STATUS.md` is empty                                                                                                                                                                                                                                                                                                                                   |
+
 ### Gate 1 — 2026-08-22 — CONCERNS
 
 Every acceptance line proven. All three gate claims reproduced, both mutation
 checks confirmed, no `src` file changed.
 
-| #   | Sev | Finding                                                                                                                                                                                                | Disposition                                                                                                                                            |
-| --- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | med | `variant-table.test.tsx` never exercised the component's sort: `fixtures.ts`'s `variants()` was already best-first, so deleting `sortVariantRows` from `VariantTable.tsx` left all 140 web tests green | **fixed** — position-dependent assertions mount a reversed list via `shuffled()`; the mutation now reddens 4                                           |
-| 2   | low | Same blind shape in `ProbePanel`'s subtitle wiring — one track per language made the `Set` dedupe untestable                                                                                           | **fixed** — third track duplicating `en`, plus a toggle-off test that `subtitleLanguages` is omitted, not `[]`                                         |
-| 3   | low | `ProbePanel`'s live duration asserted in the input but never on the wire                                                                                                                               | **fixed** — default asserted as `liveDurationSec: 300`; post-edit assertion moved to `toHaveBeenLastCalledWith`                                        |
-| 4   | low | `ThemeToggle` mounted only with `value="dark"`                                                                                                                                                         | **fixed** — loops every `THEME_CHOICES` entry                                                                                                          |
-| 5   | low | `JobCard`'s `active` covered at the two ends but not per status                                                                                                                                        | **fixed** — Cancel asserted inside the active loop; new test over all three terminal statuses                                                          |
-| 6   | low | `retryAfterSec` reached the client and nothing rendered it                                                                                                                                             | **fixed, scope grown by decision** — `presentError` surfaces it, new `formatRetryAfter`, `ErrorPanel` renders it                                       |
-| 7   | low | The `downloading → probing` step list walking backwards was logged as a design question                                                                                                                | **deferred** — ruled a defect, filed as [dl-18](./dl-18-pipeline-high-water-mark.md); characterization test added here so dl-18 goes red when it lands |
-| 8   | low | `fixtures.ts` claimed every builder parsed through a contract schema; `progress()` and `result()` returned bare literals                                                                               | **fixed** — all seven parse                                                                                                                            |
-| 9   | low | `App`'s `startError`/`retryJob` shell paths uncovered; the jsdom native-validation assertion is environment-dependent                                                                                  | **accepted** — informational, both already commented in place                                                                                          |
-| 10  | —   | `03-STATUS.md` edits collide with `repo-1-retire-the-narrative`                                                                                                                                        | **reverted** — file restored byte-identical to `origin/main`; acceptance row rewritten to close by frontmatter alone                                   |
+| #   | Sev | Finding                                                                                                                                                                                                | Disposition                                                                                                                                                                                                                                                            |
+| --- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | med | `variant-table.test.tsx` never exercised the component's sort: `fixtures.ts`'s `variants()` was already best-first, so deleting `sortVariantRows` from `VariantTable.tsx` left all 140 web tests green | **fixed** — position-dependent assertions mount a reversed list via `shuffled()`; the mutation now reddens 4                                                                                                                                                           |
+| 2   | low | Same blind shape in `ProbePanel`'s subtitle wiring — one track per language made the `Set` dedupe untestable                                                                                           | **fixed** — third track duplicating `en`, plus a toggle-off test that `subtitleLanguages` is omitted, not `[]`                                                                                                                                                         |
+| 3   | low | `ProbePanel`'s live duration asserted in the input but never on the wire                                                                                                                               | **fixed** — default asserted as `liveDurationSec: 300`; post-edit assertion moved to `toHaveBeenLastCalledWith`                                                                                                                                                        |
+| 4   | low | `ThemeToggle` mounted only with `value="dark"`                                                                                                                                                         | **fixed** — loops every `THEME_CHOICES` entry                                                                                                                                                                                                                          |
+| 5   | low | `JobCard`'s `active` covered at the two ends but not per status                                                                                                                                        | **fixed** — Cancel asserted inside the active loop; new test over all three terminal statuses                                                                                                                                                                          |
+| 6   | low | `retryAfterSec` reached the client and nothing rendered it                                                                                                                                             | **fixed, scope grown by decision** — `presentError` surfaces it, new `formatRetryAfter`, `ErrorPanel` renders it                                                                                                                                                       |
+| 7   | low | The `downloading → probing` step list walking backwards was logged as a design question                                                                                                                | **deferred** — ruled a defect, filed as [dl-18](./dl-18-pipeline-high-water-mark.md); characterization test added here so dl-18 goes red when it lands                                                                                                                 |
+| 8   | low | `fixtures.ts` claimed every builder parsed through a contract schema; `progress()` and `result()` returned bare literals                                                                               | **fixed** — all seven parse                                                                                                                                                                                                                                            |
+| 9   | low | `App`'s `startError`/`retryJob` shell paths uncovered; the jsdom native-validation assertion is environment-dependent                                                                                  | **accepted, and unmarked in the code** — the only trace of the uncovered paths is the string "not exercised by this suite" in `app.test.tsx`'s fake client, which names neither. The jsdom assertion _is_ commented, at `url-form.test.tsx:137`. Recorded here instead |
+| 10  | —   | `03-STATUS.md` edits collide with `repo-1-retire-the-narrative`                                                                                                                                        | **reverted** — file restored byte-identical to `origin/main`; acceptance row rewritten to close by frontmatter alone                                                                                                                                                   |
 
 Note on #6: `error-panel.test.tsx` previously asserted `not.toContain("20")` —
 it pinned the _absence_ of a wait as the current answer. That test was inverted,
@@ -165,6 +191,44 @@ byte-identical.
 | 5   | low | An existing test changing meaning (gate 1 #6) should be findable                                                                                                                                                                                                                                           | **fixed** — recorded under gate 1 above                                                                                                                                             |
 | 6   | —   | Acceptance row still referenced editing `03-STATUS.md`                                                                                                                                                                                                                                                     | **fixed** — replaced with repo-1's wording; closes by frontmatter alone, no contact with the file                                                                                   |
 
+### Gate 3 — 2026-08-23 — CONCERNS
+
+Every mutation claim from gate 2 reproduced. The full `formatRetryAfter` battery
+re-run: nothing throws, no output matches `/e[+-]/i`, and every numeric output
+re-parsed is `>=` its input — the bucketing rewrite did not make it round short.
+The `allowRetry` veto loop confirmed to have per-code granularity by leaking one
+code and getting exactly 1 red. The gate-1 record checked against branch history
+and found accurate.
+
+| #   | Sev  | Finding                                                                                                                                                                                                                                       | Disposition                                                                                                                                                                                   |
+| --- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | med  | Sixth blind assertion: `JobList.tsx`'s `streamState={streamStates[job.id]}` proven by nothing — the fixture said `{ "job-1": "open" }`, and `"open"` is the one value that renders nothing, so `streamState={undefined}` passed all 154 tests | **fixed** — `job-card.test.tsx:379` uses `{ "job-2": "reconnecting" }` and asserts the pill in the second card and absent from the first; `undefined` and an index-keyed lookup each redden 1 |
+| 2   | low  | Same shape at `ProbePanel.tsx`'s `cached` badge — only the true branch asserted                                                                                                                                                               | **fixed** — `probe-panel.test.tsx:107`                                                                                                                                                        |
+| 3   | low  | Same shape at `VariantTable.tsx`'s `row.hasVideo && row.fps !== "—"` guard                                                                                                                                                                    | **fixed** — `variant-table.test.tsx:98` and `:109`, both directions                                                                                                                           |
+| 4   | low  | `retryable` and `retryAfterSec` gated on different expressions, so a `RATE_LIMITED` the server marked `retryable: false` still rendered a wait                                                                                                | **fixed** — one `retryable` const now gates both; `error-panel.test.tsx:156` pins the combination                                                                                             |
+| 5   | low  | `## Review` had no acceptance table, which `docs/01-TICKETS.md` says is what the section is                                                                                                                                                   | **fixed** — added above, a row per `## Done when` line with `file:line`                                                                                                                       |
+| 6   | low  | Gate 1 row #9's disposition overstated: nothing names `App`'s uncovered `startError`/`retryJob` paths                                                                                                                                         | **fixed** — row corrected below                                                                                                                                                               |
+| 7   | low  | First Log entry's figures stale at the tip                                                                                                                                                                                                    | **fixed** — marked as dated to their own commit rather than re-corrected                                                                                                                      |
+| 8   | info | `ErrorPanel.tsx`'s "only ever a phrase the server supplied" — it is _derived_ from the server's number                                                                                                                                        | **fixed** — comment corrected                                                                                                                                                                 |
+
+**The sweep asked for found three more, all the same shape**, and one of them is
+not cosmetic:
+
+- `VariantTable.tsx`'s `row.hasAudio ? row.audioCodec : "none"` — every fixture
+  variant had audio one way or another, so dropping the guard left the suite
+  green. A video-only rendition would then advertise a stale `audioCodec` for a
+  download that comes out silent, and the audio column is the only place a user
+  sees that before committing. Fixed at `variant-table.test.tsx:121`.
+- `JobCard.tsx`'s `segmentsTotal === null` branch — collapsing it printed the
+  literal string `"null"` at a user. Fixed at `job-card.test.tsx:122`.
+- `JobCard.tsx`'s `result.durationSec !== null` branch — a trailing ` · —`.
+  Fixed at `job-card.test.tsx:139`.
+
+That is eight instances of one shape across four gates: **a fixture whose value
+makes a branch unobservable.** Every one was a green suite over an untested
+seam, and none was found by reading the tests — only by mutating the source and
+watching what stayed green.
+
 ## Log
 
 ### 2026-08-22 — built
@@ -177,6 +241,12 @@ prop through the contract's own zod schemas. Every component in
 `ThemeToggle`) and `app`. 543 tests across 37 files → **611 across 45**, and the
 project's wall clock did not move: 38.25 s without the new files, 38.03 s with
 them. The suite's time is the browser sniffer's and always was.
+
+**Every figure in this entry is as of its own commit** (`29e2710`) and is not
+maintained afterwards — three review rounds have added tests since, and the tip
+of the branch reads 625 across 45. A Log entry is a record of what was true when
+it was written; re-editing the numbers each round would turn it into a status
+page, which is the one thing a ticket Log is not.
 
 **The environment is a docblock, not a project** (step 1). `// @vitest-environment
 jsdom` at the top of each rendering file. A project of its own would have had to
@@ -388,3 +458,57 @@ committing it.
 paragraph explaining why I could not satisfy the old one. The line closes by
 frontmatter, which is what ADR 003 says state is, and it touches the file not at
 all — so it stays true whichever of the two branches lands first.
+
+### 2026-08-23 — third review round
+
+One med, several lows, and a sweep. Dispositions are in `## Review`; the part
+worth keeping is what the sweep showed.
+
+**The blind-fixture shape is not a series of accidents.** Four gates have now
+found it eight times, and every instance is the same sentence: _the fixture
+supplies the one value that makes the branch unobservable._ `variants()` was
+already sorted, so the sort was never exercised. `job()` always carried a
+variant, so the title fell through its first branch. `streamStates` said
+`"open"`, and `"open"` is precisely the value that renders nothing — only
+`"reconnecting"` produces a pill, so `streamState={undefined}` passed all 154
+tests. Every variant in the fixture had audio, so a silent rendition never
+rendered "none". `segmentsDone` and `segmentsTotal` were always set together, so
+the half-known case never printed. And so on.
+
+What makes this worth writing down rather than just fixing: **none of the eight
+was findable by reading the tests.** Each one reads as a perfectly good
+assertion, and each one passes for the wrong reason. The only thing that found
+them was mutating the source and watching what stayed green. A component test
+suite that has never been mutation-checked should be assumed to contain this
+shape, because a fixture is written to look plausible and "plausible" is exactly
+the state in which every branch agrees with the default.
+
+The tell to look for, next time: **a fixture value that is also the component's
+no-op.** `"open"` for a stream state, a sorted list for a sorter, a present
+optional for a fallback chain, `null` on both halves of a pair. Where the
+default and the interesting case coincide, the seam is invisible.
+
+**The one with a user-facing consequence** was
+`row.hasAudio ? row.audioCodec : "none"`. Dropping the guard leaves the suite
+green and makes a video-only rendition advertise a codec — so a user picks
+"AAC" and gets a silent file, with the audio column being the only place they
+could have seen otherwise before committing. The other two the sweep found are
+smaller but real: `"120 / null"` rendered at a user, and a trailing ` · —` on a
+finished file of unknown duration.
+
+**`retryable` and `retryAfterSec` now read one expression**, which is what my
+gate-2 Log entry claimed and the code did not quite do. The taxonomy veto was
+there; the payload flag was not, so a `RATE_LIMITED` the server itself marked
+`retryable: false` still rendered "wait 20 s before trying again" with nothing to
+press. Both are the same question — should this error offer another attempt? —
+so both read the same answer now. The deliberate case survives untouched: a
+panel with no `onRetry` wired still shows the wait, because the view says a retry
+is possible and only this particular renderer has no button for it.
+
+**`## Review` gained the acceptance table** `docs/01-TICKETS.md` says the section
+is. Two gates of finding tables were half the record: a later reader could see
+what was wrong but not what was covered, which is the half that makes the
+section worth committing. One row per `## Done when` line, with `file:line`.
+One row is honest about being partial — "submit disabled on an empty or invalid
+URL" is only true of the empty half, and the row says which test pins the guard
+that handles the other.

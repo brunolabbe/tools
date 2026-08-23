@@ -84,6 +84,65 @@ test("an audio-only rendition says so rather than reporting a resolution", () =>
   // same em dash it uses everywhere else rather than an empty cell.
   expect(audioRow?.textContent).toContain("—");
   expect(audioRow?.textContent).not.toContain("fps");
+
+  // The frame-rate cell is guarded by `row.hasVideo && row.fps !== "—"`, and
+  // dropping that guard left the suite green: the audio-only row picked up a
+  // stray em dash beside "audio only" that nothing was looking at. The quality
+  // cell holds exactly the resolution and nothing else.
+  const quality = within(audioRow as HTMLElement)
+    .getByRole("radio")
+    .closest("label") as HTMLElement;
+  expect(quality.textContent).toBe("audio only");
+});
+
+test("a video rendition shows its frame rate beside the resolution", () => {
+  // The other half of the same guard: where there *is* a frame rate, it renders.
+  mount(shuffled());
+
+  const videoRow = within(screen.getByRole("table")).getAllByRole("row")[2];
+  const quality = within(videoRow as HTMLElement)
+    .getByRole("radio")
+    .closest("label") as HTMLElement;
+  expect(quality.textContent).toBe("1920×108030 fps");
+});
+
+test("a video rendition with no frame rate shows the resolution alone", () => {
+  // `fps: undefined` becomes the em dash in `toVariantRow`, and the guard is
+  // what keeps that dash out of the cell.
+  mount([variant({ id: "v-nofps", fps: undefined })]);
+
+  const row = within(screen.getByRole("table")).getAllByRole("row")[1];
+  const quality = within(row as HTMLElement)
+    .getByRole("radio")
+    .closest("label") as HTMLElement;
+  expect(quality.textContent).toBe("1920×1080");
+});
+
+test("a silent rendition says it has no audio, rather than naming a codec", () => {
+  // Found by sweeping for the same shape a third time: every variant in the
+  // fixture had audio one way or another — `v-2160` through its `audioUrl`, the
+  // rest directly — so `hasAudio ? audioCodec : "none"` never took its false
+  // branch, and dropping the guard entirely left the suite green.
+  //
+  // This is not cosmetic. A video-only progressive file with a stale
+  // `audioCodec` on it would advertise "AAC" for a download that comes out
+  // silent, and the audio column is the only place a user can see that before
+  // committing to it.
+  mount([
+    variant({
+      id: "v-silent",
+      hasAudio: false,
+      audioUrl: undefined,
+      audioCodec: "mp4a.40.2",
+      label: "1080p · video only",
+    }),
+  ]);
+
+  const row = within(screen.getByRole("table")).getAllByRole("row")[1];
+  expect(row?.textContent).toContain("none");
+  expect(row?.textContent).not.toContain("AAC");
+  // And not marked for muxing either — there is no second stream to fold in.
+  expect(row?.textContent).not.toContain("+mux");
 });
 
 test("a rendition whose audio is a separate stream is marked as needing a mux", () => {

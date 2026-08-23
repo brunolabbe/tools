@@ -153,6 +153,23 @@ test("no code the taxonomy refuses to retry can show a wait", () => {
   }
 });
 
+test("a retry the server itself withdrew takes its wait with it", () => {
+  // The quieter half of the same contradiction. `RATE_LIMITED` is
+  // `allowRetry: true` in the table, so the taxonomy veto does not fire — but
+  // the server marked this one `retryable: false`, and a wait for a retry it
+  // just told us not to make is still a wait for nothing. `retryable` and
+  // `retryAfterSec` are gated on one expression so the two cannot disagree.
+  const payload = errorPayload("RATE_LIMITED", {
+    retryable: false,
+    details: { retryAfterSec: 20 },
+  });
+  expect(presentError(payload).retryAfterSec).toBeNull();
+
+  mount(payload);
+  expect(screen.queryByText(/before trying again/u)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+});
+
 test("a wait is shown even where there is nothing to press", () => {
   // A panel with no `onRetry` still tells the user the server is busy for
   // another twenty seconds, which is true and useful on its own.

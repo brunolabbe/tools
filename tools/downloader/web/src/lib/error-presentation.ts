@@ -230,23 +230,32 @@ function readRetryAfterSec(details: Record<string, unknown> | undefined): number
 export function presentError(payload: AppErrorPayload): ErrorView {
   const entry = ERROR_PRESENTATION[payload.code];
   const message = payload.message.trim() || DEFAULT_ERROR_MESSAGES[payload.code];
+  // Computed once and used twice, deliberately. `readRetryAfterSec` returns a
+  // number for *any* code — `details` is server-supplied and a server can attach
+  // one to anything — so a `DRM_PROTECTED` carrying `retryAfterSec` would render
+  // "there is nothing to retry — the answer will not change" directly above
+  // "wait 20 s before trying again". A `RATE_LIMITED` the server itself marked
+  // `retryable: false` is the quieter version of the same contradiction: a wait
+  // for a retry it just told us not to make.
+  //
+  // Both are the same question — "should this error offer another attempt?" —
+  // so both read the same answer, and the answer is computed here rather than
+  // gated in `ErrorPanel`, so no future renderer of an `ErrorView` can
+  // reintroduce either.
+  //
+  // What this does *not* veto is a panel with no `onRetry` wired: the view still
+  // says a retry is possible, and the wait is worth stating even where this
+  // particular panel has no button. That case is deliberate and tested.
+  const retryable = entry.allowRetry && payload.retryable === true;
   return {
     code: payload.code,
     title: entry.title,
     message,
     detail: entry.detail,
     tone: entry.tone,
-    retryable: entry.allowRetry && payload.retryable === true,
+    retryable,
     final: entry.final === true,
-    // The same client-side veto the retry button gets, and for the same reason.
-    // `readRetryAfterSec` will happily return a number for *any* code, because
-    // `details` is server-supplied and a server can attach one to anything. A
-    // `DRM_PROTECTED` carrying `retryAfterSec` would then render "there is
-    // nothing to retry — the answer will not change" directly above "wait 20 s
-    // before trying again", which is the contradiction this table exists to
-    // prevent. Vetoed here rather than in `ErrorPanel` so that one place
-    // decides and no future renderer can reintroduce it.
-    retryAfterSec: entry.allowRetry ? readRetryAfterSec(payload.details) : null,
+    retryAfterSec: retryable ? readRetryAfterSec(payload.details) : null,
   };
 }
 

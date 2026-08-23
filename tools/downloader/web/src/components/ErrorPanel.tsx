@@ -18,9 +18,11 @@ export function ErrorPanel({
 }: ErrorPanelProps): React.JSX.Element {
   const view = presentError(error);
   const showRetry = view.retryable && onRetry !== undefined;
-  // Only ever a phrase the server supplied. When it said nothing, this is
-  // `null` and no line is rendered — the alternative is guessing a wait, which
-  // is the "never fake progress" rule wearing a different hat.
+  // Derived from the server's own number — rounded up, bucketed and clamped by
+  // `formatRetryAfter` — never invented here. When the server said nothing
+  // usable, or the error is one no retry can help, this is `null` and no line is
+  // rendered: guessing a wait is the "never fake progress" rule wearing a
+  // different hat.
   const wait = formatRetryAfter(view.retryAfterSec);
 
   return (
