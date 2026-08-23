@@ -69,27 +69,31 @@ person would use to double-check the deferral undoes it.
 
 Two lines are responsible, both in `scripts/status.mjs`:
 
-- **`describeTicket`, at `:277-279`.** It computes blockers from `depends_on`
+- **`describeTicket`, at `:325-329`.** It computes blockers from `depends_on`
   and nothing else:
 
   ```js
-  const blockers = ticket.depends_on
-    .map((dependency) => /** @type {typeof ticket} */ (byId.get(dependency)))
-    .filter((dependency) => dependency.status !== "done");
+  for (const dependency of ticket.depends_on) {
+    const found = byId.get(dependency);
+    if (found === undefined) missing.push(dependency);
+    else if (found.status !== "done") blockers.push(found);
+  }
   ```
 
   The ticket's own `status` is never read. This much is arguably right — the
   function's JSDoc says it returns _"what is actually blocking it"_, and a
   closed ticket has the same dependency graph it always had.
 
-- **`printTicket`, at `:479-483`.** This is the actual defect. It has exactly
+- **`printTicket`, at `:591-597`.** This is the actual defect. It has exactly
   two branches and neither of them is "closed":
 
   ```js
+  const holding = [
+    ...blockers.map((blocker) => `${blocker.id} (${blocker.status})`),
+    ...missing.map((dependency) => `${dependency} (not a ticket)`),
+  ];
   process.stdout.write(
-    blockers.length === 0
-      ? "\n  unblocked\n\n"
-      : `\n  blocked by  ${blockers.map((b) => `${b.id} (${b.status})`).join(", ")}\n\n`,
+    holding.length === 0 ? "\n  unblocked\n\n" : `\n  blocked by  ${holding.join(", ")}\n\n`,
   );
   ```
 
@@ -98,7 +102,7 @@ Two lines are responsible, both in `scripts/status.mjs`:
 
 The script already knows what closed means: `OPEN` is
 `new Set(["ready", "in-flight"])` at `:48`, and `milestones` and both table
-renderers key off it (`:250`, `:298-299`, `:441`). Only the single-ticket view
+renderers key off it (`:286`, `:348-349`, `:551`). Only the single-ticket view
 does not.
 
 The mirror case is reachable and is worse to read: a closed ticket with a
@@ -109,7 +113,7 @@ dependency — so the fix should cover it rather than wait for the first one.
 
 ## Build
 
-1. **`scripts/status.mjs`, `printTicket` (`:465-484`).** Branch on the ticket's
+1. **`scripts/status.mjs`, `printTicket` (`:575-598`).** Branch on the ticket's
    own status before branching on blockers. A ticket whose status is not in
    `OPEN` gets a closing line that says so — `done` and `dropped` word
    differently, and `dropped` should carry the `note` where there is one, since
@@ -128,13 +132,14 @@ dependency — so the fix should cover it rather than wait for the first one.
 2. **Decide `describeTicket` deliberately, and say which you chose in the Log.**
    Either leave it returning the true blocker list and let `printTicket` decide
    what to print — the smaller change, and it keeps `--json`-shaped consumers
-   honest — or return a `closed` flag alongside `{ ticket, blockers }` so the
-   decision is made once. Do not silently empty `blockers` for a closed ticket:
+   honest — or return a `closed` flag alongside `{ ticket, blockers, missing }`
+   so the decision is made once. Do not silently empty `blockers` for a closed
+   ticket:
    that would make the two existing `describeTicket` tests pass while destroying
    information the function is documented to carry.
 
 3. **Tests, in `scripts/test/status.test.ts`.** The file already covers
-   `describeTicket` directly (`:249-271`) and `--show` end to end (`:332-337`),
+   `describeTicket` directly (`:324-379`) and `--show` end to end (`:449-454`),
    with a `repoWith` helper that builds a throwaway repo of ticket files — use
    it rather than asserting against real tickets, which move. Cover:
    - a `dropped` ticket with no dependencies does not print `unblocked`;
@@ -142,12 +147,35 @@ dependency — so the fix should cover it rather than wait for the first one.
    - a closed ticket with an open dependency does not print `blocked by`;
    - a `ready` ticket still prints `unblocked`, and an `in-flight` one blocked
      by an open dependency still prints `blocked by` — the existing behaviour
-     has to survive, and `:332-337` asserts only `/unblocked|blocked by/`, which
+     has to survive, and `:449-454` asserts only `/unblocked|blocked by/`, which
      both of the new cases would also satisfy. Tighten it or add beside it.
 
 4. **Check nothing else states the two-branch rule.** `git grep -n unblocked`
    unfiltered — the word appears in `docs/01-TICKETS.md`'s `--ready`
    description, and `--ready` is not changing.
+
+5. **[repo-6](./repo-6-dangling-dependency-kills-the-view.md) landed first and
+   moved these lines.** Every `file:line` above was re-resolved against it on
+   2026-08-23, and both code blocks in `## Why` are quoted as they read now —
+   the earlier ones no longer existed anywhere in the file. Three things it
+   changed that this ticket has to know:
+   - `describeTicket` returns `{ ticket, blockers, missing }`. `blockers` is
+     untouched — real, non-`done` tickets — and `missing` is a `string[]` of
+     ids no ticket carries. Step 2's first option is therefore already the
+     shape on `main`; its second option is now a fourth field, not a third.
+   - `printTicket` gates `unblocked` on `holding.length === 0`, where `holding`
+     is `blockers` and `missing` rendered together. **The closed branch step 1
+     asks for goes in front of that condition, not in place of it** — replacing
+     it would silently drop `repo-404 (not a ticket)`, which repo-6 pins at
+     `scripts/test/status.test.ts:561-570`.
+   - The CLI now takes `--root <dir>`, so a `--show` case can run end to end
+     against a throwaway tree from `repoWith` instead of the real tickets. The
+     `run()` helper takes it as a second argument and returns `stdout`,
+     `stderr` and `status` separately.
+
+   The defect itself is unchanged: `--show` on a `dropped` or `done` ticket
+   with no open dependencies still ends in `unblocked`, because both lists are
+   empty and neither branch reads the ticket's own status.
 
 This is one file's worth of change plus its tests. It does not touch the parser,
 the taxonomy, or any ticket's frontmatter.

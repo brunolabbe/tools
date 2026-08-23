@@ -239,7 +239,15 @@ npm run status -- --prs           # fold in `gh pr list`
 npm run status -- --tool planner  # narrow any of the above to one tool
 npm run status -- --show pl-28    # one ticket: its fields, its blockers, its path
 npm run status -- --markdown      # the table, to paste into a pull request body
+npm run status -- --root <dir>    # a test seam: read another tree's tickets
 ```
+
+`--root` is listed for completeness rather than for use. It exists because
+`scripts/status.mjs` derives its own root from the script's location, so without
+it no test could drive the CLI against a throwaway ticket tree and every
+end-to-end case had to run against the real tickets — which cannot be malformed
+on purpose ([repo-6](./work/repo-6-dangling-dependency-kills-the-view.md)). If
+you are asking what is next, the six above are the whole of it.
 
 Computed from the ticket files every time, so it cannot disagree with them.
 `--ready` is the one worth knowing: `status: ready` means nobody has picked a

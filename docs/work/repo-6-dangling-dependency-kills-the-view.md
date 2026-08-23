@@ -301,6 +301,61 @@ undefined`.
   and the tests listed under **Tests** exist and fail against `60e48e7`.
 - `npm run check` and `npm test` are green.
 
+## Gates
+
+### Gate 1 — 2026-08-23 · **CONCERNS**
+
+Reviewed at `399433c`. The code was found sound and every mechanical claim
+reproduced: the mutation sweep with its control at 0, the seven-mode table run
+independently against a scratch ticket of the reviewer's own, and the CI premise
+checked against real run logs rather than the diff — run `32664738928`, the
+`4e3c48e` docs-only merge, shows `check` green in 27s with `test` skipped, which
+is exactly the scenario the exit-code decision rests on. The verdict is
+CONCERNS on the strength of two documentation findings, both now addressed.
+
+**Citations re-resolved against this branch's tip.** `scripts/status.mjs` and
+`scripts/test/status.test.ts` are byte-identical to `399433c`, so the
+line numbers below are the reviewer's except for five that were already
+approximate in the record and are corrected here: `ticketDirs`'s `readdirSync`
+is `:235-239` not `:234-236`; the top-level handler is `:634-641` not
+`:632-637`; `(waits on …)` is `:565` not `:455`; the real-blocker-and-dangling-id
+test is `:362-371` not `:365-370`; the healthy-repo `test.each` is `:573-584`
+not `:583-592`. All twenty-five citations in this section were verified
+programmatically — each span checked to still contain the string it is cited
+for — and the reviewer's own file is posted unedited on the pull request, so the
+delta is visible rather than quietly folded in. The `docs/work/repo-3-…`
+citations in finding 1 are deliberately left as the reviewer wrote them: they
+are the stale-before values and documenting what was wrong is their whole
+purpose.
+
+| #   | Severity           | Finding                                                                                                                                                                                                                                                                            | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | med                | `docs/work/repo-3-show-a-closed-ticket.md` — all four `file:line` citations invalidated by this branch (`repo-3:72`, `:88`, `:112`, `:130`), and both code blocks it quotes as current code no longer exist anywhere in the file. repo-3 is the next ticket built.                 | **Fixed.** Both snippets replaced with the code as it reads now; `describeTicket` `:277-279` → `:325-329`, `printTicket` `:479-483` → `:591-597`, Build step 1's `:465-484` → `:575-598`, the `OPEN` callers `:250`/`:298-299`/`:441` → `:286`/`:348-349`/`:551`, the test citations `:249-271`/`:332-337` → `:324-379`/`:449-454`. Build step 2's `{ ticket, blockers }` corrected to `{ ticket, blockers, missing }`, since it is the sentence asking repo-3's builder to choose a return shape. A new Build step 5 records what repo-6 changed for it, including that its closed branch goes **in front of** the `holding.length === 0` condition rather than in place of it, and that the defect itself still reproduces. No part of repo-3 implemented. |
+| 2   | med-low            | `docs/adr/003:187-192` asserts a `depends_on` pointing at nothing "is a named failure rather than a row quietly missing from a table" — false for one of its four items after this branch, and the only uncorrected statement of the old rule that is not historical ticket prose. | **Fixed.** An `_Outcome, 2026-08-23:_` annotation appended to that bullet, in the pattern the same section already uses twice (`:180-185`, `:193-199`) — the ADR's own claim is left byte-unchanged, because it records what was believed when the decision was taken. The annotation says which three items remain fatal and why (a ticket that will not parse has no row to fall back to), and that the strictness is charged to `--json` rather than dropped. My Log named that pattern and then did neither, which is what the finding was about.                                                                                                                                                                                                        |
+| 3   | low                | `--root` is discoverable — in `OPTIONS` at `scripts/status.mjs:430` and in the parser's error message — but absent from both prose flag lists, so the Log's "a plain option listed in `OPTIONS`, not hidden" claims more than `OPTIONS` can carry.                                 | **Fixed, in one of the two lists.** `docs/01-TICKETS.md`'s flag block now lists `--root <dir>` marked as a test seam, with a sentence saying it is listed for completeness rather than for use and that the six above it are the whole of "what is next". `CLAUDE.md`'s `## Commands` is deliberately left at six: it is the short list a person reads to run the repo, and root `CLAUDE.md` is explicit that its sections are not to be padded. Reviewer's verification that the cheaper route does not exist is recorded and matches mine — `DEFAULT_ROOT` derives from the script's own location (`scripts/status.mjs:50`), so setting `cwd` on the spawn would have changed nothing.                                                                     |
+| 4   | low, informational | `--root` on a path that does not exist gives a raw `ENOENT` from `ticketDirs` (`scripts/status.mjs:235-239`), unguarded. Measured: `--root /nonexistent-xyz` → `ENOENT … scandir '/nonexistent-xyz/tools'`, exit 1; a directory with an empty `tools/` → exit 0, zero bytes.       | **No change, and none needed.** The message names the offending path and goes through the top-level handler at `scripts/status.mjs:634-641`, so there is no stack trace and no anonymous failure — the property this ticket exists to protect. Guarding it would be a second error path for a flag whose only caller is the test suite. Reviewer agreed with the reasoning; recorded here so it is not re-derived.                                                                                                                                                                                                                                                                                                                                           |
+| 5   | low, informational | `.github/workflows/ci.yml:98-100`'s comment says the step "**fails** by file and line" on "a `depends_on` pointing at nothing", and strictly a dangling edge is no longer a parse failure.                                                                                         | **No change, and none needed.** What that step _observes_ is byte-for-byte what it observed before: exit 1, and the same file-and-id line on stderr in the CI log. The comment describes the step's behaviour, which did not change; rewriting it would make the workflow diff say something happened there when nothing did. That the workflow needed no edit is itself the evidence the exit-code rule is the right one. Reviewer agreed.                                                                                                                                                                                                                                                                                                                  |
+
+**Acceptance**
+
+| #   | `Done when` line                                                                                                                                                                              | Verdict      | Proof                                                                                                                                                                                                                                                                                                                         |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | every interactive mode prints its normal output plus a warning naming the file and the missing id                                                                                             | **proven**   | `scripts/test/status.test.ts:483-494` (`test.each` over the default view, `--ready`, `--markdown`, `--tool`, `--show <unrelated>`; each asserts its own payload on stdout, `status === 0`, and `stderr` equal to exactly the one warning line). Reproduced independently by the reviewer across all seven modes plus `--prs`. |
+| 2   | `--show <the malformed ticket>` names the missing dependency and does not print `Cannot read properties of undefined`                                                                         | **proven**   | `scripts/test/status.test.ts:561-568`; unit-level guard at `:352-357`. Reviewer measured `blocked by  repo-808 (not a ticket)`, 263 B, exit 0.                                                                                                                                                                                |
+| 3   | `--json` writes parseable JSON containing the readable tickets and a structured account of the unreadable dependency; the exit code is Build step 5's decision and the Log says which and why | **proven**   | `scripts/test/status.test.ts:525-549` (parses, both halves, `status === 1`) and `:551-557` (narrowed by `--tool`, problem still reported). The decision and its reasoning are in the Log below and in `EXIT_ON_PROBLEMS`'s JSDoc.                                                                                             |
+| 4   | the strict check still exists, and `node scripts/status.mjs --json > /dev/null` still fails on a repo containing one                                                                          | **proven**   | `scripts/test/status.test.ts:231-244` (the condition is still detected, by file and id) and the `status === 1` assertion in `:525-549`. **verified** as a command by both builder and reviewer: exit 1 with the ticket present, 0 without.                                                                                    |
+| 5   | `scripts/test/status.test.ts:188-191` rewritten rather than deleted, and the listed tests fail against `4e3c48e`                                                                              | **proven**   | The rewrite is at `:231-244`, and `:499-520` pins the negative half — the same tree minus its malformed ticket produces byte-identical stdout for the views that do not list it. The whole new suite against `4e3c48e`'s `status.mjs`: **21 tests fail** — builder and reviewer measured the same number.                     |
+| 6   | `npm run check` and `npm test` green                                                                                                                                                          | **verified** | Both re-run by the reviewer in its own worktree: `check` exit 0, `npm test` 101 files / 1436 tests, `npm run format` clean with no drift. Re-run again after this round.                                                                                                                                                      |
+
+**What the gate did not cover**, recorded because it is the half a green report
+hides: e2e and container gates unrun (out of scope, and this change touches
+neither); the Windows half of the CI matrix unrun; six of the ten mutations not
+independently reproduced (four were, plus the control and the against-`main`
+run); and the reviewer did not re-derive the original defect, accepting the
+builder's reproduction. One claim it could not verify: that the mutation sweep
+was run with the command the Log states, inferred rather than observed — the
+control exiting 0 and the four reproduced kills make it trustworthy regardless.
+
 ## Log
 
 ### 2026-08-23 — built on `repo-6-dangling-dependency`, base `4e3c48e`
@@ -431,3 +486,54 @@ reader throws again (11 failed), `describeTicket` dereferences a missing id (3),
 reported (1), a healthy repo warns anyway (11), `--json` narrows `problems` to
 `--tool` (1). Separately, the new suite against `4e3c48e`'s `status.mjs`: **21
 tests fail**, so they are red against the code this fixes.
+
+### 2026-08-23 — gate 1, CONCERNS, addressed
+
+Both findings were about documents rather than code, and both were right.
+
+**repo-3's citations were collateral I did not think to check.** I wrote a Log
+paragraph _for_ repo-3's builder and never opened repo-3's file, so all four of
+its `file:line` citations and both of the code blocks it quotes as current code
+were left pointing at nothing — `printTicket (:465-484)` now lands on
+`EXIT_ON_PROBLEMS`'s JSDoc. Refreshed, both snippets requoted from the file as
+it now reads, and a Build step 5 added recording what repo-6 changed for it.
+The general lesson, which is not repo-3-specific: **a ticket that quotes code
+verbatim ages against every branch that touches that file, and the branch that
+moves the lines is the only one in a position to know.** The repo's convention
+already says a shape-level defect goes in the sibling's Build section in the
+same pull request; a stale citation is the same thing and I treated it as
+somebody else's problem.
+
+**The ADR annotation is the finding I most deserved.** My previous entry said
+"this repo annotates those rather than rewriting them" as the reason for
+touching nothing, which is the correct pattern and not what I did — I neither
+annotated nor rewrote, and named the pattern as though naming it were the act.
+`docs/adr/003` now carries an `_Outcome, 2026-08-23:_` bullet in the same style
+as the two already in that section, saying that three of its four strict
+failures still end the command and the fourth does not, and why. The ADR's own
+claim is byte-unchanged.
+
+**`--root` is now in one prose list of two, deliberately.** `docs/01-TICKETS.md`
+lists it marked as a test seam, with a line saying the six above it are the whole
+of "what is next"; `CLAUDE.md`'s `## Commands` stays at six, because it is the
+short list a person reads to run the repo. The reviewer was right that "listed in
+`OPTIONS`, not hidden" claims more than `OPTIONS` can carry: source and an error
+string are not documentation.
+
+Findings 4 (raw `ENOENT` on a bad `--root`) and 5 (`ci.yml`'s comment) needed no
+change and are recorded above with their reasoning, so the next reader does not
+re-derive them.
+
+**On re-resolving the record before committing it.** Five of the reviewer's
+twenty-five citations did not resolve against the tip — and `scripts/` is
+byte-identical to the commit it read, so those five were approximate when
+written rather than moved by me. Corrected in the committed section, listed
+individually there, and the reviewer's file is posted unedited on the pull
+request so the delta is visible. Every citation in the `## Gates` section was
+checked programmatically: each span re-read and asserted to still contain the
+string it is cited for, 25/25.
+
+Gates re-run after this round: `npm run check` exit 0; `npx vitest run scripts`
+2 files / 66 tests; `npm test` 101 files / 1436 tests; `npm run format` for the
+four `.md` files touched. No source file changed in this round — the diff is
+`docs/work/repo-3-…`, `docs/adr/003-…`, `docs/01-TICKETS.md` and this ticket.
