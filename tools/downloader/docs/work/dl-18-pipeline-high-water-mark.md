@@ -3,7 +3,7 @@ id: dl-18
 tool: downloader
 title: Stop the pipeline list walking backwards when a job re-probes
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -123,4 +123,107 @@ not an error`, already holds the rest of the card's behaviour and should keep
 
 ## Log
 
-_Not started._
+### 2026-08-23 — built
+
+`statusHighWaterMark(job)` in `web/src/lib/status.ts`, one ternary rewritten in
+`JobCard.tsx`, the same three lines at `AnalysingPanel.tsx`'s stage list, and
+four tests in a new `web/test/status.test.ts` beside the two rewritten in
+`job-card.test.tsx`. `npm run check` green, 645 tests green under
+`--project downloader`. Nothing outside `web` was touched; `contract/src/job.ts`
+is untouched, as the brief requires.
+
+The mark is `attempts > 1` while `status === "probing"`, and nothing else. Only
+`probing` is inferred about, which is what keeps the failed-job trap shut: a
+`failed` job carrying `attempts: 2` still reports `statusIndex("failed")`, so it
+gains no trail of steps it never walked even though the list is not rendered for
+it anyway.
+
+**The accessible state is `aria-current="step"` on the active step and an
+`aria-label` of `"<label>, done"` on the ones behind it**, rather than a
+`visually-hidden` span carrying the same words. The span is the more usual
+pattern and the class already exists here, but it changes `textContent`, which
+reddens two
+neighbouring assertions that have nothing to do with this ticket — the pipeline's
+exact-label list, and gate 5's `getAllByText("Downloading")).toHaveLength(2)`,
+which counts the pill and the step together and is load-bearing against deleting
+the pills row. An attribute leaves the text alone and puts the state in the
+accessible tree just as well. Both lists now answer
+`getByRole("listitem", { current: "step" })`, so `chrome.test.tsx`'s
+`activeStage()` reads a role instead of `.stages__item--active`.
+
+### What the brief had wrong
+
+- **`progress.downloadedBytes` is not one of two workable signals — it is dead.**
+  Step 2 says to pick either it or `attempts` and write down why. There is no
+  choice to make: dl-9's orchestrator patches `initialProgress("probing")` **as
+  it takes the back-edge**, on the grounds that an abandoned attempt's bytes are
+  not progress towards this one, so a re-probing job's `downloadedBytes` is `0`
+  in the store and `0` again on any refetch. A mark read from the byte count
+  would have been green in tests built on dl-15's fixture and inert in
+  production. `attempts` is the only signal on the `Job` that survives the
+  transition, and the comment in `status.ts` says so.
+- **The first `Done when` line is phrased against that dead signal** — "a job in
+  `probing` whose `progress` shows bytes already downloaded". Read literally it
+  asks for the wrong rule. Both tests therefore loop over `downloadedBytes` of
+  `0` and `41_000_000` and assert the same list either way: the literal wording
+  is satisfied, and so is the claim that actually matters, which is that the byte
+  count is not what is being read.
+- **dl-15's own back-edge fixture is a shape the server cannot produce.** `the
+downloading → probing back edge keeps the work, and is not an error` mounts a
+  `probing` job still carrying 41 MB and asserts "39 MB" is on screen. The
+  orchestrator resets that snapshot, so no real re-probing card shows those bytes
+  — the sentence in the ticket's Why about "the bytes already fetched still on
+  screen beside it" describes the fixture rather than the product. The brief says
+  to leave that test untouched and it is untouched; it is the eleventh instance
+  of the shape dl-15's gate-3 entry names, and it is recorded here rather than
+  fixed because fixing it is a change to an assertion this ticket was told not to
+  disturb.
+- **The fix does not reach a client that is watching live, and that is the one
+  in the Why.** No `JobEvent` carries `attempts` — the union in
+  `contract/src/job.ts` has `status`, `progress`, `probed` and the three terminal
+  frames, none of them with the field — and `applyJobEvent` never writes it. So a
+  client following the SSE stream holds `attempts: 1` straight through the back
+  edge and only learns it is `2` on a refetch, which happens on reconnect
+  (`job-stream.ts` reconciles after every one) and on page load (`useJobs`
+  re-fetches every unfinished job). The card is therefore correct after a reload
+  or a dropped connection and unchanged for the user staring at a 20-minute
+  download with a healthy stream.
+
+  Closing that needs one of two things, and both are outside this ticket:
+  `attempts` on the `status` frame, which is a contract change the brief
+  explicitly forbids here; or a client-side inference in `job-reducer.ts` — a
+  status frame that moves the job _backwards_ along `STATUS_ORDER` is itself
+  proof the edge was taken, and the reducer is the one place that sees the move.
+  The second is web-only and would fit this ticket's spirit, but not its Build
+  section, which names `JobCard.tsx` and the rule's home in `lib/`. **It wants a
+  ticket of its own** and does not have one yet.
+
+- **`AnalysingPanel` was exactly what it looked like** — the same three lines,
+  taken here as step 4 allows.
+- The `dl-18` mentions in `job-card.test.tsx` were removed rather than reworded,
+  including from the two comments this ticket wrote. The `Done when` line asks
+  for that file to stop naming the ticket, and the explanation it used to point
+  at now lives in `statusHighWaterMark`'s docblock, which is a better target than
+  a ticket id anyway.
+
+### Mutation checks
+
+Nine, each applied to the source and reverted after. `npm test -- --project
+downloader status.test job-card chrome` throughout (36 tests over three files).
+
+| Mutation                                                | Red |
+| ------------------------------------------------------- | --- |
+| `statusHighWaterMark` returns `current` unconditionally | 2   |
+| drop the `attempts <= 1` guard                          | 3   |
+| drop the `status !== "probing"` guard                   | 1   |
+| `index <= furthestStep` → `index <`                     | 1   |
+| rank `done` above `active` in the ternary               | 3   |
+| drop `JobCard`'s `aria-current`                         | 3   |
+| drop `JobCard`'s done `aria-label`                      | 3   |
+| drop `AnalysingPanel`'s `aria-current`                  | 1   |
+| drop `AnalysingPanel`'s done `aria-label`               | 1   |
+
+The third one is the trap the brief names: with only `attempts <= 1` guarding,
+a `failed` job with a retry behind it reports `statusIndex("downloading")`
+instead of the last index, and `a terminal job gains no trail of steps it never
+walked` is the only thing that notices.

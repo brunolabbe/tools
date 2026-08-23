@@ -30,17 +30,31 @@ afterEach(cleanup);
 // ---------------------------------------------------------------------------
 
 /**
- * Which stage the panel is narrating, by class name.
+ * Which stage the panel is narrating, by ARIA state.
  *
- * By class because there is nothing else: the stage list marks done, active and
- * pending with CSS alone — no `aria-current`, no name that changes — so a screen
- * reader hears five items and no indication of which one is happening. That is
- * the same gap dl-18 records for `JobCard`'s pipeline, at the sibling site, and
- * it is noted in that ticket.
+ * This used to read `.stages__item--active`, because a class was all there was:
+ * the stage list marked done, active and pending with CSS alone, so a screen
+ * reader heard five items and no indication of which one was happening. dl-18
+ * closed that here and at `JobCard`'s pipeline together — the two lists read as
+ * siblings to a user, and narrating one without the other leaves the tool half
+ * spoken for.
  */
 function activeStage(): string {
-  const active = screen.getByRole("list").querySelector(".stages__item--active");
-  return active?.textContent ?? "";
+  return screen.getByRole("listitem", { current: "step" }).textContent ?? "";
+}
+
+/** The stages the panel says are behind it, in list order. */
+function doneStages(): string[] {
+  return screen
+    .getAllByRole("listitem", { name: /, done$/u })
+    .map((item) => item.textContent ?? "");
+}
+
+/** The class the stylesheet keys off, which is set from the same expression. */
+function stageClasses(): string[] {
+  return within(screen.getByRole("list"))
+    .getAllByRole("listitem")
+    .map((item) => item.className);
 }
 
 function analysing(): ReturnType<typeof vi.fn<() => void>> {
@@ -83,12 +97,22 @@ test("the narration follows the clock rather than inventing progress", () => {
     // about the clock, which is what this test used to do: freezing
     // `activeIndex` at 0 left all 162 tests green.
     expect(activeStage()).toBe("Opening a headless browser");
+    // Nothing is behind the first stage, so no item claims to be done — and the
+    // class the CSS keys off agrees, because both come from one expression.
+    expect(screen.queryAllByRole("listitem", { name: /, done$/u })).toEqual([]);
+    expect(stageClasses()[0]).toBe("stages__item stages__item--active");
+    expect(stageClasses()[1]).toBe("stages__item");
 
     act(() => {
       vi.advanceTimersByTime(5_000);
     });
     expect(screen.getByText("5s")).toBeDefined();
     expect(activeStage()).toBe("Provoking playback and watching network requests");
+    expect(doneStages()).toEqual([
+      "Opening a headless browser",
+      "Loading the page and dismissing consent banners",
+    ]);
+    expect(stageClasses()[0]).toBe("stages__item stages__item--done");
 
     act(() => {
       vi.advanceTimersByTime(11_000);

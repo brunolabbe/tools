@@ -44,20 +44,24 @@ export function AnalysingPanel({
       <p className="muted url-echo">{url}</p>
       <ProgressBar percent={null} label="Analysing page" />
       <ol className="stages" aria-live="polite">
-        {STAGES.map((stage, index) => (
-          <li
-            key={stage.afterMs}
-            className={
-              index < activeIndex
-                ? "stages__item stages__item--done"
-                : index === activeIndex
-                  ? "stages__item stages__item--active"
-                  : "stages__item"
-            }
-          >
-            {stage.text}
-          </li>
-        ))}
+        {STAGES.map((stage, index) => {
+          const state = index === activeIndex ? "active" : index < activeIndex ? "done" : "pending";
+          return (
+            <li
+              key={stage.afterMs}
+              className={
+                state === "pending" ? "stages__item" : `stages__item stages__item--${state}`
+              }
+              // Same gap, same fix as `JobCard`'s pipeline (dl-18): done, active
+              // and pending were a colour and a `::before` tick, so the list
+              // read as five undifferentiated items to anyone not looking at it.
+              aria-current={state === "active" ? "step" : undefined}
+              aria-label={state === "done" ? `${stage.text}, done` : undefined}
+            >
+              {stage.text}
+            </li>
+          );
+        })}
       </ol>
       <p className="muted">Browser probes usually take 10–20 seconds.</p>
       <button type="button" className="button" onClick={onCancel}>

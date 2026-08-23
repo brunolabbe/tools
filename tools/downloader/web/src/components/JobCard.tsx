@@ -11,7 +11,13 @@ import {
   formatSpeed,
 } from "../lib/format.ts";
 import type { StreamState } from "../lib/job-stream.ts";
-import { STATUS_HINT, STATUS_LABEL, STATUS_ORDER, statusIndex } from "../lib/status.ts";
+import {
+  STATUS_HINT,
+  STATUS_LABEL,
+  STATUS_ORDER,
+  statusHighWaterMark,
+  statusIndex,
+} from "../lib/status.ts";
 import { ErrorPanel } from "./ErrorPanel.tsx";
 import { ProgressBar } from "./ProgressBar.tsx";
 
@@ -34,6 +40,10 @@ export function JobCard({
   const active = job.status !== "completed" && job.status !== "failed" && job.status !== "canceled";
   const { progress } = job;
   const title = job.variant?.label ?? job.result?.filename ?? job.sourceUrl;
+  // Where the job is, and how far it has been — two different questions once
+  // the `downloading → probing` back-edge exists. See `statusHighWaterMark`.
+  const currentStep = statusIndex(job.status);
+  const furthestStep = statusHighWaterMark(job);
 
   return (
     <li className={`job job--${job.status}`}>
@@ -53,20 +63,30 @@ export function JobCard({
       {active && (
         <>
           <ol className="steps" aria-label="Pipeline">
-            {STATUS_ORDER.map((status, index) => (
-              <li
-                key={status}
-                className={
-                  index < statusIndex(job.status)
-                    ? "steps__item steps__item--done"
-                    : index === statusIndex(job.status)
-                      ? "steps__item steps__item--active"
-                      : "steps__item"
-                }
-              >
-                {STATUS_LABEL[status]}
-              </li>
-            ))}
+            {STATUS_ORDER.map((status, index) => {
+              // `active` is asked first: a re-probing job is *at* a step it has
+              // already been past, and where it is now outranks how far it got.
+              const state =
+                index === currentStep ? "active" : index <= furthestStep ? "done" : "pending";
+              return (
+                <li
+                  key={status}
+                  className={
+                    state === "pending" ? "steps__item" : `steps__item steps__item--${state}`
+                  }
+                  // The three states were CSS and nothing else — a colour and a
+                  // `::before` tick that a screen reader has no reason to read —
+                  // so the list announced five steps and no sense of which one
+                  // the job was on. `aria-current` names that one; the label
+                  // names the ones behind it, because a done step is otherwise
+                  // indistinguishable from a pending one by name.
+                  aria-current={state === "active" ? "step" : undefined}
+                  aria-label={state === "done" ? `${STATUS_LABEL[status]}, done` : undefined}
+                >
+                  {STATUS_LABEL[status]}
+                </li>
+              );
+            })}
           </ol>
           <ProgressBar
             percent={progress.percent}
