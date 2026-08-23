@@ -1,0 +1,180 @@
+# The planner's grounding subsystem: a routing engine and a geocoder.
+#
+#   docker compose -f compose.planner.yaml --profile tiles run --rm valhalla-tiles
+#   docker compose -f compose.planner.yaml up -d
+#
+# ## Why this is a file of its own
+#
+# `docs/adr/004-one-compose-fragment-per-tool.md`: a tool's services are compose
+# fragments of its own and the host merges the fragments it wants. These two are
+# third-party images pulled by tag, they belong to one tool — nothing in the
+# downloader wants a distance matrix — and one of them has a lifecycle compose
+# does not model, because building Valhalla's tiles is hours of CPU run once and
+# then rarely. A downloader-only host must be able to express "not this", and
+# the list of files it merges is how.
+#
+# ## What is deliberately not here yet
+#
+# **The `planner` service itself**, which is `pl-2` steps 5 and 6 — its released
+# image, its public hostname and its Cloudflare Access application. It joins
+# this file, and the three variables it will need are written at the bottom so
+# that whoever does pl-2 does not have to derive them.
+#
+# **The repo-wide rename** ADR 004 decided — `compose.yaml` becoming
+# `compose.downloader.yaml`, the production overlay splitting per tool — is a
+# `repo-` ticket and is not started here. This fragment is additive: merging it
+# is opt-in, and nothing that works today stops working because it exists.
+#
+# ## The two images are not pinned to anything this repo has run
+#
+# Neither was pulled while this file was written — the environment pl-28 was
+# built in had no Docker and no route to a registry — so **verify the tags
+# before a first deployment** and pin them. `cloudflared:latest` in
+# `compose.prod.yaml` carries the same warning for the same reason: a `pull` can
+# otherwise change a routing engine under a working deployment.
+
+name: webtools
+
+services:
+  # --- The routing engine --------------------------------------------------
+  #
+  # Valhalla's graph is tiled and mmap'd, so resident memory tracks the tiles
+  # actually touched rather than the size of the extract. That is the whole
+  # reason it and not OSRM: a Québec-or-larger region is untroubled on a 16 GB
+  # mini-PC, and OSRM's contraction step would have meant building the graph on
+  # a second machine and copying artifacts over.
+  valhalla:
+    image: "ghcr.io/valhalla/valhalla:${VALHALLA_IMAGE_TAG:-3.7.0}"
+    restart: unless-stopped
+    networks: [planner]
+    volumes:
+      # Built once by the `tiles` profile below, read for years afterwards.
+      # Never a bind mount of the checkout: `docker compose down -v` on the
+      # wrong file is the one command that can cost hours of CPU.
+      - valhalla_tiles:/custom_files
+    environment:
+      # Read the graph that is already there. The build is a separate,
+      # deliberate act — see the `valhalla-tiles` service.
+      build_tar: "False"
+      build_elevation: "False"
+      build_admins: "False"
+      build_time_zones: "False"
+      force_rebuild: "False"
+    healthcheck:
+      # `/status` is Valhalla's own liveness action. The planner will wait on
+      # this — not for correctness, since an unreachable instance is already a
+      # retryable `UNREACHABLE` and a named gap on the plan, but so that a host
+      # restart is not several minutes of plans reporting a travel-time gap
+      # nothing was actually wrong with.
+      #
+      # Whether the image ships `curl` at all is the thing to check first if
+      # this reports unhealthy from a container that answers fine by hand.
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8002/status || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          # A regional graph, mmap'd. Raise it for a country-sized extract
+          # rather than removing it: unbounded, a tile build that was
+          # accidentally left enabled takes the host down with it.
+          memory: 4g
+
+  # --- Building the graph, which is not a service ---------------------------
+  #
+  # A one-shot job under a profile, so a routine `up -d` never selects it and
+  # naming it on the command line is the whole interface. Hours of CPU and tens
+  # of gigabytes of scratch; `up --build` is a worse verb for it than `up` is.
+  #
+  #   docker compose -f compose.planner.yaml --profile tiles run --rm valhalla-tiles
+  #
+  # `docs/02-DEPLOYMENT.md` has the extract, the timings and what re-running it
+  # for fresher OSM data involves.
+  valhalla-tiles:
+    profiles: [tiles]
+    image: "ghcr.io/valhalla/valhalla:${VALHALLA_IMAGE_TAG:-3.7.0}"
+    networks: [planner]
+    volumes:
+      - valhalla_tiles:/custom_files
+    environment:
+      # The one variable a rebuild changes. Geofabrik publishes a fresh extract
+      # daily; the graph does not need to follow it, and this is the only place
+      # that says which region this deployment is about.
+      tile_urls: "${OSM_EXTRACT_URL:?set OSM_EXTRACT_URL in .env - see docs/02-DEPLOYMENT.md}"
+      build_tar: "True"
+      force_rebuild: "${VALHALLA_FORCE_REBUILD:-False}"
+      # Off, and each costs a large download plus build time. Elevation matters
+      # to a cycling or walking profile and this tool asks for `auto`; admin and
+      # timezone data matter to turn-by-turn narrative and time-of-day costing,
+      # neither of which a distance matrix reads.
+      build_elevation: "False"
+      build_admins: "False"
+      build_time_zones: "False"
+
+  # --- The geocoder --------------------------------------------------------
+  #
+  # **Valhalla does not geocode**, and half the grounding seam is `locate` — a
+  # place name in, coordinates out. This is pl-28's option 1: Nominatim on the
+  # same regional extract. Same data, same box, and the volume behind pl-25's
+  # cache is nothing.
+  #
+  # The alternative on the table was the public instance at
+  # nominatim.openstreetmap.org, whose usage policy is roughly one request a
+  # second with a real `User-Agent` — which the cache already satisfies. It is
+  # cheaper to stand up and it makes the tool depend on somebody else's free
+  # service, which is the same objection that ruled out a metered router.
+  nominatim:
+    image: "mediagis/nominatim:${NOMINATIM_IMAGE_TAG:-4.4}"
+    restart: unless-stopped
+    networks: [planner]
+    volumes:
+      - nominatim_data:/var/lib/postgresql/14/main
+    environment:
+      # The same extract Valhalla was built from. Two imports of one file: the
+      # router wants a graph and the geocoder wants a database, and there is no
+      # artifact they can share.
+      PBF_URL: "${OSM_EXTRACT_URL:?set OSM_EXTRACT_URL in .env - see docs/02-DEPLOYMENT.md}"
+      IMPORT_WIKIPEDIA: "false"
+      NOMINATIM_PASSWORD: "${NOMINATIM_PASSWORD:?set NOMINATIM_PASSWORD in .env - see docs/02-DEPLOYMENT.md}"
+    shm_size: "1gb"
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+# --- What the planner will set, when pl-2 puts it here -----------------------
+#
+# The service does not exist yet. When it does, on this network:
+#
+#   environment:
+#     GROUNDING_PROVIDER: "valhalla"
+#     VALHALLA_URL: "http://valhalla:8002"
+#     GEOCODER_URL: "http://nominatim:8080"
+#   depends_on:
+#     valhalla:
+#       condition: service_healthy
+#
+# Neither URL has a default anywhere in the API, on purpose: a routing URL that
+# quietly falls back to somebody's public instance is a surprise bill or a
+# surprise outage, and there is no sensible localhost guess either. Naming a
+# real backend with no endpoint behind it refuses the boot rather than starting
+# a service that would fail on its first run.
+#
+# These addresses are compose service names on a private network, and they do
+# **not** go through an SSRF guard — `docs/adr` and pl-26 both say why: this is
+# an address the deployment wrote down, not one a stranger handed us, and
+# reaching for `allowPrivateAddresses` to make a guarded fetch work here would
+# disable the check for the URLs it actually exists for.
+
+networks:
+  # Private to the planner's own services. Neither of these is published to a
+  # host port: nothing outside this network has any business asking a routing
+  # engine anything, and the planner joins here rather than them joining `edge`.
+  planner:
+
+volumes:
+  # Hours of CPU. Named, so `down` without `-v` leaves them alone.
+  valhalla_tiles:
+  nominatim_data:

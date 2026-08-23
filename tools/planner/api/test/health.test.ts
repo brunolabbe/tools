@@ -54,6 +54,67 @@ describe("GET /api/health", () => {
     expect(JSON.stringify(body.grounding)).not.toMatch(/key|token|secret|http|endpoint|host/i);
   });
 
+  test("names a real backend by name, and still says nothing about where it is", async () => {
+    app = await createApp({
+      config: {
+        databasePath: ":memory:",
+        logLevel: "silent",
+        groundingProvider: "valhalla",
+        groundingEndpoints: {
+          routing: "http://valhalla.internal:8002",
+          geocoder: "http://nominatim.internal:8080",
+        },
+      },
+    });
+
+    const body = (
+      await app.server.inject({ method: "GET", url: ROUTES.health })
+    ).json<HealthResponse>();
+
+    // The whole point of pl-28: there is now something behind the seam worth
+    // not advertising. This route is unauthenticated, so the answer is the
+    // backend's name and nothing else — asserted on the response body, which is
+    // what a stranger actually receives.
+    expect(body.grounding).toEqual({ provider: "valhalla" });
+    expect(Object.keys(body.grounding)).toEqual(["provider"]);
+    expect(JSON.stringify(body)).not.toContain("valhalla.internal");
+    expect(JSON.stringify(body)).not.toContain("nominatim.internal");
+    expect(JSON.stringify(body)).not.toContain("8002");
+  });
+
+  test("refuses to boot when a real backend was named and no endpoint was", async () => {
+    // A service that starts here reports healthy and then fails on its first
+    // run — as a named travel-time gap, which is the shape of an honest answer,
+    // so nothing about it looks wrong. The mistake belongs in front of the
+    // person who made it.
+    const started = createApp({
+      config: {
+        databasePath: ":memory:",
+        logLevel: "silent",
+        groundingProvider: "valhalla",
+        groundingEndpoints: { routing: undefined, geocoder: "http://nominatim.internal:8080" },
+      },
+    });
+
+    await expect(started).rejects.toThrow(/VALHALLA_URL is not set/u);
+  });
+
+  test("refuses to boot on an endpoint that is not a URL", async () => {
+    const started = createApp({
+      config: {
+        databasePath: ":memory:",
+        logLevel: "silent",
+        groundingProvider: "valhalla",
+        groundingEndpoints: { routing: "valhalla:8002", geocoder: "http://nominatim:8080" },
+      },
+    });
+
+    // A typo that survives to the first request arrives as `UNREACHABLE`, which
+    // reads as "the instance is down" and sends an operator to the wrong
+    // machine.
+    await expect(started).rejects.toThrow(/VALHALLA_URL must be an http: or https: address/u);
+  });
+
   test("releases the database on shutdown, and can be asked twice", async () => {
     const started = await startApp();
     expect(started.context.isShuttingDown()).toBe(false);

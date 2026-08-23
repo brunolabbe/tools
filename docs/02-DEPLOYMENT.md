@@ -277,6 +277,166 @@ For LAN access alongside the public hostname — worth it for multi-gigabyte fil
 when you are at home — republish the port on all interfaces in a local override
 rather than editing `compose.yaml`, which deliberately binds to loopback.
 
+## Grounding the planner: a routing engine and a geocoder
+
+The planner ships with `GROUNDING_PROVIDER=fixtures`, which answers from a
+checked-in table and reaches nothing — a fresh clone and the image gate both
+run that way on purpose. **This section is what it takes to make the distances
+real**, and it is the half of a self-hosted decision that gets skipped and then
+has to be rediscovered a year later by whoever notices the roads are out of
+date.
+
+The services are [`compose.planner.yaml`](../compose.planner.yaml), a fragment
+of their own for the reasons in
+[adr/004](./adr/004-one-compose-fragment-per-tool.md). A downloader-only host
+never merges it and never pulls either image.
+
+### It is two services, and that surprises everyone once
+
+**Valhalla routes; it does not geocode.** It answers "how long from this point
+to that point" and has no opinion about where Sainte-Anne-des-Monts is. So the
+planner needs a geocoder as well, and
+[pl-28](../tools/planner/docs/work/pl-28-valhalla-adapter.md) chose Nominatim on
+the same regional extract: same data, same box, one more container. The API sees
+one seam and one provider name — `VALHALLA_URL` and `GEOCODER_URL` are two
+addresses behind it.
+
+Neither URL has a default, anywhere. Naming `valhalla` with an endpoint missing
+**refuses the boot**, with a message saying which variable. That is deliberate:
+a service that starts without one reports healthy and then fails on its first
+run, as a named travel-time gap on somebody's plan — which is the shape of an
+honest answer, so nothing about it looks wrong.
+
+### 1 — Choose the extract
+
+One `.osm.pbf` from [Geofabrik](https://download.geofabrik.de/), and it is the
+only line either service disagrees about. Take the **smallest region that
+contains the trips this instance will plan**, because everything below scales
+with it: a province is a comfortable afternoon and a continent is not.
+
+```bash
+# in .env, on the host
+OSM_EXTRACT_URL=https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf
+NOMINATIM_PASSWORD=<anything; it is internal to that container>
+```
+
+Geofabrik regenerates every extract daily. Nothing here follows that
+automatically and nothing should — see step 4.
+
+### 2 — Build the graph
+
+```bash
+docker compose -f compose.planner.yaml --profile tiles run --rm valhalla-tiles
+```
+
+A profile rather than a service, so a routine `up -d` never selects it. It
+downloads the extract, builds the tile set into the `valhalla_tiles` volume and
+exits.
+
+**What it is doing, and what to expect.** `valhalla_build_tiles` is a pipeline
+of named stages — `initialize`, `parseways`, `parserelations`, `parsenodes`,
+`constructedges`, `build`, `enhance`, `filter`, `transit`, `bss`, `hierarchy`,
+`shortcuts`, `restrictions`, `elevation`, `validate`, `cleanup` — and it logs
+each one as it starts. A run that appears to have hung is almost always in
+`parseways` or `build`, which are the long ones. `-j` bounds the thread count if
+you would rather the host stayed usable; `-s` and `-e` restart from a named
+stage rather than from the top, which is the difference between losing an
+afternoon and losing ten minutes when something runs out of disk.
+
+**Budget an order of magnitude more scratch space than the `.pbf`**, and expect
+the finished tiles to be a small multiple of it. A provincial extract is
+tens-of-minutes-to-an-hour of CPU on a few cores; a country is a different
+question and worth measuring before committing a maintenance window to it.
+Those are shapes rather than measurements — **measure yours once and write the
+number in your own runbook**, because it is the number you will want the next
+time and nothing here can know your host.
+
+None of the optional data sets are built: elevation matters to a cycling or
+walking profile and this tool asks for `auto`; admin and time-zone data matter
+to turn-by-turn narrative and time-of-day costing, neither of which a distance
+matrix reads. Each one is a large download and more build time, and turning one
+on is a deliberate act with a reason attached.
+
+### 3 — Bring them up and point the planner at them
+
+```bash
+docker compose -f compose.planner.yaml up -d
+docker compose -f compose.planner.yaml logs -f valhalla
+```
+
+Valhalla mmaps the tile set, so its resident memory tracks the tiles actually
+touched rather than the size of the extract — which is the whole reason it and
+not OSRM on a 16 GB host. Nominatim imports the same `.pbf` into PostgreSQL the
+first time it starts, which is its own long wait and happens once.
+
+The planner then takes three settings:
+
+| Variable             | Value                   |
+| -------------------- | ----------------------- |
+| `GROUNDING_PROVIDER` | `valhalla`              |
+| `VALHALLA_URL`       | `http://valhalla:8002`  |
+| `GEOCODER_URL`       | `http://nominatim:8080` |
+
+Those are compose service names on the fragment's private network. Neither
+service is published to a host port, and neither URL goes through the SSRF
+guard: this is an address the deployment wrote down, not one a stranger handed
+us. If a fetch to a LAN address ever needs `allowPrivateAddresses` to work, the
+answer is that the guard does not belong on that call —
+[pl-26](../tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md) is the long
+version.
+
+Confirm it took, on the host:
+
+```bash
+curl -sS http://127.0.0.1:8090/api/health | jq .grounding   # {"provider":"valhalla"}
+```
+
+That is the whole of what health says about it. The name, never the endpoint —
+the route is unauthenticated, and a self-hosted address is infrastructure
+detail.
+
+### 4 — Refreshing it, later
+
+OSM changes; a graph built today is a snapshot. Re-running the build is the
+same one command with `VALHALLA_FORCE_REBUILD=True`, against a freshly
+downloaded extract:
+
+```bash
+VALHALLA_FORCE_REBUILD=True docker compose -f compose.planner.yaml \
+  --profile tiles run --rm valhalla-tiles
+docker compose -f compose.planner.yaml restart valhalla
+```
+
+**Do not automate this.** It is hours of CPU for a change measured in months,
+and an automatic rebuild is a service that is periodically unavailable for
+reasons nobody remembers. Once or twice a year, deliberately, is the right
+cadence — and it is worth doing after a road opens that a plan got wrong,
+because that is the moment somebody actually cares.
+
+**The cache in front of it is unaffected and that is the point.** A distance is
+good for a year and `grounding_cache` keeps it for six months, so a rebuild does
+not invalidate anything: rows age out on their own schedule and the new graph
+answers the next question. Nothing needs flushing, and flushing it by hand only
+buys re-measuring roads that did not move.
+
+**Two things a stale graph does that look like bugs.** A road that opened since
+the build is not routable, so a leg through it comes back unmeasured and the
+plan names it as a gap — honest, and confusing if you know the road is there.
+And a place that has only existed in OSM for a few months does not geocode, so
+its coordinates stay null and every leg touching it goes unmeasured. Both are
+the same fix and it is this section.
+
+### Neither image is pinned to anything this repo has run
+
+`compose.planner.yaml` names both by tag with a default, and **neither was
+pulled when it was written** — pl-28 was built in an environment with no Docker
+and no route to a registry. Verify the tags against the projects' own release
+pages before a first deployment and pin them in `.env`, the way
+`cloudflared:latest` in `compose.prod.yaml` still needs doing. The `healthcheck`
+on `valhalla` is the other thing to check early: it shells out to `curl`, and
+whether that image ships one is exactly the sort of thing that shows up as a
+container that answers fine by hand and reports unhealthy anyway.
+
 ## Adding the second tool
 
 **The tunnel does not change.** One tunnel, one `cloudflared`, one subdomain per

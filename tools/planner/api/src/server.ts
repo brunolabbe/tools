@@ -22,6 +22,7 @@ import type { AppContext } from "./context.ts";
 import { migrate } from "./db/schema.ts";
 import { CachingGroundingProvider } from "./grounding/cache.ts";
 import { FixtureGroundingProvider } from "./grounding/fixtures.ts";
+import { ValhallaGroundingProvider } from "./grounding/valhalla.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
@@ -73,8 +74,10 @@ function createModelProvider(config: ApiConfig): ModelProvider {
  *
  * Beside `createModelProvider` and for the same reason: these two are the only
  * things in the tool that leave the process, and this file is the only one that
- * knows either of them by name. Adding a real one — pl-28 — is a case here plus
- * a file under `src/grounding/`, and nothing above the seam changes.
+ * knows either of them by name. Adding a real one is a case here plus a file
+ * under `src/grounding/`, and nothing above the seam changes — pl-28 added
+ * `valhalla` that way, and the two services behind that one name are still one
+ * `GroundingProvider` from here up.
  *
  * **`now` is passed down and not left to default.** The fixture provider stamps
  * the `Source.fetchedAt` it hands back, and the cache computes `expires_at`
@@ -85,17 +88,75 @@ function createModelProvider(config: ApiConfig): ModelProvider {
  * timestamp inside the provider was necessary and not sufficient: the wiring is
  * what decides which clock the two halves agree on.
  */
-function createGroundingProvider(config: ApiConfig, now: () => Date): GroundingProvider {
+function createGroundingProvider(
+  config: ApiConfig,
+  now: () => Date,
+  logger: AppLogger,
+): GroundingProvider {
   switch (config.groundingProvider) {
     case "fixtures":
       return new FixtureGroundingProvider(now);
+    case "valhalla":
+      return new ValhallaGroundingProvider({
+        routingUrl: requiredEndpoint(config.groundingEndpoints.routing, "VALHALLA_URL"),
+        geocoderUrl: requiredEndpoint(config.groundingEndpoints.geocoder, "GEOCODER_URL"),
+        timeoutMs: config.groundingTimeoutMs,
+        now,
+        logger,
+      });
   }
+}
+
+/**
+ * An endpoint an operator had to write down, checked at boot.
+ *
+ * **It refuses to start rather than failing on the first run.** A service that
+ * boots healthy and then cannot measure anything reports the failure as a named
+ * travel-time gap on somebody's plan — which is exactly the shape of an honest
+ * answer, so nothing about it looks wrong. Refusing here puts the mistake in
+ * front of the person who made it, at the moment they made it. The downloader's
+ * `PROXY_URL` takes the same line for the same reason, and `INTERNAL` is the
+ * code it uses: a misconfiguration is not the caller's error, it is this
+ * deployment's, and no user is going to read the message.
+ *
+ * The URL is parsed as well as required — `http://valhalla 8002` is a typo that
+ * would otherwise survive to the first request and arrive as `UNREACHABLE`,
+ * which reads as "the instance is down" and sends an operator to the wrong
+ * machine.
+ */
+function requiredEndpoint(value: string | undefined, variable: string): string {
+  if (value === undefined) {
+    throw new AppError(
+      "INTERNAL",
+      `GROUNDING_PROVIDER is "valhalla" but ${variable} is not set. Both VALHALLA_URL and GEOCODER_URL are required: Valhalla routes and does not geocode, so the two are separate services. Neither has a default on purpose.`,
+      { details: { variable } },
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new AppError("INTERNAL", `${variable} is not a valid URL.`, { details: { variable } });
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new AppError("INTERNAL", `${variable} must be an http: or https: address.`, {
+      details: { variable, protocol: parsed.protocol },
+    });
+  }
+  return value;
 }
 
 export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const config = loadApiConfig(options.config ?? {});
   const logger = options.logger ?? createLogger({ level: config.logLevel });
   const now = options.now ?? (() => new Date());
+
+  // Built before anything is opened or created on disk. A misconfigured
+  // endpoint refuses the boot, and doing it here means it refuses before a
+  // storage directory and a database file exist for a service that was never
+  // going to start.
+  const backend = options.grounding ?? createGroundingProvider(config, now, logger);
 
   if (config.databasePath !== ":memory:") {
     // better-sqlite3 will not create the directory, and failing at boot with
@@ -115,7 +176,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   // that only exists in tests.
   const grounding = new CachingGroundingProvider({
     db,
-    inner: options.grounding ?? createGroundingProvider(config, now),
+    inner: backend,
     ttlHours: config.groundingCacheTtlHours,
     now,
     logger,

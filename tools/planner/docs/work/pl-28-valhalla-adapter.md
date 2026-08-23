@@ -129,3 +129,182 @@ second seam, and `createGroundingProvider` stays the only file naming either.
   it does not run locally — say so rather than reporting green.
 
 ## Log
+
+**2026-08-23 — built, with one disclosed hole.** Steps 1–9 are implemented. Step
+3 is **half** captured, which is why this ticket is not `done`: the routing
+payload is real and the geocoder payload could not be obtained at all. Details
+below, and the remainder is [pl-30](./pl-30-geocoder-payload.md).
+
+### The geocoder is Nominatim, on the same extract
+
+Option 1, as recommended. It is a second implementation behind the same seam:
+`createGroundingProvider` in `api/src/server.ts` still has one `switch` and one
+case per backend, and `valhalla` is one case however many services sit behind
+it. `/api/health` reports one name.
+
+### The fixture, and exactly what is real about it
+
+**There is no Docker in this environment, no route to geofabrik.de, and no
+route to any public Valhalla or Nominatim.** Only the npm registry is
+reachable. So the ticket's procedure — download a regional extract, build tiles,
+capture — could not be run as written.
+
+What was done instead, and it is worth reading before anyone treats the fixture
+as second-best:
+
+1. `@valhallajs/valhallajs@3.7.0` — the Valhalla project's **own** Node package,
+   which ships prebuilt `valhalla_build_config`, `valhalla_build_tiles` and the
+   engine itself — installs from npm.
+2. A tiny `.osm.pbf` was written by hand with `protobufjs`: five nodes in a
+   square loop with a spur, plus a two-node fragment deliberately **not**
+   connected to it, all at Null Island so nobody reads the numbers as a real
+   road. Writing OSM PBF by hand is a `BlobHeader`/`Blob` envelope around a
+   `PrimitiveBlock` with dense nodes; the one trap is that `protobufjs`
+   camel-cases snake_case field names, and a `zlib_data` that silently does not
+   encode produces a 32-byte file and no error.
+3. `valhalla_build_tiles` built a real graph from it — the same sixteen-stage
+   pipeline a regional extract goes through, finishing in `validate` and
+   `cleanup`.
+4. The matrix was taken through the actor's raw string path, which is
+   `/sources_to_targets`'s own handler and its own serialiser.
+
+**So the geometry is invented and the payload is not.** The four things a parser
+can get wrong here — field names, nesting, units, and the shape of an answer
+with no route — are all Valhalla's, and a capture over a real Québec extract
+would settle exactly the same four. The one that mattered:
+
+```
+{"from_index":0,"to_index":2,"time":null,"distance":null}
+```
+
+An unroutable pair is a cell that is **present**, with both numbers `null`. Not
+omitted, not zero, not an error, not a shorter row. Four plausible guesses, one
+answer, and it is the case pl-28 step 5 and pl-27's whole gap vocabulary turn
+on. Also settled: `time` is **seconds**, `distance` is in whatever `units` the
+request asked for — so the adapter states `units: "kilometers"` rather than
+trusting a default — and every cell carries its own `from_index`/`to_index`.
+
+`oxfmt` indents the fixture, and **`test/fixtures/` in `.oxfmtrc.json`'s
+`ignorePatterns` does not actually exempt it** — worth knowing, and left alone
+rather than fixed here, because widening that pattern is a toolchain change with
+no ticket. Every key, value and numeric literal survived, `0.0` and `null`
+included; only whitespace moved.
+
+### The geocoder payload is missing, and nothing was written in its place
+
+Nominatim needs PostgreSQL, PostGIS and an import — none available, and neither
+is the public instance. Searching npm for a package shipping a _recorded_
+Nominatim reply turned up nothing whose provenance could be trusted, and
+laundering someone else's hand-written payload through their tarball would fail
+this ticket's own standard rather than meet it.
+
+So `firstCoordinates` is written against Nominatim's documented shape and
+**asserted by nothing**. `locate`'s tests cover only what needs no invented
+payload: the _question_ it asks (name and locality together — dropping locality
+is how Saint-Jean in Québec becomes Saint-Jean in New Brunswick), an unreachable
+geocoder, a slow one, and a blank place that is answered without a request.
+[pl-30](./pl-30-geocoder-payload.md) carries the rest. **Do not mark this ticket
+done until that lands.**
+
+### Where the brief was wrong or out of date
+
+- **`docs/02-DEPLOYMENT.md` is repo-wide, at the root**, not
+  `tools/planner/docs/02-DEPLOYMENT.md`, which does not exist and would collide
+  with `02-ROADMAP.md` if it did. The grounding section went into the root one.
+- **"pl-2's compose service names it" cannot be satisfied, because that service
+  does not exist.** pl-2 steps 5 and 6 were deliberately not bundled on
+  2026-08-14 and are still open. What landed instead is `compose.planner.yaml` —
+  the routing engine, the geocoder and the tile-build profile — with the three
+  settings the `planner` service will need written at the bottom of it, so pl-2
+  is a paste rather than a derivation. This is the shape
+  [adr/004](../../../../docs/adr/004-one-compose-fragment-per-tool.md) decided,
+  and it is additive: the repo-wide rename that ADR also decided is a `repo-`
+  ticket and is **not** started here, so nothing that works today stops working.
+- **The brief predates adr/004**, which was written the day after it and which
+  reallocates part of step 8: the compose split is repo-wide work, pl-2 owns the
+  planner service, and "pl-28 step 8 still owns the tile ops that an operator
+  will need" is the sentence this ticket was held to.
+- **No new error code was needed, and none was invented.** A boot
+  misconfiguration is `AppError("INTERNAL", "<clear operator message>")`, which
+  is precisely what the downloader's `PROXY_URL` already does in its own
+  `config.ts`. Reaching for `AGENT_UNCONFIGURED` would have meant rewording it
+  at the call site, which the root `CLAUDE.md` names as the tell that a code is
+  the wrong one. `@planner/contract` is untouched.
+
+### Decisions the brief left open
+
+**`Source.url` is `https://www.openstreetmap.org/copyright`, never the
+endpoint.** A source is stored on the plan and rendered to the user as a link
+they read as "we checked this". A private routing URL there is a dead link that
+publishes the deployment's topology into the plan document — `/api/health`'s
+rule, one layer along — and the thing actually behind the number is OSM's data,
+whose licence requires that attribution be shown anyway. So the honest citation
+and the safe one are the same string.
+
+**A place with no coordinates is not sent.** Valhalla routes between points and
+has nothing to snap a bare name onto, so such a place is left out of the request
+and its row and column come back `null`. In practice pl-27's pass locates
+everything it can first, so this is residue rather than the norm — but a place
+that would not locate must not become a guessed point.
+
+**Boot refuses before the database is opened.** `createGroundingProvider` now
+runs ahead of `mkdirSync`/`new Database`, so a misconfigured endpoint does not
+leave a storage directory and a database file behind for a service that was
+never going to start.
+
+**`indexCells` keys the reply in a `Map`, built from validated integers** — step
+4, and pl-24's review before it. The reply is not a model's, but it is not ours
+either, and `from_index` reaches an array subscript where the string
+`"constructor"` would find `Array.prototype.constructor` rather than nothing. It
+is also keyed by the reply's own indices rather than by nesting order: the two
+agree today, and a caller that assumed the order would have no way to notice the
+day they do not.
+
+**A body that is not a `sources_to_targets` reply throws rather than answering a
+table of nulls.** Nulls would report "nobody could measure these legs" for a URL
+pointing at the wrong service, which is the plan quietly lying about what it
+checked. There is a test that breaks if that is softened.
+
+**The timeout is 5 s and both signals are one signal on the wire.**
+`AbortSignal.any([caller, AbortSignal.timeout(ms)])`, and `#reachFailure` asks
+the **caller's** signal first — both causes surface as an `AbortError`, and only
+that order separates "someone stopped this run" (`CANCELED`, not retryable) from
+"the backend was too slow" (`TIMEOUT`, retryable). Reversing those two lines is
+one of the mutations below, and it goes red.
+
+### One existing test changed meaning, deliberately
+
+`config.test.ts`'s "falls back to the fixture provider when the grounding name
+is unknown" used `valhalla` as its example of an unknown name. pl-28 makes that
+a real name. The example is now `osrm`; the assertion is about the fallback and
+not about that word, and the comment says so.
+
+### Gates
+
+- `npm run check` — exit 0.
+- `npm test -- --project planner` — **693 passed, 49 files**, up from **669 in
+  47 files** at `origin/main` (measured, not derived: the suite was run against
+  a stash of this branch). 24 new tests, 2 new files.
+- `npm test` — **1390 passed, 99 files**.
+- `npm run format` — run; the deployment doc, the adapter and the fixture were
+  all reformatted by it.
+- **The image gate in `.github/workflows/planner.yml` does not run locally and
+  has not run.** Nothing here changes what the container ships — no workspace
+  dependency was added, and `packages/core/test/image-closure.test.ts` is green
+  — but that scan proves the list and never the image. `GROUNDING_PROVIDER` still
+  defaults to `fixtures`, so the gate still starts the planner container alone,
+  which is what adr/004 says it must keep doing.
+- **Nothing about `compose.planner.yaml` has been run.** No Docker here. Neither
+  image tag was pulled or verified, the `healthcheck` shells out to `curl` and
+  whether that image ships one is unchecked, and both facts are written into the
+  file and into the deployment doc rather than left for someone to discover.
+
+**Twelve mutations, twelve red.** Each new assertion was checked by breaking the
+code under it and confirming the failure: dropping `estimate`'s null guard so an
+unroutable cell measures as zero; reporting seconds as minutes; reporting
+kilometres as metres; losing the `TimeoutError` branch; asking the deadline
+before the caller's signal; answering a wrong body with nulls instead of
+failing; sending a place with no coordinates anyway; dropping the locality from
+the geocoder query; starting with no endpoint; accepting an endpoint that is not
+a URL; putting the endpoint in the `/api/health` body; and logging the endpoints
+at boot. All twelve restored.
