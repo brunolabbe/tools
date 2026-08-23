@@ -4,10 +4,10 @@ A repo of small, independent web tools that share a toolchain, a CI pipeline and
 a set of conventions. They do not share a domain — each one is its own service,
 its own image and its own version, and none of them imports from another.
 
-| Tool                                           | What it does                                              | State                                                              |
-| ---------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------ |
-| [**downloader**](./tools/downloader/README.md) | Page URL in, video stream found and downloaded, link out  | Complete and deployable · [0.1.1](./tools/downloader/CHANGELOG.md) |
-| [**planner**](./tools/planner/docs/)           | Describe a trip, plan it with an assistant, keep the plan | In flight — `npm run status` for what is open                      |
+| Tool                                           | What it does                                              | State                                                                  |
+| ---------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [**downloader**](./tools/downloader/README.md) | Page URL in, video stream found and downloaded, link out  | Complete and deployable · [changelog](./tools/downloader/CHANGELOG.md) |
+| [**planner**](./tools/planner/docs/)           | Describe a trip, plan it with an assistant, keep the plan | In flight — `npm run status` for what is open                          |
 
 ## Getting started
 
