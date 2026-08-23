@@ -177,17 +177,37 @@ Non-negotiable, because this service fetches arbitrary URLs on request:
     fetched in the clear can be rewritten by whoever could have substituted the
     segments it names.
   - **Only the manifest connection is verified. HLS and DASH segment
-    connections are not** — libavformat does not propagate the TLS options to
-    the child connections the demuxer opens, though it does propagate
-    `-headers` and `-user_agent`. A manifest on a verified origin whose segment
-    URIs point at a second, untrusted origin downloads and remuxes without
-    complaint. Measured on ffmpeg 6.1.1; [`dl-21`](./work/dl-21-verified-hls-segments.md)
-    is the ticket. So HLS and DASH are no longer the _wholly_ unverified half of
-    this tool, which is what `dl-19` changed, and they are not yet the verified
-    half.
+    connections are not, and no ffmpeg option changes that.** libavformat copies
+    a fixed list of options onto the connections a demuxer opens for its
+    segments — `headers`, `user_agent`, `cookies`, `http_proxy`, `referer`,
+    `rw_timeout`, `icy` — and `tls_verify` and `ca_file` are not in it. The list
+    is a compile-time array in `ffio_copy_url_options`
+    (`libavformat/aviobuf.c`), `hls.c`'s `open_url` builds every segment
+    connection from that copy, and `dashdec.c` calls the same function, so DASH
+    is identical by construction rather than by coincidence. A manifest on a
+    verified origin whose segment URIs point at a second, untrusted origin
+    downloads and remuxes without complaint, exit 0.
+
+    **Read the consequence plainly: the manifest is kilobytes and the segments
+    are the whole video.** An attacker on the path lets the verified manifest
+    through untouched, intercepts only the segment connections, and the
+    substituted video is remuxed into the user's file while the job reports
+    success. So HLS and DASH are no longer the _wholly_ unverified half of this
+    tool, which is what `dl-19` changed, and they are not the verified half
+    either.
+
+    [`dl-21`](./work/dl-21-verified-hls-segments.md) measured it — sixteen
+    candidate arguments on ffmpeg 6.1.1 and 7.0.2, over MPEG-TS and fMP4
+    segments, all of them no — and closed nothing, because there is nothing in
+    the argv to close it with. Its Log is the list, and the gap is stated at
+    boot as well as here: an API that verifies logs one warning saying how far
+    that reaches. [`dl-27`](./work/dl-27-verify-segment-origins.md) is the
+    ticket that closes it, and carries the one mechanism that was measured
+    working.
 
   The egress proxy tunnels rather than intercepts, so the certificate that does
-  reach ffmpeg is the origin's own.
+  reach ffmpeg is the origin's own. That is also why the proxy is not currently
+  in a position to check it for ffmpeg — see `dl-27`.
 
 - **Path safety** — filenames sanitised, output paths confined to `STORAGE_DIR`,
   no user string ever reaching a shell. Spawn with argument arrays, never

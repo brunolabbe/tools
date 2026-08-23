@@ -107,6 +107,22 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
         hint: "Prefer FFMPEG_CA_FILE with your proxy's root certificate. Anything on the path to a CDN can substitute the video while this is set.",
       },
     );
+  } else {
+    // The other half of the same honesty, and the reason it is a warning rather
+    // than an info line: with verification on, an operator reasonably believes
+    // the video is authenticated, and it is not. libavformat copies only a
+    // fixed seven-name list of options onto the connections the HLS and DASH
+    // demuxers open for segments (`ffio_copy_url_options`, `libavformat/
+    // aviobuf.c`), and the TLS settings are not in it — so `-tls_verify 1`
+    // reaches the manifest and nothing else. dl-21 measured it and could not
+    // close it from the argv; dl-27 is the ticket. Saying so once per boot is
+    // the only place an operator meets this before an incident does.
+    logger.warn(
+      "ffmpeg verifies the manifest connection only: HLS and DASH segment certificates are not checked",
+      {
+        hint: "The manifest is kilobytes and the segments are the whole video. An attacker on the path to the segment origin can substitute it. See tools/downloader/docs/work/dl-21-verified-hls-segments.md.",
+      },
+    );
   }
 
   const engine =
