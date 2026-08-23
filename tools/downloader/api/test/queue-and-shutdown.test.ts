@@ -8,6 +8,7 @@
  * the chain, rather than asserted in prose.
  */
 
+import path from "node:path";
 import { AppError, ROUTES } from "@downloader/contract";
 import type { JobResponse } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
@@ -94,6 +95,43 @@ describe("resolver composition (M2)", () => {
     // socks5 is the common mistake: ProxyAgent speaks HTTP to the proxy, so
     // this would otherwise fail at the first fetch rather than at startup.
     expect(() => loadApiConfig({}, { PROXY_URL: "socks5://127.0.0.1:1080" })).toThrow(AppError);
+  });
+
+  test("a stock deployment verifies certificates, and both TLS settings read env and override", () => {
+    // The regression this pins is the one dl-19 exists to prevent, and it is a
+    // one-character one: flip this default and every deployment that never
+    // heard of the setting silently goes back to downloading video over
+    // connections nobody authenticated. The whole suite stayed green under
+    // exactly that mutation until this test.
+    expect(loadApiConfig({}, {}).ffmpegAllowUnverifiedTls).toBe(false);
+    expect(loadApiConfig({}, {}).ffmpegCaFile).toBeUndefined();
+
+    // Read from the environment...
+    expect(
+      loadApiConfig({}, { FFMPEG_ALLOW_UNVERIFIED_TLS: "true" }).ffmpegAllowUnverifiedTls,
+    ).toBe(true);
+    // `optionalPath` resolves what it reads, so the expectation has to resolve
+    // too or this asserts a POSIX separator: on Windows the same input comes
+    // back as `D:\etc\corp\root.pem`. What is being pinned is that the variable
+    // is *read*, not the shape of the path — `path.resolve` of an absolute path
+    // is the identity on POSIX and re-roots it on Windows, so both agree here.
+    expect(loadApiConfig({}, { FFMPEG_CA_FILE: "/etc/corp/root.pem" }).ffmpegCaFile).toBe(
+      path.resolve("/etc/corp/root.pem"),
+    );
+
+    // ...and from an explicit override, which is what `createApp` passes and
+    // what every test that builds a config uses.
+    expect(loadApiConfig({ ffmpegAllowUnverifiedTls: true }, {}).ffmpegAllowUnverifiedTls).toBe(
+      true,
+    );
+    expect(loadApiConfig({ ffmpegCaFile: "/tmp/fixture.pem" }, {}).ffmpegCaFile).toBe(
+      "/tmp/fixture.pem",
+    );
+
+    // A value that is neither `true` nor `false` must not be read as consent.
+    expect(
+      loadApiConfig({}, { FFMPEG_ALLOW_UNVERIFIED_TLS: "ture" }).ffmpegAllowUnverifiedTls,
+    ).toBe(false);
   });
 
   test("a usable PROXY_URL survives verbatim, credentials and all", () => {

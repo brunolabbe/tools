@@ -74,8 +74,17 @@ WORKDIR /app
 # back to the bundled binary happily, but that one arrives through a postinstall
 # download, which makes the image depend on a GitHub release being up and leaves
 # no way to patch a CVE without an npm publish. FFMPEG_PATH points at this one.
+#
+# `ca-certificates` is named here, and it is not decoration. Since dl-19 ffmpeg
+# verifies the certificates it downloads over, so `/etc/ssl/certs` is a runtime
+# dependency of every HLS and DASH job rather than a nicety — and nothing else
+# in this stage declares it. Neither `ffmpeg` nor `curl` depends on it on noble:
+# `curl` does not name it at all and `libcurl4t64` only *recommends* it, which
+# `--no-install-recommends` two lines down declines. Inheriting it from the base
+# image would work today and disappear on a base bump, with the symptom being
+# every download failing on trust.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg curl \
+  && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 # Optional, and off by default: yt-dlp is a latency optimisation, never a

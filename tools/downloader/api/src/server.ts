@@ -96,6 +96,19 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     proxied: config.proxyUrl !== undefined,
   });
 
+  // Loud on purpose, and at boot rather than at the first download: this is the
+  // one setting that puts the tool back where dl-14 found it, fetching video
+  // over a connection encrypted to a certificate nobody checked. An operator who
+  // set it for an afternoon and forgot has a line in every startup log saying so.
+  if (config.ffmpegAllowUnverifiedTls) {
+    logger.warn(
+      "FFMPEG_ALLOW_UNVERIFIED_TLS is on: ffmpeg will not check the certificates it downloads over",
+      {
+        hint: "Prefer FFMPEG_CA_FILE with your proxy's root certificate. Anything on the path to a CDN can substitute the video while this is set.",
+      },
+    );
+  }
+
   const engine =
     options.engine ??
     createEngine({
@@ -109,6 +122,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       // subtitles — goes through the redirect-checking guard.
       fetchImpl: guardedFetch,
       ...(config.ffmpegPath === undefined ? {} : { ffmpegPath: config.ffmpegPath }),
+      tlsVerify: !config.ffmpegAllowUnverifiedTls,
+      ...(config.ffmpegCaFile === undefined ? {} : { tlsCaFile: config.ffmpegCaFile }),
       // Not `config.proxyUrl`: ffmpeg goes through the local guarded proxy,
       // which chains to the operator's when there is one.
       proxyUrl: egressProxy.url,

@@ -26,9 +26,11 @@ import tls from "node:tls";
 import {
   buildManifestDownloadArgs,
   createEngine,
+  isTlsVerificationFailure,
   resolveFfmpegPath,
   runFfmpeg,
 } from "@downloader/engine";
+import type { DownloadRequest } from "@downloader/engine";
 import { AppError } from "@downloader/contract";
 import type { RequestContext } from "@downloader/contract";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -234,36 +236,54 @@ async function getThroughTunnel(
   return { body, peerCertificate };
 }
 
+/** An engine wired to the fixture proxy, with dl-19's TLS settings on top. */
+async function startEngine(
+  proxyUrl: string,
+  tlsOptions: { tlsVerify?: boolean; tlsCaFile?: string } = {},
+): Promise<ReturnType<typeof createEngine>> {
+  const engine = createEngine({
+    storageDir,
+    proxyUrl,
+    maxFileSizeBytes: 256 * 1024 * 1024,
+    ...tlsOptions,
+  });
+  await engine.init();
+  return engine;
+}
+
+/** The same HLS job every download test in this file runs. */
+function downloadRequest(jobId: string, url: string = masterUrl()): DownloadRequest {
+  return {
+    jobId,
+    variant: {
+      id: "v0",
+      protocol: "hls",
+      url,
+      hasVideo: true,
+      hasAudio: true,
+      videoCodec: "avc1.42c01e",
+      audioCodec: "mp4a.40.2",
+      width: 320,
+      height: 240,
+      durationSec: CLIP_SECONDS,
+      label: "240p",
+    },
+    requestContext: CONTEXT,
+    title: "proxied over TLS",
+    durationSec: CLIP_SECONDS,
+  };
+}
+
 describe("a proxied HTTPS download, which is what every real site is", () => {
   test("real ffmpeg fetches an HTTPS manifest through the guarded proxy and writes a playable MP4", async () => {
     const proxy = await startPinnedProxy();
-    const engine = createEngine({
-      storageDir,
-      proxyUrl: proxy.url,
-      maxFileSizeBytes: 256 * 1024 * 1024,
-    });
-    await engine.init();
+    // `tlsCaFile` since dl-19: ffmpeg now verifies, and the fixture's
+    // certificate chains to nothing a machine trusts. Pointing it at the CA is
+    // the whole difference between this test and the one below it.
+    const engine = await startEngine(proxy.url, { tlsCaFile: certificate.caPath });
 
     const before = origin.requests.length;
-    const outcome = await engine.download({
-      jobId: "proxied-https",
-      variant: {
-        id: "v0",
-        protocol: "hls",
-        url: masterUrl(),
-        hasVideo: true,
-        hasAudio: true,
-        videoCodec: "avc1.42c01e",
-        audioCodec: "mp4a.40.2",
-        width: 320,
-        height: 240,
-        durationSec: CLIP_SECONDS,
-        label: "240p",
-      },
-      requestContext: CONTEXT,
-      title: "proxied over TLS",
-      durationSec: CLIP_SECONDS,
-    });
+    const outcome = await engine.download(downloadRequest("proxied-https"));
 
     expect(outcome.container).toBe("mp4");
     expect(outcome.sizeBytes).toBeGreaterThan(10_000);
@@ -332,10 +352,10 @@ describe("a proxied HTTPS download, which is what every real site is", () => {
   });
 
   test("ffmpeg verifies the origin's own certificate through the tunnel", async () => {
-    // ffmpeg's `tls_verify` defaults to 0, so the download above proves nothing
-    // about the chain. Turned on and pointed at the fixture CA, it does: the
-    // certificate that survives to ffmpeg is the origin's, which is the property
-    // a proxy that intercepted TLS would break.
+    // dl-14 spliced `-tls_verify 1 -ca_file` into the argv by hand, because
+    // `buildManifestDownloadArgs` did not emit them. It does now, so this is the
+    // production argv unedited — the certificate that survives to ffmpeg is the
+    // origin's, which is the property a proxy that intercepted TLS would break.
     const proxy = await startPinnedProxy();
     const destPath = path.join(storageDir, "verified.mp4");
 
@@ -349,19 +369,130 @@ describe("a proxied HTTPS download, which is what every real site is", () => {
       hasAudio: true,
       durationSec: CLIP_SECONDS,
       ffmpegPath: FFMPEG,
+      tlsCaFile: certificate.caPath,
     });
-    const verified = [...args];
-    verified.splice(args.indexOf("-i"), 0, "-tls_verify", "1", "-ca_file", certificate.caPath);
+    expect(args[args.indexOf("-tls_verify") + 1]).toBe("1");
 
     const result = await runFfmpeg({
       ffmpegPath: FFMPEG,
-      args: verified,
+      args,
       proxyUrl: proxy.url,
       failureCode: "DOWNLOAD_FAILED",
     });
 
     expect(result.exitCode).toBe(0);
     expect((await fs.stat(destPath)).size).toBeGreaterThan(10_000);
+  });
+});
+
+/**
+ * dl-19. The suite above proves ffmpeg *can* verify; these prove it *does*, and
+ * that the failure says which kind of failure it was.
+ *
+ * The origin is the same self-signed fixture, so "not given the CA" is a real
+ * untrusted chain rather than a simulated one — and every case here runs real
+ * ffmpeg rather than reading an argv.
+ */
+describe("ffmpeg verifies the certificates it is encrypting to", () => {
+  test("a download from an origin ffmpeg has no CA for fails, as a certificate problem", async () => {
+    const proxy = await startPinnedProxy();
+    const engine = await startEngine(proxy.url);
+
+    const before = origin.requests.length;
+    const failure = await engine.download(downloadRequest("untrusted-chain")).then(
+      () => null,
+      (error: unknown) => AppError.from(error),
+    );
+
+    expect(failure?.code).toBe("TLS_VERIFICATION_FAILED");
+    expect(failure?.retryable).toBe(false);
+    // ffmpeg's own words, verbatim, not a paraphrase of them: an assertion on
+    // "it failed" would pass just as happily with the origin switched off,
+    // which is the failure this one exists to be distinguished from.
+    // The real line on this machine is `Peer certificate failed verification`,
+    // five times over — once per reconnect attempt. Asserted as the word rather
+    // than the sentence because the sentence is the TLS backend's, and CI runs
+    // a second ffmpeg build on Windows; `code` above is the strict half.
+    expect(String(failure?.details?.["stderr"] ?? "")).toMatch(/certificate/iu);
+    // And it failed at the handshake: the manifest was never served.
+    expect(origin.requests.length).toBe(before);
+  });
+
+  test("the same download succeeds when the fixture CA is passed", async () => {
+    // The other half of the pair. Same origin, same argv, one setting apart —
+    // so the failure above is about trust and not about the fixture.
+    const proxy = await startPinnedProxy();
+    const engine = await startEngine(proxy.url, { tlsCaFile: certificate.caPath });
+
+    const outcome = await engine.download(downloadRequest("trusted-chain"));
+
+    expect(outcome.sizeBytes).toBeGreaterThan(10_000);
+    await assertDecodable(FFMPEG, outcome.path);
+  });
+
+  test("a 404 is still a download failure, and not mistaken for a certificate one", async () => {
+    // The `Done when` line this answers: the certificate failure must be
+    // distinguishable from a dead link, in both directions.
+    const proxy = await startPinnedProxy();
+    const engine = await startEngine(proxy.url, { tlsCaFile: certificate.caPath });
+
+    const failure = await engine
+      .download(
+        downloadRequest("missing-manifest", `https://${ORIGIN_HOST}:${origin.port}/no.m3u8`),
+      )
+      .then(
+        () => null,
+        (error: unknown) => AppError.from(error),
+      );
+
+    expect(failure?.code).toBe("DOWNLOAD_FAILED");
+  });
+
+  test("the escape hatch really turns it off, argv and behaviour both", async () => {
+    // An operator behind a TLS-intercepting proxy needs this, and the point of
+    // testing it against the untrusted fixture is that nothing else in the run
+    // changes: the download that failed on trust above now succeeds.
+    const proxy = await startPinnedProxy();
+    const engine = await startEngine(proxy.url, { tlsVerify: false });
+
+    const outcome = await engine.download(downloadRequest("verification-off"));
+    expect(outcome.sizeBytes).toBeGreaterThan(10_000);
+
+    const { args } = buildManifestDownloadArgs({
+      url: masterUrl(),
+      destPath: path.join(storageDir, "argv-only.mp4"),
+      container: "mp4",
+      protocol: "hls",
+      hasVideo: true,
+      hasAudio: true,
+      ffmpegPath: FFMPEG,
+      tlsVerify: false,
+    });
+    expect(args[args.indexOf("-tls_verify") + 1]).toBe("0");
+  });
+
+  test("the stderr classifier reads ffmpeg's real words, not a paraphrase", () => {
+    // The first two came out of real runs in dl-19, from the distribution build
+    // and from `ffmpeg-static`: gnutls's two verification messages. The rest are
+    // the other backends' wordings for the same conditions, which is what the
+    // matcher is loose enough to cover and narrow enough to exclude below.
+    expect(isTlsVerificationFailure("[tls @ 0x1] Peer certificate failed verification")).toBe(true);
+    expect(
+      isTlsVerificationFailure(
+        "[tls @ 0x1] The certificate's owner does not match hostname x.test",
+      ),
+    ).toBe(true);
+    expect(isTlsVerificationFailure("error:0A000086:SSL routines::certificate verify failed")).toBe(
+      true,
+    );
+    expect(isTlsVerificationFailure("unable to get local issuer certificate")).toBe(true);
+    expect(isTlsVerificationFailure("Server certificate verification failed")).toBe(true);
+    // A dead link, a bad manifest and a refused protocol must not be dressed up
+    // as trust failures — this half is what keeps the code meaningful.
+    expect(isTlsVerificationFailure("Server returned 404 Not Found")).toBe(false);
+    expect(isTlsVerificationFailure("Error opening input: Invalid data found")).toBe(false);
+    expect(isTlsVerificationFailure("Protocol not found: Invalid argument")).toBe(false);
+    expect(isTlsVerificationFailure("")).toBe(false);
   });
 });
 
