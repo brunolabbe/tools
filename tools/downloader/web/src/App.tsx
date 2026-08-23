@@ -155,6 +155,7 @@ export function App(): React.JSX.Element {
         <JobList
           jobs={jobs.jobs}
           streamStates={jobs.streamStates}
+          watchedSteps={jobs.watchedSteps}
           onCancel={(id) => void jobs.cancel(id)}
           onRemove={jobs.remove}
           onRetry={retryJob}

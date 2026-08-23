@@ -5,6 +5,8 @@ import { JobCard } from "./JobCard.tsx";
 interface JobListProps {
   jobs: readonly Job[];
   streamStates: Record<string, StreamState>;
+  /** Client-side pipeline marks by job id — see `useJobs`. */
+  watchedSteps: Record<string, number>;
   onCancel: (id: string) => void;
   onRemove: (id: string) => void;
   onRetry: (job: Job) => void;
@@ -14,6 +16,7 @@ interface JobListProps {
 export function JobList({
   jobs,
   streamStates,
+  watchedSteps,
   onCancel,
   onRemove,
   onRetry,
@@ -43,6 +46,7 @@ export function JobList({
             key={job.id}
             job={job}
             streamState={streamStates[job.id]}
+            watchedStep={watchedSteps[job.id]}
             onCancel={onCancel}
             onRemove={onRemove}
             onRetry={onRetry}

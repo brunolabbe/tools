@@ -1,6 +1,13 @@
 import { describe, expect, test } from "vitest";
 import type { Job, JobEvent, JobProgress } from "@downloader/contract";
-import { applyJobEvent, applyJobEvents, reconcileJob, upsertJob } from "../src/lib/job-reducer.ts";
+import {
+  applyJobEvent,
+  applyJobEvents,
+  markWatched,
+  reconcileJob,
+  upsertJob,
+} from "../src/lib/job-reducer.ts";
+import { statusIndex } from "../src/lib/status.ts";
 
 const T0 = "2026-08-05T10:00:00.000Z";
 const T1 = "2026-08-05T10:00:01.000Z";
@@ -213,6 +220,58 @@ describe("applyJobEvent", () => {
   });
 });
 
+describe("markWatched", () => {
+  // The mark's whole reason to exist: dl-9's back-edge is invisible on the wire
+  // because no `JobEvent` carries `attempts`, so the client has to remember the
+  // step the job left. The `at` timestamps are all newer than the job's own, or
+  // the frames would be dropped as stale before the mark ever saw them.
+  const downloading = statusIndex("downloading");
+
+  test("the step a job leaves over the back-edge is remembered", () => {
+    const before = job({ status: "downloading", attempts: 1, updatedAt: T1 });
+    const after = applyJobEvent(before, {
+      type: "status",
+      jobId: "job-1",
+      status: "probing",
+      at: T2,
+    });
+
+    // The job that comes back reports `probing` and, crucially, `attempts: 1` —
+    // there is nothing on it to read the departed download stage off.
+    expect(after.status).toBe("probing");
+    expect(after.attempts).toBe(1);
+    expect(markWatched(0, before, after)).toBe(downloading);
+  });
+
+  test("nothing lowers it, including a replayed frame from earlier in the run", () => {
+    // The docblock on this module is about a late or duplicated frame never
+    // moving a job backwards. A mark that a replay could lower would reintroduce
+    // exactly that, one widget over.
+    const probing = job({ status: "probing", attempts: 1, updatedAt: T2 });
+
+    expect(markWatched(downloading, probing)).toBe(downloading);
+    expect(markWatched(downloading, job({ status: "queued" }))).toBe(downloading);
+    expect(markWatched(downloading)).toBe(downloading);
+  });
+
+  test("a job the pipeline has no step for contributes nothing at all", () => {
+    // `statusIndex` folds `failed` and `canceled` onto the last step so the
+    // progress bar has somewhere to put them. Folding *that* into the mark would
+    // hand a job that got nowhere a trail of four done steps.
+    for (const status of ["failed", "canceled"] as const) {
+      expect(markWatched(0, job({ status, attempts: 2 }))).toBe(0);
+      expect(markWatched(1, job({ status, attempts: 2 }))).toBe(1);
+    }
+  });
+
+  test("a refetched job's attempts counter raises it just as a watched move does", () => {
+    // The second witness, and the only one a page load has. `useJobs` folds
+    // every reconciled job through here for this reason.
+    const refetched = job({ status: "probing", attempts: 2, updatedAt: T2 });
+    expect(markWatched(0, refetched)).toBe(downloading);
+  });
+});
+
 describe("reconcileJob", () => {
   test("prefers the server copy", () => {
     const local = job({ status: "downloading", updatedAt: T1 });
@@ -224,6 +283,29 @@ describe("reconcileJob", () => {
     const local = job({ status: "muxing", updatedAt: T3 });
     const remote = job({ status: "downloading", updatedAt: T1 });
     expect(reconcileJob(local, remote).status).toBe("muxing");
+  });
+
+  test("neither outcome can discard the mark, because the mark is not a job field", () => {
+    // dl-20's race: a reconnect is when frames arrive in a burst, so an event
+    // landing while the refetch is in flight is the *common* case, and the local
+    // copy is then strictly newer and wins. Before dl-20 that discarded the
+    // remote's `attempts: 2` and the card stayed wrong until a later refetch
+    // happened to win. The mark is kept beside the job rather than on it, so
+    // both outcomes are asserted here against the same folded value.
+    const watched = markWatched(0, job({ status: "downloading", updatedAt: T1 }));
+    const localWins = job({ status: "probing", attempts: 1, updatedAt: T3 });
+    const remoteWins = job({ status: "probing", attempts: 2, updatedAt: T3 });
+
+    expect(reconcileJob(localWins, job({ status: "probing", attempts: 2, updatedAt: T1 }))).toBe(
+      localWins,
+    );
+    expect(reconcileJob(job({ status: "downloading", updatedAt: T1 }), remoteWins)).toBe(
+      remoteWins,
+    );
+    // And the mark the client folded is untouched by either, so it still carries
+    // the departed download stage into whichever copy won.
+    expect(watched).toBe(statusIndex("downloading"));
+    expect(markWatched(watched, remoteWins)).toBe(statusIndex("downloading"));
   });
 
   test("accepts the remote when there is no local copy", () => {

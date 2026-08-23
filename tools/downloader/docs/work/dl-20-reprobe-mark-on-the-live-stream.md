@@ -3,7 +3,7 @@ id: dl-20
 tool: downloader
 title: Carry the re-probe mark to a client that never reconnects
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-18]
 ---
@@ -111,4 +111,163 @@ rather than building both.
 
 ## Log
 
-_Not started._
+### 2026-08-23 — built
+
+The mark is a **client-side record keyed by job id** — Build step 1's second
+candidate — folded in `job-reducer.ts` and threaded `useJobs → App → JobList →
+JobCard` beside `streamState`. `contract/src/job.ts` is untouched; the owner
+decision the Build section names as the better answer was not available, so the
+alternative it describes was not taken.
+
+Three pieces:
+
+- **`reachedStep(job)` in `lib/status.ts`** — the furthest pipeline step a `Job`
+  proves _on its own_, or `null` for `failed` and `canceled`, which
+  `STATUS_ORDER` has no step for. It carries dl-18's `attempts > 1 && probing`
+  rule unchanged; the `null` is what keeps `statusIndex`'s fold of the two
+  terminal statuses onto the last step from becoming a trail of four done steps.
+- **`markWatched(watched, ...jobs)` in `lib/job-reducer.ts`** — a running
+  `Math.max` over `reachedStep` of every state the client holds. Monotonic by
+  construction, which is what the module's docblock demands.
+- **`statusHighWaterMark(job, watched = 0)`** — unchanged in shape, now
+  `Math.max` of the two witnesses. Neither alone is enough: a page load has only
+  `attempts`, a live stream has only what it watched.
+
+`useJobs` folds in two places, and **both are load-bearing** — each has a
+mutation that only the other's test catches:
+
+- `applyEvent` folds the job as it stood and the job the event produced. This is
+  the live path: the frames alone, no refetch.
+- `mergeJob` folds the _reconciled remote_, before `reconcileJob` chooses. This
+  is the race, below.
+
+### On scope: five source files, not one
+
+The Build section names `job-reducer.ts` and the tests beside it, and this branch
+touches six source files. That is the ticket's own design, not drift:
+
+| File          | Why the ticket cannot be done without it                                                                                            |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `status.ts`   | Build step 2: "`statusHighWaterMark` stays the single rule; what changes is that it is given a better-informed input" — a parameter |
+| `useJobs.ts`  | Build step 1: the record "has to be threaded from `useJobs` down to `JobCard`" — this is where it is folded and held                |
+| `JobList.tsx` | one of the two hops `streamState` already makes; the mark makes the same trip                                                       |
+| `App.tsx`     | the other hop                                                                                                                       |
+| `JobCard.tsx` | the reader — one call site, `statusHighWaterMark(job, watchedStep ?? 0)`                                                            |
+
+The threading is the cost Build step 1 priced in when it preferred the truthful
+record over bumping `attempts`, and it is not free: it is three new drop-points
+for the very defect this ticket exists to fix. **That is why `app.test.tsx` is in
+the diff.** Both new props are `T | undefined` and **required**, so a component
+that forgets to pass one fails `npm run check` rather than rendering wrong.
+
+No cleanups, no refactors, nothing unrelated. `contract/` is untouched.
+
+### What the brief had wrong
+
+- **Step 1's second candidate does not, on its own, make `reconcileJob` safe —
+  and the brief's own step 3 half-notices.** Step 3 says "the mark is monotonic;
+  merging two of them is a max, not a choice", which is written for a mark that
+  lives _on_ the job. With a separate record `reconcileJob` cannot lose the mark,
+  because the mark is not one of the two things it chooses between — so that
+  acceptance line reads as vacuous. It is not. The max moved: `useJobs` folds the
+  remote job into the mark **before** handing it to `reconcileJob`, so the
+  copy that loses still contributes its `attempts`. That is the whole fix for the
+  race, and dropping that one line reddens a test.
+- **The reducer does not need to detect a _backwards_ move, and the design is
+  better for not doing it.** The Build section's premise is that "a frame that
+  moves the job to a lower position in `STATUS_ORDER` can only be the back-edge",
+  so the reducer should recognise the edge. A running maximum over every state
+  the client holds gets the same answer with no special case, no `failed`/
+  `canceled` trap to dodge at the comparison site, and nothing to re-derive if a
+  second back-edge is ever added. What the reducer contributes is not "I saw a
+  backwards move" but "I saw this job at `downloading` once".
+- **A consequence of that, recorded because it is a real weakness:** with the max
+  formulation, `applyEvent`'s fold of the job _before_ the event is redundant in
+  the shipped wiring, and no test kills it. Enumerated under the mutation table.
+- **dl-18's Log does overclaim the refetch path, and the Why is right about
+  why** — but the narrower truth is narrower still than "reconnects that race".
+  The refetch path is _also_ fine whenever the client watched the download stage
+  itself, because the mark then already holds it. The case where the refetch is
+  the only witness is a client that was **disconnected through the entire
+  download stage** — attached during the first probe, dropped, and reconnected
+  after the back-edge, so the only frame it ever sees is the channel's opening
+  `status: probing`. That is the scenario `app.test.tsx` drives, and it is the
+  one where losing the race actually cost the user a correct card.
+- **`fixtures.ts`'s `job()` builds the state the _server_ holds.** Every test
+  dl-18 wrote mounts one, which is exactly why none of them caught this. The two
+  new card tests build nothing: they fold the real frames onto a job the client
+  already has, and assert `attempts` is still `1` at the point of render, so the
+  premise cannot rot.
+
+### The reconcile race: closed, not deferred
+
+Build step 3 asked for a deliberate decision. It is **closed**, in `useJobs`'s
+`mergeJob`, and asserted at the render level rather than only in a unit — the
+reconnect that slept through the download stage, whose refetch knows
+`attempts: 2` and _loses_ the merge, still renders "Downloading" done. No
+follow-up ticket was filed and `dl-26` was not used.
+
+### Deliberately not done
+
+- **No cleanup of `watchedSteps` when a job is removed.** `streamStates` in the
+  same hook has the identical shape and is not pruned either; both are one small
+  number per job id this tab has seen. A pruner here would be code with nothing
+  observable to assert against, which is how a mutation survivor gets born.
+- **No `attempts` on the wire.** That is the contract change the Build section
+  names as the better answer, and it needs the owner decision dl-9 records
+  needing. If it is ever taken, `reachedStep`'s `attempts` clause becomes the
+  only witness needed and `markWatched` can go.
+
+### Verification
+
+`npm run check` exit 0. `npm test -- --project downloader`: 48 files, **675
+tests**, all passing. Repo-wide `npm test`: 101 files, **1,431 tests**, from a
+measured baseline of 101 / 1,416 at `4e3c48e` — so fifteen tests added and none
+removed or rewritten away.
+
+**Neither gate proves the browser.** `e2e/download.spec.ts` and the container
+build live in `.github/workflows/downloader.yml` and run nowhere else. This
+branch is `web` only and changes what the bundle contains, so the e2e suite is
+the proof I do not have.
+
+### Mutation checks
+
+Fifteen, each applied to the source and reverted after, with the source `touch`ed
+on restore. Command throughout:
+`npx vitest run tools/downloader/web --project downloader` (189 tests, 16 files).
+**Control run over the unmutated tree first: exit 0.**
+
+| Mutation                                                       | Red |
+| -------------------------------------------------------------- | --- |
+| `statusHighWaterMark` ignores `watched`                        | 6   |
+| `statusHighWaterMark` returns `watched` instead of maxing      | 7   |
+| `reachedStep` places `failed`/`canceled` instead of refusing   | 2   |
+| `reachedStep` drops the `attempts > 1` witness                 | 5   |
+| `reachedStep` treats a first probe as a re-probe (`>= 1`)      | 7   |
+| `reachedStep` infers about every status, not only `probing`    | 1   |
+| `markWatched` folds nothing                                    | 6   |
+| `markWatched` is last-wins instead of monotonic                | 4   |
+| `markWatched` places every job, pipeline step or not           | 3   |
+| `useJobs` stops folding the reconciled remote job              | 1   |
+| `useJobs` starts each job's mark at the last step instead of 0 | 2   |
+| `JobCard` ignores the mark it is handed                        | 4   |
+| `JobList` never hands a card its mark                          | 3   |
+
+**One survivor, and it is genuine.** Dropping the _before_ argument in
+`applyEvent` — `watch(jobId, before, applyJobEvent(before, event))` →
+`watch(jobId, applyJobEvent(before, event))` — kills nothing. Enumerated: every
+route by which a job reaches `downloading` in this client already folds that
+state some other way. An event that lands on `downloading` folds it as the
+after-state; `restore` reconciles before it attaches, so a job restored from
+`localStorage` is folded by `mergeJob` before any frame can arrive; and
+`createJob` returns a `queued` job (`api/src/routes/jobs.ts:57`), so `start` has
+nothing to fold. The argument is kept anyway: it makes `applyEvent` self-
+sufficient instead of correct-because-`restore`-happens-to-reconcile-first, and
+that ordering invariant lives in a different function and is enforced by nothing.
+**It is unkillable code and this is the reason, not an oversight.**
+
+A fifteenth mutation — `markWatched`'s null guard rewritten as
+`if (step === null || step > mark) mark = step ?? mark;` — also survived and is a
+**provably equivalent mutant**: the assignment is a no-op on the `null` branch.
+The behaviour it was meant to probe is covered by the two rows above it, which
+both go red.

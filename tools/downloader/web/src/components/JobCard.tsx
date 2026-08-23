@@ -24,6 +24,12 @@ import { ProgressBar } from "./ProgressBar.tsx";
 interface JobCardProps {
   job: Job;
   streamState: StreamState | undefined;
+  /**
+   * The furthest pipeline step this client has *watched* the job hold, which the
+   * job record cannot report on its own once the back-edge has been taken. See
+   * `statusHighWaterMark`; `undefined` means nothing has been watched yet.
+   */
+  watchedStep: number | undefined;
   onCancel: (id: string) => void;
   onRemove: (id: string) => void;
   onRetry: (job: Job) => void;
@@ -32,6 +38,7 @@ interface JobCardProps {
 export function JobCard({
   job,
   streamState,
+  watchedStep,
   onCancel,
   onRemove,
   onRetry,
@@ -43,7 +50,7 @@ export function JobCard({
   // Where the job is, and how far it has been — two different questions once
   // the `downloading → probing` back-edge exists. See `statusHighWaterMark`.
   const currentStep = statusIndex(job.status);
-  const furthestStep = statusHighWaterMark(job);
+  const furthestStep = statusHighWaterMark(job, watchedStep ?? 0);
 
   return (
     <li className={`job job--${job.status}`}>

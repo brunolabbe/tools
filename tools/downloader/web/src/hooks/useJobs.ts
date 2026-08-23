@@ -10,7 +10,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppError, TERMINAL_STATUSES } from "@downloader/contract";
 import type { AppErrorPayload, Job, JobEvent, JobOptions } from "@downloader/contract";
 import type { ApiClient } from "../api/types.ts";
-import { applyJobEvent, isTerminal, reconcileJob, upsertJob } from "../lib/job-reducer.ts";
+import {
+  applyJobEvent,
+  isTerminal,
+  markWatched,
+  reconcileJob,
+  upsertJob,
+} from "../lib/job-reducer.ts";
 import { createJobStream } from "../lib/job-stream.ts";
 import type { JobStream, StreamState } from "../lib/job-stream.ts";
 import { getBrowserStorage, loadJobs, saveJobs, sortJobs } from "../lib/job-store.ts";
@@ -18,6 +24,17 @@ import { getBrowserStorage, loadJobs, saveJobs, sortJobs } from "../lib/job-stor
 export interface UseJobs {
   jobs: Job[];
   streamStates: Record<string, StreamState>;
+  /**
+   * How far along `STATUS_ORDER` this client has *watched* each job go, keyed by
+   * job id and absent until there is something to say. It travels beside the job
+   * rather than on it because `Job` is a contract type; `statusHighWaterMark`
+   * takes the two together. See `markWatched`.
+   *
+   * Entries for removed jobs are left behind, exactly as `streamStates` leaves
+   * its own: both are one small value per job id this tab has seen, and pruning
+   * them is code with nothing observable to assert against.
+   */
+  watchedSteps: Record<string, number>;
   start(url: string, options: JobOptions): Promise<Job>;
   cancel(id: string): Promise<void>;
   remove(id: string): void;
@@ -28,6 +45,7 @@ export function useJobs(api: ApiClient): UseJobs {
   const storage = useMemo(() => getBrowserStorage(), []);
   const [jobs, setJobs] = useState<Job[]>(() => loadJobs(storage));
   const [streamStates, setStreamStates] = useState<Record<string, StreamState>>({});
+  const [watchedSteps, setWatchedSteps] = useState<Record<string, number>>({});
   const streams = useRef(new Map<string, JobStream>());
   const jobsRef = useRef(jobs);
 
@@ -37,12 +55,27 @@ export function useJobs(api: ApiClient): UseJobs {
     saveJobs(storage, jobs);
   }, [jobs, storage]);
 
-  const mergeJob = useCallback((remote: Job) => {
-    setJobs((previous) => {
-      const local = previous.find((candidate) => candidate.id === remote.id);
-      return sortJobs(upsertJob(previous, reconcileJob(local, remote)));
+  const watch = useCallback((jobId: string, ...seen: readonly Job[]) => {
+    setWatchedSteps((previous) => {
+      const current = previous[jobId] ?? 0;
+      const next = markWatched(current, ...seen);
+      return next === current ? previous : { ...previous, [jobId]: next };
     });
   }, []);
+
+  const mergeJob = useCallback(
+    (remote: Job) => {
+      // A freshly fetched job carries `attempts`, which is the *other* witness
+      // to the back-edge and the only one a page load has. Folding it in here
+      // means the mark survives whichever copy `reconcileJob` goes on to pick.
+      watch(remote.id, remote);
+      setJobs((previous) => {
+        const local = previous.find((candidate) => candidate.id === remote.id);
+        return sortJobs(upsertJob(previous, reconcileJob(local, remote)));
+      });
+    },
+    [watch],
+  );
 
   const failLocally = useCallback((jobId: string, error: AppErrorPayload) => {
     setJobs((previous) =>
@@ -54,11 +87,21 @@ export function useJobs(api: ApiClient): UseJobs {
     );
   }, []);
 
-  const applyEvent = useCallback((jobId: string, event: JobEvent) => {
-    setJobs((previous) =>
-      previous.map((job) => (job.id === jobId ? applyJobEvent(job, event) : job)),
-    );
-  }, []);
+  const applyEvent = useCallback(
+    (jobId: string, event: JobEvent) => {
+      // Both ends of the move, because the move is the evidence: over the
+      // back-edge the step being left is `downloading` and the job that comes
+      // back says `probing`. `jobsRef` is assigned during render, so this is the
+      // same job the updater below is about to fold the event onto — and reading
+      // it here rather than inside the updater keeps that updater pure.
+      const before = jobsRef.current.find((job) => job.id === jobId);
+      if (before) watch(jobId, before, applyJobEvent(before, event));
+      setJobs((previous) =>
+        previous.map((job) => (job.id === jobId ? applyJobEvent(job, event) : job)),
+      );
+    },
+    [watch],
+  );
 
   const attach = useCallback(
     (jobId: string) => {
@@ -154,5 +197,5 @@ export function useJobs(api: ApiClient): UseJobs {
     });
   }, []);
 
-  return { jobs, streamStates, start, cancel, remove, clearFinished };
+  return { jobs, streamStates, watchedSteps, start, cancel, remove, clearFinished };
 }

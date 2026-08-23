@@ -12,7 +12,7 @@
  */
 
 import { expect, test } from "vitest";
-import { STATUS_ORDER, statusHighWaterMark, statusIndex } from "../src/lib/status.ts";
+import { STATUS_ORDER, reachedStep, statusHighWaterMark, statusIndex } from "../src/lib/status.ts";
 import { job } from "./fixtures.ts";
 
 test("a job that has only ever moved forward is at its own high-water mark", () => {
@@ -54,5 +54,71 @@ test("a terminal job gains no trail of steps it never walked", () => {
     const terminal = job(status, { attempts: 2 });
     expect(statusIndex(status)).toBe(STATUS_ORDER.length - 1);
     expect(statusHighWaterMark(terminal)).toBe(statusIndex(status));
+  }
+});
+
+// ---------------------------------------------------------------------------
+// The second witness (dl-20)
+// ---------------------------------------------------------------------------
+
+test("a step the client watched holds the mark when the job record cannot", () => {
+  // The live-stream shape, and the one dl-18's fix could not reach: no
+  // `JobEvent` carries `attempts`, so a client following a healthy stream over
+  // the back-edge holds `attempts: 1` and the job record on its own proves
+  // nothing. What the client watched is the other witness, and it answers here.
+  const listening = job("probing", { attempts: 1, progress: { downloadedBytes: 0 } });
+
+  expect(reachedStep(listening)).toBe(statusIndex("probing"));
+  expect(statusHighWaterMark(listening, statusIndex("downloading"))).toBe(
+    statusIndex("downloading"),
+  );
+});
+
+test("the two witnesses are maxed, not chosen between", () => {
+  // A refetched job knows `attempts` and nothing about what this client watched;
+  // a listening client is the other way round. Either one alone has to carry the
+  // mark, which is what makes `reconcileJob`'s choice between the two copies
+  // survivable whichever way it goes.
+  const refetched = job("probing", { attempts: 2, progress: { downloadedBytes: 0 } });
+  const listening = job("probing", { attempts: 1, progress: { downloadedBytes: 0 } });
+  const downloading = statusIndex("downloading");
+
+  expect(statusHighWaterMark(refetched, 0)).toBe(downloading);
+  expect(statusHighWaterMark(listening, downloading)).toBe(downloading);
+  expect(statusHighWaterMark(refetched, downloading)).toBe(downloading);
+});
+
+test("only probing is inferred about, whatever the attempts counter says", () => {
+  // There is exactly one back-edge, so every other status is its own high-water
+  // mark by construction. Reading `attempts` without the status would report a
+  // job that re-probed and then reached `muxing` as having got only as far as
+  // `downloading` — true of the attempt it abandoned, wrong about this one — and
+  // would put a `queued` job two steps ahead of itself. Neither is visible on a
+  // card, because the current step outranks the mark and the list is rendered
+  // only for an active job; both are wrong answers from a helper whose whole job
+  // is to say where a job has been.
+  for (const status of ["queued", "downloading", "muxing", "completed"] as const) {
+    expect(reachedStep(job(status, { attempts: 2 }))).toBe(statusIndex(status));
+  }
+});
+
+test("a watched step is a floor under the job, never a promotion of it", () => {
+  // `Math.max`, not a replacement: a job that has only moved forwards is still
+  // its own high-water mark. Returning `watched` outright would leave a
+  // `downloading` job marked as though it were only at `probing`.
+  expect(statusHighWaterMark(job("queued"), 0)).toBe(statusIndex("queued"));
+  expect(statusHighWaterMark(job("downloading"), statusIndex("probing"))).toBe(
+    statusIndex("downloading"),
+  );
+});
+
+test("a terminal job ignores the mark, whatever this client watched", () => {
+  // The trap the test above names, reached the new way: `STATUS_ORDER` has no
+  // step for `failed` or `canceled`, so a client that watched the job get as far
+  // as `muxing` and then fail must not be handed a trail of done steps for it.
+  for (const status of ["failed", "canceled"] as const) {
+    const terminal = job(status, { attempts: 2 });
+    expect(reachedStep(terminal)).toBeNull();
+    expect(statusHighWaterMark(terminal, statusIndex("muxing"))).toBe(statusIndex(status));
   }
 });
