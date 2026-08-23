@@ -284,6 +284,22 @@ cap. `fixturePlaceKey` is exported so a caller can deduplicate its place list
 the same way the lookup will, rather than paying for a wider matrix than it
 needs.
 
+> **Amended 2026-08-23 by pl-27: do not do this, and the export is gone.**
+> `fixturePlaceKey` was `placeKey(name)` — accent-stripped, lower-cased and
+> **name only**, which is right for deciding whether this provider's own small
+> table holds an answer and wrong for deciding that two candidates mean the
+> same place. pl-27 took the advice above and merged Saint-Jean in Québec with
+> Saint-Jean in New Brunswick: the survivor's coordinates were written onto both
+> candidates and persisted, and both indexed one matrix cell, so the plan
+> reported a `measured`, `grounded` transition to the wrong province. Composing
+> the six checked-in sets, three of them collided.
+>
+> The advice's _shape_ was right — one normaliser, never a reimplementation —
+> and only the function was wrong. A caller that needs a place's identity uses
+> `placeIdentity` in `api/src/grounding/place-key.ts`, which the grounding seam
+> owns and the cache keys `locate` and `travel` by. **This matters most to
+> pl-28**, which will key places too.
+
 **2026-08-22 — review round.** A code review over the branch found four defects,
 all confirmed by hand before fixing and all now covered by a test.
 

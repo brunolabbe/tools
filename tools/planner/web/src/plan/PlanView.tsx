@@ -35,6 +35,7 @@ import {
   type PlanItem,
   type PlanView as PlanViewDocument,
   type TripShape,
+  uncheckedConstraintKey,
   type UncheckedConstraint,
 } from "@planner/contract";
 import { fetchPlan, pinItem } from "../api/plan.ts";
@@ -390,6 +391,17 @@ function Gaps({ gaps }: { gaps: readonly PlanGap[] }): React.ReactElement | null
  * whole plan; when it is not, the affected items are named by title, because an
  * id is not something a reader can find on the page.
  */
+/**
+ * The key is the entry's identity, and it comes from the contract.
+ *
+ * It was a local `keyFor` here for one round, which is one round too many: this
+ * file is not the only reader of an `UncheckedConstraint`, and "when are two
+ * entries the same entry" is a statement about the data rather than about how
+ * React reconciles a list. `uncheckedConstraintKey` is where it belongs, and
+ * `@planner/itinerary`'s suite asserts it is distinct across the entries the
+ * composer actually emits for all six checked-in candidate sets — which is a
+ * stronger guarantee than anything this file could assert about itself.
+ */
 function Unchecked({
   unchecked,
   candidates,
@@ -409,7 +421,7 @@ function Unchecked({
             .filter((title): title is string => title !== undefined);
 
           return (
-            <li key={constraint.kind}>
+            <li key={uncheckedConstraintKey(constraint)}>
               <strong>{humanise(constraint.kind)}</strong> — {constraint.detail}
               {named.length > 0 && <span className="muted"> ({named.join("; ")})</span>}
             </li>

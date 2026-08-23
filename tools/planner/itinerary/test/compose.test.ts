@@ -21,6 +21,7 @@ import { loadFixture } from "../../contract/test/fixtures.ts";
 import { compose, pinnedPlacements, type ComposeResult } from "../src/compose.ts";
 import { ACTIVITY_MINUTES_PER_DAY, DRIVE_MINUTES_PER_DAY } from "../src/limits.ts";
 import { BUCKET_OF } from "../src/pack.ts";
+import { NOTHING_MEASURED } from "../src/travel.ts";
 import { briefFor, candidate, NOW, placedIds, REVISION } from "./helpers.ts";
 
 /** Every id a revision claims — the days' and the items'. */
@@ -42,11 +43,60 @@ function asRevision(days: PlanRevision["days"], gaps: PlanRevision["gaps"]): Pla
   };
 }
 
+/**
+ * Why the end-to-end additivity assertion is arithmetic, asserted rather than
+ * assumed.
+ *
+ * pl-27's Done-when asked for a checked-in candidate set whose days "respect
+ * measured transition times". **No checked-in set can show that**, and this is
+ * the reason rather than an excuse: the six sets are two to four candidates
+ * over four to thirteen days, so the packer — which fills days evenly, not
+ * front to back — never puts two *chargeable* items on one day. What shares a
+ * day is an activity and its anchor, and an anchor is where the day ends rather
+ * than something the day fits around, so its arrival is recorded and never
+ * charged (pl-9, and `transitionTo`).
+ *
+ * A transition therefore cannot change what these sets pack, whatever it
+ * measures. The proof that a non-zero transition *does* change a day is in
+ * `pack.test.ts`, on the one-constraint-at-a-time candidates `helpers.ts`
+ * exists to build — three things fit a day with nothing between them and two
+ * fit once getting between them costs 45 minutes.
+ *
+ * This test is the guard on that explanation. The day a fixture grows enough to
+ * fill a day, it goes red and says so, instead of the end-to-end assertion
+ * quietly continuing to pass for a reason nobody rechecked.
+ */
+test("no checked-in set puts two chargeable items on one day", () => {
+  for (const shape of TRIP_SHAPES) {
+    const fixture = loadFixture(shape);
+    const byId = new Map(fixture.candidates.map((each) => [each.id, each]));
+    const packed = compose({
+      brief: fixture.brief,
+      candidates: fixture.candidates,
+      travel: NOTHING_MEASURED,
+      revision: REVISION,
+      now: NOW,
+    });
+
+    for (const day of packed.revision.days) {
+      const chargeable = day.items.filter(
+        (item) => BUCKET_OF[byId.get(item.candidateId)?.specialist ?? "activities"] !== "anchor",
+      );
+      expect({ shape, day: day.dayIndex, chargeable: chargeable.length }).toEqual({
+        shape,
+        day: day.dayIndex,
+        chargeable: Math.min(chargeable.length, 1),
+      });
+    }
+  }
+});
+
 describe.each(TRIP_SHAPES)("the %s fixture", (shape) => {
   const fixture = loadFixture(shape);
   const result = compose({
     brief: fixture.brief,
     candidates: fixture.candidates,
+    travel: NOTHING_MEASURED,
     revision: REVISION,
     now: NOW,
   });
@@ -132,12 +182,24 @@ describe("what it refuses to build", () => {
   test("a brief too thin to draft from is BRIEF_INCOMPLETE, and names the slots", () => {
     const thin = { ...briefFor({}), travellers: slot.unknown() };
 
-    expect(() => compose({ brief: thin, candidates: [], revision: REVISION, now: NOW })).toThrow(
-      expect.objectContaining({ code: "BRIEF_INCOMPLETE" }),
-    );
+    expect(() =>
+      compose({
+        brief: thin,
+        candidates: [],
+        travel: NOTHING_MEASURED,
+        revision: REVISION,
+        now: NOW,
+      }),
+    ).toThrow(expect.objectContaining({ code: "BRIEF_INCOMPLETE" }));
 
     try {
-      compose({ brief: thin, candidates: [], revision: REVISION, now: NOW });
+      compose({
+        brief: thin,
+        candidates: [],
+        travel: NOTHING_MEASURED,
+        revision: REVISION,
+        now: NOW,
+      });
     } catch (error) {
       expect((error as AppError).details).toEqual({ missing: ["travellers"] });
     }
@@ -155,6 +217,7 @@ describe("what it refuses to build", () => {
       compose({
         brief: briefFor({ effort: slot.answered("gentle") }),
         candidates: [impossible],
+        travel: NOTHING_MEASURED,
         revision: REVISION,
         now: NOW,
       }),
@@ -177,9 +240,15 @@ describe("what it refuses to build", () => {
       budget: slot.answered({ kind: "amount", currency: "CAD", amount: 100, basis: "total" }),
     });
 
-    expect(() => compose({ brief, candidates: [expensive], revision: REVISION, now: NOW })).toThrow(
-      expect.objectContaining({ code: "PLAN_INFEASIBLE" }),
-    );
+    expect(() =>
+      compose({
+        brief,
+        candidates: [expensive],
+        travel: NOTHING_MEASURED,
+        revision: REVISION,
+        now: NOW,
+      }),
+    ).toThrow(expect.objectContaining({ code: "PLAN_INFEASIBLE" }));
   });
 
   test("a plan that merely has holes ships, with the hole named", () => {
@@ -189,6 +258,7 @@ describe("what it refuses to build", () => {
     const result = compose({
       brief: briefFor({}),
       candidates: [bed, unbookable],
+      travel: NOTHING_MEASURED,
       revision: REVISION,
       now: NOW,
     });
@@ -214,6 +284,7 @@ describe("what it refuses to build", () => {
           detail: "You are all-inclusive.",
         },
       ],
+      travel: NOTHING_MEASURED,
       revision: REVISION,
       now: NOW,
     });
@@ -256,6 +327,7 @@ describe("the critic", () => {
         budget: slot.answered({ kind: "amount", currency: "CAD", amount: 100, basis: "total" }),
       }),
       candidates: [cheap, dear],
+      travel: NOTHING_MEASURED,
       revision: REVISION,
       now: NOW,
     });
@@ -288,6 +360,7 @@ describe("the critic", () => {
               candidateId: one.id,
               position: 0,
               startsAt: null,
+              travelFromPrevious: null,
               pinned: true,
               note: null,
             },
@@ -296,6 +369,7 @@ describe("the critic", () => {
               candidateId: two.id,
               position: 1,
               startsAt: null,
+              travelFromPrevious: null,
               pinned: true,
               note: null,
             },
@@ -310,6 +384,7 @@ describe("the critic", () => {
         brief: briefFor({ effort: slot.answered("gentle") }),
         candidates: [one, two],
         previous,
+        travel: NOTHING_MEASURED,
         revision: { ...REVISION, id: "rev-2" },
         now: NOW,
       }),
@@ -320,6 +395,7 @@ describe("the critic", () => {
     const result = compose({
       brief: briefFor({}),
       candidates: [candidate({ specialist: "activities", durationMinutes: 60 })],
+      travel: NOTHING_MEASURED,
       revision: REVISION,
       now: NOW,
     });
@@ -349,6 +425,7 @@ describe("re-planning", () => {
             candidateId: pinned.id,
             position: 0,
             startsAt: null,
+            travelFromPrevious: null,
             pinned: true,
             note: null,
           },
@@ -370,6 +447,7 @@ describe("re-planning", () => {
       brief: briefFor({}),
       candidates: [...others, pinned],
       previous,
+      travel: NOTHING_MEASURED,
       revision: { ...REVISION, id: "rev-2" },
       now: NOW,
     });
@@ -388,6 +466,7 @@ describe("re-planning", () => {
         brief: briefFor({}),
         candidates: [...others, pinned],
         previous,
+        travel: NOTHING_MEASURED,
         revision: { ...REVISION, id: "rev-2" },
         now: NOW,
       }),
@@ -400,12 +479,14 @@ describe("re-planning", () => {
     const first = compose({
       brief: briefFor({}),
       candidates: [pinned],
+      travel: NOTHING_MEASURED,
       revision: REVISION,
       now: NOW,
     });
     const second = compose({
       brief: briefFor({}),
       candidates: [pinned],
+      travel: NOTHING_MEASURED,
       revision: { ...REVISION, id: "rev-2" },
       now: NOW,
     });
@@ -422,6 +503,7 @@ describe("what it says it did not check", () => {
     const result = compose({
       brief: briefFor({ dealBreakers: ["No campground without showers"] }),
       candidates: [candidate({ specialist: "lodging" })],
+      travel: NOTHING_MEASURED,
       revision: REVISION,
       now: NOW,
     });
@@ -433,6 +515,7 @@ describe("what it says it did not check", () => {
     const result = compose({
       brief: briefFor({ budget: slot.answered({ kind: "band", band: "moderate" }) }),
       candidates: [candidate({ specialist: "lodging" })],
+      travel: NOTHING_MEASURED,
       revision: REVISION,
       now: NOW,
     });
@@ -446,6 +529,7 @@ describe("what it says it did not check", () => {
     const result = compose({
       brief: briefFor({}),
       candidates: [vague],
+      travel: NOTHING_MEASURED,
       revision: REVISION,
       now: NOW,
     });
@@ -458,6 +542,7 @@ describe("what it says it did not check", () => {
     const result = compose({
       brief: briefFor({ dates: { kind: "open", nights: 3 } }),
       candidates: [candidate({ specialist: "lodging" })],
+      travel: NOTHING_MEASURED,
       revision: REVISION,
       now: NOW,
     });
@@ -493,6 +578,7 @@ describe("what it says it did not check", () => {
     const result = compose({
       brief: briefFor({}),
       candidates: [inCad, inEur],
+      travel: NOTHING_MEASURED,
       revision: REVISION,
       now: NOW,
     });
@@ -543,6 +629,7 @@ describe("what it says it did not check", () => {
               candidateId: winterOnly.id,
               position: 0,
               startsAt: null,
+              travelFromPrevious: null,
               pinned: true,
               note: null,
             },
@@ -556,6 +643,7 @@ describe("what it says it did not check", () => {
       brief: briefFor({}),
       candidates: [inCad, winterOnly],
       previous,
+      travel: NOTHING_MEASURED,
       revision: { ...REVISION, id: "rev-2" },
       now: NOW,
     });
@@ -573,6 +661,7 @@ describe("what it says it did not check", () => {
     const result = compose({
       brief: { ...briefFor({}), effort: slot.declined() },
       candidates: [candidate({ specialist: "lodging" })],
+      travel: NOTHING_MEASURED,
       revision: REVISION,
       now: NOW,
     });

@@ -28,7 +28,7 @@
 import { describe, expect, test } from "vitest";
 import { TRIP_SHAPES } from "@planner/contract";
 import type { Specialist } from "@planner/contract";
-import { BUCKET_OF, compose } from "@planner/itinerary";
+import { BUCKET_OF, compose, NOTHING_MEASURED } from "@planner/itinerary";
 import { loadFixture } from "../../contract/test/fixtures.ts";
 import {
   CANDIDATE_LIMIT_OF,
@@ -59,6 +59,7 @@ async function planFor(shape: (typeof TRIP_SHAPES)[number]) {
     brief,
     candidates: fanOut.candidates,
     gaps: fanOut.gaps,
+    travel: NOTHING_MEASURED,
     revision: { id: `rev-${shape}`, reason: "First draft", createdAt: NOW.toISOString() },
     now: NOW,
   });

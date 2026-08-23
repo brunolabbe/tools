@@ -19,14 +19,19 @@
  * The one call most callers want is `compose`:
  *
  * ```
- * const { revision, unchecked } = compose({ brief, candidates, revision: {...}, now })
+ * const { revision, unchecked } = compose({ brief, candidates, travel, revision: {...}, now })
  * const plan = appendRevision(existing, revision)
  * ```
  *
+ * `travel` is what something outside this process measured between the
+ * candidates, and it is required rather than optional — `NOTHING_MEASURED` is
+ * how a caller with no grounding says so, and it packs the days this composer
+ * packed before pl-27.
+ *
  * `unchecked` is not optional decoration. It is the list of constraints this
- * composer could not evaluate — travel time above all, which Phase 2 has no
- * coordinates for — and dropping it on the floor turns an honest plan into one
- * that merely looks finished.
+ * composer could not evaluate — travel time above all, wherever nothing
+ * measured a transition — and dropping it on the floor turns an honest plan
+ * into one that merely looks finished.
  */
 
 export { compose, pinnedPlacements, type ComposeInput, type ComposeResult } from "./compose.ts";
@@ -52,6 +57,7 @@ export {
   type PackResult,
   type PinnedPlacement,
 } from "./pack.ts";
+export { NOTHING_MEASURED, transitionMinutes, type TravelTable } from "./travel.ts";
 export {
   couldBeInSeason,
   filterBySeason,

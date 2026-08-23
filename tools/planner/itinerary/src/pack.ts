@@ -45,6 +45,7 @@ import {
   isAnswered,
   MAX_ITEMS_PER_DAY,
   type Candidate,
+  type ItemTravel,
   type Specialist,
   type TripBrief,
 } from "@planner/contract";
@@ -55,6 +56,7 @@ import {
   ITEMS_PER_CITY_DAY,
 } from "./limits.ts";
 import { inSeasonOnDay } from "./season.ts";
+import { transitionMinutes, type TravelTable } from "./travel.ts";
 import type { TripSpan } from "./dates.ts";
 
 // ---------------------------------------------------------------------------
@@ -91,6 +93,15 @@ export interface PackedItem {
   bucket: Bucket;
   pinned: boolean;
   note: string | null;
+  /**
+   * Getting here from the item before it on this day (pl-27).
+   *
+   * `null` means exactly one thing — **nothing on this day precedes it** — and
+   * every other answer is a named `ItemTravel`, including the two ways there is
+   * no measurement. See `PlanItem.travelFromPrevious`, which is where this ends
+   * up, and `transitionTo` for why an anchor carries one it is not charged for.
+   */
+  travelFromPrevious: ItemTravel | null;
 }
 
 export interface PackedDay {
@@ -140,6 +151,13 @@ export interface PackInput {
   /** Already through the season filter — see `filterBySeason`. */
   candidates: readonly Candidate[];
   span: TripSpan;
+  /**
+   * What the grounding pass measured between candidates. Required rather than
+   * optional: a caller that forgot it would silently pack under nothing, which
+   * is the state this argument exists to make visible. `NOTHING_MEASURED` is
+   * how a caller says there was no grounding.
+   */
+  travel: TravelTable;
   /** `null` when the brief has no departure to count a lead time back from. */
   daysUntilDeparture: number | null;
   pinned?: readonly PinnedPlacement[];
@@ -202,6 +220,20 @@ interface DayState {
   driveMinutes: number;
   activityCount: number;
   hasAnchor: boolean;
+  /**
+   * The candidate the next item on this day will be travelled to from, or
+   * `null` while the day is empty.
+   *
+   * **The item appended last is the item that comes last**, which is what makes
+   * charging a transition as we go exact rather than an estimate. Pins lead the
+   * day and are appended first; everything else is appended bucket by bucket in
+   * `PLACEMENT_ORDER`, and `sortByBucket` is a stable sort over that same
+   * order — so the sequence this field tracks is the sequence the day ends up
+   * in. A transition *into* a day's first item is deliberately not modelled: it
+   * belongs to no day's budget, and there is no order between days until every
+   * bucket has been placed.
+   */
+  lastCandidateId: string | null;
 }
 
 function noteFor(candidate: Candidate): string | null {
@@ -217,13 +249,22 @@ function noteFor(candidate: Candidate): string | null {
  * packer's input, so a pin that makes a day impossible produces an over-full
  * day for the critic to find, not a silently dropped pin.
  */
-function fits(day: DayState, candidate: Candidate, bucket: Bucket, capacity: Capacity): boolean {
+function fits(
+  day: DayState,
+  candidate: Candidate,
+  bucket: Bucket,
+  capacity: Capacity,
+  transition: number,
+): boolean {
   if (day.pinnedItems.length + day.packedItems.length >= MAX_ITEMS_PER_DAY) return false;
   if (!inSeasonOnDay(candidate, day.date)) return false;
 
   if (bucket === "anchor") return !day.hasAnchor;
 
-  const minutes = candidate.durationMinutes ?? 0;
+  // The candidate's own stated duration, plus getting to it from the thing
+  // before it on this day. The second half is pl-27, and it is `0` for every
+  // plan composed without grounding — which is what keeps the change additive.
+  const minutes = (candidate.durationMinutes ?? 0) + transition;
 
   if (bucket === "drive" && capacity.driveMinutes !== null) {
     return day.driveMinutes + minutes <= capacity.driveMinutes;
@@ -238,8 +279,14 @@ function fits(day: DayState, candidate: Candidate, bucket: Bucket, capacity: Cap
   return day.activityMinutes + minutes <= capacity.activityMinutes;
 }
 
-function charge(day: DayState, candidate: Candidate, bucket: Bucket, capacity: Capacity): void {
-  const minutes = candidate.durationMinutes ?? 0;
+function charge(
+  day: DayState,
+  candidate: Candidate,
+  bucket: Bucket,
+  capacity: Capacity,
+  transition: number,
+): void {
+  const minutes = (candidate.durationMinutes ?? 0) + transition;
   if (bucket === "drive" && capacity.driveMinutes !== null) {
     day.driveMinutes += minutes;
   } else if (bucket !== "anchor") {
@@ -248,6 +295,38 @@ function charge(day: DayState, candidate: Candidate, bucket: Bucket, capacity: C
   } else {
     day.hasAnchor = true;
   }
+  day.lastCandidateId = candidate.id;
+}
+
+/**
+ * What was measured about getting to `candidate` on `day`, or `null`.
+ *
+ * One thing is deliberately not a transition: the **first item of a day**.
+ * Nothing on that day precedes it, and the hop from wherever the party slept
+ * belongs to no day's budget — the packer has no order between days until every
+ * bucket has been placed.
+ *
+ * ## The anchor is measured and not charged, and that is not an inconsistency
+ *
+ * Getting to where you sleep is real travel and the plan should say what it
+ * costs, so it is recorded. It is not *charged*, because `fits` cannot refuse
+ * an anchor on budget — a day has to be able to end somewhere, and pl-9's rule
+ * is that the bed is where the day ends rather than something the day fits
+ * around. Charging it could only ever produce an over-full day that the critic
+ * then rejects, which turns "the hotel is a long way off" into a plan the user
+ * does not get. `charge` ignores the minutes on the anchor branch already; this
+ * function does not have to know that, and the record reaches the plan either
+ * way.
+ */
+function transitionTo(
+  day: DayState,
+  candidate: Candidate,
+  travel: TravelTable,
+  byId: ReadonlyMap<string, Candidate>,
+): ItemTravel | null {
+  if (day.lastCandidateId === null) return null;
+  const previous = byId.get(day.lastCandidateId);
+  return previous === undefined ? null : travel.between(previous, candidate);
 }
 
 /** How full a day already is in this bucket, for the least-loaded choice. */
@@ -274,6 +353,7 @@ export function pack(input: PackInput): PackResult {
     driveMinutes: 0,
     activityCount: 0,
     hasAnchor: false,
+    lastCandidateId: null,
   }));
 
   const excluded: Excluded[] = [];
@@ -294,13 +374,15 @@ export function pack(input: PackInput): PackResult {
     const day = days[placement.dayIndex];
     if (candidate === undefined || day === undefined) continue;
     const bucket = BUCKET_OF[candidate.specialist];
+    const travelled = transitionTo(day, candidate, input.travel, byId);
     day.pinnedItems.push({
       candidateId: candidate.id,
       bucket,
       pinned: true,
       note: noteFor(candidate),
+      travelFromPrevious: travelled,
     });
-    charge(day, candidate, bucket, capacity);
+    charge(day, candidate, bucket, capacity, transitionMinutes(travelled));
     record(candidate);
   }
 
@@ -324,7 +406,21 @@ export function pack(input: PackInput): PackResult {
         continue;
       }
 
-      const options = days.filter((day) => fits(day, candidate, bucket, capacity));
+      // The transition is per-day — it depends on what is already on that day —
+      // so it is worked out once per candidate and day, and the same value
+      // decides the fit and pays for it.
+      const travelled = new Map<number, ItemTravel | null>(
+        days.map((day) => [day.dayIndex, transitionTo(day, candidate, input.travel, byId)]),
+      );
+      const options = days.filter((day) =>
+        fits(
+          day,
+          candidate,
+          bucket,
+          capacity,
+          transitionMinutes(travelled.get(day.dayIndex) ?? null),
+        ),
+      );
       const chosen = options.reduce<DayState | null>(
         (best, day) => (best === null || load(day, bucket) < load(best, bucket) ? day : best),
         null,
@@ -342,13 +438,15 @@ export function pack(input: PackInput): PackResult {
         continue;
       }
 
+      const arrival = travelled.get(chosen.dayIndex) ?? null;
       chosen.packedItems.push({
         candidateId: candidate.id,
         bucket,
         pinned: false,
         note: noteFor(candidate),
+        travelFromPrevious: arrival,
       });
-      charge(chosen, candidate, bucket, capacity);
+      charge(chosen, candidate, bucket, capacity, transitionMinutes(arrival));
       record(candidate);
     }
   }

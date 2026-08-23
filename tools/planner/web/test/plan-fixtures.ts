@@ -69,6 +69,7 @@ export function item(overrides: Partial<PlanItem> & { candidateId: string }): Pl
     startsAt: null,
     pinned: false,
     note: null,
+    travelFromPrevious: null,
     ...overrides,
   };
 }

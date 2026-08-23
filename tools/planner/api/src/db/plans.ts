@@ -21,6 +21,7 @@
 import {
   AppError,
   candidateSchema,
+  itemTravelSchema,
   planGapSchema,
   tripBriefSchema,
   type Candidate,
@@ -81,6 +82,7 @@ interface ItemRow {
   starts_at: string | null;
   pinned: number;
   note: string | null;
+  travel_json: string | null;
 }
 
 function corrupt(what: string, id: string): AppError {
@@ -198,8 +200,9 @@ export function insertRevision(db: Database, revision: PlanRevision): void {
     "INSERT INTO plan_days (id, revision_id, day_index, date) VALUES (?, ?, ?, ?)",
   );
   const item = db.prepare(
-    `INSERT INTO plan_items (id, day_id, candidate_id, position, starts_at, pinned, note)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO plan_items
+       (id, day_id, candidate_id, position, starts_at, pinned, note, travel_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
   for (const each of revision.days) {
@@ -213,6 +216,10 @@ export function insertRevision(db: Database, revision: PlanRevision): void {
         placed.startsAt,
         placed.pinned ? 1 : 0,
         placed.note,
+        // NULL rather than `"null"`: the column's own emptiness is the way to
+        // say nothing measured this transition, and it is what the read below
+        // turns back into `null` without going near a parser.
+        placed.travelFromPrevious === null ? null : JSON.stringify(placed.travelFromPrevious),
       );
     }
   }
@@ -400,5 +407,10 @@ function selectItems(db: Database, dayId: string): PlanItem[] {
     // STRICT has no boolean type; the column is 0 or 1 and the CHECK keeps it so.
     pinned: row.pinned === 1,
     note: row.note,
+    // Read back rather than re-measured, which is the whole reason it is
+    // stored: the distances and the `fetchedAt` a plan was packed against stay
+    // the ones it was packed against, long after the cache row has expired.
+    travelFromPrevious:
+      row.travel_json === null ? null : parseOr(itemTravelSchema, row.travel_json, "item", row.id),
   }));
 }

@@ -84,6 +84,7 @@ import type { Database } from "better-sqlite3";
 import type { GroundingCacheTtlHours } from "../config.ts";
 import { deleteExpiredGrounding, selectGrounding, upsertGrounding } from "../db/grounding-cache.ts";
 import type { AppLogger } from "../logger.ts";
+import { KEY_SEPARATOR, placeIdentity } from "./place-key.ts";
 
 /**
  * The kinds, which are the seam's methods.
@@ -99,67 +100,19 @@ const TRAVEL = "travel";
 // ---------------------------------------------------------------------------
 
 /**
- * Joins the parts of a key. A NUL, because nothing survives `normalisePart`
- * carrying one — see below — so no place name can forge another question's key
- * by containing the separator. Each kind has a fixed number of parts, so one
- * separator is unambiguous.
+ * The normalisation itself moved to `place-key.ts` in pl-27, unchanged.
+ *
+ * It was private here, and a second caller then needed the *same* identity for
+ * a different job — deduplicating the place list a run sends to `travel` — and,
+ * finding nothing exported, built a worse one out of the fixture provider's
+ * table-lookup key. Which merged two places that share a name. The fix is that
+ * the seam owns one normaliser and every caller asks it; `place-key.ts` carries
+ * the full argument, including what it drops and what it refuses to.
  */
-const KEY_SEPARATOR = "\u0000";
 
-/**
- * A part that is not there at all, distinct from one that is empty.
- *
- * A `Place` with no `locality` and a `Place` whose locality is `"  "` are
- * different questions — the first says nothing, the second says something
- * unusable — and collapsing them would be this file's own version of two
- * questions sharing an answer.
- */
-const ABSENT = "\u0001";
-
-/**
- * What the normalisation drops, in full, so that nobody has to read the code to
- * find out:
- *
- * 1. **Case.** `Rimouski` and `rimouski` are one question.
- * 2. **Surrounding whitespace**, and
- * 3. **repeated whitespace inside** — `"Québec  City"` is the same question as
- *    `"Québec City"`, and a model writes both.
- * 4. **Control characters**, which are not a normalisation so much as a
- *    defence: they are what a name would need to contain to forge a separator
- *    and be answered with another pair's row.
- *
- * And what it deliberately does **not** drop, because each of these turns two
- * different questions into one:
- *
- * - **Accents.** `Montréal` and `Montreal` are two different strings and a real
- *   backend may well answer them differently. The fixture provider strips them
- *   in `placeKey` and that is *its* business — it is deciding whether its own
- *   small table holds an answer, not deciding that two questions are the same
- *   question.
- * - **Punctuation, articles, abbreviations.** `Saint-Anne` is not
- *   `Sainte Anne`, and `Mt Albert` is not `Mont Albert`. Guessing here is how a
- *   cache starts lying rather than missing.
- */
-function normalisePart(value: string): string {
-  return value
-    .replace(/[\p{Cc}\p{Cf}]/gu, "")
-    .replace(/\s+/gu, " ")
-    .trim()
-    .toLowerCase();
-}
-
-function placePart(place: Place): string {
-  // `coordinates` is deliberately not in the key: it is what `locate` is *for*,
-  // and a candidate that has already been located asks a different question
-  // only in the sense that it need not ask at all.
-  return `${normalisePart(place.name)}${KEY_SEPARATOR}${
-    place.locality === null ? ABSENT : normalisePart(place.locality)
-  }`;
-}
-
-/** The key for "where is this place". */
+/** The key for "where is this place". The place's identity, and nothing else. */
 export function locateKey(place: Place): string {
-  return placePart(place);
+  return placeIdentity(place);
 }
 
 /**
@@ -172,7 +125,7 @@ export function locateKey(place: Place): string {
  * and the choice is visible.
  */
 export function travelKey(from: Place, to: Place, mode: TravelMode): string {
-  return `${mode}${KEY_SEPARATOR}${placePart(from)}${KEY_SEPARATOR}${placePart(to)}`;
+  return `${mode}${KEY_SEPARATOR}${placeIdentity(from)}${KEY_SEPARATOR}${placeIdentity(to)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -235,15 +188,18 @@ export type GroundingOutcome<T> =
 /**
  * Named so that no call site writes the literal and the two empties read apart.
  *
- * Not exported: a caller reads `outcome.kind` or `travelOutcome(...).kind`, and
- * nothing outside this file has any business constructing an outcome. The day
- * pl-28 needs to build one, exporting these is the change — until then they
- * would be three exports with no consumer.
+ * **Exported as of pl-27**, which is the condition the previous note set. A
+ * caller that only *reads* an outcome uses `outcome.kind`, so these had no
+ * consumer and stayed private; a caller that *builds* one needs them, and
+ * pl-27's `travel-measure.test.ts` stands a `RunGrounding` double up to drive
+ * the measuring pass over candidates the six checked-in sets cannot express.
+ * Writing `{ kind: "unknown" }` at that call site is the thing this naming
+ * exists to prevent, so the export is the smaller change.
  */
-const UNKNOWN = { kind: "unknown" } as const;
-const REFUSED = { kind: "refused" } as const;
+export const UNKNOWN = { kind: "unknown" } as const;
+export const REFUSED = { kind: "refused" } as const;
 
-function answered<T>(value: T): GroundingOutcome<T> {
+export function answered<T>(value: T): GroundingOutcome<T> {
   return { kind: "answered", value };
 }
 
