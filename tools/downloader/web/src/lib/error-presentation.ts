@@ -205,9 +205,12 @@ export interface ErrorView {
   retryable: boolean;
   final: boolean;
   /**
-   * Seconds the server asked us to wait, or `null` when it said nothing usable.
+   * Seconds the server asked us to wait, or `null` when there is nothing to say.
    * "Try again" with no answer to "when?" is the same failure as a progress bar
    * with an invented total: the UI knows and does not say.
+   *
+   * **`null` for any code the taxonomy refuses to retry**, whatever the payload
+   * carried — see the veto in `presentError`.
    */
   retryAfterSec: number | null;
 }
@@ -235,7 +238,15 @@ export function presentError(payload: AppErrorPayload): ErrorView {
     tone: entry.tone,
     retryable: entry.allowRetry && payload.retryable === true,
     final: entry.final === true,
-    retryAfterSec: readRetryAfterSec(payload.details),
+    // The same client-side veto the retry button gets, and for the same reason.
+    // `readRetryAfterSec` will happily return a number for *any* code, because
+    // `details` is server-supplied and a server can attach one to anything. A
+    // `DRM_PROTECTED` carrying `retryAfterSec` would then render "there is
+    // nothing to retry — the answer will not change" directly above "wait 20 s
+    // before trying again", which is the contradiction this table exists to
+    // prevent. Vetoed here rather than in `ErrorPanel` so that one place
+    // decides and no future renderer can reintroduce it.
+    retryAfterSec: entry.allowRetry ? readRetryAfterSec(payload.details) : null,
   };
 }
 

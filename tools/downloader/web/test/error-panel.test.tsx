@@ -28,9 +28,10 @@
 
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { DEFAULT_ERROR_MESSAGES } from "@downloader/contract";
+import { DEFAULT_ERROR_MESSAGES, ERROR_CODES } from "@downloader/contract";
 import type { AppErrorPayload } from "@downloader/contract";
 import { ErrorPanel } from "../src/components/ErrorPanel.tsx";
+import { ERROR_PRESENTATION, presentError } from "../src/lib/error-presentation.ts";
 import { errorPayload } from "./fixtures.ts";
 
 afterEach(cleanup);
@@ -114,6 +115,40 @@ test("no wait is rendered when the server did not supply one", () => {
     // The retry itself is still offered — the wait is extra information, not a
     // precondition for showing the button.
     expect(screen.getByRole("button", { name: "Try again" })).toBeDefined();
+    cleanup();
+  }
+});
+
+test("a hard stop never carries a wait, whatever the payload attached", () => {
+  // The hazard this file exists to prevent, in its second form. `details` is
+  // server-supplied and a server can put `retryAfterSec` on any code — so a DRM
+  // refusal could arrive carrying one, and the panel would print "there is
+  // nothing to retry — the answer will not change" directly above "wait 20 s
+  // before trying again".
+  //
+  // Vetoed in `presentError`, not gated in the panel: one place decides, the
+  // same place that vetoes the retry button, so no future renderer of an
+  // `ErrorView` can reintroduce the contradiction.
+  mount(errorPayload("DRM_PROTECTED", { retryable: true, details: { retryAfterSec: 20 } }));
+
+  const notice = screen.getByRole("status");
+  expect(within(notice).getByText(/There is nothing to retry/u)).toBeDefined();
+  expect(screen.queryByText(/before trying again/u)).toBeNull();
+  expect(within(notice).queryByRole("button")).toBeNull();
+});
+
+test("no code the taxonomy refuses to retry can show a wait", () => {
+  // Not just DRM. Every `allowRetry: false` entry, handed the same hostile
+  // payload — because the veto is a property of the table, not of one code.
+  for (const code of ERROR_CODES) {
+    if (ERROR_PRESENTATION[code].allowRetry) continue;
+    const view = presentError(
+      errorPayload(code, { retryable: true, details: { retryAfterSec: 20 } }),
+    );
+    expect(view.retryAfterSec).toBeNull();
+
+    mount(errorPayload(code, { retryable: true, details: { retryAfterSec: 20 } }));
+    expect(screen.queryByText(/before trying again/u)).toBeNull();
     cleanup();
   }
 });

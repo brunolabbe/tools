@@ -26,7 +26,7 @@ import type { Job } from "@downloader/contract";
 import { JobCard } from "../src/components/JobCard.tsx";
 import { JobList } from "../src/components/JobList.tsx";
 import type { StreamState } from "../src/lib/job-stream.ts";
-import { NOW, job, result, variant } from "./fixtures.ts";
+import { NOW, SOURCE_URL, job, result, variant } from "./fixtures.ts";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -209,6 +209,42 @@ test("CHARACTERIZATION (dl-18): the step list walks backwards on a re-probe", ()
   expect(downloadingStep).toBeDefined();
   expect(downloadingStep?.className).toBe("steps__item");
   expect(downloadingStep?.className).not.toContain("steps__item--done");
+});
+
+// ---------------------------------------------------------------------------
+// What the card calls the job
+// ---------------------------------------------------------------------------
+//
+// `variant?.label ?? result?.filename ?? sourceUrl`, and all three branches are
+// live in production. The API inserts `variant_json` as `NULL`, so a job has no
+// variant at all until the probe fills one in — which means the *last* branch is
+// the one a queued card actually takes, and it was the one nothing reached: with
+// a variant on every fixture, replacing the whole expression with
+// `job.variant?.label ?? "untitled"` left every web test green.
+
+test("a job with a variant is titled by the rendition the user chose", () => {
+  mount(job("downloading", { variant: variant({ label: "1080p · H.264 + AAC" }) }));
+  expect(screen.getByRole("heading", { name: "1080p · H.264 + AAC" })).toBeDefined();
+});
+
+test("a job with no variant but a finished file is titled by the filename", () => {
+  // The middle branch: a job whose probe never landed a variant snapshot, but
+  // which produced a file anyway.
+  mount(job("completed", { variant: null, variantId: null }));
+
+  expect(screen.getByRole("heading", { name: "a-sample-recording.mp4" })).toBeDefined();
+  expect(screen.queryByRole("heading", { name: /1080p/u })).toBeNull();
+});
+
+test("a queued job, which has neither, is titled by the address it came from", () => {
+  // The branch every real job starts on, and the one a user sees for as long as
+  // the queue is busy.
+  const queued = job("queued");
+  expect(queued.variant).toBeNull();
+  expect(queued.result).toBeNull();
+
+  mount(queued);
+  expect(screen.getByRole("heading", { name: SOURCE_URL })).toBeDefined();
 });
 
 test("a completed job offers the file, its size and how long it will be kept", () => {

@@ -168,14 +168,23 @@ export interface JobOverrides extends Partial<Omit<Job, "progress">> {
  * A job in whatever state the caller names, with `progress.stage` following
  * `status` unless told otherwise — the server keeps those in step and a fixture
  * that let them drift would be testing a job no runner produces.
+ *
+ * **A `queued` job carries no variant, and that is not a detail.** The API
+ * inserts its `variant_json` column as a literal `NULL`, so every real job is
+ * `variant: null` from creation until the probe fills it in. A fixture that
+ * handed every status a variant emitted a shape the server cannot produce, and
+ * hid `JobCard`'s title fallback chain behind its first branch — the rest of
+ * the chain was unreachable in tests while being the only part a queued card
+ * takes in production.
  */
 export function job(status: JobStatus = "downloading", overrides: JobOverrides = {}): Job {
   const { progress: progressOverrides, ...rest } = overrides;
+  const probed = status !== "queued";
   return jobSchema.parse({
     id: "job-1",
     sourceUrl: SOURCE_URL,
-    variantId: "v-1080",
-    variant: variant(),
+    variantId: probed ? "v-1080" : null,
+    variant: probed ? variant() : null,
     status,
     progress: progress({ stage: status, ...progressOverrides }),
     result: status === "completed" ? result() : null,

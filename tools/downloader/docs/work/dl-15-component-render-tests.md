@@ -111,8 +111,59 @@ is that someone once looked at it.
 - `npm run check` is green — including the test typecheck, if
   [dl-13](./dl-13-typecheck-the-tests.md) has landed. If it has not, the `.tsx`
   test files are written as though it had.
-- The "no component-render tests in `web`" entry leaves
-  [03-STATUS.md](../03-STATUS.md).
+- This ticket's `status` is `done` in its own frontmatter, which is the only
+  place that state is recorded and the only thing the generated tables read.
+  Nothing here edits `03-STATUS.md`: `repo-1` owns that prose and is retiring
+  the `## Known gaps and risks` section that carries the stale
+  "no component-render tests in `web`" sentence. Two branches editing it would
+  collide for no gain.
+
+## Review
+
+Two gates, both **CONCERNS**, both addressed on this branch before it opened.
+
+Recorded here because the reviewer's own worktree is discarded: dl-15's first
+gate existed only in a scrollback and was already unrecoverable when the second
+reviewer went looking for it, which is how a carried-or-dropped finding goes
+missing. **The builder commits the gate.**
+
+### Gate 1 — 2026-08-22 — CONCERNS
+
+Every acceptance line proven. All three gate claims reproduced, both mutation
+checks confirmed, no `src` file changed.
+
+| #   | Sev | Finding                                                                                                                                                                                                | Disposition                                                                                                                                            |
+| --- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | med | `variant-table.test.tsx` never exercised the component's sort: `fixtures.ts`'s `variants()` was already best-first, so deleting `sortVariantRows` from `VariantTable.tsx` left all 140 web tests green | **fixed** — position-dependent assertions mount a reversed list via `shuffled()`; the mutation now reddens 4                                           |
+| 2   | low | Same blind shape in `ProbePanel`'s subtitle wiring — one track per language made the `Set` dedupe untestable                                                                                           | **fixed** — third track duplicating `en`, plus a toggle-off test that `subtitleLanguages` is omitted, not `[]`                                         |
+| 3   | low | `ProbePanel`'s live duration asserted in the input but never on the wire                                                                                                                               | **fixed** — default asserted as `liveDurationSec: 300`; post-edit assertion moved to `toHaveBeenLastCalledWith`                                        |
+| 4   | low | `ThemeToggle` mounted only with `value="dark"`                                                                                                                                                         | **fixed** — loops every `THEME_CHOICES` entry                                                                                                          |
+| 5   | low | `JobCard`'s `active` covered at the two ends but not per status                                                                                                                                        | **fixed** — Cancel asserted inside the active loop; new test over all three terminal statuses                                                          |
+| 6   | low | `retryAfterSec` reached the client and nothing rendered it                                                                                                                                             | **fixed, scope grown by decision** — `presentError` surfaces it, new `formatRetryAfter`, `ErrorPanel` renders it                                       |
+| 7   | low | The `downloading → probing` step list walking backwards was logged as a design question                                                                                                                | **deferred** — ruled a defect, filed as [dl-18](./dl-18-pipeline-high-water-mark.md); characterization test added here so dl-18 goes red when it lands |
+| 8   | low | `fixtures.ts` claimed every builder parsed through a contract schema; `progress()` and `result()` returned bare literals                                                                               | **fixed** — all seven parse                                                                                                                            |
+| 9   | low | `App`'s `startError`/`retryJob` shell paths uncovered; the jsdom native-validation assertion is environment-dependent                                                                                  | **accepted** — informational, both already commented in place                                                                                          |
+| 10  | —   | `03-STATUS.md` edits collide with `repo-1-retire-the-narrative`                                                                                                                                        | **reverted** — file restored byte-identical to `origin/main`; acceptance row rewritten to close by frontmatter alone                                   |
+
+Note on #6: `error-panel.test.tsx` previously asserted `not.toContain("20")` —
+it pinned the _absence_ of a wait as the current answer. That test was inverted,
+not deleted. An existing assertion changing meaning is worth knowing about.
+
+### Gate 2 — 2026-08-23 — CONCERNS
+
+Sort fix independently reproduced (4 red here, 0 red at the previous commit).
+All four audit fixes mutation-tested and caught. Every bad input run against
+`formatRetryAfter`; rounding confirmed never short. `03-STATUS.md` confirmed
+byte-identical.
+
+| #   | Sev | Finding                                                                                                                                                                                                                                                                                                    | Disposition                                                                                                                                                                         |
+| --- | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | med | A hard stop could carry a wait: `presentError` read `details.retryAfterSec` for every code, so a `DRM_PROTECTED` carrying one would print "there is nothing to retry" above "wait 20 s before trying again". Not reachable from today's API                                                                | **fixed** — vetoed in `presentError` (`entry.allowRetry ? … : null`), not gated in the panel, so one place decides; tests cover DRM specifically and every `allowRetry: false` code |
+| 2   | med | Fifth blind assertion: `fixtures.ts`'s `job()` always supplied a variant, so `JobCard`'s title fallback chain never left its first branch. The API inserts `variant_json` as `NULL`, so every real job is `variant: null` until the probe fills it — the fixture emitted a shape the server cannot produce | **fixed** — `job()` gives `queued` a null variant; three tests, one per branch; the `?? "untitled"` mutation now reddens 2                                                          |
+| 3   | low | `formatRetryAfter` unclamped: `1e9` → `"16666667 min"`, `Number.MAX_VALUE` → exponential notation as UI copy                                                                                                                                                                                               | **fixed** — capped at 24 h with "more than a day" past it, hours unit added, `59.6` → `"1 min"` boundary settled                                                                    |
+| 4   | low | The Log overstated the `ThemeToggle` gap — the `system` case was already caught; the real gap was `light`, never mounted                                                                                                                                                                                   | **fixed** — sentence corrected in the Log                                                                                                                                           |
+| 5   | low | An existing test changing meaning (gate 1 #6) should be findable                                                                                                                                                                                                                                           | **fixed** — recorded under gate 1 above                                                                                                                                             |
+| 6   | —   | Acceptance row still referenced editing `03-STATUS.md`                                                                                                                                                                                                                                                     | **fixed** — replaced with repo-1's wording; closes by frontmatter alone, no contact with the file                                                                                   |
 
 ## Log
 
@@ -228,9 +279,12 @@ shape, three of them named by the reviewer:
   emits `liveDurationSec: 300`, and changed the post-edit assertion to
   `toHaveBeenLastCalledWith` — with two calls on the spy, "some call matched"
   would have passed even if the edit changed nothing.
-- **`ThemeToggle`.** Mounted only with `value="dark"`, so a `checked` hard-coded
-  against one value would have passed. Now loops over every `THEME_CHOICES`
-  entry, both for the marking and for the controlled-ness check.
+- **`ThemeToggle`.** I first wrote this up as "a `checked` hard-coded against one
+  value would have passed", which overstates it: the controlled-ness half already
+  mounted with `system`, so that case was caught before the fix. The real gap was
+  narrower — `light` was never mounted at all, so nothing exercised the middle
+  choice in either direction. Now loops over every `THEME_CHOICES` entry, for
+  both the marking and the controlled-ness check.
 - **`JobCard`'s `active`.** Covered at the two ends but not per status. Cancel's
   presence is now asserted inside the active-status loop, and a new test walks
   all three terminal statuses asserting no Cancel, no pipeline, no bar and a
@@ -279,3 +333,58 @@ No `src` file was changed for testability. The three source files this entry
 does touch — `ErrorPanel.tsx`, `error-presentation.ts`, `format.ts`, plus a
 style rule — are the `retryAfterSec` feature the review asked for, not test
 scaffolding.
+
+### 2026-08-23 — second review round
+
+Both med findings fixed and mutation-verified, plus the clamp and the process
+change. Details are in `## Review` above; what is worth writing down here is the
+reasoning, not the list.
+
+**A hard stop must not carry a wait, and the veto belongs in one place.**
+`presentError` read `details.retryAfterSec` for every code, so a `DRM_PROTECTED`
+carrying one would have printed _"There is nothing to retry — the answer will not
+change."_ directly above _"Wait 20 s before trying again."_ Today only
+`RATE_LIMITED` sets the field, so it was not reachable — but `details` is
+server-supplied and the whole point of `ERROR_PRESENTATION`'s `allowRetry` is
+that a buggy or hostile server must not be able to put a retry in front of a
+refusal. The gate went in `presentError`
+(`entry.allowRetry ? readRetryAfterSec(…) : null`) rather than in `ErrorPanel`,
+so the same table vetoes the button and the wait together and a second renderer
+of an `ErrorView` cannot reintroduce the contradiction. Tested twice: DRM
+specifically, and a loop over every `allowRetry: false` code in the taxonomy —
+the veto is a property of the table, not of one entry.
+
+**The fifth blind assertion had a production tell, which is what made it worth
+more than a test fix.** `job()` always supplied a variant, so `JobCard`'s
+`variant?.label ?? result?.filename ?? sourceUrl` never left its first branch —
+replacing the whole chain with `?? "untitled"` left all 147 web tests green. The
+API inserts its `variant_json` column as a literal `NULL`, so **every real job is
+`variant: null` from creation until the probe fills it in**: the branch a queued
+card actually takes in production was the one nothing reached, and the fixture
+was emitting a shape the server cannot produce. `job()` now gives `queued` a null
+variant and three tests cover one branch each. The mutation reddens 2.
+
+**`formatRetryAfter` was numerically fine and typographically not.** It never
+told anyone to wait less than the server asked — the reviewer ran the bad inputs
+and confirmed it — but `1e9` rendered as `"16666667 min"` and
+`Number.MAX_VALUE` rendered in **exponential notation, as user-facing copy**.
+The value comes off the network, so that is a server bug or a hostile response
+away. Capped at 24 h with "more than a day" past it, an hours unit added that
+carries its minutes the way `formatExpiry` does, and the `59.6` boundary settled
+by rounding to whole seconds once up front — so nothing reads "60 s" or
+"60 min". Every rounding step is still upward: coarse near a boundary (61 s is
+"2 min"), never short.
+
+**The gate record is now committed, and that is a process change rather than a
+fix to this ticket.** Reviews were being written in throwaway worktrees and
+discarded with them — dl-15's first gate no longer existed anywhere by the time
+the second reviewer looked for it, so nothing could be checked for findings
+carried or quietly dropped between rounds. `## Review` above records both gates,
+one line per finding with its disposition. `docs/01-TICKETS.md` already describes
+that section and says it is written by the review; what was missing was anyone
+committing it.
+
+**The `03-STATUS.md` acceptance row is now repo-1's wording** rather than my
+paragraph explaining why I could not satisfy the old one. The line closes by
+frontmatter, which is what ADR 003 says state is, and it touches the file not at
+all — so it stays true whichever of the two branches lands first.
