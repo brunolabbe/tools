@@ -4,10 +4,13 @@
 [repo-2](../work/repo-2-retire-the-status-page.md), 2026-08-23 · **Date:**
 2026-08-22 · **Affects:** every tool
 
-> **Read `## Decision` with this in hand.** Its last two paragraphs — the
-> `--write`-on-`main` job and the `--check` guard — are the half that did not
-> hold, and they are left byte-unchanged because they are what was believed.
-> Neither ever worked. See [the amendment](#amendment--2026-08-23).
+> **Read `## Decision` with this in hand.** Three of its paragraphs — the
+> `--write`-on-`main` job, the `--check` guard, and the workflow that carried
+> them both "on purpose" because `ci.yml` skipped markdown — are the half that
+> did not hold, and they are left byte-unchanged because they are what was
+> believed. Neither guard ever worked, and the third paragraph's premise was a
+> bug in `ci.yml` rather than a fact about it. See
+> [the amendment](#amendment--2026-08-23).
 
 ## Context
 
@@ -242,6 +245,21 @@ the ticket format and moved to [01-TICKETS.md](../01-TICKETS.md); `## Running
 things` was a second, drifting copy of each tool's own `CLAUDE.md`
 `## Commands`, which is richer and is where the root `CLAUDE.md` already says
 per-tool commands live.
+
+**And the workflow itself is gone, because its reason was a bug.** `## Decision`
+says the frontmatter check "has a workflow of its own on purpose", the purpose
+being that `ci.yml` carried `paths-ignore: ["**.md"]` and so ran nothing on a
+documentation-only pull request. That was accurate and it was not a premise:
+`npm run check` runs `oxfmt --check`, and **oxfmt formats markdown here** —
+`.oxfmtrc.json` has to exempt `**/CHANGELOG.md` precisely because it does. So a
+markdown-only pull request could break `npm run check` and merge
+green-because-skipped, leaving the next unrelated pull request to go red for it.
+`ci.yml` no longer filters by path; its cheap `check` job runs on everything and
+now carries `node scripts/status.mjs --json`, and only the five-minute matrix is
+gated — by a `changes` job that diffs base against head, since Actions has no
+per-job `paths`. `.github/workflows/status.yml` is deleted. That the guard
+existed only because the thing it guarded was absent is the same shape as the
+rest of this amendment, one layer down.
 
 **This is not a reversal of 003.** It is 003's own test — a fact restated where
 nothing keeps it true — applied to what 003 left behind. 003 removed a

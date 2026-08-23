@@ -108,10 +108,12 @@ the machine-written table because, here, no machine can.
    `renderRegion`, `statusPath`, `showAtRef` and the markers. Keep the parser,
    the default view, `--ready`, `--json`, `--prs`. Add `--tool <name>`,
    `--show <id>` and `--markdown`, and cover all three.
-5. **`.github/workflows/status.yml`** — delete the `regenerate` job and the
-   `--check` step. Keep the frontmatter-parse check on pull requests, which is
-   the only thing in CI that reads tickets, and keep the comment explaining why
-   this is its own workflow rather than a job in `ci.yml`.
+5. **`.github/workflows/status.yml`** — delete it. _(Amended after gate 1; the
+   brief said to keep it, pruned to the frontmatter-parse check, "and keep the
+   comment explaining why this is its own workflow rather than a job in
+   `ci.yml`". Writing that comment is what falsified it — see step 9.)_ Move
+   `node scripts/status.mjs --json > /dev/null` into `ci.yml`'s `check` job,
+   with the comment saying what it catches, and delete the file.
 6. **Amend, do not rewrite, `docs/adr/003`.** Its Context and Decision are a
    record of what was believed and stay byte-unchanged; a superseding note says
    the decision held and the mechanism did not. Extend `docs/adr/001`'s existing
@@ -119,7 +121,27 @@ the machine-written table because, here, no machine can.
 7. **Reconstruct `dl-17`'s missing gate**, labelled as reconstructed after the
    fact rather than transcribed at the time.
 8. **Update `.claude/skills/orchestrate-tickets/SKILL.md`** with what the batch
-   that produced this ticket taught after the skill was written.
+   that produced this ticket taught after the skill was written. _(Extended
+   after gate 1 with four more, the batch having kept teaching: verifying a
+   ticket's premise rather than its code, the resumability cost of removing a
+   worktree, sweeping the other names of a thing, and asking about parallelism
+   at intake.)_
+
+9. **Stop `ci.yml` skipping markdown**, which is the reason step 5's workflow
+   existed. _(Added after gate 1.)_ `ci.yml` carried
+   `paths-ignore: ["**.md"]` on both triggers, but `npm run check` runs
+   `oxfmt --check` and **oxfmt formats markdown in this repository** —
+   `.oxfmtrc.json` has to name `**/CHANGELOG.md` in `ignorePatterns` precisely
+   because it does. So a markdown-only pull request could break `npm run check`
+   with nothing in CI to catch it: it merged green-because-skipped and the next
+   pull request to touch code went red for a reason unrelated to itself. Not
+   theoretical — oxfmt reflowed a wrapped `> 0` into a blockquote in `dl-18`,
+   caught only because an agent ran `format` locally. Run `check` on every
+   event; keep the five-minute-fifty-four matrix filtered, which needs a
+   changes-detection job because **Actions has no per-job `paths`**; verify the
+   "no required status checks" claim in `ci.yml`'s comment still holds for a
+   skipped _job_ rather than a skipped _workflow_, and record the answer either
+   way.
 
 ## Done when
 
@@ -137,8 +159,12 @@ the machine-written table because, here, no machine can.
 - `node scripts/status.mjs` exports no region function and accepts no `--write`
   or `--check`; `--tool`, `--show` and `--markdown` each work and each have a
   test.
-- `.github/workflows/status.yml` has one job, it runs on `pull_request` only,
-  and it is `node scripts/status.mjs --json > /dev/null`.
+- `.github/workflows/status.yml` does not exist and nothing outside a record
+  references it. `node scripts/status.mjs --json > /dev/null` is a step of
+  `ci.yml`'s `check` job, and neither `ci.yml` trigger filters by path, so
+  `check` runs on a markdown-only pull request. The `test` matrix still skips
+  one — through the `changes` job rather than a trigger filter — and every event
+  without a usable diff base runs it.
 - `npm run check` and `npm test` are green.
 
 ## Review
@@ -174,6 +200,20 @@ unknown-flag guard were refused, including `--write=x`, `-w` and bare `write`.
 **Raised and correctly not a finding:** flag precedence is silent, so
 `--json --markdown` prints JSON. Same shape `--json`/`--ready` already had, and
 no reader is misled about a removed feature. No change.
+
+### Post-gate addition — 2026-08-23
+
+**New work landed on this branch after gate 1 closed, and it is recorded here
+rather than folded into the dispositions above, because gate 1 did not see it.**
+Two additions, both in the two Log entries below, and the gate that covers them
+is the one that runs after this, not the one above.
+
+1. Build step 9 and the amendment to step 5: `ci.yml` no longer skips markdown,
+   `status.yml` is deleted rather than pruned, and the frontmatter parse is a
+   step of `check`.
+2. Build step 8's skill update, extended with four things this session taught
+   after that step was already written — one of them a correction to advice the
+   skill gives.
 
 ## Log
 
@@ -326,3 +366,171 @@ labelled" is exactly the reasoning that lets an annotation become an edit.
 `## Decision` is now byte-identical to `origin/main`; the content is a
 `## Consequences` bullet, and a Decision reader is warned by a blockquote under
 the header before they reach the two paragraphs that did not hold.
+
+**2026-08-23 — post-gate: the workflow was a symptom, so it is deleted and the
+cause is fixed.**
+
+**The comment I wrote to justify keeping `status.yml` is what killed it.** Build
+step 5 asked for the workflow pruned to one job "and keep the comment explaining
+why this is its own workflow rather than a job in `ci.yml`". The explanation was
+that `ci.yml` carried `paths-ignore: ["**.md"]`, so a documentation-only pull
+request — a ticket filed, a ticket flipped to `done` — never ran it, which is
+exactly the pull request whose frontmatter needs parsing. That is true, and it
+is a description of a bug, not a premise. `npm run check` runs `oxfmt --check`,
+and **oxfmt formats markdown in this repository** — the proof is one line of
+`.oxfmtrc.json`, which has to name `**/CHANGELOG.md` in `ignorePatterns`
+precisely because it does. So a markdown-only pull request could break
+`npm run check` with nothing in CI to catch it: green-because-skipped on the way
+in, and the next pull request to touch code goes red for a reason that has
+nothing to do with it. `dl-18` hit it this morning — oxfmt reflowed a wrapped
+`> 0` into a blockquote — and it was caught only because an agent happened to
+run `format` locally. Fix the cause and `status.yml` has nothing left to be, so
+it is gone and its one step is a step of `check`.
+
+**The shape: a `changes` job, because Actions has no per-job `paths`.**
+`paths-ignore` gates the whole workflow, so there is no way to leave `check`
+unfiltered while `test` stays filtered by editing the triggers. The triggers now
+filter nothing, and a `changes` job diffs base against head and outputs
+`code=true|false`; `test` carries `needs: changes` and
+`if: needs.changes.outputs.code == 'true'`. The rule it applies is byte-for-byte
+the one the trigger filter applied — if every changed path ends in `.md`, skip —
+so the matrix's cost is unchanged and only `check`'s blast radius moved. Written
+as a dozen lines of shell rather than a marketplace action: this repo writes
+`commit-message.mjs` and `status.mjs` for the same reason, and the alternative
+is an unpinned third party holding a checkout. It is not a `scripts/*.mjs`
+either, because nothing outside CI would ever call it and it would then need a
+suite and a tsconfig reference to say what a `git diff` already says.
+
+**The two events need different bases, and everything without one runs the
+matrix.** `pull_request` diffs `event.pull_request.base.sha...head.sha`; `push`
+diffs `event.before...github.sha`. Three dots on purpose — what the branch added,
+not what `main` moved past underneath it, which is the comparison GitHub's own
+filter makes. `schedule` and `workflow_dispatch` have no base at all, a first
+push has the all-zero sha, and a rewritten history can simply be missing the
+commit; each falls through to `code=true`. **Both** shas are proven present with
+`git cat-file -e` before the diff, and that is not belt-and-braces: a `changes`
+job that errors out would skip `test` through its own `if:`, which is the one
+outcome this whole shape exists to prevent. Exercised locally against real
+ranges before pushing — `1d3efff` (one `.md`) gives `code=false`, `4fcd133`
+(a `.tsx` suite) gives `code=true`, and all four degenerate bases give `true`.
+
+**The no-required-checks claim was re-verified, and it holds.** `ci.yml`'s
+comment asserted that "the ruleset on `main` requires no status checks, so a
+skipped workflow cannot leave a pull request pending forever". That sentence now
+has to be true of a skipped **job**, which is a different thing, so it was
+checked rather than inherited. `gh api repos/brunolabbe/tools/rulesets` returns
+one active ruleset, `main`, on `~DEFAULT_BRANCH`, with exactly three rules:
+`deletion`, `non_fast_forward`, and `pull_request` with
+`required_approving_review_count: 0`. There is **no `required_status_checks`
+rule**, and `gh api repos/brunolabbe/tools/branches/main/protection` answers
+`404 Branch not protected`, so there is no classic protection carrying one
+either. A skipped `test` therefore blocks nothing. The comment in `ci.yml` now
+carries the date it was read and the warning that follows from it: if a required
+check is ever added, `test` cannot be one under this shape, because a required
+check that never reports blocks the merge forever — a worse bug than the one
+being fixed here.
+
+**`push` loses the filter too, and that was the live question.** A filtered
+`push` would have been defensible — the pull request already gates the merge —
+but the merge that puts an unformatted `.md` on `main` is a documentation-only
+squash, and under a filtered `push` the first run to notice is the next
+unrelated pull request. That is the exact failure this change exists to stop,
+one step later. So `push` runs `check` too and pays a sub-minute job per docs
+merge; the matrix still skips, because `changes` gates it on both events alike.
+
+**The sweep, run on the other names again.** `paths-ignore`, `**.md`,
+`status.yml`, "documentation-only", "on every push". Four live hits and one
+false alarm. `downloader.yml` and `planner.yml` already carry `"!**.md"` inside
+their `paths` — the correct shape for a slow gate, untouched. The three that
+needed a change: `ADR 003`, root `CLAUDE.md`, and the test comment below.
+
+**ADR 003 was extended, not re-amended.** Its `## Decision` says the frontmatter
+check "has a workflow of its own on purpose", and the purpose named is
+`paths-ignore`. That paragraph is a record and stays byte-unchanged — Build step
+6, and gate 1's finding 4, which is the one I had already got wrong once. The
+existing `## Amendment — 2026-08-23` gains a paragraph, and the blockquote under
+the header now says **three** of Decision's paragraphs are superseded rather
+than two, naming the third.
+
+**Root `CLAUDE.md` said "CI runs lint, typecheck and every unit suite on every
+push"**, which was the sentence a reader would have trusted before running
+`format` on a docs-only branch. It now says `check` is filtered by nothing,
+markdown included, and why — and that the matrix still skips an all-`.md`
+change, through `changes` rather than a trigger. `tools/planner/CLAUDE.md`'s "the
+unit suite runs on every push" was left: it is a claim about that suite's
+coverage, and it is no less true than it was.
+
+**One stale comment found in a test.** `scripts/test/status.test.ts`
+said "CI skips `**.md`, so a documentation-only pull request never reaches this
+suite — `status.yml` runs the same walk". Half of that is still true and it is
+the half that is easy to get wrong: the **matrix** is still skipped for a
+markdown-only change, so this vitest suite still does not run on a ticket-only
+pull request. What covers that case now is `check`'s `status.mjs --json` step,
+which is the same walk without vitest around it. The comment says so.
+
+**Gates.** `npm run check` exit 0. `npm test` 97 files / 1366 tests, all green —
+unchanged from gate 1, as expected: nothing in this addition touches a suite's
+subject, only a comment in one. All seven workflow files parse (`js-yaml`,
+loaded from outside the tree so as not to touch the lockfile); `ci.yml` resolves
+to jobs `check`, `changes`, `test`, with `test.needs = changes` and its `if` as
+written, and `check`'s steps ending in `node scripts/status.mjs --json >
+/dev/null`. `.github/workflows/status.yml` is deleted; `grep -rn "status\.yml"`
+over the repo returns only records — this ticket, `repo-1`, `adr/003` — plus the
+`ci.yml` comment that explains where it went.
+
+**2026-08-23 — post-gate, second: four more into
+`.claude/skills/orchestrate-tickets/SKILL.md`.**
+
+Build step 8 was written mid-batch and the batch kept teaching. Each of these
+came out of this session **after** that step landed, and one of them corrects
+advice the skill already gives.
+
+**The one worth reading is a gate instruction, and it is the reason this ticket
+exists.** `repo-1` passed **four** gates while resting on a mechanism that had
+never once run: every gate verified its code against its ticket, and not one
+asked whether the workflow the ticket depends on actually works. It did not, so
+both pages it maintained were stale on `main` the whole time, one of them hiding
+a `ready` security ticket. So `## Dispatching a gate` now says: when a ticket
+rests on machinery — a workflow, a scheduled job, a hook, an external service —
+one gate must confirm the **machinery runs**, by reading its run logs, not that
+the code calling it is correct. A green pull-request check and a working
+mechanism are different claims, and reading the diff cannot tell them apart.
+Placed there rather than in `## After a merge`, which already carries the same
+evidence for a different actor at a different time: that section tells the
+orchestrator to look at `main` afterwards, this one tells a reviewer to look
+before. The bullet points at it instead of restating the `GH013` story.
+
+**A correction, not an addition: `## Worktree hygiene` was incomplete.** It says
+remove each worktree as its PR opens, which is right for disk and silently kills
+the agent's resumability. Hit within the hour of writing it — a follow-up to
+this ticket's builder was refused with _its worktree no longer exists_, and the
+context had to be rebuilt by hand into a fresh agent. The rule keeps its
+caveat now: remove once the ticket is _finished_, not once its PR is open, and
+if you remove early, know you are buying disk with a re-dispatch.
+
+**`## Verification traps` gains the general form of its own lesson.** It already
+says the sweep must be an unfiltered `git grep`, no `--include`. This ticket
+found two hits that no `git grep` on the filename could reach however
+unfiltered, because they named the subject without naming the file:
+`package.json`'s annotation advertising `--write`, and root `CLAUDE.md`'s Layout
+block listing the page by its bare noun. So: unfilter the file type **and** sweep
+the other names — the flag, the script, the ADR slug, the bare noun. Three
+instances of the class across two tickets, each from an angle the last fix did
+not cover, which is what a non-generalising fix looks like from the outside.
+
+**`## Decisions` gains a timing rule.** `## Concurrency` already forbids running
+two tickets over one seam; what went wrong was _when_ the question was asked.
+`pl-25` and `pl-27` collided, and the decision brought to the user was how to
+reconcile them — never whether to run them concurrently at all. By then both
+were half-built and every option was bad; three rebases followed. The overlap is
+cheap to see at intake and expensive to see after dispatch.
+
+**Judged as already covered and skipped:** nothing. The closest call was the
+gate instruction against `## After a merge`, resolved by cross-reference rather
+than by a second telling.
+
+**Gates.** Skill prose, so no suite is its subject. `.oxfmtrc.json` ignores
+`.claude/`, so `npm run format` does not reach the file — verified rather than
+assumed, since the alternative is a silently unformatted commit. `npm run check`
+exit 0 and `npm test` 97 files / 1366 tests green after both post-gate
+additions together.

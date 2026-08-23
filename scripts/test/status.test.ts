@@ -90,9 +90,13 @@ function run(args: string[]): { stdout: string; status: number } {
 // ---------------------------------------------------------------------------
 
 // The point of the strict parser is that this test is the one that fails, by
-// name and by line, when a ticket's frontmatter drifts. CI skips `**.md`, so a
-// documentation-only pull request never reaches this suite — `status.yml` runs
-// the same walk on any pull request that touches a ticket, for that reason.
+// name and by line, when a ticket's frontmatter drifts. It used to be
+// unreachable on the pull requests that need it most, and still is: the
+// `test` matrix is skipped for a change that is all `.md`, which a ticket
+// filed or flipped to `done` usually is. What covers that case is `ci.yml`'s
+// `check` job, which runs `node scripts/status.mjs --json` — this same walk
+// without vitest around it — and is no longer filtered by path. That step had
+// a workflow of its own (`status.yml`) until repo-2 folded it in.
 test("every ticket in the repo parses, and its dependencies resolve", () => {
   const tickets = readTickets(REPO);
   expect(tickets.length).toBeGreaterThan(0);

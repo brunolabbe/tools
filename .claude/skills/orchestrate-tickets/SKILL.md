@@ -87,6 +87,15 @@ Two rules, both required:
 Audit with `git worktree list` and `du -sh .claude/worktrees` when a batch feels
 long. Before removing, check `git status --porcelain` and `git log @{u}..` in each.
 
+**Removing a worktree also makes its agent unresumable**, and the second rule reads
+as free until it does. A follow-up sent to a builder whose worktree is gone is
+refused — *its worktree no longer exists* — and the only way forward is a fresh
+agent with the whole context rebuilt by hand, which costs far more than the disk
+did. So remove it once the ticket is **finished**, not merely once its PR is open:
+a PR still takes review comments, a rebase and follow-ups. Removing early is
+sometimes the right trade for 7 GB; make it a choice rather than discover it an
+hour later.
+
 ## Dispatching a builder
 
 Every builder prompt carries:
@@ -124,6 +133,15 @@ prompts said *reproduce this exact mutation* instead of *review this*.
 - **Enumerate, never sample.** Say "walk every conditional and `??` in these files
   and report how many you tested and what survived". Sampling misses clustered
   defects, and a claim of *none left* is worth exactly what the sweep behind it was.
+- **Check the ticket's premise, not only its code against the ticket.** When a
+  ticket rests on machinery — a workflow, a scheduled job, a hook, an external
+  service — make one gate confirm that the machinery **actually runs**, by reading
+  its run logs, not that the code calling it is correct. A green pull-request check
+  and a working mechanism are different claims, and no amount of reviewing the
+  diff distinguishes them: in the reference session a ticket passed **four** gates
+  sitting on a job that had never once done its work (the same job `## After a
+  merge` names), and every gate had verified the code faithfully. This is one
+  command, and it is why a whole follow-up ticket had to exist.
 - **Verify the negative half of every acceptance line.** A criterion reading "a
   branch that edits X **fails** the check" is not proven by three green runs. In the
   reference session a doc ticket reached its fourth gate before anyone watched the
@@ -187,6 +205,16 @@ such a line is honest — but the amendment needs an outside check.
   matters is in the file type you did not think of), resolving every link including
   anchors, `ls` on every cited path. Three consecutive gates each found exactly one
   more dangling citation than the sweep before it claimed existed.
+- **A sweep anchored to one term is still a filter.** Unfiltering the file type is
+  half of it; the other half is sweeping the **other names of the thing** — the
+  flag, the script, the ADR slug, the bare noun in a spine listing — because a
+  citation can name the subject without ever using its filename. Two found this way
+  in one ticket, neither reachable by any `git grep` on the filename: a
+  `package.json` annotation still advertising a deleted flag, because the ADR it
+  pointed at is slugged differently; and a `CLAUDE.md` layout block listing the
+  page by its bare noun. Three instances of this class across two tickets, each
+  from an angle the previous fix did not cover — which is the tell that a fix which
+  does not generalise is how a class recurs.
 - **Slow gates do not run here.** e2e and container builds stay unrun in this loop.
   Say so when reporting a PASS; the CI workflow is the first thing to exercise them.
 
@@ -234,6 +262,15 @@ about choices with an obvious default.
 
 **Batch them.** Each question stalls the board. Hold them to a checkpoint unless one
 blocks a running agent.
+
+**Ask whether to parallelise at intake, not after the collision.** `## Concurrency`
+says never to run two tickets over one seam; the failure that costs is asking the
+question late. In the reference session two tickets overlapped and the question
+brought to the user was *how to reconcile them* — never *whether to run them
+concurrently at all*. By then both were half-built and every option was bad; three
+rebases followed. The overlap is cheap to see before dispatch and expensive after,
+so it is an intake decision, and it is one worth surfacing even though the answer
+often looks obvious.
 
 **Do not launder subagent claims.** If you repeat a consequence to the user, be able
 to say who ran it. A vivid failure scenario from a report is a hypothesis until
