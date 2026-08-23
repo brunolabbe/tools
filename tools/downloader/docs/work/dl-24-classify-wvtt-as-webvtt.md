@@ -46,13 +46,28 @@ other:
    codec in the middle, URL at the end — nothing matches at all, which is why
    the same input gives two different wrong answers depending on the caller.
 
-**Blast radius today is a wrong label, not a wrong download.** `mux.ts` picks
-its subtitle codec from the output container (`mov_text` / `webvtt` / `srt`),
-not from `SubtitleTrack.format`, and the UI counts tracks and lists languages
-without reading it. So nothing currently mis-muxes. That is the reason this is a
-`fix` and not an incident — and also the reason it has survived: **no test
-anywhere calls `subtitleFormat`.** The function has four branches, three
-callers, and zero direct coverage.
+**Blast radius is a silently missing subtitle track.** ~~A wrong label, not a
+wrong download.~~ — corrected during gate 1; the original claim and why it was
+wrong are in the Log. `mux.ts` does pick its subtitle codec from the output
+container (`mov_text` / `webvtt` / `srt`) rather than from
+`SubtitleTrack.format`, and the UI does count tracks and list languages without
+reading it, so nothing mis-muxes. But a third consumer reads `format` and
+decides something larger:
+[`engine/src/index.ts:119`](../../engine/src/index.ts) declares
+`SUBTITLE_FORMATS_FFMPEG_READS = new Set(["vtt", "srt"])`, and
+[`index.ts:533`](../../engine/src/index.ts) skips any track outside that set
+with a `logger.warn` and nothing else. Both of the defect's wrong answers —
+`ttml` for a bare `wvtt`, `unknown` for the DASH-shaped hint — fall outside it,
+and the chain from the resolver is live: `api/src/jobs/orchestrator.ts:246`
+hands `probe.subtitles` straight to the `DownloadRequest`. So a DASH manifest
+with `codecs="wvtt" lang="fr"`, a user who ticks "Embed subtitles" and picks
+French, gets an MP4 with no French subtitle track, no error, and one warn line
+in a server log nobody is reading. That is data loss, not a mislabel.
+
+It is still a `fix` rather than an incident because it needs `wvtt` in the
+manifest to bite, but the reason it survived is unchanged and is the real
+lesson: **no test anywhere called `subtitleFormat`.** The function has four
+branches, three callers, and had zero direct coverage.
 
 ## Build
 
@@ -105,6 +120,65 @@ extension working — that caller gives the regex no surrounding context at all.
 5. CodeQL's `js/missing-regexp-anchor` alert on `common.ts` is resolved by the
    change rather than dismissed — confirm on the next `security` run.
 6. `npm run check` and `npm test -- --project downloader` pass.
+
+## Gates
+
+### Gate 1 — 2026-08-23 — CONCERNS
+
+Reviewed at `5ea0fdf`. The verbatim reviewer's report is posted to the pull
+request thread; this section is the record of it. **Citations below are
+re-resolved against the commit that carries this section**, not against the
+reviewed commit — the report's `common.ts:238` (the `srt` row) and its
+`common.ts:224-234` (the table comment) both moved when finding 3 was
+addressed, and are now `common.ts:242` and `common.ts:223-239`. Every other
+`file:line` in the report resolves unchanged; all ten were checked
+programmatically against the tip, not by eye.
+
+| #   | Done when                                                                                               | Verdict         | Proof                                                                                                                                                                                                 |
+| --- | ------------------------------------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `"vtt"` for `wvtt` and for a DASH-shaped hint containing `wvtt`                                         | proven          | `common.test.ts:17`, `common.test.ts:20`                                                                                                                                                              |
+| 2   | Direct coverage of every row and every return value, including the bare-extension shape `hls.ts` passes | proven          | `common.test.ts:13-53` (32 hints, all four rows, all three caller shapes); `common.test.ts:62` asserts the table reaches all four return values; bare extensions at `:15`, `:28`, `:43`               |
+| 3   | A DASH representation with `codecs="wvtt"` yields `format: "vtt"`                                       | proven          | `dash.test.ts:125`, over the new AdaptationSet in `dash-ondemand-baseurl.mpd`                                                                                                                         |
+| 4   | `stpp`, `ttml`, `dfxp`, `.tt`, `srt`, `subrip`, `text/vtt` all still classify as today                  | proven          | `common.test.ts:18`, `:28-31`, `:36-45`; independently brute-forced by the gate over 26,517 generated hints — 1340 diffs from `origin/main`, in exactly the four intended classes                     |
+| 5   | CodeQL's `js/missing-regexp-anchor` resolved by the change, not dismissed                               | unproven (gate) | Nothing local evaluates that query. Deferred to the next `security` run. The change deletes the bare `$` the alert names rather than suppressing it, which is the strongest claim available from here |
+| 6   | `npm run check` and `npm test -- --project downloader` pass                                             | verified        | Re-run by the gate in its own worktree: check exit 0, downloader 49 files / 694 tests, full suite 102 files / 1450 tests                                                                              |
+
+**Findings, numbered as the report numbers them.**
+
+- **1 — the ticket's blast-radius claim is false (the record, not the code). Fixed
+  in this branch.** `SubtitleTrack.format` is not label-only: `index.ts:119`
+  declares `SUBTITLE_FORMATS_FFMPEG_READS = new Set(["vtt", "srt"])` and
+  `index.ts:533` drops any track outside it with a `logger.warn` and no
+  user-visible signal, and `orchestrator.ts:246` feeds resolver output straight
+  into the `DownloadRequest`. Both wrong answers the defect produced — `ttml`
+  and `unknown` — are outside that set, so the track was never downloaded.
+  Verified at all three lines before writing it up. The **Why** paragraph is
+  corrected in this commit and the Log says what it had wrong. This finding
+  raises the fix's value rather than lowering it.
+- **2 — the fix moves DASH `wvtt` tracks from "silently skipped" to "downloaded
+  and handed to ffmpeg", and nothing exercises that. Recorded as unverified; no
+  code change.** `index.ts:541` will now write `sub-0-fr.vtt` whose bytes are a
+  fragmented MP4 carrying WebVTT samples. Neither the branch nor the gate
+  verified that ffmpeg demuxes it. Stated at full strength in the Log and in
+  "Unverified" below rather than argued away. One correction to the report:
+  its "`-c:s webvtt` (`mux.ts:230`)" is container-dependent — `mux.ts:230`
+  pushes `capability.subtitleCodec`, which is `mov_text` for the MP4 in the
+  report's own scenario, `webvtt` only for webm and `srt` for mkv. The finding
+  is unaffected; the path is untested either way.
+- **3 — "Reordering is safe" in the table comment is stronger than the table
+  supports. Fixed in this branch.** Reproduced:
+  `https://srt.cdn.net/sub.wvtt` matches rows 1 and 2 both and flips `vtt` →
+  `srt` when they are swapped, without the hint naming two formats. The comment
+  at `common.ts:223-239` now says the order is still load-bearing and why.
+- **4 — leaving the `srt` row alone was correct, and the latent defect beside it
+  is real. Filed as dl-25; no change to this branch.** Reproduced on both sides:
+  `"application/mp4  https://srt.cdn.net/sub.mp4"` classifies `srt` on `HEAD`
+  and identically on `origin/main`, so this branch neither causes nor worsens
+  it, and `srt` **passes** the `index.ts:533` gate where `ttml`/`unknown` do
+  not. One case is worse than the report states —
+  `"application/ttml+xml  https://srt.cdn.net/sub.ttml"`, a genuine TTML track,
+  also answers `srt`, because the `srt` row is scanned before the `ttml` row.
+  Both are in dl-25.
 
 ## Log
 
@@ -164,3 +238,58 @@ tools/downloader/resolvers`, exit 0): reverting the `vtt` row's prefix to
   `security` run; nothing local evaluates that query. The change removes the
   bare `$` the alert points at rather than suppressing the alert, which is the
   most that can be said from this side.
+
+- **2026-08-23** — Gate 1 came back CONCERNS. Verdict recorded above as given;
+  what it changed:
+
+  **The Why was wrong about blast radius, and I had accepted it.** It said "a
+  wrong label, not a wrong download", on the strength of `mux.ts` and the UI not
+  reading `SubtitleTrack.format`. Both of those are true and neither is the
+  whole picture: `engine/src/index.ts:119` defines
+  `SUBTITLE_FORMATS_FFMPEG_READS = new Set(["vtt", "srt"])` and `index.ts:533`
+  skips every track outside it, so `format` decides whether a subtitle is
+  fetched at all — and `api/src/jobs/orchestrator.ts:246` hands resolver output
+  into the `DownloadRequest` untouched. `ttml` and `unknown`, the defect's two
+  wrong answers, are both outside the set. A DASH manifest with `codecs="wvtt"`
+  therefore lost its subtitle silently: no error, no UI signal, one
+  `logger.warn`. I verified all three lines myself before rewriting the
+  paragraph. **The lesson for the next reader is the one I missed too: three
+  greps for `SubtitleTrack.format`'s consumers is not the same as one for
+  `.format`, and the consumer that mattered was in a package the ticket's
+  "Packages:" line did not name.**
+
+  **Consequence of the fix that nothing on this branch proves.** Now that `wvtt`
+  classifies as `vtt`, those tracks stop being skipped and start being
+  downloaded: `index.ts:541` writes `sub-<i>-<lang>.vtt` for bytes that are a
+  fragmented MP4 carrying WebVTT samples, and `mux.ts:230` passes them to ffmpeg
+  as `capability.subtitleCodec` — `mov_text` for an MP4 output, `webvtt` for
+  webm, `srt` for mkv. **Whether ffmpeg demuxes that file is untested here and
+  was untested by the gate.** No engine test covers a `wvtt` track reaching
+  `#fetchSubtitles`, and the e2e suite does not run DASH. It is plausible that
+  it works — ffmpeg probes by content, not extension — but plausible is not
+  proven, and I am not recording it as anything else. This is strictly better
+  than the status quo either way: the alternative to a track ffmpeg might reject
+  is a track that was never fetched.
+
+  **Comment corrected.** "Reordering is safe" was too strong and I have
+  rewritten it. `https://srt.cdn.net/sub.wvtt` matches rows 1 and 2 both and
+  flips `vtt` → `srt` if they are swapped, so the order is still load-bearing —
+  just not for the `tt$`/`text/vtt` reason it was before. What is unconditionally
+  unsafe is dropping a `(^|\W)`, and the comment now says that instead.
+
+  **Filed [dl-25](./dl-25-srt-row-matches-a-hostname.md).** The `srt` row I
+  deliberately left alone has a latent defect of the same family: it matches
+  `srt` as a token anywhere, so a CDN hostname triggers it —
+  `"application/mp4  https://srt.cdn.net/sub.mp4"` → `srt`. Unlike `ttml` and
+  `unknown`, `srt` **passes** the `index.ts:533` gate, so that one downloads a
+  non-subtitle mp4 and feeds it to ffmpeg. Reproduced identically against
+  `origin/main`'s table and this branch's, so it is entirely pre-existing and
+  correctly out of scope here. One case is worse than the gate reported:
+  `"application/ttml+xml  https://srt.cdn.net/sub.ttml"` also answers `srt`,
+  because the `srt` row is scanned before the `ttml` row — a real TTML track
+  mislabelled by its host. Both are in the ticket.
+
+  Gate citations were re-resolved against this commit before the record was
+  written down, which caught one that had moved: rewriting the table comment
+  pushed the `srt` row from `common.ts:238` to `:242`. Everything else in the
+  report still resolves.
