@@ -131,6 +131,42 @@ describe("input arguments", () => {
     expect(args.indexOf("-user_agent")).toBeLessThan(args.indexOf("-i"));
   });
 
+  test("an HTTPS input verifies the certificate by default", () => {
+    // libavformat's own default is `tls_verify 0`, so "we did not pass a flag"
+    // and "we asked for no verification" are the same argv — which is how the
+    // manifest path spent its whole life encrypting to certificates nobody
+    // checked. See dl-14's Log for the measurement and dl-19 for the fix.
+    const args = buildNetworkInputArgs("https://cdn.example/master.m3u8");
+    expect(args[args.indexOf("-tls_verify") + 1]).toBe("1");
+    expect(args.indexOf("-tls_verify")).toBeLessThan(args.indexOf("-i"));
+    expect(args).not.toContain("-ca_file");
+  });
+
+  test("the escape hatch writes -tls_verify 0 rather than dropping the flag", () => {
+    const args = buildNetworkInputArgs("https://cdn.example/master.m3u8", { tlsVerify: false });
+    expect(args[args.indexOf("-tls_verify") + 1]).toBe("0");
+  });
+
+  test("a CA bundle is passed per input, beside the flag it qualifies", () => {
+    const args = buildNetworkInputArgs("https://cdn.example/master.m3u8", {
+      tlsCaFile: "/etc/corp/root.pem",
+    });
+    expect(args[args.indexOf("-ca_file") + 1]).toBe("/etc/corp/root.pem");
+    expect(args.indexOf("-ca_file")).toBeLessThan(args.indexOf("-i"));
+  });
+
+  test("a plain-HTTP input gets neither, because ffmpeg refuses an option nothing used", () => {
+    // Not a nicety. `avformat_open_input` fails with `Option tls_verify not
+    // found` when the top-level protocol is `http`, *after* fetching the
+    // playlist and a segment — so this flag on the e2e suite's plain-HTTP
+    // origin would have failed every download in it.
+    const args = buildNetworkInputArgs("http://cdn.example/master.m3u8", {
+      tlsCaFile: "/etc/corp/root.pem",
+    });
+    expect(args).not.toContain("-tls_verify");
+    expect(args).not.toContain("-ca_file");
+  });
+
   test("-t is emitted only for a real duration limit", () => {
     expect(buildDurationLimitArgs(30)).toEqual(["-t", "30"]);
     expect(buildDurationLimitArgs(null)).toEqual([]);
@@ -196,6 +232,26 @@ describe("manifest download arguments", () => {
 
     const maps = args.filter((arg, index) => args[index - 1] === "-map");
     expect(maps).toEqual(["0:v:0?", "1:a:0?"]);
+  });
+
+  test("both inputs of a separate-track download verify, and both take the CA", () => {
+    // The audio rendition is its own connection and its own handshake. A
+    // per-input security default that only reached the first input would leave
+    // the audio of every DASH download unverified.
+    const args = hlsArgs({
+      audioUrl: "https://cdn.example/audio.m3u8",
+      tlsCaFile: "/etc/corp/root.pem",
+    });
+
+    expect(args.filter((arg) => arg === "-i")).toHaveLength(2);
+    expect(args.filter((arg) => arg === "-tls_verify")).toHaveLength(2);
+    expect(args.filter((arg, index) => args[index - 1] === "-tls_verify")).toEqual(["1", "1"]);
+    expect(args.filter((arg) => arg === "-ca_file")).toHaveLength(2);
+  });
+
+  test("the escape hatch reaches both inputs too", () => {
+    const args = hlsArgs({ audioUrl: "https://cdn.example/audio.m3u8", tlsVerify: false });
+    expect(args.filter((arg, index) => args[index - 1] === "-tls_verify")).toEqual(["0", "0"]);
   });
 
   test("a live source is bounded with -t", () => {

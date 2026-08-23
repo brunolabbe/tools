@@ -88,6 +88,40 @@ function stat(label: string): string {
   return term.nextElementSibling?.textContent ?? "";
 }
 
+/**
+ * Each pipeline step as `[label, state]`, with the state read off the class the
+ * stylesheet keys its colour and its tick from.
+ *
+ * The role-level helpers below are the ones that speak for a screen reader user,
+ * and they are asserted alongside this rather than instead of it: both come from
+ * the same expression in `JobCard`, so a suite watching only one of them would
+ * let the other drift silently.
+ */
+function stepStates(): [string, string][] {
+  return within(screen.getByRole("list", { name: "Pipeline" }))
+    .getAllByRole("listitem")
+    .map((step): [string, string] => {
+      const modifier = [...step.classList].find((name) => name.startsWith("steps__item--"));
+      return [step.textContent ?? "", modifier?.slice("steps__item--".length) ?? "pending"];
+    });
+}
+
+/** The step the job is on, by ARIA state — no class name involved. */
+function activeStep(): string {
+  return screen.getByRole("listitem", { current: "step" }).textContent ?? "";
+}
+
+/**
+ * The steps a screen reader is told are behind the job, in list order. A
+ * `listitem` takes its accessible name from the author only, so the card's own
+ * `<li>` and the pending steps have no name and cannot match.
+ */
+function doneSteps(): string[] {
+  return screen
+    .getAllByRole("listitem", { name: /, done$/u })
+    .map((step) => step.textContent ?? "");
+}
+
 // ---------------------------------------------------------------------------
 // The rule: an unknown total is never a number
 // ---------------------------------------------------------------------------
@@ -241,44 +275,88 @@ test("a forward-running job marks the steps behind it done and the current one a
   // rendering as plain, unmarked text — and all 162 tests stayed green. Only the
   // *pending* class was ever asserted, by the characterization test below.
   //
-  // On class name for the same reason that one is: done, active and pending are
-  // CSS-only, with no accessible counterpart. dl-18 changes that, and a job that
-  // has only ever moved forward renders identically under its high-water mark,
-  // so this test survives it unchanged.
+  // A job that has only ever moved forward is at its own high-water mark, so the
+  // exact class strings here are the ones the stylesheet has always been given —
+  // including that a pending step carries the base class and nothing else. The
+  // two assertions under them are the newer half: the same three states, in the
+  // accessible tree rather than in the stylesheet alone.
   mount(job("muxing"));
 
-  const steps = within(screen.getByRole("list", { name: "Pipeline" })).getAllByRole("listitem");
-  expect(steps.map((step) => [step.textContent, step.className])).toEqual([
+  const items = within(screen.getByRole("list", { name: "Pipeline" })).getAllByRole("listitem");
+  expect(items.map((step) => [step.textContent, step.className])).toEqual([
     ["Queued", "steps__item steps__item--done"],
     ["Re-analysing", "steps__item steps__item--done"],
     ["Downloading", "steps__item steps__item--done"],
     ["Assembling", "steps__item steps__item--active"],
     ["Ready", "steps__item"],
   ]);
+
+  expect(activeStep()).toBe("Assembling");
+  expect(doneSteps()).toEqual(["Queued", "Re-analysing", "Downloading"]);
 });
 
-test("CHARACTERIZATION (dl-18): the step list walks backwards on a re-probe", () => {
-  // **This pins today's behaviour, and today's behaviour is the bug.** The
-  // progress figures survive the back edge — the test above proves that — but
-  // the pipeline list does not: "Downloading" loses its done marker while the
-  // job re-probes, so a user watching the card sees the job go backwards.
-  // dl-18 specifies a high-water mark, and when it lands this test inverts:
-  // `--done` becomes the expected class for a step already passed.
+test("a re-probe keeps Downloading marked done instead of walking the list back", () => {
+  // The inverse of dl-15's characterization test, which pinned the bug on
+  // purpose so this one would have something to turn red. The back edge is
+  // routine (dl-9) and the download stage genuinely completed once — those bytes
+  // are on disk — so a list that un-marks it reports the opposite of what
+  // happened, and retreating progress is the universal signal for "something
+  // broke and is being redone".
   //
-  // Asserted on `className` rather than by role, deliberately and only here.
-  // The step list conveys its state through CSS alone — no `aria-current`, no
-  // accessible name that changes — so there is nothing role-shaped to query.
-  // That absence is itself part of dl-18's brief.
-  const reprobing = job("probing", {
-    progress: { percent: null, downloadedBytes: 41_000_000 },
-  });
-  mount(reprobing);
+  // `attempts: 2` is the shape a *refetched* job carries: the reconcile after a
+  // reconnect, or a page load. The byte count is looped over both values only to
+  // prove the mark is not read from it — the server's own shape is zero, because
+  // the orchestrator resets the progress snapshot as it takes the edge.
+  //
+  // The 41 MB arm here is **not** the wire transient, and an earlier draft of
+  // this comment claimed it was. That transient — `status` frame applied, the
+  // `progress` frame that follows it not yet — carries `attempts: 1`, because no
+  // `JobEvent` carries `attempts` at all; it is the loop in the test below, and
+  // it renders "Downloading" as pending. So the second shape here is a state
+  // nothing can produce, kept as the negative control for the byte count and
+  // nothing more. The live path is dl-20.
+  for (const downloadedBytes of [0, 41_000_000]) {
+    mount(job("probing", { attempts: 2, progress: { percent: null, downloadedBytes } }));
 
-  const steps = within(screen.getByRole("list", { name: "Pipeline" })).getAllByRole("listitem");
-  const downloadingStep = steps.find((step) => step.textContent === "Downloading");
-  expect(downloadingStep).toBeDefined();
-  expect(downloadingStep?.className).toBe("steps__item");
-  expect(downloadingStep?.className).not.toContain("steps__item--done");
+    expect(stepStates()).toEqual([
+      ["Queued", "done"],
+      ["Re-analysing", "active"],
+      ["Downloading", "done"],
+      ["Assembling", "pending"],
+      ["Ready", "pending"],
+    ]);
+    // And by role, which is the half a class name cannot carry: the state is in
+    // the accessible tree now, so a screen reader is told where the job is and
+    // what is behind it rather than being read five undifferentiated items.
+    expect(activeStep()).toBe("Re-analysing");
+    expect(doneSteps()).toEqual(["Queued", "Downloading"]);
+    cleanup();
+  }
+});
+
+test("a first probe leaves Downloading pending, however many bytes are on the card", () => {
+  // The case a naive fix gets wrong, and the reason the two are asserted apart:
+  // a mark that simply marked everything done would pass the test above and fail
+  // here. `queued → probing` is the job's opening move — nothing is behind it,
+  // and `attempts` is still 1.
+  //
+  // The byte count is the value the other candidate signal would have read. It
+  // is not a shape the server produces in `probing`, and that is the point: it
+  // proves the mark is not a function of the progress snapshot.
+  for (const downloadedBytes of [0, 41_000_000]) {
+    mount(job("probing", { attempts: 1, progress: { percent: null, downloadedBytes } }));
+
+    expect(stepStates()).toEqual([
+      ["Queued", "done"],
+      ["Re-analysing", "active"],
+      ["Downloading", "pending"],
+      ["Assembling", "pending"],
+      ["Ready", "pending"],
+    ]);
+    expect(activeStep()).toBe("Re-analysing");
+    expect(doneSteps()).toEqual(["Queued"]);
+    cleanup();
+  }
 });
 
 // ---------------------------------------------------------------------------

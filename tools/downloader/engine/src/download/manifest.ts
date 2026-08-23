@@ -42,6 +42,9 @@ export interface ManifestDownloadOptions {
   liveDurationSec?: number | null | undefined;
   ffmpegPath: string;
   proxyUrl?: string | undefined;
+  /** Defaults to on. See `NetworkInputOptions.tlsVerify`. */
+  tlsVerify?: boolean | undefined;
+  tlsCaFile?: string | undefined;
   signal?: AbortSignal | undefined;
   timeoutMs?: number | undefined;
   maxOutputBytes?: number | undefined;
@@ -55,6 +58,20 @@ export interface ManifestDownloadResult {
   durationSec: number | null;
   transcodes: TranscodeNotice[];
   args: string[];
+}
+
+/**
+ * The TLS half of one input's options, so both inputs are built from the same
+ * source rather than from two places that can drift apart.
+ */
+function tlsOptions(options: ManifestDownloadOptions): {
+  tlsVerify?: boolean;
+  tlsCaFile?: string;
+} {
+  return {
+    ...(options.tlsVerify === undefined ? {} : { tlsVerify: options.tlsVerify }),
+    ...(options.tlsCaFile === undefined ? {} : { tlsCaFile: options.tlsCaFile }),
+  };
 }
 
 /** Exported for tests: the full argv, without spawning anything. */
@@ -78,6 +95,7 @@ export function buildManifestDownloadArgs(options: ManifestDownloadOptions): {
       ...buildNetworkInputArgs(options.url, {
         requestContext: options.requestContext,
         hlsAllowAllExtensions: options.protocol === "hls",
+        ...tlsOptions(options),
       }),
     );
     if (options.hasVideo && !audioOnly) {
@@ -96,6 +114,9 @@ export function buildManifestDownloadArgs(options: ManifestDownloadOptions): {
       ...buildNetworkInputArgs(options.audioUrl as string, {
         requestContext: options.requestContext,
         hlsAllowAllExtensions: options.protocol === "hls",
+        // The audio rendition is its own connection and its own handshake, so
+        // it needs its own copy of this as much as it needs its own headers.
+        ...tlsOptions(options),
       }),
     );
     maps.push({ inputIndex, kind: "audio", streamIndex: 0, optional: true });

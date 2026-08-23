@@ -132,20 +132,22 @@ data/downloader.sqlite  jobs, probe cache, file tokens
 All via environment, parsed and validated once at boot with zod. Fail fast on a
 bad value rather than discovering it mid-job. See `.env.example`.
 
-| Variable                  | Default     | Why it matters                                            |
-| ------------------------- | ----------- | --------------------------------------------------------- |
-| `PORT`                    | `3000`      |                                                           |
-| `STORAGE_DIR`             | `./storage` |                                                           |
-| `MAX_CONCURRENT_JOBS`     | `2`         | ffmpeg is I/O and CPU hungry                              |
-| `MAX_CONCURRENT_BROWSERS` | `2`         | ~300 MB each                                              |
-| `MAX_FILE_SIZE_MB`        | `4096`      | checked _before_ download, from bitrate × duration        |
-| `FILE_RETENTION_HOURS`    | `6`         | GC deadline                                               |
-| `PROBE_TIMEOUT_MS`        | `45000`     | browser sniffing is slow                                  |
-| `JOB_TIMEOUT_MS`          | `3600000`   | hard kill                                                 |
-| `FFMPEG_PATH`             | bundled     | override system binary                                    |
-| `YTDLP_PATH`              | `yt-dlp`    | optional; degrade gracefully if absent                    |
-| `PROXY_URL`               | —           | must apply to probe _and_ download (IP-bound signed URLs) |
-| `ENABLE_BROWSER_RESOLVER` | `true`      | lets you run a cheap, fast-only deployment                |
+| Variable                      | Default      | Why it matters                                            |
+| ----------------------------- | ------------ | --------------------------------------------------------- |
+| `PORT`                        | `3000`       |                                                           |
+| `STORAGE_DIR`                 | `./storage`  |                                                           |
+| `MAX_CONCURRENT_JOBS`         | `2`          | ffmpeg is I/O and CPU hungry                              |
+| `MAX_CONCURRENT_BROWSERS`     | `2`          | ~300 MB each                                              |
+| `MAX_FILE_SIZE_MB`            | `4096`       | checked _before_ download, from bitrate × duration        |
+| `FILE_RETENTION_HOURS`        | `6`          | GC deadline                                               |
+| `PROBE_TIMEOUT_MS`            | `45000`      | browser sniffing is slow                                  |
+| `JOB_TIMEOUT_MS`              | `3600000`    | hard kill                                                 |
+| `FFMPEG_PATH`                 | bundled      | override system binary                                    |
+| `YTDLP_PATH`                  | `yt-dlp`     | optional; degrade gracefully if absent                    |
+| `PROXY_URL`                   | —            | must apply to probe _and_ download (IP-bound signed URLs) |
+| `FFMPEG_CA_FILE`              | system store | CA bundle for ffmpeg; for a TLS-intercepting proxy        |
+| `FFMPEG_ALLOW_UNVERIFIED_TLS` | `false`      | last resort; warns at boot, see `dl-19`                   |
+| `ENABLE_BROWSER_RESOLVER`     | `true`       | lets you run a cheap, fast-only deployment                |
 
 ---
 
@@ -163,6 +165,30 @@ Non-negotiable, because this service fetches arbitrary URLs on request:
   pins the address it vetted, so a segment URI or a page subresource that no
   `ProbeResult` ever contained is still checked. `PROXY_URL`, when set, is
   chained to rather than replaced.
+- **TLS verification, and exactly how far it reaches.** The engine's own fetches
+  go through undici, which verifies without being asked. ffmpeg's do not unless
+  told — `tls_verify` defaults to off in libavformat — so since `dl-19` every
+  remote input ffmpeg opens carries `-tls_verify 1`. Read that narrowly, because
+  two limits are real and an operator who assumes otherwise is assuming a
+  guarantee they do not have:
+  - **A plain-`http://` input carries neither flag, deliberately.**
+    `avformat_open_input` fails on an option nothing consumed, so the flag on an
+    HTTP manifest aborts the download outright. Nothing is lost: a manifest
+    fetched in the clear can be rewritten by whoever could have substituted the
+    segments it names.
+  - **Only the manifest connection is verified. HLS and DASH segment
+    connections are not** — libavformat does not propagate the TLS options to
+    the child connections the demuxer opens, though it does propagate
+    `-headers` and `-user_agent`. A manifest on a verified origin whose segment
+    URIs point at a second, untrusted origin downloads and remuxes without
+    complaint. Measured on ffmpeg 6.1.1; [`dl-21`](./work/dl-21-verified-hls-segments.md)
+    is the ticket. So HLS and DASH are no longer the _wholly_ unverified half of
+    this tool, which is what `dl-19` changed, and they are not yet the verified
+    half.
+
+  The egress proxy tunnels rather than intercepts, so the certificate that does
+  reach ffmpeg is the origin's own.
+
 - **Path safety** — filenames sanitised, output paths confined to `STORAGE_DIR`,
   no user string ever reaching a shell. Spawn with argument arrays, never
   `shell: true`.

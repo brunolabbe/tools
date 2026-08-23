@@ -53,6 +53,21 @@ export interface ApiConfig {
   ytdlpPath: string | undefined;
 
   /**
+   * Lets ffmpeg fetch over TLS without checking the certificate, which is what
+   * it did everywhere until dl-19.
+   *
+   * It exists for one real case — an operator behind a TLS-intercepting
+   * corporate proxy, whose certificates are re-issued by a root this process
+   * has never heard of. `ffmpegCaFile` is the better answer for that operator
+   * and should be tried first; this one is the answer when even that is not
+   * available. `createApp` warns at boot whenever it is on, because a security
+   * check that can be turned off silently is one that gets turned off and left.
+   */
+  ffmpegAllowUnverifiedTls: boolean;
+  /** A CA bundle for ffmpeg to trust instead of the system store. */
+  ffmpegCaFile: string | undefined;
+
+  /**
    * Built UI to serve from this process, same-origin. Undefined serves nothing,
    * which is a perfectly good headless configuration — see `routes/web.ts`.
    */
@@ -262,6 +277,9 @@ export function loadApiConfig(
       overrides.enableDirectResolver ?? bool(env["ENABLE_DIRECT_RESOLVER"], true),
     proxyUrl: overrides.proxyUrl ?? proxyUrl(env["PROXY_URL"]),
     ffmpegPath: overrides.ffmpegPath ?? env["FFMPEG_PATH"] ?? undefined,
+    ffmpegAllowUnverifiedTls:
+      overrides.ffmpegAllowUnverifiedTls ?? bool(env["FFMPEG_ALLOW_UNVERIFIED_TLS"], false),
+    ffmpegCaFile: overrides.ffmpegCaFile ?? optionalPath(env["FFMPEG_CA_FILE"]),
     ytdlpPath: overrides.ytdlpPath ?? env["YTDLP_PATH"] ?? undefined,
     // Resolved so a relative WEB_DIR means the same thing wherever the process
     // was started from, matching how storageDir is handled above.

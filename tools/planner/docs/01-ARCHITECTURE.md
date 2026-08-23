@@ -215,6 +215,9 @@ All via environment, parsed and validated once at boot with zod, `api` only.
 | `PORT`                       | `8090`     | 8090/5183 so both tools run at once                            |
 | `MODEL_PROVIDER`             | `scripted` | The only place a model backend is named                        |
 | `GROUNDING_PROVIDER`         | `fixtures` | Same seam, same default: a fresh clone plans with no key       |
+| `VALHALLA_URL`               | —          | Routing endpoint. No default: an endpoint is a deployment fact |
+| `GEOCODER_URL`               | —          | A router does not geocode. Both required, or the boot refuses  |
+| `GROUNDING_TIMEOUT_MS`       | `5000`     | Short: a run holds a queue slot while it grounds               |
 | `MAX_SPECIALISTS`            | `5`        | The roster cap the orchestrator degrades to (§9)               |
 | `MAX_GROUNDING_CALLS`        | `40`       | Per run. Grounding is where the bill lives                     |
 | `GROUNDING_CACHE_TTL_*`      | varies     | Hours for an opening time, months for a distance (§5)          |

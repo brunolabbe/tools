@@ -4,8 +4,9 @@ tool: planner
 title: Lift the SSRF guard to packages/core when a second tool actually fetches
 kind: work-package
 milestone: P3
-status: ready
+status: dropped
 depends_on: [pl-24]
+note: Deferred until the existence slice is filed — not refused
 ---
 
 # pl-26 — One guard, lifted when the planner earns it
@@ -30,6 +31,17 @@ file exists because the lift is the interesting part of that work and it is
 worth having written down before the ticket that needs it is scoped; it is not
 work to pull forward. If you are here because pl-28 is next, you are in the
 wrong file.
+
+**The frontmatter says `dropped`, and here that means deferred, not refused.**
+The [ticket format](../../../../docs/01-TICKETS.md) has four statuses and none of
+them means "written down early, waiting on a slice nobody has scoped"; `dropped`
+is the only one that keeps this file and its argument while keeping it out of
+`npm run status -- --ready`. The way back is exact, and it is two edits rather
+than one: when the existence slice is filed, set this ticket to `status: ready`
+with that ticket's id in `depends_on`, **and delete the `note:` line**. The note
+is written for a closed ticket, and `renderMarkdown` prints it instead of the
+title once the ticket is open again — leaving it there publishes a row calling
+work in progress deferred.
 
 ## Why
 
@@ -91,4 +103,114 @@ code.** A model reply that hands us a link is exactly the case.
   does not consult the guard — because a comment is not a check.
 - `npm run check`, `npm test`, and the image-closure scan all pass.
 
+## Review
+
+### Gate 1 — 2026-08-23
+
+**PASS.**
+
+This gate is over the state correction, not over the lift. **The ticket's own
+`Done when` lines are untouched and unproven** — no part of the lift was
+implemented — so the table below is one row per thing the correction claimed,
+each re-run by the reviewer rather than taken from the branch.
+
+| Claim                                                                  | Verdict                                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| pl-26 leaves `npm run status -- --ready`, and nothing else does        | verified — 1 line removed, 0 added                                  |
+| No other view moved                                                    | verified — full `--json` differs by exactly 1 line, as of `2f3988d` |
+| Every reference to pl-26 in the repo still reads true                  | verified — 9 citations found, 9 enumerated, 9 correct, 0 broken     |
+| The links in and to the ticket resolve                                 | verified — 4 markdown links, 4 resolved, 0 anchors                  |
+| `depends_on` on the unwritten existence slice is genuinely unavailable | verified — `readTickets` throws, and worse than the branch claimed  |
+| The repo is otherwise unchanged                                        | verified — `npm run check` exit 0, 1,366 tests pass                 |
+
+The reviewer's own correction to the branch's reasoning, worth keeping: a
+`depends_on` naming a ticket that does not exist does not merely fail for that
+ticket — `readTickets` throws before any view renders, so **every** invocation
+exits 1 repo-wide (`--ready`, the default, `--json`, `--show`). The mechanism
+argument in the Log is therefore stronger than it was written, not weaker.
+
+Findings, all four, with what happened to each:
+
+- **`note` absent from a dropped ticket's frontmatter** (low) — **fixed here.**
+  `--show` is the one view where a dropped ticket is still visible, and it showed
+  a bare `dropped`. An agent asking what became of the SSRF lift reads that,
+  applies the documented meaning of `dropped` — considered and rejected — and
+  reports the lift as abandoned without opening the file. That is this change's
+  own reader, one step further out. The `note` field says deferred, not refused.
+- **`--show` on a dropped ticket prints `unblocked`** (low) — **not fixed, and
+  out of scope.** `describeTicket` reads `depends_on` only and never the
+  ticket's own status — `scripts/status.mjs:279`, the
+  `.filter((dependency) => dependency.status !== "done")` — so it answers "is
+  anything blocking it" for a ticket that
+  is not pickable at all. **Pre-existing**: `--show pl-1` does the same thing on
+  `origin/main`, untouched by this branch. Being surfaced separately; no ticket
+  filed from here.
+- **`tools/planner/agent/src/grounding.ts:48` promises pl-26 forward**
+  (informational) — **no change.** The id leads to the file and the file answers
+  the question, which is what a forward reference is for. The `note` above also
+  serves that reader.
+- **No `## Review` section on the ticket** (process) — **fixed by this section.**
+
+### Gate 2 — 2026-08-23
+
+**PASS.**
+
+Deliberately narrow: it re-read the three edits gate 1 asked for and the code
+they depend on, and it did **not** re-sweep the nine citations, the four links,
+the dangling-`depends_on` throw or the full suite. It ran `npm test -- --project
+repo` — 46 passed — which is the suite that parses the real ticket tree, and is
+therefore what proves the new `note:` key parses rather than being rejected by
+`parseFrontmatter`'s strict field list.
+
+What it established that gate 1 had not:
+
+- **`note` is read in exactly five places in `scripts/status.mjs`**, enumerated
+  at the source rather than inferred: `:41` the field schema, `:125` the typedef,
+  `:188` the normalization (`ticket.note ??= null`), `:331` `renderMarkdown`, and
+  `:473` `printTicket`. Two of those are display sites, and `OPEN` at `:48`
+  excludes `dropped` — which is why the note reaches `--show` and no listing.
+- **The mechanism is right rather than accidentally right.** It flipped pl-26 to
+  `ready` in a throwaway tree and rendered the result: `--ready` prints the title
+  (that path uses `ticket.title`), while `--markdown`'s open-tickets table prints
+  the note in the "What it is" column via `:331`'s `ticket.note ?? ticket.title`.
+  That is the failure the revival instruction above now names.
+- **`--ready`, the default view and `--markdown` are byte-identical between
+  `2f3988d` and `37cc23c`.** The `note:` line moved `--show` and nothing else.
+
+Findings, all three, all fixed here:
+
+- **The revival instruction left the `note` in place** (`:40`) — **fixed here.**
+  Followed literally it produced exactly the row gate 2 rendered. The way back is
+  now two edits, and says which.
+- **Finding 2 of gate 1 named `describeTicket` with no `file:line`** — **fixed
+  here.** It is `scripts/status.mjs:279`. That bullet also says no ticket was
+  filed from here, so the citation is the whole handle the next reader gets.
+- **Gate 1's "`--json` differs by exactly 1 line" was unscoped** — **fixed
+  here.** It was true of `2f3988d`, which is the commit gate 1 read; the `note:`
+  line makes it three at `37cc23c`. The row now says as of which commit.
+
 ## Log
+
+**2026-08-23 — the frontmatter said `ready` and the first section said do not
+pick this up. The frontmatter now says `dropped`.**
+
+The prose was losing that argument every time it was had, because
+`npm run status -- --ready` reads the frontmatter and nothing else: pl-26 was
+listed as unblocked work beside dl-16 and pl-28, and whoever picked it up found
+the "Read this before picking it up" section only after opening the file. A
+ticket's frontmatter is the only place its state is recorded, so a body that
+contradicts it is not a second opinion — it is a note nobody reaches in time.
+
+`depends_on` would have been the honest mechanism, and it is unavailable: the
+blocker is real and named — §5's third item, existence — but that slice
+deliberately has no ticket, and `scripts/status.mjs` refuses a `depends_on`
+naming a ticket that does not exist. Of the four statuses the format defines,
+`dropped` is the only one that keeps this file and its argument while taking it
+out of the ready list, and it is the one whose documented purpose is a file kept
+so the next person to have the idea finds the reasoning. It is doing duty for
+"deferred", which the vocabulary does not have — pl-1 is the other `dropped`
+ticket and it was genuinely refused, so the two now read alike in
+`npm run status` and only the prose separates them. That is the cost, it is
+recorded here, and the section above says the way back in one line.
+
+Nothing else changed, and no part of the lift was implemented.
