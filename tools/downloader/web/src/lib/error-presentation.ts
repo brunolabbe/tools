@@ -204,19 +204,58 @@ export interface ErrorView {
   /** True only when a retry affordance should be rendered. */
   retryable: boolean;
   final: boolean;
+  /**
+   * Seconds the server asked us to wait, or `null` when there is nothing to say.
+   * "Try again" with no answer to "when?" is the same failure as a progress bar
+   * with an invented total: the UI knows and does not say.
+   *
+   * **`null` for any code the taxonomy refuses to retry**, whatever the payload
+   * carried — see the veto in `presentError`.
+   */
+  retryAfterSec: number | null;
+}
+
+/**
+ * `details` is documented as "not rendered verbatim in the UI", and this does
+ * not render it verbatim: it reads **one** field, by name, and only when it is
+ * a positive finite number. `api/src/http-errors.ts` allowlists `retryAfterSec`
+ * through to the client precisely so a client can act on it, and the API sets
+ * it alongside the `Retry-After` header when it refuses a probe.
+ */
+function readRetryAfterSec(details: Record<string, unknown> | undefined): number | null {
+  const value = details?.["retryAfterSec"];
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
 export function presentError(payload: AppErrorPayload): ErrorView {
   const entry = ERROR_PRESENTATION[payload.code];
   const message = payload.message.trim() || DEFAULT_ERROR_MESSAGES[payload.code];
+  // Computed once and used twice, deliberately. `readRetryAfterSec` returns a
+  // number for *any* code — `details` is server-supplied and a server can attach
+  // one to anything — so a `DRM_PROTECTED` carrying `retryAfterSec` would render
+  // "there is nothing to retry — the answer will not change" directly above
+  // "wait 20 s before trying again". A `RATE_LIMITED` the server itself marked
+  // `retryable: false` is the quieter version of the same contradiction: a wait
+  // for a retry it just told us not to make.
+  //
+  // Both are the same question — "should this error offer another attempt?" —
+  // so both read the same answer, and the answer is computed here rather than
+  // gated in `ErrorPanel`, so no future renderer of an `ErrorView` can
+  // reintroduce either.
+  //
+  // What this does *not* veto is a panel with no `onRetry` wired: the view still
+  // says a retry is possible, and the wait is worth stating even where this
+  // particular panel has no button. That case is deliberate and tested.
+  const retryable = entry.allowRetry && payload.retryable === true;
   return {
     code: payload.code,
     title: entry.title,
     message,
     detail: entry.detail,
     tone: entry.tone,
-    retryable: entry.allowRetry && payload.retryable === true,
+    retryable,
     final: entry.final === true,
+    retryAfterSec: retryable ? readRetryAfterSec(payload.details) : null,
   };
 }
 

@@ -53,6 +53,53 @@ export function formatPercent(percent: number | null | undefined): string {
   return `${Math.min(100, Math.max(0, percent)).toFixed(percent >= 99.95 ? 0 : 1)}%`;
 }
 
+/**
+ * A wait longer than this is not a wait, it is a server that is broken or
+ * lying. Past it the phrase stops quoting the number.
+ */
+const MAX_RETRY_AFTER_SEC = 24 * 60 * 60;
+
+/**
+ * How long the server asked us to wait, as a phrase to put in a sentence.
+ *
+ * `null` when there is nothing to say — no value, a nonsense one, or one that
+ * has already elapsed. The caller then renders nothing rather than inventing a
+ * number, which is the same rule the progress bar follows for an unknown total.
+ *
+ * **Rounded up at every step, never down.** Telling someone to wait 20 seconds
+ * when the server said 20.4 buys them one more refusal, so the error always
+ * lands on the side of waiting slightly too long. That makes the units coarse
+ * near a boundary — 61 s reads as "2 min" — which is the trade taken
+ * deliberately.
+ *
+ * **And clamped.** `retryAfterSec` arrives from the network, so a bug or a
+ * hostile response can put anything in it. Unclamped, `1e9` rendered as
+ * "16666667 min" and `Number.MAX_VALUE` rendered in exponential notation — as
+ * user-facing copy. Anything past a day says so in words instead.
+ */
+export function formatRetryAfter(seconds: number | null | undefined): string | null {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds <= 0) {
+    return null;
+  }
+  if (seconds > MAX_RETRY_AFTER_SEC) return "more than a day";
+
+  // Normalised to whole seconds first, so the boundaries are decided once. 59.6
+  // becomes 60 and reads as "1 min" rather than the nonsense "60 s".
+  const total = Math.ceil(seconds);
+  if (total < 60) return `${total} s`;
+
+  // Rounded up once, then bucketed — so 3599 s reads as "1 h" rather than the
+  // equally-true-but-odd "60 min", for the same reason 59.6 s is not "60 s".
+  const minutes = Math.ceil(total / 60);
+  if (minutes < 60) return `${minutes} min`;
+
+  // Hours carry their minutes, matching `formatExpiry`'s shape, because
+  // "2 h" for 3601 seconds overstates the wait by nearly an hour.
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}
+
 export function formatResolution(width?: number, height?: number): string {
   if (!height) return UNKNOWN;
   return width ? `${width}×${height}` : `${height}p`;

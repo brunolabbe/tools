@@ -8,6 +8,7 @@ import {
   formatEta,
   formatExpiry,
   formatPercent,
+  formatRetryAfter,
   formatSpeed,
 } from "../src/lib/format.ts";
 
@@ -75,6 +76,52 @@ describe("formatting tolerates every nullable field", () => {
     expect(formatEta(45)).toBe("45 s left");
     expect(formatEta(600)).toBe("10 min left");
     expect(formatPercent(100)).toBe("100%");
+  });
+
+  test("a retry wait is a phrase, or nothing at all", () => {
+    // `null` rather than a dash: the caller renders no line, instead of a line
+    // that says the wait is unknown. Nothing is the honest render here.
+    expect(formatRetryAfter(null)).toBeNull();
+    expect(formatRetryAfter(undefined)).toBeNull();
+    expect(formatRetryAfter(0)).toBeNull();
+    expect(formatRetryAfter(-5)).toBeNull();
+    expect(formatRetryAfter(Number.NaN)).toBeNull();
+
+    expect(formatRetryAfter(20)).toBe("20 s");
+    // Rounded up, every time: telling someone to wait 20 s when the server said
+    // 20.4 buys them one more refusal.
+    expect(formatRetryAfter(20.4)).toBe("21 s");
+    expect(formatRetryAfter(59)).toBe("59 s");
+    expect(formatRetryAfter(60)).toBe("1 min");
+    // Coarse, and deliberately so — the rounding is always in the direction of
+    // waiting slightly too long.
+    expect(formatRetryAfter(61)).toBe("2 min");
+    expect(formatRetryAfter(600)).toBe("10 min");
+  });
+
+  test("a retry wait never renders a unit it has outgrown", () => {
+    // Each boundary is crossed once, upward, so nothing reads as "60 s" or
+    // "60 min" — true, but not what a person writes.
+    expect(formatRetryAfter(59.6)).toBe("1 min");
+    expect(formatRetryAfter(3599)).toBe("1 h");
+    expect(formatRetryAfter(3600)).toBe("1 h");
+    // Hours carry their minutes: "2 h" for 3601 s would overstate by an hour.
+    expect(formatRetryAfter(3601)).toBe("1 h 1 min");
+    expect(formatRetryAfter(7_200)).toBe("2 h");
+    expect(formatRetryAfter(9_000)).toBe("2 h 30 min");
+  });
+
+  test("an absurd wait is described, never quoted", () => {
+    // `retryAfterSec` comes off the network. Unclamped, these rendered as
+    // "16666667 min" and as exponential notation — in user-facing copy.
+    expect(formatRetryAfter(86_400)).toBe("24 h");
+    expect(formatRetryAfter(86_401)).toBe("more than a day");
+    expect(formatRetryAfter(1e9)).toBe("more than a day");
+    expect(formatRetryAfter(Number.MAX_VALUE)).toBe("more than a day");
+    // Whatever comes out, it is never a number in exponential notation.
+    for (const absurd of [1e9, 1e21, Number.MAX_VALUE]) {
+      expect(formatRetryAfter(absurd)).not.toMatch(/e[+-]/iu);
+    }
   });
 
   test("expiry counts down and then reports expiry", () => {

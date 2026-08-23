@@ -1,5 +1,6 @@
 import type { AppErrorPayload } from "@downloader/contract";
 import { presentError } from "../lib/error-presentation.ts";
+import { formatRetryAfter } from "../lib/format.ts";
 
 interface ErrorPanelProps {
   error: AppErrorPayload;
@@ -17,6 +18,12 @@ export function ErrorPanel({
 }: ErrorPanelProps): React.JSX.Element {
   const view = presentError(error);
   const showRetry = view.retryable && onRetry !== undefined;
+  // Derived from the server's own number — rounded up, bucketed and clamped by
+  // `formatRetryAfter` — never invented here. When the server said nothing
+  // usable, or the error is one no retry can help, this is `null` and no line is
+  // rendered: guessing a wait is the "never fake progress" rule wearing a
+  // different hat.
+  const wait = formatRetryAfter(view.retryAfterSec);
 
   return (
     <div
@@ -29,6 +36,7 @@ export function ErrorPanel({
       </div>
       <p className="notice__message">{view.message}</p>
       <p className="notice__detail">{view.detail}</p>
+      {wait && <p className="notice__wait">Wait {wait} before trying again.</p>}
       {(showRetry || onDismiss) && (
         <div className="notice__actions">
           {showRetry && (
