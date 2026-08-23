@@ -36,8 +36,12 @@ wrong file.
 The [ticket format](../../../../docs/01-TICKETS.md) has four statuses and none of
 them means "written down early, waiting on a slice nobody has scoped"; `dropped`
 is the only one that keeps this file and its argument while keeping it out of
-`npm run status -- --ready`. The way back is exact: when the existence slice is
-filed, set this ticket to `status: ready` with that ticket's id in `depends_on`.
+`npm run status -- --ready`. The way back is exact, and it is two edits rather
+than one: when the existence slice is filed, set this ticket to `status: ready`
+with that ticket's id in `depends_on`, **and delete the `note:` line**. The note
+is written for a closed ticket, and `renderMarkdown` prints it instead of the
+title once the ticket is open again — leaving it there publishes a row calling
+work in progress deferred.
 
 ## Why
 
@@ -110,14 +114,14 @@ This gate is over the state correction, not over the lift. **The ticket's own
 implemented — so the table below is one row per thing the correction claimed,
 each re-run by the reviewer rather than taken from the branch.
 
-| Claim                                                                  | Verdict                                                            |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| pl-26 leaves `npm run status -- --ready`, and nothing else does        | verified — 1 line removed, 0 added                                 |
-| No other view moved                                                    | verified — full `--json` differs by exactly 1 line                 |
-| Every reference to pl-26 in the repo still reads true                  | verified — 9 citations found, 9 enumerated, 9 correct, 0 broken    |
-| The links in and to the ticket resolve                                 | verified — 4 markdown links, 4 resolved, 0 anchors                 |
-| `depends_on` on the unwritten existence slice is genuinely unavailable | verified — `readTickets` throws, and worse than the branch claimed |
-| The repo is otherwise unchanged                                        | verified — `npm run check` exit 0, 1,366 tests pass                |
+| Claim                                                                  | Verdict                                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| pl-26 leaves `npm run status -- --ready`, and nothing else does        | verified — 1 line removed, 0 added                                  |
+| No other view moved                                                    | verified — full `--json` differs by exactly 1 line, as of `2f3988d` |
+| Every reference to pl-26 in the repo still reads true                  | verified — 9 citations found, 9 enumerated, 9 correct, 0 broken     |
+| The links in and to the ticket resolve                                 | verified — 4 markdown links, 4 resolved, 0 anchors                  |
+| `depends_on` on the unwritten existence slice is genuinely unavailable | verified — `readTickets` throws, and worse than the branch claimed  |
+| The repo is otherwise unchanged                                        | verified — `npm run check` exit 0, 1,366 tests pass                 |
 
 The reviewer's own correction to the branch's reasoning, worth keeping: a
 `depends_on` naming a ticket that does not exist does not merely fail for that
@@ -135,7 +139,9 @@ Findings, all four, with what happened to each:
   own reader, one step further out. The `note` field says deferred, not refused.
 - **`--show` on a dropped ticket prints `unblocked`** (low) — **not fixed, and
   out of scope.** `describeTicket` reads `depends_on` only and never the
-  ticket's own status, so it answers "is anything blocking it" for a ticket that
+  ticket's own status — `scripts/status.mjs:279`, the
+  `.filter((dependency) => dependency.status !== "done")` — so it answers "is
+  anything blocking it" for a ticket that
   is not pickable at all. **Pre-existing**: `--show pl-1` does the same thing on
   `origin/main`, untouched by this branch. Being surfaced separately; no ticket
   filed from here.
@@ -144,6 +150,44 @@ Findings, all four, with what happened to each:
   the question, which is what a forward reference is for. The `note` above also
   serves that reader.
 - **No `## Review` section on the ticket** (process) — **fixed by this section.**
+
+### Gate 2 — 2026-08-23
+
+**PASS.**
+
+Deliberately narrow: it re-read the three edits gate 1 asked for and the code
+they depend on, and it did **not** re-sweep the nine citations, the four links,
+the dangling-`depends_on` throw or the full suite. It ran `npm test -- --project
+repo` — 46 passed — which is the suite that parses the real ticket tree, and is
+therefore what proves the new `note:` key parses rather than being rejected by
+`parseFrontmatter`'s strict field list.
+
+What it established that gate 1 had not:
+
+- **`note` is read in exactly five places in `scripts/status.mjs`**, enumerated
+  at the source rather than inferred: `:41` the field schema, `:125` the typedef,
+  `:188` the normalization (`ticket.note ??= null`), `:331` `renderMarkdown`, and
+  `:473` `printTicket`. Two of those are display sites, and `OPEN` at `:48`
+  excludes `dropped` — which is why the note reaches `--show` and no listing.
+- **The mechanism is right rather than accidentally right.** It flipped pl-26 to
+  `ready` in a throwaway tree and rendered the result: `--ready` prints the title
+  (that path uses `ticket.title`), while `--markdown`'s open-tickets table prints
+  the note in the "What it is" column via `:331`'s `ticket.note ?? ticket.title`.
+  That is the failure the revival instruction above now names.
+- **`--ready`, the default view and `--markdown` are byte-identical between
+  `2f3988d` and `37cc23c`.** The `note:` line moved `--show` and nothing else.
+
+Findings, all three, all fixed here:
+
+- **The revival instruction left the `note` in place** (`:40`) — **fixed here.**
+  Followed literally it produced exactly the row gate 2 rendered. The way back is
+  now two edits, and says which.
+- **Finding 2 of gate 1 named `describeTicket` with no `file:line`** — **fixed
+  here.** It is `scripts/status.mjs:279`. That bullet also says no ticket was
+  filed from here, so the citation is the whole handle the next reader gets.
+- **Gate 1's "`--json` differs by exactly 1 line" was unscoped** — **fixed
+  here.** It was true of `2f3988d`, which is the commit gate 1 read; the `note:`
+  line makes it three at `37cc23c`. The row now says as of which commit.
 
 ## Log
 
