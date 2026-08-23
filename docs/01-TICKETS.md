@@ -48,9 +48,10 @@ produces Y", never "it works".
 
 ## Review
 
-The gate. One row per line above, each naming the test that proves it. Absent
-until the work is reviewed. **The builder commits it**, in the branch under
-review — see below.
+The gate, and it has **two halves, both required**: an acceptance table with one
+row per **Done when** line naming the test that proves it, and a bullet per
+finding with its disposition. Absent until the work is reviewed. **The builder
+commits it**, in the branch under review — see below.
 
 ## Log
 
@@ -146,16 +147,29 @@ A reviewer works in a worktree that is thrown away when it reports, so a
 back as a message and the record does not travel at all. `repo-1` went through
 two gates and neither existed in the repo afterwards, which is how it was
 noticed. So the reviewer reports and the builder writes the section down, with
-the date, the verdict, and **one line per finding with its disposition —
-including the ones that needed no change**. The point of the record is a later
-reader checking that all of them were answered, and a section listing only the
-findings that produced a diff cannot be distinguished from one that quietly
-dropped the rest.
+the date, the verdict, and **both halves named above**:
 
-That the author transcribes it is a real weakness and worth naming: the check on
-it is that the reviewer's message is in the pull request thread, so the two can
-be read against each other. A gate that is not committed did not happen; a gate
-that is committed and unfaithful is at least falsifiable.
+- **The acceptance table** — one row per `Done when` line, each naming the test
+  that proves it (`file.test.ts:88`, not "covered"), with the verdict from the
+  skill's four: `proven`, `unproven`, `unproven (gate)`, `verified`. This is the
+  half that records the acceptance-to-test link, and it is the half a finding
+  table will silently replace if only one is asked for.
+- **A bullet per finding, with its disposition — including the ones that needed
+  no change.** A later reader's whole job is checking that all of them were
+  answered, and a section listing only the findings that produced a diff cannot
+  be distinguished from one that quietly dropped the rest.
+
+A ticket through several rounds keeps **one subsection per gate**, not a single
+overwritten one, for the same reason.
+
+That the author transcribes a verdict on his own work is a real weakness, so the
+check is a step rather than an assertion: **the builder posts the reviewer's
+report to the pull request thread** — `gh pr comment <number> --body-file <file>`
+— in the same push that commits the section, and where the branch has no pull
+request yet, that duty attaches to opening it. The two are then written by
+different models and a reader can hold one against the other. A gate that is not
+committed did not happen; a gate committed with no report beside it cannot be
+audited.
 
 ## What the other documents keep
 

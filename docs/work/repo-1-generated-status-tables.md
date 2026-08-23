@@ -73,11 +73,34 @@ match, and the workflow runs `npm run format` after `--write` as the belt.
 
 ## Review
 
-Two gates, both **CONCERNS**, both closed. Recorded here by the builder rather
+Three gates, all **CONCERNS**, all closed. Recorded here by the builder rather
 than by the reviewer, and that is the point: the first two gates were written in
 reviewer worktrees that were then discarded, so neither existed in the repo and
 nothing let a later reader check that the findings were addressed rather than
 only the ones worth writing about. A gate that is not committed did not happen.
+
+### Acceptance
+
+One row per **Done when** line. Written late — gate 3's finding was that this
+half was missing entirely and a finding table had quietly stood in for it, which
+is exactly how the acceptance-to-test link stops being recorded.
+
+| Done when                                                              | Proof                                                                                                                                                                    |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run status` prints open work per tool with what blocks each       | **verified** — no unit test; the pure functions are covered and the human render is not. Re-run: `pl-28` prints `(waits on pl-24, pl-25)`                                |
+| …and `-- --ready` lists only tickets whose dependencies are all `done` | `scripts/test/status.test.ts:154` ✓ — `pl-3` waiting on ready `pl-2` is excluded                                                                                         |
+| Every one of the repo's tickets parses, asserted over the real files   | `scripts/test/status.test.ts:62` ✓ — reads `REPO`, not a fixture, and asserts the tool set against `readdirSync(tools/)`                                                 |
+| A branch that edits a generated region fails `--check`…                | **verified** — the CLI `git show` path has no unit test. Gate 1 re-ran it in both directions; this branch passes it untouched                                            |
+| …one that does not, passes. Both proven against a real base ref        | **verified** — `--check --base origin/main` green on every push of this branch                                                                                           |
+| A `03-STATUS.md` with no markers fails rather than being appended to   | `scripts/test/status.test.ts:222` ✓, and `:226` for markers reversed                                                                                                     |
+| `npm run check` and `npm test` are green                               | **verified** — exit 0; 84 files / 1168 tests, unchanged from the base commit                                                                                             |
+| …and the generated regions survive `npm run format` unchanged          | `scripts/test/status.test.ts:206` ✓ for the surrounding-text guarantee, plus **verified**: both regions re-diffed byte-identical to `origin/main` after each format pass |
+
+Four rows are `verified` rather than `proven` and none of them is idle: two are
+the `--check` CLI, whose proof is `git show` against a real ref and which no unit
+test reaches, and two are the gate bullet every ticket ends with. `verified`
+means nothing asserts it and it was re-run — the numbers above are the ones that
+came back, not the ones the Log claims.
 
 ### Gate 1 — 2026-08-22
 
@@ -123,6 +146,37 @@ source both miss — and both rounds then ran an **extension-filtered** sweep
 anyway, which is exactly how `.env.example` survived two of them. ADR 003's
 lesson bullet now carries the mechanical fix: sweep with a bare `git grep -n`,
 no `--include`, no path filter, and triage afterwards.
+
+### Gate 3 — 2026-08-23
+
+Verified: the reviewer reproduced the unfiltered sweep hit-for-hit (79), triaged
+all 29 non-ticket hits and found **no seventh citation of the dangling kind**,
+link-checked **every markdown link in the repo — 378 links across 75 files,
+anchor fragments included: 0 missing, 0 bad anchors** — reproduced the 11-path
+`ls` sweep and widened it to 28 paths with 28 hits, verified all ten gate
+dispositions above as truthful, and checked out `12a19a5` to confirm the 439→113
+figures are exact for that commit.
+
+| #   | Finding                                                                                                                                   | Disposition                                                                                      |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 1   | **med** · `.env.example:58` said the proxy's policy is "the only thing" that bounds egress — false, and self-contradicted two lines later | **Fixed** — five words deleted. `ssrf.ts:223` and `:243` do bound it in proxy mode               |
+| 2   | **med** · The new rule contradicts `.claude/skills/review-ticket/SKILL.md:79-82`, which is live                                           | **Fixed** — the skill is the document that was wrong; steps 7, 8 and the section shape rewritten |
+| 3   | **med** · `01-TICKETS.md` describes the section two incompatible ways, and this exemplar satisfied only one                               | **Fixed** — both halves are named as required, and the acceptance table above was written        |
+| 4   | **med** · The safeguard asserts a check exists rather than instructing anyone to create it                                                | **Fixed** — it is an imperative in both `01-TICKETS.md` and the skill's step 8                   |
+| 5   | **low** · `repo-1:194` re-introduced "thirty-seven commits" in the same commit that removed it                                            | **Fixed** — 39, and the sentence no longer carries the number                                    |
+| 6   | **low** · The sweep enumeration reads as exhaustive but omits 7 files and 13 hits; "23 ticket-file hits" is a file count, not a hit count | **Fixed** — full enumeration, and both counts named as what they are                             |
+| 7   | **low** · `adr/001:28` is the origin of the "dashboard" definition and still has no forward pointer to 003                                | **Fixed** — annotated, not rewritten, in the pattern used for 003's "roughly eight"              |
+| 8   | **low** · `tools/planner/docs/03-STATUS.md:24-27` carries three sentences of narrative the page's own table says belongs in an ADR        | **Fixed** — cut to the ADR link, matching the downloader's page                                  |
+
+Finding 7 is the one worth reading. `adr/001` is where "the status document
+becomes a dashboard" was first written, and it is the framing that invited every
+paragraph this ticket deleted — so an agent adding a tool reads the layout ADR,
+learns the definition, and reproduces the problem. Chasing the citations without
+annotating their source would have left the generator running.
+
+Finding 8 is the ticket failing its own rule in its own exemplar: the planner's
+header table says a decision belongs in an ADR, three lines above three sentences
+of narrative that duplicate `adr/003:7-13`. The downloader's page had it right.
 
 ## Log
 
@@ -188,10 +242,10 @@ region, a short table saying where each kind of fact goes _instead_ of onto this
 page, and "Running things". As of this commit the downloader's page went from 252
 lines to 120 and the planner's from 439 to 113 — figures for this commit, not
 live ones; the review round below moved the planner's again. The header table is
-the load-bearing part — the page's
-old second paragraph already said "if you find yourself writing a paragraph
-here, it belongs in a ticket" and thirty-seven commits ignored it, so the
-replacement names the destination for each kind of thing a person arrives
+the load-bearing part — the downloader
+page's old second paragraph already said "if you find yourself writing a
+paragraph here, it belongs in a ticket" and very nearly every pull request the
+tool has had ignored it, so the replacement names the destination for each kind of thing a person arrives
 wanting to write: frontmatter for state, a ticket's Log for what work did, a
 ticket for a gap, a code comment for why the code is shaped that way, an ADR for
 a cross-tool decision, `02-ROADMAP` for phases.
@@ -374,11 +428,36 @@ after that added markdown and still missed a file that is neither. **A bare
 `git grep -n 03-STATUS`, unfiltered, finds all seventy-odd in one call**, and
 `.env.example` is on the first line of the output. ADR 003's lesson bullet now
 carries the mechanical form: no `--include`, no path filter, triage afterwards.
-The unfiltered sweep was then run to completion here; everything it returns
-besides the six is either a correct definitional reference (`CLAUDE.md`,
-`docs/01-TICKETS.md`, `00-TOOLS.md`, both READMEs, `status.yml`, `status.mjs`,
-ADR 001), a historical Why or acceptance line in a **closed** ticket, or this
-ticket's own prose.
+The unfiltered sweep was then run to completion, and the arithmetic is worth
+stating properly because the first attempt at this paragraph named seven files
+and read as though that were all of them. Two stable groups, and a third that
+this paragraph is itself inside — so no total is quoted, since writing one
+changed it:
+
+- **29 non-ticket hits, in 14 files**, every one triaged and none dangling:
+  `.github/workflows/status.yml` (3, the workflow that writes the region),
+  `CLAUDE.md` (2), `docs/01-TICKETS.md` (1), `docs/00-TOOLS.md` (1),
+  `tools/planner/CLAUDE.md` (1) — the definition, in the four places it is
+  stated; `scripts/status.mjs` (4) and `scripts/test/status.test.ts` (3), the
+  generator and its suite; `README.md` (1), `tools/downloader/README.md` (2),
+  `tools/downloader/docs/02-ROADMAP.md` (1),
+  `tools/planner/docs/02-ROADMAP.md` (1),
+  `tools/planner/docs/01-ARCHITECTURE.md` (1) — navigation links, all still
+  true; and `docs/adr/003` (6) plus `docs/adr/001` (2), the decision and its
+  origin.
+- **35 hits in 22 other ticket files**, all historical Why, acceptance or Log
+  lines in **closed** tickets, plus `dl-5` and `dl-6`'s "carried here from
+  `03-STATUS.md` (repo-1)" provenance lines and `dl-15`/`dl-16`'s repointed
+  acceptance criteria. `dl-19` cites the page nowhere.
+- **The remainder, in this ticket's own prose** — a number that this sentence
+  moves by existing, which is why it is not written down. `git grep -c 03-STATUS
+docs/work/repo-1-generated-status-tables.md` answers it, and reproducing the
+  two groups above is `git grep -n 03-STATUS` with the ticket paths filtered out
+  afterwards, never before.
+
+Note that those are **hit** counts, not file counts; the two differ by more than
+half here, and a paragraph that quotes one while the reader is reconciling the
+other is the small version of the problem this whole ticket is about.
 
 **Four comment paths were still tool-relative** in `jobs/orchestrator.ts` and
 `api/test/pipeline.test.ts` — the other two of the four comments repointed in the
@@ -394,3 +473,86 @@ that made it and stopped being true one commit later, at 116 — the same class 
 rot as the test count this ticket deleted, reintroduced in the entry describing
 its deletion. It now says so in the sentence rather than being re-corrected,
 because re-correcting it is what the whole ticket argues against.
+
+**2026-08-23 — third gate: four mediums, four lows, and the rule finally has
+teeth.** Recorded in `## Review` above. The reviewer reproduced the unfiltered
+sweep hit-for-hit, link-checked all 378 markdown links in the repo (0 missing, 0
+bad anchors), widened the cited-path `ls` sweep from 11 to 28, and checked out
+`12a19a5` to confirm the line figures — then found four mediums, of which three
+are the same shape: **this ticket wrote a rule and did not finish making it
+true.**
+
+**`.env.example` was wrong in a way an operator could act on, and it was my
+sentence.** Fixing the dangling citation last round, I wrote that the proxy's own
+egress policy "is what bounds the service then, **and it is the only thing that
+does**." Neither source said "only" — `dispatcher.ts:42` says "what guards a
+proxied deployment is the proxy's own egress policy", `dl-8`'s Log says "what
+bounds egress there is the proxy's own policy" — and my own next sentence
+contradicted it. The check does still bound the service in proxy mode:
+`ssrf.ts:223` refuses non-allowed schemes and `:243` refuses blocked literal IPs
+regardless of the dispatcher. The failure this invited is specific: an operator
+concludes the app filters no egress of its own and sets
+`SSRF_ALLOW_PRIVATE_ADDRESSES=true` — which `dispatcher.ts:44` invites for exactly
+that deployment — believing it costs nothing, and silently turns off checks that
+were running. Five words deleted. **The lesson is about summarising: I tightened
+two hedged sources into one confident claim, which is the failure mode of writing
+a summary from two things that agree.**
+
+**The rule contradicted the tracked skill, and the skill was live.**
+`.claude/skills/review-ticket/SKILL.md` said the reviewer produces the section and
+"the caller appends it to the ticket unedited… Append it verbatim", edited on
+`main` three commits ago. `docs/01-TICKETS.md` now said the opposite. The skill is
+the document that is wrong — its authors could not have known that "append it
+verbatim" appends into a worktree about to be deleted — so its step 7 now says
+**return** the section and says why a file written there goes nowhere, step 8 is
+three acts (commit it, post the report to the pull request, then report to the
+user), and the section heading is "The section to commit". The skill's own
+warning is kept and re-aimed: it used to say a caller who edits the section has
+handed the review back to the model under review; it now says the caller is
+transcribing a verdict on its own work, which is the same hazard with a longer
+reach. It also picks up the one-subsection-per-gate rule, for the same reason the
+finding list has to include the findings that needed no change.
+
+**`01-TICKETS.md` described the section two incompatible ways** — the template at
+line 51 asking for an acceptance row per `Done when` line, the new prose asking
+for a line per finding — and **the exemplar I committed satisfied only the
+second.** So the next builder writes a finding table, cites the prose, and the
+acceptance-to-test link quietly stops being recorded. Both halves are now named
+as required in both places, and the acceptance table exists above: eight rows,
+four `proven` with a `status.test.ts` line each, four `verified` with the numbers
+that came back. Writing it was the useful part — it is the first time this
+ticket's own acceptance has been traced, and it surfaced that the `--check` CLI
+path has no unit test at all. That is honest as `verified` and would be a finding
+if the criterion had not been re-run.
+
+**The safeguard was decorative.** `01-TICKETS.md` asserted that "the check on it
+is that the reviewer's message is in the pull request thread" — a claim that a
+check exists, not an instruction to anyone to create one. Nothing posts it: no
+workflow reads PR comments, and the skill's step 8 reported to the user and
+stopped. And this branch has no pull request, so for the very ticket introducing
+the rule both reviewer messages exist nowhere but discarded scrollback — gate 2's
+failure relocated rather than closed. It is an imperative now, in both documents,
+with the command and the case where the branch has no PR yet.
+
+**Four lows, and two of them are this ticket failing its own rule.** The Log
+re-introduced "thirty-seven commits" in the same commit that removed it from the
+page — the number is 39 — so the sentence no longer carries one. The sweep
+enumeration named 7 files and read as exhaustive while omitting 7 more and 13
+hits, and quoted a file count where the reader was reconciling hits; it now gives
+both stable groups exactly (29 hits in 14 non-ticket files, 35 in 22 other ticket
+files) and deliberately quotes **no total**, because writing one moved it. And
+the planner's page carried three sentences of narrative about its own history,
+duplicating `adr/003`, three lines under a table saying such prose belongs in an
+ADR — cut, matching the downloader's page, which had it right. Lengths at this
+commit: planner 112, downloader 120.
+
+**The fourth low is the one that matters most.**
+[adr/001](../adr/001-per-tool-docs-and-tickets.md) is where "the status document
+becomes a dashboard" was first written — the origin of the framing this ticket
+spent three rounds deleting everywhere else, still `accepted`, with no pointer to 003. An agent adding a tool reads the layout ADR first and learns the definition
+that invited every paragraph removed here. Annotated rather than rewritten, in
+the pattern used for 003's "roughly eight": the word stays, a blockquote beneath
+it records that this half did not hold and why — a dashboard nobody generates is
+a dashboard everybody hand-edits — and the header says "accepted, amended in part
+by 003". Chasing citations without annotating their source would have left the
+generator running.
