@@ -303,12 +303,18 @@ test("a re-probe keeps Downloading marked done instead of walking the list back"
   // happened, and retreating progress is the universal signal for "something
   // broke and is being redone".
   //
-  // Two shapes, one expectation. The first is what the server sends: the
-  // orchestrator resets the progress snapshot as it takes the edge, so a
-  // re-probing job's byte count is *zero* and the mark cannot be read from it.
-  // The second is the transient a listening client holds between the `status`
-  // frame and the `progress` frame that follows it — the old attempt's bytes,
-  // under the new status. Both are `attempts: 2`, and both render the same list.
+  // `attempts: 2` is the shape a *refetched* job carries: the reconcile after a
+  // reconnect, or a page load. The byte count is looped over both values only to
+  // prove the mark is not read from it — the server's own shape is zero, because
+  // the orchestrator resets the progress snapshot as it takes the edge.
+  //
+  // The 41 MB arm here is **not** the wire transient, and an earlier draft of
+  // this comment claimed it was. That transient — `status` frame applied, the
+  // `progress` frame that follows it not yet — carries `attempts: 1`, because no
+  // `JobEvent` carries `attempts` at all; it is the loop in the test below, and
+  // it renders "Downloading" as pending. So the second shape here is a state
+  // nothing can produce, kept as the negative control for the byte count and
+  // nothing more. The live path is dl-20.
   for (const downloadedBytes of [0, 41_000_000]) {
     mount(job("probing", { attempts: 2, progress: { percent: null, downloadedBytes } }));
 
