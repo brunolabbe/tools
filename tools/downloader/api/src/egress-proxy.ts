@@ -208,9 +208,65 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
   // resolution to pin — the same trade dl-8 documents for `PROXY_URL`.
   const connectOptions = upstream === null ? { lookup } : {};
 
-  function denied(host: string, error: unknown): void {
+  /**
+   * A target **this proxy's policy** turned down. `code` is the guard's own —
+   * `BLOCKED_TARGET` for an address we refuse to reach, `INVALID_URL` for one
+   * that never parsed — and it names the rule that fired.
+   */
+  function refused(host: string, error: unknown): void {
     const appError = AppError.from(error);
-    logger.warn("refused an ffmpeg fetch", {
+    logger.warn("refused a subprocess fetch", {
+      host,
+      code: appError.code,
+      details: appError.details,
+    });
+  }
+
+  /**
+   * A target the policy **allowed** and the network could not deliver.
+   *
+   * Kept apart from `refused` because collapsing the two is actively
+   * misleading: a socket error is not an `AppError`, so `AppError.from` stamps
+   * it `INTERNAL`, and a line reading `refused … INTERNAL` sends the reader
+   * into `ssrf.ts` looking for the rule that fired when the truth is that the
+   * packets went nowhere. The errno is the fact worth logging — `ETIMEDOUT` is
+   * a firewall dropping traffic, `ECONNREFUSED` a host that answered no,
+   * `ENOTFOUND` a name that does not resolve — and none of it survives the
+   * `AppError` wrapper. dl-26.
+   */
+  function unreachable(host: string, error: unknown): void {
+    const errno = error as NodeJS.ErrnoException | null;
+    logger.warn("a subprocess fetch could not connect", {
+      host,
+      errno: errno?.code ?? "UNKNOWN",
+      syscall: errno?.syscall,
+      reason: errno?.message,
+    });
+  }
+
+  /**
+   * A socket that failed, which is **two** different events wearing one shape.
+   *
+   * `createPinningLookup` delivers its verdict to `callback(error)`, and node
+   * surfaces that as the socket's `error` event — so a name that rebinds to a
+   * blocked address between the pre-flight check and the connect arrives here
+   * as a `BLOCKED_TARGET` `AppError`, indistinguishable by call site from an
+   * `ETIMEDOUT`. Splitting on the type is what keeps the refusal that matters
+   * most from being filed as a network hiccup.
+   */
+  function connectFailed(host: string, error: unknown): void {
+    if (error instanceof AppError) refused(host, error);
+    else unreachable(host, error);
+  }
+
+  /**
+   * The operator's proxy turned it down, in chained mode. Ours is not the
+   * policy that fired, and saying so is the difference between reading this
+   * file and reading the upstream's configuration.
+   */
+  function upstreamRefused(host: string, error: unknown): void {
+    const appError = AppError.from(error);
+    logger.warn("the upstream proxy refused a subprocess fetch", {
       host,
       code: appError.code,
       details: appError.details,
@@ -237,7 +293,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
       try {
         await guard.assertAllowed(target);
       } catch (error) {
-        denied(target, error);
+        refused(target, error);
         response.writeHead(403).end();
         return;
       }
@@ -262,7 +318,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
       );
 
       proxied.once("error", (error: unknown) => {
-        denied(target, error);
+        connectFailed(target, error);
         if (!response.headersSent) response.writeHead(502);
         response.end();
       });
@@ -290,7 +346,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
       try {
         await guard.assertAllowed(`https://${target}`);
       } catch (error) {
-        denied(target, error);
+        refused(target, error);
         refuse(clientSocket, 403, "Blocked by egress policy");
         return;
       }
@@ -301,7 +357,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           : net.connect({ host: upstream.hostname, port: upstreamPort(upstream) });
 
       serverSocket.once("error", (error: unknown) => {
-        denied(target, error);
+        connectFailed(target, error);
         refuse(clientSocket, 502, "Upstream connect failed");
       });
 
@@ -314,7 +370,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
         // report success once it has agreed to it.
         chainConnect(serverSocket, target, upstream, (error) => {
           if (error !== null) {
-            denied(target, error);
+            upstreamRefused(target, error);
             refuse(clientSocket, 502, "Upstream proxy refused");
             serverSocket.destroy();
             return;
