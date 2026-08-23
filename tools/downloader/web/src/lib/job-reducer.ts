@@ -10,6 +10,7 @@
 
 import { TERMINAL_STATUSES } from "@downloader/contract";
 import type { Job, JobEvent, JobStatus, ProbeResult } from "@downloader/contract";
+import { reachedStep } from "./status.ts";
 
 function timestamp(value: string): number {
   const parsed = Date.parse(value);
@@ -137,9 +138,47 @@ export function applyJobEvents(job: Job, events: readonly JobEvent[]): Job {
 }
 
 /**
+ * Raises one job's *watched* high-water mark to cover the states given.
+ *
+ * The mark is client-side and lives beside the job list rather than on it —
+ * `Job` is a contract type and this is not a field the server has. See
+ * `useJobs`, which folds it, and `statusHighWaterMark`, which reads it.
+ *
+ * **Why the client has to keep one at all.** dl-9's `downloading → probing`
+ * back-edge is the only backwards move in `JOB_TRANSITIONS`, and the server
+ * records that it happened by bumping `attempts` — a field no `JobEvent`
+ * carries. So a client following the stream holds `attempts: 1` straight through
+ * the edge and only learns better on a refetch (dl-20). What it *does* see is
+ * the move itself, and that is enough: caller passes the job as it stood and the
+ * job the event produced, so the step the job has just left is remembered even
+ * though nothing on the new job reports it.
+ *
+ * **Monotonic by construction.** It is a `Math.max` over states, and nothing
+ * lowers it — which is the same guarantee the fold above is built on, and the
+ * reason a replayed or reordered frame cannot walk the step list back. States
+ * `reachedStep` refuses to place (`failed`, `canceled`) contribute nothing
+ * rather than contributing the last step.
+ */
+export function markWatched(watched: number, ...jobs: readonly Job[]): number {
+  let mark = watched;
+  for (const job of jobs) {
+    const step = reachedStep(job);
+    if (step !== null && step > mark) mark = step;
+  }
+  return mark;
+}
+
+/**
  * Merges a freshly fetched job with the locally reduced one. The server is
  * authoritative unless our copy is strictly newer, which happens when an event
  * lands while the refetch is in flight.
+ *
+ * It decides between two `Job`s and nothing else. The watched mark is not one of
+ * their fields, so neither outcome can discard it — which is deliberate: a
+ * remote job knows `attempts` but nothing about what this client watched, and a
+ * local one is the other way round, so choosing between them would lose half the
+ * evidence whichever way it went. `useJobs` folds the remote job into the mark
+ * as well, and `markWatched` takes the maximum rather than a side.
  */
 export function reconcileJob(local: Job | undefined, remote: Job): Job {
   if (!local) return remote;

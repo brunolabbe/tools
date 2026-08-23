@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 
 /**
- * The app shell: the two things about it that only exist at this level.
+ * The app shell: the things about it that only exist at this level — the
+ * mock-build banner, the probe race, and (dl-20) the pipeline mark, which is
+ * folded in `useJobs` and read three components down in `JobCard`, so no test of
+ * either end can see whether it makes the trip.
  *
  * See `progress-bar.test.tsx` for why the DOM arrives as a docblock rather than
  * a vitest project of its own.
@@ -25,10 +28,12 @@
  */
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { AppError, ProbeResponse } from "@downloader/contract";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import type { AppError, Job, JobEvent, ProbeResponse } from "@downloader/contract";
 import type { ApiClient } from "../src/api/types.ts";
-import { NOW, probe } from "./fixtures.ts";
+import type { EventStreamHandlers } from "../src/lib/event-stream.ts";
+import { JOBS_STORAGE_KEY } from "../src/lib/job-store.ts";
+import { NOW, SOURCE_URL, job, probe, progress, variant } from "./fixtures.ts";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -61,7 +66,7 @@ interface Fake {
   AppError: AppErrorClass;
 }
 
-async function mountApp(usingMock: boolean): Promise<Fake> {
+async function mountApp(usingMock: boolean, overrides: Partial<ApiClient> = {}): Promise<Fake> {
   vi.resetModules();
   const { AppError: Errors } = await import("@downloader/contract");
   const probes: Deferred<ProbeResponse>[] = [];
@@ -78,6 +83,11 @@ async function mountApp(usingMock: boolean): Promise<Fake> {
     listJobs: vi.fn(() => Promise.resolve({ jobs: [], total: 0 })),
     cancelJob: vi.fn(unused("JOB_NOT_FOUND")),
     openJobEvents: vi.fn(() => ({ close: vi.fn() })),
+    // The job-stream cases below need a client that answers; the probe cases
+    // need one that rejects loudly on anything they did not mean to reach. The
+    // two live in one harness because the module-registry dance above is the
+    // expensive part and there is no reason to have two of it.
+    ...overrides,
   };
 
   vi.doMock("../src/api/client.ts", () => ({ USING_MOCK_API: usingMock, api: client }));
@@ -293,4 +303,265 @@ test("a probe that fails is reported with the taxonomy's own copy", async () => 
   const notice = screen.getByRole("status");
   expect(notice.textContent).toContain("Protected by DRM");
   expect(screen.queryByRole("heading", { name: "Analysing" })).toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// The live event stream, and the pipeline mark that rides on it (dl-20)
+// ---------------------------------------------------------------------------
+//
+// These are here rather than in `job-card.test.tsx` because the thing they have
+// to prove is not what the card renders for a given mark — that is asserted
+// there — but that a mark is *produced* by the frames and *arrives* at the card.
+// dl-18 shipped a correct rule that reached nobody watching a healthy stream,
+// and only a render driven from the wire, through the real `useJobs`, could have
+// said so. A component test cannot: it is handed the value whose journey is the
+// thing in question.
+
+/** The frames `#attempt` emits as it takes dl-9's `downloading → probing` edge. */
+const BACK_EDGE: JobEvent[] = [
+  { type: "status", jobId: "job-1", status: "probing", at: "2026-08-20T11:59:30.000Z" },
+  {
+    type: "progress",
+    jobId: "job-1",
+    // `initialProgress("probing")`: the abandoned attempt's bytes are not
+    // progress towards this one, so the snapshot resets with the transition.
+    progress: progress({ stage: "probing", percent: null, downloadedBytes: 0 }),
+    at: "2026-08-20T11:59:31.000Z",
+  },
+];
+
+/** The forward half of a run, as the orchestrator emits it before anything expires. */
+const RUN_TO_DOWNLOADING: JobEvent[] = [
+  { type: "status", jobId: "job-1", status: "probing", at: "2026-08-20T11:59:10.000Z" },
+  { type: "status", jobId: "job-1", status: "downloading", at: "2026-08-20T11:59:20.000Z" },
+  {
+    type: "progress",
+    jobId: "job-1",
+    progress: progress({ stage: "downloading", downloadedBytes: 41_000_000 }),
+    at: "2026-08-20T11:59:21.000Z",
+  },
+];
+
+/** Each pipeline step as `[label, state]`, off the class the stylesheet keys on. */
+function pipeline(): [string, string][] {
+  return within(screen.getByRole("list", { name: "Pipeline" }))
+    .getAllByRole("listitem")
+    .map((step): [string, string] => {
+      const modifier = [...step.classList].find((name) => name.startsWith("steps__item--"));
+      return [step.textContent ?? "", modifier?.slice("steps__item--".length) ?? "pending"];
+    });
+}
+
+/**
+ * Mounts the app over a restored `downloading` job and hands back the stream
+ * handlers `useJobs` attached to it.
+ *
+ * The job arrives through `localStorage` because that is the shortest honest
+ * route to a client that is already watching one — the alternative is driving
+ * the probe form and `createJob`, which proves nothing extra here.
+ */
+async function watchOneJob(
+  restored: Job,
+  /** One snapshot per `getJob` call, in order; the last one answers any extra. */
+  snapshots: readonly Job[],
+): Promise<{ fake: Fake; listeners: EventStreamHandlers[] }> {
+  globalThis.localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify([restored]));
+  const listeners: EventStreamHandlers[] = [];
+  let fetched = 0;
+  const fake = await mountApp(false, {
+    getJob: vi.fn(() => {
+      const snapshot = snapshots[Math.min(fetched, snapshots.length - 1)];
+      fetched += 1;
+      return Promise.resolve({ job: snapshot as Job });
+    }),
+    openJobEvents: vi.fn((_jobId: string, handlers: EventStreamHandlers) => {
+      listeners.push(handlers);
+      return { close: vi.fn() };
+    }),
+  });
+  await settle();
+  return { fake, listeners };
+}
+
+test("a restored job driven over the back-edge by frames keeps Downloading marked done", async () => {
+  // The user in dl-18's Why: a healthy stream, a 20-minute download, and a
+  // signed URL that expired. Before dl-20 this render was byte-identical to a
+  // first probe's — "Downloading" went pending and the progress indicator
+  // retreated — because `attempts` is the only tell on a `Job` and no `JobEvent`
+  // carries it.
+  const downloading = job("downloading", { id: "job-1", attempts: 1 });
+  const { fake, listeners } = await watchOneJob(downloading, [downloading]);
+
+  expect(listeners).toHaveLength(1);
+  expect(pipeline()).toEqual([
+    ["Queued", "done"],
+    ["Re-analysing", "done"],
+    ["Downloading", "active"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
+
+  act(() => {
+    // The first connect is not a reconnect, so `onOpen` reconciles nothing.
+    listeners[0]?.onOpen();
+    for (const event of BACK_EDGE) listeners[0]?.onEvent(event);
+  });
+
+  expect(pipeline()).toEqual([
+    ["Queued", "done"],
+    ["Re-analysing", "active"],
+    ["Downloading", "done"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
+  // **This test does not prove the frames did it, and an earlier draft of this
+  // comment claimed it did.** `restore` reconciles before it attaches, so the one
+  // `getJob` below has already folded the restored `downloading` job into the
+  // mark — `reachedStep` reads `attempts` only for `probing`, so a `downloading`
+  // job returns step 2 whatever its counter says. The call asserted here as
+  // ruling the refetch out *is* the refetch. What this test holds is the
+  // restore-then-listen journey end to end; the frames carrying the mark on
+  // their own is the test below, which starts a job in this tab and never
+  // refetches at all.
+  expect(fake.client.getJob).toHaveBeenCalledTimes(1);
+});
+
+test("a job started in this tab, never refetched, gets its mark from the frames alone", async () => {
+  // The commonest journey there is: paste a URL, watch it run in the same tab.
+  // It goes through `start()`, which upserts the created job and attaches the
+  // stream — and never calls `mergeJob`. So `applyEvent`'s fold is the *only*
+  // thing that can carry the mark here, which is what makes this the test dl-20
+  // actually needed: with that fold neutralised, every other test in the repo
+  // stays green, this one included until it existed.
+  const created = job("queued", { id: "job-1" });
+  const listeners: EventStreamHandlers[] = [];
+  const fake = await mountApp(false, {
+    createJob: vi.fn(() => Promise.resolve({ job: created })),
+    openJobEvents: vi.fn((_jobId: string, handlers: EventStreamHandlers) => {
+      listeners.push(handlers);
+      return { close: vi.fn() };
+    }),
+  });
+
+  analyse(SOURCE_URL);
+  await settle();
+  await act(async () => {
+    fake.probes[0]?.resolve({ probe: probe(), cached: false });
+    await Promise.resolve();
+  });
+  await settle();
+  fireEvent.click(screen.getByRole("button", { name: "Download" }));
+  await settle();
+
+  expect(listeners).toHaveLength(1);
+  // Nothing was ever fetched: the job in the list is the one `createJob`
+  // returned, and no reconcile has happened or will.
+  expect(fake.client.getJob).not.toHaveBeenCalled();
+  expect(pipeline()).toEqual([
+    ["Queued", "active"],
+    ["Re-analysing", "pending"],
+    ["Downloading", "pending"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
+
+  act(() => {
+    listeners[0]?.onOpen();
+    // The forward run, then the edge — every step of it from the wire.
+    for (const event of RUN_TO_DOWNLOADING) listeners[0]?.onEvent(event);
+  });
+  expect(pipeline()).toEqual([
+    ["Queued", "done"],
+    ["Re-analysing", "done"],
+    ["Downloading", "active"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
+
+  act(() => {
+    for (const event of BACK_EDGE) listeners[0]?.onEvent(event);
+  });
+
+  expect(pipeline()).toEqual([
+    ["Queued", "done"],
+    ["Re-analysing", "active"],
+    ["Downloading", "done"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
+  // Still nothing refetched, so `attempts` has been `1` on every copy of this
+  // job the client has ever held. The mark can only have come from the fold.
+  expect(fake.client.getJob).not.toHaveBeenCalled();
+});
+
+test("a reconnect that slept through the download stage keeps the refetch's word for it", async () => {
+  // dl-20's other half, and the one case where *neither* witness is redundant.
+  // The client is watching a first probe when the connection drops; while it is
+  // away the job downloads, the signed URL expires, and the server takes the
+  // back-edge. So the only frame the reconnect brings is the channel's opening
+  // snapshot — `status: probing` again — and this client never saw
+  // `downloading` at all.
+  //
+  // The refetch that follows the reconnect knows `attempts: 2`. It also *loses*:
+  // it was issued before the burst frame landed, so its snapshot is older and
+  // `reconcileJob` keeps the local copy, discarding the counter with it. That is
+  // the race dl-18's gate found and dl-20's Why records. What survives it is the
+  // mark, which is folded from the reconciled job rather than from the copy that
+  // won.
+  const probing = job("probing", { id: "job-1", attempts: 1 });
+  const refetched = job("probing", {
+    id: "job-1",
+    attempts: 2,
+    // Older than the frame already folded in, so `reconcileJob` drops it...
+    updatedAt: "2026-08-20T11:59:35.000Z",
+    // ...and this is how the card says which copy it is rendering.
+    variant: variant({ label: "Losing server copy" }),
+  });
+  const { fake, listeners } = await watchOneJob(probing, [probing, refetched]);
+
+  act(() => {
+    listeners[0]?.onOpen();
+  });
+  expect(pipeline()).toEqual([
+    ["Queued", "done"],
+    ["Re-analysing", "active"],
+    ["Downloading", "pending"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
+
+  // Drop the connection and let the backoff bring it back, which is what makes
+  // the second `onOpen` a reconnect and forces the refetch.
+  act(() => {
+    listeners[0]?.onError();
+    vi.advanceTimersByTime(2_000);
+  });
+  expect(listeners).toHaveLength(2);
+  await act(async () => {
+    listeners[1]?.onOpen();
+    // The burst beats the refetch it just triggered, which is what makes the
+    // local copy the newer one.
+    listeners[1]?.onEvent({
+      type: "status",
+      jobId: "job-1",
+      status: "probing",
+      at: "2026-08-20T11:59:40.000Z",
+    });
+    await Promise.resolve();
+  });
+  await settle();
+
+  expect(fake.client.getJob).toHaveBeenCalledTimes(2);
+  // The race was lost, which is the premise: the local copy won and the refetch
+  // is not what is on screen.
+  expect(screen.queryByRole("heading", { name: "Losing server copy" })).toBeNull();
+  expect(screen.getByRole("heading", { name: "1080p · H.264 + AAC" })).toBeDefined();
+  // And the discarded copy's `attempts: 2` came through it anyway.
+  expect(pipeline()).toEqual([
+    ["Queued", "done"],
+    ["Re-analysing", "active"],
+    ["Downloading", "done"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
 });

@@ -22,12 +22,13 @@
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { Job } from "@downloader/contract";
+import type { Job, JobEvent } from "@downloader/contract";
 import { JobCard } from "../src/components/JobCard.tsx";
 import { JobList } from "../src/components/JobList.tsx";
 import { UNKNOWN } from "../src/lib/format.ts";
+import { applyJobEvent, markWatched } from "../src/lib/job-reducer.ts";
 import type { StreamState } from "../src/lib/job-stream.ts";
-import { NOW, SOURCE_URL, job, result, variant } from "./fixtures.ts";
+import { NOW, SOURCE_URL, job, progress, result, variant } from "./fixtures.ts";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -53,17 +54,18 @@ function handlers(): Handlers {
   };
 }
 
-// `streamState` is `StreamState | undefined` and **required** on the props, not
-// optional — so it is passed every time rather than spread in conditionally,
-// which under `exactOptionalPropertyTypes` would make it an optional property
-// the component does not declare.
-function mount(value: Job, streamState?: StreamState): Handlers {
+// `streamState` and `watchedStep` are `T | undefined` and **required** on the
+// props, not optional — so they are passed every time rather than spread in
+// conditionally, which under `exactOptionalPropertyTypes` would make them
+// optional properties the component does not declare.
+function mount(value: Job, streamState?: StreamState, watchedStep?: number): Handlers {
   const spies = handlers();
   render(
     <ul>
       <JobCard
         job={value}
         streamState={streamState}
+        watchedStep={watchedStep}
         onCancel={spies.onCancel}
         onRemove={spies.onRemove}
         onRetry={spies.onRetry}
@@ -71,6 +73,38 @@ function mount(value: Job, streamState?: StreamState): Handlers {
     </ul>,
   );
   return spies;
+}
+
+/**
+ * The state a *listening* client holds, folded from the frames the server
+ * actually emits — `fixtures.ts`'s `job()` builds the state the **server**
+ * holds, and over dl-9's back-edge the two are not the same thing.
+ *
+ * **The mark starts at `0` and is raised only inside the loop**, exactly as
+ * `useJobs` does: its map starts empty and only `applyEvent` and `mergeJob` add
+ * to it. An earlier draft seeded it with `markWatched(0, start)` before the
+ * loop, which is the one thing that must not happen here — for a `downloading`
+ * start job that seed alone reaches step 2, so the frames became decoration and
+ * neutralising the *per-frame* fold left all 191 tests green. Measured, not
+ * assumed. (A reducer that folded nothing was always caught, seed or no seed:
+ * the seed ran through `markWatched` too. It was only the fold *inside the loop*
+ * that nothing held.)
+ *
+ * Mirroring the hook is the limit of what a component test can prove. That the
+ * hook really folds the mark, and really hands it down three components, is
+ * `app.test.tsx`'s `a job started in this tab, never refetched, gets its mark
+ * from the frames alone` — the only test in the repo that dies when
+ * `useJobs`'s `applyEvent` fold is removed.
+ */
+function watch(start: Job, events: readonly JobEvent[]): { job: Job; watchedStep: number } {
+  let current = start;
+  let watchedStep = 0;
+  for (const event of events) {
+    const next = applyJobEvent(current, event);
+    watchedStep = markWatched(watchedStep, current, next);
+    current = next;
+  }
+  return { job: current, watchedStep };
 }
 
 /** The card's own accessible name for the bar, which encodes the stage and the figure. */
@@ -104,6 +138,13 @@ function stepStates(): [string, string][] {
       const modifier = [...step.classList].find((name) => name.startsWith("steps__item--"));
       return [step.textContent ?? "", modifier?.slice("steps__item--".length) ?? "pending"];
     });
+}
+
+/** One list's steps as `label:done?`, for the cases that compare two cards. */
+function stepsOf(list: HTMLElement): string[] {
+  return within(list)
+    .getAllByRole("listitem")
+    .map((step) => `${step.textContent ?? ""}:${step.className.includes("--done") ? 1 : 0}`);
 }
 
 /** The step the job is on, by ARIA state — no class name involved. */
@@ -360,6 +401,91 @@ test("a first probe leaves Downloading pending, however many bytes are on the ca
 });
 
 // ---------------------------------------------------------------------------
+// The same two cases, reached from the wire instead of from a fixture (dl-20)
+// ---------------------------------------------------------------------------
+//
+// Every test above mounts a job somebody built, which is why none of them
+// noticed that dl-18's fix could not reach a client watching a live stream: the
+// `attempts: 2` those fixtures carry only ever arrives on a refetch. These two
+// still start from a hand-built job — there is no way for a component test not
+// to — but **the mark they render is folded from the frames and from nothing
+// else**, which is the half that was missing. Drop the fold in `watch()` above
+// and the first goes red; the control below it must not, and does not, because
+// a zero mark is exactly what "Downloading pending" asserts. That asymmetry is
+// the pair: one test can only pass if the frames were folded, the other only if
+// they were not over-folded. Both measured — 1 failed / 190 passed.
+//
+// (An earlier draft of this paragraph said "both go red". They do not, and a
+// control that reddened when the mark was dropped would be a broken control.)
+//
+// What they do not prove is that the mark makes the trip from the hook to the
+// card; a component test is handed the value whose journey is in question. That
+// is `app.test.tsx`, and the claim is not rhetorical — one test there, and only
+// that one, dies when `useJobs`'s live fold is removed.
+
+/** The frames `#attempt` emits as it takes the back-edge, in order. */
+const BACK_EDGE: JobEvent[] = [
+  { type: "status", jobId: "job-1", status: "probing", at: "2026-08-20T11:59:30.000Z" },
+  {
+    type: "progress",
+    jobId: "job-1",
+    // `initialProgress("probing")`, patched with the transition: the abandoned
+    // attempt's bytes are not progress towards this one, so the count resets.
+    progress: progress({ stage: "probing", percent: null, downloadedBytes: 0 }),
+    at: "2026-08-20T11:59:31.000Z",
+  },
+];
+
+test("a job driven over the back-edge by frames alone still marks Downloading done", () => {
+  // No refetch and no reload — the client holds a `downloading` job and reduces
+  // the two frames the server sends. Before dl-20 this render was byte-identical
+  // to the first-probe render below, because `attempts` never moves on the wire.
+  const live = watch(job("downloading"), BACK_EDGE);
+
+  // The premise, and the reason the mark cannot be read off the job: everything
+  // dl-18 looked at says "first probe" here.
+  expect(live.job.status).toBe("probing");
+  expect(live.job.attempts).toBe(1);
+  expect(live.job.progress.downloadedBytes).toBe(0);
+
+  mount(live.job, undefined, live.watchedStep);
+
+  expect(stepStates()).toEqual([
+    ["Queued", "done"],
+    ["Re-analysing", "active"],
+    ["Downloading", "done"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
+  expect(activeStep()).toBe("Re-analysing");
+  expect(doneSteps()).toEqual(["Queued", "Downloading"]);
+});
+
+test("a first probe reduced from the same code path leaves Downloading pending", () => {
+  // The control, and it matters more here than in the fixture pair above: the
+  // two tests differ only in the job the fold started from, so a mark that any
+  // `probing` frame set would pass the test above and fail this one.
+  const first = watch(job("queued"), [
+    { type: "status", jobId: "job-1", status: "probing", at: "2026-08-20T11:59:30.000Z" },
+  ]);
+
+  expect(first.job.status).toBe("probing");
+  expect(first.job.attempts).toBe(1);
+
+  mount(first.job, undefined, first.watchedStep);
+
+  expect(stepStates()).toEqual([
+    ["Queued", "done"],
+    ["Re-analysing", "active"],
+    ["Downloading", "pending"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
+  expect(activeStep()).toBe("Re-analysing");
+  expect(doneSteps()).toEqual(["Queued"]);
+});
+
+// ---------------------------------------------------------------------------
 // What the card calls the job
 // ---------------------------------------------------------------------------
 //
@@ -491,6 +617,7 @@ test("an empty job list renders nothing at all", () => {
     <JobList
       jobs={[]}
       streamStates={{}}
+      watchedSteps={{}}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
       onRetry={vi.fn()}
@@ -510,6 +637,7 @@ test("the list counts what has finished and offers to clear only those", () => {
         job("failed", { id: "job-3", variant: variant({ label: "Gave up" }) }),
       ]}
       streamStates={{ "job-1": "reconnecting" }}
+      watchedSteps={{}}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
       onRetry={vi.fn()}
@@ -537,6 +665,7 @@ test("each card is handed its own stream state, looked up by job id", () => {
         job("downloading", { id: "job-2", variant: variant({ label: "Second" }) }),
       ]}
       streamStates={{ "job-2": "reconnecting" }}
+      watchedSteps={{}}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
       onRetry={vi.fn()}
@@ -555,11 +684,52 @@ test("each card is handed its own stream state, looked up by job id", () => {
   expect(within(first as HTMLElement).queryByText("reconnecting…")).toBeNull();
 });
 
+test("each card is handed its own pipeline mark, looked up by job id", () => {
+  // The twin of the test above, for dl-20's mark, and it has the same trap: the
+  // mark of a job that has only moved forwards is its own step, so handing a
+  // `downloading` card a mark of 2 renders exactly what no mark at all renders.
+  // Both jobs are therefore `probing` with `attempts: 1` — the shape a listening
+  // client holds — where the mark is the only thing that can tell them apart,
+  // and it is given to one of them and not the other.
+  render(
+    <JobList
+      jobs={[
+        job("probing", { id: "job-1", attempts: 1, variant: variant({ label: "First probe" }) }),
+        job("probing", { id: "job-2", attempts: 1, variant: variant({ label: "Re-probe" }) }),
+      ]}
+      streamStates={{}}
+      watchedSteps={{ "job-2": 2 }}
+      onCancel={vi.fn()}
+      onRemove={vi.fn()}
+      onRetry={vi.fn()}
+      onClearFinished={vi.fn()}
+    />,
+  );
+
+  const [first, second] = screen.getAllByRole("list", { name: "Pipeline" });
+
+  expect(stepsOf(first as HTMLElement)).toEqual([
+    "Queued:1",
+    "Re-analysing:0",
+    "Downloading:0",
+    "Assembling:0",
+    "Ready:0",
+  ]);
+  expect(stepsOf(second as HTMLElement)).toEqual([
+    "Queued:1",
+    "Re-analysing:0",
+    "Downloading:1",
+    "Assembling:0",
+    "Ready:0",
+  ]);
+});
+
 test("a list with nothing finished offers no clear button", () => {
   render(
     <JobList
       jobs={[job("downloading")]}
       streamStates={{}}
+      watchedSteps={{}}
       onCancel={vi.fn()}
       onRemove={vi.fn()}
       onRetry={vi.fn()}
