@@ -12,9 +12,19 @@ import { describe, expect, test } from "vitest";
 import { AppError, sourceSchema, type Place } from "@planner/contract";
 import { travelCell } from "@planner/agent";
 import { FixtureGroundingProvider } from "../src/grounding/fixtures.ts";
-import { FIXTURE_FETCHED_AT } from "../src/grounding/fixture-data.ts";
 
-const grounding = new FixtureGroundingProvider();
+/**
+ * The clock the provider stamps its answers with, fixed so the suite is
+ * deterministic.
+ *
+ * It used to be a constant in the table. pl-25's review found what that costs
+ * once grounding has a TTL: a checked-in date plus a lifetime is a day on which
+ * every answer arrives already expired and the cache silently switches itself
+ * off. The provider takes a clock now, and stamps what it hands over.
+ */
+const CONSULTED_AT = new Date("2026-08-22T00:00:00.000Z");
+
+const grounding = new FixtureGroundingProvider(() => CONSULTED_AT);
 
 /** As a candidate names one. Coordinates null — that is what `locate` is for. */
 function place(name: string, locality: string | null = null): Place {
@@ -24,6 +34,19 @@ function place(name: string, locality: string | null = null): Place {
 describe("the fixture grounding provider", () => {
   test("reports itself by name, so health cannot pass it off as a backend", () => {
     expect(grounding.name).toBe("fixtures");
+  });
+
+  test("stamps its answers with the clock, so a fixture never ages out of the cache", async () => {
+    // The time bomb pl-25's review found. With the date frozen in the table and
+    // a travel TTL of 4,320 hours, every fixture answer would have arrived
+    // already expired on 2027-02-18 — nothing cached, every lookup a miss,
+    // every miss spending budget, and nothing red or logged to say so.
+    const later = new Date("2028-05-04T09:30:00.000Z");
+    const aged = new FixtureGroundingProvider(() => later);
+
+    const located = await aged.locate({ place: place("Rimouski") });
+
+    expect(located?.source.fetchedAt).toBe(later.toISOString());
   });
 
   describe("locate", () => {
@@ -36,7 +59,7 @@ describe("the fixture grounding provider", () => {
       // A grounded fact with no source is refused by `provenanceSchema`, so the
       // seam must not be able to produce one.
       expect(sourceSchema.safeParse(located?.source).success).toBe(true);
-      expect(located?.source.fetchedAt).toBe(FIXTURE_FETCHED_AT);
+      expect(located?.source.fetchedAt).toBe(CONSULTED_AT.toISOString());
     });
 
     test("its source is visibly not a citation", async () => {

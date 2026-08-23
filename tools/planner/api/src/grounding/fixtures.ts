@@ -62,6 +62,19 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 export class FixtureGroundingProvider implements GroundingProvider {
   readonly name = FIXTURE_PROVIDER_NAME;
 
+  /**
+   * Injected so the provider stays deterministic under a test, and defaulted so
+   * a caller that does not care need not care.
+   *
+   * It exists because the answers are stamped with it — see `fixtureSource`,
+   * and the time bomb a frozen stamp turned out to be once grounding had a TTL.
+   */
+  readonly #now: () => Date;
+
+  constructor(now: () => Date = () => new Date()) {
+    this.#now = now;
+  }
+
   async locate(request: LocateRequest): Promise<LocatedPlace | null> {
     throwIfAborted(request.signal);
 
@@ -76,7 +89,7 @@ export class FixtureGroundingProvider implements GroundingProvider {
       // gazetteer for the rest of the process. `estimate` below already builds
       // a fresh object; this is the same rule, not a different one.
       coordinates: { ...coordinates },
-      source: fixtureSource(`places/${key}`),
+      source: fixtureSource(`places/${key}`, this.#now()),
     };
   }
 
@@ -87,10 +100,12 @@ export class FixtureGroundingProvider implements GroundingProvider {
     // over 16 names, and `placeKey` normalises a string every time it is called.
     const origins = request.origins.map((place) => placeKey(place.name));
     const destinations = request.destinations.map((place) => placeKey(place.name));
+    // Read once, so every cell of one matrix carries the same instant.
+    const at = this.#now();
 
     return origins.map((from) => {
       throwIfAborted(request.signal);
-      return destinations.map((to) => estimate(from, to));
+      return destinations.map((to) => estimate(from, to, at));
     });
   }
 }
@@ -103,10 +118,10 @@ export class FixtureGroundingProvider implements GroundingProvider {
  * nobody has heard of would be inventing a place and measuring it at the same
  * time.
  */
-function estimate(from: string, to: string): TravelEstimate | null {
+function estimate(from: string, to: string, at: Date): TravelEstimate | null {
   if (from === to) {
     if (!FIXTURE_PLACES.has(from)) return null;
-    return { distanceMeters: 0, durationMinutes: 0, source: fixtureSource(`legs/${from}`) };
+    return { distanceMeters: 0, durationMinutes: 0, source: fixtureSource(`legs/${from}`, at) };
   }
 
   const leg = FIXTURE_DRIVING.get(legKey(from, to));
@@ -115,7 +130,7 @@ function estimate(from: string, to: string): TravelEstimate | null {
   return {
     distanceMeters: leg.distanceMeters,
     durationMinutes: leg.durationMinutes,
-    source: fixtureSource(`legs/${from}/${to}`),
+    source: fixtureSource(`legs/${from}/${to}`, at),
   };
 }
 

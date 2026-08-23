@@ -6,10 +6,11 @@
  * provider and drive it through `inject()` with no socket at all.
  */
 
-import type { GroundingProvider, ModelProvider } from "@planner/agent";
+import type { ModelProvider } from "@planner/agent";
 import type { RateLimiter } from "@webtools/core/rate-limit";
 import type { Database } from "better-sqlite3";
 import type { ApiConfig } from "./config.ts";
+import type { RunGroundingSource } from "./grounding/cache.ts";
 import type { AppLogger } from "./logger.ts";
 import type { RunEventHub } from "./runs/events.ts";
 import type { RunQueue } from "./runs/queue.ts";
@@ -19,8 +20,16 @@ export interface AppContext {
   logger: AppLogger;
   db: Database;
   model: ModelProvider;
-  /** Everything that reaches outside, behind one seam. The default reaches nothing. */
-  grounding: GroundingProvider;
+  /**
+   * Everything that reaches outside, behind one seam. The default reaches
+   * nothing.
+   *
+   * Typed as the cache's capability rather than as the bare seam, so that
+   * `groundingForRun` can hand a run a view that spends its budget on misses
+   * only. A decorator placed around the cache has to carry `forRun` through or
+   * this stops compiling, which is the point — see `grounding/cache.ts`.
+   */
+  grounding: RunGroundingSource;
   /** Where a plan run waits for a slot, and where cancelling it reaches it. */
   runs: RunQueue;
   /** One run in, N SSE subscribers out. Also the only place a frame's clock is read. */

@@ -253,10 +253,10 @@ const MIGRATIONS: readonly string[] = [
     -- same argument \`plan_runs.status\` already makes about \`RUN_TRANSITIONS\`.
     kind         TEXT NOT NULL,
     -- The normalised question. What the normalisation drops is written down on
-    -- \`groundingKey\` and it drops as little as it can: case, surrounding and
-    -- repeated whitespace, and control characters. Anything more and two
-    -- different questions start sharing an answer, which is a cache that lies
-    -- rather than one that misses.
+    -- \`locateKey\` and \`travelKey\` and it drops as little as it can: case,
+    -- surrounding and repeated whitespace, and control characters. Anything
+    -- more and two different questions start sharing an answer, which is a
+    -- cache that lies rather than one that misses.
     key          TEXT NOT NULL,
     -- The answer, whole: coordinates for \`locate\`, a distance and a duration
     -- for \`travel\`. JSON on migration 2's rule — read entire, never filtered

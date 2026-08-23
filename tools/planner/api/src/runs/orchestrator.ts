@@ -199,8 +199,22 @@ export function startRun(context: AppContext, intakeId: string): Run {
         // Skipped while shutting down: the queue cancels what is in flight and
         // the database closes behind it, and a failed DELETE would turn a run
         // that finished into a logged task rejection.
+        //
+        // And guarded even so. A `finally` that throws **replaces** the outcome
+        // of the block it guards, so an unlucky `SQLITE_BUSY` or a full disk
+        // here would discard a completed run's result and report it to
+        // `onTaskError` as "run task rejected" — a plan that was written, filed
+        // as a bug in the bookkeeping. Housekeeping does not get to fail a run;
+        // the next boot sweeps whatever this missed.
         if (!context.isShuttingDown()) {
-          evictExpiredGrounding(context.db, context.now(), context.logger);
+          try {
+            evictExpiredGrounding(context.db, context.now(), context.logger);
+          } catch (error: unknown) {
+            context.logger.warn("grounding cache eviction failed", {
+              run: runId,
+              code: AppError.from(error).code,
+            });
+          }
         }
       }
     },

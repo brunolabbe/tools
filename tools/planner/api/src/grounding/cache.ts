@@ -19,6 +19,16 @@
  * `name` is the inner provider's, deliberately. `/api/health` answers "which
  * backend is this deployment grounding against", and "cached" is not a backend.
  *
+ * ## Two shapes, and the run gets the richer one
+ *
+ * As a `GroundingProvider` it answers `T | null`, which is all a caller with
+ * nothing to spend can distinguish. `forRun(budget)` hands back a
+ * `RunGrounding`, whose answers are a three-way `GroundingOutcome`: a run can
+ * come back empty because nobody knows, *or* because its budget would not pay
+ * for the call, and a plan that renders those alike claims to have checked
+ * something nobody asked about. That is the shape this file got wrong first
+ * time round; see `GroundingOutcome`.
+ *
  * ## `Source.fetchedAt` is the original fetch time, never `now()`
  *
  * The sharpest trap in this file. `contract/src/candidate.ts` documents
@@ -61,7 +71,7 @@ import type {
   TravelMode,
   TravelRequest,
 } from "@planner/agent";
-import { coordinatesSchema, sourceSchema } from "@planner/contract";
+import { AppError, coordinatesSchema, sourceSchema } from "@planner/contract";
 import type { Place, Source } from "@planner/contract";
 import type { Database } from "better-sqlite3";
 import type { GroundingCacheTtlHours } from "../config.ts";
@@ -183,63 +193,134 @@ export function evictExpiredGrounding(
 }
 
 // ---------------------------------------------------------------------------
+// What a lookup came back with
+// ---------------------------------------------------------------------------
+
+/**
+ * The three ways a run's grounding lookup ends, and why this is a union rather
+ * than `T | null`.
+ *
+ * `GroundingProvider` answers `null` for "nobody established it", which is the
+ * right shape for a seam that only ever asks. A **run** has a second way to
+ * come back empty: it wanted to ask and could not afford to. Those two must
+ * never be the same value. With a ceiling of forty and forty-five places to
+ * locate, lookups forty-one to forty-five are never sent — and a caller holding
+ * `null` for them writes "nothing established where this is" against five
+ * places nobody asked about. That is a plan lying about what it checked, which
+ * is *never fake progress* broken in the one place §5 says the bill lives.
+ *
+ * So the distinction is in the type and the compiler asks about it at every
+ * call site, rather than a comment asking each author to remember:
+ *
+ * - `answered` — the fact, and a `Source` saying when it was read.
+ * - `unknown` — the backend was asked and has no answer. This is the leg a plan
+ *   reports as unmeasured: an `UncheckedConstraint`.
+ * - `refused` — the run's grounding budget would not pay for the call, so
+ *   nothing was asked and nobody knows anything either way. What a run skipped
+ *   for want of budget is a `PlanGap`, in front of the user, the way a dropped
+ *   specialist already is (pl-24 step 8).
+ */
+export type GroundingOutcome<T> =
+  | { readonly kind: "answered"; readonly value: T }
+  | { readonly kind: "unknown" }
+  | { readonly kind: "refused" };
+
+/** Named so that no call site writes the literal and the two empties read apart. */
+export const UNKNOWN = { kind: "unknown" } as const;
+export const REFUSED = { kind: "refused" } as const;
+
+export function answered<T>(value: T): GroundingOutcome<T> {
+  return { kind: "answered", value };
+}
+
+/**
+ * `TravelMatrix` with the same distinction, per cell.
+ *
+ * Per cell and not per call, because one call is genuinely mixed: a revision
+ * that adds a stop is answered from the table for the pairs it already holds
+ * and refused for the ones it does not, inside the same matrix.
+ */
+export type TravelOutcomeMatrix = readonly (readonly GroundingOutcome<TravelEstimate>[])[];
+
+/**
+ * One cell by position, so no caller indexes the matrix by hand and transposes
+ * it — `travelCell`'s argument, one type along.
+ *
+ * Out of range **throws** where `travelCell` returns `null`, and the difference
+ * is deliberate. The three outcomes are statements about the world; an index
+ * that was never sent is a statement about the caller. Folding it into
+ * `unknown` would put "we asked and nobody knew" against a pair nobody asked
+ * about, which is the exact collapse this type exists to prevent.
+ */
+export function travelOutcome(
+  matrix: TravelOutcomeMatrix,
+  origin: number,
+  destination: number,
+): GroundingOutcome<TravelEstimate> {
+  const cell = matrix[origin]?.[destination];
+  if (cell === undefined) {
+    throw new AppError("INTERNAL", "A grounding matrix was asked for a pair it was not sent.");
+  }
+  return cell;
+}
+
+// ---------------------------------------------------------------------------
 // Spending the budget
 // ---------------------------------------------------------------------------
 
 /**
- * A provider that claims one call from a run's budget before each call it
- * makes, and makes none when the budget refuses.
+ * The grounding one run gets: the cache, spending that run's budget on
+ * **misses only**.
  *
- * **This sits *inside* the cache, not outside it**, which is the whole of
- * step 4: the cache only reaches its inner provider on a miss, so a hit never
- * arrives here and never spends. `MAX_GROUNDING_CALLS` is a bill control and a
- * hit costs nothing — the name says "calls" and reads the other way, which is
- * why it is written down here rather than left to the reader.
+ * **Not a `GroundingProvider`**, and that is the point. The seam's methods
+ * answer `T | null`; a run needs the third answer above. A view that still
+ * satisfied `GroundingProvider` could be handed anywhere the seam is expected
+ * and the distinction would be lost on the way through — silently, which is how
+ * it was lost the first time this file was written.
  */
-export interface RunGrounding extends GroundingProvider {
+export interface RunGrounding {
+  /** The backend's name. A cache is not a thing to ground against. */
+  readonly name: string;
+  locate(request: LocateRequest): Promise<GroundingOutcome<LocatedPlace>>;
+  travel(request: TravelRequest): Promise<TravelOutcomeMatrix>;
   /**
-   * Lookups this run wanted, could not afford, and therefore never made.
+   * Calls this run wanted, could not afford and never made.
    *
-   * A refusal is **not** a `null` that means "nobody knows", and a caller must
-   * not render it as one. What was skipped for want of budget is a `PlanGap` in
-   * front of the user, the way a dropped specialist already is — that is
-   * pl-24's argument and this is the number it needs. It is a count rather than
-   * a throw because running out of budget is a planned outcome with copy
-   * attached: `GroundingBudget.claim` does not throw, and neither does this.
+   * The per-lookup `refused` outcome is the authority and is what a caller
+   * renders against a place or a leg; this is the run-level tally, for the one
+   * sentence a `PlanGap` needs. It counts **calls**, so one refused matrix over
+   * eight places is one — the same unit `MAX_GROUNDING_CALLS` is denominated
+   * in, and for the same reason.
    */
   readonly refused: number;
 }
 
-interface Budgeted extends GroundingProvider {
-  readonly refused: number;
+/**
+ * A provider that can hand out a per-run view. Only the cache implements it.
+ *
+ * `groundingForRun` asks for this rather than for a `GroundingProvider` on
+ * purpose. The shape before the review dispatched on `instanceof` and fell back
+ * to a plain budgeted wrapper for anything else — so a second decorator placed
+ * around the cache would have gone on compiling and quietly started charging
+ * the budget for cache hits, which is the one thing this file argues against.
+ * Asking for the capability instead means that mistake does not typecheck.
+ */
+export interface RunGroundingSource extends GroundingProvider {
+  forRun(budget: GroundingBudget): RunGrounding;
 }
 
-function budgeted(inner: GroundingProvider, budget: GroundingBudget): Budgeted {
-  let refused = 0;
-  return {
-    name: inner.name,
-    get refused() {
-      return refused;
-    },
-    async locate(request: LocateRequest): Promise<LocatedPlace | null> {
-      if (!budget.claim()) {
-        refused += 1;
-        return null;
-      }
-      return inner.locate(request);
-    },
-    async travel(request: TravelRequest): Promise<TravelMatrix> {
-      if (!budget.claim()) {
-        refused += 1;
-        // The shape the caller asked for, with nothing in it. One matrix is one
-        // call whatever its size, so a refusal costs the whole table at once —
-        // which is why `applyBudget`'s argument holds here too: decide before
-        // the request, not at cell forty-one.
-        return request.origins.map(() => request.destinations.map(() => null));
-      }
-      return inner.travel(request);
-    },
-  };
+/**
+ * What a run may spend, and where a refusal is counted.
+ *
+ * Passed down into the lookups rather than wrapped around them: the cache only
+ * reaches this after the table has failed to answer, which is the whole of
+ * step 4 — `MAX_GROUNDING_CALLS` is a bill control, a hit costs nothing, so the
+ * budget counts misses. The name says "calls" and reads the other way round,
+ * which is why it is spelled out at both call sites below.
+ */
+interface RunSpend {
+  budget: GroundingBudget;
+  refuse: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +337,7 @@ export interface GroundingCacheOptions {
   logger?: AppLogger | undefined;
 }
 
-export class CachingGroundingProvider implements GroundingProvider {
+export class CachingGroundingProvider implements RunGroundingSource {
   readonly #options: GroundingCacheOptions;
 
   constructor(options: GroundingCacheOptions) {
@@ -268,7 +349,28 @@ export class CachingGroundingProvider implements GroundingProvider {
     return this.#options.inner.name;
   }
 
+  /**
+   * The seam's shape, for a caller with no budget to spend.
+   *
+   * Nothing is lost on the way down: with no `RunSpend` there is no refusal to
+   * flatten, so the only two outcomes a caller can reach here are the two
+   * `GroundingProvider` already has words for.
+   */
   async locate(request: LocateRequest): Promise<LocatedPlace | null> {
+    const outcome = await this.#locate(request, null);
+    return outcome.kind === "answered" ? outcome.value : null;
+  }
+
+  /** Same, for the matrix. A cell is `null` where the outcome was not an answer. */
+  async travel(request: TravelRequest): Promise<TravelMatrix> {
+    const outcomes = await this.#travel(request, null);
+    return outcomes.map((row) => row.map((cell) => (cell.kind === "answered" ? cell.value : null)));
+  }
+
+  async #locate(
+    request: LocateRequest,
+    spend: RunSpend | null,
+  ): Promise<GroundingOutcome<LocatedPlace>> {
     const { db, inner, now } = this.#options;
     const key = locateKey(request.place);
     const at = now();
@@ -280,17 +382,26 @@ export class CachingGroundingProvider implements GroundingProvider {
       // miss. Validating on the way out and not only on the way in is what
       // makes the column safe to widen later without a migration for every
       // reader — the same rule `readError` follows in `db/runs.ts`.
-      if (coordinates.success) return { coordinates: coordinates.data, source: cached.source };
+      if (coordinates.success) {
+        return answered({ coordinates: coordinates.data, source: cached.source });
+      }
+    }
+
+    // A miss, and **only** a miss, reaches the budget: the ceiling is a bill
+    // control and a hit costs nothing. Everything above returned already.
+    if (spend !== null && !spend.budget.claim()) {
+      spend.refuse();
+      return REFUSED;
     }
 
     const located = await inner.locate(request);
-    if (located === null) return null;
+    if (located === null) return UNKNOWN;
 
     this.#store(LOCATE, key, located.coordinates, located.source, at);
-    return located;
+    return answered(located);
   }
 
-  async travel(request: TravelRequest): Promise<TravelMatrix> {
+  async #travel(request: TravelRequest, spend: RunSpend | null): Promise<TravelOutcomeMatrix> {
     const { db, inner, now } = this.#options;
     const at = now();
     const timestamp = at.toISOString();
@@ -318,68 +429,99 @@ export class CachingGroundingProvider implements GroundingProvider {
       });
     });
 
+    // Set once, when the budget turns the call down. Every cell the table could
+    // not answer is then `refused` rather than `unknown`: nothing was asked, so
+    // nobody knows anything either way about those pairs.
+    let refusedCall = false;
+
     if (wantedOrigins.size > 0 && wantedDestinations.size > 0) {
-      // The sub-matrix over the rows and columns that are missing something.
-      // Every missing cell has its row in one set and its column in the other,
-      // so this covers all of them — and the extra cells it may pick up are
-      // ones we would otherwise pay for next time. One call, whatever its size,
-      // is the shape `TravelMatrix` exists for.
-      //
-      // `flatMap` rather than an index list so the place and the row it came
-      // from travel together and nothing has to be indexed back out.
-      const origins = request.origins.flatMap((place, index) =>
-        wantedOrigins.has(index) ? [{ place, index }] : [],
-      );
-      const destinations = request.destinations.flatMap((place, index) =>
-        wantedDestinations.has(index) ? [{ place, index }] : [],
-      );
+      // One matrix is one call whatever its size, so a refusal costs the whole
+      // sub-table at once — `applyBudget`'s argument one layer down: decide
+      // before the request rather than at cell forty-one. Claimed here and not
+      // earlier, because a matrix the table holds in full asks for nothing.
+      if (spend !== null && !spend.budget.claim()) {
+        spend.refuse();
+        refusedCall = true;
+      } else {
+        // The sub-matrix over the rows and columns that are missing something.
+        // Every missing cell has its row in one set and its column in the
+        // other, so this covers all of them — and the extra cells it may pick
+        // up are ones we would otherwise pay for next time. One call, whatever
+        // its size, is the shape `TravelMatrix` exists for.
+        //
+        // `flatMap` rather than an index list so the place and the row it came
+        // from travel together and nothing has to be indexed back out.
+        const origins = request.origins.flatMap((place, index) =>
+          wantedOrigins.has(index) ? [{ place, index }] : [],
+        );
+        const destinations = request.destinations.flatMap((place, index) =>
+          wantedDestinations.has(index) ? [{ place, index }] : [],
+        );
 
-      const measured = await inner.travel({
-        origins: origins.map((entry) => entry.place),
-        destinations: destinations.map((entry) => entry.place),
-        mode: request.mode,
-        signal: request.signal,
-      });
-
-      origins.forEach((origin, row) => {
-        destinations.forEach((destination, column) => {
-          const estimate = measured[row]?.[column] ?? null;
-          const key = keys[origin.index]?.[destination.index];
-          if (estimate === null || key === undefined) return;
-          answers.set(key, estimate);
-          this.#store(
-            TRAVEL,
-            key,
-            { distanceMeters: estimate.distanceMeters, durationMinutes: estimate.durationMinutes },
-            estimate.source,
-            at,
-          );
+        const measured = await inner.travel({
+          origins: origins.map((entry) => entry.place),
+          destinations: destinations.map((entry) => entry.place),
+          mode: request.mode,
+          signal: request.signal,
         });
-      });
+
+        origins.forEach((origin, row) => {
+          destinations.forEach((destination, column) => {
+            const estimate = measured[row]?.[column] ?? null;
+            const key = keys[origin.index]?.[destination.index];
+            if (estimate === null || key === undefined) return;
+            answers.set(key, estimate);
+            this.#store(
+              TRAVEL,
+              key,
+              {
+                distanceMeters: estimate.distanceMeters,
+                durationMinutes: estimate.durationMinutes,
+              },
+              estimate.source,
+              at,
+            );
+          });
+        });
+      }
     }
 
-    return keys.map((row) => row.map((key) => answers.get(key) ?? null));
+    return keys.map((row) =>
+      row.map((key) => {
+        const estimate = answers.get(key);
+        if (estimate !== undefined) return answered(estimate);
+        // A cell the table could not answer is `unknown` when the backend was
+        // asked about it and `refused` when nothing was asked at all. Collapsing
+        // the two here is the defect this type exists to make impossible.
+        return refusedCall ? REFUSED : UNKNOWN;
+      }),
+    );
   }
 
   /**
-   * A per-run view that spends that run's budget on **misses only**.
+   * A per-run view that spends that run's budget on **misses only**, and that
+   * says which of the three things happened to each lookup.
    *
-   * The composition is the argument: this returns a cache whose inner provider
-   * is the budgeted one, so the budget is only ever reached after the table has
-   * failed to answer. Written this way round rather than as a flag, because the
-   * other order — a budget outside a cache — silently charges for hits and
-   * looks identical at the call site.
+   * The budget is handed *down* into the lookup rather than wrapped around it,
+   * so it can only be reached after the table has failed to answer. A budget
+   * wrapped around a cache charges for hits and looks identical at the call
+   * site, which is why the direction is stated rather than left to the reader.
    */
   forRun(budget: GroundingBudget): RunGrounding {
-    const inner = budgeted(this.#options.inner, budget);
-    const cached = new CachingGroundingProvider({ ...this.#options, inner });
-    return {
-      name: cached.name,
-      get refused() {
-        return inner.refused;
+    let refused = 0;
+    const spend: RunSpend = {
+      budget,
+      refuse: () => {
+        refused += 1;
       },
-      locate: (request) => cached.locate(request),
-      travel: (request) => cached.travel(request),
+    };
+    return {
+      name: this.name,
+      get refused() {
+        return refused;
+      },
+      locate: (request) => this.#locate(request, spend),
+      travel: (request) => this.#travel(request, spend),
     };
   }
 
@@ -422,7 +564,19 @@ export class CachingGroundingProvider implements GroundingProvider {
     // never be served is a table that only grows, and a TTL of zero — how a
     // deployment turns the cache off — would otherwise write every answer it
     // was told not to keep.
-    if (expiresAt.getTime() <= at.getTime()) return;
+    //
+    // **Logged**, because everything else about this branch is invisible: a
+    // backend whose `fetchedAt` is older than the TTL disables the cache
+    // completely and silently, and every lookup then spends budget. That is
+    // exactly what a frozen `FIXTURE_FETCHED_AT` would have done to the default
+    // provider on 2027-02-18. `debug` rather than `warn` at zero TTL, which is
+    // a deployment saying so on purpose rather than a fault.
+    if (expiresAt.getTime() <= at.getTime()) {
+      const line = "grounding answer not cached: it arrived already expired";
+      if (ttl === 0) logger?.debug(line, { kind, reason: "ttl is zero" });
+      else logger?.warn(line, { kind, fetchedAt, ttlHours: ttl });
+      return;
+    }
 
     upsertGrounding(db, {
       kind,
@@ -451,19 +605,15 @@ function readEstimate(payload: unknown, source: Source): TravelEstimate | null {
 }
 
 /**
- * The grounding a single run gets: the cache, spending that run's budget on
- * misses only.
+ * The grounding a single run gets — the one entry point a caller needs.
  *
- * One entry point so a caller never has to know whether a cache is in the way.
- * With one, the budget sits *inside* it and a hit is free; without one — an
- * injected provider in a test, a deployment that has somehow turned the cache
- * off — every lookup is a miss and every miss is a call, which is the same rule
- * arriving at the same answer.
+ * It takes a `RunGroundingSource` and not a `GroundingProvider`, which is the
+ * whole of the guarantee: the only thing in this tool that can hand out a
+ * per-run view is the cache, so there is no arrangement of decorators in which
+ * this quietly returns something that charges the budget for a hit. Wrap the
+ * cache in something new and either that thing carries `forRun` through, or the
+ * call here stops compiling.
  */
-export function groundingForRun(
-  provider: GroundingProvider,
-  budget: GroundingBudget,
-): RunGrounding {
-  if (provider instanceof CachingGroundingProvider) return provider.forRun(budget);
-  return budgeted(provider, budget);
+export function groundingForRun(source: RunGroundingSource, budget: GroundingBudget): RunGrounding {
+  return source.forRun(budget);
 }

@@ -37,17 +37,18 @@ import type { Coordinates, Source } from "@planner/contract";
 // ---------------------------------------------------------------------------
 
 /**
- * When these numbers were written down. Fixed, because a provider that stamped
- * `new Date()` on a checked-in table would be claiming to have just read
- * something, and because `@planner/itinerary`'s determinism rule does not stop
- * being true one package over.
+ * When the table was written down. Documentation, and nothing reads it as a
+ * timestamp any more.
  *
- * It ages, deliberately. pl-25 gives grounding a TTL that varies by kind, and
- * when that lands these facts age out like any others — a fixture that stayed
- * eternally fresh would be the one input the cache could never be tested
- * against.
+ * pl-24 stamped every fixture answer with this constant, on the argument that a
+ * checked-in table must not claim to have just read something. pl-25's review
+ * found what that costs once there is a TTL: the travel lifetime is 4,320 hours,
+ * so **on 2027-02-18 every fixture `travel` answer would arrive already expired**
+ * — nothing cached, every lookup a miss, every miss spending budget, and no red
+ * test and no log line to say so. `locate` would follow on 2027-08-22. A dated
+ * constant plus a lifetime is a time bomb whichever pair of numbers you pick.
  */
-export const FIXTURE_FETCHED_AT = "2026-08-22T00:00:00.000Z";
+export const FIXTURE_TABLE_WRITTEN = "2026-08-22";
 
 /**
  * Every fixture answer carries a source, because `provenanceSchema` refuses a
@@ -60,12 +61,21 @@ export const FIXTURE_FETCHED_AT = "2026-08-22T00:00:00.000Z";
  * is precisely the failure the whole provenance mechanism exists to make
  * visible — the same argument that makes the scripted model provider report
  * itself as `scripted` in `/api/health`.
+ *
+ * **`fetchedAt` is when this answer was handed over, not when the table was
+ * typed.** It is the honest reading of the field — the fixture provider really
+ * did consult its table just now — and it is what keeps the provider from
+ * ageing into a permanently disabled cache. Nothing here pretends to be a
+ * measurement: the host cannot resolve and the title says what it is.
+ *
+ * The clock is the caller's so the provider stays deterministic under a test,
+ * which is the half of pl-24's argument that was actually load-bearing.
  */
-export function fixtureSource(what: string): Source {
+export function fixtureSource(what: string, fetchedAt: Date): Source {
   return {
     url: `https://fixtures.invalid/planner/${what}`,
     title: "Checked-in fixture, not a measurement",
-    fetchedAt: FIXTURE_FETCHED_AT,
+    fetchedAt: fetchedAt.toISOString(),
   };
 }
 

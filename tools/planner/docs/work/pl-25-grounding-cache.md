@@ -179,3 +179,133 @@ pay for. It is a `PlanGap`, not an `UncheckedConstraint` and not a `null`.
 **611 in the planner suite (574 before), 1205 repo-wide, `npm run check` green.**
 Nothing existing changed meaning; `migrations.test.ts` and `schema.test.ts` moved
 from `user_version = 4` to `5` and gained `grounding_cache` in their table lists.
+
+**2026-08-23 — review round.** The gate failed the branch. The design held —
+migration 5, `PRIMARY KEY (kind, key)`, the normalisation, the populated-database
+migration test and all three gate claims all reproduced — and two of the three
+disclosed decisions were upheld. What failed was the shape of one seam and a set
+of untested branches.
+
+**A refusal and "nobody knows" were the same `null`, and a per-run counter is not
+enough.** `refused` told a caller _how many_ lookups the budget turned down, and
+nothing told it _which_. With a ceiling of forty and forty-five places, lookups
+forty-one to forty-five came back `null` and pl-27 would have written "nothing
+established where this is" against five places nobody asked about — the exact
+collapse the first log said must not happen. Asking the caller not to cause it is
+not a design.
+
+So the per-run seam no longer answers `T | null`:
+
+```ts
+type GroundingOutcome<T> =
+  | { readonly kind: "answered"; readonly value: T }
+  | { readonly kind: "unknown" }
+  | { readonly kind: "refused" };
+
+interface RunGrounding {
+  readonly name: string;
+  locate(request: LocateRequest): Promise<GroundingOutcome<LocatedPlace>>;
+  travel(request: TravelRequest): Promise<TravelOutcomeMatrix>;
+  readonly refused: number;
+}
+
+function groundingForRun(source: RunGroundingSource, budget: GroundingBudget): RunGrounding;
+```
+
+`TravelOutcomeMatrix` is `readonly (readonly GroundingOutcome<TravelEstimate>[])[]`
+— **per cell, not per call**, because one call is genuinely mixed: a revision
+that adds a stop is answered from the table for the pairs it already holds and
+refused for the ones it does not, inside the same matrix. `travelOutcome(matrix,
+origin, destination)` is the accessor, and it **throws `INTERNAL`** where
+`travelCell` returns `null`: the three outcomes are statements about the world,
+and an index nobody sent is a statement about the caller, so folding it into
+`unknown` would put "we asked and nobody knew" against a pair nobody asked about.
+
+**None of it touches `@planner/contract` or the seam in `@planner/agent`.**
+`GroundingProvider` still answers `T | null` and `CachingGroundingProvider` still
+implements it — flattening loses nothing there, because a caller with no budget
+has no refusal to lose. The union lives in `api/src/grounding/cache.ts` beside
+the thing that produces it.
+
+**`groundingForRun` no longer dispatches on `instanceof`.** It takes a
+`RunGroundingSource` — a `GroundingProvider` that can also hand out a per-run
+view — and `AppContext.grounding` is typed as one. The old shape fell back to a
+plain budgeted wrapper for anything that was not literally the cache, so a second
+decorator around the cache would have gone on compiling and quietly started
+charging the budget for hits. Now that mistake does not typecheck.
+
+**The fixture provider was a time bomb, and the brief's own reasoning was the
+fuse.** pl-24 froze `FIXTURE_FETCHED_AT` at `2026-08-22` and the first round of
+this ticket called that a feature — "these facts age out like any others". With a
+travel TTL of 4,320 hours it means that on **2027-02-18** every fixture `travel`
+answer arrives already expired: nothing caches, every lookup is a miss, every
+miss spends budget, and the drop branch in `#store` returned silently. `locate`
+would have followed on 2027-08-22. A checked-in date plus a lifetime is a bomb
+whichever pair of numbers you pick. `FixtureGroundingProvider` now takes a clock
+(defaulted, injected in tests) and stamps `fetchedAt` with it — the honest
+reading of the field, since the provider really did consult its table just now,
+and nothing about it pretends to be a measurement: the host still cannot resolve
+and the title still says what it is. `FIXTURE_TABLE_WRITTEN` remains as
+documentation and nothing reads it as a timestamp.
+
+**That silent branch now logs**, `warn` with the `fetchedAt` and the TTL, and
+`debug` when the TTL is zero — which is a deployment turning the cache off on
+purpose rather than a fault. Both are asserted against a recording logger.
+
+Also fixed, all from the gate:
+
+- **The acceptance clause says `locate` _and_ `travel` share a row on case and
+  whitespace**, and only `locate` was proven. `travelKey` now has both the key
+  assertion (at both ends of the leg, and on the locality) and a table assertion
+  — one row and one call for the same leg spelled two ways.
+- **The clamp was never exercised in either direction**, because the counting
+  fake stamped every answer with the current clock. It takes a stamp offset now:
+  a backend claiming a time in the future cannot extend its own TTL, and one
+  claiming a time long past does not get a full lifetime from the moment we
+  happened to ask.
+- **"However that run ended" only ran the happy path.** There are three now —
+  done, failed and canceled — because a `finally` is the easiest block to lose
+  and the two unhappy paths are exactly what it is there for.
+- **The eviction call in that `finally` is guarded.** A throwing `finally`
+  _replaces_ the outcome of the block it guards, so an unlucky `SQLITE_BUSY`
+  would have discarded a completed run's result and reported it as "run task
+  rejected". Housekeeping does not get to fail a run; the next boot sweeps
+  whatever a failed sweep missed.
+- **The dead comment in migration 5** pointed at a `groundingKey` that never
+  existed. It names `locateKey` and `travelKey` now — worth doing before the
+  migration ships, since a shipped one is never edited again.
+- **A test asserted the opposite of its own name** (`…rather than answering
+null` asserting `toBeNull()`). It is the first thing a pl-27 author would have
+  read. Gone, along with the "without a cache in the way" test, whose path the
+  type system now forbids.
+
+**Accepted as argued, no change:** not caching negatives (a re-ask cannot
+hot-loop — every one goes through the budget), and the amplified matrix cost that
+comes with it. **The known cost, for pl-27:** one uncached `null` cell keeps its
+row _and_ its column in the "wanted" sets, so a single unanswerable pair pulls a
+whole row and column back into the next sub-request. A matrix over eight places
+with one permanently unknown pair re-asks 1×8 + 8×1 cells every time rather than
+one. It is one call either way — the ceiling counts calls — but it is not free at
+a metered backend, and the fix if it bites is a negative TTL, argued for in the
+architecture's configuration table like every other one.
+
+**The eviction tests ask about the row they seeded, not about an empty table.**
+"Is `grounding_cache` empty afterwards" was only ever the same statement as "the
+expired row was deleted" while nothing in a run wrote to the cache — and pl-27
+makes a run ground for real, so it would have started failing for a reason that
+has nothing to do with eviction. `seededRowSurvives` asks the question the tests
+are actually about. The three cases are separate `test(...)` blocks so that
+reconciling them with pl-27's edit to the same file is a matter of keeping both.
+
+**For pl-27, concretely:** `whyUnanswered(refusedThisCall)` in
+`api/src/runs/travel.ts` can stop diffing `provider.refused` around each call.
+The cell says what happened — `travelOutcome(matrix, origin, destination).kind`
+is `answered`, `unknown` or `refused` — so the attribution is read rather than
+inferred, per cell rather than per call. `RunGrounding.refused` stays as the
+run-level tally for a gap's one sentence. `ItemTravel` is a different layer and
+is not touched: this says what grounding returned, that says what the plan
+asserts about a transition, and `GroundingOutcome<T>` stays generic because
+pl-28 will put facts through the same seam that have nothing to do with travel.
+
+**624 in the planner suite (611 before, 574 at the branch point), 1218
+repo-wide, `npm run check` green.**

@@ -1,7 +1,7 @@
 /**
  * The grounding cache.
  *
- * Four things are worth more than the rest of this file put together, and each
+ * Five things are worth more than the rest of this file put together, and each
  * has a test named after it:
  *
  * - two identical questions cost one call, asserted by counting, never by
@@ -9,12 +9,15 @@
  * - a hit carries the *original* `fetchedAt`, asserted with a clock that moved
  *   between the write and the read;
  * - a hit does not spend the run's grounding budget, and a miss does;
+ * - a lookup the budget refused says `refused` and never `unknown`, because
+ *   "we could not afford to ask" and "nobody knows" are different sentences in
+ *   front of a user;
  * - a question named `constructor` misses like any other unknown one.
  *
  * The provider behind the cache is a counting fake rather than the fixture
- * provider, because the fixture provider's `Source.fetchedAt` is frozen at the
- * date its table was written — which is exactly the value the third assertion
- * has to see change.
+ * provider, because a test needs to move the clock between a write and a read
+ * and to hand the cache a `fetchedAt` it did not choose — a backend claiming a
+ * time in the future, and one claiming a time long past.
  */
 
 import { mkdtempSync, rmSync } from "node:fs";
@@ -27,11 +30,16 @@ import type {
   GroundingProvider,
   LocatedPlace,
   LocateRequest,
+  ModelProvider,
+  ModelReply,
+  ModelRequest,
   TravelMatrix,
   TravelRequest,
 } from "@planner/agent";
+import { AppError, runCancelUrl } from "@planner/contract";
 import type { Place, Source } from "@planner/contract";
 import type { GroundingCacheTtlHours } from "../src/config.ts";
+import type { AppLogger } from "../src/logger.ts";
 import { countGrounding, upsertGrounding } from "../src/db/grounding-cache.ts";
 import { migrate } from "../src/db/schema.ts";
 import { createApp } from "../src/index.ts";
@@ -41,9 +49,11 @@ import {
   groundingForRun,
   locateKey,
   travelKey,
+  travelOutcome,
 } from "../src/grounding/cache.ts";
 import {
   createRunHarness,
+  deferred,
   intakeReadyToDraft,
   runToCompletion,
   startRunOver,
@@ -93,17 +103,33 @@ class CountingProvider implements GroundingProvider {
 
   readonly #clock: Clock;
   readonly #known: ReadonlySet<string>;
+  /**
+   * Hours to add to the clock when stamping an answer.
+   *
+   * A real backend's `Source.fetchedAt` is its claim, not ours, and the two
+   * directions fail differently: a clock running fast would extend its own TTL
+   * for ever, and a fact read months ago must not become good for months more
+   * merely because we asked for it today.
+   */
+  readonly #stampOffsetHours: number;
 
-  constructor(clock: Clock, known: readonly string[] = ["rimouski", "québec city"]) {
+  constructor(
+    clock: Clock,
+    known: readonly string[] = ["rimouski", "québec city"],
+    stampOffsetHours = 0,
+  ) {
     this.#clock = clock;
     this.#known = new Set(known);
+    this.#stampOffsetHours = stampOffsetHours;
   }
 
   #source(what: string): Source {
     return {
       url: `https://fixtures.invalid/counting/${what}`,
       title: "A counting fake, not a measurement",
-      fetchedAt: this.#clock.now().toISOString(),
+      fetchedAt: new Date(
+        this.#clock.now().getTime() + this.#stampOffsetHours * 3_600_000,
+      ).toISOString(),
     };
   }
 
@@ -142,23 +168,48 @@ class CountingProvider implements GroundingProvider {
 
 const TTL: GroundingCacheTtlHours = { locate: 24, travel: 12 };
 
+/** Keeps every line, so a test can assert that a silent branch is not silent. */
+function recordingLogger(): { logger: AppLogger; lines: { level: string; message: string }[] } {
+  const lines: { level: string; message: string }[] = [];
+  const at =
+    (level: string) =>
+    (message: string): void => {
+      lines.push({ level, message });
+    };
+  const logger: AppLogger = {
+    debug: at("debug"),
+    info: at("info"),
+    warn: at("warn"),
+    error: at("error"),
+    child: () => logger,
+  };
+  return { logger, lines };
+}
+
 function build(
   clock: Clock,
-  options: { ttlHours?: GroundingCacheTtlHours; known?: readonly string[] } = {},
+  options: {
+    ttlHours?: GroundingCacheTtlHours;
+    known?: readonly string[];
+    stampOffsetHours?: number;
+    logger?: AppLogger;
+  } = {},
 ): { cache: CachingGroundingProvider; inner: CountingProvider; database: Database.Database } {
   const database = new Database(":memory:");
   migrate(database);
   db = database;
 
-  const inner =
-    options.known === undefined
-      ? new CountingProvider(clock)
-      : new CountingProvider(clock, options.known);
+  const inner = new CountingProvider(
+    clock,
+    options.known ?? ["rimouski", "québec city"],
+    options.stampOffsetHours ?? 0,
+  );
   const cache = new CachingGroundingProvider({
     db: database,
     inner,
     ttlHours: options.ttlHours ?? TTL,
     now: clock.now,
+    logger: options.logger,
   });
   return { cache, inner, database };
 }
@@ -351,6 +402,81 @@ describe("the grounding cache", () => {
       expect(countGrounding(database)).toBe(1);
     });
 
+    test("runs the deadline from when the fact was read, not from when we stored it", async () => {
+      // A backend answering with a fact it read five hours ago has three hours
+      // of a six-hour lifetime left, not six. Storing it as good for six would
+      // let a stale answer be laundered fresh by whichever boot first asked.
+      const clock = new Clock("2026-08-22T09:00:00.000Z");
+      const { cache, inner } = build(clock, {
+        ttlHours: { locate: 6, travel: 6 },
+        stampOffsetHours: -5,
+      });
+
+      await cache.locate({ place: place("Rimouski") });
+      clock.advanceHours(2);
+      await cache.locate({ place: place("Rimouski") });
+
+      // Seven hours old against a six-hour lifetime: expired, so asked again.
+      expect(inner.locates).toBe(2);
+    });
+
+    test("clamps a backend whose clock runs fast, so it cannot extend its own TTL", async () => {
+      // `fetchedAt` is the backend's claim about itself. Unclamped, a source
+      // dated ten hours from now would be good for sixteen on a six-hour TTL —
+      // and a badly-set clock would hold an answer for as long as it was wrong.
+      const clock = new Clock("2026-08-22T09:00:00.000Z");
+      const { cache, inner } = build(clock, {
+        ttlHours: { locate: 6, travel: 6 },
+        stampOffsetHours: 10,
+      });
+
+      await cache.locate({ place: place("Rimouski") });
+      clock.advanceHours(3);
+      await cache.locate({ place: place("Rimouski") });
+      expect(inner.locates).toBe(1);
+
+      clock.advanceHours(4);
+      await cache.locate({ place: place("Rimouski") });
+      // Seven hours after the write, against a lifetime clamped to start at the
+      // write. Unclamped it would still have had nine hours to run.
+      expect(inner.locates).toBe(2);
+    });
+
+    test("a fact older than its own lifetime is answered, not written down, and logged", async () => {
+      // The `#store` branch the review found had no log line and no test: a
+      // backend stamping every answer a week ago against a six-hour TTL turns
+      // the cache off completely and silently. Every lookup is then a miss and
+      // every miss spends budget, with nothing anywhere saying why.
+      const clock = new Clock("2026-08-22T09:00:00.000Z");
+      const { logger, lines } = recordingLogger();
+      const { cache, inner, database } = build(clock, {
+        ttlHours: { locate: 6, travel: 6 },
+        stampOffsetHours: -24 * 7,
+        logger,
+      });
+
+      const located = await cache.locate({ place: place("Rimouski") });
+
+      expect(located).not.toBeNull();
+      expect(countGrounding(database)).toBe(0);
+      expect(inner.locates).toBe(1);
+      expect(lines).toContainEqual({
+        level: "warn",
+        message: "grounding answer not cached: it arrived already expired",
+      });
+    });
+
+    test("a TTL of zero is a deployment's own decision, so it is not warned about", async () => {
+      const clock = new Clock("2026-08-22T09:00:00.000Z");
+      const { logger, lines } = recordingLogger();
+      const { cache } = build(clock, { ttlHours: { locate: 0, travel: 0 }, logger });
+
+      await cache.locate({ place: place("Rimouski") });
+
+      expect(lines.filter((line) => line.level === "warn")).toEqual([]);
+      expect(lines.some((line) => line.level === "debug")).toBe(true);
+    });
+
     test("a TTL of zero writes nothing, which is how a deployment turns it off", async () => {
       const clock = new Clock("2026-08-22T09:00:00.000Z");
       const { cache, inner, database } = build(clock, { ttlHours: { locate: 0, travel: 0 } });
@@ -379,18 +505,75 @@ describe("the grounding cache", () => {
       expect(run.refused).toBe(0);
     });
 
-    test("a run out of budget makes no call, and says so rather than answering null", async () => {
-      // A refusal is not a `null` that means "nobody knows" — it is a `PlanGap`
-      // in front of the user, which is why it is counted rather than swallowed.
+    test("a matrix the table holds in full spends nothing", async () => {
+      const clock = new Clock("2026-08-22T09:00:00.000Z");
+      const { cache } = build(clock, { known: ["a", "b"] });
+      const request = {
+        origins: [place("A"), place("B")],
+        destinations: [place("A"), place("B")],
+        mode: "driving",
+      } as const;
+      const budget = groundingBudget(4);
+      const run = groundingForRun(cache, budget);
+
+      await run.travel(request);
+      expect(budget.remaining()).toBe(3);
+
+      await run.travel(request);
+      expect(budget.remaining()).toBe(3);
+    });
+
+    test("a run out of budget makes no call, and says refused rather than unknown", async () => {
+      // The distinction the whole result type exists for. With a ceiling of
+      // forty and forty-five places, lookups forty-one to forty-five are never
+      // sent — and reporting them as `unknown` would write "nothing established
+      // where this is" against five places nobody asked about.
       const clock = new Clock("2026-08-22T09:00:00.000Z");
       const { cache, inner } = build(clock);
       const run = groundingForRun(cache, groundingBudget(1));
 
       await run.locate({ place: place("Rimouski") });
-      const refused = await run.locate({ place: place("Québec City") });
+      const outcome = await run.locate({ place: place("Québec City") });
 
       expect(inner.locates).toBe(1);
-      expect(refused).toBeNull();
+      expect(outcome.kind).toBe("refused");
+      expect(run.refused).toBe(1);
+    });
+
+    test("a place nobody has heard of is unknown, which is not the same word", async () => {
+      const clock = new Clock("2026-08-22T09:00:00.000Z");
+      const { cache, inner } = build(clock);
+      const run = groundingForRun(cache, groundingBudget(4));
+
+      const outcome = await run.locate({ place: place("Chibougamau") });
+
+      // It was asked, and the backend had no answer. That is an unmeasured leg
+      // on the plan; a refusal is a `PlanGap`. Two different sentences.
+      expect(inner.locates).toBe(1);
+      expect(outcome.kind).toBe("unknown");
+      expect(run.refused).toBe(0);
+    });
+
+    test("a refused matrix refuses only the cells it could not ask about", async () => {
+      // One call is genuinely mixed: the pairs the table already holds are
+      // answered, and only the rest are refused.
+      const clock = new Clock("2026-08-22T09:00:00.000Z");
+      const { cache } = build(clock, { known: ["a", "b", "c"] });
+      const run = groundingForRun(cache, groundingBudget(1));
+
+      await run.travel({
+        origins: [place("A")],
+        destinations: [place("B")],
+        mode: "driving",
+      });
+      const wider = await run.travel({
+        origins: [place("A")],
+        destinations: [place("B"), place("C")],
+        mode: "driving",
+      });
+
+      expect(travelOutcome(wider, 0, 0).kind).toBe("answered");
+      expect(travelOutcome(wider, 0, 1).kind).toBe("refused");
       expect(run.refused).toBe(1);
     });
 
@@ -400,27 +583,47 @@ describe("the grounding cache", () => {
       const run = groundingForRun(cache, groundingBudget(1));
 
       const first = await run.locate({ place: place("Rimouski") });
-      await run.locate({ place: place("Québec City") }); // spends nothing; refused
+      await run.locate({ place: place("Québec City") }); // refused; spends nothing
       const again = await run.locate({ place: place("Rimouski") });
 
       expect(again).toEqual(first);
+      expect(again.kind).toBe("answered");
       expect(run.refused).toBe(1);
     });
 
-    test("without a cache in the way, every lookup is a call", async () => {
-      // `groundingForRun` is one entry point whether or not a cache is present,
-      // so the rule reaches the same answer either way rather than depending on
-      // how the app happened to be assembled.
+    test("the seam's own methods never refuse, because there is no budget to refuse from", async () => {
+      // `CachingGroundingProvider` is still a `GroundingProvider` for a caller
+      // with nothing to spend, and flattening to `null` there loses nothing:
+      // `refused` is unreachable without a `RunSpend`.
       const clock = new Clock("2026-08-22T09:00:00.000Z");
-      const inner = new CountingProvider(clock);
-      const budget = groundingBudget(2);
-      const run = groundingForRun(inner, budget);
+      const { cache, inner } = build(clock);
 
-      await run.locate({ place: place("Rimouski") });
-      await run.locate({ place: place("Rimouski") });
+      await cache.locate({ place: place("Rimouski") });
+      await cache.locate({ place: place("Rimouski") });
+      await cache.locate({ place: place("Chibougamau") });
 
       expect(inner.locates).toBe(2);
-      expect(budget.remaining()).toBe(0);
+    });
+  });
+
+  describe("reading a cell out of the outcome matrix", () => {
+    test("a pair that was never sent throws rather than reading as unknown", async () => {
+      // The three outcomes are statements about the world; an index nobody sent
+      // is a statement about the caller. Folding it into `unknown` would put
+      // "we asked and nobody knew" against a pair nobody asked about.
+      const clock = new Clock("2026-08-22T09:00:00.000Z");
+      const { cache } = build(clock);
+      const run = groundingForRun(cache, groundingBudget(4));
+
+      const matrix = await run.travel({
+        origins: [place("Québec City")],
+        destinations: [place("Rimouski")],
+        mode: "driving",
+      });
+
+      expect(travelOutcome(matrix, 0, 0).kind).toBe("answered");
+      expect(() => travelOutcome(matrix, 1, 0)).toThrow(AppError);
+      expect(() => travelOutcome(matrix, 0, 9)).toThrow(AppError);
     });
   });
 
@@ -477,6 +680,40 @@ describe("the grounding cache", () => {
       expect(locateKey(place("Québec  City"))).toBe(locateKey(place("Québec City")));
     });
 
+    test("the same three, on `travel`, at both ends of the leg", () => {
+      // `travelKey` composes the same `placePart` twice, but the acceptance
+      // clause says `locate` *and* `travel` share a row on case and whitespace
+      // — and a key built from two ends is exactly where a normalisation
+      // applied to one of them would go unnoticed.
+      expect(travelKey(place("  QUÉBEC  City "), place("rimouski"), "driving")).toBe(
+        travelKey(place("Québec City"), place("Rimouski"), "driving"),
+      );
+      expect(travelKey(place("Alma", "  SAGUENAY "), place("Rimouski", "Québec"), "driving")).toBe(
+        travelKey(place("alma", "saguenay"), place("rimouski", "québec"), "driving"),
+      );
+    });
+
+    test("and one row is what that costs the table, not two", async () => {
+      // The clause is about a *row*, so it is asserted against the table and
+      // not only against the key function.
+      const clock = new Clock("2026-08-22T09:00:00.000Z");
+      const { cache, inner, database } = build(clock);
+
+      await cache.travel({
+        origins: [place("Québec City")],
+        destinations: [place("Rimouski")],
+        mode: "driving",
+      });
+      await cache.travel({
+        origins: [place("  québec  CITY  ")],
+        destinations: [place("RIMOUSKI ")],
+        mode: "driving",
+      });
+
+      expect(inner.travels).toBe(1);
+      expect(countGrounding(database)).toBe(1);
+    });
+
     test("control characters, so no name can forge another pair's key", () => {
       // A NUL joins the parts of a key. Left in a name, `"quebec\\u0000city"`
       // would be indistinguishable from the pair `"quebec"` + `"city"`.
@@ -519,11 +756,67 @@ describe("the grounding cache", () => {
   });
 });
 
+/** Fails every specialist, so the run ends `failed` rather than `done`. */
+class FailingProvider implements ModelProvider {
+  readonly name = "failing";
+  readonly model = "failing";
+
+  async send(): Promise<ModelReply> {
+    throw new AppError("AGENT_UNAVAILABLE");
+  }
+}
+
+/** Blocks inside the provider until aborted, so a run can be canceled in flight. */
+class BlockingProvider implements ModelProvider {
+  readonly name = "blocking";
+  readonly model = "blocking";
+  readonly #entered = deferred();
+
+  /** Resolves once at least one specialist is inside `send` and waiting. */
+  get entered(): Promise<void> {
+    return this.#entered.promise;
+  }
+
+  async send(request: ModelRequest): Promise<ModelReply> {
+    this.#entered.resolve();
+    return await new Promise<ModelReply>((_resolve, reject) => {
+      const stop = (): void => {
+        reject(new AppError("JOB_CANCELED"));
+      };
+      // Already aborted means the listener never fires and this promise never
+      // settles, which is a hang rather than a failed assertion.
+      if (request.signal?.aborted === true) stop();
+      else request.signal?.addEventListener("abort", stop);
+    });
+  }
+}
+
+/** The one row `seedExpired` writes, so a test can ask about it by name. */
+const SEEDED = { kind: "locate", key: "somewhere old\u0000" } as const;
+
+/**
+ * Whether the seeded row is still there, expiry ignored — which
+ * `selectGrounding` will not do for you.
+ *
+ * The eviction tests ask this rather than "is the table empty". The claim
+ * under test is that an expired row is deleted, and an empty table is only the
+ * same statement for as long as nothing else in a run writes to this cache.
+ * pl-27 makes a run ground for real, at which point "empty" stops being true
+ * and would start failing for a reason that has nothing to do with eviction.
+ */
+function seededRowSurvives(database: Database.Database): boolean {
+  const row = database
+    .prepare<[string, string], { n: number }>(
+      "SELECT COUNT(*) AS n FROM grounding_cache WHERE kind = ? AND key = ?",
+    )
+    .get(SEEDED.kind, SEEDED.key);
+  return (row?.n ?? 0) > 0;
+}
+
 /** A row that expired long before any clock a test could be holding. */
 function seedExpired(database: Database.Database): void {
   upsertGrounding(database, {
-    kind: "locate",
-    key: "somewhere old\u0000",
+    ...SEEDED,
     payload: { latitude: 48.45, longitude: -68.52 },
     source: {
       url: "https://fixtures.invalid/counting/place",
@@ -545,26 +838,66 @@ describe("where eviction runs", () => {
     try {
       const first = await createApp({ config: { databasePath, logLevel: "silent" } });
       seedExpired(first.context.db);
-      expect(countGrounding(first.context.db)).toBe(1);
+      expect(seededRowSurvives(first.context.db)).toBe(true);
       await first.shutdown();
 
       const second = await createApp({ config: { databasePath, logLevel: "silent" } });
-      expect(countGrounding(second.context.db)).toBe(0);
+      expect(seededRowSurvives(second.context.db)).toBe(false);
       await second.shutdown();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  test("and after a run, however that run ended", async () => {
+  test("and after a run that finished", async () => {
     const harness = await createRunHarness();
     try {
       seedExpired(harness.app.context.db);
       const intakeId = await intakeReadyToDraft(harness.app);
       const run = await startRunOver(harness.app, intakeId);
-      await runToCompletion(harness.app, run.id);
+      const finished = await runToCompletion(harness.app, run.id);
 
-      expect(countGrounding(harness.app.context.db)).toBe(0);
+      expect(finished.status).toBe("done");
+      expect(seededRowSurvives(harness.app.context.db)).toBe(false);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test("after a run that failed", async () => {
+    // "However that run ended" is the claim, and the sweep is in a `finally`
+    // precisely so the two unhappy paths are covered by the same line. Asserted
+    // rather than assumed: a `finally` is also the easiest block to lose.
+    const harness = await createRunHarness({ model: new FailingProvider() });
+    try {
+      seedExpired(harness.app.context.db);
+      const intakeId = await intakeReadyToDraft(harness.app);
+      const run = await startRunOver(harness.app, intakeId);
+      const finished = await runToCompletion(harness.app, run.id);
+
+      expect(finished.status).toBe("failed");
+      expect(seededRowSurvives(harness.app.context.db)).toBe(false);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test("and after one the user canceled", async () => {
+    const provider = new BlockingProvider();
+    const harness = await createRunHarness({ model: provider });
+    try {
+      seedExpired(harness.app.context.db);
+      const intakeId = await intakeReadyToDraft(harness.app);
+      const run = await startRunOver(harness.app, intakeId);
+
+      // Wait until the fan-out is genuinely in flight, or this would only prove
+      // that a queued run can be dropped before the task body ever ran.
+      await provider.entered;
+      await harness.app.server.inject({ method: "POST", url: runCancelUrl(run.id) });
+      const finished = await runToCompletion(harness.app, run.id);
+
+      expect(finished.status).toBe("canceled");
+      expect(seededRowSurvives(harness.app.context.db)).toBe(false);
     } finally {
       await harness.close();
     }
