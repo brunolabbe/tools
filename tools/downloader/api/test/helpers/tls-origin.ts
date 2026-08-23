@@ -100,6 +100,8 @@ function run(command: string, args: readonly string[]): Promise<void> {
 const SAN_DNS = 2;
 const SAN_IP = 7;
 
+let serialCounter = 0;
+
 /**
  * A self-signed certificate for the names a test will actually use.
  *
@@ -116,17 +118,28 @@ const SAN_IP = 7;
 export async function createFixtureCertificate(names: {
   dnsNames?: readonly string[];
   ipAddresses?: readonly string[];
+  /**
+   * Defaults to `CERTIFICATE_COMMON_NAME`, which is what the single-origin
+   * suites assert on. **A test that puts two of these in one CA bundle must
+   * give them different names**, and dl-21 found out the hard way: a trust
+   * store is indexed by subject, so two self-signed certificates sharing a
+   * subject collide and only the first is ever used. The bundle then verifies
+   * one origin, silently refuses the other, and reads as a network failure.
+   */
+  commonName?: string;
 }): Promise<FixtureCertificate> {
   const keys = forge.pki.rsa.generateKeyPair({ bits: 2048 });
   const cert = forge.pki.createCertificate();
   cert.publicKey = keys.publicKey;
-  cert.serialNumber = "01";
+  // Distinct per certificate, for the same reason the subject is.
+  serialCounter += 1;
+  cert.serialNumber = serialCounter.toString(16).padStart(2, "0");
   cert.validity.notBefore = new Date(Date.now() - 60_000);
   // Short-lived on purpose: it exists for one test run, and a fixture key that
   // outlives the run is a key somebody could be tempted by.
   cert.validity.notAfter = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-  const attributes = [{ name: "commonName", value: CERTIFICATE_COMMON_NAME }];
+  const attributes = [{ name: "commonName", value: names.commonName ?? CERTIFICATE_COMMON_NAME }];
   cert.setSubject(attributes);
   cert.setIssuer(attributes);
   cert.setExtensions([
@@ -268,6 +281,66 @@ export async function generateHlsClip(
     ].join("\n"),
     "utf8",
   );
+}
+
+/**
+ * Moves the clip's segments to a second directory and repoints the media
+ * playlist at them by absolute URL — the shape a real CDN has and the one
+ * dl-21 exists for.
+ *
+ * A single-origin fixture cannot express the question dl-21 asks: the manifest
+ * connection and the segment connections have to be able to *disagree about
+ * trust* before the difference between them is observable at all. So the
+ * playlist stays on the origin serving `clipDir` and every `#EXTINF` line below
+ * it names `segmentBaseUrl`, which is a different origin with a different
+ * certificate.
+ *
+ * `segmentBaseUrl` has no trailing slash and is the second origin's root
+ * (`https://127.0.0.1:<port>`), so the second origin must already be listening
+ * when this is called. That is harmless: it serves `segmentDir` lazily, so it
+ * can be started before there is anything in it.
+ */
+export async function splitHlsClip(
+  clipDir: string,
+  segmentDir: string,
+  segmentBaseUrl: string,
+): Promise<{ segmentNames: string[] }> {
+  await fs.mkdir(segmentDir, { recursive: true });
+  const segmentNames: string[] = [];
+  for (const name of await fs.readdir(clipDir)) {
+    if (!name.endsWith(".ts")) continue;
+    await fs.rename(path.join(clipDir, name), path.join(segmentDir, name));
+    segmentNames.push(name);
+  }
+  if (segmentNames.length === 0) throw new Error("the clip has no .ts segments to split off");
+
+  const playlist = path.join(clipDir, "index.m3u8");
+  const text = await fs.readFile(playlist, "utf8");
+  const rewritten = text
+    .split("\n")
+    .map((line) => (line.endsWith(".ts") ? `${segmentBaseUrl}/${line}` : line))
+    .join("\n");
+  await fs.writeFile(playlist, rewritten, "utf8");
+
+  segmentNames.sort();
+  return { segmentNames };
+}
+
+/**
+ * One PEM file holding several fixture CAs.
+ *
+ * ffmpeg's `-ca_file` takes **one** bundle and **replaces** the system store
+ * rather than adding to it, so "trust both origins" is one file with both
+ * certificates in it — never verification switched off, which is the trap dl-14,
+ * dl-19 and dl-21 all carry.
+ */
+export async function createCaBundle(
+  certificates: readonly FixtureCertificate[],
+): Promise<{ path: string; cleanup(): Promise<void> }> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "downloader-tls-bundle-"));
+  const bundlePath = path.join(dir, "bundle.pem");
+  await fs.writeFile(bundlePath, certificates.map((c) => c.ca.trim()).join("\n") + "\n", "utf8");
+  return { path: bundlePath, cleanup: () => fs.rm(dir, { recursive: true, force: true }) };
 }
 
 const CONTENT_TYPES: Record<string, string> = {

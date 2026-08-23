@@ -202,3 +202,50 @@ describe("correlation, end to end", () => {
     expect(lines.filter((line) => line.msg === "request")).toEqual([]);
   });
 });
+
+/**
+ * dl-21. The gap it could not close had to land somewhere an operator meets it,
+ * and a documentation page is not that place. These pin the two lines and, more
+ * to the point, pin that there is always exactly one of them: a deployment is
+ * either told that nothing is verified or told how far the verification reaches,
+ * and never left to infer a guarantee from silence.
+ */
+describe("what boot says about how far TLS verification reaches", () => {
+  let harness: Harness | undefined;
+
+  afterEach(async () => {
+    await harness?.dispose();
+    harness = undefined;
+  });
+
+  test("a verifying deployment is told the segments are not covered", async () => {
+    const { logger, lines } = capturing("info");
+    harness = await createHarness({ logger });
+
+    const warnings = lines.filter((line) => line.level === "warn");
+    const segments = warnings.filter((line) =>
+      /segment certificates are not checked/u.test(line.msg),
+    );
+    expect(segments).toHaveLength(1);
+    // The consequence, not just the fact: an operator skimming a startup log
+    // needs to know what it costs them.
+    expect(String(segments[0]?.["hint"])).toMatch(/substitute/u);
+    // And not both lines at once, which would say two contradictory things.
+    expect(warnings.some((line) => /FFMPEG_ALLOW_UNVERIFIED_TLS/u.test(line.msg))).toBe(false);
+  });
+
+  test("a deployment with verification off gets dl-19's louder line instead", async () => {
+    const { logger, lines } = capturing("info");
+    harness = await createHarness({ logger, config: { ffmpegAllowUnverifiedTls: true } });
+
+    const warnings = lines.filter((line) => line.level === "warn");
+    expect(warnings.filter((line) => /FFMPEG_ALLOW_UNVERIFIED_TLS/u.test(line.msg))).toHaveLength(
+      1,
+    );
+    // Saying "the segments are not verified" to a deployment that verifies
+    // nothing at all would read as a narrower problem than it has.
+    expect(warnings.some((line) => /segment certificates are not checked/u.test(line.msg))).toBe(
+      false,
+    );
+  });
+});
