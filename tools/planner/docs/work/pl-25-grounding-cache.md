@@ -309,3 +309,78 @@ pl-28 will put facts through the same seam that have nothing to do with travel.
 
 **624 in the planner suite (611 before, 574 at the branch point), 1218
 repo-wide, `npm run check` green.**
+
+**2026-08-23 — second gate round.** CONCERNS, and all three mediums were in the
+**wiring** rather than in the seam: the reviewer probed mixed, fully-refused,
+zero-budget and hit-plus-refused matrices and found no path that collapses
+refusal into unknown or the reverse. What the seam guaranteed, the assembly gave
+back.
+
+**The un-budgeted door was still open one level up.** `RunGroundingSource`
+extended `GroundingProvider`, so `AppContext.grounding` carried `locate` and
+`travel` and `context.grounding.locate(…)` compiled — answering `T | null` and
+spending no budget at all. That is the obvious spelling for pl-27 to reach for,
+and it reinstates both halves of what this round existed to close: the ceiling
+goes unconsulted and `null` means "nobody knows" and "never asked" again.
+`cache.ts` made exactly this argument about `RunGrounding` while the source on
+the context was the same door, unlatched.
+
+`RunGroundingSource` is now `{ name, forRun }` and extends nothing.
+`CachingGroundingProvider implements GroundingProvider, RunGroundingSource`, and
+`server.ts` is the only place that holds it as both, because it is the only place
+that builds it. `routes/health.ts` reads `name`; a run calls `groundingForRun`;
+nothing in the tool wanted more. **The narrowing is asserted by the compiler** —
+two `@ts-expect-error` probes in the suite, which this repo typechecks under the
+same gate as the source, so reopening the door fails `npm run check` with TS2578
+rather than passing quietly. Verified by doing it: put `extends
+GroundingProvider` back and the build fails naming both lines.
+
+**The boot sweep was unguarded** while the identical sweep in the run's `finally`
+was wrapped, on the argument that housekeeping must not fail a run. One step
+further: a `SQLITE_BUSY` or a full disk on that DELETE rejected `createApp`, so
+the _service would not boot_ over work this file itself calls not load-bearing —
+an expired row is refused on read whether or not anything deleted it. Wrapped, on
+the same terms.
+
+**The time bomb was defused in the provider and re-armed by the wiring, and that
+is the transferable half.** `createGroundingProvider` built
+`new FixtureGroundingProvider()` on its default clock while the cache around it
+took `createApp`'s injected `now`. Pin `now` to 2030 and the provider stamps
+answers from the wall clock — later than the moment the cache stores them — the
+`Math.min` clamp reads that as already-expired-on-write, nothing is cached, and
+every lookup spends budget. It did not bite only because `createRunHarness` pins
+`NOW` to 2026-08-15, _behind_ the real clock, where the clamp absorbs it; and
+that harness runs `logLevel: "silent"`, so the warn added in the last round would
+not have been seen either. One line: `new FixtureGroundingProvider(now)`.
+
+The lesson is worth more than the line. **The test that proves a 2028 provider
+stamps 2028 passes precisely because it constructs the provider directly** —
+bypassing the assembly that was wrong. A fix inside a component and a test that
+instantiates that component are the same blind spot twice, and the bug lives in
+the one step neither of them takes. There is a test at the `createApp` level now,
+pinned to 2030, and it fails without the one-line fix.
+
+Lows, all three:
+
+- **A test named for a claim it did not make.** "The seam's own methods never
+  refuse" asserted only a call count. It now asks the same question two ways at
+  once — a run with a spent budget refuses it, the un-budgeted seam still answers
+  it — which is the claim in the name.
+- **The eviction guard had no test and flattened its cause.** `AppError.from`
+  gives everything untyped the same `INTERNAL` code and the same generic
+  sentence, so a lock and a full disk logged identically, and that line is the
+  only place either is ever mentioned. It carries `cause` now, and there is a
+  test: the sweep throws `SQLITE_BUSY`, the run still reaches `done`, the warning
+  names the cause, and nothing is filed as "run task rejected". Verified failing
+  without the guard.
+- **`FIXTURE_TABLE_WRITTEN` was a dead export.** Removed; the reasoning it
+  carried moved onto `fixtureSource`, which is what a reader is looking at when
+  the question comes up.
+
+**Dropped as argued by the reviewer, no action:** prepare-per-cell in `#travel`'s
+read loop (house style in `db/runs.ts` and `db/intakes.ts`, not introduced here),
+and `UNKNOWN`/`REFUSED` being unfrozen singletons (every consumer is TypeScript).
+
+**627 in the planner suite (624 before, 574 at the branch point), 1221
+repo-wide, `npm run check` green.** Each of the three new tests was confirmed to
+fail with its fix reverted.

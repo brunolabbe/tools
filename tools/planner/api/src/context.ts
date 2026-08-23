@@ -24,10 +24,15 @@ export interface AppContext {
    * Everything that reaches outside, behind one seam. The default reaches
    * nothing.
    *
-   * Typed as the cache's capability rather than as the bare seam, so that
-   * `groundingForRun` can hand a run a view that spends its budget on misses
-   * only. A decorator placed around the cache has to carry `forRun` through or
-   * this stops compiling, which is the point — see `grounding/cache.ts`.
+   * **Narrowed to `{ name, forRun }` on purpose: there is no un-budgeted
+   * lookup reachable from here.** The thing on the other side really is a
+   * `GroundingProvider` as well, and while this field said so,
+   * `context.grounding.locate(…)` compiled, answered `T | null` and spent no
+   * budget at all — the obvious spelling, and the one that quietly undoes both
+   * `MAX_GROUNDING_CALLS` and the refused/unknown distinction. A run asks
+   * `groundingForRun(context.grounding, budget)` and gets a view that spends
+   * its budget on misses only; `/api/health` reads `name`; nothing else in the
+   * tool needs more. `server.ts` holds the full object because it builds it.
    */
   grounding: RunGroundingSource;
   /** Where a plan run waits for a slot, and where cancelling it reaches it. */

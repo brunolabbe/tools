@@ -24,7 +24,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { groundingBudget } from "@planner/agent";
 import type {
   GroundingProvider,
@@ -168,13 +168,19 @@ class CountingProvider implements GroundingProvider {
 
 const TTL: GroundingCacheTtlHours = { locate: 24, travel: 12 };
 
+interface LoggedLine {
+  level: string;
+  message: string;
+  fields?: Record<string, unknown> | undefined;
+}
+
 /** Keeps every line, so a test can assert that a silent branch is not silent. */
-function recordingLogger(): { logger: AppLogger; lines: { level: string; message: string }[] } {
-  const lines: { level: string; message: string }[] = [];
+function recordingLogger(): { logger: AppLogger; lines: LoggedLine[] } {
+  const lines: LoggedLine[] = [];
   const at =
     (level: string) =>
-    (message: string): void => {
-      lines.push({ level, message });
+    (message: string, fields?: Record<string, unknown>): void => {
+      lines.push({ level, message, fields });
     };
   const logger: AppLogger = {
     debug: at("debug"),
@@ -460,10 +466,13 @@ describe("the grounding cache", () => {
       expect(located).not.toBeNull();
       expect(countGrounding(database)).toBe(0);
       expect(inner.locates).toBe(1);
-      expect(lines).toContainEqual({
-        level: "warn",
-        message: "grounding answer not cached: it arrived already expired",
-      });
+      expect(
+        lines.filter(
+          (line) =>
+            line.level === "warn" &&
+            line.message === "grounding answer not cached: it arrived already expired",
+        ),
+      ).toHaveLength(1);
     });
 
     test("a TTL of zero is a deployment's own decision, so it is not warned about", async () => {
@@ -595,14 +604,30 @@ describe("the grounding cache", () => {
       // `CachingGroundingProvider` is still a `GroundingProvider` for a caller
       // with nothing to spend, and flattening to `null` there loses nothing:
       // `refused` is unreachable without a `RunSpend`.
+      //
+      // Asserted by asking the *same question two ways at once*: a run whose
+      // budget is exhausted refuses it, and the un-budgeted seam still answers
+      // it. A call count alone would say nothing about refusal.
       const clock = new Clock("2026-08-22T09:00:00.000Z");
       const { cache, inner } = build(clock);
+      const run = groundingForRun(cache, groundingBudget(0));
 
-      await cache.locate({ place: place("Rimouski") });
-      await cache.locate({ place: place("Rimouski") });
-      await cache.locate({ place: place("Chibougamau") });
+      expect((await run.locate({ place: place("Rimouski") })).kind).toBe("refused");
+      expect(inner.locates).toBe(0);
 
-      expect(inner.locates).toBe(2);
+      const throughTheSeam = await cache.locate({ place: place("Rimouski") });
+      expect(throughTheSeam).not.toBeNull();
+      expect(inner.locates).toBe(1);
+
+      const matrix = await cache.travel({
+        origins: [place("Québec City")],
+        destinations: [place("Rimouski")],
+        mode: "driving",
+      });
+      expect(matrix[0]?.[0]).not.toBeNull();
+
+      // And the only `null` it can produce is the unknown one.
+      await expect(cache.locate({ place: place("Chibougamau") })).resolves.toBeNull();
     });
   });
 
@@ -828,6 +853,72 @@ function seedExpired(database: Database.Database): void {
   });
 }
 
+describe("how the app wires it up", () => {
+  test("a run cannot reach an un-budgeted lookup through the context", async () => {
+    // The door the second gate found still open. `RunGroundingSource` used to
+    // extend `GroundingProvider`, so `context.grounding.locate(…)` compiled,
+    // answered `T | null` and spent no budget at all — the obvious spelling,
+    // and the one that reinstates both the unmetered bill and the collapse of
+    // "we never asked" into "nobody knows".
+    //
+    // Asserted by the compiler, which is the only place a type-level guarantee
+    // can be asserted: this suite is typechecked by the same gate the source
+    // is, so the day `locate` becomes reachable again, `@ts-expect-error` has
+    // nothing to suppress and `npm run check` fails.
+    const harness = await createRunHarness();
+    try {
+      // @ts-expect-error — the un-budgeted seam is unreachable from a run.
+      const unbudgetedLocate: unknown = harness.app.context.grounding.locate;
+      // @ts-expect-error — and so is the matrix half of it.
+      const unbudgetedTravel: unknown = harness.app.context.grounding.travel;
+
+      // Both are still there at runtime — it is the same cache object, and
+      // `server.ts` holds it as a `GroundingProvider` too. The guarantee is
+      // entirely in the type, which is where a wrong spelling gets written.
+      expect(unbudgetedLocate).toBeInstanceOf(Function);
+      expect(unbudgetedTravel).toBeInstanceOf(Function);
+
+      // What a run *does* get, and it is enough.
+      expect(harness.app.context.grounding.name).toBe("fixtures");
+      const run = groundingForRun(harness.app.context.grounding, groundingBudget(2));
+      expect(run.refused).toBe(0);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test("the provider and the cache around it read the same clock", async () => {
+    // Defusing the time bomb inside the fixture provider was necessary and not
+    // sufficient: `createGroundingProvider` built it on the *default* clock
+    // while the cache took the injected one, so a deployment whose clock is
+    // ahead of this file stamps answers later than the moment they are stored,
+    // the clamp turns that into already-expired-on-write, and the cache is off
+    // with every lookup spending budget.
+    //
+    // Pinned to 2030 because it is the wiring under test, not the provider: the
+    // test one file over that proves a 2028 provider stamps 2028 passes by
+    // constructing the provider directly, which is exactly the step that skips
+    // the bug.
+    const harness = await createRunHarness({ now: () => new Date("2030-06-01T12:00:00.000Z") });
+    try {
+      const run = groundingForRun(harness.app.context.grounding, groundingBudget(4));
+
+      const first = await run.locate({ place: place("Rimouski") });
+      const second = await run.locate({ place: place("Rimouski") });
+
+      expect(first.kind).toBe("answered");
+      expect(second.kind).toBe("answered");
+      // The second answer came out of the table, which is only possible if the
+      // row was written — and it is only written if the stamp is not in the
+      // future relative to the cache's own clock.
+      expect(countGrounding(harness.app.context.db)).toBe(1);
+      expect(run.refused).toBe(0);
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
 describe("where eviction runs", () => {
   test("on boot, because a process that was down for a month comes up holding stale answers", async () => {
     // A file database rather than `:memory:`, because the claim under test is
@@ -878,6 +969,43 @@ describe("where eviction runs", () => {
       expect(finished.status).toBe("failed");
       expect(seededRowSurvives(harness.app.context.db)).toBe(false);
     } finally {
+      await harness.close();
+    }
+  });
+
+  test("and a sweep that throws does not fail the run it was housekeeping for", async () => {
+    // A `finally` that throws *replaces* the outcome of the block it guards, so
+    // an unlucky `SQLITE_BUSY` or a full disk on this DELETE would discard a
+    // completed run's result and report it to `onTaskError` as "run task
+    // rejected" — a plan that was written, filed as a bug in the bookkeeping.
+    const { logger, lines } = recordingLogger();
+    const harness = await createRunHarness({ logger });
+    try {
+      const database = harness.app.context.db;
+      const prepare = database.prepare.bind(database);
+      // Only the sweep fails. Everything the run itself does still works, which
+      // is what makes "the run still finished" mean anything.
+      vi.spyOn(database, "prepare").mockImplementation(((sql: string) => {
+        if (sql.startsWith("DELETE FROM grounding_cache")) {
+          throw new Error("SQLITE_BUSY: database is locked");
+        }
+        return prepare(sql);
+      }) as typeof database.prepare);
+
+      const intakeId = await intakeReadyToDraft(harness.app);
+      const run = await startRunOver(harness.app, intakeId);
+      const finished = await runToCompletion(harness.app, run.id);
+
+      expect(finished.status).toBe("done");
+      const warning = lines.find((line) => line.message === "grounding cache eviction failed");
+      expect(warning?.level).toBe("warn");
+      // The cause, not only `INTERNAL`: `AppError.from` gives everything
+      // untyped the same code and the same generic sentence, and this line is
+      // the only place a lock or a full disk is ever mentioned.
+      expect(warning?.fields?.["cause"]).toContain("SQLITE_BUSY");
+      expect(lines.some((line) => line.message === "run task rejected")).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
       await harness.close();
     }
   });

@@ -210,9 +210,15 @@ export function startRun(context: AppContext, intakeId: string): Run {
           try {
             evictExpiredGrounding(context.db, context.now(), context.logger);
           } catch (error: unknown) {
+            // The cause, not only the code. `AppError.from` wraps anything
+            // untyped as `INTERNAL` with the catalog's generic sentence, so a
+            // lock contention and a full disk would otherwise be the same log
+            // line — and this line is the only place either of them is ever
+            // mentioned.
             context.logger.warn("grounding cache eviction failed", {
               run: runId,
               code: AppError.from(error).code,
+              cause: error instanceof Error ? error.message : String(error),
             });
           }
         }

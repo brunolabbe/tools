@@ -296,16 +296,30 @@ export interface RunGrounding {
 }
 
 /**
- * A provider that can hand out a per-run view. Only the cache implements it.
+ * The capability to hand out a per-run view, and **nothing else**. Only the
+ * cache has it.
  *
  * `groundingForRun` asks for this rather than for a `GroundingProvider` on
- * purpose. The shape before the review dispatched on `instanceof` and fell back
- * to a plain budgeted wrapper for anything else — so a second decorator placed
- * around the cache would have gone on compiling and quietly started charging
- * the budget for cache hits, which is the one thing this file argues against.
- * Asking for the capability instead means that mistake does not typecheck.
+ * purpose. The shape before the first review dispatched on `instanceof` and
+ * fell back to a plain budgeted wrapper for anything else — so a second
+ * decorator placed around the cache would have gone on compiling and quietly
+ * started charging the budget for cache hits, which is the one thing this file
+ * argues against. Asking for the capability instead means that mistake does not
+ * typecheck.
+ *
+ * **It deliberately does not extend `GroundingProvider`.** It did, and that
+ * left the un-budgeted door open one level up: `AppContext.grounding` was one
+ * of these, so `context.grounding.locate(…)` compiled, answered `T | null` and
+ * spent no budget at all — the obvious spelling, and the one that quietly
+ * reinstates every failure the outcome type above exists to prevent. The
+ * context now carries only this, so from a run there is no un-budgeted method
+ * to reach. `CachingGroundingProvider` still implements both interfaces;
+ * `server.ts` is the one place that holds it as both, because it is the one
+ * place that builds it.
  */
-export interface RunGroundingSource extends GroundingProvider {
+export interface RunGroundingSource {
+  /** Reported by `/api/health`. The backend's name — a cache is not a backend. */
+  readonly name: string;
   forRun(budget: GroundingBudget): RunGrounding;
 }
 
@@ -337,7 +351,7 @@ export interface GroundingCacheOptions {
   logger?: AppLogger | undefined;
 }
 
-export class CachingGroundingProvider implements RunGroundingSource {
+export class CachingGroundingProvider implements GroundingProvider, RunGroundingSource {
   readonly #options: GroundingCacheOptions;
 
   constructor(options: GroundingCacheOptions) {

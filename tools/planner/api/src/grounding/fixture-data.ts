@@ -37,23 +37,21 @@ import type { Coordinates, Source } from "@planner/contract";
 // ---------------------------------------------------------------------------
 
 /**
- * When the table was written down. Documentation, and nothing reads it as a
- * timestamp any more.
- *
- * pl-24 stamped every fixture answer with this constant, on the argument that a
- * checked-in table must not claim to have just read something. pl-25's review
- * found what that costs once there is a TTL: the travel lifetime is 4,320 hours,
- * so **on 2027-02-18 every fixture `travel` answer would arrive already expired**
- * — nothing cached, every lookup a miss, every miss spending budget, and no red
- * test and no log line to say so. `locate` would follow on 2027-08-22. A dated
- * constant plus a lifetime is a time bomb whichever pair of numbers you pick.
- */
-export const FIXTURE_TABLE_WRITTEN = "2026-08-22";
-
-/**
  * Every fixture answer carries a source, because `provenanceSchema` refuses a
  * grounded fact without one and because the plan view renders it as "we checked
  * this, here is where".
+ *
+ * ## Why there is no `FIXTURE_FETCHED_AT` any more
+ *
+ * pl-24 stamped every answer with a constant dated the day this table was
+ * typed, on the argument that a checked-in table must not claim to have just
+ * read something. pl-25's review found what that costs once grounding has a
+ * TTL: the travel lifetime is 4,320 hours, so **from 2027-02-18 every fixture
+ * `travel` answer would have arrived already expired** — nothing cached, every
+ * lookup a miss, every miss spending budget, and nothing red to say so.
+ * `locate` would have followed on 2027-08-22. A dated constant plus a lifetime
+ * is a time bomb whichever pair of numbers you pick, so there is no date here
+ * to go stale.
  *
  * **The host is `.invalid` on purpose.** RFC 2606 reserves that TLD so it can
  * never resolve, which makes the link visibly not a citation. The alternative
