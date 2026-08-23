@@ -297,7 +297,7 @@ function registerNotFoundHandler(server: FastifyInstance, servingWeb: boolean): 
     if (servingWeb && serveIndexForUnknownPath(request, reply)) return;
 
     const { status, body } = toErrorResponse(
-      new AppError("JOB_NOT_FOUND", "No such endpoint.", {
+      new AppError("NOT_FOUND", undefined, {
         details: { path: request.url.slice(0, 200) },
       }),
     );

@@ -3,7 +3,7 @@ id: dl-17
 tool: downloader
 title: Answer an unknown endpoint with NOT_FOUND, not JOB_NOT_FOUND
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -65,4 +65,50 @@ Only the unknown-route call site is wrong.
 
 ## Log
 
-_Not started._
+**2026-08-22 — done.** `registerNotFoundHandler` in `api/src/server.ts` now
+raises `new AppError("NOT_FOUND", undefined, { details: { path: ... } })`,
+dropping the `"No such endpoint."` override so the catalog's own message is
+used — matching the `undefined`-message pattern already used elsewhere in this
+file (`dispatcher.ts`, `ssrf.ts`, `routes/probe.ts`). `JOB_NOT_FOUND` is
+untouched everywhere else: `JobStore.get`, the job/job-events routes, and their
+tests all still mean "no such job" and still say so.
+
+Both prerequisites named in the ticket were already in place from pl-11 — the
+`NOT_FOUND` code, its `http-errors.ts` mapping, and its `error-presentation.ts`
+copy — so this ticket was only the call site and its tests. One thing the brief
+undersold: it named "`api/test/` has an unknown-path test asserting
+`JOB_NOT_FOUND`" as singular, but — same as pl-11 found for the planner's
+`web-serving.test.ts` equivalent — there were three, all in
+`tools/downloader/api/test/web-serving.test.ts` (an unknown `/api` path with an
+HTML `Accept`, the same with a JSON `Accept`, and an unknown path with no
+`WEB_DIR` set). All three now assert `NOT_FOUND`. `routes.test.ts`'s "an
+unknown job id" cases and `job-store.test.ts`'s lookup-miss case are genuine
+`JOB_NOT_FOUND` and were left alone, as were `web/test/mock-api.test.ts`'s
+`notReachableInTheMock` list (already carrying `NOT_FOUND`, per pl-11).
+
+Also updated the stale comment in `api/src/http-errors.ts` that pointed at this
+ticket as still-open ("Nothing raises it here yet ... which is dl-17's to
+fix") — it now just says where `NOT_FOUND` is raised.
+
+`npm run check` and `npm test -- --project downloader` (543 tests, 37 files)
+are both green. Nothing in `packages/` was touched, so its suite was not
+re-run.
+
+**2026-08-22 — review follow-ups.** Review's point stood: the first pass was a
++3/-3 substitution inside existing assertions, and nothing pinned the
+_distinction_ the ticket exists to establish — a refactor that quietly
+re-merged the two codes would have left every existing suite green. Added
+`tools/downloader/api/test/not-found.test.ts`, a small dedicated file with two
+tests side by side: an unrecognised route (`GET /api/nope` → `NOT_FOUND`, 404)
+and a recognised job route naming an id the store has no record of
+(`GET /api/jobs/nope` → `JOB_NOT_FOUND`, 404). Chose a new file over folding
+into `web-serving.test.ts` or `routes.test.ts` because the contrast is the
+point of the test — splitting it across the two existing suites (which cover
+route-serving and the HTTP surface respectively, for reasons of their own)
+would bury the side-by-side read this ticket needs. `npm run check` and
+`npm test -- --project downloader` re-run green: 545 tests, 38 files.
+
+**`tools/downloader/docs/03-STATUS.md` was deliberately left alone.** Review
+found stale prose below the generated region describing dl-17 as still open;
+that cleanup belongs to repo-1's retirement of that hand-written narrative, not
+to this ticket, and is being tracked there.
