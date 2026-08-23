@@ -17,6 +17,13 @@
  * data and must never, on its own, put a "Try again" button in front of a hard
  * stop.** `presentError` ands it with the table's own `allowRetry`, and a DRM
  * refusal with `retryable: true` forced on it is the test that says so.
+ *
+ * The second claim is the one dl-15 added rather than found: **a retry the user
+ * cannot yet make must say when they can.** `retryAfterSec` reaches the client
+ * inside `details`, and until this ticket nothing read it — the panel offered a
+ * button and no answer to "when?", which is the never-fake-progress rule failing
+ * from the other direction. `presentError` now surfaces it and the panel renders
+ * it, and only when the server actually supplied one.
  */
 
 import { afterEach, expect, test, vi } from "vitest";
@@ -65,7 +72,7 @@ test("DRM is presented as an answer, with no retry to press", () => {
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-test("a retryable rate limit offers the retry, and its own copy", () => {
+test("a retryable rate limit offers the retry, and says when", () => {
   // What the API actually sends for a probe-gate refusal: `retryAfterSec` rides
   // in `details`, which `http-errors.ts` allowlists through to the client.
   const payload = errorPayload("RATE_LIMITED", {
@@ -79,14 +86,47 @@ test("a retryable rate limit offers the retry, and its own copy", () => {
   expect(within(notice).getByRole("heading", { name: "Too many requests" })).toBeDefined();
   expect(within(notice).getByText(payload.message)).toBeDefined();
 
+  // "Try again" with no answer to "when?" is the same failure as an invented
+  // progress total: the UI was told and did not say.
+  expect(within(notice).getByText("Wait 20 s before trying again.")).toBeDefined();
+
   fireEvent.click(within(notice).getByRole("button", { name: "Analyse again" }));
   expect(spies.onRetry).toHaveBeenCalledOnce();
+});
 
-  // Not asserted as a feature, recorded as the current answer: nothing renders
-  // the wait. `details` is documented as "not rendered verbatim in the UI" and
-  // `presentError` does not read it, so the panel says "try again" without
-  // saying when. See this ticket's Log.
-  expect(notice.textContent).not.toContain("20");
+test("a long wait is given in minutes, rounded up", () => {
+  mount(errorPayload("RATE_LIMITED", { retryable: true, details: { retryAfterSec: 90 } }));
+  expect(screen.getByText("Wait 2 min before trying again.")).toBeDefined();
+});
+
+test("no wait is rendered when the server did not supply one", () => {
+  // The rest of `details` is not the UI's to read, and an absent, zero or
+  // nonsense value produces no line rather than a guessed one.
+  for (const details of [
+    undefined,
+    { scope: "probe-gate" },
+    { retryAfterSec: 0 },
+    { retryAfterSec: -30 },
+    { retryAfterSec: "soon" },
+  ]) {
+    mount(errorPayload("RATE_LIMITED", { retryable: true, ...(details ? { details } : {}) }));
+    expect(screen.queryByText(/before trying again/u)).toBeNull();
+    // The retry itself is still offered — the wait is extra information, not a
+    // precondition for showing the button.
+    expect(screen.getByRole("button", { name: "Try again" })).toBeDefined();
+    cleanup();
+  }
+});
+
+test("a wait is shown even where there is nothing to press", () => {
+  // A panel with no `onRetry` still tells the user the server is busy for
+  // another twenty seconds, which is true and useful on its own.
+  mount(errorPayload("RATE_LIMITED", { retryable: true, details: { retryAfterSec: 20 } }), {
+    retry: false,
+  });
+
+  expect(screen.getByText("Wait 20 s before trying again.")).toBeDefined();
+  expect(screen.queryByRole("button")).toBeNull();
 });
 
 test("a retry the code does not allow is not offered, whatever the payload says", () => {

@@ -36,16 +36,34 @@ function radios(): HTMLInputElement[] {
   return within(screen.getByRole("table")).getAllByRole("radio") as HTMLInputElement[];
 }
 
-test("renditions are listed best-first, with video before audio-only", () => {
-  mount(variants());
+/**
+ * The fixture in the **worst** order a caller could hand over — reversed, so
+ * audio-only comes first and the best rendition last.
+ *
+ * Every assertion below that depends on row position mounts this rather than
+ * `variants()`, and that is not fussiness. `variants()` is already best-first
+ * (it is written to look like what a resolver returns), so a suite built on it
+ * agrees with the expected order whether or not the component sorts at all:
+ * deleting `sortVariantRows` from `VariantTable.tsx` left the whole suite green.
+ * `presentation-helpers.test.ts` covers the sort function; the component's *use*
+ * of it is the seam only a render test can see, and mounting a shuffled list is
+ * what makes it visible.
+ */
+function shuffled(): MediaVariant[] {
+  return variants().toReversed();
+}
 
-  // `sortVariantRows`: video first, then height descending. The fixture is
-  // already in that order, so the interesting half is that audio-only sinks.
+test("renditions are listed best-first however they arrive", () => {
+  // In: audio-only, 1080p, 2160p. Out: video first, then height descending —
+  // which is `sortVariantRows`, and only the component can have applied it.
+  expect(shuffled().map((item) => item.id)).toEqual(["v-audio", "v-1080", "v-2160"]);
+
+  mount(shuffled());
   expect(radios().map((input) => input.value)).toEqual(["v-2160", "v-1080", "v-audio"]);
 });
 
 test("a row spells out the rendition a user is choosing between", () => {
-  mount(variants());
+  mount(shuffled());
 
   const rows = within(screen.getByRole("table")).getAllByRole("row");
   // [0] is the header row; the rest follow the sorted order above.
@@ -57,8 +75,9 @@ test("a row spells out the rendition a user is choosing between", () => {
 });
 
 test("an audio-only rendition says so rather than reporting a resolution", () => {
-  mount(variants());
+  mount(shuffled());
 
+  // Handed over first and rendered last, because audio-only sinks below video.
   const audioRow = within(screen.getByRole("table")).getAllByRole("row")[3];
   expect(audioRow?.textContent).toContain("audio only");
   // No video codec and no frame rate to report, and the table says so with the
@@ -68,7 +87,7 @@ test("an audio-only rendition says so rather than reporting a resolution", () =>
 });
 
 test("a rendition whose audio is a separate stream is marked as needing a mux", () => {
-  mount(variants());
+  mount(shuffled());
 
   const muxRow = within(screen.getByRole("table")).getAllByRole("row")[1];
   expect(muxRow?.textContent).toContain("+mux");
@@ -98,14 +117,17 @@ test("an estimated size is marked as an estimate", () => {
 });
 
 test("the selected rendition is the checked radio, and only that one", () => {
-  mount(variants(), "v-1080");
+  // Selection has to survive the re-sort: `v-1080` arrives second and is
+  // rendered second here, but nothing about the checked state may depend on
+  // that — it is matched by id, not by position.
+  mount(shuffled(), "v-1080");
 
   const checked = radios().filter((input) => input.checked);
   expect(checked.map((input) => input.value)).toEqual(["v-1080"]);
 });
 
 test("choosing another rendition reports its id upward", () => {
-  const onSelect = mount(variants(), "v-1080");
+  const onSelect = mount(shuffled(), "v-1080");
 
   const audio = radios().find((input) => input.value === "v-audio");
   fireEvent.click(audio as HTMLInputElement);
@@ -115,9 +137,10 @@ test("choosing another rendition reports its id upward", () => {
 test("the default selection is the one `pickDefaultVariantId` names", () => {
   // The rule is "highest quality that already carries audio", which for this
   // fixture means walking past the taller 2160p whose audio is a separate
-  // stream. Asserted here against the table so the picker and the list agree;
+  // stream. Asked of a shuffled list so the answer cannot be "whatever came
+  // first". Asserted here against the table so the picker and the list agree;
   // `probe-panel.test.tsx` asserts the panel actually starts there.
-  const list = variants();
+  const list = shuffled();
   const chosen = pickDefaultVariantId(list);
   expect(chosen).toBe("v-1080");
 

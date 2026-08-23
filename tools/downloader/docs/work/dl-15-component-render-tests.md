@@ -168,9 +168,8 @@ component.
 - **`retryAfterSec` is not a field on `AppErrorPayload`.** It rides in `details`,
   which `api/src/http-errors.ts` allowlists through to the client. And nothing
   renders it: `presentError` never reads `details`, so a rate-limited user is
-  told to try again without being told when. `error-panel.test.tsx` records that
-  as the current answer rather than asserting it as a feature. Surfacing the
-  wait is a UI change and wants its own ticket.
+  told to try again without being told when. **Fixed in this ticket** on review —
+  see the second Log entry below.
 - **An invalid URL does not disable submit.** Step 4 asks for "submit disabled on
   an empty or invalid URL"; the button is disabled by an _empty_ field and by
   `busy`, and that is right — a button that silently refused to depress explains
@@ -184,8 +183,9 @@ component.
   the test pins is the claim that can be defended without changing the
   component: the bytes already fetched are still reported, the stage carries
   dl-9's own copy about expiring links, and nothing on screen reads as a failure
-  or a reset. Whether the step list should hold its high-water mark is a design
-  question, not a test one.
+  or a reset. I called the step list a design question; on review it was ruled a
+  defect and filed as
+  [dl-18](./dl-18-pipeline-high-water-mark.md) — see the second Log entry below.
 - **`FILE_EXPIRED` is not `final`,** so an expired result renders `role="alert"`
   rather than `role="status"`. Worth knowing before writing the assertion.
 - Testing `App` needs `vi.resetModules()` and a dynamic import, because
@@ -195,3 +195,87 @@ component.
   app's, `instanceof` fails inside `AppError.from`, and every rejection reaches
   the screen as `INTERNAL`. The fake client takes its `AppError` from the same
   fresh registry; the comment in `app.test.tsx` says so.
+
+### 2026-08-23 — review round (CONCERNS → addressed)
+
+Reviewed at CONCERNS: one med, five low, every acceptance line proven and both
+mutation checks reproduced. Five things came back; all five are done.
+
+**The med: one blind assertion, and it was the interesting kind.** The reviewer
+ran eleven mutations and caught ten. The eleventh — deleting
+`sortVariantRows(...)` from `VariantTable.tsx` — left all 140 web tests green,
+because `fixtures.ts`'s `variants()` is written best-first (the order a resolver
+returns) and every row-index assertion in `variant-table.test.tsx` inherited
+that. The component's _use_ of the sort was the one seam only a render test can
+see, and the suite was not looking at it.
+
+Fixed by mounting a deliberately reversed list — a `shuffled()` helper — in
+every assertion that depends on row position. Re-ran the mutation: **4 tests now
+fail** where 0 did. `presentation-helpers.test.ts` still covers the sort
+function itself; these now cover the component calling it.
+
+**The audit that came with it** turned up four more assertions of the same
+shape, three of them named by the reviewer:
+
+- **`ProbePanel` subtitles.** The fixture had one track per language, so
+  `map(t => t.language)` and `[...new Set(map)]` return the same array and the
+  dedupe was untestable. Added a third track duplicating `en` — three tracks,
+  two languages — plus a new test that turning the checkbox off omits
+  `subtitleLanguages` entirely rather than sending `[]`, which is what
+  `JobOptions` documents.
+- **`ProbePanel` live duration.** The default was asserted as a number in the
+  box but never on the wire. Added an assertion that the untouched default
+  emits `liveDurationSec: 300`, and changed the post-edit assertion to
+  `toHaveBeenLastCalledWith` — with two calls on the spy, "some call matched"
+  would have passed even if the edit changed nothing.
+- **`ThemeToggle`.** Mounted only with `value="dark"`, so a `checked` hard-coded
+  against one value would have passed. Now loops over every `THEME_CHOICES`
+  entry, both for the marking and for the controlled-ness check.
+- **`JobCard`'s `active`.** Covered at the two ends but not per status. Cancel's
+  presence is now asserted inside the active-status loop, and a new test walks
+  all three terminal statuses asserting no Cancel, no pipeline, no bar and a
+  surviving Remove.
+
+**`retryAfterSec` is now rendered** (`ErrorPanel`, `presentError`, and a new
+`formatRetryAfter` in `format.ts`), rather than deferred as the first Log entry
+proposed. `presentError` reads exactly one allowlisted field out of `details`,
+by name and only when it is a positive finite number — which is not the
+"rendered verbatim" that `AppErrorPayload` warns against. Rounded up, because
+telling someone to wait 20 s when the server said 20.4 buys one more refusal.
+`null` when the server said nothing usable, and the panel then renders no line
+at all: guessing a wait is the never-fake-progress rule failing sideways.
+Watched failing — deleting the line from `ErrorPanel` reddens 3 tests.
+
+**dl-18 filed** at
+[`dl-18-pipeline-high-water-mark.md`](./dl-18-pipeline-high-water-mark.md),
+`kind: fix`, `status: ready`. The back edge un-marking "Downloading" is a defect,
+not a design question, and the specified behaviour is a high-water mark. The
+ticket also carries the smaller thing found while writing it: the step list has
+**no accessible state at all** — done/active/pending are CSS classes with no
+`aria-current` and no name change — which is why the characterization test has
+to assert on `className` and says so. `job-card.test.tsx` now carries an
+explicit `CHARACTERIZATION (dl-18)` test pinning today's wrong behaviour, so
+dl-18 has something that goes red when it lands; the ticket says to replace it
+with its inverse rather than delete it. **dl-18 is not implemented here.**
+
+**Fixture honesty.** `progress()` and `result()` returned bare literals under a
+docblock claiming every builder parses through a contract schema. They now go
+through `jobProgressSchema` and `jobResultSchema`, and the hand-assembled
+`reprobing` Job literal in `job-card.test.tsx` is built with `job("probing", …)`
+instead. All seven builders parse; the docblock says so and is now true.
+
+**The `03-STATUS.md` half of "Done when" was retired, not satisfied — and that
+is deliberate.** This ticket's acceptance says the "no component-render tests"
+entry leaves `03-STATUS.md`. It does not leave it here: every edit I made to
+that file has been reverted to `origin/main`. `repo-1`, on
+`repo-1-retire-the-narrative`, deletes the whole `## Known gaps and risks`
+section — that stale sentence included — and rewrote this ticket's acceptance so
+it closes by frontmatter alone. Two branches editing the same prose would have
+collided for no gain. So the sentence stays visibly false on `main` until repo-1
+lands, which is accepted rather than overlooked: a future reader comparing the
+criteria to the diff has not found a skipped step.
+
+No `src` file was changed for testability. The three source files this entry
+does touch — `ErrorPanel.tsx`, `error-presentation.ts`, `format.ts`, plus a
+style rule — are the `retryAfterSec` feature the review asked for, not test
+scaffolding.

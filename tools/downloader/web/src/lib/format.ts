@@ -53,6 +53,23 @@ export function formatPercent(percent: number | null | undefined): string {
   return `${Math.min(100, Math.max(0, percent)).toFixed(percent >= 99.95 ? 0 : 1)}%`;
 }
 
+/**
+ * How long the server asked us to wait, as a phrase to put in a sentence.
+ *
+ * `null` when there is nothing to say — no value, a nonsense one, or one that
+ * has already elapsed. The caller then renders nothing rather than inventing a
+ * number, which is the same rule the progress bar follows for an unknown total.
+ * Rounded **up**: telling someone to wait 20 seconds when the server said 20.4
+ * produces one more refusal.
+ */
+export function formatRetryAfter(seconds: number | null | undefined): string | null {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds <= 0) {
+    return null;
+  }
+  if (seconds < 60) return `${Math.ceil(seconds)} s`;
+  return `${Math.ceil(seconds / 60)} min`;
+}
+
 export function formatResolution(width?: number, height?: number): string {
   if (!height) return UNKNOWN;
   return width ? `${width}×${height}` : `${height}p`;

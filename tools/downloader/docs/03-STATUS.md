@@ -5,8 +5,8 @@ Where the downloader stands right now. Phases and milestones are defined in
 ticket under [work/](./work/). This page is a dashboard, not a log — if you find
 yourself writing a paragraph here, it belongs in a ticket.
 
-**Last updated:** 2026-08-22 · **Phases 0–3 ✅ · M1–M4 ✅ · two open tickets,
-one of them test coverage for code that already shipped**
+**Last updated:** 2026-08-14 · **Phases 0–3 ✅ · M1–M4 ✅ · two open tickets,
+both of them test coverage for code that already shipped**
 
 ---
 
@@ -19,12 +19,10 @@ one of them test coverage for code that already shipped**
 | Phase 2 — Integration    | ✅ complete | [dl-5](./work/dl-5-api-and-orchestration.md)                                                                                                                           |
 | Phase 3 — Hardening      | ✅ complete | [dl-6](./work/dl-6-security-and-limits.md) · [dl-7](./work/dl-7-ops-and-e2e.md)                                                                                        |
 
-**611 tests pass across 45 files in this tool's suite, plus 3 Playwright
+**543 tests pass across 37 files in this tool's suite, plus 3 Playwright
 end-to-end tests. `npm run check` is green**, and since
 [dl-13](./work/dl-13-typecheck-the-tests.md) it typechecks the test files too.
-Zero live-network tests. Eight of those files render components in jsdom
-([dl-15](./work/dl-15-component-render-tests.md)) and cost nothing measurable:
-the suite's wall clock is the browser sniffer's, not the UI's.
+Zero live-network tests.
 
 (This tool's count, `npm test -- --project downloader`, rather than the repo's:
 a number on this page that moved every time the planner grew a test was one
@@ -47,8 +45,8 @@ nobody could check.)
 
 ## Open tickets
 
-One of the open two is coverage debt on code that already shipped rather than
-new capability; the other is a one-line correctness fix left ready by another
+Two of the open three are coverage debt on code that already shipped rather than
+new capability; the third is a one-line correctness fix left ready by another
 tool's work. They are independent of each other.
 
 <!-- generated:tickets -->
@@ -195,18 +193,12 @@ rather than leaving a progress bar that never moves.
 both handled rather than solved: `DOWNLOAD_FAILED` during `downloading` is
 treated as re-probe-worthy exactly once.
 
-**Component-render tests: closed.** Every component in `web/src/components/` and
-`App` itself are rendered by
-[dl-15](./work/dl-15-component-render-tests.md)'s suite, jsdom per file rather
-than per project, queried by role the way the Playwright specs are. The
-unknown-total rule now fails a test rather than an inspection, and `App`'s
-`probeToken` race has one.
-
-**The E2E suite drives only the direct resolver** — so nothing exercises
-sniffer → engine → UI in one piece — and **the container's browser tier is only
-smoke-tested**. See [dl-2](./work/dl-2-browser-sniffer.md) and
-[dl-4](./work/dl-4-web-ui.md) for how each got here and
-[dl-16](./work/dl-16-e2e-through-the-sniffer.md) for closing the first. The
+**No component-render tests** in `web`, and **the E2E suite drives only the
+direct resolver** — so nothing exercises sniffer → engine → UI in one piece, and
+**the container's browser tier is only smoke-tested**. See
+[dl-2](./work/dl-2-browser-sniffer.md) and [dl-4](./work/dl-4-web-ui.md) for how
+each got here, [dl-15](./work/dl-15-component-render-tests.md) and
+[dl-16](./work/dl-16-e2e-through-the-sniffer.md) for closing them. The
 smoke-tested container tier stays as it is — dl-16 does not reach it.
 
 ---

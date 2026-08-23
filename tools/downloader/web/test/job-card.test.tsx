@@ -26,7 +26,7 @@ import type { Job } from "@downloader/contract";
 import { JobCard } from "../src/components/JobCard.tsx";
 import { JobList } from "../src/components/JobList.tsx";
 import type { StreamState } from "../src/lib/job-stream.ts";
-import { NOW, job, progress, result, variant } from "./fixtures.ts";
+import { NOW, job, result, variant } from "./fixtures.ts";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -140,6 +140,24 @@ test("each active status names itself and says why the job is sitting there", ()
       "Assembling",
       "Ready",
     ]);
+    // `active` is one expression covering four statuses, so it is asserted for
+    // each of them rather than only for `downloading`: a job still running can
+    // always be stopped.
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDefined();
+    cleanup();
+  }
+});
+
+test("a terminal job offers nothing to cancel and no pipeline to watch", () => {
+  // The other side of `active`, for all three terminal statuses. Hard-code it
+  // either way and one of these two tests goes red.
+  for (const status of ["completed", "failed", "canceled"] as const) {
+    mount(job(status));
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Pipeline" })).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    // Removing it from the list is the one action that survives.
+    expect(screen.getByRole("button", { name: "Remove from list" })).toBeDefined();
     cleanup();
   }
 });
@@ -149,15 +167,9 @@ test("the downloading → probing back edge keeps the work, and is not an error"
   // sends the job back to `probing` rather than failing it. What must not
   // happen is the card reading as a reset — the bytes already fetched are still
   // reported, and nothing on screen claims something went wrong.
-  const downloading = job("downloading", {
-    progress: { percent: null, downloadedBytes: 41_000_000 },
-  });
-  const reprobing: Job = {
-    ...downloading,
-    status: "probing",
-    progress: progress({ stage: "probing", percent: null, downloadedBytes: 41_000_000 }),
-    attempts: 2,
-  };
+  const carried = { percent: null, downloadedBytes: 41_000_000 };
+  const downloading = job("downloading", { progress: carried });
+  const reprobing = job("probing", { progress: carried, attempts: 2 });
 
   mount(downloading);
   expect(screen.getByText("39 MB")).toBeDefined();
@@ -173,6 +185,30 @@ test("the downloading → probing back edge keeps the work, and is not an error"
   expect(screen.queryByRole("alert")).toBeNull();
   expect(screen.queryByRole("status")).toBeNull();
   expect(screen.queryByRole("link", { name: "Download file" })).toBeNull();
+});
+
+test("CHARACTERIZATION (dl-18): the step list walks backwards on a re-probe", () => {
+  // **This pins today's behaviour, and today's behaviour is the bug.** The
+  // progress figures survive the back edge — the test above proves that — but
+  // the pipeline list does not: "Downloading" loses its done marker while the
+  // job re-probes, so a user watching the card sees the job go backwards.
+  // dl-18 specifies a high-water mark, and when it lands this test inverts:
+  // `--done` becomes the expected class for a step already passed.
+  //
+  // Asserted on `className` rather than by role, deliberately and only here.
+  // The step list conveys its state through CSS alone — no `aria-current`, no
+  // accessible name that changes — so there is nothing role-shaped to query.
+  // That absence is itself part of dl-18's brief.
+  const reprobing = job("probing", {
+    progress: { percent: null, downloadedBytes: 41_000_000 },
+  });
+  mount(reprobing);
+
+  const steps = within(screen.getByRole("list", { name: "Pipeline" })).getAllByRole("listitem");
+  const downloadingStep = steps.find((step) => step.textContent === "Downloading");
+  expect(downloadingStep).toBeDefined();
+  expect(downloadingStep?.className).toBe("steps__item");
+  expect(downloadingStep?.className).not.toContain("steps__item--done");
 });
 
 test("a completed job offers the file, its size and how long it will be kept", () => {

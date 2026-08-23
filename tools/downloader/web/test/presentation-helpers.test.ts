@@ -8,6 +8,7 @@ import {
   formatEta,
   formatExpiry,
   formatPercent,
+  formatRetryAfter,
   formatSpeed,
 } from "../src/lib/format.ts";
 
@@ -75,6 +76,25 @@ describe("formatting tolerates every nullable field", () => {
     expect(formatEta(45)).toBe("45 s left");
     expect(formatEta(600)).toBe("10 min left");
     expect(formatPercent(100)).toBe("100%");
+  });
+
+  test("a retry wait is a phrase, or nothing at all", () => {
+    // `null` rather than a dash: the caller renders no line, instead of a line
+    // that says the wait is unknown. Nothing is the honest render here.
+    expect(formatRetryAfter(null)).toBeNull();
+    expect(formatRetryAfter(undefined)).toBeNull();
+    expect(formatRetryAfter(0)).toBeNull();
+    expect(formatRetryAfter(-5)).toBeNull();
+    expect(formatRetryAfter(Number.NaN)).toBeNull();
+
+    expect(formatRetryAfter(20)).toBe("20 s");
+    // Rounded up, both times: telling someone to wait 20 s when the server said
+    // 20.4 buys them one more refusal.
+    expect(formatRetryAfter(20.4)).toBe("21 s");
+    expect(formatRetryAfter(59)).toBe("59 s");
+    expect(formatRetryAfter(60)).toBe("1 min");
+    expect(formatRetryAfter(61)).toBe("2 min");
+    expect(formatRetryAfter(600)).toBe("10 min");
   });
 
   test("expiry counts down and then reports expiry", () => {

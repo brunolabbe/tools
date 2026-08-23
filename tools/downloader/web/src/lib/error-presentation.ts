@@ -204,6 +204,24 @@ export interface ErrorView {
   /** True only when a retry affordance should be rendered. */
   retryable: boolean;
   final: boolean;
+  /**
+   * Seconds the server asked us to wait, or `null` when it said nothing usable.
+   * "Try again" with no answer to "when?" is the same failure as a progress bar
+   * with an invented total: the UI knows and does not say.
+   */
+  retryAfterSec: number | null;
+}
+
+/**
+ * `details` is documented as "not rendered verbatim in the UI", and this does
+ * not render it verbatim: it reads **one** field, by name, and only when it is
+ * a positive finite number. `api/src/http-errors.ts` allowlists `retryAfterSec`
+ * through to the client precisely so a client can act on it, and the API sets
+ * it alongside the `Retry-After` header when it refuses a probe.
+ */
+function readRetryAfterSec(details: Record<string, unknown> | undefined): number | null {
+  const value = details?.["retryAfterSec"];
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
 export function presentError(payload: AppErrorPayload): ErrorView {
@@ -217,6 +235,7 @@ export function presentError(payload: AppErrorPayload): ErrorView {
     tone: entry.tone,
     retryable: entry.allowRetry && payload.retryable === true,
     final: entry.final === true,
+    retryAfterSec: readRetryAfterSec(payload.details),
   };
 }
 

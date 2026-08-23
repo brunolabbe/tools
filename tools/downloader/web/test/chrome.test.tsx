@@ -119,27 +119,37 @@ test("picking a scenario reports the URL that selects it", () => {
 // ThemeToggle
 // ---------------------------------------------------------------------------
 
-test("the theme switch offers every choice and marks the current one", () => {
-  render(<ThemeToggle value="dark" onChange={vi.fn()} />);
+test("the theme switch offers every choice and marks whichever is current", () => {
+  // Every choice, not one: a `checked` hard-coded against a single value would
+  // pass a test that only ever mounted with `value="dark"`.
+  for (const choice of THEME_CHOICES) {
+    render(<ThemeToggle value={choice} onChange={vi.fn()} />);
 
-  const radios = screen.getAllByRole("radio") as HTMLInputElement[];
-  expect(radios.map((input) => input.value)).toEqual([...THEME_CHOICES]);
-  expect(radios.filter((input) => input.checked).map((input) => input.value)).toEqual(["dark"]);
-  // The group is named for a screen reader even though the legend is visually
-  // hidden, so "Colour theme" is what it answers to.
-  expect(screen.getByRole("group", { name: "Colour theme" })).toBeDefined();
+    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
+    expect(radios.map((input) => input.value)).toEqual([...THEME_CHOICES]);
+    expect(radios.filter((input) => input.checked).map((input) => input.value)).toEqual([choice]);
+    // The group is named for a screen reader even though the legend is visually
+    // hidden, so "Colour theme" is what it answers to.
+    expect(screen.getByRole("group", { name: "Colour theme" })).toBeDefined();
+    cleanup();
+  }
 });
 
 test("choosing a theme reports it upward without owning the state", () => {
-  const onChange = vi.fn<(choice: ThemeChoice) => void>();
-  render(<ThemeToggle value="system" onChange={onChange} />);
+  // Controlled-ness from both ends: whichever choice is clicked is reported,
+  // and the selection does not move until the parent moves it. Swap `checked`
+  // for `defaultChecked` in the component and the second half goes red.
+  for (const choice of THEME_CHOICES.filter((candidate) => candidate !== "system")) {
+    const onChange = vi.fn<(next: ThemeChoice) => void>();
+    render(<ThemeToggle value="system" onChange={onChange} />);
 
-  fireEvent.click(screen.getByRole("radio", { name: "light" }));
-  expect(onChange).toHaveBeenCalledWith("light");
-  // Controlled: the component did not move the selection on its own.
-  expect(
-    (screen.getAllByRole("radio") as HTMLInputElement[])
-      .filter((input) => input.checked)
-      .map((input) => input.value),
-  ).toEqual(["system"]);
+    fireEvent.click(screen.getByRole("radio", { name: choice }));
+    expect(onChange).toHaveBeenCalledWith(choice);
+    expect(
+      (screen.getAllByRole("radio") as HTMLInputElement[])
+        .filter((input) => input.checked)
+        .map((input) => input.value),
+    ).toEqual(["system"]);
+    cleanup();
+  }
 });

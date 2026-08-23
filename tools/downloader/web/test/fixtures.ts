@@ -1,7 +1,8 @@
 /**
  * The shapes the API hands the UI, built here rather than asserted.
  *
- * **Every builder returns its value through the contract's own zod schema.**
+ * **Every builder returns its value through the contract's own zod schema — all
+ * seven of them, with no exceptions.**
  * That is what dl-15 asks for and it is not decoration: a component test builds
  * props by hand, and a hand-typed object drifts from the contract silently — the
  * compiler is happy with an object literal that satisfies a type alias that no
@@ -33,6 +34,8 @@ import {
   DEFAULT_ERROR_MESSAGES,
   RETRYABLE_CODES,
   appErrorPayloadSchema,
+  jobProgressSchema,
+  jobResultSchema,
   jobSchema,
   mediaVariantSchema,
   probeResultSchema,
@@ -119,7 +122,7 @@ export function probe(overrides: Partial<ProbeResult> = {}): ProbeResult {
  * determinate bar has to ask for it.
  */
 export function progress(overrides: Partial<JobProgress> = {}): JobProgress {
-  return {
+  return jobProgressSchema.parse({
     stage: "downloading",
     percent: null,
     downloadedBytes: 41_000_000,
@@ -130,11 +133,11 @@ export function progress(overrides: Partial<JobProgress> = {}): JobProgress {
     etaSec: null,
     processedSec: null,
     ...overrides,
-  };
+  });
 }
 
 export function result(overrides: Partial<JobResult> = {}): JobResult {
-  return {
+  return jobResultSchema.parse({
     filename: "a-sample-recording.mp4",
     sizeBytes: 418_000_000,
     container: "mp4",
@@ -142,7 +145,7 @@ export function result(overrides: Partial<JobResult> = {}): JobResult {
     downloadUrl: "/api/files/opaque-token/a-sample-recording.mp4",
     expiresAt: "2026-08-20T14:00:00.000Z",
     ...overrides,
-  };
+  });
 }
 
 export function errorPayload(
