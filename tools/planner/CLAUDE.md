@@ -10,11 +10,11 @@ model interview and its amendment overrules it; §7's failure table promises a
 deal-breaker check "in code" that free text cannot support, and its amendment
 says so. Both pairs are deliberate — the argument is kept and overridden rather
 than rewritten. `01-ARCHITECTURE.md` beside it is the structure that follows;
-`02-ROADMAP.md` is what is planned and what is still open; `03-STATUS.md` is the
-generated ticket tables and the commands, and carries no prose about what
-exists. **What actually exists today is the closed tickets** — read
-`docs/work/`, where each ticket keeps its brief and its log, and treat the
-analysis and the architecture as design until a ticket says otherwise.
+`02-ROADMAP.md` is what is planned and why. **What actually exists today is the
+closed tickets** — read `docs/work/`, where each ticket keeps its brief and its
+log, and treat the analysis and the architecture as design until a ticket says
+otherwise. `npm run status -- --tool planner` is what is still open; there is no
+status page, and `repo-2` says why.
 
 ## What this is
 
@@ -71,7 +71,15 @@ npm run e2e:planner          # Chromium over the real bundle; `npm run e2e:insta
 
 The ports are 8090/5183 rather than 8080/5173 so both tools can run at once
 without either being reconfigured. The e2e suite takes 8098 for the same reason —
-not 8090, where a dev API usually is, and not 8099, which is the downloader's.
+not 8090, where a dev API usually is, and not 8099, which is the downloader's. It
+also keeps its own database under `e2e/.artifacts/` and starts the API itself, so
+there is nothing to have running first and a dev session left open costs it
+nothing.
+
+The unit suite runs on every push in the repo-wide CI.
+`.github/workflows/planner.yml` carries the two slow gates that run nowhere else
+— the e2e suite in a real browser, and the image, which is built, started and
+asked for both `/api/health` and the page.
 
 The API's dev script is `node --watch --import tsx`, not `tsx watch` — see the
 downloader's note; the same Windows failure applies.

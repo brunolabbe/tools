@@ -28,6 +28,8 @@ they change a decision.
 7. **Builder opens the PR**, commits the gate record, posts the reviewer's report to
    the PR thread.
 8. **Remove the worktree the moment the PR is open.**
+9. **Check the merge landed what it was supposed to.** Not polling — one look,
+   after the fact. See _After a merge_.
 
 ## Concurrency
 
@@ -47,6 +49,28 @@ after the gate returns, or the reviewer is judging a moving target.
 **Ticket ids are an unlocked shared namespace.** Two parallel builders will both
 reach for the next number. The next free id is `git log --all`, not `ls docs/work/`.
 Assign ids yourself when two builders might file tickets.
+
+**Overlapping work degrades verification, not just throughput.** The obvious cost
+of running four tickets at once is coordination. The real one is that every gate
+measures a moving target: a baseline taken an hour ago is a different `main`, a
+test count in a report is already wrong, and a citation written into a ticket goes
+stale while the ticket is still being written. Two symptoms to expect, both seen —
+a reviewer reproducing "543 tests" and getting 545 because a sibling merged, and a
+ticket's own Log quoting a figure that stopped being true one commit later. Take
+every baseline yourself, in the worktree, at the moment you use it, and write
+figures with the commit they belong to.
+
+**Unstack a branch after its parent squash-merges with `--onto`.** A squash merge
+rewrites the parent's history into one new commit, so a child branch still carries
+the parent's *original* commits — which are now duplicates of content already on
+`main`. `git rebase main` replays them and conflicts on every line the squash
+touched; `git merge main` keeps them and puts the duplicates in the PR diff. The
+one that works is
+`git rebase --onto main <the-parent-branch's-old-tip> <child-branch>` — recover
+the old tip from the reflog or `gh pr view <parent> --json headRefOid` before the
+branch is deleted. **GitHub reports the un-rebased child as "conflicting"**, which
+reads like a content problem and is not: it is history shape. Do not send a builder
+to resolve those conflicts by hand.
 
 ## Worktree hygiene
 
@@ -77,8 +101,8 @@ Every builder prompt carries:
   wrong, do the right thing and record what it had wrong in the Log.
 - **Gates**: `npm run check`, the tool's project suite, full `npm test` if shared
   config moved, `npm run format` after any `.md`.
-- **Bookkeeping**: append a dated Log entry, set `status: done`, never touch a
-  `<!-- generated:tickets -->` region.
+- **Bookkeeping**: append a dated Log entry, set `status: done`. There is no status
+  page to update — `npm run status` is the view, computed from the frontmatter.
 - **Stop before the PR.** A reviewer runs first.
 - **Do not spawn subagents.** Orchestration is yours.
 - **Report**: branch, files, what the brief had wrong, exact gate commands and
@@ -165,6 +189,25 @@ such a line is honest — but the amendment needs an outside check.
   more dangling citation than the sweep before it claimed existed.
 - **Slow gates do not run here.** e2e and container builds stay unrun in this loop.
   Say so when reporting a PASS; the CI workflow is the first thing to exercise them.
+
+## After a merge
+
+**A standing rule against polling CI is not a reason never to look.** The rule
+exists so nobody watches a run to completion; it does not license never checking
+what a merge did. Look once, afterwards.
+
+**Green PR checks say nothing about the `push`-triggered jobs.** They are different
+events with different jobs, and a job that only runs on `push` to `main` can fail
+on *every* merge while every pull request stays green — nobody sees the red,
+because nobody was looking at `main`. In the reference repo one such job had never
+once succeeded: branch protection rejected its push with `GH013 — changes must be
+made through a pull request`, so a generated file it maintained sat a week stale
+while listing a merged ticket as open and omitting a live security ticket
+entirely.
+
+So after a batch merges, one call: `gh run list --branch main --limit 10`. Read
+the `push` rows. That is the whole check, and it is the only thing that would have
+caught it.
 
 ## Records
 

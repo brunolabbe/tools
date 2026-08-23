@@ -5,10 +5,11 @@ when the work belongs to no single tool. It carries the brief that starts the
 work and the record of what the work did — the same file, from "someone should
 do this" to "here is what happened and why".
 
-**Its frontmatter is the only place the ticket's state is recorded**, and every
-status table in the repo is generated from it —
-[adr/003](./adr/003-the-status-page-is-generated.md). Move a ticket to `done` by
-editing the ticket, in the commit that earns it.
+**Its frontmatter is the only place the ticket's state is recorded**, and
+`npm run status` is the only view over it — computed from these files on every
+run, and stored nowhere. [adr/003](./adr/003-the-status-page-is-generated.md) and
+its amendment are why. Move a ticket to `done` by editing the ticket, in the
+commit that earns it.
 
 That is the whole point of the format. Splitting a plan across a roadmap row, a
 brief and a status entry means three places to keep in sync by hand, and they
@@ -69,7 +70,7 @@ wrong in the brief. This is what a future reader actually needs.
 | `status`     | `ready` · `in-flight` · `done` · `dropped`                                    |
 | `milestone`  | A milestone from that tool's roadmap, or `null`                               |
 | `depends_on` | Ticket ids that must land first                                               |
-| `note`       | Optional. What the generated table says instead of the title                  |
+| `note`       | Optional. What the status view shows instead of the title                     |
 
 The id prefix exists so `dl-8` means something in a commit message and in
 conversation, where the directory is not there to disambiguate it.
@@ -81,7 +82,7 @@ badly in a table column is usually a title worth fixing.
 file and line on a key nobody has agreed on, a `status` or `kind` outside the
 lists above, an `id` that disagrees with its own filename, or a `depends_on`
 naming a ticket that does not exist. A parser that shrugs at what it does not
-understand reports a clean status page having read half the tickets.
+understand reports a clean status view having read half the tickets.
 
 **`dropped` tickets stay.** A ticket that was considered and rejected is worth
 more than a deleted file: the next person to have the idea finds the reason it
@@ -182,27 +183,50 @@ audited.
 - **`02-ROADMAP.md`** — phases, milestones, and the shape of the argument. It
   links to tickets; it does not describe work. A phase is done when its tickets
   are.
-- **`03-STATUS.md`** — the ticket tables and how to run the thing, and nothing
-  else. The tables sit between `<!-- generated:tickets -->` markers and are
-  **written on `main`, from the frontmatter**. Never edit that region on a
-  branch: `.github/workflows/status.yml` fails the pull request, and the reason
-  is [adr/003](./adr/003-the-status-page-is-generated.md).
+- **`CLAUDE.md`** — the rules for that tool, and how to run it. Its
+  `## Commands` section is where per-tool commands live; the root `CLAUDE.md`
+  says so, and it is the only place that has ever kept them right.
+- **There is no `03-STATUS.md`.** Both tools had one.
+  [repo-1](./work/repo-1-generated-status-tables.md) emptied it of everything a
+  person had to keep true and generated the rest from frontmatter;
+  [repo-2](./work/repo-2-retire-the-status-page.md) deleted what was left,
+  because a projection kept in version control needs a writer and every writer
+  available was unsafe, noisy or racy. **`npm run status` is the view**, and it
+  is computed on every run, so it cannot be stale.
 
-  The page carries **no hand-written status**: no phase table, no test count, no
-  gap list, no "what exists" paragraph. Every one of those is either a
-  projection of frontmatter — in which case the tables already say it — or a
-  ticket's Log restated where nothing keeps it true. Both tools' pages were
-  emptied of it in [repo-1](./work/repo-1-generated-status-tables.md); each page
-  now opens with a table saying where each kind of fact goes instead. A gap
-  worth recording is a ticket worth filing.
+### Where each kind of fact goes
+
+This table is why the page could go. Every line on it names a home that
+something already keeps true; a status page is what you get when none of them
+is named.
+
+| What you want to say                          | Where it goes                                              |
+| --------------------------------------------- | ---------------------------------------------------------- |
+| A ticket is done, or blocked, or open         | its own frontmatter. `npm run status` is the view over it  |
+| What a piece of work did, and got wrong       | that ticket's `## Log`                                     |
+| Whether the work was checked, and by whom     | that ticket's `## Review`                                  |
+| A gap a tool still has                        | the ticket that closes it — and if there is none, file one |
+| Why the code is shaped the way it is          | a comment beside the code                                  |
+| How to run the tool, and what trips you up    | that tool's `CLAUDE.md`                                    |
+| Where the design was overruled by building it | an amendment in that tool's `00-ANALYSIS.md`               |
+| A decision that binds more than one tool      | an [ADR](./adr/)                                           |
+| What a phase or a milestone means             | that tool's `02-ROADMAP.md`                                |
+
+A test count, a "what exists" paragraph and a phase table are each either a
+projection of frontmatter — in which case `npm run status` already says it — or
+a ticket's Log restated where nothing keeps it true. **A gap worth recording is
+a ticket worth filing.**
 
 ## Asking what is next
 
 ```bash
-npm run status                # open tickets per tool, with what blocks each
-npm run status -- --ready     # ready, and nothing open in its depends_on
-npm run status -- --json      # the same data, structured
-npm run status -- --prs       # fold in `gh pr list`
+npm run status                    # open tickets per tool, with what blocks each
+npm run status -- --ready         # ready, and nothing open in its depends_on
+npm run status -- --json          # the same data, structured
+npm run status -- --prs           # fold in `gh pr list`
+npm run status -- --tool planner  # narrow any of the above to one tool
+npm run status -- --show pl-28    # one ticket: its fields, its blockers, its path
+npm run status -- --markdown      # the table, to paste into a pull request body
 ```
 
 Computed from the ticket files every time, so it cannot disagree with them.

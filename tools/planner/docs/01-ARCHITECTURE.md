@@ -7,7 +7,7 @@ named.
 **Read this as design, not as description.** It leads the code, and always has —
 by four phases when it was written, by one now. What is actually built is the
 closed tickets in [work/](./work/); what is not is the open ones, which
-[03-STATUS.md](./03-STATUS.md) lists. Check there before assuming anything on
+`npm run status -- --tool planner` lists. Check there before assuming anything on
 this page exists, and expect everything about specialists, grounding and
 revision to be the furthest ahead.
 

@@ -114,8 +114,8 @@ loopback fixture — currently exists only in unit tests that stub one of the fo
 - CI runs both suites on a downloader change and names them separately.
 - "The E2E suite drives only the direct resolver" stops being true, and this
   ticket's frontmatter goes to `done` in the commit that earns it — that is the
-  only place the gap was recorded, since `03-STATUS.md` is generated from the
-  frontmatter and carries no hand-written gap list (repo-1). **The container's
+  only place the gap is recorded, and `npm run status` is the only view over it
+  (repo-1, repo-2). **The container's
   browser tier stays smoke-tested only**: this ticket does not reach it, and
   should not claim to. Say so in the Log rather than leaving it unsaid.
 

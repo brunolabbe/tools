@@ -25,7 +25,7 @@ something to type into and never told what.
 Found by [pl-12](./pl-12-render-the-wizard-in-tests.md) while building the
 component suite, and **deliberately left alone there** — pl-16 was editing
 `web/src` in parallel, the component suite could be written without it, and the
-gap was written up in [03-STATUS.md](../03-STATUS.md) rather than fixed in
+gap was written up in `03-STATUS.md` rather than fixed in
 passing. That reason has since expired: pl-16 landed, and nothing is editing
 those files now. This is that finding, written down as work.
 

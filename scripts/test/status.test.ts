@@ -1,18 +1,19 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
 import {
-  extractRegion,
+  describeTicket,
   milestones,
   parseFrontmatter,
   readTickets,
   readyTickets,
-  renderRegion,
-  replaceRegion,
+  renderMarkdown,
 } from "../status.mjs";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
+const CLI = path.join(REPO, "scripts", "status.mjs");
 
 /**
  * A throwaway repo root with the tickets a case needs.
@@ -51,6 +52,32 @@ const pl = (id: string, over: Record<string, string> = {}) =>
 
 const at = (id: string) => `tools/planner/docs/work/${id}-slug.md`;
 
+/**
+ * Run the CLI the way a person does.
+ *
+ * repo-1's fourth gate found that the CLI had no test at all — `--check`'s two
+ * acceptance rows could only ever be `verified`. The flags added here are
+ * covered end to end for that reason: `--tool`, `--show` and `--markdown` are
+ * argument parsing and formatting, which is precisely what a pure-function
+ * suite cannot see.
+ *
+ * Argument array, never a shell — the repo-wide rule.
+ */
+function run(args: string[]): { stdout: string; status: number } {
+  try {
+    return {
+      stdout: execFileSync("node", [CLI, ...args], { encoding: "utf8", shell: false }),
+      status: 0,
+    };
+  } catch (error) {
+    const failure = error as { stdout?: string; stderr?: string; status?: number };
+    return {
+      stdout: `${failure.stdout ?? ""}${failure.stderr ?? ""}`,
+      status: failure.status ?? 1,
+    };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The real tickets
 // ---------------------------------------------------------------------------
@@ -58,7 +85,7 @@ const at = (id: string) => `tools/planner/docs/work/${id}-slug.md`;
 // The point of the strict parser is that this test is the one that fails, by
 // name and by line, when a ticket's frontmatter drifts. CI skips `**.md`, so a
 // documentation-only pull request never reaches this suite — `status.yml` runs
-// the same walk on every pull request for exactly that reason.
+// the same walk on any pull request that touches a ticket, for that reason.
 test("every ticket in the repo parses, and its dependencies resolve", () => {
   const tickets = readTickets(REPO);
   expect(tickets.length).toBeGreaterThan(0);
@@ -70,18 +97,20 @@ test("every ticket in the repo parses, and its dependencies resolve", () => {
   ]);
 });
 
-test("repo-wide tickets live in docs/work and have no status page to write into", () => {
+test("repo-wide tickets live in docs/work", () => {
   const repoTickets = readTickets(REPO).filter((t) => t.tool === "repo");
   expect(repoTickets.length).toBeGreaterThan(0);
   expect(repoTickets.every((t) => t.file.startsWith("docs/work/"))).toBe(true);
-  expect(fs.existsSync(path.join(REPO, "docs", "03-STATUS.md"))).toBe(false);
 });
 
-test("every tool's status page has a region to write into", () => {
+// repo-2 deleted both pages. This is the test that fails if one comes back:
+// the view is computed on every run, and a copy of it in a file is a copy
+// something has to keep true.
+test("no tool keeps a status page, and neither does the repo", () => {
+  expect(fs.existsSync(path.join(REPO, "docs", "03-STATUS.md"))).toBe(false);
   for (const tool of fs.readdirSync(path.join(REPO, "tools"))) {
     const file = path.join(REPO, "tools", tool, "docs", "03-STATUS.md");
-    if (!fs.existsSync(file)) continue;
-    expect(extractRegion(fs.readFileSync(file, "utf8")), `${tool} has no markers`).not.toBeNull();
+    expect(fs.existsSync(file), `${tool} has a status page again`).toBe(false);
   }
 });
 
@@ -134,7 +163,7 @@ test("a dependency on a ticket that does not exist is caught", () => {
 });
 
 test("a tool with no work directory yet is a young tool, not an error", () => {
-  const root = repoWith({ "tools/planner/docs/03-STATUS.md": "# status\n" });
+  const root = repoWith({ "tools/planner/docs/02-ROADMAP.md": "# roadmap\n" });
   expect(readTickets(root)).toEqual([]);
 });
 
@@ -183,48 +212,116 @@ test("unmilestoned tickets sort last, under their own heading", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The region
+// One ticket — `--show`
 // ---------------------------------------------------------------------------
 
-test("the region links each ticket relative to the status page beside it", () => {
+// The list worth printing is the dependencies that are *not* done, which is not
+// the same list as `depends_on`: a mature ticket's are mostly landed, and
+// listing them all buries the one that has not.
+test("the blockers are the dependencies that are not done, not all of them", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done" }),
+    [at("pl-2")]: pl("pl-2", { status: "in-flight" }),
+    [at("pl-3")]: pl("pl-3", { depends_on: "[pl-1, pl-2]" }),
+  });
+  const { ticket: shown, blockers } = describeTicket(readTickets(root), "pl-3");
+  expect(shown.file).toBe("tools/planner/docs/work/pl-3-slug.md");
+  expect(blockers.map((b) => [b.id, b.status])).toEqual([["pl-2", "in-flight"]]);
+});
+
+test("a ticket whose dependencies have all landed reports no blockers", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done" }),
+    [at("pl-2")]: pl("pl-2", { depends_on: "[pl-1]" }),
+  });
+  expect(describeTicket(readTickets(root), "pl-2").blockers).toEqual([]);
+});
+
+test("an id nobody filed is named rather than returning nothing", () => {
   const root = repoWith({ [at("pl-1")]: pl("pl-1") });
-  expect(renderRegion(readTickets(root))).toContain("[pl-1](./work/pl-1-slug.md)");
+  expect(() => describeTicket(readTickets(root), "pl-42")).toThrow(/no ticket called "pl-42"/);
+});
+
+// ---------------------------------------------------------------------------
+// The markdown — `--markdown`
+// ---------------------------------------------------------------------------
+
+// The links used to be relative to a `03-STATUS.md` sitting beside `work/`.
+// There is no such page any more and the destination is a pull request body, so
+// they are repo-root-relative.
+test("the markdown links each ticket from the repo root, not from a page beside it", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1") });
+  expect(renderMarkdown(readTickets(root))).toContain(
+    "[pl-1](tools/planner/docs/work/pl-1-slug.md)",
+  );
 });
 
 test("a note overrides the title, which is the only editorial field there is", () => {
   const root = repoWith({ [at("pl-1")]: pl("pl-1", { note: "what the table should say" }) });
-  const region = renderRegion(readTickets(root));
-  expect(region).toContain("what the table should say");
-  expect(region).not.toContain("the pl-1 thing");
+  const rendered = renderMarkdown(readTickets(root));
+  expect(rendered).toContain("what the table should say");
+  expect(rendered).not.toContain("the pl-1 thing");
 });
 
 test("a tool with nothing open says so rather than rendering an empty table", () => {
   const root = repoWith({ [at("pl-1")]: pl("pl-1", { status: "done" }) });
-  expect(renderRegion(readTickets(root))).toContain("None. Every ticket this tool has is closed.");
-});
-
-test("writing the region leaves everything around it exactly as it was", () => {
-  const page =
-    "# Status\n\nprose above\n\n<!-- generated:tickets -->\nold\n<!-- /generated:tickets -->\n\nprose below\n";
-  const written = replaceRegion(
-    page,
-    "<!-- generated:tickets -->\nnew\n<!-- /generated:tickets -->",
-    "t.md",
-  );
-  expect(written).toBe(
-    "# Status\n\nprose above\n\n<!-- generated:tickets -->\nnew\n<!-- /generated:tickets -->\n\nprose below\n",
+  expect(renderMarkdown(readTickets(root))).toContain(
+    "None. Every ticket this tool has is closed.",
   );
 });
 
-// Guessing where the region belongs would rewrite someone's page. The position
-// is editorial — under the orientation, above "Running things" — so a page that
-// has not opted in is a named error rather than a file to append to.
-test("a page with no markers is refused rather than appended to", () => {
-  expect(() => replaceRegion("# Status\n", "x", "t.md")).toThrow(/no .* region to write into/);
+test("the markdown heads each tool and counts the closed rather than listing them", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done" }),
+    [at("pl-2")]: pl("pl-2", { status: "dropped" }),
+    [at("pl-3")]: pl("pl-3"),
+  });
+  const rendered = renderMarkdown(readTickets(root));
+  expect(rendered).toContain("## planner — 1 open of 3");
+  expect(rendered).toContain("2 closed tickets not listed.");
+  expect(rendered).not.toContain("pl-1-slug.md");
 });
 
-test("markers the wrong way round are refused", () => {
-  const page = "<!-- /generated:tickets -->\n<!-- generated:tickets -->\n";
-  expect(() => replaceRegion(page, "x", "t.md")).toThrow(/wrong way round/);
-  expect(extractRegion(page)).toBeNull();
+// ---------------------------------------------------------------------------
+// The CLI
+// ---------------------------------------------------------------------------
+
+test("--tool narrows the view to one tool", () => {
+  const { stdout, status } = run(["--tool", "downloader", "--ready"]);
+  expect(status).toBe(0);
+  expect(stdout.length).toBeGreaterThan(0);
+  for (const line of stdout.trimEnd().split("\n")) {
+    expect(line).toContain("\tdownloader\t");
+  }
+});
+
+test("--tool with a name no tool has is a named failure, not an empty view", () => {
+  const { stdout, status } = run(["--tool", "sniffer"]);
+  expect(status).toBe(1);
+  expect(stdout).toMatch(/no tickets for a tool called "sniffer"/);
+});
+
+test("--show prints a ticket's path and the dependencies still open", () => {
+  const { stdout, status } = run(["--show", "pl-2"]);
+  expect(status).toBe(0);
+  expect(stdout).toContain("tools/planner/docs/work/pl-2-container-image.md");
+  expect(stdout).toMatch(/unblocked|blocked by/);
+});
+
+test("--markdown emits a table, with no generated-region markers to guard", () => {
+  const { stdout, status } = run(["--markdown", "--tool", "downloader"]);
+  expect(status).toBe(0);
+  expect(stdout).toContain("| Ticket ");
+  expect(stdout).not.toContain("generated:tickets");
+});
+
+// `--write` and `--check` were real until repo-2 retired the file they wrote.
+// Ignoring them would hand a reader with muscle memory the default view and let
+// them believe a page had just been regenerated.
+test("--write and --check are gone, and say so rather than being ignored", () => {
+  for (const flag of ["--write", "--check"]) {
+    const { stdout, status } = run([flag]);
+    expect(status).toBe(1);
+    expect(stdout).toContain(`unrecognised argument "${flag}"`);
+  }
 });

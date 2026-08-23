@@ -37,6 +37,15 @@ tickets instead of describing work; the status document becomes a dashboard.
 > `docs/01-TICKETS.md` for what it keeps. The word is left standing here rather
 > than corrected, because this is the record of what was decided in August 2026
 > and the framing is the interesting part of the mistake.
+>
+> _Extended, 2026-08-23._ There is no `03-STATUS.md` any longer.
+> [repo-2](../work/repo-2-retire-the-status-page.md) deleted both, because 003's
+> writer never worked: branch protection rejected every push the regenerating
+> job made, and its `--check` guard compared two equally stale copies and so
+> could not tell. The spine is now four documents and `work/` — see
+> [00-TOOLS.md](../00-TOOLS.md) — and the dashboard is `npm run status`,
+> computed on demand and stored nowhere. Which is what "a dashboard" should have
+> meant here all along: a view, not a page.
 
 Ids are prefixed per tool (`dl-`, `pl-`) so they survive being quoted outside
 their directory.

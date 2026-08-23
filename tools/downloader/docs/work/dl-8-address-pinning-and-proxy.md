@@ -14,7 +14,7 @@ depends_on: [dl-5, dl-6]
 
 ## Why
 
-Two gaps [03-STATUS.md](../03-STATUS.md) listed separately turned out to be one
+Two gaps `03-STATUS.md` listed separately turned out to be one
 seam, so they closed together.
 
 The SSRF guard resolved a name, approved it, and then let the socket resolve it

@@ -14,7 +14,7 @@ depends_on: [dl-6, dl-8]
 
 ## Why
 
-[03-STATUS.md](../03-STATUS.md) records it in one line: **ffmpeg fetches outside
+`03-STATUS.md` records it in one line: **ffmpeg fetches outside
 the guard.** `guarded-fetch.ts` covers the direct resolver and the engine's own
 fetches, and `dispatcher.ts` pins those connections to a vetted address, but
 ffmpeg does its own HTTP through libavformat and neither mechanism can reach it.
@@ -121,7 +121,7 @@ process keeps the sockets alive.
 - `npm run e2e:downloader` passes unchanged — it drives the direct resolver
   against a local fixture origin, so `SSRF_ALLOW_HOSTS=127.0.0.1` has to keep
   working through the proxy. If it does not, the exemption is not being shared.
-- The line in [03-STATUS.md](../03-STATUS.md) moves from "known gaps" to closed,
+- The line in `03-STATUS.md` moves from "known gaps" to closed,
   naming what remains true in proxy mode.
 
 ## Log

@@ -4,7 +4,7 @@ Give it a web page URL. It finds the video stream behind the page, downloads it,
 and hands back a link to the file.
 
 > **Status: complete and deployable.** `docker compose up` gives a working
-> service on <http://localhost:8080>. [docs/03-STATUS.md](./docs/03-STATUS.md)
+> service on <http://localhost:8080>. `npm run status -- --tool downloader`
 > lists what is still open; [docs/work/](./docs/work/) is what each piece of
 > work did.
 
@@ -91,14 +91,15 @@ API. A production build defaults the other way.
 
 This tool's documentation lives with its code, in [docs/](./docs/):
 
-|                                                |                                                                |
-| ---------------------------------------------- | -------------------------------------------------------------- |
-| [00 — Analysis](./docs/00-ANALYSIS.md)         | How video is delivered and how to catch it. **Read first.**    |
-| [01 — Architecture](./docs/01-ARCHITECTURE.md) | Packages, pipeline, decisions, config, security                |
-| [02 — Roadmap](./docs/02-ROADMAP.md)           | What was ruled out, the recommendation, phases, milestones     |
-| [03 — Status](./docs/03-STATUS.md)             | The open tickets, generated from frontmatter, and the commands |
-| [work/](./docs/work/)                          | One file per ticket: the brief and what it did                 |
+|                                                |                                                             |
+| ---------------------------------------------- | ----------------------------------------------------------- |
+| [00 — Analysis](./docs/00-ANALYSIS.md)         | How video is delivered and how to catch it. **Read first.** |
+| [01 — Architecture](./docs/01-ARCHITECTURE.md) | Packages, pipeline, decisions, config, security             |
+| [02 — Roadmap](./docs/02-ROADMAP.md)           | What was ruled out, the recommendation, phases, milestones  |
+| [work/](./docs/work/)                          | One file per ticket: the brief and what it did              |
 
-[CLAUDE.md](./CLAUDE.md) beside this file is the rules specific to this tool;
+[CLAUDE.md](./CLAUDE.md) beside this file is the rules specific to this tool and
+the commands that run it — and `npm run status -- --tool downloader` is where it
+stands, computed from the tickets rather than written down;
 the repo-wide conventions are in the [root CLAUDE.md](../../CLAUDE.md), and
 [../../README.md](../../README.md) is the repo itself.

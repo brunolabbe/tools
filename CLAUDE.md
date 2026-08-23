@@ -44,10 +44,12 @@ npm install                   # workspaces
 npm run check                 # lint + format check + typecheck — must pass before done
 npm test                      # vitest, every project
 npm test -- --project <tool>  # just one tool's suite — seconds, not a minute
+npx vitest run <package-dir>  # just one package, e.g. tools/downloader/api
 npm run lint:fix              # oxlint --fix
 npm run format                # oxfmt
 npm run build                 # every workspace
 npm run status                # open tickets per tool, computed from their frontmatter
+npm run status -- --show <id> # one ticket: its fields, its blockers, its path
 ```
 
 Per-tool commands (`dev`, `e2e`) live in that tool's `CLAUDE.md`.
@@ -159,8 +161,8 @@ work on one tool does not pay for another's.
 ## Documentation and work
 
 **A tool's documentation lives with its code**, in `tools/<tool>/docs/`, on the
-same spine for every tool: `00-ANALYSIS`, `01-ARCHITECTURE`, `02-ROADMAP`,
-`03-STATUS`, and `work/`. The root `docs/` holds only what is true of the repo —
+same spine for every tool: `00-ANALYSIS`, `01-ARCHITECTURE`, `02-ROADMAP`, and
+`work/`. The root `docs/` holds only what is true of the repo —
 the tool index, the ticket format, and ADRs for decisions binding more than one
 tool. A document that describes two tools is where two tools start to fuse.
 
@@ -171,29 +173,28 @@ format, the fields and the preamble to hand an agent are in
 [docs/01-TICKETS.md](./docs/01-TICKETS.md).
 
 Append to a ticket's Log when you finish work on it, including whatever the
-brief turned out to have wrong. That is the note the next agent needs, and the
-roadmap and status pages are deliberately too thin to hold it.
+brief turned out to have wrong. That is the note the next agent needs, and there
+is nowhere else for it: the roadmap is deliberately too thin to hold it, and
+there is no status page at all.
 
-**A `03-STATUS.md` holds the generated tables and how to run the thing, and
-nothing else** — no phase table, no test count, no "what exists" paragraph, no
-gap list. Each of those is either a projection of frontmatter, which the tables
-already are, or a ticket's Log restated where nothing keeps it true; both pages
-were emptied of them in `repo-1`, and each now opens with a table saying where
-each kind of fact goes. A gap worth recording is a ticket worth filing.
+**There is no status page.** `repo-1` emptied `03-STATUS.md` of everything a
+person had to keep true, and `repo-2` deleted what was left, because a projection
+kept in version control needs a writer and every writer available here was
+unsafe, noisy or racy — the one that shipped was rejected by branch protection on
+every merge it ever attempted, while the guard meant to catch that compared two
+equally stale copies. **The view is `npm run status`**, computed on every run
+from the tickets, so it cannot disagree with them. A gap worth recording is a
+ticket worth filing;
+[docs/01-TICKETS.md](./docs/01-TICKETS.md) says where each other kind of fact
+goes. The reasoning is in
+[adr/003](./docs/adr/003-the-status-page-is-generated.md) and its amendment.
 
 **A ticket's frontmatter is the only place its state is recorded**, and
 `npm run status` is the view over it — `-- --ready` for what is ready and
-unblocked, `-- --json` for an agent, `-- --prs` to fold in what is in review.
-Move a ticket to `done` by editing the ticket, in the commit that earns it.
-
-**Never edit a `<!-- generated:tickets -->` region.** Those tables are written on
-`main` from the frontmatter, by `.github/workflows/status.yml`. A branch that
-edits one fails its pull request, and the reason is the failure that came before
-the rule: a table with one line per ticket, touched by every ticket, means a
-branch cut a few days ago silently restores every row that moved since — which
-reads as plausible rather than as a conflict, because the file still parses and
-the statuses are all still words. See
-[adr/003](./docs/adr/003-the-status-page-is-generated.md).
+unblocked, `-- --json` for an agent, `-- --prs` to fold in what is in review,
+`-- --tool <name>` for one tool, `-- --show <id>` for one ticket and what blocks
+it, `-- --markdown` for a table to paste into a pull request. Move a ticket to
+`done` by editing the ticket, in the commit that earns it.
 
 **A ticket file does not know about a branch.** It says `status: ready` until
 something merges, so "what is next" is `gh pr list` first and the ticket files

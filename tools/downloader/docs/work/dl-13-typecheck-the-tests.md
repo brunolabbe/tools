@@ -17,7 +17,7 @@ and whatever the fixes turn out to be under `test/`.
 > dl-10's was. `work/` exists only under a tool, and inventing a `repo-`
 > namespace for the second time is worse than the precedent. The downloader owns
 > it because it holds the largest untypechecked surface — 39 test files plus
-> `e2e/` — and because [03-STATUS.md](../03-STATUS.md) is where the gap is
+> `e2e/` — and because `03-STATUS.md` is where the gap is
 > written down. Applying the same pattern to `packages/` and to the planner is
 > part of the ticket, not a follow-up: a convention that half the repo follows
 > is not a convention.
@@ -113,7 +113,7 @@ have never once been held to them.
   in the Log, because that means it was passing for a reason nobody knew.
 - `npm run build` emits nothing new into any package's `dist`.
 - The "test files are still not typechecked" entry in
-  [03-STATUS.md](../03-STATUS.md) is gone rather than reworded.
+  `03-STATUS.md` is gone rather than reworded.
 
 ## Log
 

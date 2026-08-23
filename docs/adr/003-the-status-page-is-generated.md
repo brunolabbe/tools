@@ -1,6 +1,9 @@
 # 003 — The status tables are generated from the tickets
 
-**Status:** accepted · **Date:** 2026-08-22 · **Affects:** every tool
+**Status:** accepted; its **mechanism** superseded by
+[repo-2](../work/repo-2-retire-the-status-page.md), 2026-08-23 —
+see [the amendment](#amendment--2026-08-23) · **Date:** 2026-08-22 ·
+**Affects:** every tool
 
 ## Context
 
@@ -68,6 +71,14 @@ merge ever changes it, and there is nothing to conflict.
 **A pull request that edits the region fails.** `--check` compares the branch's
 region against the base commit's and refuses a difference. The same workflow
 parses every ticket, which is the only thing in CI that does.
+
+> _Amended by [repo-2](../work/repo-2-retire-the-status-page.md), 2026-08-23._
+> The two paragraphs above are the half of this decision that did not hold, and
+> they are left standing because they are what was believed. Neither mechanism
+> worked: the `regenerate` job was rejected by branch protection on every merge
+> it ever attempted, and `--check` compares two equally stale regions and so
+> cannot see it. The tables are no longer stored at all — `npm run status`, and
+> `--markdown` when a table is wanted. See [the amendment](#amendment--2026-08-23).
 
 **That check has a workflow of its own on purpose.** `ci.yml` carries
 `paths-ignore: ["**.md"]`, so a documentation-only pull request — a ticket
@@ -166,9 +177,69 @@ worse than either one.
   a pull request to write there, that job fails, and the fix is to open one
   rather than to let it pass — a status page that silently stops updating is
   worse than the hand-written one it replaced.
+
+  _Outcome, 2026-08-23: the ruleset already required it, and always had._ The
+  job was rejected on every merge it ever attempted — `GH013`, "changes must be
+  made through a pull request" — so the condition this bullet describes as
+  hypothetical was true from the first push. The fix taken was neither of the
+  two named here; see the amendment below. The prediction is annotated rather
+  than corrected in place, in the same pattern as "roughly eight" above.
+
 - **`status.mjs` is the first thing in the repo that reads ticket frontmatter at
   all.** It is strict on purpose: an unknown field, a status outside the
   taxonomy, an id that disagrees with its filename or a `depends_on` pointing at
   nothing is a named failure rather than a row quietly missing from a table.
   Forty-six existing tickets pass it unchanged, which is the only reason the
   strictness was affordable.
+
+## Amendment — 2026-08-23
+
+**The decision held; the mechanism did not.** A ticket's frontmatter is still
+the only place its state is recorded, `scripts/status.mjs` is still the lens
+over it, and there is still no store between the two. What changed is that the
+projection is no longer **kept in a file**. Both `tools/*/docs/03-STATUS.md`
+were deleted in [repo-2](../work/repo-2-retire-the-status-page.md).
+
+Two bugs, and neither is a defect in the code so much as in the shape:
+
+**The `regenerate` job never once pushed a commit.** Branch protection rejects
+the bot — `GH013`, `changes must be made through a pull request`. Of the six
+`push` runs `status.yml` ever had, three failed that way, one lost a race with a
+concurrent merge (`! [rejected] main -> main (fetch first)`), one was cancelled
+by the workflow's own `cancel-in-progress`, and the single green one printed
+`the tables already match the tickets` and exited before pushing anything. So
+both pages sat stale on `main` for a week: the downloader's listed a merged
+ticket as `ready` and omitted `dl-19`, a `ready` security ticket, entirely.
+
+**`--check` cannot see that staleness, by construction.** It compared HEAD's
+region against the **base commit's**. Both were equally stale, so it was green
+every time. It asked "did this branch edit the region", never "is the region
+correct" — and the two questions look the same only while a writer is working.
+
+**Why the fix was not to repair the writer**, which is the part that must not be
+re-proposed. Pushing to `main` needs a protection bypass, and an unreviewed
+write path to `main` is a bad price for a table. A pull request per merge is
+reviewable and is noise — one bot PR per merge, each touching the file every
+ticket touches — and it does not dissolve the conflict, it queues it.
+Regenerating on the branch is what this ADR removed. And the race above says the
+job is not even reliable when it is permitted.
+
+**A generated artefact kept in version control needs a writer; the fix is to
+stop keeping it.** `npm run status` computes the same tables from the tickets on
+every run. It cannot be stale, and it needs no job, no token and no guard. The
+`--markdown` flag renders the tables for a pull request body or a message, which
+is where a person actually wanted them.
+
+The third alternative this ADR considered — "generating the entire page" — was
+rejected because "the orientation paragraph is the one thing on the page a
+reader actually needs and no projection can write it". That was right, and it is
+the reason the page is gone rather than fully generated: the orientation had a
+better home already. The "where each kind of fact goes" table is a rule about
+the ticket format and moved to [01-TICKETS.md](../01-TICKETS.md); `## Running
+things` was a second, drifting copy of each tool's own `CLAUDE.md`
+`## Commands`, which is richer and is where the root `CLAUDE.md` already says
+per-tool commands live.
+
+**This is not a reversal of 003.** It is 003's own test — a fact restated where
+nothing keeps it true — applied to what 003 left behind. 003 removed a
+projection a person could not keep; this removes one no machine here can.
