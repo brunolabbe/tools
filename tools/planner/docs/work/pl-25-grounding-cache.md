@@ -95,6 +95,124 @@ we read, and when".
 - Migration 5 applies to a database at `user_version = 4` and the existing
   suites still pass against a fresh one.
 
+## Review
+
+**Gate: PASS** — 2026-08-23, on the third pass. Three gates over two days:
+**FAIL** (2026-08-22) → **CONCERNS** (2026-08-23) → **PASS** (2026-08-23), each
+`review-ticket` over `origin/main...HEAD`, delegating the defect hunt to
+`code-review`. The verdicts are left as they were given rather than rewritten by
+the round that fixed them — a gate that edits itself once the work is done
+records nothing.
+
+Recorded here by the builder, not the reviewer: a reviewer's worktree is
+discarded when it finishes, so a gate that lives only there did not happen.
+
+| Done when                                                                                                                         | Proof                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Two identical lookups in one run hit the underlying provider once; by a counting fake, not by timing                              | `api/test/grounding-cache.test.ts:230` "costs one `locate` call, not two", `:241` "costs one `travel` call, not two", `:287` "a matrix it holds in full costs no call at all" ✓                                                                                    |
+| A cached fact's `Source.fetchedAt` is the original fetch time, with a clock that moved between write and read                     | `:305` "carries the original fetch time, not the time it was served", `:321` "…through a `travel` cell too" ✓                                                                                                                                                      |
+| An expired row is not served, and is gone after eviction runs                                                                     | `:339` "does not serve a row that has aged out", `:382` "an expired row is gone once eviction runs", `:394` "eviction leaves what is still good alone" ✓                                                                                                           |
+| A cache hit does not decrement the run's grounding budget; a miss does                                                            | `:502` "a miss spends a call and a hit does not", `:517` "a matrix the table holds in full spends nothing", `:589` "a hit still answers once the budget is spent" ✓                                                                                                |
+| `constructor` / `__proto__` / `toString` miss like any other unknown question                                                     | `:657` `test.each(["constructor", "__proto__", "toString", "valueOf"])` "%s misses like any other unknown place" ✓                                                                                                                                                 |
+| `locate` **and** `travel` share a row on case and surrounding whitespace; anything else the normaliser touches is named in a test | `:693` "case and surrounding whitespace: one row, one call", `:708` "the same three, on `travel`, at both ends of the leg", `:721` "and one row is what that costs the table, not two"; and `:704`, `:742`, `:750`, `:758`, `:765`, `:770`, `:776` name the rest ✓ |
+| Migration 5 applies to a database at `user_version = 4`; existing suites pass against a fresh one                                 | `api/test/migrations.test.ts:58` "migration 5 applies to a database at `user_version = 4`"; `schema.test.ts` and `migrations.test.ts` moved 4→5 with insertions only ✓                                                                                             |
+
+Every claim was reproduced by hand at the third gate: each fix reverted to
+confirm its test goes red, the branch-point baseline re-run independently
+(574 across 43 files), and the `@ts-expect-error` probes checked in both
+directions (`TS2578` when the narrowing is undone).
+
+### Gate 1 — FAIL, 2026-08-22
+
+The design held — migration 5, `PRIMARY KEY (kind, key)`, the normalisation, the
+populated-database migration test and all three gate claims reproduced, and two
+of the three disclosed decisions were upheld. The defects were in the shape of
+one seam and in what was untested.
+
+- **high · fixed** — a budget refusal and "nobody knows" were the same `null` at
+  every per-lookup layer; `refused` as a per-run scalar only asks the caller not
+  to collapse them. Replaced by a discriminated `GroundingOutcome<T>`.
+- **med · fixed** — `FIXTURE_FETCHED_AT` frozen against a 4,320-hour TTL meant
+  every fixture `travel` answer arrived already expired from 2027-02-18: cache
+  off, every lookup spending budget, no red test and no log line.
+- **med · fixed** — the acceptance clause names `locate` **and** `travel`; only
+  `locate` was proven.
+- **med · fixed** — the TTL clamp was unexercised in both directions.
+- **med · fixed** — "however that run ended" ran only the happy path.
+- **low · fixed** — the eviction call in the run's `finally` was unguarded.
+- **low · fixed** — a dead comment in migration 5 named a `groundingKey` that
+  never existed.
+- **low · fixed** — `groundingForRun` dispatched on `instanceof` and fell back
+  silently.
+- **low · fixed** — a test asserted the opposite of its own name.
+- **accepted, no action** — not caching negatives (confirmed it cannot hot-loop:
+  every re-ask goes through the budget), and the amplified matrix cost that
+  comes with it.
+
+### Gate 2 — CONCERNS, 2026-08-23
+
+The seam held under probing: mixed, fully-refused, zero-budget and
+hit-plus-refused matrices, with no path found that collapses refusal into
+unknown or the reverse. `travelOutcome` throwing `INTERNAL` was judged correct
+and idiomatic. All nine prior findings confirmed fixed rather than papered over.
+All three new findings were in the **wiring** rather than in the seam.
+
+- **med · fixed** — `RunGroundingSource extends GroundingProvider`, so
+  `context.grounding.locate(…)` still compiled and spent no budget: the
+  un-budgeted door, one level above the seam that exists to close it.
+- **med · fixed** — the boot sweep was unguarded, so a `SQLITE_BUSY` on that
+  DELETE stopped the service booting.
+- **med · fixed** — `createGroundingProvider` built the fixture provider on its
+  _default_ clock while the cache took the injected one, re-arming the time bomb
+  the provider had just been fixed for.
+- **low · fixed** — "the seam's own methods never refuse" asserted only a call
+  count.
+- **low · fixed** — the eviction guard had no test and flattened its cause.
+- **low · fixed** — `FIXTURE_TABLE_WRITTEN` was a dead export.
+- **dropped by the reviewer** — prepare-per-cell in `#travel`'s read loop (house
+  style in `db/runs.ts` and `db/intakes.ts`, not introduced here), and
+  `UNKNOWN`/`REFUSED` being unfrozen singletons (every consumer is TypeScript).
+
+### Gate 3 — PASS, 2026-08-23
+
+Seven lows, four swept in the round below and three deferred with reasons.
+
+- **low · fixed** — the boot-sweep guard was the only one of six fixes without a
+  test.
+- **low · fixed** — `cache.ts`'s header still said everything above the seam
+  "sees the seam and nothing else", which the narrowing had made the opposite of
+  true.
+- **low · fixed** — the claim that an unguarded throwing `finally` "would
+  discard a completed run's result" was overstated in three places: the run row
+  is committed before `execute` returns and the queue releases the slot, so what
+  the guard actually buys is the suppression of a spurious, misattributed error
+  line.
+- **low · fixed** — `answered`, `UNKNOWN` and `REFUSED` were exported with no
+  consumer outside the file.
+- **low · comment corrected, code unchanged** — the `key` column embeds a NUL,
+  so storage, comparison and lookup are exact but `length()`, `substr`, `LIKE`
+  and most database browsers truncate at it. Migration 5 sold the table as
+  answerable by "one `SELECT` against these five columns"; it now says what is
+  true. The separator is deliberately unchanged — pl-27 builds `placeIdentity`
+  on this format.
+- **low · deferred** — the N×M `#store` log lines, latent until pl-27 calls
+  `travel`.
+- **low · deferred** — `01-ARCHITECTURE.md`'s `GROUNDING_CACHE_TTL_*` row still
+  reads "varies" and predates the two variables that now exist.
+
+- NFR: security — the cache fetches nothing itself; keys come from model-written
+  text and every index over them is a `Map` or a SQLite row, with control
+  characters stripped so no name can forge a separator; sources are
+  schema-validated before storage; no credential reaches a log line ·
+  performance — a hit costs one indexed `SELECT`, a partial matrix re-asks only
+  the rows and columns it is missing, and eviction is a single indexed `DELETE`
+  · reliability — both sweeps are guarded, expiry is enforced on read rather than
+  trusted to the sweep, and a row that no longer parses reads as a miss rather
+  than poisoning every run that touches it · maintainability — the refused /
+  unknown distinction is carried by the type system rather than by comments, and
+  the narrowing that keeps it that way is enforced by the same gate that
+  typechecks the source
+
 ## Log
 
 **2026-08-22 — built.** Migration 5, the caching provider, its TTLs and the two
@@ -384,3 +502,73 @@ and `UNKNOWN`/`REFUSED` being unfrozen singletons (every consumer is TypeScript)
 **627 in the planner suite (624 before, 574 at the branch point), 1221
 repo-wide, `npm run check` green.** Each of the three new tests was confirmed to
 fail with its fix reverted.
+
+**2026-08-23 — third gate: PASS, and the sweep that followed it.** The reviewer
+reproduced every claim by hand rather than reading for them: each fix reverted to
+confirm its test goes red, the branch-point baseline re-run independently
+(574/43), and the `@ts-expect-error` probes checked in both directions. Seven
+lows; four fixed here, three deferred on purpose and named below so the next
+reader does not think they were missed. The gate record for all three rounds is
+now the `## Review` section above — **the builder commits it, because a
+reviewer's worktree is discarded and an uncommitted gate did not happen.**
+
+**The boot-sweep guard was the only one of six fixes with no test**, and the
+previous entry's "each of the three new tests was confirmed to fail" quietly
+excluded it. It has one now, spying `Database.prototype.prepare` — the instance
+cannot be reached, because `createApp` builds its own — and confirmed failing
+without the guard: `createApp` rejects and the service does not boot. The failure
+it guards is worse than the run-time one and it was the one left unpinned.
+
+**`cache.ts`'s header had become false.** It said everything above the seam
+"sees the seam and nothing else"; after the narrowing, `context.grounding` is
+precisely the thing that cannot see it. That was the first paragraph a reader
+hits, in the file whose header _is_ the argument — the sentence is now what the
+interface's own note has said since the last round.
+
+**The `finally` guard was oversold, in the comment, in the test and in the Log.**
+All three said an unguarded throw "would discard a completed run's result and
+report it as run task rejected". It would not: `execute` commits the run row
+before returning, and the queue catches a rejected task and releases its slot.
+The reviewer's proof is the sharper form of the point — `expect(finished.status)
+.toBe("done")` **still passes with the guard removed**, so the test's
+title-bearing assertion was inert and only the two log assertions ever bit. The
+guard is still worth having: it stops an error-level line blaming a run that
+succeeded for a DELETE it had nothing to do with. All three places now say that,
+and the test is named for what actually bites, with the inert assertion marked as
+context rather than claim. **A test whose headline assertion passes under the bug
+is a test that reads as coverage and is not** — the same shape as a name
+asserting the opposite of its body, found two rounds ago.
+
+**`answered`, `UNKNOWN` and `REFUSED` are no longer exported.** Nothing outside
+the file consumed them — not even the suite, which reads `outcome.kind` and
+`travelOutcome(...).kind`, which is also what the Log points pl-27 at. Same class
+as `FIXTURE_TABLE_WRITTEN` last round; the day pl-28 needs to build an outcome,
+exporting them is the change.
+
+**The NUL in `key`: comment corrected, code deliberately unchanged.** The
+reviewer checked empirically that storage, comparison and lookup are all exact —
+two keys differing only after the separator are two rows, each found by its own
+key. What is not true is migration 5's own sales pitch: `length()` returns 4 for
+`alma<NUL>québec`, and `substr`, `LIKE` and most database browsers stop at the
+first NUL, so that row and `alma<NUL>saguenay` both display as `alma`. The table
+is **answerable by query, not readable by browsing**, and the one column that
+identifies a row is the one that will not read back by eye. Migration 5 and
+`db/grounding-cache.ts` both say so now. The separator itself stays: pl-27 builds
+`placeIdentity` on this format and changing it would ripple into a branch
+mid-review.
+
+**Deferred, deliberately, both named by the gate:**
+
+- **`#store` logs per cell.** A refused or already-expired `travel` matrix can
+  emit N×M lines where one would do. Latent until pl-27 actually calls `travel`,
+  and the right fix is a per-call summary rather than a per-cell line — which is
+  easier to write against a real caller than against none.
+- **`01-ARCHITECTURE.md`'s `GROUNDING_CACHE_TTL_*` row** still says "varies" and
+  predates `GROUNDING_CACHE_TTL_LOCATE_HOURS` and
+  `GROUNDING_CACHE_TTL_TRAVEL_HOURS`. Left alone on this branch on purpose: the
+  configuration table is one table for the whole tool, pl-27 is in review against
+  it, and a two-line edit is not worth a conflict in a shared document.
+
+**628 in the planner suite (627 before, 574 at the branch point), 1222
+repo-wide, `npm run check` green.** The new boot-sweep test was confirmed failing
+with its guard removed, like the three before it.

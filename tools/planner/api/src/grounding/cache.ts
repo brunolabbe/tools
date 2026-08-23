@@ -13,8 +13,15 @@
  * This is a `GroundingProvider` that holds another one, so pl-28's adapter
  * never learns that SQLite exists, the fixture provider is cacheable for free,
  * and a test can assert the wrapped provider was called exactly once for two
- * identical questions. Everything above the seam — `context.grounding` — sees
- * the seam and nothing else.
+ * identical questions. Nothing below it learns there is a cache, and nothing
+ * above it learns there is a backend.
+ *
+ * What is above it does **not** get the seam. `AppContext.grounding` is
+ * `RunGroundingSource` — `{ name, forRun }` — so the only lookup reachable from
+ * a run is one that spends that run's budget and can say it was refused. The
+ * plain `GroundingProvider` methods are still here, and `server.ts` is the only
+ * place that holds this object as both, because it is the only place that
+ * builds it. See `RunGroundingSource` below for what that closes.
  *
  * `name` is the inner provider's, deliberately. `/api/health` answers "which
  * backend is this deployment grounding against", and "cached" is not a backend.
@@ -225,11 +232,18 @@ export type GroundingOutcome<T> =
   | { readonly kind: "unknown" }
   | { readonly kind: "refused" };
 
-/** Named so that no call site writes the literal and the two empties read apart. */
-export const UNKNOWN = { kind: "unknown" } as const;
-export const REFUSED = { kind: "refused" } as const;
+/**
+ * Named so that no call site writes the literal and the two empties read apart.
+ *
+ * Not exported: a caller reads `outcome.kind` or `travelOutcome(...).kind`, and
+ * nothing outside this file has any business constructing an outcome. The day
+ * pl-28 needs to build one, exporting these is the change — until then they
+ * would be three exports with no consumer.
+ */
+const UNKNOWN = { kind: "unknown" } as const;
+const REFUSED = { kind: "refused" } as const;
 
-export function answered<T>(value: T): GroundingOutcome<T> {
+function answered<T>(value: T): GroundingOutcome<T> {
   return { kind: "answered", value };
 }
 

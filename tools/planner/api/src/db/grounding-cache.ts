@@ -8,9 +8,15 @@
  *
  * **The deadline is stored, never computed on read.** `expires_at` arrives with
  * the row, so a later change to a TTL neither resurrects what had already aged
- * out nor kills what was still good — and "what is in the cache, and until
- * when" is one `SELECT` by somebody who has never heard of the TTL table. That
- * is the inspectable half of `01-ARCHITECTURE.md`'s "a table, not a service".
+ * out nor kills what was still good — and "how much of this cache is still
+ * good" is one `SELECT` by somebody who has never heard of the TTL table. That
+ * is the answerable half of `01-ARCHITECTURE.md`'s "a table, not a service".
+ *
+ * The half it is not: **`key` does not read back by eye.** It joins its parts
+ * with a NUL, which most database browsers and SQLite's own `substr` and `LIKE`
+ * truncate at. Lookups by equality are exact — see migration 5's note on the
+ * column — but "which question is this row about" is a question for the code
+ * that built the key, not for a screen.
  */
 
 import { sourceSchema } from "@planner/contract";

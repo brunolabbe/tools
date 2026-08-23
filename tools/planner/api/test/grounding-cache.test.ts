@@ -973,11 +973,49 @@ describe("where eviction runs", () => {
     }
   });
 
-  test("and a sweep that throws does not fail the run it was housekeeping for", async () => {
-    // A `finally` that throws *replaces* the outcome of the block it guards, so
-    // an unlucky `SQLITE_BUSY` or a full disk on this DELETE would discard a
-    // completed run's result and report it to `onTaskError` as "run task
-    // rejected" — a plan that was written, filed as a bug in the bookkeeping.
+  test("and a boot sweep that throws does not stop the service from booting", async () => {
+    // The one fix in this round that the gate found untested, and the failure
+    // is worse than the run-time one: an unguarded DELETE here rejects
+    // `createApp`, so a lock or a full disk means the service does not start at
+    // all — over work this cache itself calls not load-bearing, since an
+    // expired row is refused on read whether or not anything deleted it.
+    //
+    // Spied on the prototype rather than the instance, because `createApp`
+    // builds its own `Database` and there is nothing to reach for until it has.
+    const { logger, lines } = recordingLogger();
+    const prepare = Database.prototype.prepare;
+    vi.spyOn(Database.prototype, "prepare").mockImplementation(function (
+      this: Database.Database,
+      sql: string,
+    ) {
+      if (sql.startsWith("DELETE FROM grounding_cache")) {
+        throw new Error("SQLITE_FULL: database or disk is full");
+      }
+      return prepare.call(this, sql);
+    } as typeof Database.prototype.prepare);
+
+    try {
+      const app = await createApp({ config: { databasePath: ":memory:" }, logger });
+      await app.shutdown();
+
+      const warning = lines.find(
+        (line) => line.message === "grounding cache eviction failed at boot",
+      );
+      expect(warning?.level).toBe("warn");
+      expect(warning?.fields?.["cause"]).toContain("SQLITE_FULL");
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  test("and a sweep that throws is reported as itself, not as a rejected run", async () => {
+    // What the guard actually buys, stated exactly. The run row is committed
+    // before `execute` returns and the queue releases the slot of a rejected
+    // task, so an unguarded throw here loses no plan and wedges nothing — the
+    // status below is `done` either way, which is why it is context here and
+    // not the claim. What it does produce is an error-level "run task rejected"
+    // blaming a run that succeeded for a DELETE it had nothing to do with. The
+    // two log assertions are the ones that bite.
     const { logger, lines } = recordingLogger();
     const harness = await createRunHarness({ logger });
     try {
@@ -996,7 +1034,9 @@ describe("where eviction runs", () => {
       const run = await startRunOver(harness.app, intakeId);
       const finished = await runToCompletion(harness.app, run.id);
 
+      // Context, not the claim: this passes with the guard removed too.
       expect(finished.status).toBe("done");
+
       const warning = lines.find((line) => line.message === "grounding cache eviction failed");
       expect(warning?.level).toBe("warn");
       // The cause, not only `INTERNAL`: `AppError.from` gives everything

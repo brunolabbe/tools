@@ -200,12 +200,15 @@ export function startRun(context: AppContext, intakeId: string): Run {
         // the database closes behind it, and a failed DELETE would turn a run
         // that finished into a logged task rejection.
         //
-        // And guarded even so. A `finally` that throws **replaces** the outcome
-        // of the block it guards, so an unlucky `SQLITE_BUSY` or a full disk
-        // here would discard a completed run's result and report it to
-        // `onTaskError` as "run task rejected" — a plan that was written, filed
-        // as a bug in the bookkeeping. Housekeeping does not get to fail a run;
-        // the next boot sweeps whatever this missed.
+        // And guarded even so, though it is worth being exact about what that
+        // buys. The run row is already committed by the time `execute` returns,
+        // and the queue catches a rejected task and releases its slot — so an
+        // unguarded `SQLITE_BUSY` here does **not** lose the plan or leave the
+        // queue wedged. What it does is reject the task, which `onTaskError`
+        // logs at error level as "run task rejected": a spurious line blaming
+        // the run for a failed DELETE it had nothing to do with, on a run that
+        // succeeded. Housekeeping reports itself; the next boot sweeps whatever
+        // this missed.
         if (!context.isShuttingDown()) {
           try {
             evictExpiredGrounding(context.db, context.now(), context.logger);

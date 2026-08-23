@@ -242,9 +242,13 @@ const MIGRATIONS: readonly string[] = [
   // A table and not a service, decided in `01-ARCHITECTURE.md` and not
   // re-litigated here: it must survive a restart, because a distance is good
   // for months and re-measuring the same road every boot is the entire cost
-  // this exists to avoid; and it must be inspectable, because the first
-  // question about a plan citing something surprising is "what did we read,
-  // and when" — which is one `SELECT` against these five columns.
+  // this exists to avoid; and it must be answerable, because the first question
+  // about a plan citing something surprising is "what did we read, and when".
+  //
+  // **Answerable by query, not readable by browsing**, and the difference is
+  // `key` — see its own note below. Everything a `SELECT` returns about a row
+  // is honest; the column that identifies the row is the one that will not read
+  // back by eye.
   `
   CREATE TABLE grounding_cache (
     -- The seam's method: \`locate\` or \`travel\` today. Deliberately not a CHECK
@@ -257,6 +261,17 @@ const MIGRATIONS: readonly string[] = [
     -- surrounding and repeated whitespace, and control characters. Anything
     -- more and two different questions start sharing an answer, which is a
     -- cache that lies rather than one that misses.
+    --
+    -- **It embeds a NUL between its parts, and that costs legibility.** The
+    -- separator has to be something a place name cannot contain — the names
+    -- come from a model, and a space would let \`quebec\`+\`city rimouski\` forge
+    -- \`quebec city\`+\`rimouski\`. Storage, comparison and lookup are all exact:
+    -- two keys differing only after the NUL are two rows and each is found by
+    -- its own key. But SQLite's \`length()\`, \`substr\` and \`LIKE\`, and most
+    -- database browsers, stop at the first NUL — so \`alma<NUL>quebec\` displays
+    -- as \`alma\`, and so does \`alma<NUL>saguenay\`. Query this column by
+    -- equality with a key the code built; do not read it off a screen and do
+    -- not trust \`LIKE\` against it.
     key          TEXT NOT NULL,
     -- The answer, whole: coordinates for \`locate\`, a distance and a duration
     -- for \`travel\`. JSON on migration 2's rule — read entire, never filtered
