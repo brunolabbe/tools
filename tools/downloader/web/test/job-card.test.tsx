@@ -85,8 +85,10 @@ function mount(value: Job, streamState?: StreamState, watchedStep?: number): Han
  * to it. An earlier draft seeded it with `markWatched(0, start)` before the
  * loop, which is the one thing that must not happen here — for a `downloading`
  * start job that seed alone reaches step 2, so the frames became decoration and
- * neutralising the fold inside the loop left the suite green. The tests below
- * would have passed against a reducer that folded nothing.
+ * neutralising the *per-frame* fold left all 191 tests green. Measured, not
+ * assumed. (A reducer that folded nothing was always caught, seed or no seed:
+ * the seed ran through `markWatched` too. It was only the fold *inside the loop*
+ * that nothing held.)
  *
  * Mirroring the hook is the limit of what a component test can prove. That the
  * hook really folds the mark, and really hands it down three components, is
@@ -408,7 +410,13 @@ test("a first probe leaves Downloading pending, however many bytes are on the ca
 // still start from a hand-built job — there is no way for a component test not
 // to — but **the mark they render is folded from the frames and from nothing
 // else**, which is the half that was missing. Drop the fold in `watch()` above
-// and both go red.
+// and the first goes red; the control below it must not, and does not, because
+// a zero mark is exactly what "Downloading pending" asserts. That asymmetry is
+// the pair: one test can only pass if the frames were folded, the other only if
+// they were not over-folded. Both measured — 1 failed / 190 passed.
+//
+// (An earlier draft of this paragraph said "both go red". They do not, and a
+// control that reddened when the mark was dropped would be a broken control.)
 //
 // What they do not prove is that the mark makes the trip from the hook to the
 // card; a component test is handed the value whose journey is in question. That

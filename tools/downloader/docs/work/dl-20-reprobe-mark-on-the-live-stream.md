@@ -237,8 +237,11 @@ the proof I do not have.
 
 ### Mutation checks
 
-Seventeen, each applied to the source and reverted after, with the source
-`touch`ed on restore. Command throughout:
+Seventeen, each applied and reverted after, with the file `touch`ed on restore.
+Sixteen mutate the source; **row 16 mutates a test** — `job-card.test.tsx`'s own
+`watch()` helper — because what it probes is whether that helper's fold is
+load-bearing, which is a fact about the test and not about the product. Command
+throughout:
 `npx vitest run tools/downloader/web --project downloader` — **16 files, 191
 tests**. **Control run over the unmutated tree first: exit 0, nothing failed.**
 
