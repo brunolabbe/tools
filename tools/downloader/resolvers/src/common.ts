@@ -223,12 +223,28 @@ export function compareVariantQuality(
 /**
  * Scanned in order. Under these boundaries no token any row names is a
  * substring of another, so `tt$` no longer decides `text/vtt` the way it did
- * before dl-24 — but the order is still load-bearing, because the `srt` row
- * matches its token anywhere and a URL can carry one without claiming a
- * format: `https://srt.cdn.net/sub.wvtt` matches rows 1 and 2 both, and
- * answers `vtt` only because `vtt` is scanned first. Reorder with that in
- * mind. Dropping a `(^|\W)` is the change that is never safe, and that is what
- * dl-24 was. The `srt` row's reach over hostnames is dl-25.
+ * before dl-24. Dropping a `(^|\W)` is the change that is never safe, and that
+ * is what dl-24 was.
+ *
+ * The order is still load-bearing, but since dl-25 for a narrower reason. The
+ * `srt` row used to match its token anywhere, so a URL could carry one without
+ * claiming a format and `https://srt.cdn.net/sub.wvtt` matched rows 1 and 2
+ * both. Its `(\W|$)` now says the token has to _end_ a claim rather than
+ * continue into a hostname label or a path segment, so `srt.cdn.net`,
+ * `/srt/` and `srt-edge` no longer match while `sub.srt`, `sub.srt?token=…`,
+ * `text/srt` and a bare `srt` still do. What is left overlapping is the
+ * alternatives that are unanchored on purpose — `subrip` in row 2, and the
+ * whole of row 3 — so `https://cdn.net/subrip/sub.vtt` still matches rows 1
+ * and 2 both and answers `vtt` only because `vtt` is scanned first. Reorder
+ * with that in mind.
+ *
+ * Row 3 cannot take row 2's boundary and so keeps the hostname defect dl-25
+ * fixed in row 2; that is dl-28, along with row 1, which is exposed the same
+ * way (`https://vtt.cdn.net/sub.mp4` answers `vtt`). A token boundary cannot
+ * settle row 3 either way, because `stpp.ttml.im1t` is a real `codecs=` string
+ * whose dots separate a claim and `stpp.cdn.net` is a hostname whose dots do
+ * not — telling those apart needs the caller to stop putting a whole URL in
+ * the hint, not a tighter regex.
  *
  * `wvtt` and `stpp` are the ISO-BMFF sample-entry codes for WebVTT and TTML in
  * fragmented mp4 — what a DASH `codecs=` carries when the mime type is only
@@ -239,7 +255,7 @@ export function compareVariantQuality(
  */
 const SUBTITLE_FORMATS: ReadonlyArray<readonly [RegExp, "vtt" | "srt" | "ttml"]> = [
   [/(^|\W)(web|w)?vtt(\W|$)/i, "vtt"],
-  [/(^|\W)srt(\W|$)|subrip/i, "srt"],
+  [/(^|\W)srt(?![\w./-])|subrip/i, "srt"],
   [/ttml|dfxp|stpp/i, "ttml"],
   [/(^|\W)tt$/i, "ttml"],
 ];

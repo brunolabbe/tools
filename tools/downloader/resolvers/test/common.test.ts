@@ -31,6 +31,18 @@ const CASES: ReadonlyArray<readonly [string | undefined, Format, string]> = [
   ["application/x-subrip https://cdn.example.com/s/sub.srt", "srt", "dash.ts triple"],
   ["xsrt", "unknown", "boundary: a word character before srt is not an srt"],
   ["srtx", "unknown", "boundary: a word character after srt is not an srt"],
+  ["text/srt", "srt", "mime type whose subtype ends the hint"],
+  ["https://cdn.example.com/s/sub.srt?token=abc", "srt", "whole URL, the ytdlp.ts fallback"],
+  // dl-25 — SRT is also a transport protocol, so `srt` is a plausible CDN label
+  // and a plausible path segment. None of these four claims a format.
+  ["application/mp4 https://srt.cdn.net/sub.mp4", "unknown", "dl-25: srt is a hostname label"],
+  ["application/mp4 https://cdn.net/srt/sub.mp4", "unknown", "dl-25: srt is a path segment"],
+  ["video/mp4 https://srt-edge.example.com/s/sub.mp4", "unknown", "dl-25: srt prefixes a host"],
+  [
+    "application/ttml+xml https://srt.cdn.net/sub.ttml",
+    "ttml",
+    "dl-25: a real ttml track behind an srt-named host; row 2 must not outrank row 3",
+  ],
 
   // Row 3 — ttml, and its aliases.
   ["ttml", "ttml", "bare extension, the shape hls.ts passes"],
@@ -44,6 +56,16 @@ const CASES: ReadonlyArray<readonly [string | undefined, Format, string]> = [
   ["https://cdn.example.com/s/sub.tt", "ttml", "whole URL ending in .tt"],
   ["ttx", "unknown", "boundary: tt has to end the hint"],
   ["xtt", "unknown", "boundary: a word character before a trailing tt is not a .tt"],
+
+  // Rows 1 and 3 still read a hostname as a format claim — the defect dl-25
+  // fixed in row 2. These four pin the wrong answers rather than the right
+  // ones, so that dl-28 has a failing target to flip; row 2's boundary cannot
+  // be reused here, because `stpp.ttml.im1t` above needs the dots row 2 now
+  // rejects. Do not "fix" these expectations without fixing the code.
+  ["application/mp4 https://stpp.cdn.net/sub.mp4", "ttml", "dl-28, wrong: should be unknown"],
+  ["application/mp4 https://cdn.net/ttml/sub.mp4", "ttml", "dl-28, wrong: should be unknown"],
+  ["application/mp4 https://vtt.cdn.net/sub.mp4", "vtt", "dl-28, wrong: should be unknown"],
+  ["application/mp4 https://cdn.net/dfxp/sub.mp4", "ttml", "dl-28, wrong: should be unknown"],
 
   // No row.
   ["", "unknown", "empty hint"],

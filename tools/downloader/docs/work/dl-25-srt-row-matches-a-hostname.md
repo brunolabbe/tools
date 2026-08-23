@@ -3,7 +3,7 @@ id: dl-25
 tool: downloader
 title: A CDN hostname containing "srt" classifies the track as SubRip
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -114,3 +114,84 @@ purpose and matches mime types like `application/x-subrip`.
   is one this builder found while reproducing, and is worse than the gate
   reported: it is a correctly-described subtitle being mislabelled, not just a
   non-subtitle being picked up.
+
+- **2026-08-23** — Built. Row 2 is now
+  `/(^|\W)srt(?![\w./-])|subrip/i`: the only change is the right boundary,
+  `(\W|$)` → `(?![\w./-])`. `(\W|$)` let `srt` be followed by any non-word
+  character, which is every hostname and path separator there is; the lookahead
+  says the token may not continue into a `.`, `-` or `/`, so it has to _end_ a
+  claim. `subrip` is untouched and still unanchored (the named trap), and the
+  left `(^|\W)` is untouched (dl-24's trap).
+
+  **Reproduced first, before any edit.** All four hints in the Why reproduce
+  verbatim on this branch's `origin/main` base, and so do the two extra
+  `stpp`/`ttml` cases:
+
+  ```
+  "application/mp4  https://srt.cdn.net/sub.mp4"       -> srt
+  "application/mp4  https://cdn.net/srt/sub.mp4"       -> srt
+  "video/mp4  https://srt-edge.example.com/s/sub.mp4"  -> srt
+  "application/ttml+xml  https://srt.cdn.net/sub.ttml" -> srt
+  "application/mp4  https://stpp.cdn.net/sub.mp4"      -> ttml
+  "application/mp4  https://cdn.net/ttml/sub.mp4"      -> ttml
+  ```
+
+  **Build 2, the design decision: option 1 (anchor the token), not option 2
+  (stop `dash.ts` concatenating the URL).** Two things decided it, and the
+  second contradicts the brief.
+
+  First, option 2 cannot be proven by the tests the ticket asks for. Build 3
+  says extend the `common.test.ts` table with these four hints, and Done-when 1
+  and 2 name hint strings and say "proven by a test". Under option 2 those
+  strings are never built, so `subtitleFormat` keeps answering `srt` for all of
+  them and the new rows would have to assert the defect. The acceptance and the
+  regression net both live at the function, so the fix has to as well.
+
+  Second — **the brief is wrong that option 2 "removes the whole class"**. It
+  does not, for two independent reasons. `ytdlp.ts:256` passes
+  `chosen.ext ?? chosen.url`, so a whole URL still reaches the matcher whenever
+  yt-dlp omits `ext`; fixing only `dash.ts` leaves that caller with the same
+  bug. And the obvious repair for ytdlp — reduce the URL to `urlExtension` —
+  is a _regression_, because yt-dlp subtitle URLs commonly carry the format in
+  the query string (a YouTube timedtext URL ends `&fmt=vtt`) and the path
+  extension is nothing useful. Passing the URL is load-bearing there. Option 2
+  is a partial fix wearing a total fix's description.
+
+  **Done-when 4 — filed, not fixed: [dl-28](./dl-28-hint-carries-a-whole-url.md).**
+  Row 3 provably cannot take row 2's new boundary, and this is the sharp reason
+  rather than a scope judgement: `stpp.ttml.im1t` is a real DASH `codecs=`
+  string whose dots separate a claim, `stpp.cdn.net` is a hostname whose dots do
+  not, and both are `stpp` followed by `.`. Measured, not reasoned — applying
+  `(?![\w./-])` to row 3 turns the existing `stpp.ttml.im1t` row of the table
+  red. So row 3 needs the caller-side change, which is a different ticket's
+  worth of work and touches `dash.ts`.
+
+  **A finding the brief did not have: row 1 is exposed identically, and worse.**
+  `subtitleFormat("application/mp4 https://vtt.cdn.net/sub.mp4")` answers `vtt`,
+  and `vtt` is _inside_ `SUBTITLE_FORMATS_FFMPEG_READS`, so it has the same
+  reaches-the-disk blast radius this ticket was raised for — unlike the `ttml`
+  cases, which are dropped at that gate. It is left unfixed here because it is
+  outside this ticket and one fix closes it together with row 3; it is folded
+  into dl-28 with its own pinned test rather than left as prose.
+
+  All four of dl-28's cases are pinned in the table as the **wrong** answers
+  they currently give, under a comment saying so, so dl-28 has a failing target
+  to flip rather than a paragraph to re-derive.
+
+  **Build 4, the ordering comment: rewritten.** The overlap it documented is
+  gone — `https://srt.cdn.net/sub.wvtt` no longer matches row 2 at all, so it is
+  no longer an example of order deciding anything. Order is still load-bearing,
+  for a narrower reason now stated instead: the alternatives that are unanchored
+  on purpose, `subrip` in row 2 and the whole of row 3, so
+  `https://cdn.net/subrip/sub.vtt` matches rows 1 and 2 both and answers `vtt`
+  only because `vtt` is scanned first.
+
+  **Mutation check, with its control.** Control first, on the unmutated tree:
+  `npx vitest run tools/downloader/resolvers` → exit 0, 199 passed. Then the fix
+  reverted to `(\W|$)` in place, same command → exit 1, `4 failed | 195 passed`,
+  and the four are exactly the four dl-25 rows. Fix restored, green again. The
+  harness can fail.
+
+  Gates: `npm run check` and `npm test -- --project downloader`, both green.
+  Not measured: nothing was run against a live DASH manifest or a real CDN —
+  the whole of this is the classifier and its table.
