@@ -1,6 +1,16 @@
 # 003 — The status tables are generated from the tickets
 
-**Status:** accepted · **Date:** 2026-08-22 · **Affects:** every tool
+**Status:** accepted; its **mechanism** superseded by
+[repo-2](../work/repo-2-retire-the-status-page.md), 2026-08-23 · **Date:**
+2026-08-22 · **Affects:** every tool
+
+> **Read `## Decision` with this in hand.** Three of its paragraphs — the
+> `--write`-on-`main` job, the `--check` guard, and the workflow that carried
+> them both "on purpose" because `ci.yml` skipped markdown — are the half that
+> did not hold, and they are left byte-unchanged because they are what was
+> believed. Neither guard ever worked, and the third paragraph's premise was a
+> bug in `ci.yml` rather than a fact about it. See
+> [the amendment](#amendment--2026-08-23).
 
 ## Context
 
@@ -166,9 +176,91 @@ worse than either one.
   a pull request to write there, that job fails, and the fix is to open one
   rather than to let it pass — a status page that silently stops updating is
   worse than the hand-written one it replaced.
+
+  _Outcome, 2026-08-23: the ruleset already required it, and always had._ The
+  job was rejected on every merge it ever attempted — `GH013`, "changes must be
+  made through a pull request" — so the condition this bullet describes as
+  hypothetical was true from the first push. The fix taken was neither of the
+  two named here; see the amendment below. The prediction is annotated rather
+  than corrected in place, in the same pattern as "roughly eight" above.
+
 - **`status.mjs` is the first thing in the repo that reads ticket frontmatter at
   all.** It is strict on purpose: an unknown field, a status outside the
   taxonomy, an id that disagrees with its filename or a `depends_on` pointing at
   nothing is a named failure rather than a row quietly missing from a table.
   Forty-six existing tickets pass it unchanged, which is the only reason the
   strictness was affordable.
+- **Added 2026-08-23, and the reason for the amendment below.** Neither half of
+  the mechanism this ADR chose ever worked. The `regenerate` job was rejected by
+  branch protection on every merge it attempted, so it never pushed a commit;
+  `--check` compared HEAD's region to the base's, which was equally stale, so it
+  was green throughout. The tables are no longer stored at all —
+  `npm run status`, and `--markdown` when a table is actually wanted. This is a
+  consequence rather than an edit to `## Decision`, which stays as written.
+
+## Amendment — 2026-08-23
+
+**The decision held; the mechanism did not.** A ticket's frontmatter is still
+the only place its state is recorded, `scripts/status.mjs` is still the lens
+over it, and there is still no store between the two. What changed is that the
+projection is no longer **kept in a file**. Both `tools/*/docs/03-STATUS.md`
+were deleted in [repo-2](../work/repo-2-retire-the-status-page.md).
+
+Two bugs, and neither is a defect in the code so much as in the shape:
+
+**The `regenerate` job never once pushed a commit.** Branch protection rejects
+the bot — `GH013`, `changes must be made through a pull request`. Of the six
+`push` runs `status.yml` ever had, three failed that way, one lost a race with a
+concurrent merge (`! [rejected] main -> main (fetch first)`), one was cancelled
+by the workflow's own `cancel-in-progress`, and the single green one printed
+`the tables already match the tickets` and exited before pushing anything. So
+both pages sat stale on `main` for a week: the downloader's listed a merged
+ticket as `ready` and omitted `dl-19`, a `ready` security ticket, entirely.
+
+**`--check` cannot see that staleness, by construction.** It compared HEAD's
+region against the **base commit's**. Both were equally stale, so it was green
+every time. It asked "did this branch edit the region", never "is the region
+correct" — and the two questions look the same only while a writer is working.
+
+**Why the fix was not to repair the writer**, which is the part that must not be
+re-proposed. Pushing to `main` needs a protection bypass, and an unreviewed
+write path to `main` is a bad price for a table. A pull request per merge is
+reviewable and is noise — one bot PR per merge, each touching the file every
+ticket touches — and it does not dissolve the conflict, it queues it.
+Regenerating on the branch is what this ADR removed. And the race above says the
+job is not even reliable when it is permitted.
+
+**A generated artefact kept in version control needs a writer; the fix is to
+stop keeping it.** `npm run status` computes the same tables from the tickets on
+every run. It cannot be stale, and it needs no job, no token and no guard. The
+`--markdown` flag renders the tables for a pull request body or a message, which
+is where a person actually wanted them.
+
+The third alternative this ADR considered — "generating the entire page" — was
+rejected because "the orientation paragraph is the one thing on the page a
+reader actually needs and no projection can write it". That was right, and it is
+the reason the page is gone rather than fully generated: the orientation had a
+better home already. The "where each kind of fact goes" table is a rule about
+the ticket format and moved to [01-TICKETS.md](../01-TICKETS.md); `## Running
+things` was a second, drifting copy of each tool's own `CLAUDE.md`
+`## Commands`, which is richer and is where the root `CLAUDE.md` already says
+per-tool commands live.
+
+**And the workflow itself is gone, because its reason was a bug.** `## Decision`
+says the frontmatter check "has a workflow of its own on purpose", the purpose
+being that `ci.yml` carried `paths-ignore: ["**.md"]` and so ran nothing on a
+documentation-only pull request. That was accurate and it was not a premise:
+`npm run check` runs `oxfmt --check`, and **oxfmt formats markdown here** —
+`.oxfmtrc.json` has to exempt `**/CHANGELOG.md` precisely because it does. So a
+markdown-only pull request could break `npm run check` and merge
+green-because-skipped, leaving the next unrelated pull request to go red for it.
+`ci.yml` no longer filters by path; its cheap `check` job runs on everything and
+now carries `node scripts/status.mjs --json`, and only the five-minute matrix is
+gated — by a `changes` job that diffs base against head, since Actions has no
+per-job `paths`. `.github/workflows/status.yml` is deleted. That the guard
+existed only because the thing it guarded was absent is the same shape as the
+rest of this amendment, one layer down.
+
+**This is not a reversal of 003.** It is 003's own test — a fact restated where
+nothing keeps it true — applied to what 003 left behind. 003 removed a
+projection a person could not keep; this removes one no machine here can.

@@ -17,7 +17,7 @@ depends_on: [dl-11]
 [dl-11](./dl-11-guarded-egress-proxy.md) put ffmpeg behind a loopback proxy that
 runs the service's own `SsrfGuard` on every request, and its step 6 deferred the
 other two subprocess tiers on purpose: prove it on ffmpeg first, then widen.
-This is the widening, and [03-STATUS.md](../03-STATUS.md) names it as the last
+This is the widening, and `03-STATUS.md` names it as the last
 egress outside the guard.
 
 Both tiers already take a proxy — `browser/pool.ts` passes Playwright's
@@ -118,7 +118,7 @@ in the same ticket.
 - `npm run check` is green, the downloader suites pass, and
   `npm run e2e:downloader` passes unchanged.
 - The "browser and yt-dlp tiers still fetch outside the guard" entry in
-  [03-STATUS.md](../03-STATUS.md) moves from known gaps to closed, naming what
+  `03-STATUS.md` moves from known gaps to closed, naming what
   remains true (WebRTC, plain-HTTP WebSocket, and proxy mode's lack of pinning).
 
 ## Log

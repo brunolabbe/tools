@@ -19,11 +19,17 @@ where to look in the next:
 00-ANALYSIS.md      the research the design rests on — the "why it is hard"
 01-ARCHITECTURE.md  packages, pipeline, the decisions that shape them
 02-ROADMAP.md       phases and milestones for this tool only
-03-STATUS.md        the ticket tables, generated from frontmatter, and how to run the thing
 work/               one file per ticket — the brief and its outcome together
 ```
 
-A tool is not obliged to have all five on day one. The downloader has the full
+There is no status page in the spine, and `03-STATUS.md` is not a free number
+waiting to be reused. Both tools had one; `repo-2` deleted them, because a
+projection of the tickets kept in version control needs a writer and none of the
+available writers was safe — see
+[adr/003](./adr/003-the-status-page-is-generated.md)'s amendment. **Where a tool
+stands is `npm run status`**, and how to run it is that tool's `CLAUDE.md`.
+
+A tool is not obliged to have all four on day one. The downloader has the full
 set; a young tool may have only a roadmap and an empty `work/`, and that is an
 honest description of a young tool rather than a gap to fill with guesses.
 

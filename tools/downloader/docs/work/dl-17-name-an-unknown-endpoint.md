@@ -63,6 +63,51 @@ into another tool.
 meaning — a job id the server has no record of, which the UI presents as such.
 Only the unknown-route call site is wrong.
 
+## Review
+
+> **Reconstructed after the fact, on 2026-08-23, from the orchestrator's
+> transcript — not transcribed at the time.** This ticket merged as #65 before
+> `docs/01-TICKETS.md` said the builder commits the gate, so nothing was written
+> here and no report was posted to the pull request thread. Read it as a record
+> recovered from a scrollback, with the weaknesses that implies: the wording is
+> the reviewer's, the decision to write it down is not.
+>
+> Two things it deliberately does **not** do. It does not back-fill an
+> acceptance table — none was written at the time, and composing one now from
+> the `Done when` lines would invent a link that nobody actually traced (the
+> same reason repo-1's gate 4 declined to reshape its earlier rounds). And it
+> records only the round it has: a **second** review round happened, and its
+> finding is in the Log below — the first pass was a +3/−3 substitution inside
+> existing assertions, so nothing pinned the distinction the ticket exists to
+> establish, which is why `api/test/not-found.test.ts` was added. That round's
+> gate was never captured either and is not reconstructed here.
+
+### Gate 1 — 2026-08-23
+
+**Gate: PASS** — 2026-08-23, range `origin/main...d007f27`. Gates reproduced by
+the reviewer: `npm run check` exit 0; `npm test -- --project downloader` 543
+tests / 37 files passed; `npx oxfmt --check` clean on the ticket; commit-message
+check exit 0.
+
+Verified: `NOT_FOUND` maps to 404 at `api/src/http-errors.ts` and is exercised
+end-to-end in `api/test/web-serving.test.ts` (three assertions checking both
+status and code); no genuine "no such job" case was converted — `JobStore.get`,
+`routes/jobs.ts`, `routes/files.ts` and `routes/events.ts` still raise
+`JOB_NOT_FOUND`; no consumer regression, since `web/src/lib/error-presentation.ts`
+handled both codes already from pl-11 and nothing in `web/src` branches on either
+literal.
+
+- **low** — the brief predicted one test asserting `JOB_NOT_FOUND` on an unknown
+  path; there were three, all in `web-serving.test.ts`, mirroring what pl-11
+  found for the planner. The Log corrects the brief.
+- **low** — `details: { path }` at the raise site is unobservable: `path` is not
+  in `CLIENT_SAFE_DETAIL_KEYS`, and `registerNotFoundHandler` builds its own
+  reply, so it neither reaches the wire nor a log line. Settled by the brief,
+  which specified it; recorded so a reader knows it is dead weight, not a gap.
+- **low, now resolved by repo-2** — stale prose in `03-STATUS.md` outside the
+  generated region still described dl-17 as outstanding. That file no longer
+  exists.
+
 ## Log
 
 **2026-08-22 — done.** `registerNotFoundHandler` in `api/src/server.ts` now
@@ -112,3 +157,22 @@ would bury the side-by-side read this ticket needs. `npm run check` and
 found stale prose below the generated region describing dl-17 as still open;
 that cleanup belongs to repo-1's retirement of that hand-written narrative, not
 to this ticket, and is being tracked there.
+
+**2026-08-23 — the gate was reconstructed, and the absence is the point.**
+`## Review` above was written months-late in
+[repo-2](../../../../docs/work/repo-2-retire-the-status-page.md)'s branch, from
+the orchestrator's transcript rather than from anything in the repo. This ticket
+merged as #65 on 2026-08-22, hours before `docs/01-TICKETS.md` grew the rule that
+**the builder commits the gate** — a rule `repo-1` earned by going through two
+review rounds whose records were written into reviewer worktrees and thrown away
+with them. dl-17 is the same loss one branch over: two rounds happened, the
+second of them is why `not-found.test.ts` exists, and neither left a trace on
+`main`. The pull request has no report comment either, so there is nothing to
+hold the reconstruction against. That is exactly the gap the rule closes, and
+this entry exists so the next reader knows the section above was recovered
+rather than recorded.
+
+The stale-prose finding in that gate is now moot: repo-2 deleted
+`tools/downloader/docs/03-STATUS.md` outright. The page had gone on to list this
+very ticket as `ready` for a week after it merged, because the job that was
+supposed to regenerate it had never once been allowed to push.

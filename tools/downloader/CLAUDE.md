@@ -6,8 +6,8 @@ Rules for this tool only. The repo-wide conventions are in the root
 Read `tools/downloader/docs/00-ANALYSIS.md` before touching resolver or engine
 code — most non-obvious decisions here are justified there, not repeated. The
 rest of this tool's documentation is beside it in `docs/`: architecture,
-roadmap, current status, and `docs/work/` where each ticket keeps its brief and
-its log.
+roadmap, and `docs/work/` where each ticket keeps its brief and its log. What is
+still open is `npm run status -- --tool downloader`; there is no status page.
 
 ## What this is
 
@@ -59,12 +59,36 @@ API's watcher never exits and the web app is never reached.
 
 The UI defaults to a **mocked** API — that is what let it ship before the
 backend existed. `cp web/.env.example web/.env.local` to point it at the real
-one. Until you do, the UI works but talks to nothing.
+one; it sets `VITE_API_MOCK=false`. Until you do, the UI works but talks to
+nothing. The Vite dev server proxies `/api` to the API, so development is
+same-origin and there is no CORS to configure — the rest of that file says what
+to set when the API is somewhere else.
 
 The API's dev script is `node --watch --import tsx`, not `tsx watch`. On Windows
 `tsx watch` spawned by `concurrently` starts, prints nothing and never binds its
 port — silently, which costs an afternoon if you do not know. Node's own
 watcher does the restarting and tsx only transforms.
+
+To drive the real pipeline with no browser and no yt-dlp tier — the shape the
+M3 verification ran in — against a local fixture origin:
+
+```bash
+ENABLE_BROWSER_RESOLVER=false ENABLE_YTDLP_RESOLVER=false \
+  SSRF_ALLOW_HOSTS=127.0.0.1 STORAGE_DIR=./storage \
+  npm run dev -w @downloader/api
+```
+
+`SSRF_ALLOW_HOSTS` is the escape hatch that lets the guard reach that origin. It
+is empty by default and **must stay empty in production** — it is the one
+setting that turns the SSRF check into a suggestion.
+
+A load test trips the limiter long before it finds anything interesting. Turn it
+off for that, and only that:
+
+```bash
+RATE_LIMIT_PROBE_PER_MINUTE=0 RATE_LIMIT_JOBS_PER_MINUTE=0 \
+  npm run dev -w @downloader/api
+```
 
 ## Rules
 

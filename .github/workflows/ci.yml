@@ -7,21 +7,57 @@ name: CI
 # one that records the merged state. A branch with no pull request open yet is
 # not worth a runner.
 #
-# Markdown is skipped, and it is worth saying why that is safe here rather than
-# reflexive. Appending to a ticket's Log when work finishes is a standing rule
-# in CLAUDE.md, so documentation-only commits are routine, not rare: `d97db2c`
+# **Markdown is no longer skipped, and the reason it was skipped is the reason
+# it must not be.** The triggers carried `paths-ignore: ["**.md"]`, on the
+# argument below. That argument was about cost and it was measured — `d97db2c`
 # edited `docs/01-TICKETS.md` and nothing else, and bought five minutes and
-# fifty-four seconds of Linux and Windows suites for it. No `.md` in this
-# repository is a test fixture — every one is prose — and the ruleset on `main`
-# requires no status checks, so a skipped workflow cannot leave a pull request
-# pending forever. Release pull requests still run: release-please touches
+# fifty-four seconds of Linux and Windows suites for it. Appending to a ticket's
+# Log when work finishes is a standing rule in CLAUDE.md, so documentation-only
+# commits are routine here, not rare. All of that still holds. What it never
+# justified is skipping `check`: `npm run check` runs `oxfmt --check`, and
+# **oxfmt formats markdown in this repository** — `.oxfmtrc.json` has to name
+# `**/CHANGELOG.md` in `ignorePatterns` precisely because it does. So a
+# documentation-only pull request could break `npm run check` with nothing in CI
+# to catch it. It merged green-because-skipped, and the next pull request to
+# touch code went red for a reason that had nothing to do with it. Not
+# hypothetical: oxfmt reflowed a wrapped `> 0` into a blockquote in `dl-18`,
+# caught only because an agent ran `format` locally.
+#
+# So the measurement keeps its conclusion and loses its blast radius. Five
+# minutes fifty-four seconds is the **matrix's** cost; `check` answers in under
+# a minute, and `check` is what markdown can break. The triggers no longer
+# filter, `check` runs on every event, and the matrix is gated instead by the
+# `changes` job below — which reproduces the old `**.md` rule as a diff rather
+# than as a trigger filter, because Actions has no per-job `paths`. No `.md` in
+# this repository is a test fixture — every one is prose — so nothing the matrix
+# runs can depend on one, which is what makes gating the matrix and not `check`
+# the right split.
+#
+# **`push` loses the filter too, and that is a choice rather than symmetry for
+# its own sake.** The `main` push is the run that records the merged state, and
+# a squash of a documentation-only branch is precisely the merge that could put
+# an unformatted `.md` on `main` — a filtered `push` would mean the first run to
+# notice is the next unrelated pull request, which is the failure this change
+# exists to stop. It costs one sub-minute `check` per docs merge; the matrix
+# still skips, because `changes` gates it on both events alike.
+#
+# **A skipped job cannot leave a pull request pending forever**, and that claim
+# had to be re-checked rather than inherited: it used to be about a skipped
+# *workflow* and now has to hold for a skipped *job*. The ruleset on `main`
+# (`gh api repos/{owner}/{repo}/rulesets`, read 2026-08-23) carries `deletion`,
+# `non_fast_forward` and `pull_request` with zero required approvals, and **no
+# `required_status_checks` rule at all**; `branches/main/protection` answers
+# 404, so there is no classic protection either. If a required check is ever
+# added, `test` cannot be one of them under this shape — a required check that
+# never reports blocks the merge forever, which is a worse bug than the one this
+# replaced.
+#
+# Release pull requests still run the matrix: release-please touches
 # `version.txt` and the manifest alongside the changelog.
 on:
   push:
     branches: [main]
-    paths-ignore: ["**.md"]
   pull_request:
-    paths-ignore: ["**.md"]
   # Nightly against `main`, because the failures this repo actually hits are
   # environmental and no commit triggers them. The `ffmpeg-static` SIGSEGV
   # documented below appeared when a runner image changed underneath us, not
@@ -47,7 +83,8 @@ env:
 
 jobs:
   # Lint, format and typecheck. Split out because it answers in under a minute
-  # and a formatting failure should not wait on a browser download.
+  # and a formatting failure should not wait on a browser download. Unfiltered
+  # and ungated on purpose — see the header: this is the job markdown breaks.
   check:
     runs-on: ubuntu-latest
     steps:
@@ -58,6 +95,90 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      # Parses every ticket, and fails by file and line on anything it does not
+      # understand — an unknown field, a status outside the taxonomy, an id that
+      # disagrees with its filename, a `depends_on` pointing at nothing. Nothing
+      # else in CI reads them.
+      #
+      # This lived in a `status.yml` of its own for exactly one reason: `ci.yml`
+      # skipped markdown, so the pull requests whose frontmatter needed parsing
+      # — a ticket filed, a ticket flipped to `done` — were the ones that never
+      # ran it. That reason is gone, so the workflow went with it (repo-2). It
+      # needs no build and no dependencies, for the same reason
+      # `commit-message.mjs` does not, so it costs this job seconds.
+      - run: node scripts/status.mjs --json > /dev/null
+
+  # Which files this change actually touches, because **Actions has no per-job
+  # `paths` filter** — `paths-ignore` gates the whole workflow, so the only way
+  # to keep `check` unfiltered while the matrix stays cheap is to compute the
+  # answer here and have `test` gate on it.
+  #
+  # The rule is the one the trigger filter expressed: if everything that changed
+  # ends in `.md`, the matrix is skipped. Close to the original rather than
+  # provably identical to it — GitHub does not document whether its own filter
+  # consults a rename's `previous_filename` alongside its `filename`, so that is
+  # one case where the two may differ and the claim stops at what can be shown.
+  # Written out rather than delegated to a marketplace action, for the same
+  # reason `commit-message.mjs` and `status.mjs` are ours — it is a dozen lines,
+  # and the alternative is an unpinned third party holding a checkout of the
+  # repository.
+  #
+  # The two events need different diff bases, and anything without one runs the
+  # matrix. `schedule` and `workflow_dispatch` have no base at all; a push whose
+  # `before` is the all-zero sha is a branch's first push; and a base commit can
+  # simply be absent from a rewritten history. Every one of those falls through
+  # to `code=true`. **The failure direction is deliberate: not knowing means
+  # running the suites, never skipping them**, and the `git cat-file -e` guards
+  # are what buys that: without them a degenerate base reaches `git diff`, which
+  # is the only path by which a change could be skipped for a reason nobody
+  # chose. They are not there to prevent a silent green — a `changes` job that
+  # errors sets the run's conclusion to `failure`, so the skipped `test` is red
+  # and visible. `set -euo pipefail` is the other half: the first `git diff` is
+  # unguarded on purpose, so if git itself fails the job stops there rather than
+  # letting the second one's `|| true` turn the failure into an empty `non_md`
+  # and a skip.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history, or the base commit is not there to diff against.
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE:-}" ] || [ -z "${HEAD:-}" ] \
+            || [ "${BASE}" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null \
+            || ! git cat-file -e "${HEAD}^{commit}" 2>/dev/null; then
+            echo "No usable diff base for ${GITHUB_EVENT_NAME}; running the matrix."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Three dots: what this change added, not what `main` moved past
+          # underneath it — which is the comparison the trigger filter made too.
+          #
+          # `--no-renames` is load-bearing, not tidiness. Rename detection is on
+          # by default and reports a rename as its **destination only**, so
+          # `git mv src/foo.ts docs/foo.md` lists `docs/foo.md` and nothing
+          # else — every path ends in `.md`, and the matrix skips a change that
+          # deleted a TypeScript file. With `--no-renames` the same commit lists
+          # both paths and `src/foo.ts` fails the test, which is the answer that
+          # matters.
+          echo "Changed files, ${BASE}...${HEAD}:"
+          git diff --no-renames --name-only "${BASE}...${HEAD}" | sed 's/^/  /'
+          non_md="$(git diff --no-renames --name-only "${BASE}...${HEAD}" | grep -v '\.md$' || true)"
+          if [ -n "${non_md}" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Documentation only; skipping the matrix. check still ran."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # The unit and integration suites. On both platforms, because this project
   # has a genuine Windows story — but narrower than it looks, and worth naming
@@ -76,7 +197,12 @@ jobs:
   # repository it costs nothing. A root `package.json`, a tsconfig or a vitest
   # setting can all change Windows behaviour without touching a downloader
   # path, and a filter that never fires for them is a gap, not a saving.
+  #
+  # The one filter it does carry is markdown, via `changes` above — the same
+  # rule the workflow trigger used to apply to every job at once.
   test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:

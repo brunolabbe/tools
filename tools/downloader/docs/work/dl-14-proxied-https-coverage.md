@@ -120,7 +120,7 @@ with no end-to-end coverage. Every real site the tool exists for is HTTPS.
   applied.
 - Chained mode moves bytes through two real proxies.
 - `npm run check` is green and every existing suite passes unchanged.
-- [03-STATUS.md](../03-STATUS.md) loses "the gap in coverage that hid it is
+- `03-STATUS.md` loses "the gap in coverage that hid it is
   still there", and gains whatever this leaves uncovered instead.
 
 ## Log

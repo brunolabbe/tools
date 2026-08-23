@@ -1,25 +1,23 @@
 /**
- * The status tables, computed from the tickets rather than written by hand.
+ * The status view, computed from the tickets rather than written by hand.
  *
  * A ticket's frontmatter is the only place its state is recorded. This script
  * is a lens over that: it parses every `tools/<tool>/docs/work/*.md`, and can
- * print the result, emit it as JSON, answer "what is ready", or write it back
- * into the generated region of that tool's `03-STATUS.md`.
+ * print the result, emit it as JSON, answer "what is ready", describe one
+ * ticket, or render the tables as markdown for pasting somewhere.
  *
- * Nothing is cached and nothing is stored. A second store between the tickets
- * and this projection is exactly what ADR 001 removed and ADR 003 refuses to
- * bring back: a status change has to travel with the branch that earned it, and
- * only a file in the diff does that.
- *
- * **`--write` is for `main` only.** A branch that regenerates the region turns
- * a table every ticket touches back into a file every branch edits, which is
- * the conflict this exists to end. `--check` is what enforces that, and it runs
- * on every pull request.
+ * Nothing is cached, nothing is stored, and **nothing is written to a file**.
+ * A second store between the tickets and this projection is what ADR 001
+ * removed and ADR 003 refused to bring back; a generated *file* is the same
+ * mistake one step further out, and repo-2 removed that too. A projection kept
+ * in version control needs a writer, and every writer available here turned out
+ * to be unsafe, noisy or racy — so the projection is computed on demand and
+ * never kept.
  *
  * Plain `.mjs`, no dependencies, matching `commit-message.mjs` — the two are
  * the repo's tooling and neither should need a build step to answer.
  *
- * See docs/adr/003-the-status-page-is-generated.md.
+ * See docs/adr/003-the-status-page-is-generated.md and its amendment.
  */
 
 import { execFileSync } from "node:child_process";
@@ -49,16 +47,13 @@ const STATUSES = ["ready", "in-flight", "done", "dropped"];
 /** Statuses that mean the ticket is still work. `dropped` is neither. */
 const OPEN = new Set(["ready", "in-flight"]);
 
-const REGION_START = "<!-- generated:tickets -->";
-const REGION_END = "<!-- /generated:tickets -->";
-
 const DEFAULT_ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 
 /**
  * Parse a ticket's frontmatter.
  *
  * Deliberately strict, and for the reason `image-closure.test.ts` is: a parser
- * that shrugs at what it does not understand reports a clean status page while
+ * that shrugs at what it does not understand reports a clean status view while
  * having read half the tickets. A key nobody has agreed on, a status that is
  * not in the list, an id that disagrees with its own filename — each is a named
  * failure rather than a row quietly missing from a table.
@@ -139,7 +134,7 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
     } catch (error) {
       // A tool with no `work/` yet is a young tool, not a broken one. Anything
       // else — a permission error, a file where the directory should be — is
-      // raised, because reading it as "no tickets" would silently empty a table.
+      // raised, because reading it as "no tickets" would silently empty a view.
       if (/** @type {NodeJS.ErrnoException} */ (error).code === "ENOENT") continue;
       throw error;
     }
@@ -147,7 +142,7 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
       if (!entry.endsWith(".md")) continue;
       const file = `${docs}/work/${entry}`;
       const fields = parseFrontmatter(fs.readFileSync(path.join(dir, entry), "utf8"), file);
-      tickets.push({ ...validate(fields, tool, entry, file), file, dir: docs });
+      tickets.push({ ...validate(fields, tool, entry, file), file });
     }
   }
 
@@ -208,8 +203,7 @@ function ticketDirs(repoRoot) {
     .toSorted((a, b) => a.tool.localeCompare(b.tool));
   // `repo` is not a tool and never will be, but repo-wide work is still work
   // and had nowhere to be filed — ADR 002 said the third piece of it would be
-  // the signal to give `docs/` a `work/`, and ADR 003 is it. It has no status
-  // page of its own, so it is read into every view and written into none.
+  // the signal to give `docs/` a `work/`, and ADR 003 is it.
   return [...tools, { tool: "repo", docs: "docs" }];
 }
 
@@ -266,91 +260,90 @@ export function milestones(tickets) {
 }
 
 /**
- * The markdown that goes between the markers.
+ * One ticket: its fields, what is actually blocking it, and where it lives.
  *
- * Pure — no git, no clock. That is what makes `--check` a string comparison
- * rather than a judgement, and what lets the test assert the whole region
- * against a fixture.
+ * The blockers are the `depends_on` entries that are **not** `done`, which is a
+ * different list from `depends_on` and the one worth printing — most of a
+ * mature ticket's dependencies landed months ago, and listing them all buries
+ * the one that has not.
  *
- * @param {ReturnType<typeof readTickets>} tickets All of them, for one tool.
+ * @param {ReturnType<typeof readTickets>} tickets All of them; the graph needs it.
+ * @param {string} id
  */
-export function renderRegion(tickets) {
-  const open = tickets.filter((t) => OPEN.has(t.status));
-  const closed = tickets.filter((t) => !OPEN.has(t.status));
-  const lines = [
-    REGION_START,
-    "",
-    "<!-- Written by `node scripts/status.mjs --write`, which runs on `main` after a merge.",
-    "     Do not edit this region: a ticket's frontmatter is what it is generated from, and a",
-    "     branch that edits it here is the merge conflict ADR 003 exists to end. -->",
-    "",
-    "### Milestones",
-    "",
-    table(
-      ["Milestone", "Done", "Open", "Dropped", "State"],
-      milestones(tickets).map((row) => [
-        row.milestone ?? "_no milestone_",
-        String(row.done),
-        String(row.open),
-        String(row.dropped),
-        row.state,
-      ]),
-    ),
-    "",
-    "### Open tickets",
-    "",
-  ];
+export function describeTicket(tickets, id) {
+  const ticket = tickets.find((t) => t.id === id);
+  if (ticket === undefined) throw new Error(`no ticket called "${id}"`);
+  const byId = new Map(tickets.map((t) => [t.id, t]));
+  const blockers = ticket.depends_on
+    .map((dependency) => /** @type {typeof ticket} */ (byId.get(dependency)))
+    .filter((dependency) => dependency.status !== "done");
+  return { ticket, blockers };
+}
 
-  if (open.length === 0) {
-    lines.push("None. Every ticket this tool has is closed.");
-  } else {
+/**
+ * The ticket tables, as markdown.
+ *
+ * This is what used to be written into a `03-STATUS.md`, and the difference is
+ * where it goes: into a pull request body or a message, at the moment someone
+ * wants it, rather than into a file somebody then has to keep true. Links are
+ * **repo-root-relative**, because the destination is no longer a page sitting
+ * beside `work/`.
+ *
+ * @param {ReturnType<typeof readTickets>} tickets
+ */
+export function renderMarkdown(tickets) {
+  const lines = [];
+  for (const tool of new Set(tickets.map((t) => t.tool))) {
+    const mine = tickets.filter((t) => t.tool === tool);
+    const open = mine.filter((t) => OPEN.has(t.status));
+    const closed = mine.filter((t) => !OPEN.has(t.status));
+    lines.push(
+      `## ${tool} — ${open.length} open of ${mine.length}`,
+      "",
+      "### Milestones",
+      "",
+      table(
+        ["Milestone", "Done", "Open", "Dropped", "State"],
+        milestones(mine).map((row) => [
+          row.milestone ?? "_no milestone_",
+          String(row.done),
+          String(row.open),
+          String(row.dropped),
+          row.state,
+        ]),
+      ),
+      "",
+      "### Open tickets",
+      "",
+    );
+    if (open.length === 0) {
+      lines.push("None. Every ticket this tool has is closed.", "");
+      continue;
+    }
     lines.push(
       table(
         ["Ticket", "Kind", "Status", "Milestone", "What it is"],
         open.map((ticket) => [
-          link(ticket),
+          `[${ticket.id}](${ticket.file})`,
           ticket.kind,
           ticket.status,
           ticket.milestone ?? "—",
           ticket.note ?? ticket.title,
         ]),
       ),
+      "",
+      `${closed.length} closed ticket${closed.length === 1 ? "" : "s"} not listed.`,
+      "",
     );
   }
-
-  lines.push(
-    "",
-    "<details>",
-    `<summary>Closed — ${closed.length} ticket${closed.length === 1 ? "" : "s"}</summary>`,
-    "",
-    table(
-      ["Ticket", "Kind", "Status", "What it was"],
-      closed.map((ticket) => [
-        link(ticket),
-        ticket.kind,
-        ticket.status,
-        ticket.note ?? ticket.title,
-      ]),
-    ),
-    "",
-    "</details>",
-    "",
-    REGION_END,
-  );
-  return lines.join("\n");
-}
-
-/** A link relative to the tool's `docs/`, where `03-STATUS.md` sits. */
-function link(ticket) {
-  return `[${ticket.id}](./${path.posix.relative(ticket.dir, ticket.file)})`;
+  return lines.join("\n").trimEnd();
 }
 
 /**
  * A markdown table, padded.
  *
- * oxfmt formats markdown in this repo, so an unpadded table is a `npm run
- * check` failure the moment it lands. Padding here means the workflow's format
- * pass has nothing to do rather than producing a second commit.
+ * oxfmt formats markdown in this repo, so an unpadded table pasted into a
+ * document is a `npm run check` failure the moment it lands.
  *
  * @param {string[]} headers @param {string[][]} rows
  */
@@ -366,80 +359,39 @@ function table(headers, rows) {
   ].join("\n");
 }
 
-/**
- * Replace the generated region of a status file.
- *
- * A file with no markers is an error rather than a file to append to: the
- * region's position is editorial — it sits under the hand-written orientation
- * and above "Running things" — and guessing it would rewrite someone's page.
- *
- * @param {string} text @param {string} body @param {string} file
- */
-export function replaceRegion(text, body, file) {
-  const start = text.indexOf(REGION_START);
-  const end = text.indexOf(REGION_END);
-  if (start === -1 || end === -1) {
-    throw new Error(`${file}: no "${REGION_START}" … "${REGION_END}" region to write into`);
-  }
-  if (end < start) throw new Error(`${file}: the region markers are the wrong way round`);
-  return text.slice(0, start) + body + text.slice(end + REGION_END.length);
-}
-
-/** @param {string} text @returns {string | null} */
-export function extractRegion(text) {
-  const start = text.indexOf(REGION_START);
-  const end = text.indexOf(REGION_END);
-  if (start === -1 || end === -1 || end < start) return null;
-  return text.slice(start, end + REGION_END.length);
-}
-
-/** @param {string} repoRoot @param {string} tool */
-function statusPath(repoRoot, tool) {
-  // `repo` has no status page. Its tickets are repo-wide work — a toolchain, a
-  // convention — and a dashboard for them would be a third place saying what
-  // `npm run status` already says.
-  if (tool === "repo") return null;
-  return {
-    relative: `tools/${tool}/docs/03-STATUS.md`,
-    absolute: path.join(repoRoot, "tools", tool, "docs", "03-STATUS.md"),
-  };
-}
-
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
 
-/**
- * `git show <ref>:<path>`, or null when the path did not exist at that ref.
- *
- * Argument array, never a shell — the repo-wide rule, and `ref` here comes off
- * a workflow input.
- *
- * @param {string} repoRoot @param {string} ref @param {string} file
- */
-function showAtRef(repoRoot, ref, file) {
-  try {
-    return execFileSync("git", ["show", `${ref}:${file}`], {
-      cwd: repoRoot,
-      encoding: "utf8",
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-  } catch {
-    return null;
-  }
-}
+const FLAGS = ["ready", "json", "prs", "markdown"];
+const OPTIONS = ["--tool", "--show"];
 
-/** @param {string[]} argv */
+/**
+ * Unknown flags are refused rather than ignored.
+ *
+ * `--write` and `--check` were real until repo-2 retired the file they wrote,
+ * and a reader with muscle memory for either must be told they are gone. A
+ * parser that shrugs at an unknown flag would hand them the default view and
+ * let them believe a page had just been regenerated.
+ *
+ * @param {string[]} argv
+ */
 function parseArgs(argv) {
   const flags = new Set();
   /** @type {Record<string, string>} */
   const values = {};
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "--base" || arg === "--tool") values[arg.slice(2)] = argv[++i];
-    else if (arg.startsWith("--")) flags.add(arg.slice(2));
-    else throw new Error(`unrecognised argument "${arg}"`);
+    if (OPTIONS.includes(arg)) {
+      const value = argv[++i];
+      if (value === undefined) throw new Error(`${arg} needs a value`);
+      values[arg.slice(2)] = value;
+    } else if (FLAGS.includes(arg.slice(2)) && arg.startsWith("--")) flags.add(arg.slice(2));
+    else {
+      throw new Error(
+        `unrecognised argument "${arg}". Use one of: ${[...OPTIONS, ...FLAGS.map((f) => `--${f}`)].join(", ")}`,
+      );
+    }
   }
   return { flags, values };
 }
@@ -448,6 +400,15 @@ function main() {
   const { flags, values } = parseArgs(process.argv.slice(2));
   const repoRoot = DEFAULT_ROOT;
   const all = readTickets(repoRoot);
+
+  // `--show` is about one ticket and its blockers can be under another tool, so
+  // it reads the whole graph and ignores `--tool` — narrowing first would
+  // report that a ticket which exists does not.
+  if (values.show !== undefined) {
+    printTicket(describeTicket(all, values.show));
+    return;
+  }
+
   const selected = values.tool ? all.filter((t) => t.tool === values.tool) : all;
   if (values.tool && selected.length === 0) {
     throw new Error(`no tickets for a tool called "${values.tool}"`);
@@ -459,70 +420,17 @@ function main() {
     return;
   }
 
+  if (flags.has("markdown")) {
+    process.stdout.write(`${renderMarkdown(selected)}\n`);
+    return;
+  }
+
   if (flags.has("ready")) {
     const ready = readyTickets(selected);
     for (const ticket of ready) {
       process.stdout.write(`${ticket.id}\t${ticket.tool}\t${ticket.title}\n`);
     }
     if (ready.length === 0) process.stdout.write("nothing is ready and unblocked\n");
-    return;
-  }
-
-  if (flags.has("write")) {
-    for (const tool of byTool) {
-      const page = statusPath(repoRoot, tool);
-      if (page === null) continue;
-      const { relative, absolute } = page;
-      const before = fs.readFileSync(absolute, "utf8");
-      const after = replaceRegion(
-        before,
-        renderRegion(all.filter((t) => t.tool === tool)),
-        relative,
-      );
-      if (before !== after) {
-        fs.writeFileSync(absolute, after);
-        process.stdout.write(`wrote ${relative}\n`);
-      }
-    }
-    return;
-  }
-
-  if (flags.has("check")) {
-    const base = values.base ?? "origin/main";
-    const complaints = [];
-    for (const tool of byTool) {
-      const page = statusPath(repoRoot, tool);
-      if (page === null) continue;
-      const { relative, absolute } = page;
-      const head = extractRegion(fs.readFileSync(absolute, "utf8"));
-      if (head === null) {
-        complaints.push(`${relative}: has no generated region — add the markers`);
-        continue;
-      }
-      const atBase = showAtRef(repoRoot, base, relative);
-      const baseRegion = atBase === null ? null : extractRegion(atBase);
-      // Two branches have no base region to be unchanged from, and both are
-      // legitimate: a status file this branch invents for a new tool, and the
-      // one that first adds the markers to an existing page. For those the only
-      // honest bar is that the region is already what `--write` produces.
-      const expected = baseRegion ?? renderRegion(all.filter((t) => t.tool === tool));
-      if (head !== expected) {
-        complaints.push(
-          baseRegion === null
-            ? `${relative}: this branch adds the generated region, so it must be exactly ` +
-                `what \`node scripts/status.mjs --write\` produces`
-            : `${relative}: the generated region was edited on this branch. Revert it — ` +
-                `it is written on \`main\` from the tickets, and editing it here is what ` +
-                `makes every branch conflict`,
-        );
-      }
-    }
-    if (complaints.length > 0) {
-      for (const complaint of complaints) process.stderr.write(`${complaint}\n`);
-      process.exitCode = 1;
-      return;
-    }
-    process.stdout.write(`the generated regions are untouched (base ${base})\n`);
     return;
   }
 
@@ -551,6 +459,27 @@ function main() {
 
   if (flags.has("prs")) printOpenPullRequests(repoRoot);
   process.stdout.write("\n");
+}
+
+/** @param {ReturnType<typeof describeTicket>} described */
+function printTicket({ ticket, blockers }) {
+  process.stdout.write(`\n${ticket.id}  ${ticket.title}\n\n`);
+  for (const [key, value] of [
+    ["tool", ticket.tool],
+    ["kind", ticket.kind],
+    ["status", ticket.status],
+    ["milestone", ticket.milestone ?? "—"],
+    ["depends on", ticket.depends_on.length === 0 ? "nothing" : ticket.depends_on.join(", ")],
+    ["note", ticket.note ?? "—"],
+    ["file", ticket.file],
+  ]) {
+    process.stdout.write(`  ${key.padEnd(11)} ${value}\n`);
+  }
+  process.stdout.write(
+    blockers.length === 0
+      ? "\n  unblocked\n\n"
+      : `\n  blocked by  ${blockers.map((b) => `${b.id} (${b.status})`).join(", ")}\n\n`,
+  );
 }
 
 /**

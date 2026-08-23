@@ -404,5 +404,5 @@ precisely so nobody has to reconcile a stale one.
 
 Work is tracked as one file per ticket in [work/](./work/) — see
 [docs/01-TICKETS.md](../../../docs/01-TICKETS.md) for the format. What is open
-is in [03-STATUS.md](./03-STATUS.md), or `npm run status`; what each closed
-ticket did is in its own Log.
+is `npm run status -- --tool planner`; what each closed ticket did is in its own
+Log.

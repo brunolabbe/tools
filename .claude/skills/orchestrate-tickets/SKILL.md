@@ -28,6 +28,8 @@ they change a decision.
 7. **Builder opens the PR**, commits the gate record, posts the reviewer's report to
    the PR thread.
 8. **Remove the worktree the moment the PR is open.**
+9. **Check the merge landed what it was supposed to.** Not polling — one look,
+   after the fact. See _After a merge_.
 
 ## Concurrency
 
@@ -48,6 +50,28 @@ after the gate returns, or the reviewer is judging a moving target.
 reach for the next number. The next free id is `git log --all`, not `ls docs/work/`.
 Assign ids yourself when two builders might file tickets.
 
+**Overlapping work degrades verification, not just throughput.** The obvious cost
+of running four tickets at once is coordination. The real one is that every gate
+measures a moving target: a baseline taken an hour ago is a different `main`, a
+test count in a report is already wrong, and a citation written into a ticket goes
+stale while the ticket is still being written. Two symptoms to expect, both seen —
+a reviewer reproducing "543 tests" and getting 545 because a sibling merged, and a
+ticket's own Log quoting a figure that stopped being true one commit later. Take
+every baseline yourself, in the worktree, at the moment you use it, and write
+figures with the commit they belong to.
+
+**Unstack a branch after its parent squash-merges with `--onto`.** A squash merge
+rewrites the parent's history into one new commit, so a child branch still carries
+the parent's *original* commits — which are now duplicates of content already on
+`main`. `git rebase main` replays them and conflicts on every line the squash
+touched; `git merge main` keeps them and puts the duplicates in the PR diff. The
+one that works is
+`git rebase --onto main <the-parent-branch's-old-tip> <child-branch>` — recover
+the old tip from the reflog or `gh pr view <parent> --json headRefOid` before the
+branch is deleted. **GitHub reports the un-rebased child as "conflicting"**, which
+reads like a content problem and is not: it is history shape. Do not send a builder
+to resolve those conflicts by hand.
+
 ## Worktree hygiene
 
 Worktrees auto-clean only when unchanged. A reviewer that writes into its worktree
@@ -57,11 +81,64 @@ leaves it dirty, so it never cleans. The reference session leaked **7.0 GB acros
 Two rules, both required:
 
 - Reviewers **return** their section as text; they never write it to a file.
-- Remove each worktree as its PR opens: `git worktree remove --force <path>`, then
+- Remove each worktree once its ticket is **finished** — merged, or abandoned —
+  not when its PR opens: `git worktree remove --force <path>`, then
   `git worktree prune`, then delete the `review-*` branch.
 
 Audit with `git worktree list` and `du -sh .claude/worktrees` when a batch feels
 long. Before removing, check `git status --porcelain` and `git log @{u}..` in each.
+
+**Removing a worktree also makes its agent unresumable**, which is why the second
+rule waits for the ticket rather than the PR. A follow-up sent to a builder whose
+worktree is gone is refused — *its worktree no longer exists* — and the only way
+forward is a fresh agent with the whole context rebuilt by hand, which costs far
+more than the disk did. An open PR still takes review comments, a rebase and
+follow-ups, and every one of those wants the agent that wrote it. Removing earlier
+is sometimes the right trade for 7 GB; make it a choice rather than discover it an
+hour later.
+
+### Give a new worktree its dependencies without installing them
+
+A fresh worktree has no `node_modules`, so every agent pays `npm install` plus
+`npm run build` before it can read a test result — minutes each, and in the
+reference session two dozen agents each paid it. A **selective symlink farm**
+built from the shared checkout's `node_modules` removes the install half in well
+under a second and costs tens of kilobytes instead of hundreds of megabytes. The
+build still has to run.
+
+The shape, and the whole of it is *why*:
+
+- **Symlink each third-party entry individually**, absolute, into the worktree's
+  own real `node_modules` directory.
+- **Include the dotfiles** — `.bin` above all. A `*` glob silently misses it and
+  every binary the scripts call disappears with it; enumerate with `ls -A`.
+- **But create the workspace scopes — `@planner`, `@downloader`, `@webtools` —
+  as real directories**, re-creating each inner link with its *original relative
+  target*.
+
+That last rule is the load-bearing one. npm writes workspace links relatively
+(`@planner/api -> ../../tools/planner/api`), and a relative link resolves from
+where it **physically** lives. Inside a real directory in the worktree it lands
+on the worktree's own `tools/planner/api`, which is the point. Hence the first
+trap:
+
+- **Do not symlink `node_modules` wholesale.** It is one command and it is
+  silently wrong: the worktree's `node_modules` *is* the shared one, so every
+  workspace link resolves into the **shared checkout**. An agent editing a
+  contract then typechecks and tests against the other tree's version of it —
+  stale exports, green suite, wrong code, and nothing in the output says so.
+  Verified: under a wholesale link `@planner/api` resolves to
+  `/workspaces/tools/tools/planner/api` rather than into the worktree.
+- **Hard links are not the escape either.** In this container `node_modules` is
+  its own mount, so `cp -al` fails on the first file with
+  `Invalid cross-device link`. Check with `df` before assuming otherwise; the
+  mount layout is specific to this environment, while the relative-link reasoning
+  above is not.
+
+Verify a farm the same way rather than trusting it: resolve one workspace link
+with `readlink -f` and confirm it points inside the worktree, then run one real
+suite there. A farm that is wrong is wrong *quietly*, which is the only reason it
+needs a check at all.
 
 ## Dispatching a builder
 
@@ -77,8 +154,8 @@ Every builder prompt carries:
   wrong, do the right thing and record what it had wrong in the Log.
 - **Gates**: `npm run check`, the tool's project suite, full `npm test` if shared
   config moved, `npm run format` after any `.md`.
-- **Bookkeeping**: append a dated Log entry, set `status: done`, never touch a
-  `<!-- generated:tickets -->` region.
+- **Bookkeeping**: append a dated Log entry, set `status: done`. There is no status
+  page to update — `npm run status` is the view, computed from the frontmatter.
 - **Stop before the PR.** A reviewer runs first.
 - **Do not spawn subagents.** Orchestration is yours.
 - **Report**: branch, files, what the brief had wrong, exact gate commands and
@@ -100,6 +177,15 @@ prompts said *reproduce this exact mutation* instead of *review this*.
 - **Enumerate, never sample.** Say "walk every conditional and `??` in these files
   and report how many you tested and what survived". Sampling misses clustered
   defects, and a claim of *none left* is worth exactly what the sweep behind it was.
+- **Check the ticket's premise, not only its code against the ticket.** When a
+  ticket rests on machinery — a workflow, a scheduled job, a hook, an external
+  service — make one gate confirm that the machinery **actually runs**, by reading
+  its run logs, not that the code calling it is correct. A green pull-request check
+  and a working mechanism are different claims, and no amount of reviewing the
+  diff distinguishes them: in the reference session a ticket passed **four** gates
+  sitting on a job that had never once done its work (the same job `## After a
+  merge` names), and every gate had verified the code faithfully. This is one
+  command, and it is why a whole follow-up ticket had to exist.
 - **Verify the negative half of every acceptance line.** A criterion reading "a
   branch that edits X **fails** the check" is not proven by three green runs. In the
   reference session a doc ticket reached its fourth gate before anyone watched the
@@ -163,8 +249,37 @@ such a line is honest — but the amendment needs an outside check.
   matters is in the file type you did not think of), resolving every link including
   anchors, `ls` on every cited path. Three consecutive gates each found exactly one
   more dangling citation than the sweep before it claimed existed.
+- **A sweep anchored to one term is still a filter.** Unfiltering the file type is
+  half of it; the other half is sweeping the **other names of the thing** — the
+  flag, the script, the ADR slug, the bare noun in a spine listing — because a
+  citation can name the subject without ever using its filename. Two found this way
+  in one ticket, neither reachable by any `git grep` on the filename: a
+  `package.json` annotation still advertising a deleted flag, because the ADR it
+  pointed at is slugged differently; and a `CLAUDE.md` layout block listing the
+  page by its bare noun. Three instances of this class across two tickets, each
+  from an angle the previous fix did not cover — which is the tell that a fix which
+  does not generalise is how a class recurs.
 - **Slow gates do not run here.** e2e and container builds stay unrun in this loop.
   Say so when reporting a PASS; the CI workflow is the first thing to exercise them.
+
+## After a merge
+
+**A standing rule against polling CI is not a reason never to look.** The rule
+exists so nobody watches a run to completion; it does not license never checking
+what a merge did. Look once, afterwards.
+
+**Green PR checks say nothing about the `push`-triggered jobs.** They are different
+events with different jobs, and a job that only runs on `push` to `main` can fail
+on *every* merge while every pull request stays green — nobody sees the red,
+because nobody was looking at `main`. In the reference repo one such job had never
+once succeeded: branch protection rejected its push with `GH013 — changes must be
+made through a pull request`, so a generated file it maintained sat a week stale
+while listing a merged ticket as open and omitting a live security ticket
+entirely.
+
+So after a batch merges, one call: `gh run list --branch main --limit 10`. Read
+the `push` rows. That is the whole check, and it is the only thing that would have
+caught it.
 
 ## Records
 
@@ -191,6 +306,15 @@ about choices with an obvious default.
 
 **Batch them.** Each question stalls the board. Hold them to a checkpoint unless one
 blocks a running agent.
+
+**Ask whether to parallelise at intake, not after the collision.** `## Concurrency`
+says never to run two tickets over one seam; the failure that costs is asking the
+question late. In the reference session two tickets overlapped and the question
+brought to the user was *how to reconcile them* — never *whether to run them
+concurrently at all*. By then both were half-built and every option was bad; three
+rebases followed. The overlap is cheap to see before dispatch and expensive after,
+so it is an intake decision, and it is one worth surfacing even though the answer
+often looks obvious.
 
 **Do not launder subagent claims.** If you repeat a consequence to the user, be able
 to say who ran it. A vivid failure scenario from a report is a hypothesis until

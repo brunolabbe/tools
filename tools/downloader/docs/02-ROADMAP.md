@@ -71,8 +71,8 @@ Everything below assumes Plan B.
 
 ## Phases
 
-Phases 0 through 3 are done, and M4 with them — see
-[03-STATUS.md](./03-STATUS.md) for what is still open, or `npm run status`.
+Phases 0 through 3 are done, and M4 with them —
+`npm run status -- --tool downloader` for what is still open.
 Phase 1 was the parallel block, where running several agents at once paid off;
 Phase 2 was the single-agent join. What remains is Phase 4, which never ends.
 

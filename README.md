@@ -4,10 +4,10 @@ A repo of small, independent web tools that share a toolchain, a CI pipeline and
 a set of conventions. They do not share a domain — each one is its own service,
 its own image and its own version, and none of them imports from another.
 
-| Tool                                             | What it does                                              | State                                                              |
-| ------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------ |
-| [**downloader**](./tools/downloader/README.md)   | Page URL in, video stream found and downloaded, link out  | Complete and deployable · [0.1.1](./tools/downloader/CHANGELOG.md) |
-| [**planner**](./tools/planner/docs/03-STATUS.md) | Describe a trip, plan it with an assistant, keep the plan | In flight — `npm run status` for what is open                      |
+| Tool                                           | What it does                                              | State                                                              |
+| ---------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------ |
+| [**downloader**](./tools/downloader/README.md) | Page URL in, video stream found and downloaded, link out  | Complete and deployable · [0.1.1](./tools/downloader/CHANGELOG.md) |
+| [**planner**](./tools/planner/docs/)           | Describe a trip, plan it with an assistant, keep the plan | In flight — `npm run status` for what is open                      |
 
 ## Getting started
 
@@ -77,7 +77,8 @@ The two ports differ from each other on purpose, so both tools can run at once
 without either being reconfigured.
 
 Each tool's documentation lives with its code, on the same spine — analysis,
-architecture, roadmap, status, and one file per ticket. The root
+architecture, roadmap, and one file per ticket. Where a tool stands is
+`npm run status`, computed from those tickets rather than written down. The root
 [docs/](./docs/) holds only what is true of the repo: the tool index, the ticket
 format, deployment, releasing, and the ADRs for decisions binding more than one
 tool.
