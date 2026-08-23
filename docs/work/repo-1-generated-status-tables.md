@@ -73,7 +73,7 @@ match, and the workflow runs `npm run format` after `--write` as the belt.
 
 ## Review
 
-Three gates, all **CONCERNS**, all closed. Recorded here by the builder rather
+Four gates, all **CONCERNS**, all closed. Recorded here by the builder rather
 than by the reviewer, and that is the point: the first two gates were written in
 reviewer worktrees that were then discarded, so neither existed in the repo and
 nothing let a later reader check that the findings were addressed rather than
@@ -83,7 +83,10 @@ only the ones worth writing about. A gate that is not committed did not happen.
 
 One row per **Done when** line. Written late — gate 3's finding was that this
 half was missing entirely and a finding table had quietly stood in for it, which
-is exactly how the acceptance-to-test link stops being recorded.
+is exactly how the acceptance-to-test link stops being recorded. Gate 4 then
+found two things about the table itself, both recorded there and neither fixed:
+the rows cite the `test(` line rather than the assertion, and the last row's
+citation proves a property of the writer rather than of the formatter.
 
 | Done when                                                              | Proof                                                                                                                                                                    |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -177,6 +180,40 @@ annotating their source would have left the generator running.
 Finding 8 is the ticket failing its own rule in its own exemplar: the planner's
 header table says a decision belongs in an ADR, three lines above three sentences
 of narrative that duplicate `adr/003:7-13`. The downloader's page had it right.
+
+### Gate 4 — 2026-08-23
+
+**Gate: CONCERNS** — `origin/main...HEAD` · code-review at medium · the reviewer
+states it does not expect a fifth round.
+
+Verified: both regions byte-identical at 6527 and 4115 bytes (`cmp` clean);
+`--check` red on a deliberately perturbed region and green again on restore —
+the first time this branch has proven the guard **fires** rather than only that
+it passes; the unfiltered sweep reproduced at 84 hits across 37 files with the
+per-file arithmetic in the Log's enumeration **exact**; 75 relative links across
+the seven most-edited documents, 0 missing, 0 bad anchors; `wc -l` confirming
+planner 112 and downloader 120; and both surviving `.env.example` claims
+re-checked against `ssrf.ts` and `dispatcher.ts`.
+
+**The `--check` CLI has no unit test — confirmed, and it is this branch's most
+useful finding about itself.** `status.test.ts` imports exactly seven pure
+functions; there is no CLI entry, no `showAtRef`, no `--check`. Marking those two
+acceptance rows `verified` rather than `proven` was judged honest rather than
+evasive, which is the distinction the verdict exists to carry.
+
+| #   | Finding                                                                                                                                                                                        | Disposition                                                                                                                                                                                                                                   |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **med** · `SKILL.md:290` still said "replacing a previous `## Review` — one gate per ticket", contradicting the one-subsection-per-gate rule added in the same round, and `01-TICKETS.md:162`  | **Fixed** — eleven words deleted. A caller following the old sentence would have deleted every earlier gate, which is repo-1's own failure twice over                                                                                         |
+| 2   | **med** · `01-TICKETS.md`'s normative gate table did not admit `verified`, so repo-1's own acceptance section was a FAIL under it                                                              | **Fixed** — PASS is "proven or `verified`", FAIL is "nothing asserts **and nobody re-ran**", and `verified` is now glossed beside the table                                                                                                   |
+| 3   | **low** · `SKILL.md:249` said "name both acts" four lines after step 8 grew to three                                                                                                           | **Fixed** — "name all three, and keep the third of them honest"                                                                                                                                                                               |
+| 4   | **low** · The acceptance table cites the `test(` line, not the assertion — the style `SKILL.md:157-161` rules out                                                                              | **Declined** — every row is truthful and the citations resolve; recorded because this table is now the repo's worked example and the next one should cite the assertion                                                                       |
+| 5   | **low** · Its last row cites `status.test.ts:206` for the `npm run format` guarantee; that test proves `replaceRegion` preserves text outside the region — the writer, not the formatter       | **Declined** — the row's real proof is its `verified` half, the byte-identical re-diff after each format pass. The citation is weak rather than wrong                                                                                         |
+| 6   | **low** · The gate subsections carry no `findings` line, no NFR line, no header naming range and level, and use tables where both documents now mandate bullets                                | **Declined** — gates 1–3 were reported as prose under the old regime and transcribing them into a shape they were never written in would invent detail. Gate 4 above carries the header; the mandate binds reviews written under the new rule |
+| 7   | **low** · `README.md:10` — the planner's State cell now points at `npm run status` while the downloader's neighbour hand-asserts "Complete and deployable" with four tickets open, one a `fix` | **Declined** — not wrong today, and out of this ticket's range. It is the same class of rotting cell one column over, and worth a ticket if it ever misleads                                                                                  |
+
+Informational, no action: `adr/003:11-12` still says "397 lines" and "thirty-seven
+commits" unannotated. Correct — those are point-in-time observations in a dated
+ADR `## Context`, which is the one place this ticket argues such a figure belongs.
 
 ## Log
 
@@ -556,3 +593,58 @@ it records that this half did not hold and why — a dashboard nobody generates 
 a dashboard everybody hand-edits — and the header says "accepted, amended in part
 by 003". Chasing citations without annotating their source would have left the
 generator running.
+
+**2026-08-23 — fourth gate: two mediums, and both were this branch's own new
+rules failing to bind.** Recorded in `## Review` above as `### Gate 4`, with the
+four lows the reviewer raised and I am declining, so they are tracked rather than
+lost.
+
+**The skill undid its own fix in the same paragraph.** "Above `## Log`, or
+replacing a previous `## Review` — one gate per ticket, the current one" is the
+sentence that tells a caller _where to put the section_, and it survived
+untouched three lines above the new "keep one subsection per gate rather than
+overwriting". A caller on the next multi-round ticket follows the first, replaces
+the section, and every earlier gate leaves the repo — which is precisely the loss
+repo-1 suffered twice and the new sentence exists to prevent. Eleven words
+deleted. Worth naming the shape: **adding a rule beside a contradicting one
+leaves the contradiction, and the older sentence usually wins because it is the
+one that answers the question the reader arrived with.** That is the third time
+in four rounds this ticket has done a version of it.
+
+**`verified` was named as a legitimate verdict twelve lines below a normative
+table that did not admit it.** `01-TICKETS.md` gave PASS as "every acceptance
+line proven" and FAIL as "an acceptance line nothing asserts at all", and
+presents that table as fixed vocabulary — "so that the gate is a decision rather
+than a mood". Under it, **repo-1's own eight-row acceptance section is a FAIL**,
+because four of its rows are lines nothing asserts. The gap was latent while
+nothing used the word; naming it made it live in the same commit. PASS now reads
+"proven or `verified`", FAIL "nothing asserts **and nobody re-ran**", and
+`verified` is glossed beside the table rather than only in the skill — the
+difference between the two verdicts is whether someone got a number back, and a
+normative table that omits a verdict its own exemplar uses is worse than one that
+never mentioned it.
+
+**Four lows declined, and the interesting one is the acceptance table's
+citations.** It cites the `test(` line rather than the assertion, which is the
+style `SKILL.md:157-161` explicitly rules out — cite the clause you mean and the
+row can be checked without opening the file. Every row is truthful and every
+citation resolves, so there is nothing wrong to fix; what makes it worth
+recording is that this table is now the repo's only worked example of the half of
+the section gate 3 added, and the next person will copy its shape. Also declined:
+the last row's `status.test.ts:206` citation, which proves `replaceRegion`
+preserves text _outside_ the region — a property of the writer, not of `oxfmt` —
+where the row's real proof is its `verified` half; the gate subsections carrying
+no `findings` line, no NFR line and no range-and-level header, because gates 1–3
+were reported as prose under the old regime and transcribing them into a shape
+they were never written in would invent detail; and `README.md`'s downloader cell
+still hand-asserting "Complete and deployable" with four tickets open, one column
+from the planner cell fixed for exactly that reason — true today, out of range,
+and a ticket if it ever misleads.
+
+**One thing gate 4 proved that no earlier gate had.** Every round so far checked
+that `--check` **passes** on this branch. The reviewer perturbed a generated
+region and watched it go red, then restored it and watched it go green. That is
+the guard demonstrated firing rather than merely not complaining, and it is the
+one assertion this branch could not make about itself — the acceptance line says
+"a branch that edits a generated region fails `--check`", and until now nothing
+on the branch had ever seen it fail.

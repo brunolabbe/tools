@@ -245,11 +245,11 @@ is the caller's alone.
    what the reviewer actually said; if the branch has no pull request yet, that
    duty attaches to opening it, and the report goes in the body or as the first
    comment. Third, report the gate to the user. A verdict is a record; the repair
-   is work that has not happened — and a report that ends in a list of findings reads exactly
-   like a report of work done. So name both acts. Give the gate, say plainly that
-   **nothing has been fixed**, and then what clearing it would take, per finding
-   or per cluster and concrete enough that the user can say yes to some and no to
-   others. Then offer to do that work now, and wait for the answer. The findings
+   is work that has not happened — and a report that ends in a list of findings
+   reads exactly like a report of work done. So name all three, and keep the
+   third of them honest: give the gate, say plainly that **nothing has been
+   fixed**, and then what clearing it would take, per finding or per cluster and
+   concrete enough that the user can say yes to some and no to others. Then offer to do that work now, and wait for the answer. The findings
    are the author's to accept, argue with or defer: a CONCERNS gate is not a work
    order, and FAIL is a report rather than a decision to stop.
 
@@ -287,11 +287,10 @@ reviewer's. The section is added, never in place of anything else in the file.
 
 ## The section to commit
 
-Above `## Log`, or replacing a previous `## Review` — one gate per ticket, the
-current one. On a ticket that has been through several rounds, keep one
+Above `## Log`. On a ticket that has been through several rounds, keep one
 subsection per gate rather than overwriting: a record that shows only the last
-gate cannot be told from one whose earlier findings were dropped. Keep it short; the reasoning belongs in the Log where the author
-writes it.
+gate cannot be told from one whose earlier findings were dropped. Keep it short;
+the reasoning belongs in the Log where the author writes it.
 
 ```markdown
 ## Review

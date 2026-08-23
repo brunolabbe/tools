@@ -104,10 +104,16 @@ single word:
 
 | Gate         | When                                                              |
 | ------------ | ----------------------------------------------------------------- |
-| **PASS**     | Every acceptance line proven, nothing found above `low`           |
+| **PASS**     | Every acceptance line proven or `verified`, nothing above `low`   |
 | **CONCERNS** | A `med` finding, or a line proven only by a gate that has not run |
-| **FAIL**     | A `high` finding, or an acceptance line nothing asserts at all    |
+| **FAIL**     | A `high` finding, or a line nothing asserts **and nobody re-ran** |
 | **WAIVED**   | A human overrode a gate, named themself, and said why             |
+
+`verified` is the row for an acceptance line nothing asserts and the reviewer
+**re-ran** — the gates-are-green bullet almost every ticket ends with, and a
+criterion whose only proof is a command rather than a test. It counts as proven,
+and it is not a softer `unproven`: the difference is whether someone got a number
+back. The four row verdicts are the review skill's, and it defines them.
 
 The vocabulary is fixed so that the gate is a decision rather than a mood. Prose
 verdicts drift towards the reviewer's appetite for argument that afternoon; four
