@@ -8,6 +8,7 @@
  * the chain, rather than asserted in prose.
  */
 
+import path from "node:path";
 import { AppError, ROUTES } from "@downloader/contract";
 import type { JobResponse } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
@@ -109,8 +110,13 @@ describe("resolver composition (M2)", () => {
     expect(
       loadApiConfig({}, { FFMPEG_ALLOW_UNVERIFIED_TLS: "true" }).ffmpegAllowUnverifiedTls,
     ).toBe(true);
+    // `optionalPath` resolves what it reads, so the expectation has to resolve
+    // too or this asserts a POSIX separator: on Windows the same input comes
+    // back as `D:\etc\corp\root.pem`. What is being pinned is that the variable
+    // is *read*, not the shape of the path — `path.resolve` of an absolute path
+    // is the identity on POSIX and re-roots it on Windows, so both agree here.
     expect(loadApiConfig({}, { FFMPEG_CA_FILE: "/etc/corp/root.pem" }).ffmpegCaFile).toBe(
-      "/etc/corp/root.pem",
+      path.resolve("/etc/corp/root.pem"),
     );
 
     // ...and from an explicit override, which is what `createApp` passes and
