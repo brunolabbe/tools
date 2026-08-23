@@ -3,7 +3,7 @@ id: pl-31
 tool: planner
 title: Put the web vite.config.ts into a tsconfig project, so npm run check reads it
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -178,4 +178,52 @@ read.
 
 ## Log
 
-_Not started._
+- **2026-08-23** — Built. One line changed:
+  `tools/planner/web/test/tsconfig.json`'s `include` now names
+  `../vite.config.ts`, with a comment above it saying why the file is there —
+  the `web` project beside it includes `src/**` only and could not take the file
+  anyway, so until now it was in no project at all.
+
+- **The brief was right on every measurement it made, and I re-took them all in
+  this worktree rather than trusting them.** All four runs below deleted every
+  `.tsbuildinfo` outside `node_modules` first, and `npm run typecheck` is
+  `tsc --build --verbose`, so each run printed
+  `Building project 'tools/planner/web/test/tsconfig.json'...` and the green ones
+  are green because the project compiled, not because it was skipped.
+
+  1. Probe appended to `vite.config.ts`, fix reverted (`git stash` of the one
+     file): **exit 0**, and neither `error TS` nor `vite.config` appears
+     anywhere in the output. The gap is real on `567f9e5`.
+  2. Probe present, fix applied: **exit 1**, with
+     `tools/planner/web/vite.config.ts(55,7): error TS2322: Type 'string' is not
+assignable to type 'number'.`
+  3. Probe reverted (`git checkout --`, then diffed against a copy taken before
+     it was appended), fix applied: **exit 0**.
+  4. The rejected alternative from step 3 of the brief, confirmed rather than
+     taken on faith — `"vite.config.ts"` added to `tools/planner/web/tsconfig.json`:
+     `error TS6059: File '…/tools/planner/web/vite.config.ts' is not under
+'rootDir' '…/tools/planner/web/src'.` It also dropped a `vite.config.d.ts`
+     and a `.d.ts.map` beside the config, exactly as the brief warned. Both
+     reverted, both stray files deleted.
+
+- `npm run build -w @planner/web` after deleting `tools/planner/web/dist`:
+  `tsc --build && vite build` green, 136 modules, `dist/app/assets/index-*.js`
+  at 311.61 kB. Being in a `noEmit` project as well as being Vite's input
+  disturbs neither, and no stray declaration lands beside the config.
+
+- Gates: cold `npm run check` green (lint's 16 `no-await-in-loop` warnings are
+  pre-existing and are warnings), `npm test` green — 103 files, 1508 tests.
+
+- **Step 5's decision: yes, the planner wants a `vite-config.test.ts`, and it is
+  filed as pl-32.** The brief's doubt was that the planner's config "already
+  reads `HOST` the same way", so a test might prove nothing new — but reading it
+  the same way is not the same as anything asserting it. This ticket makes a
+  _type_ error in the file fail the gate; a _value_ regression — `host:
+"localhost"`, `strictPort: false`, a port that is no longer the 5183
+  `.devcontainer/devcontainer.json` forwards — still typechecks perfectly and
+  still produces the silent blank page the docblock describes. repo-5 is what
+  settles it: it asks whether the `HOST` resolution lifts to `packages/`, and
+  its acceptance requires the pinned behaviour to survive the move "proven by
+  the tests that pinned it". Only the downloader has those tests today, so a
+  lift could change what the planner binds with the suite staying green. Scoped
+  out of here per the brief's own instruction to file rather than grow.
