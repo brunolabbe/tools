@@ -15,6 +15,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import type { AddressResolver, ResolvedAddress } from "../src/dispatcher.ts";
 import { startEgressProxy } from "../src/egress-proxy.ts";
 import type { EgressProxy } from "../src/egress-proxy.ts";
+import type { AppLogger } from "../src/logger.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
 import type { SsrfGuard } from "../src/ssrf.ts";
 
@@ -25,6 +26,33 @@ const NOOP_LOGGER = {
   error: () => {},
   child: () => NOOP_LOGGER,
 };
+
+interface Line {
+  msg: string;
+  fields: Record<string, unknown>;
+}
+
+/** A logger that keeps its warnings, for the tests that are about the log itself. */
+function recordingLogger(): { logger: AppLogger; warnings: Line[] } {
+  const warnings: Line[] = [];
+  const logger: AppLogger = {
+    ...NOOP_LOGGER,
+    warn: (msg, fields) => {
+      warnings.push({ msg, fields: fields ?? {} });
+    },
+    child: () => logger,
+  };
+  return { logger, warnings };
+}
+
+/** A port that was listening long enough to be allocated, and is not now. */
+async function closedPort(): Promise<number> {
+  const server = net.createServer();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return port;
+}
 
 function v4(address: string): ResolvedAddress {
   return { address, family: 4 };
@@ -187,6 +215,73 @@ describe("the holes dl-11 closes", () => {
     const result = await connectThrough(proxy.port, "rebind.test:443");
 
     expect(result.status).toBe(502);
+  });
+});
+
+/**
+ * dl-26. The log is the only account of a blocked fetch — a refusal here cannot
+ * be attributed to a job, so nothing reaches the client but a generic failure.
+ * That makes "which of these two happened" a property worth testing, not a
+ * cosmetic detail: one sends the reader to `ssrf.ts` and the other to their
+ * firewall.
+ */
+describe("what the log says happened", () => {
+  test("a policy refusal names the rule, not an internal error", async () => {
+    const { logger, warnings } = recordingLogger();
+    const guard = guardResolving({ "segments.evil.test": ["169.254.169.254"] });
+    const proxy = await startProxy({ guard, logger });
+
+    await connectThrough(proxy.port, "segments.evil.test:443");
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.msg).toBe("refused a subprocess fetch");
+    expect(warnings[0]?.fields["code"]).toBe("BLOCKED_TARGET");
+  });
+
+  test("an allowed host we cannot reach is not reported as a refusal", async () => {
+    // The dl-26 case: the guard said yes and the network said nothing. Logging
+    // this as "refused … INTERNAL" cost an afternoon in `ssrf.ts`.
+    const { logger, warnings } = recordingLogger();
+    const guard = createSsrfGuard({ allowHosts: ["unreachable.test"] });
+    const proxy = await startProxy({ guard, logger, resolve: resolverFor([v4("127.0.0.1")]) });
+
+    const result = await connectThrough(proxy.port, `unreachable.test:${await closedPort()}`);
+
+    expect(result.status).toBe(502);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.msg).toBe("a subprocess fetch could not connect");
+    expect(warnings[0]?.fields["errno"]).toBe("ECONNREFUSED");
+    // The distinction is the point: nothing here refused anything.
+    expect(warnings[0]?.msg).not.toContain("refused");
+    expect(warnings[0]?.fields["code"]).toBeUndefined();
+  });
+
+  test("a rebind caught at connect stays a refusal, though it arrives as a socket error", async () => {
+    // `createPinningLookup` reports through the socket's `error` event, so this
+    // shares a call site with the case above and must not share its message.
+    const { logger, warnings } = recordingLogger();
+    const guard = guardResolving({ "rebind.test": ["93.184.216.34"] });
+    const proxy = await startProxy({ guard, logger, resolve: resolverFor([v4("127.0.0.1")]) });
+
+    await connectThrough(proxy.port, "rebind.test:443");
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.msg).toBe("refused a subprocess fetch");
+    expect(warnings[0]?.fields["code"]).toBe("BLOCKED_TARGET");
+  });
+
+  test("no message claims the fetch was ffmpeg's", async () => {
+    // Since dl-12 this proxy serves Chromium and yt-dlp too, and the case that
+    // prompted dl-26 was a browser probe's subresources.
+    const { logger, warnings } = recordingLogger();
+    const guard = guardResolving({ "segments.evil.test": ["169.254.169.254"] });
+    const proxy = await startProxy({ guard, logger });
+
+    await connectThrough(proxy.port, "segments.evil.test:443");
+    await getThrough(proxy.port, "http://segments.evil.test/seg.ts");
+
+    expect(warnings).toHaveLength(2);
+    for (const line of warnings) expect(line.msg).not.toContain("ffmpeg");
   });
 });
 
