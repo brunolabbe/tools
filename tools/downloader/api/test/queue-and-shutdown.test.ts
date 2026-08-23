@@ -96,6 +96,38 @@ describe("resolver composition (M2)", () => {
     expect(() => loadApiConfig({}, { PROXY_URL: "socks5://127.0.0.1:1080" })).toThrow(AppError);
   });
 
+  test("a stock deployment verifies certificates, and both TLS settings read env and override", () => {
+    // The regression this pins is the one dl-19 exists to prevent, and it is a
+    // one-character one: flip this default and every deployment that never
+    // heard of the setting silently goes back to downloading video over
+    // connections nobody authenticated. The whole suite stayed green under
+    // exactly that mutation until this test.
+    expect(loadApiConfig({}, {}).ffmpegAllowUnverifiedTls).toBe(false);
+    expect(loadApiConfig({}, {}).ffmpegCaFile).toBeUndefined();
+
+    // Read from the environment...
+    expect(
+      loadApiConfig({}, { FFMPEG_ALLOW_UNVERIFIED_TLS: "true" }).ffmpegAllowUnverifiedTls,
+    ).toBe(true);
+    expect(loadApiConfig({}, { FFMPEG_CA_FILE: "/etc/corp/root.pem" }).ffmpegCaFile).toBe(
+      "/etc/corp/root.pem",
+    );
+
+    // ...and from an explicit override, which is what `createApp` passes and
+    // what every test that builds a config uses.
+    expect(loadApiConfig({ ffmpegAllowUnverifiedTls: true }, {}).ffmpegAllowUnverifiedTls).toBe(
+      true,
+    );
+    expect(loadApiConfig({ ffmpegCaFile: "/tmp/fixture.pem" }, {}).ffmpegCaFile).toBe(
+      "/tmp/fixture.pem",
+    );
+
+    // A value that is neither `true` nor `false` must not be read as consent.
+    expect(
+      loadApiConfig({}, { FFMPEG_ALLOW_UNVERIFIED_TLS: "ture" }).ffmpegAllowUnverifiedTls,
+    ).toBe(false);
+  });
+
   test("a usable PROXY_URL survives verbatim, credentials and all", () => {
     // Round-tripping the URL through `new URL().href` would normalise the path
     // and re-encode the credentials, which is not this function's business.

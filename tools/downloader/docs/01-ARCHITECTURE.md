@@ -165,12 +165,30 @@ Non-negotiable, because this service fetches arbitrary URLs on request:
   pins the address it vetted, so a segment URI or a page subresource that no
   `ProbeResult` ever contained is still checked. `PROXY_URL`, when set, is
   chained to rather than replaced.
-- **Verified TLS on both download paths** — the engine's own fetches go through
-  undici, which verifies without being asked; ffmpeg's do not unless told, and
-  `tls_verify` defaults to off in libavformat. Since `dl-19` every remote input
-  carries `-tls_verify 1`, so HLS and DASH are no longer the unverified half of
-  the same tool. The egress proxy tunnels rather than intercepts, so the
-  certificate that reaches ffmpeg is the origin's own.
+- **TLS verification, and exactly how far it reaches.** The engine's own fetches
+  go through undici, which verifies without being asked. ffmpeg's do not unless
+  told — `tls_verify` defaults to off in libavformat — so since `dl-19` every
+  remote input ffmpeg opens carries `-tls_verify 1`. Read that narrowly, because
+  two limits are real and an operator who assumes otherwise is assuming a
+  guarantee they do not have:
+  - **A plain-`http://` input carries neither flag, deliberately.**
+    `avformat_open_input` fails on an option nothing consumed, so the flag on an
+    HTTP manifest aborts the download outright. Nothing is lost: a manifest
+    fetched in the clear can be rewritten by whoever could have substituted the
+    segments it names.
+  - **Only the manifest connection is verified. HLS and DASH segment
+    connections are not** — libavformat does not propagate the TLS options to
+    the child connections the demuxer opens, though it does propagate
+    `-headers` and `-user_agent`. A manifest on a verified origin whose segment
+    URIs point at a second, untrusted origin downloads and remuxes without
+    complaint. Measured on ffmpeg 6.1.1; [`dl-21`](./work/dl-21-verified-hls-segments.md)
+    is the ticket. So HLS and DASH are no longer the _wholly_ unverified half of
+    this tool, which is what `dl-19` changed, and they are not yet the verified
+    half.
+
+  The egress proxy tunnels rather than intercepts, so the certificate that does
+  reach ffmpeg is the origin's own.
+
 - **Path safety** — filenames sanitised, output paths confined to `STORAGE_DIR`,
   no user string ever reaching a shell. Spawn with argument arrays, never
   `shell: true`.
