@@ -27,6 +27,9 @@ by the scope in its subject. So the sentence generalises: _any_ commit of a
 releasable type (`feat`, `fix`, `perf`, `revert` — the four not `hidden` in
 `changelog-sections`) that touches **one file** anywhere under `tools/<name>/`
 lands in that tool's changelog and bumps its version, whatever its scope says.
+**The generalisation is the inference, and it is the part to check** — what is
+measured below is the two halves it rests on, that attribution follows the path
+and that the scope is not consulted. Build step 2 says how to close the gap.
 
 **This is measured, not predicted**, in the two release-please branches open on
 `origin` today. The pending planner `0.4.0` has, under `### Fixes`:
@@ -45,8 +48,10 @@ by:
 
 `2ea0631` is a `fix(core)` that touched both `Dockerfile`s and the planner's
 docs, so it is in both tools' notes. `a112cd4` is a `feat(planner)` that lifted
-rate limiting into `packages/core` and edited eleven files under
-`tools/downloader/api/`, so it decided the downloader's next minor version.
+rate limiting into `packages/core` and edited seven files under
+`tools/downloader/api/` — which is also every file it touched under
+`tools/downloader/`, so no counting convention makes it more — and so decided
+the downloader's next minor version.
 Neither commit is wrong. Both were attributed by the paths in their diff, and
 the scope in the subject — the thing this repo enforces on every commit — had no
 part in it.
@@ -58,8 +63,10 @@ written onto that sibling, in the same pull request as the fix
 [repo-3](./repo-3-show-a-closed-ticket.md), and the review skill asks for it).
 repo-3 wanted to append a two-line `_Outcome:_` annotation to a finding in
 `tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md` — a pure documentation
-edit — from a commit reading `fix(repo): … (repo-3)`. That would have cut the
-planner a patch release whose only changelog line is about `scripts/status.mjs`.
+edit — from a commit reading `fix(repo): … (repo-3)`. On the mechanism above
+that would have cut the planner a patch release whose only changelog line is
+about `scripts/status.mjs`; that exact shape has never occurred here, which is
+why step 2 asks for it to be run rather than assumed.
 repo-3 dropped the annotation for that reason and the loop it wanted to close is
 still open, which is the cost being paid today.
 

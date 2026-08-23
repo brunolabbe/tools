@@ -543,6 +543,27 @@ test("--show on a closed ticket with an open dependency is not blocked by it", (
   expect(stdout).not.toContain("unblocked");
 });
 
+// The same seam with a dangling id instead of a real blocker, because `holding`
+// mixes the two and only one of them was pinned here. Gate 1 mutated this branch
+// alone to read `blockers` rather than `holding` and the suite stayed green at
+// 75/75, with `repo-404 (not a ticket)` gone from stdout — which would silently
+// falsify docs/01-TICKETS.md's promise that `--show` on the offending ticket
+// names the missing id. repo-6's own end-to-end test guards that for an *open*
+// ticket only; this is the case repo-3 introduced.
+test("--show on a closed ticket still names a dependency that is not a ticket", () => {
+  const root = repoWith({
+    [at("pl-2")]: pl("pl-2", { status: "done", depends_on: "[pl-99]" }),
+  });
+  const { stdout, stderr, status } = run(["--show", "pl-2"], root);
+  expect(status).toBe(0);
+  expect(closingLine(stdout)).toBe(
+    "  done — nothing to pick up; depends_on still lists pl-99 (not a ticket)",
+  );
+  expect(stdout).not.toContain("blocked by");
+  expect(stdout).not.toContain("unblocked");
+  expect(stderr.trimEnd()).toContain('depends_on "pl-99", which is not a ticket');
+});
+
 // The half three green runs cannot prove: the two open branches are untouched.
 // `in-flight` as well as `ready`, because the closed branch keys off `OPEN`,
 // which holds both — a fix written against `status === "ready"` would pass the

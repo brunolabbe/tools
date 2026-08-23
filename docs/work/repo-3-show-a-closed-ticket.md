@@ -192,6 +192,58 @@ the taxonomy, or any ticket's frontmatter.
   failing against `origin/main`'s `printTicket`.
 - `npm run check` and `npm test` are green.
 
+## Gates
+
+### Gate 1 — 2026-08-23 · **CONCERNS**
+
+Reviewed at `b54f2e8`. The fix itself was found correct and could not be broken:
+the reviewer enumerated the status taxonomy rather than sampling it — `STATUSES`
+at `scripts/status.mjs:45` is closed at four and `validate` throws by file on
+anything else — and confirmed the `!OPEN.has(...)` branch is therefore total,
+across nine invocations covering all four statuses plus both `note` variants and
+a real blocked case. All seven modes hold for the closed case on an independent
+tree. The baseline numbers, the four-tests-fail-against-`origin/main` claim and
+five of six mutations were reproduced. The verdict is CONCERNS on one surviving
+mutation and two wrong facts in ticket prose.
+
+**Citations re-resolved against the tree this section is committed with** — one
+commit past `b54f2e8`, which is what the reviewer read — and checked
+programmatically: every span below was re-read and asserted to still contain the
+string it is cited for. The gate's own citations into `scripts/test/status.test.ts`
+moved when finding 1 was fixed and are the corrected values here, not the
+reviewer's. Two are deliberately left as the reviewer wrote them —
+`docs/work/repo-3-…:289-290` and `:299-300` in findings 2 and 3 — because they
+are the stale-before values and pointing at what was wrong is their whole
+purpose. The reviewer's file is posted unedited on the pull request, so the
+delta is visible rather than folded in.
+
+| #   | Severity                  | Finding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | med                       | **A mutation survives on the repo-6 seam.** `holding` mixes real blockers and dangling ids, but the closed line was pinned only with a real blocker. Mutating the closed branch alone to read `blockers` instead of `holding` leaves `npx vitest run scripts` at **exit 0, 75 passed**, while `--show` on a `done` ticket whose only dependency is `repo-404` drops the id from stdout — silently falsifying `docs/01-TICKETS.md:88-92`, the promise repo-6 wrote its handover to protect. | **Fixed.** Reproduced first, exactly: mutation applied, suite green at 75/75, and `--show` on a `done` ticket depending on `repo-404` printed `done — nothing to pick up` with the id gone. A row added at `scripts/test/status.test.ts:553-570` — a `done` ticket with `depends_on: [pl-99]`, asserting the closing line is `  done — nothing to pick up; depends_on still lists pl-99 (not a ticket)` and that the stderr warning still names it. The same mutation now fails 1 test. The Log's "measured on a throwaway tree" is the tell the reviewer read it as: measured is not pinned. |
+| 2   | med-low                   | **`repo-7` states a measurement that is wrong by four, in the section headed "measured, not predicted".** `a112cd4` edited **seven** files under `tools/downloader/api/`, not eleven, and seven is also its total under `tools/downloader/`.                                                                                                                                                                                                                                               | **Fixed in both places** — `docs/work/repo-7-…:48-51` and this file's Log. Re-derived here: `git diff-tree --no-commit-id --name-only -r a112cd4 -- tools/downloader/api \| wc -l` → **7**, the same seven listed by the reviewer. My count came from a `git show --stat \| head -20` that also carried `packages/core` and planner paths; I read a screenful and reported it as a count. The mechanism the number supports is unaffected and was independently confirmed.                                                                                                                    |
+| 3   | med-low                   | **The Log cites a word in a file that does not contain it, under a bullet headed "Nothing in it was wrong".** `docs/01-TICKETS.md` has no occurrence of `unblocked`; the word is at `CLAUDE.md:199`.                                                                                                                                                                                                                                                                                       | **Fixed, and the bullet above it rewritten.** `grep -n unblocked docs/01-TICKETS.md` exits 1 here too. The claim came from the ticket's own Build step 4 and I repeated it rather than running the grep that step asked for — a three-link laundering chain, and the bullet now says so instead of saying nothing was wrong. The conclusion is unchanged and was independently re-swept: nothing outside repo-3, repo-6 and pl-26's gate record states the two-branch rule.                                                                                                                   |
+| 4   | observation, not a defect | **`repo-7`'s Why asserts its inferred half flatly**, though Build step 2 flags exactly that as unproven and Done-when gates the documentation on it. The reviewer explicitly declined to call it overclaiming and suggested softening as an improvement.                                                                                                                                                                                                                                   | **Changed anyway, two sentences.** The generalisation now names itself as the inference and points at step 2, and the pl-26 consequence is phrased "on the mechanism above … which is why step 2 asks for it to be run rather than assumed". Cheap, and it removes the one reading under which a next agent skips step 2.                                                                                                                                                                                                                                                                     |
+| 5   | pre-existing, low         | `scripts/test/status.test.ts:450-457` runs `--tool downloader --ready` against the real tickets and asserts `stdout.length > 0`. It goes red the day every downloader ticket closes — the same species as the assertion this branch rewrote. Flagged as pre-existing; not asked for.                                                                                                                                                                                                       | **No change, and out of this branch's scope.** It predates repo-3 and fixing it would widen a diff the gate is otherwise closed over. It has no ticket: `repo-7` was the only id allocated to this builder and it is spent on the changelog-attribution defect. Recorded here so the next reader finds a named gap rather than re-deriving it, and reported upward for an id.                                                                                                                                                                                                                 |
+
+**Acceptance**
+
+| #   | `Done when` line                                                                                                | Verdict      | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | --------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `--show pl-1` names the ticket as closed and `unblocked` does not appear                                        | **proven**   | `scripts/test/status.test.ts:494-503`, with the note variant at `:505-514`. **verified** as a command on the real tickets by both builder and reviewer: `dropped — nothing to pick up`, and pl-26's carries its note.                                                                                                                                                                                                                  |
+| 2   | the same of a `done` ticket — `pl-25` and `repo-2`                                                              | **proven**   | `scripts/test/status.test.ts:516-529`. **verified** on `pl-25`, `repo-2`, `dl-1`, `repo-3` and `repo-6` by the reviewer, all `done — nothing to pick up`.                                                                                                                                                                                                                                                                              |
+| 3   | `--show dl-16` still prints `unblocked`, and a ticket blocked by an open dependency still prints `blocked by …` | **proven**   | `scripts/test/status.test.ts:571-586`, four parameterized rows over `ready` and `in-flight` × unblocked and blocked. **verified** on `dl-16`, `pl-2` and `pl-29`.                                                                                                                                                                                                                                                                      |
+| 4   | a test per bullet in Build step 3, each failing against `origin/main`'s `printTicket`                           | **proven**   | Three of the four fail against `848af10`: `:494`, `:516`, `:532` (and `:505`) — **4 failed / 71 passed**, reproduced by the reviewer. Bullet 4 is a preservation criterion and cannot fail against `origin/main` by construction; the reviewer looked for a stronger proof and found none. It is proven by mutation instead — `status === "dropped"` kills its two `done` rows, `!== "ready"` kills both `in-flight` rows, no overlap. |
+| 5   | `npm run check` and `npm test` green                                                                            | **verified** | Both re-run by the reviewer in its own worktree at `b54f2e8` (`check` exit 0, 102 files / 1479 tests, format clean) and again here after this round — see the Log.                                                                                                                                                                                                                                                                     |
+
+**What the gate did not cover**, recorded because it is the half a green report
+hides: it did not re-review repo-6, only the seam where this change meets it; it
+did not re-derive the original defect, accepting the reproduction as given; e2e,
+container-build and Windows gates are unrun and this change touches none of
+them; and `repo-7`'s central inference — that a releasable-type commit whose
+only path under `tools/<name>/` is a `.md` file releases that tool — is still
+**unproven**, by that ticket's own admission. `release-please --dry-run` was not
+run; it is repo-7's Build step 2.
+
 ## Log
 
 ### 2026-08-23 — built on `repo-3-show-a-closed-ticket`, base `848af10`
@@ -248,7 +300,15 @@ so it is left out.
 
 **What the brief had wrong, or left open.**
 
-- **Nothing in it was wrong.** Every `file:line` in the refreshed Build resolved
+- **One thing in it was wrong, and it is an inventory rather than a citation.**
+  Build step 4 says the word `unblocked` "appears in `docs/01-TICKETS.md`'s
+  `--ready` description". It does not appear in that file at all —
+  `grep -n unblocked docs/01-TICKETS.md` exits 1 — and the occurrence it means
+  is `CLAUDE.md:199`. I repeated the claim from the brief instead of running the
+  grep the same step told me to run, and then filed it under a bullet headed
+  "nothing was wrong". The step's _substance_ was right: `--ready` is not
+  changing and its occurrences of the word are all about it. Everything else in
+  the brief held — every `file:line` in the refreshed Build resolved
   against `848af10` and both quoted blocks were byte-accurate. repo-6's Build
   step 5 handover was accurate on all three of its claims, checked at the file:
   `describeTicket` returns `{ ticket, blockers, missing }` (`:317-331`),
@@ -287,7 +347,7 @@ so it is left out.
   `fix(core): … (pl-17)` (`2ea0631`, which touched `tools/planner/Dockerfile`),
   and the pending downloader `0.2.0` is minor-bumped by
   `feat(planner): run the fan-out as a job (pl-16)` (`a112cd4`, which edited
-  eleven files under `tools/downloader/api/`). Filed as
+  seven files under `tools/downloader/api/`). Filed as
   [repo-7](./repo-7-changelogs-are-attributed-by-path.md), including the half of
   it that is inferred rather than measured — no releasable-type commit on `main`
   has ever had _only_ documentation under a tool, so that exact case is
@@ -296,8 +356,10 @@ so it is left out.
   unfiltered, plus sweeps for `--show`, `blocked by`, `describeTicket` and
   `printTicket`. `CLAUDE.md:52` and `:200` and
   [docs/01-TICKETS.md](../01-TICKETS.md)`:240` describe `--show` as "its fields,
-  its blockers, its path", which is unchanged; `01-TICKETS.md`'s `--ready`
-  description uses the word and `--ready` is not changing;
+  its blockers, its path", which is unchanged; the word itself is at
+  `CLAUDE.md:199`, in the `--ready` description, and `--ready` is not changing
+  (`docs/01-TICKETS.md` does not contain the word — see the corrected bullet
+  above);
   `01-TICKETS.md:88-97`'s dangling-id sentence stays true, verified by running
   the case rather than by reading it. `pl-26:142` cites
   `scripts/status.mjs:279` and a `.filter(...)` that repo-6 replaced with a
@@ -322,3 +384,52 @@ so `unblocked` prints under it (4), and the dangling ids dropped from `holding`
 — repo-6's regression, still guarded (1). Separately, the new suite against
 `origin/main`'s `scripts/status.mjs`: **4 tests fail**, one per closed-ticket
 case.
+
+### 2026-08-23 — gate 1, CONCERNS, addressed
+
+One finding was about the code's tests and two were about facts I wrote down
+without checking.
+
+**The surviving mutation is the finding worth the gate.** I mutated `holding`
+wholesale and watched it die, and concluded the seam was pinned. It was not: the
+death came from repo-6's own end-to-end test, which drives an **open** ticket. My
+closed line was pinned only with a real blocker, so mutating the closed branch
+_alone_ to read `blockers` instead of `holding` left the suite green at 75/75
+while `--show` on a closed ticket with a dangling id stopped naming it.
+Reproduced before fixing: mutation applied, `npx vitest run scripts` exit 0, and
+`--show repo-99` on a scratch tree printing `done — nothing to pick up` with
+`repo-404` gone. The general lesson is narrower than "test the seam": **a
+mutation that dies tells you a test exists, not that yours does** — and mine was
+one list-shaped expression covering two behaviours, where only the composite was
+mutated. One row added at `scripts/test/status.test.ts:553-570`; the mutation now
+takes it with it.
+
+**Both wrong facts were wrong in the same way — a screenful read as a
+measurement.** "Eleven files" came from a `git show --stat | head -20` whose
+first twenty lines spanned `packages/core`, the downloader and the planner; the
+answer to the question I was actually asking is
+`git diff-tree --no-commit-id --name-only -r a112cd4 -- tools/downloader/api | wc -l`,
+which is 7. And `docs/01-TICKETS.md` does not contain the word `unblocked` at
+all — that came from the brief's Build step 4, which I repeated instead of
+running the grep the same step told me to run, and then filed under a bullet
+saying nothing in the brief was wrong. Both corrected, in both places each
+appears. The bullet now records that the brief _was_ wrong on that point, which
+is the part a next reader needs.
+
+**repo-7's Why softened** to match its own Build step 2, which the gate raised
+as an observation rather than a defect. Two sentences: the generalisation names
+itself as the inference, and the pl-26 consequence is conditioned on the
+mechanism rather than asserted.
+
+**One finding is recorded and not fixed.** `scripts/test/status.test.ts:450-457`
+asserts `stdout.length > 0` against the real downloader tickets and goes red the
+day the last one closes. It predates this branch and has no ticket, because
+`repo-7` was the only id allocated here.
+
+Gates re-run after this round: `npm run check` exit 0; `npx vitest run scripts`
+2 files / **76 tests**; `npm test` 102 files / **1480 tests**;
+`node scripts/status.mjs --json > /dev/null` exit 0; `npm run format` for the
+`.md` files touched. Mutation control re-run at exit 0 before and after, and the
+previously surviving mutation now fails 1 test. The only source file changed in
+this round is `scripts/test/status.test.ts`; `scripts/status.mjs` is
+byte-identical to `b54f2e8`.
