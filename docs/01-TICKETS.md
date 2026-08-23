@@ -80,9 +80,21 @@ badly in a table column is usually a title worth fixing.
 
 **These six fields are parsed, and strictly.** `scripts/status.mjs` fails by
 file and line on a key nobody has agreed on, a `status` or `kind` outside the
-lists above, an `id` that disagrees with its own filename, or a `depends_on`
-naming a ticket that does not exist. A parser that shrugs at what it does not
-understand reports a clean status view having read half the tickets.
+lists above, or an `id` that disagrees with its own filename. A parser that
+shrugs at what it does not understand reports a clean status view having read
+half the tickets.
+
+**A `depends_on` naming a ticket that does not exist is the one exception, and
+it is a warning rather than an ending** ([repo-6](./work/repo-6-dangling-dependency-kills-the-view.md)).
+It is still named by file and by id, on stderr beside the view; every ticket
+still renders, and `--show` on the offending one prints
+`repo-404 (not a ticket)` where a blocker would be. Only `--json` also exits
+non-zero, which is what `.github/workflows/ci.yml`'s `check` job reads — so the
+check is not softened, it is paid for by the pipeline rather than by every
+reader. The difference from the failures above is that a dangling id is
+frequently just a forward reference: a ticket depending on one still in review
+is valid on its own branch and becomes dangling for everybody else the moment it
+merges first.
 
 **`dropped` tickets stay.** A ticket that was considered and rejected is worth
 more than a deleted file: the next person to have the idea finds the reason it
@@ -227,7 +239,15 @@ npm run status -- --prs           # fold in `gh pr list`
 npm run status -- --tool planner  # narrow any of the above to one tool
 npm run status -- --show pl-28    # one ticket: its fields, its blockers, its path
 npm run status -- --markdown      # the table, to paste into a pull request body
+npm run status -- --root <dir>    # a test seam: read another tree's tickets
 ```
+
+`--root` is listed for completeness rather than for use. It exists because
+`scripts/status.mjs` derives its own root from the script's location, so without
+it no test could drive the CLI against a throwaway ticket tree and every
+end-to-end case had to run against the real tickets — which cannot be malformed
+on purpose ([repo-6](./work/repo-6-dangling-dependency-kills-the-view.md)). If
+you are asking what is next, the six above are the whole of it.
 
 Computed from the ticket files every time, so it cannot disagree with them.
 `--ready` is the one worth knowing: `status: ready` means nobody has picked a

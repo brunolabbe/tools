@@ -190,6 +190,22 @@ worse than either one.
   nothing is a named failure rather than a row quietly missing from a table.
   Forty-six existing tickets pass it unchanged, which is the only reason the
   strictness was affordable.
+
+  _Outcome, 2026-08-23: three of the four still end the command; the fourth is
+  now a warning beside the view._ A `depends_on` pointing at nothing is still
+  named, by file and by id, but on stderr — and the ticket's row is printed
+  along with every other. The three that remain fatal are the ones where the
+  ticket cannot be rendered at all, so there is no row to fall back to; a
+  dangling edge leaves a perfectly readable ticket. What forced it is a case
+  this bullet did not foresee: a `depends_on` naming a ticket that is real but
+  has not merged yet is valid on the branch that wrote it and dangles for
+  everybody else the moment it lands first, so "a named failure" meant every
+  reader losing every ticket in every mode for someone else's merge. The
+  strictness is not softened, it is charged to a different payer — `--json`
+  still exits non-zero, which is the whole of the check `ci.yml` runs. See
+  [repo-6](../work/repo-6-dangling-dependency-kills-the-view.md). Annotated
+  rather than corrected in place, in the same pattern as "roughly eight" above.
+
 - **Added 2026-08-23, and the reason for the amendment below.** Neither half of
   the mechanism this ADR chose ever worked. The `regenerate` job was rejected by
   branch protection on every merge it attempted, so it never pushed a commit;
