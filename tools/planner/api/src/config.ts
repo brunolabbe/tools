@@ -28,10 +28,31 @@ export type ModelProviderName = (typeof MODEL_PROVIDERS)[number];
  * The same list, the same default and the same argument one seam over:
  * `fixtures` answers from a checked-in table, so a fresh clone plans with no
  * key and no bill and CI asserts against something that does not change
- * overnight. A real backend is a deliberate act — pl-28 adds the first.
+ * overnight. A real backend is a deliberate act — `valhalla` is the first, and
+ * it does not start without endpoints.
  */
-export const GROUNDING_PROVIDERS = ["fixtures"] as const;
+export const GROUNDING_PROVIDERS = ["fixtures", "valhalla"] as const;
 export type GroundingProviderName = (typeof GROUNDING_PROVIDERS)[number];
+
+/**
+ * Where the grounding backends live, when one is configured.
+ *
+ * **No defaults, on purpose.** A routing URL that quietly falls back to
+ * somebody's public instance is a surprise bill or a surprise outage, and there
+ * is no sensible localhost guess either — the endpoint is a fact about a
+ * deployment and nothing else can know it. `createGroundingProvider` refuses to
+ * boot rather than start a service that would fail on its first run.
+ *
+ * Two of them because **a router does not geocode**: Valhalla answers "how far
+ * is it from here to there" and something else — Nominatim, on the same
+ * regional extract — answers "where is this place". One seam, two services.
+ */
+export interface GroundingEndpoints {
+  /** Valhalla's base URL. `/sources_to_targets` hangs off it. */
+  routing: string | undefined;
+  /** Nominatim's base URL. `/search` hangs off it. */
+  geocoder: string | undefined;
+}
 
 /**
  * Cache lifetimes, in hours, one per kind of question the seam can ask.
@@ -59,6 +80,23 @@ export interface ApiConfig {
   maxOutputTokens: number;
 
   groundingProvider: GroundingProviderName;
+  /**
+   * Where a real backend lives. Both `undefined` under the fixture default,
+   * which reaches nothing. See `GroundingEndpoints`.
+   */
+  groundingEndpoints: GroundingEndpoints;
+  /**
+   * Per-request ceiling on a grounding call, in milliseconds.
+   *
+   * **Short on purpose.** A run holds a queue slot while it grounds and
+   * `MAX_CONCURRENT_RUNS` is 2, so two requests hanging is the whole service —
+   * and a routing instance rebuilding its tiles hangs rather than refuses,
+   * which is the failure this bounds. A timeout maps to core's `TIMEOUT`, which
+   * is retryable, and a leg nobody measured is a named gap rather than a failed
+   * run: the cost of being impatient here is low and the cost of being patient
+   * is the whole queue.
+   */
+  groundingTimeoutMs: number;
   /**
    * How many grounding calls one run may make (§9).
    *
@@ -153,6 +191,10 @@ export const API_DEFAULTS = {
   // exists to avoid.
   groundingCacheTtlLocateHours: 8_760,
   groundingCacheTtlTravelHours: 4_320,
+  // Five seconds. A matrix over a few dozen points on a warm regional graph is
+  // milliseconds; anything approaching this is an instance in trouble, and
+  // waiting longer for it costs a queue slot rather than buying an answer.
+  groundingTimeoutMs: 5_000,
   maxSpecialists: 5,
   maxConcurrentRuns: 2,
   rateLimitRunsPerMinute: 5,
@@ -176,6 +218,19 @@ function optionalInt(raw: string | undefined): number | undefined {
   const value = Number(raw);
   if (!Number.isFinite(value) || value < 1) return undefined;
   return Math.trunc(value);
+}
+
+/**
+ * A setting that may legitimately be absent, kept as the operator wrote it.
+ *
+ * Trimmed and then treated as absent when empty, so `VALHALLA_URL=` in a
+ * `.env` — the shape a commented-out line collapses into — means "not set"
+ * rather than "set to nothing", which would otherwise reach a `new URL()` as a
+ * boot crash with a confusing message.
+ */
+function optionalText(raw: string | undefined): string | undefined {
+  const value = raw?.trim() ?? "";
+  return value === "" ? undefined : value;
 }
 
 function optionalPath(raw: string | undefined): string | undefined {
@@ -219,6 +274,12 @@ function modelProvider(raw: string | undefined): ModelProviderName {
  * out loud on every affected line and reported by name at `/api/health`. That
  * is a visible failure, and refusing to boot over it would trade a plan that
  * admits what it did not check for no plan at all.
+ *
+ * **A *recognised* name with no endpoint behind it is the opposite case**, and
+ * it does refuse: an operator who typed `valhalla` said what they wanted, and
+ * starting a service that will fail on its first run — silently, into a named
+ * gap on somebody's plan — is worse than not starting. That check is in
+ * `createGroundingProvider`, which is the file that knows what a backend needs.
  */
 function groundingProvider(raw: string | undefined): GroundingProviderName {
   const value = (raw ?? API_DEFAULTS.groundingProvider).trim().toLowerCase();
@@ -243,6 +304,16 @@ export function loadApiConfig(
     databasePath,
     modelProvider: overrides.modelProvider ?? modelProvider(env["MODEL_PROVIDER"]),
     groundingProvider: overrides.groundingProvider ?? groundingProvider(env["GROUNDING_PROVIDER"]),
+    // Parsed, never defaulted, and not validated here: whether a missing one is
+    // a problem depends on which provider was named, which is
+    // `createGroundingProvider`'s question and not this file's.
+    groundingEndpoints: overrides.groundingEndpoints ?? {
+      routing: optionalText(env["VALHALLA_URL"]),
+      geocoder: optionalText(env["GEOCODER_URL"]),
+    },
+    groundingTimeoutMs:
+      overrides.groundingTimeoutMs ??
+      int(env["GROUNDING_TIMEOUT_MS"], API_DEFAULTS.groundingTimeoutMs, { max: 120_000 }),
     maxOutputTokens:
       overrides.maxOutputTokens ??
       int(env["MAX_OUTPUT_TOKENS"], API_DEFAULTS.maxOutputTokens, { max: 32_000 }),

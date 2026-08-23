@@ -49,9 +49,43 @@ describe("loadApiConfig", () => {
     // here cannot send a request anywhere, so the worst case is a plan whose
     // legs are unmeasured and which says so — reported by name at
     // `/api/health`. Refusing to boot would trade that for no plan at all.
-    expect(loadApiConfig({}, { GROUNDING_PROVIDER: "valhalla" }).groundingProvider).toBe(
-      "fixtures",
+    //
+    // The example used to be `valhalla`, which pl-28 made a real name. Anything
+    // this list does not hold does the same thing; the assertion is about the
+    // fallback, not about that word.
+    expect(loadApiConfig({}, { GROUNDING_PROVIDER: "osrm" }).groundingProvider).toBe("fixtures");
+  });
+
+  test("recognises valhalla, and keeps its endpoints as written with no default", () => {
+    const config = loadApiConfig(
+      {},
+      {
+        GROUNDING_PROVIDER: "Valhalla",
+        VALHALLA_URL: " http://valhalla:8002 ",
+        GEOCODER_URL: "http://nominatim:8080",
+      },
     );
+    expect(config.groundingProvider).toBe("valhalla");
+    expect(config.groundingEndpoints).toEqual({
+      routing: "http://valhalla:8002",
+      geocoder: "http://nominatim:8080",
+    });
+  });
+
+  test("has no endpoint at all when nothing named one", () => {
+    // No localhost guess and no public instance: an endpoint is a fact about a
+    // deployment, and a default here is a surprise bill or a surprise outage.
+    // `VALHALLA_URL=` — what a commented-out line collapses into — is absent
+    // rather than an empty string that would reach `new URL()` as a crash.
+    const config = loadApiConfig({}, { VALHALLA_URL: "  ", GEOCODER_URL: "" });
+    expect(config.groundingEndpoints).toEqual({ routing: undefined, geocoder: undefined });
+  });
+
+  test("bounds a grounding request by a short timeout, from its own variable", () => {
+    // A run holds a queue slot while it grounds and `MAX_CONCURRENT_RUNS` is 2,
+    // so two hung requests are the whole service.
+    expect(loadApiConfig({}, {}).groundingTimeoutMs).toBe(5_000);
+    expect(loadApiConfig({}, { GROUNDING_TIMEOUT_MS: "1200" }).groundingTimeoutMs).toBe(1_200);
   });
 
   test("caches a place for longer than a road, because the facts age differently", () => {
