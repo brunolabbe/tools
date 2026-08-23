@@ -113,11 +113,14 @@ jobs:
   # to keep `check` unfiltered while the matrix stays cheap is to compute the
   # answer here and have `test` gate on it.
   #
-  # The rule is the one the trigger filter used to express, unchanged: if
-  # everything that changed ends in `.md`, the matrix is skipped. Written out
-  # rather than delegated to a marketplace action, for the same reason
-  # `commit-message.mjs` and `status.mjs` are ours — it is a dozen lines, and
-  # the alternative is an unpinned third party holding a checkout of the
+  # The rule is the one the trigger filter expressed: if everything that changed
+  # ends in `.md`, the matrix is skipped. Close to the original rather than
+  # provably identical to it — GitHub does not document whether its own filter
+  # consults a rename's `previous_filename` alongside its `filename`, so that is
+  # one case where the two may differ and the claim stops at what can be shown.
+  # Written out rather than delegated to a marketplace action, for the same
+  # reason `commit-message.mjs` and `status.mjs` are ours — it is a dozen lines,
+  # and the alternative is an unpinned third party holding a checkout of the
   # repository.
   #
   # The two events need different diff bases, and anything without one runs the
@@ -125,9 +128,15 @@ jobs:
   # `before` is the all-zero sha is a branch's first push; and a base commit can
   # simply be absent from a rewritten history. Every one of those falls through
   # to `code=true`. **The failure direction is deliberate: not knowing means
-  # running the suites, never skipping them.** Both shas are proven present
-  # before the diff for the same reason: this job erroring out would skip `test`
-  # through its `if:`, which is the one outcome the whole shape is against.
+  # running the suites, never skipping them**, and the `git cat-file -e` guards
+  # are what buys that: without them a degenerate base reaches `git diff`, which
+  # is the only path by which a change could be skipped for a reason nobody
+  # chose. They are not there to prevent a silent green — a `changes` job that
+  # errors sets the run's conclusion to `failure`, so the skipped `test` is red
+  # and visible. `set -euo pipefail` is the other half: the first `git diff` is
+  # unguarded on purpose, so if git itself fails the job stops there rather than
+  # letting the second one's `|| true` turn the failure into an empty `non_md`
+  # and a skip.
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -153,9 +162,17 @@ jobs:
           fi
           # Three dots: what this change added, not what `main` moved past
           # underneath it — which is the comparison the trigger filter made too.
+          #
+          # `--no-renames` is load-bearing, not tidiness. Rename detection is on
+          # by default and reports a rename as its **destination only**, so
+          # `git mv src/foo.ts docs/foo.md` lists `docs/foo.md` and nothing
+          # else — every path ends in `.md`, and the matrix skips a change that
+          # deleted a TypeScript file. With `--no-renames` the same commit lists
+          # both paths and `src/foo.ts` fails the test, which is the answer that
+          # matters.
           echo "Changed files, ${BASE}...${HEAD}:"
-          git diff --name-only "${BASE}...${HEAD}" | sed 's/^/  /'
-          non_md="$(git diff --name-only "${BASE}...${HEAD}" | grep -v '\.md$' || true)"
+          git diff --no-renames --name-only "${BASE}...${HEAD}" | sed 's/^/  /'
+          non_md="$(git diff --no-renames --name-only "${BASE}...${HEAD}" | grep -v '\.md$' || true)"
           if [ -n "${non_md}" ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else

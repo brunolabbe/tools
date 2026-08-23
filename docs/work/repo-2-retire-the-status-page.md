@@ -159,7 +159,10 @@ the machine-written table because, here, no machine can.
 - `node scripts/status.mjs` exports no region function and accepts no `--write`
   or `--check`; `--tool`, `--show` and `--markdown` each work and each have a
   test.
-- `.github/workflows/status.yml` does not exist and nothing outside a record
+- _(Amended after gate 1, with the criterion the addition earned; the original
+  read "`.github/workflows/status.yml` has one job, it runs on `pull_request`
+  only, and it is `node scripts/status.mjs --json > /dev/null`".)_
+  `.github/workflows/status.yml` does not exist and nothing outside a record
   references it. `node scripts/status.mjs --json > /dev/null` is a step of
   `ci.yml`'s `check` job, and neither `ci.yml` trigger filters by path, so
   `check` runs on a markdown-only pull request. The `test` matrix still skips
@@ -214,6 +217,40 @@ is the one that runs after this, not the one above.
 2. Build step 8's skill update, extended with four things this session taught
    after that step was already written — one of them a correction to advice the
    skill gives.
+
+Gate 2 below is the gate over both, and it found five lows plus one addition of
+its own. A third post-gate item — the worktree symlink farm — arrived with that
+gate rather than from the build, and is marked as such in its own Log entry.
+
+### Gate 2 — 2026-08-23
+
+**Gate: PASS** — five lows, all fixed. Range `origin/main...HEAD`, covering the
+post-gate additions gate 1 did not see.
+
+Verified by the reviewer: the `changes` shell reproduced against real shas and
+all five degenerate bases, every one failing open as claimed. The ruleset
+confirmed independently and by a **second endpoint this build did not check** —
+`gh api repos/{owner}/{repo}/rules/branches/main`, which folds in inherited
+organisation rulesets that `/rulesets` alone would not show. Same three rules,
+still no required status check, so the claim holds on the wider reading too. ADR
+003's `## Context`, `## Decision` and `## Alternatives considered` byte-compared
+against `origin/main` by SHA-256: identical.
+
+| #   | Finding                                                                                                                                                                                                                       | Disposition                                                                                                                                                                                                                                      |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **low** · `ci.yml` — `git diff --name-only` has rename detection on by default and reports a rename as its **destination only**, so `git mv src/foo.ts docs/foo.md` lists one `.md` path and the matrix skips a deleted `.ts` | **Fixed** — `--no-renames` on both diffs, reproduced before and after. The header's "the rule the trigger filter expressed, unchanged" is softened to what is provable: GitHub does not document whether its filter consults `previous_filename` |
+| 2   | **low** · `ci.yml` — the comment implied a failing `changes` job would silently skip `test`; a failed job sets the run's conclusion to `failure`, so the skip is red and visible                                              | **Fixed** — the comment now says what the guards actually buy (a _degenerate base_ falling open) and adds the reviewer's point that `set -euo pipefail` stops an unguarded git failure before the second diff's `\|\| true` can mask it          |
+| 3   | **low** · `SKILL.md:84` still read "Remove each worktree as its PR opens", six lines above the new paragraph correcting it — and that file's own `### Do not cap the gate count` cites self-contradiction as a real find      | **Fixed** — the original bullet now says "once its ticket is **finished** — merged, or abandoned — not when its PR opens", so the rule and its reasoning agree. A correction stacked under the thing it corrects was the actual defect           |
+| 4   | **low** · `scripts/test/status.test.ts` — precise about its own test, misleading about the file: two further tests are equally skipped and uncovered, notably `no tool keeps a status page`, this ticket's regression guard   | **Fixed** — rewritten as a section comment listing what `check` covers and what it does not, naming the guard and why an all-`.md` pull request is exactly the change it cannot see. Pre-existing, and now stated instead of implied             |
+| 5   | **low** · The `status.yml` Done-when line was rewritten in place while Build steps 5 and 8 carry `_(Amended after gate 1…)_`, so the acceptance list read as though the criterion had always said that                        | **Fixed** — annotated in the same form, quoting the original criterion                                                                                                                                                                           |
+
+**Dropped by the reviewer, no action:** `tools/planner/CLAUDE.md:79` ("the unit
+suite runs on every push") — equally imprecise before this change, and the build
+had declared leaving it. And `test` now waiting on a full-history `changes`
+checkout, which is a cost rather than a defect.
+
+**Added with the gate, not found by it:** the worktree symlink farm in
+`## Worktree hygiene`. Post-gate work in its own right; see the Log entry below.
 
 ## Log
 
@@ -534,3 +571,104 @@ than by a second telling.
 assumed, since the alternative is a silently unformatted commit. `npm run check`
 exit 0 and `npm test` 97 files / 1366 tests green after both post-gate
 additions together.
+
+**2026-08-23 — gate 2: PASS, five lows, and the one that mattered was a git
+default I did not know I was relying on.**
+
+**Rename detection defeats the skip rule.** `git diff --name-only` has it on by
+default and reports a rename as its **destination only**, so
+`git mv src/foo.ts docs/foo.md` lists `docs/foo.md` and nothing else — every
+path ends in `.md`, `non_md` is empty, and the matrix skips a change that
+deleted a TypeScript file. Reproduced in a throwaway repo before and after:
+`--no-renames` lists both paths and `src/foo.ts` fails the test. Both diffs
+carry it now. This is the shape of defect the ticket is about, one layer down —
+a guard that looks like it runs and does not, on the one input it exists for.
+
+**And it cost the header a claim.** I had written that the `changes` rule is "the
+one the trigger filter used to express, unchanged". The reviewer could not
+establish what GitHub's own filter does with a rename — the API reports
+`filename` and `previous_filename`, and whether path filtering consults the
+latter is undocumented — so "unchanged" was a claim I had no way to check. It now
+says close-to rather than identical-to, and names the rename case as the place
+the two may differ. Softening it costs nothing; leaving it would have been a
+second-hand assertion in a comment written to be trusted.
+
+**A comment that overstated its own mechanism.** I wrote that the `cat-file`
+guards exist because a failing `changes` job "would skip `test` through its
+`if:`". True in the narrow sense and misleading: a failed job sets the run's
+conclusion to `failure`, so the skip is red and nobody merges past it silently.
+What the guards actually buy is the **degenerate base** falling open — the only
+path by which a change gets skipped for a reason nobody chose. The reviewer
+added the half that strengthens it: `set -euo pipefail` means an unguarded first
+`git diff` aborts the job if git fails, so the second diff's `|| true` cannot
+turn a git failure into an empty `non_md` and a skip. Both are in the comment.
+
+**I stacked a correction under the thing it corrected.** `SKILL.md` still said
+"remove each worktree as its PR opens" six lines above my new paragraph saying to
+wait until the ticket is finished. A reader who stops at the two-rule list — which
+is how a two-rule list is read — gets exactly the advice the paragraph exists to
+undo. The bullet itself now carries the rule. Worth naming because that file's
+own `### Do not cap the gate count` cites "a process document contradicting
+itself in adjacent sentences" as a real gate find, and I reproduced it in the
+file that records it.
+
+**The test comment was precise about one test and quiet about two.** It described
+what `check` covers for the parse test above it, and left a reader believing the
+file was handled. It is not: `no tool keeps a status page` — the regression guard
+**this ticket added** — never runs on a pull request that re-adds a
+`03-STATUS.md`, because such a pull request is by construction all markdown. Now
+a section comment that lists covered and not-covered explicitly. Pre-existing and
+not fixed here: the fix is to run the matrix, and that trade is argued in
+`ci.yml`'s header rather than settled by a second workflow.
+
+**And a Done-when line I rewrote instead of annotating**, while the Build steps
+beside it carry `_(Amended after gate 1…)_`. Same form now, quoting the original.
+Small, and the same class as gate 1's finding 4: a record edited to match what
+shipped stops being a record.
+
+**The reviewer checked the ruleset by an endpoint I had not.**
+`gh api repos/{owner}/{repo}/rules/branches/main` folds in inherited
+**organisation** rulesets, which `/rulesets` on the repository alone does not
+show. Same three rules, no required status check, so the claim holds on the wider
+reading — but I had verified the narrower one and written it up as settled.
+
+**Gates.** `npm run check` exit 0. `npm test` 97 files / 1366 tests, all green.
+`npm run format` clean. All seven workflow files still parse; `ci.yml` still
+resolves to `check`, `changes`, `test` with the gate intact. The `changes` shell
+re-exercised after `--no-renames`: a rename from `.ts` to `.md` now yields
+`code=true`, a real `.md`-only range still `code=false`, a real code range still
+`code=true`, and all degenerate bases still `true`.
+
+**2026-08-23 — post-gate, third: a worktree symlink farm, in
+`.claude/skills/orchestrate-tickets/SKILL.md`.**
+
+Arrived with gate 2 rather than from it. Every agent in this session paid
+`npm install` plus `npm run build` in a fresh worktree before it could read a
+single test result — minutes each, across two dozen agents. The install half is
+avoidable: a **selective symlink farm** off the shared checkout's `node_modules`
+builds in **0.24 s** and costs **28 KB** against 342 MB. The build still runs.
+
+Re-verified here rather than transcribed, because guidance that is wrong is
+worse than none:
+
+- The farm resolves correctly. Built into a stub worktree carrying a marker file
+  at `tools/planner/api/`, `readlink -f node_modules/@planner/api` lands **inside**
+  the stub and `cat`ting the marker returns it. 248 entries, `.bin` among them.
+- **Wholesale-symlinking `node_modules` is silently wrong**, which is the trap
+  worth the words. npm writes workspace links relatively —
+  `@planner/api -> ../../tools/planner/api` — and a relative link resolves from
+  where it _physically_ lives, so under a wholesale link `@planner/api` resolves
+  to `/workspaces/tools/tools/planner/api`: the **shared checkout**. An agent
+  editing a contract would typecheck and test against another tree's version of
+  it. Stale exports, green suite, wrong code, nothing in the output saying so.
+  Reproduced, and that resolved path is the evidence.
+- **Hard links are not the escape.** `node_modules` is its own mount here
+  (`/dev/sdc`, against `/dev/sdd` for the repo), so `cp -al` fails on the first
+  file with `Invalid cross-device link`. Reproduced.
+- **`.bin` is a dotfile**, so a `*` glob drops it and every binary the scripts
+  call with it. `ls -A`, not `*`.
+
+Written as guidance with the reasoning rather than a script to paste: the mount
+layout is this container's, while the relative-link rule is npm's and will
+outlive it. The section ends by saying to verify a farm with `readlink -f` and
+one real suite, because the failure mode is quiet by construction.

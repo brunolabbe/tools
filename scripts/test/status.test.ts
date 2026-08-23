@@ -89,14 +89,31 @@ function run(args: string[]): { stdout: string; status: number } {
 // The real tickets
 // ---------------------------------------------------------------------------
 
-// The point of the strict parser is that this test is the one that fails, by
-// name and by line, when a ticket's frontmatter drifts. It used to be
-// unreachable on the pull requests that need it most, and still is: the
-// `test` matrix is skipped for a change that is all `.md`, which a ticket
-// filed or flipped to `done` usually is. What covers that case is `ci.yml`'s
-// `check` job, which runs `node scripts/status.mjs --json` — this same walk
-// without vitest around it — and is no longer filtered by path. That step had
-// a workflow of its own (`status.yml`) until repo-2 folded it in.
+// **The three tests below are the ones a documentation-only pull request needs
+// most, and CI runs at most one of them.** `ci.yml`'s `test` matrix is skipped
+// for a change that is all `.md` — which is exactly what filing a ticket or
+// flipping one to `done` is — so what runs on such a pull request is the
+// unfiltered `check` job, and the only thing it knows about tickets is
+// `node scripts/status.mjs --json`. That step had a workflow of its own
+// (`status.yml`) until repo-2 folded it in.
+//
+// So, precisely:
+//
+// - **Covered by `check`:** the parse and `depends_on` resolution the first
+//   test asserts. `--json` walks every ticket through the same reader, so a
+//   drifted field, a status outside the taxonomy or a dangling dependency fails
+//   there by file and line whether or not vitest runs.
+// - **Not covered, on any all-`.md` pull request:** the tool-set assertion in
+//   the first test, and both tests after it. The second is only ever violated
+//   by a misplaced file; the third — `no tool keeps a status page` — is the
+//   regression guard repo-2 added, and a pull request that re-adds a
+//   `03-STATUS.md` is by construction all markdown, so it is the one change the
+//   guard exists for and the one CI will not run it on. Pre-existing and not
+//   worth a second workflow: the fix is to run the matrix, and that trade is
+//   argued in `ci.yml`'s header.
+//
+// The point of the strict parser is that the first test is the one that fails,
+// by name and by line, when a ticket's frontmatter drifts.
 test("every ticket in the repo parses, and its dependencies resolve", () => {
   const tickets = readTickets(REPO);
   expect(tickets.length).toBeGreaterThan(0);

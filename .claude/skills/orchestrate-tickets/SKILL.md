@@ -81,20 +81,64 @@ leaves it dirty, so it never cleans. The reference session leaked **7.0 GB acros
 Two rules, both required:
 
 - Reviewers **return** their section as text; they never write it to a file.
-- Remove each worktree as its PR opens: `git worktree remove --force <path>`, then
+- Remove each worktree once its ticket is **finished** — merged, or abandoned —
+  not when its PR opens: `git worktree remove --force <path>`, then
   `git worktree prune`, then delete the `review-*` branch.
 
 Audit with `git worktree list` and `du -sh .claude/worktrees` when a batch feels
 long. Before removing, check `git status --porcelain` and `git log @{u}..` in each.
 
-**Removing a worktree also makes its agent unresumable**, and the second rule reads
-as free until it does. A follow-up sent to a builder whose worktree is gone is
-refused — *its worktree no longer exists* — and the only way forward is a fresh
-agent with the whole context rebuilt by hand, which costs far more than the disk
-did. So remove it once the ticket is **finished**, not merely once its PR is open:
-a PR still takes review comments, a rebase and follow-ups. Removing early is
-sometimes the right trade for 7 GB; make it a choice rather than discover it an
+**Removing a worktree also makes its agent unresumable**, which is why the second
+rule waits for the ticket rather than the PR. A follow-up sent to a builder whose
+worktree is gone is refused — *its worktree no longer exists* — and the only way
+forward is a fresh agent with the whole context rebuilt by hand, which costs far
+more than the disk did. An open PR still takes review comments, a rebase and
+follow-ups, and every one of those wants the agent that wrote it. Removing earlier
+is sometimes the right trade for 7 GB; make it a choice rather than discover it an
 hour later.
+
+### Give a new worktree its dependencies without installing them
+
+A fresh worktree has no `node_modules`, so every agent pays `npm install` plus
+`npm run build` before it can read a test result — minutes each, and in the
+reference session two dozen agents each paid it. A **selective symlink farm**
+built from the shared checkout's `node_modules` removes the install half in well
+under a second and costs tens of kilobytes instead of hundreds of megabytes. The
+build still has to run.
+
+The shape, and the whole of it is *why*:
+
+- **Symlink each third-party entry individually**, absolute, into the worktree's
+  own real `node_modules` directory.
+- **Include the dotfiles** — `.bin` above all. A `*` glob silently misses it and
+  every binary the scripts call disappears with it; enumerate with `ls -A`.
+- **But create the workspace scopes — `@planner`, `@downloader`, `@webtools` —
+  as real directories**, re-creating each inner link with its *original relative
+  target*.
+
+That last rule is the load-bearing one. npm writes workspace links relatively
+(`@planner/api -> ../../tools/planner/api`), and a relative link resolves from
+where it **physically** lives. Inside a real directory in the worktree it lands
+on the worktree's own `tools/planner/api`, which is the point. Hence the first
+trap:
+
+- **Do not symlink `node_modules` wholesale.** It is one command and it is
+  silently wrong: the worktree's `node_modules` *is* the shared one, so every
+  workspace link resolves into the **shared checkout**. An agent editing a
+  contract then typechecks and tests against the other tree's version of it —
+  stale exports, green suite, wrong code, and nothing in the output says so.
+  Verified: under a wholesale link `@planner/api` resolves to
+  `/workspaces/tools/tools/planner/api` rather than into the worktree.
+- **Hard links are not the escape either.** In this container `node_modules` is
+  its own mount, so `cp -al` fails on the first file with
+  `Invalid cross-device link`. Check with `df` before assuming otherwise; the
+  mount layout is specific to this environment, while the relative-link reasoning
+  above is not.
+
+Verify a farm the same way rather than trusting it: resolve one workspace link
+with `readlink -f` and confirm it points inside the worktree, then run one real
+suite there. A farm that is wrong is wrong *quietly*, which is the only reason it
+needs a check at all.
 
 ## Dispatching a builder
 
