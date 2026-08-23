@@ -119,14 +119,138 @@ observed.
   will stay that way until it is fixed or dropped. See dl-19's Log for the 2×3
   matrix.
 
+## Gates
+
+Two gates, on different halves, both PASS. Recorded here by the builder because
+a reviewer's worktree is thrown away when it reports — the verdicts are the
+reviewers' words, the dispositions are mine, and the `file:line` citations were
+re-resolved against this branch's tip as the last action before staging.
+
+### Gate A — PASS
+
+**The security claim: real ffmpeg, two TLS origins, the source-level proof.**
+
+| Done-when line                                                                        | Verdict                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A test fails when the segment origin is untrusted, carrying `TLS_VERIFICATION_FAILED` | **not met, and not meetable from the CLI** — re-assigned to dl-27, whose `Done when` carries it. What ships instead is the characterization test at `two-origin-tls.test.ts:242`, asserting the defect and written to go red when dl-27 lands. Its control — that the _manifest_ connection genuinely is verified — is `two-origin-tls.test.ts:222` |
+| The same download succeeds when both origins' CAs are trusted                         | `proven` — `two-origin-tls.test.ts:270`                                                                                                                                                                                                                                                                                                             |
+| `01-ARCHITECTURE.md`'s TLS bullet updated to whatever is then true                    | `verified` — gate B read it clause by clause                                                                                                                                                                                                                                                                                                        |
+| `npm run check` / `npm test -- --project downloader` green, e2e unchanged             | `verified` — both gates re-ran them independently                                                                                                                                                                                                                                                                                                   |
+
+> **Is the central claim true? Substantially yes.** No missed option was found,
+> attacked three independent ways that agree. "There is no ffmpeg option that
+> verifies HLS/DASH segment connections" — **TRUE**, proven at a level stronger
+> than the ticket claims: on both binaries, empirically (16/16 candidates), by
+> exhaustive option-table inspection, _and_ by recovering the propagation array
+> from the shipped machine code. "...and there cannot be one" — **overstated**.
+
+Findings and dispositions:
+
+- **A1 — CONCERN, wording: "there cannot be one" contradicts the branch's own
+  dl-27.** _Failure scenario: a future agent reads it, treats segment
+  verification as impossible, and closes dl-27 as invalid — deleting the one
+  route that works._ **Fixed.** The Log now claims only what was established —
+  no existing CLI option in 6.1.1 or 7.0.2, a compile-time list with no
+  option-level override, therefore an upstream change or verification outside
+  ffmpeg — and a paragraph says explicitly why the stronger wording was
+  dangerous. `.env.example` was corrected in the same pass.
+- **A2 — MINOR: _why_ `seg_format_options` fails is unconfirmed.** At
+  `-loglevel verbose`, 6.1.1 emits nothing for a deliberately bogus key, so
+  "ignored by the segment demuxer" cannot be told from "never delivered".
+  **Fixed by marking, not by re-claiming.** The row and the prose now say the
+  result is reproduced 3/3 and the mechanism is an inference. The conclusion is
+  untouched.
+- **A3 — NOTE: the proxy refusal surfaced as exit 8, not the ticket's 183.**
+  The gate's proxy answered a refused `CONNECT` with `502` where the ticket's
+  dropped the connection. **No change to the conclusion; recorded in dl-27
+  step 4**, which now carries both exit codes and says the load-bearing part —
+  no certificate semantics reach ffmpeg — holds in both variants.
+- **A4 — the disassembly is stronger evidence than the source.** Not a defect.
+  **Adopted into the Log**: the `.text 0x783a0` extraction, the seven names in
+  order, the TLS options sitting untouched in their own `AVOption` table, and
+  the identical result from 7.0.2 at `.text 0x7ab7c0`.
+- **A5 — a third call site (`imfdec`) the ticket did not mention.** Not a
+  defect. **Adopted**: the Log now says three call sites, not two.
+- **Unverified by gate A, carried forward as such:** FFmpeg master's eight-name
+  array (no network to github from its side — 7.0.2 was verified directly
+  instead); why `seg_format_options` has no effect (A2); and non-loopback,
+  real-hostname behaviour, since everything measured is `127.0.0.1` with IP-SAN
+  certificates.
+
+### Gate B — PASS
+
+**The code, the record and the invariants.**
+
+| Done-when line                                                     | Verdict                                                                                                                                                                        |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Two-origin fixture exists and the single-origin helper still works | `proven` — `tls-origin.ts:308` and `tls-origin.ts:342`, proved usable by `two-origin-tls.test.ts:204`; `proxied-https.test.ts` unchanged from `b76dca4` and green              |
+| The gap is stated where an operator sees it                        | `proven` — `server.ts:120` pinned by `logging.test.ts:221` and `logging.test.ts:237`; `verified` firing in a real boot via the e2e `[WebServer]` output                        |
+| Repo invariants hold (no shell, typed errors, redaction, SSRF)     | `verified` — re-derived independently; `spawn-safety` + `image-closure` green. The branch adds no subprocess spawn and no production error path; `server.ts:120` is a log line |
+| Gate commands green                                                | `verified` — all seven re-run by the gate itself                                                                                                                               |
+
+> **There is no configuration in which the gap is silent.** The `else` is keyed
+> on `ffmpegAllowUnverifiedTls` alone, so `FFMPEG_CA_FILE` cannot suppress it —
+> the warning fires in the default deployment.
+
+Findings and dispositions:
+
+- **F1 — the Log miscounted its own test file**: "five tests … two keep the
+  fixture honest" against a file with six and three. The uncounted one is the
+  bundle test, added late to kill a surviving mutation — precisely the test
+  dl-27's acceptance rests on. **Fixed**, with a note saying why the drift
+  happened.
+- **F2 — `.env.example` pointed an operator at dl-21**, which this commit closes
+  under a title reading as though it fixed the thing. **Fixed**: it now points
+  at dl-27 and says in as many words that dl-21 is closed and closed nothing.
+- **F3 — `SECURITY.md` never names the gap**, in neither its in-scope nor its
+  known-and-accepted list. **No change, and no ticket — deliberately.** It is
+  pre-existing, it is not something this branch introduced or worsened in the
+  code, and the gap is now stated in the three places a reader actually meets it
+  (the architecture page, `.env.example`, and a warning on every boot). Adding a
+  fourth claim to a policy document is the kind of restatement this repo
+  removed a status page over. **If a maintainer disagrees, it is one bullet and
+  worth its own ticket rather than a rider on this one** — I did not take an id
+  for it.
+- **F4 — bare `.rejects.toThrow()` at the fixture-honesty test.** Passes on any
+  rejection. **No change**, and the gate agreed it is not a defect: the two
+  positive handshakes immediately above it rule out the wrong-port class, and
+  the pair is what makes the assertion meaningful. Asserting
+  `DEPTH_ZERO_SELF_SIGNED_CERT` would pin trust rather than any failure and is
+  worth doing the day someone touches that test; it is noted in dl-27's Traps
+  rather than left only here.
+- **F5 — the serial comment overstated its own importance.** Gate B mutated the
+  two halves separately: distinct common names alone fix the collision, and
+  reverting the serial while keeping them leaves all six tests green. **Fixed**
+  in `tls-origin.ts` and in the phrasing dl-27's Traps had inherited. The
+  serials stay — two certificates sharing one is wrong on its own terms — but
+  they are now described as defence in depth.
+- **Checked and cleared, no change:** `commonName` defaulting to the shared
+  constant. It cannot default to something unique, because the sole existing
+  caller's suite asserts the peer certificate's CN _is_ that constant. Collision
+  freedom rests on caller discipline, which is documented on the parameter and
+  warned about in dl-27's Traps.
+- **Unverified by gate B, carried forward as such:** the entire security claim
+  (gate A's scope, taken as given), the two `args.ts` mutation rows in the Log's
+  table, and the container/image gate, which nothing in this branch touches.
+
 ## Log
 
 **2026-08-23 — Done, and the outcome is the gap, stated rather than closed.**
-Build step 4 is what this ticket produced: **there is no ffmpeg option that
-verifies segment connections, and there cannot be one.** The hole is real, it
-reproduces exactly as the brief says, and the fix is a change the brief did not
-contemplate. It is filed as [dl-27](./dl-27-verify-segment-origins.md), with a
-working prototype behind it.
+Build step 4 is what this ticket produced: **no existing ffmpeg CLI option,
+alone or in combination, verifies segment connections in 6.1.1 or 7.0.2, and
+the propagation list is compile-time with no option-level override. So closing
+this gap requires either an upstream source change or verification outside
+ffmpeg.** The hole is real, it reproduces exactly as the brief says, and the fix
+is a change the brief did not contemplate. It is filed as
+[dl-27](./dl-27-verify-segment-origins.md), with a working prototype behind it.
+
+**Read that sentence exactly as written, because an earlier draft of it said
+"and there cannot be one" and that would have been actively dangerous.** A fix
+does exist — this ticket measured one working — and it lives outside ffmpeg's
+argument surface. Someone who reads "impossible" and then meets dl-27
+describing a working mechanism has to conclude one of the two is wrong, and the
+cheap resolution is to close dl-27 as invalid. That would delete the only route
+anyone has demonstrated. **What is exhausted is the CLI, not the problem.**
 
 Every measurement below is the distribution's **ffmpeg 6.1.1-3ubuntu5** (gnutls),
 which is what `FFMPEG_PATH` names here, in CI and in the image — except the two
@@ -182,6 +306,38 @@ it. Two things follow that the brief could only guess at:
   was added — and still neither TLS option. **Upgrading ffmpeg is not the fix**,
   which was worth knowing before anyone proposed it.
 
+**Gate A could not reach the source and proved it a better way — from the
+binary this repo actually runs.** No `deb-src` entries and no egress to the
+Debian archives or github, so rather than mark the central claim unverified it
+recovered the array out of `libavformat.so.60.16.100`. The library is stripped
+and the array is stack-local with no relocations, so it found the construction
+site at `.text 0x783a0` by scanning for the RIP-relative `lea` cluster:
+
+```
+0x10(%rsp) 'headers'     0x30(%rsp) 'referer'
+0x18(%rsp) 'user_agent'  0x38(%rsp) 'rw_timeout'
+0x20(%rsp) 'cookies'     0x40(%rsp) 'icy'
+0x28(%rsp) 'http_proxy'  0x48(%rsp) movq $0x0   <- NULL
+```
+
+**The same seven names, the same order, NULL-terminated** — and the four TLS
+options do exist 64 bytes apart in the TLS protocol's own `AVOption` table at
+`0x2a3040`–`0x2a31c0`, which is where they stay. This is strictly stronger
+evidence than a source tag: it is what the binary at `FFMPEG_PATH` does. The
+same extraction on ffmpeg-static 7.0.2 (`.text 0x7ab7c0`) yields the identical
+seven, so "upgrading is not the fix" is measured for that binary rather than
+inferred from master. Master's eight-name list stays **unverified** — no network
+to github from the gate's side.
+
+Two corrections to the bullets above, both from that extraction. The helper has
+**three** call sites in the whole library, not two: dashdec, hls, and
+**imfdec** — the IMF demuxer, which this tool never reaches but which is a third
+caller the sentence above did not know about. And there is exactly **one**
+decode-side dictionary option across 6.1.1's entire surface (`-seg_format_options`);
+the complete HLS demuxer table is ten options with no TLS option, and the DASH
+demuxer has **two** (`allowed_extensions`, `cenc_decryption_key`) — no TLS
+surface whatsoever.
+
 ### Every mechanism tried
 
 Sixteen candidates, each run twice against the same fixture: **NEG** with only
@@ -192,7 +348,7 @@ holding both (which must still succeed). Run on 6.1.1 with MPEG-TS segments, on
 | Candidate                                      | Result                                                                 |
 | ---------------------------------------------- | ---------------------------------------------------------------------- |
 | baseline (the dl-19 argv)                      | NEG exit 0, 104,610 bytes, B served 2 segments                         |
-| `-seg_format_options tls_verify=1`             | no change — reaches the segment _demuxer_, never the protocol          |
+| `-seg_format_options tls_verify=1`             | no change (why: asserted, not demonstrated — see below)                |
 | `-seg_format_options ca_file=<A>`              | no change                                                              |
 | `-seg_format_options tls_verify=1:ca_file=<A>` | no change                                                              |
 | `-http_persistent 0`                           | no change                                                              |
@@ -296,14 +452,23 @@ up in [dl-27](./dl-27-verify-segment-origins.md).
   test using it still passes. `createCaBundle` is one PEM holding two
   certificates — the trap this ticket carries is answered by construction, and
   no verification is disabled anywhere in the new fixture.
-- **`api/test/two-origin-tls.test.ts`**, five tests, real ffmpeg, two TLS
-  origins. Two of them keep the fixture honest — that the origins genuinely
-  disagree about trust, and that the playlist genuinely points off-origin.
-  Then the pair that matters, same fixture and same argv one PEM apart: trusting
-  **only B** fails at the manifest with `TLS_VERIFICATION_FAILED` before a byte
-  is served, and trusting **only A** downloads the entire video off B. The
-  second is a **characterization test**: it asserts the defect, and it is
-  written to go red the day dl-27 lands.
+- **`api/test/two-origin-tls.test.ts`**, **six** tests, real ffmpeg, two TLS
+  origins. **Three** of them keep the fixture honest — that the origins
+  genuinely disagree about trust, that the playlist genuinely points off-origin,
+  and that the both-CAs bundle really holds both and each origin verifies
+  against it. Then the pair that matters, same fixture and same argv one PEM
+  apart: trusting **only B** fails at the manifest with
+  `TLS_VERIFICATION_FAILED` before a byte is served, and trusting **only A**
+  downloads the entire video off B. The second is a **characterization test**:
+  it asserts the defect, and it is written to go red the day dl-27 lands.
+
+  **This paragraph said "five … two" until gate B counted it**, and the
+  uncounted one was the bundle test — added late, to kill a mutation that had
+  survived, and therefore the single test **dl-27's acceptance rests on**. The
+  prose was written before the fix and not revisited after it, which is exactly
+  how a record and a file drift apart: an agent picking up dl-27 would have
+  counted six against a claimed five with no way to tell which was stale.
+
 - **`api/src/server.ts`** warns at boot, when verification is on, that it
   reaches the manifest connection only. That is Build step 4's "where an
   operator will see it" — an operator who has read nothing has one line per boot
@@ -331,10 +496,19 @@ pass-through are real options that do nothing here, because the pass-through is
 `hls.c`'s `open_url` was right and one function short: `open_url` copies a dict
 somebody else filled, and the filling is where the answer is.
 
-**`-seg_format_options` looks like the answer and is not.** It is the closest
-thing on the demuxer to "options for segments", and it configures the segment
-_demuxer_ — the thing that parses the MPEG-TS once bytes arrive. It never
-touches the protocol that fetched them.
+**`-seg_format_options` looks like the answer and is not — and the reason it is
+not is asserted rather than demonstrated.** Gate A tried to confirm the
+explanation and could not: at `-loglevel verbose`, 6.1.1 emits **nothing** for a
+deliberately bogus key (`-seg_format_options bogus_option_xyz=1`) — no "not
+found", no warning of any kind. So "delivered to the segment demuxer and ignored
+there" cannot be told apart from "never delivered at all". **The result is
+reproduced 3/3 on both gates and the conclusion is untouched; only the mechanism
+below is an inference.** It is the closest
+thing on the demuxer to "options for segments", and on the option table it
+configures the segment _demuxer_ — the thing that parses the MPEG-TS once bytes
+arrive, rather than the protocol that fetched them. Either way it does not put
+the TLS settings on the segment connection, which is the part that was
+measured.
 
 ### The mutation check, and the one that survived
 
@@ -367,12 +541,59 @@ Worth stating plainly: without the mutation run this branch would have shipped a
 CA bundle helper that silently trusted one origin of two, and dl-27's entire
 acceptance rests on that helper.
 
+### Two things suggested at review and deliberately not done
+
+**The `ffio_copy_url_options` finding does not also go in `00-ANALYSIS.md`.**
+The suggestion was that a future reader will otherwise re-derive it from FFmpeg
+source. They will not have to: it is on `01-ARCHITECTURE.md` with the seven
+names inline, in this Log with the disassembly that proves it, and in dl-27's
+brief. A fourth copy is a fourth thing that has to stay true, and this repo's
+whole posture on that — `repo-1`, `repo-2`, and the reason there is no status
+page — is that a fact restated where nothing keeps it true becomes a liability
+rather than an aid. `01-TICKETS.md` reserves `00-ANALYSIS.md` for "where the
+design was overruled by building it", and this does not overrule the analysis:
+§3's premise that ffmpeg handles AES-128 natively is untouched. It constrains
+how far ffmpeg's _verification_ reaches, which is an architecture fact and is on
+the architecture page. This ticket's `Done when` names `01-ARCHITECTURE.md` and
+only that.
+
+**`dl-27` does not gain `depends_on: [dl-26]`.** dl-26 is merged, so the edge
+would no longer dangle and CI would stay green — the objection is not mechanical.
+It is that `depends_on` means "must land first" and dl-26 already landed, so the
+edge would be vacuous on the day it was written, while `npm run status --ready`
+would carry it forever. What dl-26 actually gives dl-27 is a **constraint on how
+it must be built** — three outcomes converging on one socket instead of two — and
+that is prose. It is in dl-27's step 4, with the strings read out of the merged
+tree and the tripwire re-measured on this branch rather than relayed.
+
 ### Gates
 
-`npm run check` green (exit 0). `npm test -- --project downloader` 668 tests in
-49 files, full `npm test` 1,424 in 102 — up from a measured baseline of 1,416 in
-101, so eight tests and one file. `npm run e2e:downloader` 3 passed, and its
-`[WebServer]` output is where the new warning was seen firing in a real boot
+**Measured on this branch rebased onto `b76dca4`, and nothing here is carried
+across from the pre-rebase run.** `main` gained three merges during review
+(dl-26 #84, repo-3 #85, dl-20 #86) and the earlier figures are stale twice over.
+
+| Command                            | Result                      |
+| ---------------------------------- | --------------------------- |
+| `npm run build`                    | exit 0                      |
+| `npm run check`                    | exit 0                      |
+| `npm test -- --project downloader` | **50 files / 722 tests**    |
+| `npm test`                         | **103 files / 1,508 tests** |
+| `npm run e2e:downloader`           | 3 passed                    |
+
+**The baseline was re-measured rather than assumed**, by checking `b76dca4` out
+and running the suite on it: **102 files / 1,500 tests.** So the branch is
+**+1 file and +8 tests, all of it this branch's** — six in
+`two-origin-tls.test.ts`, two in `logging.test.ts`. The pre-rebase numbers
+(1,416 → 1,424) described a different `main` and are kept here only to show the
+delta is unchanged. Gate B predicted "~103 files and >1424 tests" post-rebase:
+the file count was right and the test count was far short, because `main` gained
+76 tests rather than a handful — which is why this was measured.
+
+`logging.test.ts` was re-run on its own after the rebase (14 passed) and checked
+for any assertion on the egress proxy's message text, because dl-26 rewrote
+those strings. There is none, so the two changes do not interact.
+
+Its `[WebServer]` output is where the new warning was seen firing in a real boot
 rather than only in a unit test:
 
 ```

@@ -71,12 +71,48 @@ segment. The prototype is in that ticket's Log.
    nothing else — while the _proxy_ is the side that now needs the operator's
    private root, merged with the system store. The two CA settings swap sides,
    and getting this wrong fails closed on every public origin.
-4. **Report the failure as what it is.** In dl-21's prototype a refused segment
-   origin surfaced to ffmpeg as `Invalid data found when processing input`, exit
-   183 — no certificate wording anywhere, so `isTlsVerificationFailure` in
-   `runner.ts` classifies it `DOWNLOAD_FAILED`. The proxy is the only party that
-   knows the real reason, so it has to carry it back out of band; a stderr
-   matcher cannot do this one.
+4. **Report the failure as what it is, and mind what dl-26 just did to this
+   exact function.** In dl-21's prototype a refused segment origin surfaced to
+   ffmpeg as `Invalid data found when processing input`, exit 183 — no
+   certificate wording anywhere, so `isTlsVerificationFailure` in `runner.ts`
+   classifies it `DOWNLOAD_FAILED`. A second gate run of the same prototype saw
+   exit 8 (`Server returned 5XX Server Error reply`) because its proxy answered
+   the refused `CONNECT` with `502` where dl-21's dropped the connection; the
+   exit code is an artefact of refusal style, and **the load-bearing part is
+   identical in both — no certificate semantics reach ffmpeg at all.** So the
+   proxy is the only party that knows the real reason and has to carry it back
+   out of band. A stderr matcher cannot do this one.
+
+   **[dl-26](./dl-26-refusal-is-not-a-connect-failure.md) (#84) landed in
+   `egress-proxy.ts` while dl-21 was in review, and it lands on this ticket's
+   weakest point.** `createPinningLookup` reports its verdict through
+   `callback(error)`, which node surfaces as the socket's `error` event — the
+   same event `ETIMEDOUT` arrives on. A `BLOCKED_TARGET` from a DNS rebind and a
+   dead network are therefore **indistinguishable by call site**, and dl-26
+   splits them on `error instanceof AppError` for exactly that reason. A
+   terminating proxy makes this worse rather than better: certificate
+   verification failure becomes a **third** outcome converging on that one
+   socket, and per the paragraph above it is the outcome whose only surviving
+   evidence is the log line. Getting the three-way split right is part of this
+   ticket, not a detail after it.
+
+   The current strings, read out of the merged tree at `b76dca4` rather
+   than taken on report:
+   `refused a subprocess fetch` (keeps the `AppError` code),
+   `a subprocess fetch could not connect` (carries `errno`/`syscall`/`reason`,
+   no `code`), and `the upstream proxy refused a subprocess fetch` (chained
+   only). **`refused an ffmpeg fetch` no longer exists in the tree** — it
+   survives only in dl-26's own prose, describing what it replaced.
+
+   **Use dl-26's tripwire rather than adding assertions.** It pinned the
+   discrimination with a mutation: collapse `connectFailed` back into a single
+   `refused` call and exactly one test fails while the rest stay green.
+   Re-measured on this branch at `b76dca4`: **1 failed, 17 passed** in `egress-proxy.test.ts` — the failing one is _"an allowed host we
+   cannot reach is not reported as a refusal"_. If restructuring that function
+   for a terminating proxy leaves the suite green under a collapsed
+   implementation, **the split has been silently lost** and no assertion you add
+   will say so.
+
 5. **Turn `two-origin-tls.test.ts`'s middle test around.** It currently asserts
    the download succeeds over an untrusted segment origin. It should assert it
    fails, with `TLS_VERIFICATION_FAILED`, against the same fixture and with the
@@ -112,13 +148,19 @@ work.
 - **Do not turn verification off anywhere to get a fixture working.** The trap
   dl-14, dl-19 and dl-21 all carry. Trusting two origins is one PEM with two
   certificates in it.
-- **A CA bundle is indexed by subject.** Two self-signed fixture certificates
-  sharing a common name collide, and the bundle silently trusts only the first —
-  refusing the other with `DEPTH_ZERO_SELF_SIGNED_CERT`, which reads like a
-  network failure. dl-21 shipped the fix (`createFixtureCertificate` takes a
-  `commonName` and issues distinct serials) and a test that pins it. **This
-  ticket's acceptance rests on that bundle**, so if you add a third origin, give
-  it its own name.
+- **A CA bundle is indexed by subject, and the subject is the only half that
+  matters.** Two self-signed fixture certificates sharing a common name collide,
+  and the bundle silently trusts only the first — refusing the other with
+  `DEPTH_ZERO_SELF_SIGNED_CERT`, which reads like a network failure. dl-21
+  shipped the fix: `createFixtureCertificate` takes a `commonName`, and a test
+  pins that the bundle holds two certificates **and** that each origin completes
+  a real handshake against it. It also issues a distinct serial per call, and
+  **that part is defence in depth rather than the fix** — gate B mutated the two
+  halves separately and reverting the serial alone leaves every test green.
+  Distinct names are what you need. **This ticket's acceptance rests on that
+  bundle**, so if you add a third origin, give it its own name. The helper sets
+  no `subjectKeyIdentifier`/`authorityKeyIdentifier`, which is why a subject
+  collision is fatal here rather than merely ambiguous.
 - **An IP has no SNI.** RFC 6066 forbids it, so a leaf minted for a numeric
   CONNECT target needs the address in `subjectAltName`, not the name. dl-21's
   prototype hit this; Node's failure for it reads like a network error.

@@ -131,7 +131,12 @@ export async function createFixtureCertificate(names: {
   const keys = forge.pki.rsa.generateKeyPair({ bits: 2048 });
   const cert = forge.pki.createCertificate();
   cert.publicKey = keys.publicKey;
-  // Distinct per certificate, for the same reason the subject is.
+  // Defence in depth, and **not** what fixes the collision — a mutation run
+  // proved it: reverting this to a constant `01` while keeping distinct common
+  // names leaves every test green. A trust store indexes by subject, so the
+  // subject is the load-bearing half. Distinct serials are kept because two
+  // certificates sharing one is wrong on its own terms, not because anything
+  // here depends on them.
   serialCounter += 1;
   cert.serialNumber = serialCounter.toString(16).padStart(2, "0");
   cert.validity.notBefore = new Date(Date.now() - 60_000);
