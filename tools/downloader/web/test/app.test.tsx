@@ -33,7 +33,7 @@ import type { AppError, Job, JobEvent, ProbeResponse } from "@downloader/contrac
 import type { ApiClient } from "../src/api/types.ts";
 import type { EventStreamHandlers } from "../src/lib/event-stream.ts";
 import { JOBS_STORAGE_KEY } from "../src/lib/job-store.ts";
-import { NOW, job, probe, progress, variant } from "./fixtures.ts";
+import { NOW, SOURCE_URL, job, probe, progress, variant } from "./fixtures.ts";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -330,6 +330,18 @@ const BACK_EDGE: JobEvent[] = [
   },
 ];
 
+/** The forward half of a run, as the orchestrator emits it before anything expires. */
+const RUN_TO_DOWNLOADING: JobEvent[] = [
+  { type: "status", jobId: "job-1", status: "probing", at: "2026-08-20T11:59:10.000Z" },
+  { type: "status", jobId: "job-1", status: "downloading", at: "2026-08-20T11:59:20.000Z" },
+  {
+    type: "progress",
+    jobId: "job-1",
+    progress: progress({ stage: "downloading", downloadedBytes: 41_000_000 }),
+    at: "2026-08-20T11:59:21.000Z",
+  },
+];
+
 /** Each pipeline step as `[label, state]`, off the class the stylesheet keys on. */
 function pipeline(): [string, string][] {
   return within(screen.getByRole("list", { name: "Pipeline" }))
@@ -371,7 +383,7 @@ async function watchOneJob(
   return { fake, listeners };
 }
 
-test("the re-probe mark reaches a card that is only listening, with no refetch behind it", async () => {
+test("a restored job driven over the back-edge by frames keeps Downloading marked done", async () => {
   // The user in dl-18's Why: a healthy stream, a 20-minute download, and a
   // signed URL that expired. Before dl-20 this render was byte-identical to a
   // first probe's — "Downloading" went pending and the progress indicator
@@ -402,10 +414,84 @@ test("the re-probe mark reaches a card that is only listening, with no refetch b
     ["Assembling", "pending"],
     ["Ready", "pending"],
   ]);
-  // And nothing went back to the server for it. One call, made on restore before
-  // the edge was taken — so `attempts` was `1` every time the client saw it, and
-  // the mark can only have come from the frames.
+  // **This test does not prove the frames did it, and an earlier draft of this
+  // comment claimed it did.** `restore` reconciles before it attaches, so the one
+  // `getJob` below has already folded the restored `downloading` job into the
+  // mark — `reachedStep` reads `attempts` only for `probing`, so a `downloading`
+  // job returns step 2 whatever its counter says. The call asserted here as
+  // ruling the refetch out *is* the refetch. What this test holds is the
+  // restore-then-listen journey end to end; the frames carrying the mark on
+  // their own is the test below, which starts a job in this tab and never
+  // refetches at all.
   expect(fake.client.getJob).toHaveBeenCalledTimes(1);
+});
+
+test("a job started in this tab, never refetched, gets its mark from the frames alone", async () => {
+  // The commonest journey there is: paste a URL, watch it run in the same tab.
+  // It goes through `start()`, which upserts the created job and attaches the
+  // stream — and never calls `mergeJob`. So `applyEvent`'s fold is the *only*
+  // thing that can carry the mark here, which is what makes this the test dl-20
+  // actually needed: with that fold neutralised, every other test in the repo
+  // stays green, this one included until it existed.
+  const created = job("queued", { id: "job-1" });
+  const listeners: EventStreamHandlers[] = [];
+  const fake = await mountApp(false, {
+    createJob: vi.fn(() => Promise.resolve({ job: created })),
+    openJobEvents: vi.fn((_jobId: string, handlers: EventStreamHandlers) => {
+      listeners.push(handlers);
+      return { close: vi.fn() };
+    }),
+  });
+
+  analyse(SOURCE_URL);
+  await settle();
+  await act(async () => {
+    fake.probes[0]?.resolve({ probe: probe(), cached: false });
+    await Promise.resolve();
+  });
+  await settle();
+  fireEvent.click(screen.getByRole("button", { name: "Download" }));
+  await settle();
+
+  expect(listeners).toHaveLength(1);
+  // Nothing was ever fetched: the job in the list is the one `createJob`
+  // returned, and no reconcile has happened or will.
+  expect(fake.client.getJob).not.toHaveBeenCalled();
+  expect(pipeline()).toEqual([
+    ["Queued", "active"],
+    ["Re-analysing", "pending"],
+    ["Downloading", "pending"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
+
+  act(() => {
+    listeners[0]?.onOpen();
+    // The forward run, then the edge — every step of it from the wire.
+    for (const event of RUN_TO_DOWNLOADING) listeners[0]?.onEvent(event);
+  });
+  expect(pipeline()).toEqual([
+    ["Queued", "done"],
+    ["Re-analysing", "done"],
+    ["Downloading", "active"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
+
+  act(() => {
+    for (const event of BACK_EDGE) listeners[0]?.onEvent(event);
+  });
+
+  expect(pipeline()).toEqual([
+    ["Queued", "done"],
+    ["Re-analysing", "active"],
+    ["Downloading", "done"],
+    ["Assembling", "pending"],
+    ["Ready", "pending"],
+  ]);
+  // Still nothing refetched, so `attempts` has been `1` on every copy of this
+  // job the client has ever held. The mark can only have come from the fold.
+  expect(fake.client.getJob).not.toHaveBeenCalled();
 });
 
 test("a reconnect that slept through the download stage keeps the refetch's word for it", async () => {

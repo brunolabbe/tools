@@ -80,14 +80,23 @@ function mount(value: Job, streamState?: StreamState, watchedStep?: number): Han
  * actually emits — `fixtures.ts`'s `job()` builds the state the **server**
  * holds, and over dl-9's back-edge the two are not the same thing.
  *
- * This mirrors what `useJobs` does with each frame, and mirroring it is the
- * limit of what a component test can prove: that the hook really folds the mark
- * and really hands it down three components is asserted in `app.test.tsx`,
- * against a rendered `App` driven through the same frames.
+ * **The mark starts at `0` and is raised only inside the loop**, exactly as
+ * `useJobs` does: its map starts empty and only `applyEvent` and `mergeJob` add
+ * to it. An earlier draft seeded it with `markWatched(0, start)` before the
+ * loop, which is the one thing that must not happen here — for a `downloading`
+ * start job that seed alone reaches step 2, so the frames became decoration and
+ * neutralising the fold inside the loop left the suite green. The tests below
+ * would have passed against a reducer that folded nothing.
+ *
+ * Mirroring the hook is the limit of what a component test can prove. That the
+ * hook really folds the mark, and really hands it down three components, is
+ * `app.test.tsx`'s `a job started in this tab, never refetched, gets its mark
+ * from the frames alone` — the only test in the repo that dies when
+ * `useJobs`'s `applyEvent` fold is removed.
  */
 function watch(start: Job, events: readonly JobEvent[]): { job: Job; watchedStep: number } {
   let current = start;
-  let watchedStep = markWatched(0, current);
+  let watchedStep = 0;
   for (const event of events) {
     const next = applyJobEvent(current, event);
     watchedStep = markWatched(watchedStep, current, next);
@@ -396,8 +405,15 @@ test("a first probe leaves Downloading pending, however many bytes are on the ca
 // Every test above mounts a job somebody built, which is why none of them
 // noticed that dl-18's fix could not reach a client watching a live stream: the
 // `attempts: 2` those fixtures carry only ever arrives on a refetch. These two
-// build nothing — they start from a job the client already holds and fold in the
-// exact frames the orchestrator emits, so the render is a function of the wire.
+// still start from a hand-built job — there is no way for a component test not
+// to — but **the mark they render is folded from the frames and from nothing
+// else**, which is the half that was missing. Drop the fold in `watch()` above
+// and both go red.
+//
+// What they do not prove is that the mark makes the trip from the hook to the
+// card; a component test is handed the value whose journey is in question. That
+// is `app.test.tsx`, and the claim is not rhetorical — one test there, and only
+// that one, dies when `useJobs`'s live fold is removed.
 
 /** The frames `#attempt` emits as it takes the back-edge, in order. */
 const BACK_EDGE: JobEvent[] = [

@@ -137,7 +137,12 @@ Three pieces:
 mutation that only the other's test catches:
 
 - `applyEvent` folds the job as it stood and the job the event produced. This is
-  the live path: the frames alone, no refetch.
+  the live path, and the journey that reaches it with nothing else behind it is
+  `start()` — paste a URL, watch it run in this tab — because `start` upserts the
+  created job and attaches the stream without ever calling `mergeJob`. **Gate 1
+  found this line covered by no test at all**; it is now covered by exactly one,
+  `app.test.tsx`'s `a job started in this tab, never refetched, gets its mark
+from the frames alone`, and by nothing else in the repo.
 - `mergeJob` folds the _reconciled remote_, before `reconcileJob` chooses. This
   is the race, below.
 
@@ -220,9 +225,9 @@ follow-up ticket was filed and `dl-26` was not used.
 
 ### Verification
 
-`npm run check` exit 0. `npm test -- --project downloader`: 48 files, **675
-tests**, all passing. Repo-wide `npm test`: 101 files, **1,431 tests**, from a
-measured baseline of 101 / 1,416 at `4e3c48e` — so fifteen tests added and none
+`npm run check` exit 0. `npm test -- --project downloader`: 48 files, **676
+tests**, all passing. Repo-wide `npm test`: 101 files, **1,432 tests**, from a
+measured baseline of 101 / 1,416 at `4e3c48e` — so sixteen tests added and none
 removed or rewritten away.
 
 **Neither gate proves the browser.** `e2e/download.spec.ts` and the container
@@ -232,42 +237,85 @@ the proof I do not have.
 
 ### Mutation checks
 
-Fifteen, each applied to the source and reverted after, with the source `touch`ed
-on restore. Command throughout:
-`npx vitest run tools/downloader/web --project downloader` (189 tests, 16 files).
-**Control run over the unmutated tree first: exit 0.**
+Seventeen, each applied to the source and reverted after, with the source
+`touch`ed on restore. Command throughout:
+`npx vitest run tools/downloader/web --project downloader` — **16 files, 191
+tests**. **Control run over the unmutated tree first: exit 0, nothing failed.**
 
-| Mutation                                                       | Red |
-| -------------------------------------------------------------- | --- |
-| `statusHighWaterMark` ignores `watched`                        | 6   |
-| `statusHighWaterMark` returns `watched` instead of maxing      | 7   |
-| `reachedStep` places `failed`/`canceled` instead of refusing   | 2   |
-| `reachedStep` drops the `attempts > 1` witness                 | 5   |
-| `reachedStep` treats a first probe as a re-probe (`>= 1`)      | 7   |
-| `reachedStep` infers about every status, not only `probing`    | 1   |
-| `markWatched` folds nothing                                    | 6   |
-| `markWatched` is last-wins instead of monotonic                | 4   |
-| `markWatched` places every job, pipeline step or not           | 3   |
-| `useJobs` stops folding the reconciled remote job              | 1   |
-| `useJobs` starts each job's mark at the last step instead of 0 | 2   |
-| `JobCard` ignores the mark it is handed                        | 4   |
-| `JobList` never hands a card its mark                          | 3   |
+| Mutation                                                     | Red      |
+| ------------------------------------------------------------ | -------- |
+| `statusHighWaterMark` ignores `watched`                      | 7        |
+| `statusHighWaterMark` returns `watched` instead of maxing    | 7        |
+| `reachedStep` places `failed`/`canceled` instead of refusing | 2        |
+| `reachedStep` drops the `attempts > 1` witness               | 5        |
+| `reachedStep` treats a first probe as a re-probe (`>= 1`)    | 7        |
+| `reachedStep` infers about every status, not only `probing`  | 1        |
+| `markWatched` folds nothing                                  | 7        |
+| `markWatched` is last-wins instead of monotonic              | 5        |
+| `markWatched` places every job, pipeline step or not         | 3        |
+| **`useJobs`: `applyEvent` folds nothing**                    | **1**    |
+| `useJobs`: `applyEvent` drops only the `before` argument     | survives |
+| `useJobs`: `mergeJob` stops folding the reconciled remote    | 1        |
+| `useJobs`: a job's mark starts at the last step instead of 0 | 3        |
+| `JobCard` ignores the mark it is handed                      | 5        |
+| `JobList` never hands a card its mark                        | 4        |
+| `job-card.test.tsx`'s `watch()` folds nothing per frame      | 1        |
+| `markWatched` null-guard rewrite                             | survives |
 
-**One survivor, and it is genuine.** Dropping the _before_ argument in
-`applyEvent` — `watch(jobId, before, applyJobEvent(before, event))` →
-`watch(jobId, applyJobEvent(before, event))` — kills nothing. Enumerated: every
-route by which a job reaches `downloading` in this client already folds that
-state some other way. An event that lands on `downloading` folds it as the
-after-state; `restore` reconciles before it attaches, so a job restored from
-`localStorage` is folded by `mergeJob` before any frame can arrive; and
-`createJob` returns a `queued` job (`api/src/routes/jobs.ts:57`), so `start` has
-nothing to fold. The argument is kept anyway: it makes `applyEvent` self-
-sufficient instead of correct-because-`restore`-happens-to-reconcile-first, and
-that ordering invariant lives in a different function and is enforced by nothing.
-**It is unkillable code and this is the reason, not an oversight.**
+**The bolded row is the one gate 1 caught me not running**, and it is the one
+that matters: it is dl-20's entire live-stream mechanism. My first table ran only
+its strictly weaker sibling — the row below it — and I reasoned from that
+sibling's survival instead of testing the real thing. Confirmed before fixing:
+with `applyEvent`'s `watch` call replaced by a no-op, the tree as I first
+committed it ran **16 files / 190 tests green** and `--project downloader` ran
+**48 files / 675 tests green**. Nothing in the repo noticed.
 
-A fifteenth mutation — `markWatched`'s null guard rewritten as
-`if (step === null || step > mark) mark = step ?? mark;` — also survived and is a
-**provably equivalent mutant**: the assignment is a no-op on the `null` branch.
-The behaviour it was meant to probe is covered by the two rows above it, which
-both go red.
+Two mutations survive, and they are different in kind:
+
+- **`applyEvent` drops only the `before` argument** — genuine, benign, and
+  unchanged from the first round. Every route by which a job reaches
+  `downloading` in this client already folds that state some other way: an event
+  that lands on `downloading` folds it as the after-state; `restore` reconciles
+  before it attaches (`useJobs.ts`), so a job restored from `localStorage` is
+  folded by `mergeJob` before any frame can arrive; and `createJob` returns a
+  `queued` job (`api/src/db/job-store.ts:186` — an earlier draft cited
+  `api/src/routes/jobs.ts:57`, which is the `options,` line of the `store.create`
+  call and proves nothing). The argument is kept anyway: it makes `applyEvent`
+  self-sufficient instead of correct-because-`restore`-happens-to-reconcile-
+  first, and that ordering invariant lives in a different function and is
+  enforced by nothing. It is unkillable code and this is the reason, not an
+  oversight.
+- **`markWatched`'s null guard rewritten** as
+  `if (step === null || step > mark) mark = step ?? mark;` — a **provably
+  equivalent mutant**: the assignment is a no-op on the `null` branch. Gate 1
+  confirmed the truth table independently. The behaviour it was meant to probe is
+  covered by the two `markWatched` rows above it, which both go red.
+
+### Gate 1 — what it caught, in my own words
+
+The verdict was FAIL on the proof, not the code, and it was right. Three claims
+on this branch stated the opposite of what was true, all one root:
+
+1. **`app.test.tsx`'s first live test did not prove what its name said.**
+   "with no refetch behind it", and a comment asserting that a single `getJob`
+   call meant the mark "can only have come from the frames". `restore` calls
+   `mergeJob` **before** `attach`, and `reachedStep` reads `attempts` only for
+   `probing` — so a restored `downloading` job returns step 2 whatever its
+   counter says. The one call I cited as ruling the refetch out **was** the
+   refetch. Renamed, comment rewritten to say so, and the missing journey added
+   as its own test.
+2. **`job-card.test.tsx`'s `watch()` helper seeded the mark before the loop.**
+   `markWatched(0, current)` reaches step 2 on its own for a `downloading` start
+   job, so the frames were decoration; neutralising the per-frame fold left all
+   191 green. The seed is gone — the helper now starts at `0` and raises only
+   inside the loop, which is also what `useJobs` actually does — and the section
+   header no longer claims "the render is a function of the wire".
+3. **The Log said `applyEvent`'s fold was "the live path: the frames alone, no
+   refetch".** True of the mechanism, false of the coverage.
+
+**This is dl-18's failure shape one level up**, and I had already caught two
+instances of it on this branch — which is the uncomfortable part: my own survivor
+argument rests on the same two facts (`restore` reconciles before attaching;
+`createJob` returns `queued`) that make the gap invisible, and I drew the
+narrower conclusion from them. The habit that would have caught it is the one
+this ticket is about: **mutate the line, do not reason about it.**
