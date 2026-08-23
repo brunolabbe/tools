@@ -70,6 +70,7 @@ import type {
 import { AppError, coordinatesSchema } from "@planner/contract";
 import type { Coordinates, Place, Source } from "@planner/contract";
 import type { AppLogger } from "../logger.ts";
+import { KEY_SEPARATOR } from "./place-key.ts";
 
 /** The name `/api/health` reports and the config's `GROUNDING_PROVIDER` selects. */
 export const VALHALLA_PROVIDER_NAME = "valhalla";
@@ -408,8 +409,19 @@ function indexCells(body: unknown, logger: AppLogger | undefined): ReadonlyMap<s
   return cells;
 }
 
+/**
+ * The key one cell is indexed by.
+ *
+ * `KEY_SEPARATOR` rather than a literal, and rather than a space: it is the
+ * separator `place-key.ts` already owns and documents, and writing it as an
+ * escape keeps this file plain text. It was a raw NUL byte until pl-28's second
+ * gate, which made the whole module **binary to `grep`** — every pattern
+ * silently matching nothing unless you thought to pass `-a`. That cost two
+ * people time before anyone worked out why, and neither of them was looking for
+ * a separator.
+ */
 function cellKey(from: number, to: number): string {
-  return `${String(from)} ${String(to)}`;
+  return `${String(from)}${KEY_SEPARATOR}${String(to)}`;
 }
 
 function indexOf(cell: unknown, field: "from_index" | "to_index"): number | null {

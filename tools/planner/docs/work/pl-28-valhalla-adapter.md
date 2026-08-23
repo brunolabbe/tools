@@ -141,7 +141,9 @@ records nothing. The round that answers it is below, and the findings carry
 their dispositions.
 
 Scope of the reviewed commit: 14 files, +1902 / −8. The tip that carries this
-section is the same 14 files at +2131 / −8.
+section is the **same 14 files** — the insertion count has moved twice since,
+because each gate's record is itself part of the diff it describes, so the file
+list is the half worth quoting and the number is not.
 
 | Done when                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -172,10 +174,10 @@ identical, so it does not matter — but this was **not** a byte-for-byte
 reproduction and the record should not read as though it were.
 
 **Step 4 passes, and the builder's report was silent on it.** Both tables are
-`Map`s — `valhalla.ts:397` and `:353`, and there is no third. `__proto__`,
+`Map`s — `valhalla.ts:398` and `:354`, and there is no third. `__proto__`,
 `constructor`, `toString` and `prototype` as place names all travel as ordinary
 query strings and come back as ordinary answers. `from_index: "constructor"` is
-rejected by `indexOf` at `valhalla.ts:418`. The shallow-freeze property was
+rejected by `indexOf` at `valhalla.ts:430`. The shallow-freeze property was
 proved by mutating a nested field of a returned cell in place and re-asking:
 the second answer was identical.
 
@@ -197,7 +199,7 @@ the second answer was identical.
   happened.
 
 - **F2 · fixed** — "asserted by nothing" understated the geocoder gap. What is
-  true is that the whole of `firstCoordinates` (`valhalla.ts:464`) can be
+  true is that the whole of `firstCoordinates` (`valhalla.ts:476`) can be
   replaced with `return null;` and the planner suite stays green — reproduced by
   the builder at 698/698 — with none of its seven branches pinned. The Log now
   says that, and adds the production reachability the gate asked for:
@@ -230,14 +232,29 @@ the second answer was identical.
   equivalent; four were not, and all four now have a test that was watched to
   fail before it was believed:
 
-  | Survivor                                                          | Now killed by                            |
-  | ----------------------------------------------------------------- | ---------------------------------------- |
-  | `valhalla.ts:418` — `indexOf`'s integer / non-negative validation | `grounding-valhalla.test.ts:450`, `:467` |
-  | `valhalla.ts:438` — `estimate`'s half-a-cell guard (`\|\|`→`&&`)  | `grounding-valhalla.test.ts:478`         |
-  | `valhalla.ts:439` — the negative time/distance guard              | `grounding-valhalla.test.ts:491`         |
-  | `valhalla.ts:164` — the Nominatim `User-Agent` header             | `grounding-valhalla.test.ts:363`         |
+  | Survivor                                                            | Now killed by                    |
+  | ------------------------------------------------------------------- | -------------------------------- |
+  | `valhalla.ts:430` — `indexOf`'s validation, **type check included** | `grounding-valhalla.test.ts:450` |
+  | `valhalla.ts:450` — `estimate`'s half-a-cell guard (`\|\|`→`&&`)    | `grounding-valhalla.test.ts:478` |
+  | `valhalla.ts:451` — the negative time/distance guard                | `grounding-valhalla.test.ts:491` |
+  | `valhalla.ts:165` — the Nominatim `User-Agent` header               | `grounding-valhalla.test.ts:363` |
 
-  The first is the sharpest and the gate was right to rank it so: it is the
+  **Row one is narrower than it looks, and gate 2 caught the overstatement.**
+  What `:450` kills is dropping `indexOf`'s validation _entirely_, the
+  `typeof value === "number"` check included. Removing only the
+  `Number.isInteger(value) && value >= 0` half **survives** — gate 2 applied
+  exactly that and got 698/698 — and that half is plausibly an equivalent
+  mutant: `from` and `to` reach the lookup as loop counters over the caller's
+  own arrays, so a fractional or negative index can only produce a key nothing
+  ever looks up. It is left unkilled deliberately rather than chased with a test
+  that would assert nothing.
+
+  `:467` is therefore **documentation of intent, not a killer**. It resolves
+  `null` with or without the integer guard, and it is kept because "an index
+  that is not a whole number is no index at all" is a sentence the next person
+  to touch `indexOf` should find written down.
+
+  The first is still the sharpest and gate 1 was right to rank it so: it is the
   defence a twenty-line comment in that file argues for at length, and nothing
   in the suite noticed its removal. The test that pins it is the collision case
   rather than the prototype one — `from_index: "0"` and `from_index: 0` are one
@@ -254,6 +271,106 @@ the second answer was identical.
 partial: step 3's geocoder half is not done, two acceptance rows above are
 `unproven`, and a review neither moves `status` nor decides whether the work
 stops.
+
+### Gate 2 — 2026-08-23
+
+**Gate: PASS** · `bd3bdbc` · `review-ticket`, narrowly scoped to the gate-1
+round: are the five new tests genuinely live, and are the Log's corrections
+accurate. One subsection per gate, so this sits **below** gate 1 rather than
+replacing it — a ticket through several rounds keeps both, and gate 1's
+CONCERNS is part of this ticket's record whatever gate 2 found.
+
+**5 of 5 new tests are live.** Each was reproduced independently — mutation
+applied, rebuilt, run **red**, reverted, run **green** — and in every case the
+failure _output_ was read rather than the exit code trusted. That distinction is
+the whole reason this gate exists: reading an exit code is exactly what produced
+the twelve reds that were not there. `grounding-valhalla.test.ts:450` was shown
+to fail with the hostile `"0"`-indexed cell displacing the measured 3.339 km leg
+and reporting `distanceMeters: 99999000, durationMinutes: 0`.
+
+**The harness root cause was confirmed at the source**, not inferred from the
+Log: on the clean tip, `--reporter=basic` against vitest **4.1.10** gives
+`Startup Error: Failed to load custom Reporter from basic` and exit 1 — the
+process dies before a single test runs. And the replacement control is real:
+`npm test -- --project planner` on a clean tree exits 0 at 698 in 49 files.
+
+**Five of the sixteen sweep rows were reproduced independently**, chosen to
+include row 5, the pure reorder that gate 1 found green and that this branch
+then made die.
+
+**The `indexOf` reasoning was adjudicated, and the builder was upheld.** Gate 1
+described that guard as stopping a prototype hit through an array subscript, and
+the orchestrator passed that framing down as an instruction; the builder pushed
+back, saying the container closes that route and the guard's real work is key
+collision. Gate 2 traced `from_index` to `cells.set(cellKey(from, to), cell)` at
+`valhalla.ts:398`, confirmed `cells` is a `Map` — never an array subscript,
+never a plain-object key — and that `cellKey` joins with `KEY_SEPARATOR`, so
+`"0"` and `0` produce the same string key and the later `Map.set` wins. **The
+builder was right and gate 1's framing was wrong.** Recorded because a
+correction that only travelled through a conversation is a correction the next
+reader cannot find.
+
+**F2 was verified independently**: replacing the body of `firstCoordinates`
+(`valhalla.ts:476`) with `return null;` still leaves 698 in 49 green. The Log's
+strongest claim about its own weakest code holds.
+
+**12 of 12 spot-checked citations resolved.** Two line numbers relayed during
+gate 1 — `:388` and `:346` for the two `Map`s — were already stale when they
+were sent; `valhalla.ts:398` and `:354` are correct, and are what the record
+now carries.
+
+#### What gate 2 did not do
+
+Stated so that the PASS is not read as wider than it is. It did **not** re-derive
+the fixture — no second independent capture, no rebuilt tiles — and did not
+re-run the 52-branch enumeration or sweep rows 1–4 and 6–12. Those rest on gate
+1's own capture and on a control that now demonstrably works, which is a
+different thing from being re-proved here. Docker is still absent, so the image
+gate, `compose.planner.yaml` and both third-party image tags remain
+**unverified by anything**, exactly as the Log says.
+
+#### Findings
+
+- **F-a · med · fixed** — the corrected mutation table still overstated by one
+  row, on the branch whose entire correction is about overstated mutation rows.
+  Row 13 read "remove the integer / non-negative validation"; gate 2 applied
+  precisely that — `Number.isInteger(value) && value >= 0` dropped, the type
+  check kept — and got **698/698, exit 0. It survives.** The builder reproduced
+  it before rewriting anything.
+
+  What `:450` kills is the _broader_ mutation that drops the type check too. The
+  integer/non-negative half alone is plausibly an equivalent mutant, because
+  `from` and `to` reach the lookup as loop counters over the caller's own
+  arrays, so a fractional or negative index can only key something nothing ever
+  looks up. **No test was added**, on the gate's own instruction: a test that
+  cannot fail is the thing this ticket has already been wrong about once. Row 13
+  and the F5 table now say "entirely, the type check included", `:467` is
+  described as documenting intent rather than as a killer, and the equivalence
+  argument is written down in both places.
+
+- **F-b · low · fixed** — an `oxfmt` wrap had cut "verified here and
+  independently at gate 1." mid-clause, leaving `1. Not one test…` at the start
+  of a line, which markdown renders as an ordered list. The Log's strongest
+  paragraph rendered truncated. Reflowed so no sentence ends on a bare numeral.
+
+- **F-c · nit · fixed** — the Review's "+2131 / −8" was already stale, because
+  each gate's record is part of the diff it describes and so moves the count it
+  quotes. The counts are dropped and the file list kept: it is the half that
+  does not rot.
+
+- **F-d · nit · fixed** — `cellKey` embedded a **literal NUL byte**, which makes
+  the whole module binary to `grep`: every pattern silently returns nothing
+  unless you pass `-a`. It cost the reviewer ten minutes and it had already cost
+  the builder some during gate 1, when greps for `Number.isInteger` in a file
+  that plainly contained it came back empty. It is now `KEY_SEPARATOR` imported
+  from `place-key.ts` — the separator that module already owns and documents, so
+  the fix removes a duplicated magic value as well as the byte — with a comment
+  saying why it is not a literal. Verified: the file is plain text and `grep`
+  matches it.
+
+**`status` stays `ready`, and both gates agree it should.** This lands as a
+partial: pl-28 step 3's geocoder half is not done, two acceptance rows above are
+`unproven`, and [pl-30](./pl-30-geocoder-payload.md) is what closes them.
 
 ## Log
 
@@ -329,10 +446,10 @@ So `firstCoordinates` is written against Nominatim's documented shape and
 asserted by nothing. **"Asserted by nothing" is literal and it is worth stating
 at full strength, because it reads as "thinly tested" and it is not:** the
 entire body of `firstCoordinates` can be replaced with `return null;` and the
-planner suite stays green — 698 of 698, verified here and independently at gate
-
-1. Not one test on this branch ever receives a non-null `LocatedPlace`, and none
-   of that function's seven branches is pinned by anything.
+planner suite stays green at 698 of 698 — verified here, and independently by
+both gates. Not one test on this branch ever receives a non-null
+`LocatedPlace`, and none of that function's seven branches is pinned by
+anything.
 
 `locate`'s tests cover only what needs no invented payload: the _question_ it
 asks (name and locality together — dropping locality is how Saint-Jean in Québec
@@ -494,7 +611,7 @@ flag, and each run is the whole `--project planner` rather than one spec:
 | 10  | `requiredEndpoint`: accept an endpoint that is not a URL                      | killed |
 | 11  | `/api/health`: report the endpoint beside the provider name                   | killed |
 | 12  | boot log: log the endpoints beside the provider                               | killed |
-| 13  | `indexOf`: remove the integer / non-negative validation                       | killed |
+| 13  | `indexOf`: remove its validation **entirely, the type check included**        | killed |
 | 14  | `estimate`: half-a-cell guard, `\|\|` becomes `&&`                            | killed |
 | 15  | `estimate`: remove the negative time/distance guard                           | killed |
 | 16  | `locate`: drop the `User-Agent` header                                        | killed |
@@ -502,3 +619,12 @@ flag, and each run is the whole `--project planner` rather than one spec:
 Rows 13–16 are gate 1's F5 — four survivors its own 55-mutation sweep found and
 mine could not have, because mine could not find anything. Row 5 is F1. All five
 are covered by tests added in the gate-1 round; every mutation was reverted.
+
+**Row 13 is stated at exactly the width that dies.** Gate 2 found this table
+overstating it — the row said "the integer / non-negative validation", and
+removing _only_ that half survives at 698/698. What dies is dropping the whole
+guard, the type check included. The integer/non-negative half is plausibly an
+equivalent mutant and is left unkilled on purpose; the reasoning is in the
+Review, under F5. An overstated mutation row on the branch whose whole
+correction is about overstated mutation rows is the failure this Log is least
+entitled to repeat.
