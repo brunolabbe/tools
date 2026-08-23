@@ -369,7 +369,15 @@ acceptance rests on that helper.
 
 ### Gates
 
-`npm run check` green. `npm test -- --project downloader` and full `npm test`
-green — see the numbers in the pull request. `npm run e2e:downloader` is
-unproven here and is named as such: the only source change is a boot log line,
-but a log line is not a proof.
+`npm run check` green (exit 0). `npm test -- --project downloader` 668 tests in
+49 files, full `npm test` 1,424 in 102 — up from a measured baseline of 1,416 in
+101, so eight tests and one file. `npm run e2e:downloader` 3 passed, and its
+`[WebServer]` output is where the new warning was seen firing in a real boot
+rather than only in a unit test:
+
+```
+{"level":"warn", … ,"msg":"ffmpeg verifies the manifest connection only: HLS and DASH segment certificates are not checked"}
+```
+
+The container gate is untouched and unrun here, as always: nothing in this branch
+changes what the image ships.
