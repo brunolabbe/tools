@@ -76,6 +76,21 @@ export interface EngineConfig {
    */
   proxyUrl: string | undefined;
   /**
+   * Whether ffmpeg checks the certificates it is encrypting to.
+   *
+   * On by default, which libavformat is not: `tls_verify` defaults to `0`
+   * there. The engine's own fetches have always verified — undici does it
+   * without being asked — so before dl-19 the manifest path was the unverified
+   * half of the same tool, and nothing about a URL said which half you got.
+   */
+  tlsVerify: boolean;
+  /**
+   * A CA bundle for ffmpeg to trust instead of the system store. Unset means
+   * the system store, which is what both ffmpeg builds this repo runs actually
+   * use — measured in dl-19, not assumed.
+   */
+  tlsCaFile: string | undefined;
+  /**
    * Node's global `fetch` has no proxy support. When `proxyUrl` is set the
    * caller must supply a dispatcher-aware fetch here; the engine warns and
    * proceeds unproxied otherwise rather than silently ignoring the setting.
@@ -117,6 +132,18 @@ function positiveNumber(raw: string | undefined, fallback: number): number {
   if (raw === undefined) return fallback;
   const value = Number(raw);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/**
+ * Only the exact words. A typo'd `FFMPEG_ALLOW_UNVERIFIED_TLS=ture` must not
+ * quietly read as "off" for a flag whose whole job is to be deliberate.
+ */
+function boolean(raw: string | undefined, fallback: boolean): boolean {
+  if (raw === undefined) return fallback;
+  const value = raw.trim().toLowerCase();
+  if (value === "true" || value === "1" || value === "yes") return true;
+  if (value === "false" || value === "0" || value === "no") return false;
+  return fallback;
 }
 
 /** Separate from `positiveNumber` because zero is a meaningful value: "no cap". */
@@ -174,6 +201,8 @@ export function loadEngineConfig(
     baseBackoffMs: input.baseBackoffMs ?? ENGINE_DEFAULTS.baseBackoffMs,
     maxBackoffMs: input.maxBackoffMs ?? ENGINE_DEFAULTS.maxBackoffMs,
     proxyUrl: input.proxyUrl ?? env["PROXY_URL"] ?? undefined,
+    tlsVerify: input.tlsVerify ?? !boolean(env["FFMPEG_ALLOW_UNVERIFIED_TLS"], false),
+    tlsCaFile: input.tlsCaFile ?? env["FFMPEG_CA_FILE"] ?? undefined,
     fetchImpl: input.fetchImpl ?? globalThis.fetch,
     clock: input.clock ?? SYSTEM_CLOCK,
     logger: input.logger ?? NOOP_LOGGER,

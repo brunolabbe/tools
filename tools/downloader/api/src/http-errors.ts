@@ -17,6 +17,10 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   // The *source* was unreachable, not us. 502 says "the upstream failed",
   // which is exactly what happened.
   UNREACHABLE: 502,
+  // Also the upstream's problem, and also not ours — but distinct from a dead
+  // link on purpose, because the answer to it is "do not trust this", not
+  // "try again".
+  TLS_VERIFICATION_FAILED: 502,
 
   NO_MEDIA_FOUND: 422,
   // 451 is the one status that means precisely this.

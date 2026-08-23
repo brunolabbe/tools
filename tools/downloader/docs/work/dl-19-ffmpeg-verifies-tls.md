@@ -3,7 +3,7 @@ id: dl-19
 tool: downloader
 title: Make ffmpeg verify the certificates it is already encrypting to
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -116,4 +116,151 @@ ffmpeg builds this repo runs.
 
 ## Log
 
-_Not started._
+**2026-08-23 — Done.** `-tls_verify 1` on every remote input, a
+`TLS_VERIFICATION_FAILED` code in `@webtools/core`, and two settings:
+`FFMPEG_CA_FILE` for an operator with a private root, `FFMPEG_ALLOW_UNVERIFIED_TLS`
+for the one who has neither. `npm run check` green, `npm test -- --project
+downloader` 651 tests in 46 files (up from 640/46 — this ticket is the +11),
+`npm test` 1,377 green, `npm run e2e:downloader` 3 passing.
+
+### The two trust stores, measured
+
+The brief's central question — what each build trusts once it starts checking —
+has one answer for both builds: **the system store, and they agree.** So no
+`-ca_file` is resolved at boot, and `FFMPEG_CA_FILE` exists for the operator
+case rather than to paper over a disagreement.
+
+- **`ffmpeg-static` 7.0.2** (`--enable-gnutls`, johnvansickle static build):
+  verified a real public HTTPS origin with `-tls_verify 1` and no `-ca_file`,
+  reading 101,147 bytes of body before failing on `Invalid data found when
+processing input` — which is the demuxer's complaint about JSON, i.e. after a
+  completed, verified handshake.
+- **The distribution's ffmpeg 6.1.1** (Ubuntu noble, also `--enable-gnutls`):
+  same command, same 101,147 bytes, same demuxer complaint. This is the binary
+  `FFMPEG_PATH` names in CI, in the dev container, and in the image.
+
+Both were then pointed at the fixture's self-signed origin and both refused it
+with `Peer certificate failed verification`, so the successes above are the
+trust store answering rather than verification being quietly off.
+
+**Measuring `ffmpeg-static` took a detour worth writing down: it does not
+segfault on TLS, it segfaults on `getaddrinfo`.** Any hostname kills it —
+`https://registry.npmjs.org/…`, and `https://localhost:9/` just as dead — while
+the same binary against `https://104.16.6.34/` completes a handshake and reports
+the origin's 403. It is a statically linked glibc that cannot dlopen its own NSS
+modules, not a broken TLS stack. [dl-3](./dl-3-download-engine.md)'s Log records
+the SIGSEGV without locating it, and "on Linux CI" understates it — it is every
+Linux host, this dev container included. The measurement was taken by pointing
+the static build at a local `CONNECT` proxy: with `-http_proxy`, libavformat
+resolves nothing itself and puts the hostname only in the CONNECT line, so SNI
+and the hostname check still see the real name.
+
+**The image-side trust store is UNMEASURED.** There is no container runtime in
+this environment — no `docker`, `podman`, `nerdctl` or socket — so the built
+image was never run, and nothing here should be read as having checked it. What
+_was_ checked, on the same `mcr.microsoft.com/playwright:v1.62.1-noble` base the
+image uses, is the half of the brief's question that is answerable from a
+package database: **`curl` cannot be the reason `ca-certificates` is there.**
+`curl` 8.5.0-2ubuntu10.11 does not name it at all, and `libcurl4t64` only
+_recommends_ it, which the `--no-install-recommends` in that same `RUN` declines.
+So it was being inherited from the base image, which is exactly the implicit
+dependency the brief refuses to call a trust store. Rather than infer whether
+the base still ships it, `ca-certificates` is now **named explicitly in the
+runtime stage** — free if it is already there, and no longer something a base
+bump can take away. The container gate in `.github/workflows/downloader.yml` is
+where that gets proven; it did not run here.
+
+### What the brief had wrong
+
+**`-tls_verify 1` cannot go on every remote input. `avformat_open_input` fails
+on an option nothing consumed**, so a plain-`http://` manifest with the flag set
+fetches the playlist, fetches the first segment, and then exits non-zero with
+`Option tls_verify not found`. Measured on both builds. The e2e origin is plain
+HTTP by [dl-14](./dl-14-proxied-https-coverage.md)'s deliberate choice, so the
+"must not touch it" line in `Done when` and the step-2 instruction were in direct
+conflict; the flag is now gated on the input URL's scheme, and
+`ffmpeg-args.test.ts` pins both halves. Nothing is lost by the gate: a manifest
+fetched in the clear can be rewritten in flight by whoever could have substituted
+the segments, so authenticating the segments it names is a lock on a door with no
+wall.
+
+**Turning verification on breaks dl-14's own headline test**, which downloads
+from the self-signed fixture through the proxy. That is the acceptance working as
+intended, but it means the engine needed a way to be _given_ a CA — the ticket
+only contemplated `-ca_file` as the answer to two builds disagreeing. So
+`EngineConfig` gained `tlsCaFile` as well as `tlsVerify`, and the pair of tests
+is now the proof: same origin, same argv, one setting apart.
+
+**`SSRF_ALLOW_PRIVATE_ADDRESSES` is not "treated" any way at boot.** Step 3 says
+to log a warning "the way `SSRF_ALLOW_PRIVATE_ADDRESSES` is treated" — there is
+no such warning anywhere in the API; the flag is read in `config.ts` and passed
+to the guard in silence. `FFMPEG_ALLOW_UNVERIFIED_TLS` now warns in `createApp`,
+and it is the first setting here that does. Whether the SSRF flag should join it
+is a ticket, not a line in this one.
+
+### The error code, and where it lives
+
+**`TLS_VERIFICATION_FAILED` is a new code in `@webtools/core`,** not in the
+downloader's taxonomy. It describes the transport, and the repo's own tell
+applies: reporting a rejected certificate as `UNREACHABLE` means replacing the
+copy — "the site could not be reached" is wrong when the site answered — at the
+raise site, which is how `NOT_FOUND` was found to be missing. A second tool that
+fetches over TLS meets this without ever having heard of a video stream. It is
+**not retryable**, which `UNREACHABLE` is: an identical request gets an identical
+certificate, and retrying spends the budget to learn nothing.
+
+`UNREACHABLE`'s doc comment lost "TLS failure" and gained the distinction. The
+planner picks the code up through its own `[...CORE_ERROR_CODES]` spread and
+maps it nowhere, which its `Partial<Record<…>>` status table allows; the
+downloader maps it to 502 and gives it UI copy and a mock scenario, because its
+`Record<ErrorCode, …>` tables are exhaustive by design.
+
+Detection is by stderr, in `runner.ts`, because **libavformat gives every TLS
+failure the same exit path** — `Input/output error`. The real line, from the
+engine, through the guarded proxy, against the fixture:
+
+```
+[tls @ 0x561921ae4f40] Peer certificate failed verification
+[tls @ 0x561921b38d00] Peer certificate failed verification
+[tls @ 0x561921c74800] Peer certificate failed verification
+[tls @ 0x561921d5d740] Peer certificate failed verification
+[tls @ 0x561921e6bcc0] Peer certificate failed verification
+[in#0 @ 0x561921b2c1c0] Error opening input: Input/output error
+Error opening input file https://allowed.test:44285/master.m3u8.
+Error opening input files: Input/output error
+```
+
+Five times over, once per `-reconnect` attempt. The matcher is two halves — the
+word "certificate" and a verification/trust word — rather than a list of
+sentences, because the sentence belongs to the TLS backend and this repo runs two
+ffmpeg builds on three platforms. Only gnutls's wordings were measured; OpenSSL's,
+SChannel's and SecureTransport's are covered on inspection and named as unmeasured
+in the comment. The negative half of that test matters as much as the positive:
+a 404, a bad manifest and a refused protocol must all stay `DOWNLOAD_FAILED`, and
+there is a live test that a 404'd manifest still is.
+
+### What proves it, and what does not
+
+The certificate test is not one that would also pass with the origin switched
+off. It asserts ffmpeg's own word for the failure, and it is paired with two
+runs against the _same_ origin that succeed — one given the fixture CA, one with
+`tlsVerify: false`. Verification off is tested because it is the documented
+escape hatch, not as a way to get to green: no `NODE_TLS_REJECT_UNAUTHORIZED` was
+set and no `-tls_verify 0` was used as a debugging shortcut anywhere. The proxy
+is untouched and still tunnels; dl-14's assertion that the peer certificate's
+fingerprint is the fixture's own still passes unchanged, which is what says so.
+
+**`npm run e2e:downloader` failed once and then passed three times**, twice with
+this change and once on `origin/main` in between. The failure was a download
+stalled at 0 bytes for the full 120 s, on the first run of the session and
+seconds after a whole-repo `npm test` had finished; it did not reproduce. It is
+recorded here rather than dropped, but the change cannot be its cause: for a
+plain-`http://` input the argv is byte-identical, since the only insertion is
+inside the scheme gate, and every other change in the download path is reached
+only on a non-zero exit.
+
+Windows is the platform this could not check. `ci.yml` runs `npm test` on
+`windows-latest` against `ffmpeg-static`'s win32 build, whose TLS backend was not
+measured — dl-14's `-ca_file` test passes there, which rules out SChannel and
+says little else. The certificate assertion in the new test is on the word rather
+than the sentence for that reason, with `code` as the strict half.

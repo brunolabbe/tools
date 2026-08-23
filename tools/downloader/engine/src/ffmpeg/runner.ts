@@ -70,11 +70,40 @@ function tail(text: string, maxBytes: number): string {
 }
 
 /**
+ * What a rejected certificate looks like on ffmpeg's stderr.
+ *
+ * There is no exit code for it — libavformat turns every TLS failure into
+ * `Input/output error` — so the text is the only signal, and without reading it
+ * a MITM in front of a CDN arrives as `DOWNLOAD_FAILED`, indistinguishable from
+ * a dead link. That is the ambiguity dl-11 wrote up, in the place it matters
+ * most.
+ *
+ * Matched as two halves rather than as a list of sentences, because **the
+ * sentence belongs to whichever TLS backend ffmpeg was built against** and this
+ * repo already runs two ffmpeg builds on three platforms. dl-19 measured what
+ * gnutls says — `Peer certificate failed verification` and `The certificate's
+ * owner does not match hostname <host>`, from both the distribution build and
+ * `ffmpeg-static` — and the second half covers the wordings OpenSSL, SChannel
+ * and SecureTransport use for the same conditions, which were not measured. A
+ * build nobody measured must not fall through to "the download failed".
+ */
+const CERTIFICATE_MENTIONED = /certificate/iu;
+const VERIFICATION_FAILED =
+  /verif|not trusted|untrusted|self[- ]signed|has expired|does not match hostname|unable to get/iu;
+
+/** Exported for tests: does this stderr tail describe a rejected certificate? */
+export function isTlsVerificationFailure(stderr: string): boolean {
+  return CERTIFICATE_MENTIONED.test(stderr) && VERIFICATION_FAILED.test(stderr);
+}
+
+/**
  * Runs ffmpeg to completion.
  *
  * Rejects with `AppError`: `JOB_CANCELED` on abort, `TIMEOUT` past
  * `timeoutMs`, `SIZE_LIMIT_EXCEEDED` past `maxOutputBytes`, `INTERNAL` when the
- * binary is missing, and `failureCode` (default `MUX_FAILED`) on a non-zero exit.
+ * binary is missing, `TLS_VERIFICATION_FAILED` when the stderr tail says a
+ * certificate was rejected, and `failureCode` (default `MUX_FAILED`) on any
+ * other non-zero exit.
  */
 export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
   const logger = options.logger ?? NOOP_LOGGER;
@@ -215,8 +244,9 @@ export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
           resolve({ exitCode: 0, stderrTail, lastSnapshot });
           return;
         }
+        const code = isTlsVerificationFailure(stderrTail) ? "TLS_VERIFICATION_FAILED" : failureCode;
         reject(
-          new AppError(failureCode, undefined, {
+          new AppError(code, undefined, {
             details: {
               exitCode,
               ...(signalName === null ? {} : { signal: signalName }),

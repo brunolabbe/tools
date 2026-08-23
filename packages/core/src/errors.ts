@@ -23,8 +23,29 @@ export const CORE_ERROR_CODES = [
   "INVALID_URL",
   /** Blocked by the SSRF guard: private IP, loopback, link-local, or denied host. */
   "BLOCKED_TARGET",
-  /** DNS failure, connection refused, TLS failure, or non-2xx on the target itself. */
+  /**
+   * DNS failure, connection refused, a TLS handshake that never completed, or a
+   * non-2xx on the target itself.
+   *
+   * A certificate that *did* arrive and failed verification is
+   * `TLS_VERIFICATION_FAILED`, not this: the two want different copy and a
+   * different retry answer.
+   */
   "UNREACHABLE",
+  /**
+   * The target's certificate did not verify — unknown issuer, expired, or a
+   * name that does not match the host asked for.
+   *
+   * Core rather than a tool's own, because it is a property of the transport
+   * and every tool here fetches over TLS. It is deliberately not `UNREACHABLE`:
+   * the host answered, and the difference between "the site is down" and "the
+   * connection to the site is not trustworthy" is the whole point of checking.
+   * The tell the repo's rule names applies too — reporting this as `UNREACHABLE`
+   * means replacing the copy at the raise site, which is how you know the code
+   * is the wrong one. Not retryable: an identical request gets an identical
+   * certificate.
+   */
+  "TLS_VERIFICATION_FAILED",
   /**
    * The request reached us and matched no route.
    *
@@ -71,6 +92,7 @@ export const CORE_ERROR_MESSAGES: Readonly<Record<CoreErrorCode, string>> = {
   INVALID_URL: "That does not look like a valid web address.",
   BLOCKED_TARGET: "That address points somewhere this service is not allowed to reach.",
   UNREACHABLE: "The site could not be reached.",
+  TLS_VERIFICATION_FAILED: "The site's security certificate could not be verified.",
   NOT_FOUND: "That endpoint does not exist.",
   SIZE_LIMIT_EXCEEDED: "The result is larger than the configured size limit.",
   DISK_FULL: "The server has run out of storage.",

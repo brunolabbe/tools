@@ -59,6 +59,13 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
     tone: "transient",
     allowRetry: true,
   },
+  TLS_VERIFICATION_FAILED: {
+    title: "The site's certificate did not check out",
+    detail:
+      "The site answered, but its security certificate could not be verified — it may be expired, issued for another address, or signed by an authority this server does not know. The download was stopped rather than trusting it. Retrying will not change the certificate.",
+    tone: "blocked",
+    allowRetry: false,
+  },
   NO_MEDIA_FOUND: {
     title: "No video found",
     detail:

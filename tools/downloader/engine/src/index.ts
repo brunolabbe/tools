@@ -359,6 +359,8 @@ class Engine implements DownloadEngine {
         liveDurationSec,
         ffmpegPath: this.config.ffmpegPath,
         proxyUrl: this.config.proxyUrl,
+        tlsVerify: this.config.tlsVerify,
+        tlsCaFile: this.config.tlsCaFile,
         signal: request.signal,
         timeoutMs: this.config.stageTimeoutMs,
         maxOutputBytes: this.config.maxFileSizeBytes,
@@ -620,7 +622,7 @@ export { buildTaskkillArgs, killProcessTree } from "./ffmpeg/kill.ts";
 export type { FfmpegProgressSnapshot, JobProgressContext } from "./ffmpeg/progress.ts";
 export { FfmpegProgressParser, RateTracker, toJobProgress } from "./ffmpeg/progress.ts";
 export type { FfmpegRunOptions, FfmpegRunResult } from "./ffmpeg/runner.ts";
-export { runFfmpeg } from "./ffmpeg/runner.ts";
+export { isTlsVerificationFailure, runFfmpeg } from "./ffmpeg/runner.ts";
 
 export type { DashDownloadOptions } from "./download/dash.ts";
 export { downloadDash } from "./download/dash.ts";

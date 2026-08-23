@@ -368,6 +368,13 @@ export const SCENARIOS: readonly Scenario[] = [
     job: { failWith: "TIMEOUT", failAt: "downloading" },
   },
   {
+    keyword: "badcert",
+    title: "Certificate not trusted",
+    description: "The CDN's certificate failed verification mid-download. Not retryable.",
+    probeDelayMs: 1_000,
+    job: { failWith: "TLS_VERIFICATION_FAILED", failAt: "downloading" },
+  },
+  {
     keyword: "muxfail",
     title: "Mux failed",
     description: "ffmpeg exits non-zero while joining the streams.",
