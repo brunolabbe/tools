@@ -592,6 +592,22 @@ function printTicket({ ticket, blockers, missing }) {
     ...blockers.map((blocker) => `${blocker.id} (${blocker.status})`),
     ...missing.map((dependency) => `${dependency} (not a ticket)`),
   ];
+  // `unblocked` and `blocked by` are both statements about work that has not
+  // happened yet, so neither can be the verdict on a ticket that is over: an
+  // agent reads this closing line, takes `unblocked` for "pickable", and builds
+  // a ticket that was deliberately taken out of the queue (repo-3). The closed
+  // branch goes *in front of* the pair rather than in place of them — a closed
+  // ticket can still carry a real blocker or a dangling id, and repo-6 put both
+  // on this line, so they are kept where they can be read as history instead of
+  // as an obstruction. `dropped` also carries its `note`, duplicating the row
+  // above deliberately: the reason it was dropped belongs in the line a reader
+  // acts on, not four rows higher.
+  if (!OPEN.has(ticket.status)) {
+    const why = ticket.status === "dropped" && ticket.note !== null ? ` (${ticket.note})` : "";
+    const stale = holding.length === 0 ? "" : `; depends_on still lists ${holding.join(", ")}`;
+    process.stdout.write(`\n  ${ticket.status} — nothing to pick up${why}${stale}\n\n`);
+    return;
+  }
   process.stdout.write(
     holding.length === 0 ? "\n  unblocked\n\n" : `\n  blocked by  ${holding.join(", ")}\n\n`,
   );

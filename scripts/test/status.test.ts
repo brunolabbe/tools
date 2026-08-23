@@ -370,6 +370,23 @@ test("a real blocker and a dangling id are reported separately, both kept", () =
   expect(missing).toEqual(["pl-99"]);
 });
 
+// repo-3 decided that the closed-ticket verdict belongs to `printTicket` and
+// this function keeps answering the graph question only. The prohibition it came
+// with is what this pins: emptying `blockers` for a closed ticket would satisfy
+// every `--show` assertion in this file while destroying what the function is
+// documented to carry — a `done` ticket that still names an open dependency is a
+// real anomaly, and losing it here loses it for every caller.
+test("a closed ticket still reports the dependencies that never landed", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "in-flight" }),
+    [at("pl-2")]: pl("pl-2", { status: "done", depends_on: "[pl-1, pl-99]" }),
+  });
+  const { ticket: shown, blockers, missing } = describeTicket(readTickets(root), "pl-2");
+  expect(shown.status).toBe("done");
+  expect(blockers.map((b) => [b.id, b.status])).toEqual([["pl-1", "in-flight"]]);
+  expect(missing).toEqual(["pl-99"]);
+});
+
 test("a sound ticket in a repo that has a malformed one is described unchanged", () => {
   const root = repoWithADanglingDependency();
   const { ticket: shown, blockers, missing } = describeTicket(readTickets(root), "pl-3");
@@ -446,11 +463,103 @@ test("--tool with a name no tool has is a named failure, not an empty view", () 
   expect(stderr).toMatch(/no tickets for a tool called "sniffer"/);
 });
 
+/**
+ * The verdict `--show` ends on, which is the line this view exists to give.
+ *
+ * Asserted as the last line rather than with `toContain`, because every case
+ * below is about a word that must *not* be there: `/unblocked|blocked by/` was
+ * what this file had, and both of repo-3's new outputs satisfy it.
+ */
+const closingLine = (stdout: string) => stdout.trimEnd().split("\n").at(-1);
+
+// Against a throwaway tree, not `pl-2`: this ran on the real tickets and
+// asserted `/unblocked|blocked by/`, which is true of a ticket in any state the
+// repo has — including, after repo-3, the two states the assertion was there to
+// distinguish. It was also one frontmatter edit away from meaning nothing, since
+// flipping its subject to `done` would have changed the line it never read.
 test("--show prints a ticket's path and the dependencies still open", () => {
-  const { stdout, status } = run(["--show", "pl-2"]);
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "in-flight" }),
+    [at("pl-2")]: pl("pl-2", { depends_on: "[pl-1]" }),
+  });
+  const { stdout, status } = run(["--show", "pl-2"], root);
   expect(status).toBe(0);
-  expect(stdout).toContain("tools/planner/docs/work/pl-2-container-image.md");
-  expect(stdout).toMatch(/unblocked|blocked by/);
+  expect(stdout).toContain("tools/planner/docs/work/pl-2-slug.md");
+  expect(closingLine(stdout)).toBe("  blocked by  pl-1 (in-flight)");
+});
+
+// repo-3. `unblocked` is the word this view uses for *pickable*, and an agent
+// asking what became of a ticket reads the last line and picks it up — which is
+// the exact outcome dropping a ticket is meant to prevent.
+test("--show on a dropped ticket says it is closed rather than unblocked", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { status: "dropped" }) });
+  const { stdout, status } = run(["--show", "pl-1"], root);
+  expect(status).toBe(0);
+  expect(closingLine(stdout)).toBe("  dropped — nothing to pick up");
+  expect(stdout).not.toContain("unblocked");
+});
+
+// `note` is where the reason a ticket was dropped lives (pl-26's is "Deferred
+// until the existence slice is filed"), so it belongs in the line a reader acts
+// on and not only in the row four lines above it.
+test("--show on a dropped ticket carries its note into the closing line", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "dropped", note: "deferred, not refused" }),
+  });
+  const { stdout } = run(["--show", "pl-1"], root);
+  expect(closingLine(stdout)).toBe("  dropped — nothing to pick up (deferred, not refused)");
+  expect(stdout).not.toContain("unblocked");
+});
+
+// The defect is about *closed*, not about `dropped`: a `done` ticket whose
+// dependencies all landed printed `unblocked` too.
+test("--show on a done ticket says it is closed rather than unblocked", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done" }),
+    [at("pl-2")]: pl("pl-2", { status: "done", depends_on: "[pl-1]" }),
+  });
+  const { stdout, status } = run(["--show", "pl-2"], root);
+  expect(status).toBe(0);
+  expect(closingLine(stdout)).toBe("  done — nothing to pick up");
+  expect(stdout).not.toContain("unblocked");
+});
+
+// The mirror case, and the worse of the two to read: `blocked by` on a ticket
+// that is over says something is holding up work that has already landed. No
+// ticket is in this shape on `main`, so the fix covers it rather than waiting
+// for the first one. The dependency is still named — as history, on the closed
+// line, where it cannot be read as an obstruction.
+test("--show on a closed ticket with an open dependency is not blocked by it", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "ready" }),
+    [at("pl-2")]: pl("pl-2", { status: "done", depends_on: "[pl-1]" }),
+  });
+  const { stdout, status } = run(["--show", "pl-2"], root);
+  expect(status).toBe(0);
+  expect(closingLine(stdout)).toBe(
+    "  done — nothing to pick up; depends_on still lists pl-1 (ready)",
+  );
+  expect(stdout).not.toContain("blocked by");
+  expect(stdout).not.toContain("unblocked");
+});
+
+// The half three green runs cannot prove: the two open branches are untouched.
+// `in-flight` as well as `ready`, because the closed branch keys off `OPEN`,
+// which holds both — a fix written against `status === "ready"` would pass the
+// four cases above and swallow this one.
+test.each([
+  ["ready", "unblocked", "[]"],
+  ["in-flight", "unblocked", "[]"],
+  ["ready", "blocked by  pl-1 (in-flight)", "[pl-1]"],
+  ["in-flight", "blocked by  pl-1 (in-flight)", "[pl-1]"],
+])("--show on a %s ticket still ends in `%s`", (status, closing, depends_on) => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "in-flight" }),
+    [at("pl-2")]: pl("pl-2", { status, depends_on }),
+  });
+  const { stdout } = run(["--show", "pl-2"], root);
+  expect(closingLine(stdout)).toBe(`  ${closing}`);
+  expect(stdout).not.toContain("nothing to pick up");
 });
 
 test("--markdown emits a table, with no generated-region markers to guard", () => {

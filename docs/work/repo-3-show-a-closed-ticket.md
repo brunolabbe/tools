@@ -3,7 +3,7 @@ id: repo-3
 tool: repo
 title: Say that a closed ticket is closed, instead of reporting it unblocked
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -194,4 +194,131 @@ the taxonomy, or any ticket's frontmatter.
 
 ## Log
 
-_Not started._
+### 2026-08-23 — built on `repo-3-show-a-closed-ticket`, base `848af10`
+
+**Reproduced first, on unfixed code**, against the real tickets. `--show pl-1`
+(`dropped`, no dependencies), `--show pl-25` and `--show repo-2` (`done`) each
+printed `status dropped` / `status done` four rows above a closing line reading
+`unblocked`, exit 0. `--show pl-26` — the ticket the defect was found on —
+printed its `note` row saying _Deferred until the existence slice is filed_ and
+then `unblocked` under it. Four for four; the brief's account is exact.
+
+After: `dropped — nothing to pick up`, `done — nothing to pick up`, and for
+pl-26 `dropped — nothing to pick up (Deferred until the existence slice is
+filed — not refused)`. `--show dl-16` (`ready`) and `--show pl-2` (`in-flight`)
+still end in `unblocked`; `--show pl-29` still ends in
+`blocked by  pl-28 (ready)`.
+
+**Build step 2, decided: `describeTicket` is left alone.** It keeps returning
+`{ ticket, blockers, missing }` with `blockers` the real, non-`done` tickets,
+and `printTicket` makes the call. Three reasons, in order of weight. It is a
+function about the _dependency graph_, and "is this ticket closed" is not a fact
+about the graph — a closed ticket has exactly the dependencies it always had,
+which is what its own JSDoc claims to report. A `closed` flag would have exactly
+one consumer (`printTicket`, at `scripts/status.mjs:512`, the only caller in the
+repo), and it would compute `OPEN.has(ticket.status)` at a distance from the
+`ticket` object it hands back anyway — the caller can read the field it is
+already given. And it keeps the mirror case _findable_: a `done` ticket that
+still names an open dependency is a real anomaly in the graph, and the function
+that answers "what is not landed" is where a future `--json` consumer or a lint
+would look for it. The prohibition is respected and now pinned:
+`scripts/test/status.test.ts:379-388` asserts a `done` ticket still reports both
+its open blocker and its dangling id, so emptying `blockers` for a closed ticket
+fails a test instead of quietly passing the two that existed.
+
+**The closed branch goes in front of the pair, and keeps their payload.** repo-6
+warned that replacing the `holding.length === 0` gate would drop
+`repo-404 (not a ticket)`. Preceding it would drop the same thing for a closed
+ticket, one case further in — so the closed line _carries_ the list rather than
+discarding it: `done — nothing to pick up; depends_on still lists repo-404 (not
+a ticket)`. Measured on a throwaway tree: `--show` on a `done` ticket whose only
+dependency is dangling prints exactly that, exit 0, with repo-6's stderr warning
+beside it. That is what keeps
+[docs/01-TICKETS.md](../01-TICKETS.md)'s claim — _`--show` on the offending one
+prints `repo-404 (not a ticket)` where a blocker would be_ — true rather than
+nearly true, and it is why no documentation needed editing for this change.
+
+**`dropped` carries its `note` and `done` does not.** The `note` field is
+documented as "what the status view shows instead of the title", and pl-26 uses
+it as the reason a ticket was deferred; the closing line is the one a reader
+acts on, so the reason belongs there even though the `note` row four lines above
+already prints it. That duplication is the whole argument of this ticket applied
+to one field. A `done` ticket's note is a title substitute rather than a reason,
+so it is left out.
+
+**What the brief had wrong, or left open.**
+
+- **Nothing in it was wrong.** Every `file:line` in the refreshed Build resolved
+  against `848af10` and both quoted blocks were byte-accurate. repo-6's Build
+  step 5 handover was accurate on all three of its claims, checked at the file:
+  `describeTicket` returns `{ ticket, blockers, missing }` (`:317-331`),
+  `printTicket` gated `unblocked` on `holding.length === 0` over both lists
+  (`:591-597` at `848af10`; the pair is `:611-613` now, with the closed branch
+  at `:605-610` in front of it), and `run()` takes `--root` and returns the
+  three fields separately (`scripts/test/status.test.ts:94-105`).
+- **One `Done when` line cannot be met as written.** It asks for "a test per
+  bullet in Build step 3, each failing against `origin/main`'s `printTicket`",
+  but step 3's fourth bullet is the _preservation_ criterion — a `ready` ticket
+  still prints `unblocked` — and a test for behaviour that is unchanged passes
+  against `origin/main` by construction. Three of the four bullets have tests
+  that fail against `848af10` (four tests, measured). The fourth is proven the
+  only way it can be: by mutation. A fix keyed on `ticket.status === "dropped"`
+  kills two of its rows, and one keyed on `!== "ready"` — treating `in-flight`
+  as closed — kills the other two. Both mutations were run; both were red.
+- **The weak end-to-end assertion was worse than the brief says.** `:449-454`
+  asserted `/unblocked|blocked by/` against the **real** `pl-2`, so as well as
+  being satisfied by both new outputs it was one frontmatter edit from asserting
+  nothing at all — flipping pl-2 to `done` changes the line it never looks at.
+  Rewritten onto a `repoWith` tree with `--root`, asserting the closing line
+  exactly. Every new case asserts the _last line_ rather than `toContain`, for
+  the same reason: each of them is about a word that must not be there.
+- **A cross-ticket annotation was wanted and could not be paid for**, which is
+  the one thing this branch leaves undone. `pl-26`'s gate records this defect as
+  a finding — _"not fixed, and out of scope … Being surfaced separately; no
+  ticket filed from here"_ — and the natural close of that loop is an
+  `_Outcome, 2026-08-23:_` line under it, in the pattern repo-6 used on ADR 003.
+  It is not written, because `release-please` attributes a commit to a package
+  **by the paths it touches**, not by its scope: a `fix(repo)` commit carrying
+  one `.md` file under `tools/planner/` would cut the planner a patch release
+  whose only changelog line is about `scripts/status.mjs`. Splitting the branch
+  into two commits does not help — this repo squash-merges, so the pull request
+  title is the one commit that lands and it carries every path in the branch.
+  Measured rather than assumed: the pending planner `0.4.0` lists
+  `fix(core): … (pl-17)` (`2ea0631`, which touched `tools/planner/Dockerfile`),
+  and the pending downloader `0.2.0` is minor-bumped by
+  `feat(planner): run the fan-out as a job (pl-16)` (`a112cd4`, which edited
+  eleven files under `tools/downloader/api/`). Filed as
+  [repo-7](./repo-7-changelogs-are-attributed-by-path.md), including the half of
+  it that is inferred rather than measured — no releasable-type commit on `main`
+  has ever had _only_ documentation under a tool, so that exact case is
+  unproven.
+- **Nothing else states the two-branch rule.** `git grep -n unblocked`
+  unfiltered, plus sweeps for `--show`, `blocked by`, `describeTicket` and
+  `printTicket`. `CLAUDE.md:52` and `:200` and
+  [docs/01-TICKETS.md](../01-TICKETS.md)`:240` describe `--show` as "its fields,
+  its blockers, its path", which is unchanged; `01-TICKETS.md`'s `--ready`
+  description uses the word and `--ready` is not changing;
+  `01-TICKETS.md:88-97`'s dangling-id sentence stays true, verified by running
+  the case rather than by reading it. `pl-26:142` cites
+  `scripts/status.mjs:279` and a `.filter(...)` that repo-6 replaced with a
+  loop — stale, left as written: it is a gate record of what a reviewer saw, and
+  editing a review is a worse defect than a stale line inside one.
+
+**Gates.** `npm run check` exit 0. `npx vitest run scripts` — 2 files, 75 tests
+(66 before). Full `npm test` — 102 files, **1479 tests**, against a baseline I
+measured in this worktree at `848af10` of 102 files / 1470 tests; the 9 new
+tests are all in `scripts/test/status.test.ts`. `npm run format` run for the
+`.md` files touched.
+
+**Mutation-checked, control first.** `npx vitest run scripts` over the
+unmutated tree exits **0**, stated because a control that fails on a clean tree
+makes every mutation look dead. Seven mutations, each applied to a restored
+copy, `touch`ed, run, and reverted; all seven red, and the control re-run at 0
+afterwards: the closed branch removed (4 failed — this is `848af10`'s
+behaviour), the closed line dropping its holding list (1), `dropped` handled but
+`done` left in the old branches (2), `in-flight` treated as closed (2), the
+`note` not carried (1), the closed branch falling through instead of returning
+so `unblocked` prints under it (4), and the dangling ids dropped from `holding`
+— repo-6's regression, still guarded (1). Separately, the new suite against
+`origin/main`'s `scripts/status.mjs`: **4 tests fail**, one per closed-ticket
+case.
