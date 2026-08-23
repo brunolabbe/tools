@@ -120,8 +120,8 @@ is that someone once looked at it.
 
 ## Review
 
-Four gates, every one **CONCERNS**, every finding addressed on this branch
-before it opened.
+Five gates: four **CONCERNS**, then **PASS**. Every finding addressed on this
+branch before the pull request opened.
 
 Recorded here because the reviewer's own worktree is discarded: dl-15's first
 gate existed only in a scrollback and was already unrecoverable when the second
@@ -135,7 +135,7 @@ the branch tip.
 
 | Acceptance line                                                       | Proven by                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Every component in `web/src/components/` rendered at least once       | `ProgressBar` `progress-bar.test.tsx:40` · `JobCard` `job-card.test.tsx:95` · `JobList` `job-card.test.tsx:407` · `VariantTable` `variant-table.test.tsx:56` · `ProbePanel` `probe-panel.test.tsx:86` · `ErrorPanel` `error-panel.test.tsx:60` · `UrlForm` `url-form.test.tsx:52` · `AnalysingPanel` `chrome.test.tsx:52` · `ScenarioHints` `chrome.test.tsx:123` · `ThemeToggle` `chrome.test.tsx:150` · `App` `app.test.tsx:119` |
+| Every component in `web/src/components/` rendered at least once       | `ProgressBar` `progress-bar.test.tsx:40` · `JobCard` `job-card.test.tsx:95` · `JobList` `job-card.test.tsx:411` · `VariantTable` `variant-table.test.tsx:56` · `ProbePanel` `probe-panel.test.tsx:86` · `ErrorPanel` `error-panel.test.tsx:60` · `UrlForm` `url-form.test.tsx:52` · `AnalysingPanel` `chrome.test.tsx:52` · `ScenarioHints` `chrome.test.tsx:123` · `ThemeToggle` `chrome.test.tsx:150` · `App` `app.test.tsx:119` |
 | Step 4 — `ProgressBar`/`JobCard` with `total: null`                   | `progress-bar.test.tsx:40`, `job-card.test.tsx:95`                                                                                                                                                                                                                                                                                                                                                                                 |
 | Step 4 — `JobCard` across the statuses, terminal ones included        | `job-card.test.tsx:170` (active four), `job-card.test.tsx:199` (all three terminal)                                                                                                                                                                                                                                                                                                                                                |
 | Step 4 — the `downloading → probing` back edge (dl-9)                 | `job-card.test.tsx:213`; today's step-list defect pinned separately at `job-card.test.tsx:260`                                                                                                                                                                                                                                                                                                                                     |
@@ -203,7 +203,7 @@ and found accurate.
 
 | #   | Sev  | Finding                                                                                                                                                                                                                                       | Disposition                                                                                                                                                                                   |
 | --- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | med  | Sixth blind assertion: `JobList.tsx`'s `streamState={streamStates[job.id]}` proven by nothing — the fixture said `{ "job-1": "open" }`, and `"open"` is the one value that renders nothing, so `streamState={undefined}` passed all 154 tests | **fixed** — `job-card.test.tsx:379` uses `{ "job-2": "reconnecting" }` and asserts the pill in the second card and absent from the first; `undefined` and an index-keyed lookup each redden 1 |
+| 1   | med  | Sixth blind assertion: `JobList.tsx`'s `streamState={streamStates[job.id]}` proven by nothing — the fixture said `{ "job-1": "open" }`, and `"open"` is the one value that renders nothing, so `streamState={undefined}` passed all 154 tests | **fixed** — `job-card.test.tsx:449` uses `{ "job-2": "reconnecting" }` and asserts the pill in the second card and absent from the first; `undefined` and an index-keyed lookup each redden 1 |
 | 2   | low  | Same shape at `ProbePanel.tsx`'s `cached` badge — only the true branch asserted                                                                                                                                                               | **fixed** — `probe-panel.test.tsx:107`                                                                                                                                                        |
 | 3   | low  | Same shape at `VariantTable.tsx`'s `row.hasVideo && row.fps !== "—"` guard                                                                                                                                                                    | **fixed** — `variant-table.test.tsx:98` and `:109`, both directions                                                                                                                           |
 | 4   | low  | `retryable` and `retryAfterSec` gated on different expressions, so a `RATE_LIMITED` the server marked `retryable: false` still rendered a wait                                                                                                | **fixed** — one `retryable` const now gates both; `error-panel.test.tsx:156` pins the combination                                                                                             |
@@ -224,14 +224,15 @@ not cosmetic:
   smaller reason to keep the test: `—` means "we do not know", which is a
   different claim from "this has no sound". Fixed at `variant-table.test.tsx:121`.
 - `JobCard.tsx`'s `segmentsTotal === null` branch — collapsing it printed the
-  literal string `"null"` at a user. Fixed at `job-card.test.tsx:122`.
+  literal string `"null"` at a user. Fixed at `job-card.test.tsx:145`.
 - `JobCard.tsx`'s `result.durationSec !== null` branch — a trailing ` · —`.
-  Fixed at `job-card.test.tsx:139`.
+  Fixed at `job-card.test.tsx:161`.
 
-That is eight instances of one shape across four gates: **a fixture whose value
-makes a branch unobservable.** Every one was a green suite over an untested
+That is eight instances of one shape across the gates so far: **a fixture whose
+value makes a branch unobservable.** Every one was a green suite over an untested
 seam, and none was found by reading the tests — only by mutating the source and
-watching what stayed green.
+watching what stayed green. (Written at gate 3, when three had run. The running
+count is reconciled in the gate-4 entry below.)
 
 ### Gate 4 — 2026-08-23 — CONCERNS
 
@@ -251,6 +252,22 @@ card is the half doing the work.
 | F   | low  | The dated-figures marking was itself stale at the commit that wrote it                                                                                                                                                                                                                                | **fixed** — it names no live figure now, and says why                                                                                                                                              |
 | G   | low  | The pipeline's `--done`/`--active` classes asserted nowhere positively; both predicates could be `false` with 162 green                                                                                                                                                                               | **fixed** — `job-card.test.tsx:238` pins all five steps for a forward-running job; the mutant reddens 1                                                                                            |
 | —   | info | `ProbePanel.tsx`'s default-variant `useEffect` untested; `App.tsx`'s `url.trim() !== ""` half and its `busy=` wiring survive                                                                                                                                                                          | **recorded, not fixed** — see the survivor paragraph in the Log                                                                                                                                    |
+
+### Gate 5 — 2026-08-23 — PASS
+
+All three gate-4 mediums reproduced independently, plus four further mutations.
+The D correction verified by rendering the mutant a second time
+(`Expected: "none" / Received: "—"`). `stat(label)` confirmed to read a genuinely
+named `<dt>`/`<dd>` pair rather than a positional guess. No source file changed.
+**All 36 citations in this section resolved**, not the six the gate asked for.
+
+| #   | Sev  | Finding                                                                                                                                                                                                                        | Disposition                                                                                                                                                           |
+| --- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | info | Three citations in the gate-3 subsection stale — this round's own `+66` lines moved their targets, landing two of them mid-body in other tests                                                                                 | **fixed** — `:379` → `:445`, `:122` → `:145`, `:139` → `:161`. Not a dating convention: the other gate-3 citations _were_ refreshed, so these three were an oversight |
+| 2   | info | The healthy-stream test's "not passing because the pill row vanished" over-credited its assertion — deleting the whole `pills` block left that test green, since a progressbar proves the card body rendered, not the pill row | **fixed by making it true** — asserts the status label appears twice (pipeline + pill). Deleting the block now reddens 3 where it reddened 2                          |
+| 3   | info | "Eight instances across four gates" (gate 3) and "1, then 4, then 3, then 3" (gate 4) disagree; the per-gate tally is not reconstructible from these tables                                                                    | **reconciled in the Log** — neither number is load-bearing, no third invented, and what survives is stated plainly                                                    |
+
+**PASS.** Every acceptance line proven; nothing outstanding above `info`.
 
 ## Log
 
@@ -604,9 +621,49 @@ and mine was not checked.**
   and `App`'s `busy=` wiring.
 
 The reviewer's own conclusion, plainly: **"none left" is not true, and "none left
-of the kind that reaches a user" is not true either.** Four gates have each found
-more of this shape — 1, then 4, then 3, then 3 — and the rate is not obviously
-falling. What is written down here is where this sweep stopped, not that it
-finished. A record of the boundary is worth more than a claim of completeness,
+of the kind that reaches a user" is not true either.** Every gate so far has found
+more of this shape, and the rate is not obviously falling. What is written down
+here is where this sweep stopped, not that it finished.
+
+**On the running count:** this entry first said "1, then 4, then 3, then 3", and
+the gate-3 entry says "eight". Both are defensible and they disagree, because
+they count different things — whether an audit sweep requested _by_ a gate counts
+as that gate's finding or the next round's work — and the per-gate tally is not
+reconstructible from the gate tables, which record dispositions rather than
+classifications. So neither number is load-bearing and I am not inventing a third.
+What holds regardless: **each of the four gates found more, none found none, and
+the last one still found three.** A record of the boundary is worth more than a claim of completeness,
 because the next person to touch these tests can start from the survivors instead
 of rediscovering them.
+
+### 2026-08-23 — fifth gate: PASS
+
+Three informational notes, two fixed and one reconciled. Two are worth a sentence
+each.
+
+**The rot this ticket is about turned up inside the record that exists to prevent
+it.** Three citations in the gate-3 subsection were true when written and stopped
+being true when this round added 66 lines above their targets — two of them now
+landed mid-body in unrelated tests. Not a dating convention, and I cannot claim it
+was: I refreshed the _other_ gate-3 citations in the same edit and missed these
+three. A `file:line` citation is a fixture in exactly the sense the rest of this
+ticket has been about — correct at the moment of writing, silently wrong
+afterwards, and never noticed by anything that runs. The lesson is small and
+mechanical: **when a round adds tests, re-resolve every citation in the record,
+not the ones it happens to touch.**
+
+**A negative assertion needs something positive beside it.** The healthy-stream
+test said "this is not passing because the pill row vanished" and the progressbar
+assertion beside it did not prove that — deleting the entire `pills` block left
+that test green, because a progress bar proves the card body rendered and nothing
+about the row the pill lives in. The suite still caught the deletion elsewhere, so
+this was over-crediting rather than a hole; the fix was to make the sentence true
+rather than soften it, by asserting the status label appears twice — once in the
+pipeline, once in the pill. Deleting the block now reddens three tests instead of
+two. The general form is worth keeping: **`queryBy…()).toBeNull()` passes just as
+happily when the markup is gone, so it needs a companion that fails in that case.**
+
+The running-count discrepancy is reconciled in the gate-4 entry above rather than
+resolved: the two numbers count different things, the per-gate tally cannot be
+rebuilt from tables that record dispositions rather than classifications, and
+inventing a third number to make them agree would be worth less than saying so.

@@ -380,8 +380,12 @@ test("a healthy stream shows no pill at all", () => {
   for (const healthy of ["idle", "connecting", "open", "closed"] as const) {
     mount(job("downloading"), healthy);
     expect(screen.queryByText("reconnecting…")).toBeNull();
-    // Still rendering — this is not passing because the pill row vanished.
-    expect(screen.getByRole("progressbar")).toBeDefined();
+    // A negative assertion needs something positive beside it, or deleting the
+    // markup it looks at would pass. The status pill lives in the same row as
+    // the stream pill, and its label also appears in the pipeline list — so two
+    // occurrences means both are on screen, and deleting the pills row leaves
+    // one and reddens this.
+    expect(screen.getAllByText("Downloading")).toHaveLength(2);
     cleanup();
   }
 
