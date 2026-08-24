@@ -8,7 +8,8 @@ type Format = "vtt" | "srt" | "ttml" | "unknown";
  * build: a bare extension (`hls.ts`), a `mimeType codecs fileUrl` triple
  * (`dash.ts`), and a bare extension or a whole URL (`ytdlp.ts`). The boundary
  * probes are the point of the table — dl-24 was a row that answered `ttml` for
- * anything whose last two letters were `tt`.
+ * anything whose last two letters were `tt`, and dl-25 was two rows that read
+ * a CDN hostname as a format claim.
  */
 const CASES: ReadonlyArray<readonly [string | undefined, Format, string]> = [
   // Row 1 — vtt.
@@ -23,6 +24,24 @@ const CASES: ReadonlyArray<readonly [string | undefined, Format, string]> = [
   ["swvtt", "unknown", "boundary: a word character before the w is not a wvtt"],
   ["xvtt", "unknown", "boundary: a word character before vtt is not a vtt"],
   ["vttx", "unknown", "boundary: a word character after vtt is not a vtt"],
+  ["text/vtt; charset=utf-8", "vtt", "mime type with a parameter after it"],
+  ['application/mp4; codecs="wvtt"', "vtt", "codecs in a quoted mime parameter"],
+  // dl-25 — row 1 takes the same boundary as row 2. `vtt` is as plausible a CDN
+  // label as `srt`, and it is the more damaging of the two: `vtt` passes the
+  // engine's SUBTITLE_FORMATS_FFMPEG_READS gate, so a wrong answer here is a
+  // wrong download rather than a dropped track.
+  ["application/mp4 https://vtt.cdn.net/sub.mp4", "unknown", "dl-25: vtt is a hostname label"],
+  ["application/mp4 https://cdn.net/vtt/sub.mp4", "unknown", "dl-25: vtt is a path segment"],
+  [
+    "video/mp4 https://webvtt-edge.example.com/s/sub.mp4",
+    "unknown",
+    "dl-25: webvtt prefixes a host",
+  ],
+  [
+    "https://www.youtube.com/api/timedtext?lang=en&fmt=vtt",
+    "vtt",
+    "dl-25: the boundary must not cost the query-string claim ytdlp.ts relies on",
+  ],
 
   // Row 2 — srt.
   ["srt", "srt", "bare extension, the shape hls.ts passes"],
@@ -57,15 +76,30 @@ const CASES: ReadonlyArray<readonly [string | undefined, Format, string]> = [
   ["ttx", "unknown", "boundary: tt has to end the hint"],
   ["xtt", "unknown", "boundary: a word character before a trailing tt is not a .tt"],
 
-  // Rows 1 and 3 still read a hostname as a format claim — the defect dl-25
-  // fixed in row 2. These four pin the wrong answers rather than the right
-  // ones, so that dl-28 has a failing target to flip; row 2's boundary cannot
-  // be reused here, because `stpp.ttml.im1t` above needs the dots row 2 now
-  // rejects. Do not "fix" these expectations without fixing the code.
+  // Row 3 still reads a hostname as a format claim — the defect dl-25 fixed in
+  // rows 1 and 2. These three pin the wrong answers rather than the right ones,
+  // so that dl-28 has a failing target to flip. Row 3 cannot borrow dl-25's
+  // boundary: `stpp.ttml.im1t` above is a real codecs string and needs the dots
+  // that boundary rejects. Do not "fix" these expectations without fixing the
+  // code.
   ["application/mp4 https://stpp.cdn.net/sub.mp4", "ttml", "dl-28, wrong: should be unknown"],
   ["application/mp4 https://cdn.net/ttml/sub.mp4", "ttml", "dl-28, wrong: should be unknown"],
-  ["application/mp4 https://vtt.cdn.net/sub.mp4", "vtt", "dl-28, wrong: should be unknown"],
   ["application/mp4 https://cdn.net/dfxp/sub.mp4", "ttml", "dl-28, wrong: should be unknown"],
+
+  // dl-25 bought its hostname boundary at a price, and this is the price. The
+  // lookahead `(?![\w./-])` rejects a real extension followed by `/`, `.`, `-`
+  // or a word character, so these three genuine tracks are now `unknown`. It
+  // only bites a hint with no mime type and no codec: prefix any of them with
+  // `text/srt` or `application/x-subrip` and they answer `srt` again, which is
+  // why dash.ts and hls.ts cannot reach it and only ytdlp.ts can. Pinned so
+  // that re-widening the boundary is a decision and not an accident.
+  ["https://cdn.example.com/s/sub.srt/download", "unknown", "dl-25 cost: extension not last"],
+  ["https://cdn.example.com/s/sub.srt.gz", "unknown", "dl-25 cost: a suffix after the extension"],
+  [
+    "text/srt https://cdn.example.com/s/sub.srt/download",
+    "srt",
+    "dl-25 cost is recovered by any mime type in front",
+  ],
 
   // No row.
   ["", "unknown", "empty hint"],

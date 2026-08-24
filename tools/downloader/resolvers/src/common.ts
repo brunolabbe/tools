@@ -226,25 +226,41 @@ export function compareVariantQuality(
  * before dl-24. Dropping a `(^|\W)` is the change that is never safe, and that
  * is what dl-24 was.
  *
- * The order is still load-bearing, but since dl-25 for a narrower reason. The
- * `srt` row used to match its token anywhere, so a URL could carry one without
- * claiming a format and `https://srt.cdn.net/sub.wvtt` matched rows 1 and 2
- * both. Its `(\W|$)` now says the token has to _end_ a claim rather than
- * continue into a hostname label or a path segment, so `srt.cdn.net`,
- * `/srt/` and `srt-edge` no longer match while `sub.srt`, `sub.srt?token=…`,
- * `text/srt` and a bare `srt` still do. What is left overlapping is the
+ * Rows 1 and 2 used to match their tokens anywhere, so a URL could carry one
+ * without claiming a format: `https://srt.cdn.net/sub.mp4` answered `srt` and
+ * `https://vtt.cdn.net/sub.mp4` answered `vtt`, and both of those formats are
+ * inside the engine's `SUBTITLE_FORMATS_FFMPEG_READS`, so the wrong answer was
+ * a wrong *download*. Their `(?![\w./-])` — dl-25, and the boundary to copy
+ * if you need another — says the token has to _end_ a claim rather than run
+ * on into a hostname label or a non-terminal path segment. So `srt.cdn.net`,
+ * `/srt/` and `srt-edge` no longer match, while `sub.srt`, `sub.srt?token=…`,
+ * `text/srt`, `text/vtt; charset=utf-8`, `codecs="wvtt"` and a bare `srt`
+ * still do.
+ *
+ * **It is a trade, and here is the side that was paid.** The lookahead admits
+ * every character except `[A-Za-z0-9_]`, `.`, `/` and `-`, so a real track
+ * whose extension is followed by one of those is now `unknown`:
+ * `.../sub.srt/download`, `sub.srt.gz`, `sub.srt-v2`. That is only reachable
+ * from a hint carrying no mime type and no codec — all three answer `srt`
+ * again the moment anything precedes the URL — so `dash.ts:338` (always
+ * prefixes mime and codecs) and `hls.ts:278` (bare extension) cannot hit it,
+ * and only `ytdlp.ts:256` can, and only when yt-dlp omits `ext`. Pinned in the
+ * table so re-widening the boundary is a decision rather than an accident.
+ *
+ * The order is still load-bearing, for what is left overlapping: the
  * alternatives that are unanchored on purpose — `subrip` in row 2, and the
  * whole of row 3 — so `https://cdn.net/subrip/sub.vtt` still matches rows 1
- * and 2 both and answers `vtt` only because `vtt` is scanned first. Reorder
- * with that in mind.
+ * and 2 both and answers `vtt` only because `vtt` is scanned first, and
+ * `application/x-subrip https://cdn.net/s/sub.ttml` answers `srt` only because
+ * row 2 precedes row 3. Reorder with that in mind; neither of those two is
+ * pinned by a test.
  *
- * Row 3 cannot take row 2's boundary and so keeps the hostname defect dl-25
- * fixed in row 2; that is dl-28, along with row 1, which is exposed the same
- * way (`https://vtt.cdn.net/sub.mp4` answers `vtt`). A token boundary cannot
- * settle row 3 either way, because `stpp.ttml.im1t` is a real `codecs=` string
- * whose dots separate a claim and `stpp.cdn.net` is a hostname whose dots do
- * not — telling those apart needs the caller to stop putting a whole URL in
- * the hint, not a tighter regex.
+ * Row 3 is the one row that cannot take dl-25's boundary, so it keeps the
+ * hostname defect — that is dl-28. A token boundary cannot settle it either
+ * way, because `stpp.ttml.im1t` is a real `codecs=` string whose dots separate
+ * a claim and `stpp.cdn.net` is a hostname whose dots do not; telling those
+ * apart needs the caller to stop putting a whole URL in the hint, not a
+ * tighter regex.
  *
  * `wvtt` and `stpp` are the ISO-BMFF sample-entry codes for WebVTT and TTML in
  * fragmented mp4 — what a DASH `codecs=` carries when the mime type is only
@@ -254,7 +270,7 @@ export function compareVariantQuality(
  * `wvtt`.
  */
 const SUBTITLE_FORMATS: ReadonlyArray<readonly [RegExp, "vtt" | "srt" | "ttml"]> = [
-  [/(^|\W)(web|w)?vtt(\W|$)/i, "vtt"],
+  [/(^|\W)(web|w)?vtt(?![\w./-])/i, "vtt"],
   [/(^|\W)srt(?![\w./-])|subrip/i, "srt"],
   [/ttml|dfxp|stpp/i, "ttml"],
   [/(^|\W)tt$/i, "ttml"],
