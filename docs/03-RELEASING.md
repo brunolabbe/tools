@@ -156,13 +156,39 @@ retyped `docs(planner): …`, on a second scratch branch of the same shape, give
 Would open 0 pull requests
 ```
 
-So **a cross-tool documentation annotation rides in a pull request titled
-`docs(<tool>): …`**, naming the tool whose ticket is being annotated. The test is
-the one release-please applies, not a list to memorise: **is the title's type
-`hidden` in `changelog-sections`?** Where it is — most `docs(repo): …` work — the
-annotation is free and goes in that same pull request. Where it is not, which
-today means `feat`, `fix`, `perf` and `revert`, the annotation is its own pull
-request, and that second pull request is the price.
+**And the scope really is not consulted, measured rather than composed.** The
+same single-file commit again on 2026-08-24, typed `docs` but scoped `repo` —
+the shape this page's own repo-7 pull request landed — gives the identical skip:
+
+```
+❯ Backfilling file list for commit: 58b2764e4d800790874e1c47523a68034f4720f0
+❯ Found 1 files
+✔ Considering: 1 commits
+✔ No user facing commits found since ece6ec0fc6410c3d19a92c120860f0982e3a396c - skipping
+Would open 0 pull requests
+```
+
+Three runs, then: a releasing type releases whatever tool the path names
+(`fix(repo)` → planner `0.4.1`), and a `hidden` type releases nothing whether the
+scope names that tool (`docs(planner)`) or not (`docs(repo)`).
+
+So **a cross-tool documentation annotation rides in a pull request whose title
+carries a `hidden` type**. That is the whole constraint, and it is the test
+release-please applies rather than a list to memorise: **is the title's type
+`hidden` in `changelog-sections`?** Where it is — any `docs`, `refactor`, `test`,
+`build`, `ci` or `chore` title — the annotation is free and goes in that same
+pull request. Where it is not, which today means `feat`, `fix`, `perf` and
+`revert`, the annotation is its own pull request, and that second pull request is
+the price.
+
+**The scope is the usual convention, not part of the constraint.** Name what the
+pull request is about: `docs(planner): …` when annotating a planner ticket is
+what the pull request is _for_, and the branch's own scope when the annotation
+rides along inside a wider change. This page's own history is the worked example
+— repo-7 carried the `pl-26` annotation under `docs(repo): …`, and measurement C
+above is that exact shape releasing nothing. Writing the rule as "titled
+`docs(<tool>): …`" was over-specified in both halves, and repo-9's brief inherited
+the error.
 
 **"Two commits" above means two pull requests.** Splitting a branch into two
 literal commits does not help, and the sentences under **What routes a commit to
@@ -170,7 +196,8 @@ a tool** are not telling you to: this repo squash-merges, so the title is the on
 and it carries every path in the branch. Only a second pull request separates the
 paths.
 
-Only `fix` and `docs` were run. `release-please-config.json` hides six types,
+Only two types were ever run — `fix` and `docs`, across three runs.
+`release-please-config.json` hides six types,
 so the other **five** — `refactor`, `test`, `build`, `ci`, `chore` — are read off
 the config and assumed to behave like `docs`, not measured.
 

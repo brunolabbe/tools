@@ -145,6 +145,17 @@ Findings, all four, with what happened to each:
   is not pickable at all. **Pre-existing**: `--show pl-1` does the same thing on
   `origin/main`, untouched by this branch. Being surfaced separately; no ticket
   filed from here.
+
+  _Outcome, 2026-08-24: filed as
+  [repo-3](../../../../docs/work/repo-3-show-a-closed-ticket.md) and fixed
+  there, in `3145934`._ `printTicket` branches on the ticket's own status before
+  it branches on blockers, so `--show pl-26` now ends
+  `dropped — nothing to pick up (Deferred until the existence slice is filed — not refused)`
+  — the `note` this same gate asked for, carried by the closing line rather than
+  contradicted by it. "No ticket filed from here" was true when it was written:
+  repo-3 was filed from the branch that read this section, which is the loop
+  closing rather than an inconsistency.
+
 - **`tools/planner/agent/src/grounding.ts:48` promises pl-26 forward**
   (informational) — **no change.** The id leads to the file and the file answers
   the question, which is what a forward reference is for. The `note` above also

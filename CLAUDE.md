@@ -234,13 +234,15 @@ single `.md` file releases that tool anyway, with your repo-scoped sentence as
 its changelog line. Measured: one such commit touching only
 `tools/planner/docs/work/pl-26-…md` cuts planner `0.4.1`. The way out is the
 type, not the scope: `docs` is `hidden` in `release-please-config.json`, and the
-same commit as `docs(planner): …` releases nothing. **So an annotation onto
-another tool's ticket rides in a pull request titled `docs(<tool>): …`**, its own
-pull request whenever the branch's own title carries a type that is **not**
-`hidden` in `changelog-sections` — today `feat`, `fix`, `perf` and `revert`. Read
-the test off the config rather than off this sentence; a type added there
-without `hidden` is releasing the day it is added. The worked examples, both measurements and the
-commands that produced them are in
+same commit as `docs(planner): …` releases nothing, and so does `docs(repo): …`
+carrying the same path. **So an annotation onto another tool's ticket rides in a
+pull request whose title carries a `hidden` type** — its own pull request
+whenever the branch's own title carries a type that is **not** `hidden` in
+`changelog-sections`, today `feat`, `fix`, `perf` and `revert`. The type is the
+constraint; the scope is the usual convention and names whatever the pull request
+is about. Read the test off the config rather than off this sentence; a type
+added there without `hidden` is releasing the day it is added. The worked
+examples, all three measurements and the commands that produced them are in
 [docs/03-RELEASING.md](./docs/03-RELEASING.md).
 
 ## Style

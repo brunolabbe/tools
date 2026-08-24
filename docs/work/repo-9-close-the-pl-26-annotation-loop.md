@@ -3,7 +3,7 @@ id: repo-9
 tool: repo
 title: Write the pl-26 outcome annotation repo-3 could not pay for
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: [repo-7]
 ---
@@ -54,5 +54,51 @@ repo-7's brief did not ask for it and its own commit was scoped to the rule.
 
 ## Log
 
-_Not started. Filed from [repo-7](./repo-7-changelogs-are-attributed-by-path.md)
-on 2026-08-23, which unblocked it._
+### 2026-08-24 — folded into repo-7's own pull request, and its Build step 2 was wrong
+
+**Done, and not as a separate batch item.** The annotation is one line under one
+finding; the brief around it was fifty-eight. A ticket whose entire deliverable
+is a line does not earn a dispatch of its own, and this one was filed only
+because repo-7's brief said not to widen — the note explaining that choice is
+what made the cost visible. It was written on repo-7's branch instead, in the
+pull request that documents the rule making it affordable, which is also the
+only place a reader will be looking for it.
+
+**What landed.** An `_Outcome, 2026-08-24:_` line under the `--show`-prints-
+`unblocked` finding in `tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md`,
+naming [repo-3](./repo-3-show-a-closed-ticket.md) and the commit that fixed it,
+`3145934`. It quotes what `--show pl-26` prints today, taken from a run rather
+than from repo-3's brief:
+
+```
+dropped — nothing to pick up (Deferred until the existence slice is filed — not refused)
+```
+
+Append-only, as Build step 3 required: `git diff --stat` on that file reports 10
+insertions and 0 deletions, and the frontmatter and brief are untouched.
+
+**Build step 2 was over-specified, and it was inherited rather than invented
+here.** It said the pull request title "**must be `docs(planner): …`**". The
+measurement says otherwise: what release-please tests is whether the title's type
+is `hidden` in `changelog-sections`, and the scope is not consulted at all. This
+annotation landed under `docs(repo): …` and released nothing — measured, not
+assumed, on a scratch branch carrying exactly this commit shape:
+
+```
+❯ Backfilling file list for commit: 58b2764e4d800790874e1c47523a68034f4720f0
+❯ Found 1 files
+✔ Considering: 1 commits
+✔ No user facing commits found since ece6ec0fc6410c3d19a92c120860f0982e3a396c - skipping
+Would open 0 pull requests
+```
+
+The error came from repo-7's own wording — `03-RELEASING.md` said the annotation
+"rides in a pull request titled `docs(<tool>): …`", which fixes both the type and
+the scope where only the type is load-bearing. Both documents are corrected on
+the same branch, and this ticket's Build is left as written: a brief records what
+was believed when the work was dispatched, and the Log is where it is corrected.
+
+**Kept rather than deleted.** The Why records why the annotation became
+affordable and what unblocked it, which the one-line diff does not carry. Three
+gate records on repo-7's branch also verify this file's frontmatter, its id and
+its `depends_on`; deleting it would dangle all of that.
