@@ -107,9 +107,9 @@ re-derive them:
   attribution.)
 - **`2ea0631` — `fix(core): make the image scan fail by name … (pl-17)`** is in
   planner `0.4.0` under `### Fixes` _and_ in
-  downloader `0.2.0` under `### Fixes`. It touched both `Dockerfile`s and three
-  of the planner's documents, so it is in both tools' notes under a `core` scope
-  that names neither of them.
+  downloader `0.2.0` under `### Fixes`. It touched both `Dockerfile`s and five
+  of the planner's documents — three of them tickets — so it is in both tools'
+  notes under a `core` scope that names neither of them.
 
 In both, the scope in the subject — the thing this repo enforces on every commit
 — had no part in the routing.
@@ -117,8 +117,11 @@ In both, the scope in the subject — the thing this repo enforces on every comm
 ### Annotating another tool's ticket, without releasing it
 
 This repo asks that a finding about a sibling ticket be written onto that ticket,
-in the same pull request as the fix, and
-[01-TICKETS.md](./01-TICKETS.md) makes the review gate work the same way. Under
+in the same pull request as the fix. That convention is practised rather than
+written down — repo-6 did it for repo-3, in the `_Outcome, <date>:_` pattern
+[adr/003](./adr/003-the-status-page-is-generated.md) carries — while
+[01-TICKETS.md](./01-TICKETS.md) writes down only the review gate, which works the
+same way. Under
 the rule above, doing that from a branch titled `fix(repo): …` **releases the
 other tool**: one `.md` file under `tools/<name>/` is enough, and the changelog
 line it cuts is your repo-scoped sentence.
@@ -154,17 +157,30 @@ Would open 0 pull requests
 ```
 
 So **a cross-tool documentation annotation rides in a pull request titled
-`docs(<tool>): …`**, naming the tool whose ticket is being annotated. Where the
-branch's own title is already a hidden type — most `docs(repo): …` work — the
-annotation is free and goes in that same pull request. Where the branch's title
-is a `feat` or a `fix`, the annotation is its own pull request, and that second
-pull request is the price. Splitting the branch into two _commits_ does not help:
-this repo squash-merges, so the title is the one commit that lands and it carries
-every path in the branch.
+`docs(<tool>): …`**, naming the tool whose ticket is being annotated. The test is
+the one release-please applies, not a list to memorise: **is the title's type
+`hidden` in `changelog-sections`?** Where it is — most `docs(repo): …` work — the
+annotation is free and goes in that same pull request. Where it is not, which
+today means `feat`, `fix`, `perf` and `revert`, the annotation is its own pull
+request, and that second pull request is the price.
 
-Only `fix` and `docs` were run. The other four hidden types are read off
-`release-please-config.json` and are not measured; `perf` and `revert` are not
-`hidden`, so the "no user facing commits" skip above does not cover them.
+**"Two commits" above means two pull requests.** Splitting a branch into two
+literal commits does not help, and the sentence at the top of this section is not
+telling you to: this repo squash-merges, so the title is the one commit that lands
+and it carries every path in the branch. Only a second pull request separates the
+paths.
+
+Only `fix` and `docs` were run. `release-please-config.json` hides six types,
+so the other **five** — `refactor`, `test`, `build`, `ci`, `chore` — are read off
+the config and assumed to behave like `docs`, not measured.
+
+`perf` and `revert` are not `hidden`, so the "no user facing commits" skip above
+is the one thing that can be said about them: it does not apply, and they reach
+whatever release-please does next. What that is was not run. **This does not
+contradict "a `perf:` commit on its own therefore releases nothing" further up** —
+that sentence is about the version bump, this one is about the skip, and the case
+where the two meet is untested. It is filed as
+[repo-10](./work/repo-10-measure-the-unmeasured-types.md).
 
 ### The one case that needs a footer
 
