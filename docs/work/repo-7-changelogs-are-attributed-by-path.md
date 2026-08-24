@@ -209,7 +209,7 @@ defect runs the other way — see F2.
 #### F1 — med. `2ea0631`'s file count is wrong in a landed document, in the passage claiming to have re-derived it
 
 `docs/03-RELEASING.md:110-111` — "both `Dockerfile`s and **three** of the
-planner's documents"; `docs/work/repo-7-...md:573-575` — "**three** files,
+planner's documents"; `docs/work/repo-7-...md:781-783` — "**three** files,
 **two** of them tickets".
 
 Actual `git show --name-only 2ea0631`, planner documents:
@@ -220,7 +220,7 @@ Actual `git show --name-only 2ea0631`, planner documents:
 tickets. Both numbers wrong, in both places.
 
 _Failure scenario:_ `03-RELEASING.md` exists so "the next reader does not have to
-re-derive them" (`:93-94`); a reader who checks gets 5 against a published 3 and
+re-derive them" (`:94-95`); a reader who checks gets 5 against a published 3 and
 must re-derive both examples — the cost the section was written to remove. The
 conclusion is unaffected (the two `Dockerfile`s alone put the commit in both
 changelogs), so this is a citation defect, not a rule defect.
@@ -236,7 +236,7 @@ sibling annotation reads `CLAUDE.md:238-240`, sees its type is neither `feat` no
 Exactly the outcome repo-7 exists to prevent.
 
 Severity is held down by `03-RELEASING.md:173-183` disclosing the gap, by
-`CLAUDE.md:242-244` linking there, and by there being **zero** `perf`/`revert`
+`CLAUDE.md:243-244` linking there, and by there being **zero** `perf`/`revert`
 commits in all 166 commits of history. It is raised by a **tension inside one
 document**: `03-RELEASING.md:68-70` states "a `perf:` commit on its own therefore
 releases nothing", while `:177-183` states the "no user facing commits" skip does
@@ -244,7 +244,7 @@ not cover `perf`. Both cannot be comfortably true, and `:163-165` picks a side
 implicitly. `CLAUDE.md` carries the enumeration with **no caveat at all**, and it
 is the document an agent reads by default.
 
-#### F3 — minor. "all four workflows" (ticket Log `:527-532`)
+#### F3 — minor. "all four workflows" (ticket Log `:735-740`)
 
 There are seven, at the tip and at the base. The safety conclusion is correct —
 all seven were audited here — but an agent repeating the measurement would check
@@ -261,7 +261,7 @@ anywhere. The **conclusion is right** for the cleaner reason the branch also
 gives (documentation with no behaviour, so `docs` is the honest type); only the
 supporting sentence is wrong.
 
-#### F5 — no change needed. "heads that release's `### Features`" (`03-RELEASING.md:97-98`)
+#### F5 — no change needed. "heads that release's `### Features`" (`03-RELEASING.md:97-99`)
 
 In `tools/downloader/CHANGELOG.md` the first Features line is the `09bd161`
 duplicate (line 8); `a112cd4` is line 9. Same text, and the branch flags the
@@ -315,7 +315,7 @@ from the repository. Every citation was resolved **after** `npm run check` and
 
 #### 1 — med. The rewritten worked example replaces a stale claim with a false one: "three of the planner's documents" is **five**
 
-`docs/03-RELEASING.md:110-111`; `docs/work/repo-7-...md:573-578` ("it is three
+`docs/03-RELEASING.md:110-111`; `docs/work/repo-7-...md:781-786` ("it is three
 files, two of them tickets").
 
 Ground truth for `2ea0631` under `tools/planner/docs/`:
@@ -348,7 +348,7 @@ what this ticket was for.
 `docs/03-RELEASING.md:173-174`. `release-please-config.json:30-35` declares six hidden
 types — `refactor`, `docs`, `test`, `build`, `ci`, `chore` — and
 `03-RELEASING.md:149-150` correctly lists all six. `docs` was measured, leaving
-**five** unmeasured. The ticket Log gets this right by enumeration (`:623-625`
+**five** unmeasured. The ticket Log gets this right by enumeration (`:832-834`
 lists five), so the published summary contradicts its own source.
 
 _Failure scenario:_ this is the sentence whose entire job is to bound what the
@@ -434,7 +434,7 @@ as a dangling citation and "fixes" it.
   `../03-RELEASING.md#annotating-another-tools-ticket-without-releasing-it`;
   heading at `03-RELEASING.md:117` slugs to exactly that.
 - **The pl-26 quotation is accurate**, ellipsis included, against
-  `tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md:140-146`.
+  `tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md:140-147`.
 - **The `_Outcome, <date>:_` pattern repo-9 tells the next agent to copy exists**
   at `docs/adr/003-the-status-page-is-generated.md:147,180,194`, applied by repo-6.
 - **Config claims check out**: `docs` hidden (`:31`); six hidden types (`:30-35`);
@@ -484,6 +484,214 @@ as a dangling citation and "fixes" it.
 - Absence of sibling PRs rests on `gh pr list` returning `[]` plus `git branch -r`;
   "none open" could not be distinguished from a token restriction, though the two
   corroborate.
+
+## Gate 2 (narrow — the correction pass) — `repo-7-changelog-attribution` @ `7a07a5a` — **PASS**
+
+Scope: only what the second pass introduced. This gate did **not** re-run the
+release-please dry run, re-audit the `on:` blocks beyond counting, re-sweep for
+attribution statements, re-verify `a112cd4`, or re-check the changelog-shape
+claims — gates 1A and 1B settled those.
+
+_Citations in this record were gathered at `7a07a5a` and re-resolved as the last
+action before staging, against the commit that carries this record — the commit
+that applies the corrections it asked for. The verdict, the findings and their
+wording are the gate's own and are unedited; only line numbers moved._
+
+### The six corrections — each verified by command, not by reading the Log
+
+| #   | Claim                                                           | Result                                                                                                                                                                                                                                                                                                      |
+| --- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `2ea0631` touched **five** planner documents, **three** tickets | verified. `git show --name-only --format="" 2ea0631 \| grep '^tools/planner/docs/'` -> 5 (`02-ROADMAP.md`, `03-STATUS.md`, `pl-17`, `pl-21`, `pl-5`); `\| grep -c '/work/'` -> 3. `03-RELEASING.md:110-111` correct.                                                                                        |
+| 2   | **Five** unmeasured hidden types                                | verified. `release-please-config.json:30-35` hides six; `docs` (`:31`) measured; the five named at `:174` are exactly the remainder.                                                                                                                                                                        |
+| 3   | "two commits" disambiguated as "two **pull requests**"          | verified at `CLAUDE.md:226-228` and `03-RELEASING.md:167-171`. Read in order, 1B's failure scenario is closed at the point of failure. Two residuals: F3, F4.                                                                                                                                               |
+| 4   | **Seven** workflows, five with `push:`, all `branches: [main]`  | verified. 7 files; `grep -l "push:"` -> `ci`, `downloader`, `planner`, `release`, `security`, each `branches: [main]`; `pr-title.yml` and `cache-cleanup.yml` are `pull_request` only.                                                                                                                      |
+| 5   | `docs(repo)` justification no longer self-contradicts           | verified at `:815-819` — one consistent claim, and true (no changed file is under `tools/`). But see **F1**.                                                                                                                                                                                                |
+| 6   | The `01-TICKETS.md` pointer is backed                           | verified. `adr/003:147,180,194` carry `_Outcome, <date>:_`; repo-6's PR #82 (`8dc9cd4`) wrote a finding onto `docs/work/repo-3-...md` in the same PR as its fix; `01-TICKETS.md:107,163-169` writes down the review gate. `CLAUDE.md`'s "the review gate asks for" clause is gone. See **F5** for one weld. |
+
+**No correction is wrong.** Every published figure the second pass touched
+re-derives.
+
+### The reframing — assessed, not rubber-stamped
+
+**Is the mechanism claim right?** Yes against shipped behaviour, but it is an
+inference stated as measurement. The skip line
+`No user facing commits found since ... - skipping` fires when the generated
+release-notes body comes out empty, and `hidden: true` on a `changelog-sections`
+entry is what empties it — so "the test is `hidden`, not the type name" is
+correct. But only two types were ever run, `fix` (not hidden -> released) and
+`docs` (hidden -> skipped), and **both data points are equally consistent with a
+hardcoded releasing-type list**. The Log says "the measurement says the
+enumeration is the defect"; strictly the measurement is _consistent with_ that
+and does not distinguish it. The shipped text is more careful than the Log —
+`03-RELEASING.md:160-165` poses it as a question rather than a derivation.
+
+**Does the inference matter?** No, because it errs safe. If the hidden-flag
+hypothesis were wrong the new rule over-warns (an agent on a `perf` branch opens
+a second PR it did not need); the enumeration it replaced under-warned, which is
+the actual hazard.
+
+**Does it close gate 1A's scenario?** Yes. `CLAUDE.md:239-240` and
+`03-RELEASING.md:163-164` both name `perf` and `revert`.
+
+**Stays true if a type is added?** `03-RELEASING.md`'s form does. `CLAUDE.md`'s
+compressed trailing clause does not — F3.
+
+**Is the bump/skip split fair, or papering over?** Fair. The branch does not
+assert the pre-existing sentence is true; it labels which of the two each
+sentence is about, says the meeting case is untested, and files `repo-10` with a
+`Done when` that forces reconciliation. **One thing for repo-10 to be alert to:**
+`03-RELEASING.md:67-68`'s "Only `feat`, `fix` and a breaking change move a
+version — that is release-please's rule" may itself be false, since
+release-please's default versioning strategy may fall through to a patch bump for
+any non-empty, non-breaking, non-`feat` commit set. **Not measured here and not
+asserted** — flagged because repo-10 may find both sentences wrong rather than
+merely unreconciled, and its brief currently anticipates only the latter.
+
+### Findings, most severe first
+
+#### F1 — low. The `docs(repo)` justification names four files; the branch touches five
+
+`docs/work/repo-7-changelogs-are-attributed-by-path.md:810-813` lists
+`CLAUDE.md`, `docs/03-RELEASING.md`, `repo-7` and `repo-9`.
+`git diff --name-only origin/main...HEAD` -> **5**;
+`docs/work/repo-10-measure-the-unmeasured-types.md` is missing. `:919` in the
+same document says five, so the file contradicts itself.
+
+**This is the one genuine instance of the species this gate exists for:** the
+second pass added the fifth file and rewrote this exact paragraph without
+updating its own count, on a branch whose stated lesson is "every figure below is
+the output of a command written down beside it" (`:859-860`). The conclusion is
+untouched — `repo-10` is under `docs/work/` too, so "nothing under `tools/`"
+still holds and `docs(repo)` remains the right type.
+
+_Failure scenario:_ a reader checking the type justification lists the diff, gets
+five against a published four, and has to re-derive whether the fifth file is
+under `tools/` — the cost the enumeration exists to remove.
+
+#### F2 — low. Three citations are one line short at a range boundary
+
+Each identifies the correct passage; in each the quoted string runs one line past
+the cited range.
+
+- `:223` cites `03-RELEASING.md:93-94` for "the next reader does not have to
+  re-derive them" — line 93 is blank, the phrase is at **94-95**.
+- `:264` cites `03-RELEASING.md:97-98` for "heads that release's `### Features`" —
+  `` `### Features` `` is on **99**. The sibling citation at `:467` gets this
+  right with `97-99`.
+- `:437` cites `pl-26:140-146` for a quote ending "no ticket filed from here" —
+  `filed from here.` is on **147**.
+
+_Failure scenario:_ a reader resolving the F1 failure-scenario citation opens
+`03-RELEASING.md:93`, finds a blank line, and widens the window by hand.
+
+#### F3 — low. `CLAUDE.md:241-242` overstates what adding a type to the config does
+
+"Read the test off the config rather than off this sentence; **a type added there
+is releasing the day it is added**." The natural referent of "there" is
+`changelog-sections`, and a type added there _with_ `hidden: true` is not
+releasing. `03-RELEASING.md:160-165` states the same idea precisely.
+
+_Failure scenario:_ someone adds
+`{ "type": "style", "section": "Style", "hidden": true }`, reads this clause, and
+splits a `style(...)` branch into two pull requests it never needed. Errs safe.
+
+#### F4 — low. The disambiguation points at the wrong section, and `:92`/`:104` are still bare
+
+`03-RELEASING.md:167-169` says "the sentence at the top of **this** section is not
+telling you to". The "two commits" sentences are at `:92` and `:104`, in
+`### What routes a commit to a tool` (`:86-115`) — the _previous_ section. A
+stranger looking at the top of `### Annotating another tool's ticket`
+(`:117-119`) finds nothing about commits. Meanwhile `:92` and `:104` remain
+un-disambiguated in place, ~75 lines above the correction. The primary read point
+— `CLAUDE.md:226-228` — is fixed, so 1B's failure scenario is genuinely closed;
+this is the residual for a reader who stops inside `03-RELEASING.md`. "above"
+would be correct.
+
+#### F5 — low, no change needed. `03-RELEASING.md:121-122` welds two true halves
+
+"repo-6 did it for repo-3, in the `_Outcome, <date>:_` pattern [adr/003]
+carries." Both facts hold separately — repo-6's PR #82 wrote a sibling-finding
+section onto repo-3's ticket, and repo-6 put the `_Outcome, 2026-08-23:_` line on
+`adr/003:180-199`. But repo-6 did **not** put an `_Outcome_` line on repo-3, and
+the sentence reads as though it did. `repo-9:21-22` states it correctly ("the
+pattern repo-6 used on ADR 003"). Recorded so the next reader does not resolve it
+and think the pointer is broken; the pointer is fine, the sentence is compressed.
+
+#### F6 — no change needed. Gate-record citations resolve to the corrected text, not the defect
+
+Structural, and disclosed by each record's added preamble. Strongest case: 1B
+finding 4 cites `CLAUDE.md:238` for "the sibling-finding note the review gate asks
+for" — correction 6 deleted that clause outright, so nothing at `:238` matches.
+Same for 1A F2's `CLAUDE.md:238-240`, which now enumerates all four types.
+Inherent to this repo's convention that the builder commits the gate in the branch
+that fixes it; flagged only so nobody later reads these as broken citations.
+
+### Mechanical checks
+
+**A. Transplant — clean.** Both records diffed against the scratchpad originals
+under heading-demotion normalisation.
+
+- Every finding present, none dropped: 1A's F1-F5 including the "no change
+  needed" one, its "Verified correct" list and its "What this gate did NOT do";
+  1B's findings 1-5, its 17-item "needing no change" list, its "Minor, not counted
+  as findings" and its "What this gate did NOT do".
+- Both verdicts recorded **as given** — `CONCERNS` at `:121` and `:297`. Not
+  softened.
+- **No fenced content altered.** Gate 1A's single fence extracted and
+  byte-compared: identical, and the `### Fixes` line inside the dry-run transcript
+  survives as `### Fixes` — the corruption the builder hit on its first attempt is
+  genuinely fixed. Gate 1B contains no fences.
+- Benign deltas: a 4-line preamble added to each record disclosing the
+  re-resolution, oxfmt's `*text*` -> `_text_` emphasis normalisation, and oxfmt's
+  table-separator padding.
+
+**B. Citations — 78 resolved, 3 failed.** The three failures are F2, all one-line
+boundary misses that identify the correct passage. Both classes the builder said
+it nearly missed were checked specifically:
+
+- **Gate 1A's evidence-table `line` column** (bare numbers, no file token,
+  `:196-201`): all six resolve exactly against `CLAUDE.md` — `231-232`, `232-234`,
+  `235`, `236`, `237`, `237-238`.
+- **Self-citations into the record's own file**: `:781-783`, `:781-786`,
+  `:735-740`, `:832-834`, `:35`, `:41` all resolve.
+- Also exact: all five workflow citations, `release-please-config.json:28-29,
+30-35, 31`, both CHANGELOG lines, `repo-3:223,336-355,346-348`,
+  `01-TICKETS.md:69-70,145,163-169`, `adr/002:33-36`, `adr/003:147,180,194`, and
+  `repo-9:44` (anchor slugs to the heading at `03-RELEASING.md:117`).
+
+**C. `repo-10` — valid, free, and the gate is real.**
+
+- Frontmatter: six fields, `id` matches filename, `kind: chore` and
+  `status: ready` both in `01-TICKETS.md:69-70`'s lists, `depends_on: [repo-7]`
+  well-formed.
+- Id genuinely free: `git ls-tree -r origin/main -- docs/work/` stops at `repo-8`;
+  the three open PRs (#91, #92, #93) carry no `repo-10` file — checked by
+  `gh pr diff --name-only`, not by log subjects or PR titles.
+- `npm run status -- --show repo-10` renders and prints `unblocked`.
+- **Gate verified by making it fail first**:
+  `node scripts/status.mjs --json > /dev/null` -> **0**; repointed `depends_on` at
+  `repo-999` -> **1**, stderr `depends_on "repo-999", which is not a ticket`;
+  restored -> **0**, `git status --porcelain` empty, HEAD `7a07a5a`.
+
+### Also run
+
+`npm run build` -> exit 0. `npm run check` -> exit 0. `npx oxfmt --check` on all
+five changed `.md` -> "All matched files use the correct format", tree unchanged.
+**Citations were resolved after this run**, so the formatter has not reflowed
+anything resolved here.
+
+### What this gate did NOT verify
+
+- Anything gates 1A/1B settled: the dry runs, the `on:`-block audit beyond
+  re-deriving the 7/5 counts, the repo-wide attribution sweep, `a112cd4`'s seven
+  files, the changelog shape claims.
+- `npm test` — not run. Only `npm run check` and the build.
+- `perf` / `revert` behaviour — still unmeasured by anyone. No scratch branch was
+  pushed and no release-please was run here. The hidden-flag mechanism statement
+  reasons from `release-please-config.json` and the observed skip message, **not**
+  from release-please's source; the note about the default versioning strategy is
+  recollection, not measurement, and repo-10 should treat it as a hypothesis.
+- Whether the five hidden types other than `docs` actually behave like `docs`.
 
 ## Log
 
@@ -599,10 +807,11 @@ and one description in `03-RELEASING.md` was stale.**
   request**, not a second attribution — noted in the new text so the next reader
   does not read it as one.
 
-**This commit's own type was chosen under the rule it documents.** It touches
-`CLAUDE.md`, `docs/03-RELEASING.md`, `docs/work/repo-7-…md` and
-`docs/work/repo-9-…md` — nothing under `tools/`, so no attribution arises either
-way. The change is documentation with no behaviour in it, so `docs(repo)` is the
+**This commit's own type was chosen under the rule it documents.**
+`git diff --name-only origin/main...HEAD` → **5**, and the same piped through
+`grep -c '^tools/'` → **0**: `CLAUDE.md`, `docs/03-RELEASING.md`,
+`docs/work/repo-7-…md`, `docs/work/repo-9-…md` and `docs/work/repo-10-…md`.
+Nothing under `tools/`, so no attribution arises either way. The change is documentation with no behaviour in it, so `docs(repo)` is the
 honest type and it is also the non-releasing one. `fix(repo)` would have been
 defensible from the ticket's `kind: fix`, and — the first version of this
 sentence had this wrong — it would have released nothing here **either**, and put
@@ -708,3 +917,77 @@ transcript, not a citation. Both were raised as no-change and are left as raised
 
 Gates after the corrections are in the report; the branch stayed within
 `CLAUDE.md`, `docs/03-RELEASING.md`, this ticket, `repo-9` and `repo-10`.
+
+### 2026-08-24 — gate 2, and the count that got past its own discipline
+
+A third gate ran at `7a07a5a`, narrow, over the correction pass only: **PASS**.
+Its record is above, below 1A's and 1B's. It re-derived all six corrections by
+command, byte-compared 1A's fenced transcript to confirm the `### Fixes`
+corruption was gone, resolved 78 citations, and upheld the reframing on the
+merits while noting — correctly — that two data points cannot _distinguish_ the
+hidden-flag mechanism from a hardcoded type list, only be consistent with it. The
+shipped text already poses it as a question; the previous Log entry called it a
+derivation, and that was one word too strong.
+
+**F1 is the finding worth keeping.** The `docs(repo)` justification listed four
+changed files. There are five:
+
+```bash
+git diff --name-only origin/main...HEAD          # -> 5
+git diff --name-only origin/main...HEAD | grep -c '^tools/'   # -> 0
+```
+
+The conclusion is untouched — `repo-10` is under `docs/work/` like the rest, so
+"nothing under `tools/`" holds and `docs(repo)` is still the honest type. What
+matters is how it happened. **The pass whose stated lesson was "every figure is
+the output of a command written down beside it" wrote a figure with no command
+beside it, in its own justification paragraph, in the same edit that created the
+fifth file.** The discipline was applied to the figures the gates had named and
+not to the prose around them, because that paragraph was being edited for a
+different reason (F5 of the previous round, the self-contradicting clause) and
+was not on the list of numbers to re-derive. So the rule as practised was "verify
+the figures under review", and the rule as written was "verify every figure";
+this is the third instance on this document of the gap between them. The figure
+now carries its command, like the rest.
+
+The lesson generalises past this branch: a number is not safe because it was
+correct when written — it is safe when it is re-derived in the same pass that
+could have invalidated it, and adding a file to a branch invalidates every count
+of that branch's files.
+
+**F2 — three citations one line short**, each identifying the right passage and
+each stopping one line before the phrase it quotes. `03-RELEASING.md:93-94` →
+`94-95` (93 is blank), `:97-98` → `:97-99` (`### Features` is on 99, and the
+sibling citation at `:467` already had it right), `pl-26:140-146` → `:140-147`.
+Fixed inside the gate records, which is where they live.
+
+**F3 — fixed.** `CLAUDE.md` said "a type added there is releasing the day it is
+added"; a type added with `hidden: true` is not. Now "a type added there
+**without `hidden`**". This is exactly the class of overstatement this ticket
+exists to remove, and it was in the sentence telling the reader to trust the
+config over the sentence.
+
+**F4 — fixed, and more precisely than the gate asked.** The new paragraph said
+"the sentence at the top of **this** section", but the "two commits" sentences
+are in the previous one. The gate suggested "above"; it now names the section —
+"the sentences under **What routes a commit to a tool**" — because "above" is the
+word that made the reference vague in the first place. `:92` and `:104` are still
+bare in place, deliberately: `:104` is inside a worked example where a
+parenthetical would blunt the example, and the primary read point
+(`CLAUDE.md:226-228`) is fixed, so 1B's failure scenario stays closed.
+
+**F5 and F6 — no change, as marked.** F5 is a compressed sentence whose two
+halves are separately true; `repo-9` states it unambiguously. F6 is structural —
+gate citations resolve to the corrected text rather than the defect, which is
+what this repo's convention of committing the gate in the fixing branch
+necessarily produces, and each record's preamble discloses it.
+
+**Carried into `repo-10`, flagged unmeasured.** Gate 2 suspects
+`03-RELEASING.md`'s "only `feat`, `fix` and a breaking change move a version —
+that is release-please's rule" may itself be false, if the default versioning
+strategy falls through to a patch bump. **It ran no release-please and did not
+assert it**, so it is written into `repo-10`'s Why as a hypothesis in those terms,
+its Build gains the outcome where `perf` bumps and the sentence is simply wrong,
+and its `Done when` now reads "the document agrees with the measurement" rather
+than "the two flagged sentences were reconciled". Three sentences may be in play
+there, not two.

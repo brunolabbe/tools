@@ -238,8 +238,8 @@ same commit as `docs(planner): …` releases nothing. **So an annotation onto
 another tool's ticket rides in a pull request titled `docs(<tool>): …`**, its own
 pull request whenever the branch's own title carries a type that is **not**
 `hidden` in `changelog-sections` — today `feat`, `fix`, `perf` and `revert`. Read
-the test off the config rather than off this sentence; a type added there is
-releasing the day it is added. The worked examples, both measurements and the
+the test off the config rather than off this sentence; a type added there
+without `hidden` is releasing the day it is added. The worked examples, both measurements and the
 commands that produced them are in
 [docs/03-RELEASING.md](./docs/03-RELEASING.md).
 

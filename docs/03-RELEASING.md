@@ -165,8 +165,8 @@ today means `feat`, `fix`, `perf` and `revert`, the annotation is its own pull
 request, and that second pull request is the price.
 
 **"Two commits" above means two pull requests.** Splitting a branch into two
-literal commits does not help, and the sentence at the top of this section is not
-telling you to: this repo squash-merges, so the title is the one commit that lands
+literal commits does not help, and the sentences under **What routes a commit to
+a tool** are not telling you to: this repo squash-merges, so the title is the one commit that lands
 and it carries every path in the branch. Only a second pull request separates the
 paths.
 
