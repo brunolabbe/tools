@@ -9,13 +9,15 @@ You dispatch, you gate, you decide. **You do not build and you do not review.** 
 context is the one thing that must survive the whole batch, so it holds the board
 and nothing else.
 
-This skill is written from three sessions, each applying the last one's lessons:
+This skill is written from four sessions, each applying the last one's lessons:
 ~4 M subagent tokens across 21 agents and 16 gates; then ~2.7 M across 17
-invocations and 6 gates; then **2.86 M across 12 agents and 18 invocations, five
+invocations and 6 gates; then 2.86 M across 12 agents and 18 invocations, five
 tickets to five merged pull requests, 8 gates and 8 that returned landable
-findings.** Most of what follows is the cost of learning something the expensive
-way; numbers are quoted where they change a decision, and where the sessions
-disagree all are given, because the disagreement is usually the point.
+findings; then **2.04 M across 10 agents and 16 invocations, four tickets to four
+pull requests, 6 gates and 6 that returned findings, every builder producing a
+complete branch on its first round, and no branch ever needing a rebase.** Most of
+what follows is the cost of learning something the expensive way; numbers are quoted where they change a decision, and where the
+sessions disagree all are given, because the disagreement is usually the point.
 
 ## The loop
 
@@ -39,9 +41,21 @@ disagree all are given, because the disagreement is usually the point.
 6. **Repeat 4–5** until the gate passes or the findings are cosmetic.
 7. **Builder opens the PR**, commits the gate record, posts the reviewer's report to
    the PR thread.
-8. **Remove the worktree the moment the PR is open.**
+8. **Remove the reviewer's worktree** once its record is pushed — in the ticket and
+   on the PR thread. **Hold the builder's until the ticket is finished**, because
+   steps 9 and 4-above may still need that agent. See _Worktree hygiene_.
 9. **Check the merge landed what it was supposed to.** Not polling — one look,
    after the fact. See _After a merge_.
+
+**The PR is not the end of gating; the merge is.** Step 7 reads as a terminus and
+it is not one. A branch whose fixes are themselves risky — a correction pass over
+numbers, a rewrite of a claim a gate just falsified — can open its PR under
+conditional ship authority *and* take one narrow gate afterwards, scoped to the
+corrections alone. That ordering costs one cheap gate instead of a whole builder
+round, and gives up no gating at all, because you control the merge. The fourth
+session did exactly this on its documentation branch and the post-PR gate found a
+real defect the correction pass had introduced. Use it when the branch has already
+demonstrated that its corrections can be wrong; do not make it the default.
 
 ## Concurrency
 
@@ -49,19 +63,65 @@ disagree all are given, because the disagreement is usually the point.
 builders alone means constantly rediscovering the cap.
 
 **The builder/reviewer split is not a planning constant, and it is not the lever.**
-Reviews were 60% of token spend in the first session, 23% in the second and 25% in
-the third — the third running 75% builder on the same loop and the same repo. Do
-not budget from any of those numbers. **Budget from resume cost**, which is the
+Reviews were 60% of token spend in the first session, 23% in the second, 25% in
+the third and **30% in the fourth** (604 k of 2.04 M) — the third running 75%
+builder on the same loop and the same repo. Four sessions, four different answers.
+Do not budget from any of those numbers. **Budget from resume cost**, which is the
 thing that actually moves: a resumed builder pays a full context reload priced by
 transcript length, not by the work in front of it. Measure your own split as you
 go, but expect the answer to be that builders are winning and that the fix is
 fewer builder rounds rather than fewer gates. See _Size the process to the ticket_.
+
+The fourth session is the cleanest read on that, because every one of its four
+builders produced a **complete branch on its first round** — nothing needed a
+second dispatch to fix a build. It still spent **ten builder invocations on four
+tickets** — one ticket took four rounds by itself. Most of the extra ones were gate
+relays; the exceptions widened a fix after a gate measured that it could be, and
+folded in a sibling ticket. Budget the invocations, not the tickets.
+
+Its per-round costs still rose as the work shrank, exactly as the table below
+predicts: one builder went 93 k → 135 k while its second round applied five small
+findings, and the documentation branch went 97 k → 177 k → 231 k → 283 k across
+four rounds. That one branch cost **787 k against a sibling's 206 k** (per-round
+figures rounded; the exact sum is 787.2 k) — more than the other three tickets'
+builders combined — and its diffs got smaller every round.
+**Rounds, not difficulty, is what a batch pays for.**
 
 **Never run two tickets over one seam.** The most expensive agent in the reference
 session (559 k) was a builder that rebased three times onto a sibling branch whose
 contract kept moving. Every rebase is a full re-read. Serialise them: it costs
 wall-clock and saves tokens, context reloads and a whole class of coordination
 message.
+
+**The positive case for doing this at intake, measured.** The fourth session built
+the seam map before dispatch — reading each candidate, finding two colliding
+pairs, and offering the user only batches that broke them up: **one member of each
+pair could still run, the other was held.** The four tickets it ran touched
+**fifteen files with zero overlap**, confirmed by diffing the four pull requests
+against each other. (It was fourteen until a late round folded a sibling ticket's
+one-line deliverable into one of the branches — and the pass that wrote *that*
+paragraph left this count at fourteen. Fourth instance of the class on this page,
+caught by the gate that read both paragraphs together.) No rebase, no serialisation, no cross-builder
+coordination message, and merge order that did not matter. Ten minutes of reading
+at intake is the cheapest thing on this page.
+
+Be careful what that proves. Zero overlap is measured; *"the seam map prevented
+the rebases"* is a counterfactual, and two things confound it — `main` never moved
+during the batch, and no branch merged while another was open, so no branch was
+ever in a position to need a rebase. The honest claim is the narrower one: **the
+whole class of failure was never available to that batch.** Whether the map is
+what did it went untested, exactly as the third session's worktree evidence was
+about cost and not about timing.
+
+It is worth naming what the map is made of, because a ticket's header does only
+half of it: each ticket's **Packages** line, *plus* what its Build section
+actually touches. In that batch the `api/src/server.ts` collision was visible in
+two Packages lines; the `vite.config.ts` one was **not** — one of those tickets
+carries no Packages line at all and the collision is in the second prose paragraph
+of its Why.
+Two of the ten tickets `npm run status -- --ready` returned had no Packages line —
+three of the twelve that read `status: ready`. A map built from headers alone would
+have missed a live collision.
 
 **Never edit a branch while it is being reviewed.** Batch the fixes and send them
 after the gate returns, or the reviewer is judging a moving target.
@@ -74,6 +134,21 @@ correction the moment you have it rather than banking it for the next relay: whe
 one builder discovered its mutation harness was broken, warning the other gate
 mid-flight cost almost nothing and it folded the check into work it was already
 doing. Banking it would have cost a round.
+
+**So is the scratchpad, and a collision there can reach outward.** Every agent in a
+session writes to one shared scratch directory, and left to themselves they choose
+`test.txt`, `section.md`, `verify.py`, `tail.md`. In the fourth session one builder
+passed `gh pr edit --body-file` a path another agent had overwritten in the
+meantime, and **a pull request briefly carried a body describing someone else's
+ticket.** It was caught on the next command and rewritten, but the lesson is that a
+scratch file is not scratch once a `--body-file` or `--body` flag points at it.
+
+Two rules, and the orchestrator has to set them because agents will not:
+**namespace every scratch path by the ticket or agent it belongs to** (say so in
+the dispatch prompt, and do it in the paths you hand out yourself), and **write the
+file you are about to publish immediately before publishing it**, never reusing a
+path written earlier in the round. The same applies to the gate records you stage
+for a builder to commit — name them for their branch and gate number.
 
 **Ticket ids are an unlocked shared namespace**, and it is wider than your batch:
 parallel builders, other sessions on the same machine, and unmerged branches all
@@ -192,6 +267,50 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   found more than it was briefed, corrected the orchestrator, and cost 111 k with
   no reviewer at all.
 
+### Fold it in, or file it
+
+A ticket whose entire deliverable is **one line** is not a ticket. The fourth
+session shipped a 58-line brief whose Build section was "append one `_Outcome:_`
+line to a sibling ticket" — and the branch that filed it was the branch that had
+just *measured* the annotation to be free. It proved the thing was affordable and
+then declined to pay for it.
+
+Nobody was careless. The builder was told "implement the Build section, do not
+widen or narrow", and it obeyed. **The defect is the orchestrator's**, in two
+places: the dispatch rule had no exception for work the branch itself had just
+made free, and the resulting deferral was never surfaced as a decision.
+
+**The arithmetic is not close.** Folding it in costs one resume of an agent that
+is alive and holds the whole context — and, if the PR is still open, not even a
+new pull request. Filing it costs a future intake slot, a full builder dispatch, a
+gate, a PR and a merge, all to move one line. Call it five to ten times the price,
+paid later, by someone with none of the context.
+
+Three tells that you are looking at this, all cheap to check at relay time:
+
+- **The Build section's output is a single line, or a single frontmatter field.**
+- **The blocking reason is already gone** — most sharply when *this* branch is what
+  removed it. A ticket that says "X is now affordable because we just measured Y"
+  is a ticket that should have spent Y.
+- **The ticket's own Why explains why it was not folded in.** In the reference
+  case: "left as its own ticket rather than folded in because the brief did not ask
+  for it." That sentence is the builder telling you it could have. Read those; they
+  are where deferrals become visible, which is exactly why the builder prompt is
+  told to write them.
+
+**When you do fold it in, do not delete the ticket if it has already been
+committed.** Mark it `done` in the commit that earns it — the convention this repo
+already documents — and rewrite its Log to say it was folded in and why that was
+possible. The brief usually records *why* the work became affordable, which is not
+derivable from a one-line diff; and on a branch where gate records have already
+verified that ticket's id, frontmatter and `depends_on`, deleting the file dangles
+verified content across every one of them.
+
+**The inverse still holds**, so do not over-read this: a ticket that records a
+*defect* is worth filing even when the fix looks small, because the reproduction is
+the deliverable and the fix may not be. The test is not size, it is whether
+anything is left to decide.
+
 ## Worktree hygiene
 
 Worktrees auto-clean only when unchanged. A reviewer that writes into its worktree
@@ -233,6 +352,58 @@ more than the disk did. An open PR still takes review comments, a rebase and
 follow-ups, and every one of those wants the agent that wrote it. Removing earlier
 is sometimes the right trade for 7 GB; make it a choice rather than discover it an
 hour later. The third session held every builder worktree to merge and paid almost nothing for it — 105 MB peak across a five-ticket batch, against the 7 GB above, because reviewers returned text and finished tickets were swept promptly. It is worth being precise that this is evidence about **cost, not about timing**: every branch in that batch opened its PR in its final builder round, so none was ever resumed afterwards and the trade was never actually tested. Holding to merge is cheap insurance; that batch did not have to collect on it.
+
+**Split the rule by role: hold builders, retire reviewers early.** The unresumable
+cost is real for a *builder*, whose branch may still need a rebase or a follow-up.
+It is near zero for a *reviewer* the moment its record is safe, and the test for
+that is one condition, not three: **the record is pushed** — in the ticket commit
+and on the PR thread — somewhere you do not have to be alive to recover it. The
+copy you saved when it returned is redundancy, and the least durable of the three.
+At that point the worktree holds nothing you cannot get back, and reviewer trees
+are the ones that never auto-clean, because reviewing dirties them.
+
+The fourth session ran this deliberately: it retired each reviewer tree as its
+record landed and held all four builder trees, going 133 MB → 61 MB mid-batch with
+no loss of optionality. (Held *to merge* is the intent; nothing had merged when
+that was written, so like the third session's figure this is evidence about cost,
+not about whether holding ever paid.) It kept exactly one reviewer alive past its
+report — the one whose builder had been told to *reproduce* a finding before
+accepting it, because a builder that comes back "this does not reproduce" is a
+question only that reviewer can answer. That is the test: **hold a reviewer only
+while a specific open question could go back to it.**
+
+Before removing any of them, confirm what the tree actually holds. A reviewer that
+checked out the builder's branch shows commits ahead of `main` — those are the
+*builder's*, already pushed, not review work. One command settles it:
+`git merge-base --is-ancestor "$(git -C "$w" rev-parse HEAD)" origin/<builder-branch>`.
+Sweep the leftover `worktree-agent-*` ref at the same time; removal leaves it
+behind, and that is the leak that reached 51 stale branches in the second session.
+
+### When every agent dies at once
+
+A session usage limit killed all five in-flight gates simultaneously in the fourth
+session. It is worth planning for because the recovery is cheap and the wrong
+recovery is expensive.
+
+- **Check for damage before resuming anything.** Agents die at an arbitrary
+  instant, so one may have been mid-mutation with a source file still mutated, or
+  one step from pushing a scratch branch. Confirm the shared checkout is clean,
+  every builder branch is intact at its reported tip, and nothing stray reached
+  `origin` (`git ls-remote --heads origin`). All four checks were clean that time;
+  the point is that they are four commands and you do not get to assume.
+- **Resume by message, do not re-dispatch.** A message resumes the agent from its
+  own transcript and keeps its partial work — one gate was on its final confirming
+  run, another had already reached "found something". Re-dispatching pays a fresh
+  context reload and throws that away.
+- **Every resume must re-establish the positive control.** This is the part that
+  matters: a gate that died mid-mutation may be sitting on a mutated tree, so any
+  result it was holding is worthless. Say it explicitly — *a result carried across
+  an interruption is not evidence* — and have it restore to the branch tip and
+  re-run the control before continuing.
+- **Tighten the destructive step on the way back in.** The gate authorised to push
+  a scratch branch was told to delete it as its *immediate next action* after
+  capturing output rather than at the end of its review, so a second interruption
+  could not strand it on `origin`.
 
 ### Give a new worktree its dependencies without installing them
 
@@ -287,7 +458,12 @@ Every builder prompt carries:
 - **Read first**: root `CLAUDE.md`, the tool's `CLAUDE.md`, `docs/01-TICKETS.md`, the
   ticket in full, and any sibling ticket whose Log carries the handover.
 - **Scope**: implement the Build section, do not widen or narrow. If the brief is
-  wrong, do the right thing and record what it had wrong in the Log.
+  wrong, do the right thing and record what it had wrong in the Log. **One
+  exception, and say it out loud in the prompt:** if the work in front of you makes
+  some *other* small, already-specified piece of work free, fold it in rather than
+  leaving it — and if you decide not to, write down in the Log that you could have
+  and why you did not. That note is what lets the orchestrator catch the call; a
+  silent deferral is invisible.
 - **Gates**: `npm run check`, the tool's project suite, full `npm test` if shared
   config moved, `npm run format` after any `.md`.
 - **Bookkeeping**: append a dated Log entry, set `status: done`. There is no status
@@ -329,6 +505,23 @@ prompts said *reproduce this exact mutation* instead of *review this*.
   untrusted origin first, got a clean refusal, and only then ran sixteen candidate
   options — which is the entire reason its sixteen negatives are evidence rather
   than a broken fixture.
+- **Expect a judgement question to come back as an echo.** The corollary to the
+  rule above, and it is the one that decides what a gate is worth. Ask a reviewer
+  to *run* something and you get information you did not have. Ask it to *judge*
+  something you have already doubted — "is this over-specified?", "is the register
+  right?", "is that claim earned?" — and you will usually get your own doubt
+  returned in better prose, which feels like corroboration and is not. Both
+  readings were already in your prompt.
+
+  Measured on one gate in the fourth session, over a 45-line diff: six findings,
+  **three genuinely independent** (a heading that swallowed the section's closing
+  paragraph; a worked example that fused two incidents needing two different
+  commands; a documented command that exits 2 because it names no pattern — the
+  reviewer ran it), **two echoes** of questions the prompt had already raised, one
+  cosmetic. Every independent one required executing or resolving something; every
+  echo was pure judgement. Scope a gate toward what it must run, and accept that
+  the questions you already know to ask are the ones it can least help you with.
+
 - **Enumerate, never sample.** Say "walk every conditional and `??` in these files
   and report how many you tested and what survived". Sampling misses clustered
   defects, and a claim of *none left* is worth exactly what the sweep behind it was.
@@ -358,6 +551,43 @@ prompts said *reproduce this exact mutation* instead of *review this*.
 Ask for: `PASS / CONCERNS / FAIL`, gates reproduced independently, findings
 most-severe-first with `file:line` and a concrete failure scenario each, and
 anything claimed that could not be verified.
+
+### Authorising an outward-facing action
+
+**This is not an exception to "Fix nothing" above** — it authorises a throwaway
+branch off the base, never a change to the branch under review. See also
+_When every agent dies at once_, which is the same cleanup rule arriving from the
+other direction.
+
+Sometimes a gate cannot reproduce a claim without reaching outside the repo — a
+dry run that needs a branch on `origin`, a service that will not answer a local
+ref. Refusing costs you the reproduction; granting it carelessly leaves debris on
+a shared remote under someone else's name. Grant it with the conditions attached,
+in this order:
+
+- **One named throwaway.** Name the branch in the prompt (`<ticket>-verify-scratch`)
+  so it is unmistakably disposable and you can find it later by grep.
+- **Make the agent verify the preconditions itself, and say which.** "Confirm no
+  workflow can fire on this ref before pushing." Do not hand it your own survey —
+  a builder in the fourth session reported four workflows, all of them
+  push-to-`main`, and there are **seven**. The reviewer read all seven, reached the same
+  conclusion, and only then pushed.
+- **Dry run only, never the real thing**, and never to the default branch.
+- **Cleanup is the immediate next action after capturing the output**, not a step
+  at the end of the review, and it must be stated that way. This is the rule that
+  earns its keep: a session usage limit killed that gate mid-run, and it happened
+  to die *just before* the push. Had the cleanup been batched with the write-up, a
+  second interruption would have stranded the branch.
+- **Demand proof of deletion** in the report — `git ls-remote --heads origin |
+  grep -c <the-branch-name>` → 0; **name the pattern**, because a bare `grep -c`
+  is a usage error and `grep -c ""` counts every branch on the remote and can
+  never be 0. Then **check it yourself**: it is one command and it is the only
+  part you can confirm.
+- **Give it an explicit way out.** "If you judge the push not worth the remote
+  churn, say so and verify as far as you can without it." An honest *I did not
+  reproduce this* is a legitimate review; a reasoned substitute presented as a
+  reproduction is not.
+
 
 ### Do not cap the gate count
 
@@ -456,6 +686,79 @@ whose sweep collapsed was re-swept properly (16/16, control green), and the
 *corrected* table still overstated by one row. The gate that caught that was the
 one a "three gates then ship" cap would have skipped.
 
+**Reasoning that was never run.** One level earlier than the harness that cannot
+fail, and it is the most common defect in this repo's history. That shape is about
+verification machinery producing a false negative; this one is about a claim that
+**never had machinery at all** — sound reasoning, written down as a conclusion,
+never executed.
+
+Its distinguishing property is what makes it dangerous: **sound-but-unrun and
+sound-and-run reasoning are identical on the page.** No reviewer can separate them
+by reading, which is why prose review never catches this and why the fourth
+session shipped three instances across two branches — and drafted a fourth, in
+this very section. They rhyme:
+
+- A builder deferred fixing one table row because it was "the same class" as a
+  row it had *measured* to be unfixable. The measurement was real; the
+  generalisation to the neighbouring row was never run. That row was the one
+  reaching the disk.
+- The same builder rejected an option on a ticket for a specific reason, then
+  wrote the opposite into a sibling ticket an hour later. Its own diagnosis is the
+  best statement of the class anyone produced: *"The reasoning was sound both
+  times; only one was run."*
+- A documentation branch replaced a **vague and true** sentence with a **precise
+  and false** one, in a passage headed "re-derived from the repository, not taken
+  on trust".
+
+The countermeasure is one line, and it belongs in every builder and gate prompt:
+**do not write the sentence until the command has exited.** Its corollary is
+cheaper still — where you cannot run it, write the vague-and-true form rather than
+the precise-and-unverified one. Precision is not a courtesy to the next reader
+when it is unearned; it is a trap, because precision is what makes a claim look
+checked.
+
+Two consequences for how you dispatch:
+
+- **Require every figure to carry the command that produced it**, inline, in the
+  Log. Not "verified" — the invocation and its output. This is the only mechanical
+  test that separates the two cases, and it is what a later gate can audit.
+- **A ticket's own rigour claim is a place to look, not a reassurance.** All three
+  instances above sat inside sentences advertising that they had been measured.
+  When a gate prompt says what to attack, "the sentence claiming it was measured"
+  is a good answer.
+
+**And it catches orchestrators.** The first draft of this very section reported the
+fourth session's review share as "40%". Nobody computed it; it was the number that
+felt right beside the previous three. Summing the six gates against the total gave
+**34%** — written into a paragraph whose subject is claims that were never run, by
+the agent writing the rule.
+
+Then the session kept running, one branch took a fourth round, and the true figure
+became **30%**. So the anecdote has two halves and the second is the more useful
+one. Nobody is exempt from this class, least of all whoever is currently explaining
+it — and **a figure computed while the work is still moving is a figure that will
+move.** Re-derive every number as the last action before you commit, not the first
+convenient one; the discipline that caught both errors was mechanical, not
+vigilance.
+
+**Why it recurs, which is the part worth carrying.** The documentation branch above
+hit this class **three times on one document across three passes of one branch** —
+written wrong, corrected wrong, and the correction's correction invalidated by the
+next round — all inside a single session, across roughly one hour. That is the
+alarming part: it does not need elapsed time or a change of author to recur. Two
+gate rounds on that branch were enough to surface two of the three. Its builder found the
+mechanism, and it is not carelessness: the paragraph was being edited for a
+*different* finding, so it was on the **edit list** but not on the **re-derive
+list**. The rule as practised was "verify the figures the gates named"; the rule as
+written was "verify every figure". Adding a file to the branch silently invalidated
+a count that had been correct when written, and nothing connected the two edits.
+
+So the generalisation to put in a relay is theirs, not a restatement of the
+finding: **a number is safe when it is re-derived in the same pass that could have
+invalidated it — and adding a file to a branch invalidates every count of that
+branch's files.** A fix that does not generalise is how a class recurs, and "fix
+the number the gate named" is exactly such a fix.
+
 ## Verification traps
 
 - **A harness that cannot fail is the defect class that produced everything else
@@ -548,7 +851,17 @@ discarded. So:
   2. **The reviewer's citation was wrong when written.** Five of twenty-five did
      not resolve on one third-session branch against a directory that was
      *byte-identical* to the commit reviewed — so this step catches reviewer error,
-     not just drift.
+     not just drift. **This mode dominates, and the ordering here understates it:**
+     the fourth session caught **ten** of them across four branches — one off by a
+     line (`:14→:15`), five clustered in one direction (each pointing at the
+     comment block *above* a test rather than its `test(` line), three one-line
+     boundary misses where the quoted string ran past the cited range, and one
+     more (`:96→:94`) on a fourth branch. Reviewers mis-cite systematically, in a
+     consistent direction per reviewer, which is why a spot-check misses it and an
+     enumeration does not. Mode 1 occurred too, on the branch whose fix moved the
+     very lines its record cited — handled not by remapping but by **pinning the
+     record to the commit the gate reviewed** and saying so, which is the cheaper
+     answer when the reviewed tree is the one the findings describe.
   3. **You re-resolve, then make one more edit.** One builder ran its check clean
      at 10/10, then applied a comment fix that moved two citations. It caught this
      only by re-running. "Before committing" is not tight enough; it has to be
@@ -556,6 +869,33 @@ discarded. So:
   4. **The formatter reflows the file after you write the record.** oxfmt
      rewrapping gate tables broke a self-referential row twice on one branch and
      was confirmed on another. Format first, resolve second.
+
+  Three mechanics make the check actually catch things, all learned by nearly
+  missing them:
+
+  - **Assert that every `path:line` in the record is in the checked set.** Without
+    it a citation you forgot to register passes silently, which is the one failure
+    the check exists to prevent. One builder built this and it is the difference
+    between a resolver and a rubber stamp.
+  - **Bare numbers with no file token are citations too.** A reviewer's evidence
+    table with a `line` column carries them, and every naive regex skips the whole
+    column. Two builders hit this independently.
+  - **Do not remap a citation that is the finding's own evidence.** A gate that
+    reports "`:93-94` is wrong, the text is at `:94-95`" contains a coordinate that
+    must stay wrong — it is a quotation of the defect, not a pointer. A positional
+    remap will silently "fix" it and destroy the finding.
+
+  **A caveat specific to editing this file.** `.claude/` sits in `.oxfmtrc.json`'s
+  `ignorePatterns`, so `oxfmt` never touches this page and `npm run check` cannot
+  catch a broken table, an unterminated code span or a mangled list in it. "Format
+  first, resolve second" does not apply here — nothing reflows — but neither does
+  the formatter's usual backstop, so proofread structure by eye.
+
+  And two things that are not staleness and will look like it: a citation whose
+  *content* you changed (it resolves, it just no longer says what it said), and a
+  gate record citing text a later correction deleted outright — inherent to
+  committing a gate in the branch that fixes it. Say so in the record's preamble
+  rather than repointing them.
 - Record what the gate **did not** do, alongside what it did. A narrow second gate
   that says "did not re-sweep the citations, did not re-run the full suite, ran
   `--project repo` because that is what parses the ticket tree" is far more useful
@@ -565,13 +905,25 @@ discarded. So:
 
 Bring the user a decision whenever two readings lead to materially different work:
 scope that widens past a ticket's declared packages, a contract-adjacent change, a
-defect that ships today, an architectural choice two branches would both satisfy.
+defect that ships today, an architectural choice two branches would both satisfy,
+**or a branch about to file a ticket for work it could finish now** (see
+_Fold it in, or file it_).
 
 Give **options with a recommendation first**, each with its real cost. Do not ask
 about choices with an obvious default.
 
 **Batch them.** Each question stalls the board. Hold them to a checkpoint unless one
 blocks a running agent.
+
+**And hold a question until you can bring a measurement rather than a guess.**
+When the decision turns on a fact nobody has yet, asking now buys an opinion and
+usually costs a second question later. Put the fact into a gate prompt instead —
+name it as blocking a decision you owe the user, so the reviewer prioritises it —
+and ask once, with the number attached. In the fourth session the open question
+was whether a fix should widen to a neighbouring row; the gate was asked to
+*measure* whether it could, came back with one failing test out of 732 — and that
+one the row already pinned as a defect — and the user decided on that rather than
+on two plausible arguments. The delay was one gate the branch was taking anyway.
 
 **Ask whether to parallelise at intake, not after the collision.** `## Concurrency`
 says never to run two tickets over one seam; the failure that costs is asking the
@@ -586,7 +938,23 @@ often looks obvious.
 to say who ran it. A vivid failure scenario from a report is a hypothesis until
 someone renders it.
 
-**The mechanism is one clause, and it is cheap: mark relayed claims as unverified
+**Cheaper than marking a claim unverified: run it.** Where checking is a single
+command — a file count, a config flag, a line that either says what it is quoted as
+saying or does not — spend it rather than caveating. The value is not catching
+the reviewer — in the fourth session none of these checks found a reviewer wrong.
+It is the difference between "the reviewer says" and "I checked", which is what
+lets you relay a finding as fact without becoming the middle link in a laundering
+chain.
+
+The worked example is a count of the files one commit touched, published wrong in
+a document: `git show --name-only <sha>` settles it in one line, and the same line
+settled it a second time two passes later when the published number had drifted
+again. Note the object — a *branch's* touched-file count is
+`git diff --name-only <base>...<tip>`, a different command, and reaching for the
+wrong one gives a confident wrong answer. Reserve the caveat for what genuinely cannot be checked from here — token
+counts, another session's transcript, anything that needed the network.
+
+**For the rest, the mechanism is one clause, and it is cheap: mark relayed claims as unverified
 in the relay itself.** "The ticket says X; I have not checked" costs a sentence and
 stops the chain. Without it the chain forms silently — in the third session a
 ticket asserted that a file contained a word, the orchestrator repeated it in a
@@ -606,7 +974,63 @@ demonstrate, and the next gate upheld the builder. **Three separate builders
 corrected an orchestrator error in one session** — an id, a ticket's status, and a
 diagnosis. Write relays so that is possible: give the reproduction, not the
 verdict, and say explicitly that a builder should push back rather than transcribe
-if the framing does not survive contact with the code.
+if the framing does not survive contact with the code. In the fourth session all
+four builders corrected something — a brief's fixture tree that would have passed
+against the CLI it was testing, a brief's claim that an option "removes the whole
+class", an orchestrator framing that treated a choice as settled when its premise
+was unmeasured, and a ticket's own baseline.
+
+### Two clauses that turn a correction into a rule
+
+Both are one sentence in a relay, and both were the direct cause of the fourth
+session's best builder output. They cost nothing and they are easy to omit.
+
+**Ask for the mechanism, not the fix.** When you relay a finding, add: *"why did
+the argument not transfer?"*, or *"why did the discipline not catch its own
+paragraph? — that is the more useful note than the fix."* Without it you get a
+corrected number. With it you get the reason the number was wrong, which is the
+only part the next agent can use. Both generalisations quoted on this page —
+"tested it and narrated the other", and the edit-list/re-derive-list split — exist
+because a relay asked for them. Neither builder volunteered it.
+
+**Make the builder reproduce a finding before accepting it.** Not to doubt the
+reviewer — to put the builder in contact with the gap. A builder told to run the
+disproof of its own claim wrote the sharpest diagnosis of the batch; a verdict
+handed down would have got "reproduced, agreed, fixed". This also catches the
+reviewer being wrong, which happens (see _Records_ on citations).
+
+The shape to avoid is the opposite one: relaying a finding as an instruction to
+apply. That gets it applied and learns nothing, and when the reviewer is wrong it
+gets a wrong thing applied confidently.
+
+### When two gates disagree, relay the disagreement
+
+A split gate can come back split. Do not adjudicate it yourself and do not average
+it — **give the builder both readings with their evidence and no verdict, and say
+explicitly that concluding both gates are wrong is an available answer.**
+
+In the fourth session gate A rated a rule's type enumeration a real defect; gate B
+rated the same thing acceptable. Relayed as an open disagreement, the builder
+rejected both framings and proposed a third: read the mechanism off the `hidden`
+flag rather than off a list of type names, so *enumerating type names was itself
+the defect*. An answer neither gate proposed, and the instruction it wrote — read
+the test off the config — does not go stale when a type is added.
+
+**And then a later gate corrected the builder in turn, which is the part not to
+lose.** That third answer was an *inference*, not a measurement: only two types
+were ever run, and both results are equally consistent with a hardcoded releasing
+list. It shipped because it **errs safe** — if the hypothesis is wrong the new rule
+over-warns, where the enumeration it replaced under-warned. So the lesson is not
+"the builder's measured answer beats both gates"; it is that relaying the split
+produced a better *hypothesis* than either gate held, and that a further gate was
+still needed to say what kind of claim it was. Repeating a builder's
+self-description as measurement is the laundering this section forbids, and the
+orchestrator did exactly that in the first draft of this paragraph.
+
+Often the builder has run the mechanism and the reviewers have not — though not
+always: one gate in that session reproduced a release-please dry run end to end,
+which is more than the builder's own claim rested on. Say which gate found what,
+keep both attributions, and let whoever is closest to the measurement decide.
 
 ## Reporting to the user
 
