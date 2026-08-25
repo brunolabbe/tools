@@ -249,6 +249,20 @@ const URL_SHAPED = /^[a-z][a-z0-9+.-]*:\/\//i;
  *
  * The fragment does not survive, and that is not the same trade: a `#` never
  * reaches the server, so nothing can have used it to state a format.
+ *
+ * **The invariant a fourth caller has to keep, found by gate 1 on dl-28.**
+ * `URL_SHAPED` recognises an absolute URL and nothing else: of 43 URL shapes
+ * probed at that gate it admits 17 and passes 26 through untouched —
+ * protocol-relative `//host/…`, scheme-less, quoted, parenthesised, `blob:`,
+ * `data:`, comma-joined and percent-encoded forms. That is safe today only
+ * because **every caller normalises its URL before building the hint**:
+ * `tools/downloader/resolvers/src/manifest/dash.ts` resolves every `BaseURL`
+ * through `resolveUrl` (protocol-relative and root-relative values were driven
+ * through `parseDash` at the gate and both came back `unknown`), and
+ * `tools/downloader/resolvers/src/manifest/hls.ts` passes a bare extension.
+ * Only `tools/downloader/resolvers/src/resolvers/ytdlp.ts` hands over a URL it
+ * did not resolve. Build a hint from a raw, unresolved URL and none of this
+ * holds.
  */
 function claimsOnly(hint: string): string {
   if (!hint.includes("://")) return hint;
@@ -301,9 +315,14 @@ function claimsOnly(hint: string): string {
  * rows 1 and 2 (`text/vtt` against a `.srt` extension) is not.
  *
  * Row 3 is unanchored on purpose and stays that way: `stpp.ttml.im1t` needs
- * the dots a boundary would reject, and with the host and the path gone there
- * is nothing left for it to over-match except the query string the trade above
- * already accounts for.
+ * the dots a boundary would reject. **It is the row with no defence of its
+ * own**, so it over-matches wherever `claimsOnly` does not reach — the query
+ * string the trade above accounts for, and a host in a token with no scheme,
+ * where `stpp.cdn.net/sub.mp4` still answers `ttml`. Rows 1 and 2 survive that
+ * second case on dl-25's lookahead alone, which is why the two scheme-less
+ * rows in the table exist and why deleting that lookahead has to stay red.
+ * Row 3 has nothing equivalent; it is unfixed, and no caller can reach it
+ * while the invariant above holds.
  *
  * `wvtt` and `stpp` are the ISO-BMFF sample-entry codes for WebVTT and TTML in
  * fragmented mp4 — what a DASH `codecs=` carries when the mime type is only

@@ -128,6 +128,19 @@ const CASES: ReadonlyArray<readonly [string | undefined, Format, string]> = [
     "dl-25 cost is recovered by any mime type in front",
   ],
 
+  // Gate 1 on dl-28, F1 and F2. Every other URL-bearing row above carries a
+  // scheme, and `claimsOnly` returns early on a hint that has no `://` — so
+  // without these two the whole table passes with dl-25's `(?![\w./-])`
+  // deleted from rows 1 and 2 except `vttx` and `srtx`, and a later agent
+  // tidying the table would "fix" those with `(?!\w)` and ship dl-25's defect
+  // again, green. These are the rows that redden when that boundary goes.
+  ["srt.cdn.net/sub.mp4", "unknown", "gate 1 F1: a scheme-less host is not a claim either"],
+  [
+    "vtt.cdn.net/sub.mp4",
+    "unknown",
+    "gate 1 F1: and vtt reaches the disk, so this is the costly one",
+  ],
+
   // No row.
   ["", "unknown", "empty hint"],
   ["application/octet-stream", "unknown", "an unrelated mime type"],

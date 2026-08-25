@@ -149,19 +149,26 @@ editing the expectation.
 
 ### Gate 1
 
+_Citations in this section resolve against the final tree unless a line says
+otherwise; the F1 evidence block is pinned to `2d94dda`, the commit reviewed.
+Three bare citations elsewhere in this file (`index.ts:533` at :35,
+`dash.ts:338` at :60) are pre-existing brief text whose markdown link targets
+resolve, and F4's own row quotes the defective form on purpose — it is the
+finding's evidence, not a pointer, so it is deliberately not repointed._
+
 **2026-08-25 — CONCERNS.** Reviewed detached at `2d94dda`. Recorded here in
 full because the reviewer's worktree and the orchestrator's copy do not
 survive the session; this file is the only durable place for it.
 
-| # | Finding | Disposition |
-|---|---|---|
-| F1 | The fix defangs nine of dl-25's own regression rows | Accepted, fixed |
-| F2 | Row 3 still reads a scheme-less hostname; the comment asserts a defence nothing pins | Accepted, fixed by the same rows |
-| F3 | `URL_SHAPED` lets 26 of 43 probed URL shapes through | Recorded; comment only |
-| F4 | `dash.ts:338` / `ytdlp.ts:256` cited without a repo-root-relative path | Fixed; both say what was claimed |
-| F5 | Log said 212 tests; actual is 213 | Fixed; and see the class below |
-| F6 | The new `.mpd` `it` set is not conformant-packager output | Recorded, no change |
-| F7 | The three flipped rows were the only in-suite proof row 3 reaches a hostname | Closed by F1's rows |
+| #   | Finding                                                                              | Disposition                      |
+| --- | ------------------------------------------------------------------------------------ | -------------------------------- |
+| F1  | The fix defangs nine of dl-25's own regression rows                                  | Accepted, fixed                  |
+| F2  | Row 3 still reads a scheme-less hostname; the comment asserts a defence nothing pins | Accepted, fixed by the same rows |
+| F3  | `URL_SHAPED` lets 26 of 43 probed URL shapes through                                 | Recorded; comment only           |
+| F4  | `dash.ts:338` / `ytdlp.ts:256` cited without a repo-root-relative path               | Fixed; both say what was claimed |
+| F5  | Log said 212 tests; actual is 213                                                    | Fixed; and see the class below   |
+| F6  | The new `.mpd` `it` set is not conformant-packager output                            | Recorded, no change              |
+| F7  | The three flipped rows were the only in-suite proof row 3 reaches a hostname         | Closed by F1's rows              |
 
 **F1, reproduced by this builder both ways before accepting it.** Dropping
 `(?![\w./-])` from rows 1 and 2 — reverting dl-25 — and running
@@ -171,6 +178,36 @@ survive the session; this file is the only durable place for it.
 origin/main    11 failed | 196 passed (207)
 this branch     2 failed | 211 passed (213)   only "vttx" and "srtx"
 ```
+
+Those two numbers are the **finding**, measured at `2d94dda`, the commit gate 1
+reviewed. They are pinned, not remapped: the whole point of F1 is what that tree
+did, and rewriting them to match the fixed tree would delete the evidence.
+
+**And here is the same mutation on the fixed tree, which is what says F1 is
+closed.** Two rows were added — `srt.cdn.net/sub.mp4` and `vtt.cdn.net/sub.mp4`,
+both expecting `unknown`. `claimsOnly` returns early on a hint with no `://`, so
+these are the only rows in the table that reach rows 1 and 2 without a scheme in
+front, and they are what dl-25's lookahead is actually holding up:
+
+```
+$ npx vitest run tools/downloader/resolvers          # control, unmutated
+      Tests  215 passed (215)
+
+$ # rows 1 and 2 with (?![\w./-]) deleted, i.e. dl-25 reverted
+      Tests  4 failed | 211 passed (215)
+        "vttx" is unknown
+        "vtt.cdn.net/sub.mp4" is unknown      <- new
+        "srtx" is unknown
+        "srt.cdn.net/sub.mp4" is unknown      <- new
+
+$ # restored
+      Tests  215 passed (215)
+```
+
+Two red before this fix, four after. The two that were missing are the two whose
+wrong answers reach the disk, since `vtt` and `srt` are the members of
+`SUBTITLE_FORMATS_FFMPEG_READS`. The control is stated because without it a
+uniformly failing harness would report the same four.
 
 The nine that stop failing are dl-25's own: the `vtt`/`srt`/`webvtt` hostname
 and path-segment rows, the two `dl-25 cost` rows, and
@@ -298,7 +335,8 @@ behaviour under the mutation above.
   and nothing else" — measured rather than taken.
 
   **Build 2 was not done, deliberately, and here is what that costs.** Option
-  (b) makes the `dash.ts:338` change redundant for the host and the path: the
+  (b) makes the `tools/downloader/resolvers/src/manifest/dash.ts:338` change
+  redundant for the host and the path: the
   hint may keep carrying the whole `fileUrl` because no row ever sees it. What
   option (b) does _not_ close is the query string, which it keeps on purpose
   (Build 3's `&fmt=vtt`), so `application/mp4 https://cdn.net/sub.mp4?x=ttml`
@@ -326,8 +364,15 @@ behaviour under the mutation above.
   **Done-when 4 — pinned, and the pin is mutation-checked.** The new row is
   `["application/x-subrip https://cdn.net/s/sub.ttml", "srt", …]`. With rows 2
   and 3 swapped on the finished tree, `npx vitest run tools/downloader/resolvers`
-  → `1 failed | 211 passed (212)`, and the one failure is that row. Order
-  restored, `212 passed (212)`.
+  → `1 failed | 214 passed (215)`, and the one failure is that row. Order
+  restored, `215 passed (215)`.
+
+  _Re-derived after gate 1._ These read `211/212` and `212` when first written:
+  correct for the tree at `2d94dda`, and wrong the moment gate 1's F1 rows were
+  added to this branch. The class, recorded because it recurred three times on
+  this one ticket: **a count of a branch's own tests is invalidated by adding a
+  test to that branch**, so it is only safe when re-derived in the pass that
+  could have invalidated it — not in the pass that happens to notice it.
 
   **Two things the brief had wrong, both about what the fix leaves behind.**
 
@@ -371,7 +416,9 @@ behaviour under the mutation above.
   **Not measured, and not inferred.** No yt-dlp was run against a live site, so
   Build 3's premise — that yt-dlp subtitle URLs routinely carry the format in
   the query string — is _still_ unmeasured, exactly as dl-25 left it. Nothing
-  here depends on it being true: `ytdlp.ts:256` is untouched and `claimsOnly`
+  here depends on it being true:
+  `tools/downloader/resolvers/src/resolvers/ytdlp.ts:256` is untouched and
+  `claimsOnly`
   keeps query strings, so the behaviour that premise argues for is preserved
   either way, and the timedtext row proves only what the classifier answers, not
   what yt-dlp emits. No live DASH manifest and no real CDN were touched; the
