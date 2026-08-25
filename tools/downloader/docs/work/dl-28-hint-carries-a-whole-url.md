@@ -3,7 +3,7 @@ id: dl-28
 tool: downloader
 title: The ttml row still reads a hostname as a format claim
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -178,3 +178,131 @@ editing the expectation.
   gate, which found that swapping those two rows leaves the suite green while
   silently dropping genuine SubRip tracks. It was deliberately not pinned on
   dl-25 — the reorder it guards against belongs to this ticket.
+
+- **2026-08-25** — Built, on **Build 4's second option**: `subtitleFormat` now
+  normalises its hint before matching, and no row changed. Everything below was
+  written after the command that proves it exited; where nothing was run, it
+  says so.
+
+  **Reproduced first, on the `origin/main` base, before any edit.** All three
+  hints in the Why, plus the cases the ordering argument rests on
+  (`npx tsx <scratch>/dl28-probe.ts`, calling `subtitleFormat` directly):
+
+  ```
+  "application/mp4 https://stpp.cdn.net/sub.mp4"      -> ttml
+  "application/mp4 https://cdn.net/ttml/sub.mp4"      -> ttml
+  "application/mp4 https://cdn.net/dfxp/sub.mp4"      -> ttml
+  "stpp.ttml.im1t"                                    -> ttml
+  "application/x-subrip https://cdn.net/s/sub.ttml"   -> srt
+  "text/srt https://cdn.net/ttml/sub.srt"             -> srt
+  ```
+
+  **Build 1 is right, and it is measured.** Row 3 given dl-25's lookahead
+  (`/(ttml|dfxp|stpp)(?![\w./-])/i`), everything else untouched,
+  `npx vitest run tools/downloader/resolvers` → exit 1,
+  `4 failed | 203 passed (207)`. Three of the four are the pinned rows, failing
+  because they assert the defect and the code no longer has it; the fourth is
+  `"stpp.ttml.im1t" is ttml`, and that one is a real regression. So the boundary
+  buys row 3 at the cost of a real DASH `codecs=` string, exactly as the brief
+  says. Reverted with `git checkout --` before continuing.
+
+  **Build 6 is right too, and it is measured.** Rows 2 and 3 swapped on the
+  _unfixed_ tree, same command → exit 0, `207 passed (207)` — fully green — and
+  the probe on that tree reproduces the brief's table verbatim, both rows
+  `srt` → `ttml`. So nothing pinned that order before this ticket. (The brief's
+  counts say 199; the table has grown since dl-25 and the suite is 207 on this
+  base. Nothing else about the measurement differs.)
+
+  **The decision: Build 4 option (b), normalise inside `subtitleFormat`.**
+  A new `claimsOnly(hint)` rewrites every whitespace-separated token that is
+  URL-shaped (`^[a-z][a-z0-9+.-]*://`) to `urlExtension(token)` plus its query
+  string, and leaves every other token — mime types, codecs, bare extensions —
+  alone. Rows 1–4 are byte-for-byte unchanged, including row 3's unanchored
+  shape and every `(^|\W)`. Applied with the test table still asserting the
+  defect, `npx vitest run tools/downloader/resolvers` → exit 1,
+  `3 failed | 204 passed (207)`, and the three are exactly the three pinned
+  rows. That is the brief's claim for option (b) — "turns exactly those rows red
+  and nothing else" — measured rather than taken.
+
+  **Build 2 was not done, deliberately, and here is what that costs.** Option
+  (b) makes the `dash.ts:338` change redundant for the host and the path: the
+  hint may keep carrying the whole `fileUrl` because no row ever sees it. What
+  option (b) does _not_ close is the query string, which it keeps on purpose
+  (Build 3's `&fmt=vtt`), so `application/mp4 https://cdn.net/sub.mp4?x=ttml`
+  still answers `ttml` — measured. Build 2's `urlExtension(fileUrl)` would have
+  closed that for DASH alone, at the price of a second mechanism doing the same
+  job in a different place and of a DASH claim that lives in a query being
+  dropped. I judged one mechanism worth more than that one edge, pinned the
+  edge as a table row so narrowing it later is a decision rather than an
+  accident, and am recording the call here rather than leaving it silent. It
+  did not seem worth a follow-up ticket: it is the accepted side of a trade the
+  code now states, not an unclosed defect.
+
+  **Folded in, because this change made them free** (the fold-in the
+  orchestrator asked to be told about either way): Build 1's cheap improvement —
+  `stpp.ttml.im1t` had no fixture anywhere, only one unit row — and the
+  `dash.ts`-level test Build 4's option (a) would have required. Two text
+  `AdaptationSet`s were added to
+  `test/fixtures/manifests/dash-ondemand-baseurl.mpd`: one with
+  `codecs="stpp.ttml.im1t"` (parses to `ttml` through `parseDash`, so the string
+  that rules out the boundary is now evidenced by a manifest) and one with no
+  codecs on an `stpp`-named absolute `BaseURL` (parses to `unknown`; it was
+  `ttml` before this change). Both assert through `parseDash`, not
+  `subtitleFormat`.
+
+  **Done-when 4 — pinned, and the pin is mutation-checked.** The new row is
+  `["application/x-subrip https://cdn.net/s/sub.ttml", "srt", …]`. With rows 2
+  and 3 swapped on the finished tree, `npx vitest run tools/downloader/resolvers`
+  → `1 failed | 211 passed (212)`, and the one failure is that row. Order
+  restored, `212 passed (212)`.
+
+  **Two things the brief had wrong, both about what the fix leaves behind.**
+
+  Build 5 says that after the fix "the remaining reason order is load-bearing is
+  the unanchored `subrip` alternative alone (`https://cdn.net/subrip/sub.vtt`
+  matches rows 1 and 2 both)". That example does not survive the fix:
+  `claimsOnly` reduces it to `vtt`, so it matches row 1 only and answers `vtt`
+  under either order — measured on the finished tree. The `subrip` alternative
+  is still unanchored, but a path segment can no longer reach it.
+
+  Build 6's second measured row goes the same way. With the fix in place and
+  rows 2 and 3 swapped, `text/srt https://cdn.net/ttml/sub.srt` answers `srt`,
+  not `ttml` — the `/ttml/` path segment is gone before any row is scanned. Only
+  the first of the brief's two rows is still order-dependent, because it is the
+  only one whose competing claims are both genuine (a `subrip` mime type against
+  a `.ttml` extension). That is the one that is pinned; the comment at
+  `common.ts` now says the order decides between two real claims rather than
+  between a claim and a hostname.
+
+  **A behaviour change I introduced that the brief did not ask for, pinned
+  rather than left silent.** `claimsOnly` drops the fragment as well as the host
+  and the path, so `https://cdn.net/sub.mp4#fmt=vtt` is now `unknown` where it
+  was `vtt`. A `#` never reaches the server, so nothing can have used it to
+  state a format; the row and a sentence in the comment say so.
+
+  Two smaller corrections to the `common.ts` comment, both measured with
+  `urlExtension` directly: `.../sub.srt/download` and `sub.srt.gz` are `unknown`
+  before dl-25's lookahead is consulted at all (their extensions are `undefined`
+  and `gz`), so `sub.srt-v2` is the only one of the three pinned "dl-25 cost"
+  rows that still exercises the boundary. And the boundary is still doing real
+  work despite `claimsOnly`: `srt.cdn.net/sub.mp4` with no scheme is not
+  URL-shaped, passes through untouched and answers `unknown` only because of the
+  lookahead.
+
+  **Gates.** `npm run check` → exit 0. `npm test -- --project downloader` →
+  exit 0, `50 passed (50)` files, `746 passed (746)` tests. The `packages`
+  project was run too, since the repo-wide source scans live there → exit 0,
+  `11 passed (11)`. `npm run format` was run for this file, and `npm run check`
+  re-run after it → exit 0.
+
+  **Not measured, and not inferred.** No yt-dlp was run against a live site, so
+  Build 3's premise — that yt-dlp subtitle URLs routinely carry the format in
+  the query string — is _still_ unmeasured, exactly as dl-25 left it. Nothing
+  here depends on it being true: `ytdlp.ts:256` is untouched and `claimsOnly`
+  keeps query strings, so the behaviour that premise argues for is preserved
+  either way, and the timedtext row proves only what the classifier answers, not
+  what yt-dlp emits. No live DASH manifest and no real CDN were touched; the
+  whole of this is the classifier, `parseDash` over checked-in fixtures, and the
+  table. The Playwright e2e suite was not run; `grep -rin "subtitle\|caption"
+tools/downloader/e2e/` returns nothing, so there is no subtitle path in it to
+  exercise, but that is an argument from the specs' text and not from a run.
