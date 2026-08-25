@@ -154,6 +154,18 @@ Fixtures, not live network calls — real services change, rate-limit and geo-va
 which makes CI failures meaningless. Check in real payloads under
 `test/fixtures/` and parse them offline. E2E runs against a local fixture server.
 
+**What keeps the formatter off them is `**/test/fixtures/` in `.oxfmtrc.json`,
+and the `**/` is the whole of it.** These are gitignore-shaped patterns: an entry
+with an internal slash is anchored to the config's directory, so the bare
+`test/fixtures/` that stood there until repo-4 matched nothing and every fixture
+in the repo was formatted like source — for JSON that is only indentation, but
+oxfmt reflows HTML text nodes and rewrites inline `<script>`, which is editing
+the thing under test. A fixture directory must therefore be named
+`test/fixtures/` to be covered; do not broaden the entry to `**/fixtures/`,
+which would swallow `tools/downloader/e2e/fixtures/hls-origin.ts`, TypeScript
+the repo does want formatted. Anything under a covered directory is exempt
+whatever its extension.
+
 CI runs lint, typecheck and every unit suite on every push. **`ci.yml`'s `check`
 job is filtered by nothing at all**, markdown included, because `npm run check`
 runs `oxfmt --check` and oxfmt formats markdown here — a documentation-only

@@ -6,7 +6,9 @@
     "node_modules/",
     "storage/",
     "coverage/",
-    "test/fixtures/",
+    // The `**/` is load-bearing: an entry with an internal slash is anchored to
+    // this directory, so a bare `test/fixtures/` matches nothing. See CLAUDE.md.
+    "**/test/fixtures/",
     "**/CHANGELOG.md"
   ]
 }
