@@ -19,9 +19,10 @@ complete branch on its first round, and no branch ever needing a rebase**; then
 **877 k across 6 agents and 12 dispatches-or-messages, three tickets to three
 pull requests,
 3 gates, again every builder complete on its first round and no rebase — and a
-batch whose whole output was 104 lines of source against 1,113 of documentation,
-which is the fifth session's real lesson and the reason two of its entries below
-are about cost rather than correctness.** Most of
+batch whose whole output was 266 non-documentation lines — 104 of them `src/`,
+the rest tests, a fixture and one config line — against **1,113 of
+documentation**. That 4.2:1 is the fifth session's real lesson and the reason two
+of its entries below are about cost rather than correctness.** Most of
 what follows is the cost of learning something the expensive way; numbers are quoted where they change a decision, and where the
 sessions disagree all are given, because the disagreement is usually the point.
 
@@ -271,7 +272,7 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
 - **Point every verification run at the narrowest thing that can fail.** This is
   the largest single cost in a batch and the page said nothing about it for five
   sessions. Measured on this repo, warm: one spec file **2 s**, the directory that
-  contains it **41 s**, the tool's whole project **>60 s**, plus **12 s** to rebuild.
+  contains it **41 s**, the tool's whole project **~50 s**, plus **12 s** to rebuild.
   A five-mutation sweep is `5 x (12 + 2)` or `5 x (12 + 41)` — **1.2 minutes or
   4.4 minutes for identical evidence**, and the fifth session paid the second
   figure across six agents. A mutation to one regex cannot break a spec that never
@@ -279,7 +280,6 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   the prompt; agents reach for the directory by default. The 20x is this repo's
   suites and will not transfer as a constant — the *shape* does, so have the agent
   measure both once and use the number it gets.
-
 - **Some work needs no gate at all.** Filing a ticket that *records a defect* is
   the clear case: require the builder to reproduce the defect before writing it up,
   and the reproduction **is** the verification. In the second session that builder
@@ -401,7 +401,7 @@ behind, and that is the leak that reached 51 stale branches in the second sessio
 ### When every agent dies at once
 
 A session usage limit killed all five in-flight gates simultaneously in the fourth
-session. It is worth planning for because the recovery is cheap and the wrong
+session, and the fifth ended mid-batch on a deliberate machine shutdown. It is worth planning for because the recovery is cheap and the wrong
 recovery is expensive.
 
 - **A snapshot of a live worktree is a moment, not a state — and it goes stale
@@ -414,13 +414,11 @@ recovery is expensive.
   the worktree path, the branch, the pushed tip — and re-read the tree on the way
   back in. Copy content out only for what dies with the session and exists nowhere
   else: a reviewer's returned report is the clear case, an uncommitted diff is not.
-
 - **Prefer pushing over describing.** The best thing that happened under that
   shutdown was a builder told to secure its work choosing to commit and push the
   **gate record first**, ahead of its own half-finished code fixes, under a `docs`
   type so it released nothing. That is the right instinct to name in the message:
   *push the thing that exists nowhere else; the code you can rewrite.*
-
 - **Check for damage before resuming anything.** Agents die at an arbitrary
   instant, so one may have been mid-mutation with a source file still mutated, or
   one step from pushing a scratch branch. Confirm the shared checkout is clean,
@@ -812,6 +810,15 @@ the number the gate named" is exactly such a fix.
 - **Stale `dist` fakes a passing mutation.** Where a package resolves a sibling
   through `dist`, mutating that sibling and seeing green may mean the build never
   ran. Rebuild, then re-mutate.
+- **And restoring a mutation can leave `dist` stale too** — the same trap running
+  backwards, hit independently by two agents in one session. `mv "$F.bak" "$F"`
+  restores the file's **original mtime**, so `tsc --build` judges the source older
+  than the emitted output, skips the project, and the **mutated** `dist` survives
+  the restore. One occurrence left a mutated `config.js` in place, failed an
+  unrelated suite, and looked exactly like a branch flake. `touch` the source
+  after restoring, or force a clean rebuild, and grep `dist` to confirm the
+  mutation is gone. Suspect this first when a suite fails in a way the diff cannot
+  explain.
 - **Restore from a `trap`, not from the next line of the script.** The next line
   does not run when you are killed. A mutation harness whose restore is a
   subsequent statement leaves the tree mutated on any timeout, interrupt or usage
@@ -822,16 +829,6 @@ the number the gate named" is exactly such a fix.
   first mutation, and have the run print a line when it fires so you can see that
   it did. This is the cheap half of *When every agent dies at once*: that section
   tells you to check for a mutated tree afterwards, and this stops there being one.
-
-- **And restoring a mutation can leave `dist` stale too** — the same trap running
-  backwards, hit independently by two agents in one session. `mv "$F.bak" "$F"`
-  restores the file's **original mtime**, so `tsc --build` judges the source older
-  than the emitted output, skips the project, and the **mutated** `dist` survives
-  the restore. One occurrence left a mutated `config.js` in place, failed an
-  unrelated suite, and looked exactly like a branch flake. `touch` the source
-  after restoring, or force a clean rebuild, and grep `dist` to confirm the
-  mutation is gone. Suspect this first when a suite fails in a way the diff cannot
-  explain.
 - **Measure the baseline yourself.** Never carry a delta across a rebase; check out
   the base, build there, run the suite.
 - **Docs need mechanical verification, not prose review.** Prose has no compiler.
@@ -884,7 +881,6 @@ discarded. So:
   text posted.** Commit the verdict, the findings table with `file:line` and a
   disposition each, and what the gate did **not** do; post the reasoning, the
   enumerations and the reproductions to the thread, and link it.
-
 - **The Log is where the bloat is, not the gate record.** Same three tickets: Logs
   **753 lines**, gate records **303** — and one of those Logs ran to **371 lines
   for a three-line config change**. The cause is upstream, in the relay: every
@@ -892,10 +888,13 @@ discarded. So:
   measurement into paragraphs, and those instructions are elsewhere on this page
   because they are worth it. So keep asking — and put the answer where it is read
   once. **The Log's shape is a claim, its command, and that command's output.** The
-  narrative belongs in the pull request body. Judge a Log by whether a later agent
-  can re-run it, not by whether it reads well.
+  narrative belongs in the pull request body. **One carve-out, because the repo's
+  own `CLAUDE.md` says it has nowhere else to live:** what the brief turned out to
+  have wrong stays in the Log, as a claim with its command like any other. Judge a
+  Log by whether a later agent can re-run it, not by whether it reads well.
 
-- The reviewer returns the section; **the builder commits it** to the ticket, above
+- The reviewer returns the section; **the builder commits the short form of it**
+  (the two bullets above say which form) to the ticket, above
   `## Log`, one subsection per gate, never overwriting an earlier one.
 - The builder then posts the reviewer's report to the PR thread
   (`gh pr comment <n> --body-file <f>`). That is what makes a self-transcribed
