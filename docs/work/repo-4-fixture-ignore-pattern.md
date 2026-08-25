@@ -233,6 +233,71 @@ next fixture format checked in gets no such luck by design, only by accident.
   named, or the statement that none did.
 - `npm run check` and `npm test` are green.
 
+## Review
+
+### Gate 1 — 2026-08-25
+
+**Verdict: CONCERNS.** Reviewed detached at `eac616e`. Zero behavioural defects —
+the gate looked for one and could not find it. All six findings are prose
+accuracy in the Log and in `CLAUDE.md`; none required re-measuring the fix.
+
+**What the gate confirmed independently.** A set-diff over all **549** tracked
+files, run twice with each config at the same anchoring base: claimed
+**492 → 471**, delta **exactly 21**, newly included **0**, files still formatted
+under a `test/fixtures/` directory **0**. All four of the builder's corrections
+to the brief hold. `**/test/fixtures/` matches at depth 1 as well, so a future
+tool laying its fixtures one level shallower is covered — there is no gap. The
+`CHANGELOG.md` control stayed excluded in both states.
+
+Its probe used `tools/downloader/engine/test/fixtures/` — the fourth directory,
+the one the brief missed — and stated the positive control first: an identical
+copy of the probe placed _outside_ a fixtures directory is `CLAIMED, WOULD
+REWRITE` under **both** configs, which is what makes the probe genuinely
+mis-formatted rather than accidentally well-formed. Under the old config the
+fixture-directory copy was rewritten (`4091f2c8ea10` → `bb375ad18a5e`); under
+the shipped config it is byte-identical.
+
+`repo-11` fully validated: the id was free, `npm run status` lists it under
+`repo — 3 open of 11`, `--show repo-11` resolves it as unblocked, and its quotes
+check out at the lines it cites. The release-please reasoning was checked against
+`release-please-config.json` rather than against prose: `feat`/`fix`/`perf`/
+`revert` visible, `docs`/`chore` hidden. **Filing it rather than folding it in
+was correct.**
+
+| #   | Finding                                                                                                                                                                                                                                                                                                                                                                                                                   | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1  | `CLAUDE.md` said "every fixture in the repo was formatted like source". Only **21 of the 54** tracked files under a `test/fixtures/` directory were ever claimed; the other 33 (`.m3u8`, `.mpd`, `.m4s`, `.mp4`, `.txt`, `.png`) are extensions oxfmt never handled. A reader would believe the checked-in DASH/HLS manifests were being rewritten, and either hunt damage that never existed or distrust the manifests.  | **Fixed.** The paragraph now says "every fixture **oxfmt claims**", names the three claimed extensions and the six it never handled, and says outright that the manifests and segments were never at risk. Durable wording, no baked count.                                                                                                                                                                                                                                                                                                       |
+| F2  | Gates block claimed 1 pre-existing `no-await-in-loop` warning, in `pin.spec.ts`.                                                                                                                                                                                                                                                                                                                                          | **Fixed, re-derived rather than inherited.** True figure is **16 warnings across 9 files**. Three parties disagreed (this gate 16/8, the pl-32 gate 3/3, the builder 1/1); the coordinator ran it clean at 16 and explicitly asked the builder to derive the file count rather than inherit it. Derived here: **9** distinct paths, not 8. The builder's original 1 came from reading the tail of a grepped log window as if it were the whole.                                                                                                   |
+| F3  | The builder's correction to the brief (that `**/fixtures/` does not swallow `tools/planner/web/test/fixtures.ts`) is **right**, but its stated reason — "a trailing slash matches directories only" — is **wrong**. The gate measured `**/fixtures` _without_ the slash and `fixtures.ts` is still claimed.                                                                                                               | **Fixed.** The operative reason is that gitignore patterns match **whole path components**: `fixtures.ts` is not a component named `fixtures`, and the slash would only bite against a file literally named `fixtures`. The Log now carries the corrected reasoning plus a note on the failure mode — a right conclusion with an untested reason reads as _more_ reviewed than the original. The builder could not re-measure this independently (sandbox refusal on the scratch-config write, under shutdown pressure) and says so at the claim. |
+| F4  | Absolute file counts did not reproduce on a clean tree: the Log reported `494 → 472` and `on 470 files`; true clean-tree values at `eac616e` are **492 → 471**. The `470` predated the branch's own `repo-11` ticket file, which oxfmt formats; the `494/472` pair was measured with two throwaway configs present. The delta of 21 and the identity of all 21 files were **exactly right** — only the absolutes drifted. | **Fixed, and treated as a class rather than a typo.** Every figure re-derived on the final tree as the last action before staging, and the Log now states which commit its numbers belong to. The lesson recorded: adding a file to your own branch invalidates counts you took earlier in the same branch.                                                                                                                                                                                                                                       |
+| F5  | `.oxfmtrc.json:9-10` is invalid strict JSON. The gate enumerated every consumer: `package.json:39,40` via the binary (verified working), `.claude/settings.json` string-matches permission patterns only, `ci.yml` prose, `package-lock.json` metadata, `scripts/` reads only `release-please-config.json`, `image-closure.test.ts` reads manifests and Dockerfiles, no `.vscode/`, no root `*.json` glob.                | **Recorded, no change.** Cosmetic editor squiggle unless `files.associations` maps the file to `jsonc`, and already the status quo for `.oxlintrc.json`. Noted in the Log.                                                                                                                                                                                                                                                                                                                                                                        |
+| F6  | `CLAUDE.md:57-62` (lines as at the reviewed commit `eac616e`; applying this finding shifted them) says the only honoured oxfmt setting is `ignorePatterns` but never says these files are JSONC — which this branch now relies on. Suggestion, builder's call.                                                                                                                                                            | **Accepted and applied.** `CLAUDE.md` now states both oxc configs are JSONC, that neither survives strict `JSON.parse`, that only the binaries read them, and that oxfmt preserves the comments.                                                                                                                                                                                                                                                                                                                                                  |
+
+**The gate's best contribution was on the JSON comment.** The builder argued from
+a grep showing no consumers, which only establishes that nothing breaks today.
+The gate found the precedent instead: `.oxlintrc.json`, the sibling config named
+beside `.oxfmtrc.json` in `CLAUDE.md`, has carried `//` comments and failed
+strict `JSON.parse` for 20 days. That is what makes the choice defensible, and it
+is now in the Log — with the gate's SHA corrected from `5ab843f` to **`b876906`**,
+since `.oxlintrc.json` carried no comments at the first commit.
+
+**What this gate did not do**, stated so nobody assumes otherwise: it did not run
+the e2e suites, did not build the container image, and did not re-run the full
+21-file `git log --follow` sweep behind step 3 — it spot-checked that work rather
+than reproducing it. It reviewed a detached checkout at `eac616e`, so anything
+committed after that sha is ungated by it. It also could not verify how the
+`oxc.oxc-vscode` extension handles the commented config (no VS Code available),
+and could not exercise `storage/` or `coverage/` in `ignorePatterns` because
+neither directory exists in the tree.
+
+**One item is left open rather than closed.** The full-suite run that exited 1 at
+`102/1515` — a vitest forks-worker start timeout on
+`tools/downloader/web/test/error-panel.test.tsx`, not an assertion failure — is
+diagnosed as environmental, and three clean full runs (one the gate's, two the
+builder's) stand against the one failure. But clean runs cannot disprove an
+intermittent fault, so this stays an open watch item: if a `web` suite fails to
+start again, suspect the forks pool before the test.
+
 ## Log
 
 **2026-08-25 — anchored the pattern, and audited what the inert one had done.**
@@ -260,9 +325,27 @@ that now say why. `.oxfmtrc.json` names `**/test/fixtures/`; no other entry move
 - **The anti-instruction is right, but only one of its two examples is.**
   Measured below: broadening to `**/fixtures/` does swallow
   `tools/downloader/e2e/fixtures/hls-origin.ts`, so the instruction stands. It
-  does **not** swallow `tools/planner/web/test/fixtures.ts` — that is a _file_
-  named `fixtures.ts`, and a pattern with a trailing slash matches directories
-  only. The conclusion survives on one leg, not two.
+  does **not** swallow `tools/planner/web/test/fixtures.ts`. The conclusion
+  survives on one leg, not two.
+
+  **My first explanation of that was wrong, and gate 1 caught it.** I wrote that
+  the trailing slash makes the pattern directory-only, so a file named
+  `fixtures.ts` cannot match. The gate measured `**/fixtures` _without_ the
+  slash: `fixtures.ts` is **still** claimed. So the slash is not what saves it.
+  The operative reason is that **gitignore patterns match whole path
+  components** — `fixtures.ts` is not a component named `fixtures`, and the
+  trailing slash would only bite against a file literally named `fixtures`.
+
+  Worth naming the failure mode, because it is the ticket's own bug wearing a
+  different hat: I corrected the brief, was right, and gave a reason I had not
+  tested. A correct conclusion with an untested reason reads as _more_ reviewed
+  than the original, not less, which is exactly what makes it durable. What
+  would have caught it is the thing that caught everything else here — one more
+  probe config, `**/fixtures` without the slash, four seconds of work. I varied
+  the pattern I was arguing _for_ and not the one I was arguing _from_.
+  (Recorded honestly: the gate measured this, not me. My own re-run was blocked
+  by a sandbox refusal on the scratch-config write, and with the machine coming
+  down I took the gate's measurement rather than fight the tooling for it.)
 
 ### Step 2 — the pattern, before and after
 
@@ -324,10 +407,14 @@ newly excluded (CLAIMED before, SKIPPED after): 21
 went the other way (SKIPPED before, CLAIMED after): (none)
 ```
 
-Cross-checked repo-wide, both configs run with an identical file set present:
-`494 files` under the old pattern versus `472` under the new — a delta of 22,
-being the 21 fixtures plus the probe described below. The per-file count and the
-repo-wide count agree.
+Cross-checked repo-wide. **The absolutes below are the clean-tree values for
+this branch's final commit** — an earlier version of this Log reported `494 → 472`,
+which was measured with two throwaway configs and a probe still on disk, and
+`on 470 files`, which predated this branch's own `repo-11` ticket file. Gate 1
+caught both. Re-derived here: **492 files** claimed under the old pattern versus
+**471** under the new, over **549** tracked files — a delta of **21**, the
+fixtures exactly. The per-file classification and the repo-wide count agree, and
+did so at every version of these numbers; only the absolutes ever drifted.
 
 ### Step 1 — why `**/test/fixtures/` and not `**/fixtures/`, measured
 
@@ -422,8 +509,8 @@ Probe restored to its mis-indented state, then the two gates the acceptance name
 
 ```
 $ npm run check                                       # exit 0
-    oxfmt --check → All matched files use the correct format. …on 470 files
-$ npm run format                                      # exit 0, …on 470 files
+    oxfmt --check → All matched files use the correct format. …on 471 files
+$ npm run format                                      # exit 0, …on 471 files
     probe sha b47ad19e… before → b47ad19e… after      # untouched
 $ git status --porcelain                              # only ` M .oxfmtrc.json` + the untracked probe
 ```
@@ -448,6 +535,27 @@ before it was proposed, not assumed** — `.json` is not obviously comment-beari
 - Nothing in the repo parses `.oxfmtrc.json`. `grep -rn oxfmtrc` over `ts/mjs/js/
 json/yml/md` returns prose references only — no `JSON.parse`, so a comment
   cannot break a reader.
+
+**Gate 1 found a better argument than mine, and it is the one to keep.** I
+reasoned from the absence of consumers, which only shows nothing breaks _today_.
+The gate found the precedent: **`.oxlintrc.json` — the sibling config, named
+beside `.oxfmtrc.json` at `CLAUDE.md:57-58` — already carries `//` comments and
+already fails strict `JSON.parse`.** So this branch introduces no new property of
+the repo; it makes the two oxc configs consistent. Verified here rather than
+inherited, and the gate's SHA needed correcting: comments entered
+`.oxlintrc.json` at **`b876906`** (2026-08-05, WP-4), _not_ at `5ab843f`, which
+had none. Same day, different commit; the precedent is 20 days old either way.
+
+```
+.oxlintrc.json FAILS strict JSON.parse: Expected property name or '}' … line 28
+.oxfmtrc.json  FAILS strict JSON.parse: Unexpected token '/', ..."ge/",
+```
+
+Recorded and not acted on (gate F5): the file is invalid strict JSON, and an
+editor's built-in JSON validator will squiggle it unless `files.associations`
+maps it to `jsonc`. Cosmetic, and already the status quo for `.oxlintrc.json`.
+`CLAUDE.md` now says both configs are JSONC (gate F6), since this branch relies
+on it.
 
 Both homes rather than either, because the failure mode was precisely that the
 intent lived in `CLAUDE.md` and the enforcement in `.oxfmtrc.json` with nothing
@@ -486,13 +594,29 @@ This branch touches `.oxfmtrc.json`, `CLAUDE.md` and `docs/` only, nothing under
 
 ### Gates
 
+All figures below re-derived on the final tree of this branch — see "Numbers,
+and which commit they belong to" at the end.
+
 ```
 npm run build   exit 0
-npm run check   exit 0   (oxfmt --check: 470 files; oxlint: 1 pre-existing
-                          no-await-in-loop warning in tools/planner/e2e/pin.spec.ts)
+npm run check   exit 0   oxfmt --check: 471 files
+                         oxlint: 16 pre-existing warnings, all no-await-in-loop,
+                         across 9 files (7 in engine/src/storage.ts, 2 in
+                         engine/src/download/retry.ts, 1 each in api/src/server.ts,
+                         engine/src/download/pool.ts, engine/src/ffmpeg/kill.ts,
+                         engine/src/index.ts, planner/agent/src/ask.ts,
+                         planner/api/src/runs/travel.ts, planner/e2e/pin.spec.ts)
 npm test        exit 0   Test Files 103 passed (103) · Tests 1528 passed (1528)
-npm run format  exit 0   run after the .md edits; git status clean of anything unintended
+npm run format  exit 0   run after every .md edit; git status checked each time
 ```
+
+**I originally reported that oxlint warning count as `1`, in `pin.spec.ts`, and
+that was wrong** — I read the last line of a grepped log window and reported it
+as the whole. The true figure is 16 across 9 files, derived here with
+`npx oxlint 2>&1 | grep -c 'no-await-in-loop'` and a `sed`/`uniq -c` over the
+paths, not taken from the coordinator (who measured 16 and cautioned that their
+own file count might be off — it was: 9 distinct paths, not 8). All 16 predate
+this branch; none is in a file it touches.
 
 `npm test` in full rather than one project, since this moves shared config.
 
@@ -504,3 +628,44 @@ never ran. `npx vitest run tools/downloader/web/test/error-panel.test.tsx` passe
 13 tests, exactly the 13 missing from that run, and the next full run was
 `103 passed` / `1528 passed`, exit 0. Machine contention, not this change —
 recorded because an exit 1 in a log is worth being able to dismiss on evidence.
+
+**Left open, not closed.** Gate 1's judgement, and it is right: a diagnosis of
+"environmental" that rests on subsequent green runs cannot disprove an
+intermittent fault. Gate 1's own full run was clean, and so were two of mine, so
+three clean runs stand against one failure — but if `error-panel.test.tsx` or
+another `web` suite fails to start again, this is the prior, and the next reader
+should suspect the forks pool rather than the test.
+
+### Numbers, and which commit they belong to
+
+Gate 1's F4 was not a typo, and it is the finding worth carrying forward. My
+absolutes were **true when I measured them** and false by the time I committed,
+because I added a file to my own branch — `docs/work/repo-11-…md`, which oxfmt
+formats — after taking the counts. Nothing was careless at the moment of
+measurement; the branch moved underneath the number.
+
+So: **a figure is only safe when it is re-derived in the same pass that could
+have invalidated it.** Every number in this Log was re-derived as the last action
+before staging, and they belong to **this branch's final commit**, not to
+`eac616e`. The ones that can drift again if anything is added to this branch:
+
+| Figure                    | Value             | How                                    |
+| ------------------------- | ----------------- | -------------------------------------- |
+| tracked files             | 549               | `git ls-files \| wc -l`                |
+| oxfmt claims, old pattern | 492               | repo-wide `--check` via a root config  |
+| oxfmt claims, new pattern | 471               | ditto, and what `npm run check` prints |
+| **delta**                 | **21**            | the invariant — it never drifted       |
+| fixture files total       | 54                | under a `test/fixtures/` directory     |
+| claimed / never claimed   | 21 / 33           | by extension, per-file                 |
+| oxlint warnings           | 16 across 9 files | `npx oxlint`, all `no-await-in-loop`   |
+| tests                     | 103 files / 1528  | `npm test`                             |
+
+The delta, the identity of the 21 files, and every conclusion in this Log were
+correct in all three versions of these numbers. Only the absolutes moved, which
+is exactly why absolutes are the ones to re-derive.
+
+Nine commit SHAs are cited above — `5ab843f`, `786d686`, `2f97370`, `b876906`,
+`725740c`, `5662f95`, `d1ec2c6`, `7b3b0f4`, `60e48e7`, plus `1ac6de6` and
+`50701dc`. Gate 1 resolved all of them and confirmed each says what is claimed;
+`b876906` is the one this pass added, and it was verified here rather than taken
+from the gate, which had attributed those comments to `5ab843f`.
