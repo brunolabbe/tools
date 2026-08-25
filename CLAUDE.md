@@ -223,7 +223,27 @@ so a branch's own commits are working notes and the title is the changelog line
 — check yours with `node scripts/commit-message.mjs --text "<title>"` before
 opening the pull request. A commit that touches two tools lands in both
 changelogs under one sentence written for one of them, which is the tell that it
-should have been two commits.
+should have been two commits — meaning **two pull requests**, since a squash
+merge lands one title carrying every path in the branch, and two commits on one
+branch separate nothing.
+
+**Changelog attribution is by path, and the type decides whether there is one at
+all.** release-please routes a commit to a tool by the files it touched, never by
+the scope in its subject — so a `fix(repo):` whose only path under `tools/` is a
+single `.md` file releases that tool anyway, with your repo-scoped sentence as
+its changelog line. Measured: one such commit touching only
+`tools/planner/docs/work/pl-26-…md` cuts planner `0.4.1`. The way out is the
+type, not the scope: `docs` is `hidden` in `release-please-config.json`, and the
+same commit as `docs(planner): …` releases nothing, and so does `docs(repo): …`
+carrying the same path. **So an annotation onto another tool's ticket rides in a
+pull request whose title carries a `hidden` type** — its own pull request
+whenever the branch's own title carries a type that is **not** `hidden` in
+`changelog-sections`, today `feat`, `fix`, `perf` and `revert`. The type is the
+constraint; the scope is the usual convention and names whatever the pull request
+is about. Read the test off the config rather than off this sentence; a type
+added there without `hidden` is releasing the day it is added. The worked
+examples, all three measurements and the commands that produced them are in
+[docs/03-RELEASING.md](./docs/03-RELEASING.md).
 
 ## Style
 

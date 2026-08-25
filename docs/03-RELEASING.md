@@ -91,12 +91,123 @@ re-probing in place (dl-9)`. That is what the `dl-`/`pl-` prefix is for — see
 machine. A commit touching both tools appears in both changelogs, which is
 correct and is also a hint that it should have been two commits.
 
-The worked example is downloader 0.2.0, whose only entry reads
-`**planner:** run the fan-out as a job (pl-16)`. That commit lifted the rate
-limiter into `packages/core` and rewired `tools/downloader/api` to use it while
-adding the planner's feature — so the downloader genuinely changed and genuinely
-owed a release, and the line describing it was written for another tool. Two
-commits would have given each tool a sentence that was true of it.
+Two worked examples, named with their commits so the next reader does not have to
+re-derive them:
+
+- **`a112cd4` — `feat(planner): run the fan-out as a job (pl-16)`** is what
+  decided downloader `0.2.0`, a **minor** bump from `0.1.1`, and it heads that
+  release's `### Features`. It lifted the rate limiter into `packages/core` and
+  rewired `tools/downloader/api` to use it while adding the planner's feature —
+  seven files under `tools/downloader/api/`, which is also every file it touched
+  under `tools/downloader/`. So the downloader genuinely changed and genuinely
+  owed a release, and the line describing it was written for another tool. Two
+  commits would have given each tool a sentence that was true of it. (It is
+  listed there twice, under `09bd161` as well. That is the merge-commit
+  duplication described under **Merging a pull request** below, not a second
+  attribution.)
+- **`2ea0631` — `fix(core): make the image scan fail by name … (pl-17)`** is in
+  planner `0.4.0` under `### Fixes` _and_ in
+  downloader `0.2.0` under `### Fixes`. It touched both `Dockerfile`s and five
+  of the planner's documents — three of them tickets — so it is in both tools'
+  notes under a `core` scope that names neither of them.
+
+In both, the scope in the subject — the thing this repo enforces on every commit
+— had no part in the routing.
+
+### Annotating another tool's ticket, without releasing it
+
+This repo asks that a finding about a sibling ticket be written onto that ticket,
+in the same pull request as the fix. That convention is practised rather than
+written down — repo-6 did it for repo-3, in the `_Outcome, <date>:_` pattern
+[adr/003](./adr/003-the-status-page-is-generated.md) carries — while
+[01-TICKETS.md](./01-TICKETS.md) writes down only the review gate, which works the
+same way. Under
+the rule above, doing that from a branch titled `fix(repo): …` **releases the
+other tool**: one `.md` file under `tools/<name>/` is enough, and the changelog
+line it cuts is your repo-scoped sentence.
+
+Measured on 2026-08-23, on a scratch branch off `main` carrying exactly one
+commit — `fix(repo): scratch measurement, annotate a planner ticket only
+(repo-7)` — whose only file is
+`tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md`:
+
+```bash
+npx release-please@17.11.1 release-pr --repo-url=brunolabbe/tools \
+  --target-branch=<scratch-branch> --token="$(gh auth token)" --dry-run
+```
+
+```
+✔ Considering: 1 commits
+Would open 1 pull requests
+title: chore(planner): release 0.4.1
+
+### Fixes
+
+* **repo:** scratch measurement, annotate a planner ticket only (repo-7) (541be9f)
+```
+
+**The way out is the type, not the scope.** `docs`, `refactor`, `test`, `build`,
+`ci` and `chore` are `hidden` in `changelog-sections`, and the identical commit
+retyped `docs(planner): …`, on a second scratch branch of the same shape, gives:
+
+```
+✔ Considering: 1 commits
+✔ No user facing commits found since ece6ec0 - skipping
+Would open 0 pull requests
+```
+
+**And the scope really is not consulted, measured rather than composed.** The
+same single-file commit again on 2026-08-24, typed `docs` but scoped `repo` —
+the shape this page's own repo-7 pull request landed — gives the identical skip:
+
+```
+❯ Backfilling file list for commit: 58b2764e4d800790874e1c47523a68034f4720f0
+❯ Found 1 files
+✔ Considering: 1 commits
+✔ No user facing commits found since ece6ec0fc6410c3d19a92c120860f0982e3a396c - skipping
+Would open 0 pull requests
+```
+
+Three runs, then: a releasing type releases whatever tool the path names
+(`fix(repo)` → planner `0.4.1`), and a `hidden` type releases nothing whether the
+scope names that tool (`docs(planner)`) or not (`docs(repo)`).
+
+So **a cross-tool documentation annotation rides in a pull request whose title
+carries a `hidden` type**. That is the whole constraint, and it is the test
+release-please applies rather than a list to memorise: **is the title's type
+`hidden` in `changelog-sections`?** Where it is — any `docs`, `refactor`, `test`,
+`build`, `ci` or `chore` title — the annotation is free and goes in that same
+pull request. Where it is not, which today means `feat`, `fix`, `perf` and
+`revert`, the annotation is its own pull request, and that second pull request is
+the price.
+
+**The scope is the usual convention, not part of the constraint.** Name what the
+pull request is about: `docs(planner): …` when annotating a planner ticket is
+what the pull request is _for_, and the branch's own scope when the annotation
+rides along inside a wider change. This page's own history is the worked example
+— repo-7 carried the `pl-26` annotation under `docs(repo): …`, and measurement C
+above is that exact shape releasing nothing. Writing the rule as "titled
+`docs(<tool>): …`" was over-specified in both halves, and repo-9's brief inherited
+the error.
+
+**"Two commits" above means two pull requests.** Splitting a branch into two
+literal commits does not help, and the sentences under **What routes a commit to
+a tool** are not telling you to: this repo squash-merges, so the title is the one commit that lands
+and it carries every path in the branch. Only a second pull request separates the
+paths.
+
+Only two types were ever run — `fix` and `docs`, across three runs.
+`release-please-config.json` hides six types,
+so the other **five** — `refactor`, `test`, `build`, `ci`, `chore` — are read off
+the config and assumed to behave like `docs`, not measured.
+
+`perf` and `revert` are not `hidden`, so the "no user facing commits" skip above
+is the one thing that can be said about them: it does not apply, and they reach
+whatever release-please does next. What that is was not run. **This does not
+contradict "a `perf:` commit on its own therefore releases nothing" further up** —
+that sentence is about the version bump, this one is about the skip, and the case
+where the two meet is untested. It is filed as
+[repo-10](./work/repo-10-measure-the-unmeasured-types.md).
 
 ### The one case that needs a footer
 
