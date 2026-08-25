@@ -447,15 +447,51 @@ test("the markdown heads each tool and counts the closed rather than listing the
 // The CLI
 // ---------------------------------------------------------------------------
 
+// Against a throwaway tree, not the real board. This ran `--tool downloader
+// --ready` over the repo's own tickets and asserted every stdout line was a
+// downloader row, so it went red the moment the last open downloader ticket was
+// *picked up* — `--ready` is `ready` and unblocked, so `in-flight` is enough —
+// and redder still once the last one closed. It failed because the project
+// succeeded (repo-8).
+//
+// **Two tools in the tree, not one.** A single-tool tree passes against a CLI
+// that ignores `--tool` altogether, which is the one property this case is
+// named for; the second tool is what makes the narrowing observable.
 test("--tool narrows the view to one tool", () => {
-  const { stdout, status } = run(["--tool", "downloader", "--ready"]);
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1"),
+    [at("pl-2")]: pl("pl-2"),
+    [atRepo("repo-9")]: repoTicket("repo-9"),
+  });
+  const { stdout, status } = run(["--tool", "planner", "--ready"], root);
   expect(status).toBe(0);
-  expect(stdout.length).toBeGreaterThan(0);
-  for (const line of stdout.trimEnd().split("\n")) {
-    expect(line).toContain("\tdownloader\t");
+  const lines = stdout.trimEnd().split("\n");
+  expect(lines).toHaveLength(2);
+  for (const line of lines) {
+    expect(line).toContain("\tplanner\t");
   }
+  expect(stdout).not.toContain("repo-9");
 });
 
+// The behaviour the defect above walked into, and unasserted anywhere until
+// now: `--ready` with nothing ready writes a sentence rather than nothing at
+// all (`scripts/status.mjs:543`). That is why the per-line assertion above saw
+// the fallback line and `expect(stdout.length).toBeGreaterThan(0)` did not.
+test("--ready with nothing ready says so rather than printing nothing", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done" }),
+    [at("pl-2")]: pl("pl-2", { status: "dropped" }),
+  });
+  const { stdout, status } = run(["--ready"], root);
+  expect(status).toBe(0);
+  expect(stdout.trimEnd()).toBe("nothing is ready and unblocked");
+});
+
+// Deliberately rootless, and left that way by repo-8: with the `--write` and
+// `--check` case below, it is the suite's only proof that the CLI runs at all
+// against the tree it derives from its own location. Its assertion is about
+// absence, and the only board that could move it is one where some tool is
+// named `sniffer`.
 test("--tool with a name no tool has is a named failure, not an empty view", () => {
   const { stdout, stderr, status } = run(["--tool", "sniffer"]);
   expect(status).toBe(1);
@@ -583,16 +619,51 @@ test.each([
   expect(stdout).not.toContain("nothing to pick up");
 });
 
+// Against a throwaway tree, not the real board: `--markdown --tool downloader`
+// lost its `| Ticket ` header the moment every downloader ticket closed, because
+// `renderMarkdown` writes a sentence in place of the table (repo-8). Its trigger
+// is not the `--ready` case's: `in-flight` leaves this one green, so the board
+// has to actually finish.
+//
+// `not.toContain("generated:tickets")` is repo-2's preservation criterion — the
+// marker that opened the generated region of the page it deleted — and it is
+// carried over verbatim.
 test("--markdown emits a table, with no generated-region markers to guard", () => {
-  const { stdout, status } = run(["--markdown", "--tool", "downloader"]);
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1"),
+    [atRepo("repo-9")]: repoTicket("repo-9"),
+  });
+  const { stdout, status } = run(["--markdown", "--tool", "planner"], root);
   expect(status).toBe(0);
   expect(stdout).toContain("| Ticket ");
+  expect(stdout).toContain("[pl-1](tools/planner/docs/work/pl-1-slug.md)");
+  expect(stdout).not.toContain("repo-9");
+  expect(stdout).not.toContain("generated:tickets");
+});
+
+// The pair, and the state the case above used to fail in — end to end through
+// the CLI rather than through `renderMarkdown` alone, because what broke was
+// the flag path and its exit code, not the renderer.
+test("--markdown on a tool with nothing open says so rather than emitting a table", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done" }),
+    [at("pl-2")]: pl("pl-2", { status: "dropped" }),
+  });
+  const { stdout, status } = run(["--markdown", "--tool", "planner"], root);
+  expect(status).toBe(0);
+  expect(stdout).toContain("None. Every ticket this tool has is closed.");
+  expect(stdout).not.toContain("| Ticket ");
   expect(stdout).not.toContain("generated:tickets");
 });
 
 // `--write` and `--check` were real until repo-2 retired the file they wrote.
 // Ignoring them would hand a reader with muscle memory the default view and let
 // them believe a page had just been regenerated.
+//
+// Rootless on purpose, like the `sniffer` case above, and left that way by
+// repo-8: `parseArgs` throws before `main` ever reads a ticket, so no board can
+// move it, and running it against the derived root is the other half of the
+// proof that the derived root works at all.
 test("--write and --check are gone, and say so rather than being ignored", () => {
   for (const flag of ["--write", "--check"]) {
     const { stderr, status } = run([flag]);

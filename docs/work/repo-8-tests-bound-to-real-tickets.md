@@ -3,7 +3,7 @@ id: repo-8
 tool: repo
 title: Two CLI tests assert on the real ticket board, and go red when downloader work finishes
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [repo-3, repo-6]
 ---
@@ -211,6 +211,323 @@ closed.` and no `| Ticket ` header, which is also unasserted today.
 - `npm run check` and `npm test` are green, and
   `node scripts/status.mjs --json > /dev/null` exits 0.
 
+## Gate 1 — 2026-08-24 · **PASS**
+
+**Gate: `repo-8-tests-off-the-real-board` — PASS.** The reviewer's record
+follows whole; only its headings are demoted one level to sit under this one,
+and five citations are corrected as recorded at the end of the section. The
+reviewer's file is posted unedited on the pull request, so the delta is visible
+rather than folded in.
+
+Reviewed at branch tip `b28fbee`. Worktree verified clean at `b28fbee`
+(`git status --porcelain` empty, `scripts/status.mjs` md5 identical to a pristine
+copy) before any evidence below was gathered, and clean again after.
+
+### 1. The enumeration claim — full sweep, not a sample
+
+**23 `run(...)` call sites** in `scripts/test/status.test.ts` (22 matching lines;
+`:713` carries two), excluding the definition at `:94`.
+`grep -n 'spawnSync\|execFile\|execSync'` confirms `run` is the only path to the
+CLI — no second spawn route.
+
+**21 pass `--root`:** `:466 :485 :521 :532 :545 :557 :573 :593 :617 :636 :652
+:691 :713(x2) :717 :718 :727 :753 :763 :780 :788`.
+
+**Exactly 2 are rootless**, and they are the two the Log names — no third
+slipped through:
+
+| Line   | Call                                   | Asserts                                                                          | Can a ticket move it?                                                                                                                                                                                               |
+| ------ | -------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:496` | `--tool sniffer`                       | exit 1, `stdout === ""`, stderr matches `no tickets for a tool called "sniffer"` | No. `tool` is derived from directory names under `tools/` plus the literal `repo` (`scripts/status.mjs:234-244`), never from frontmatter — so only creating `tools/sniffer/` moves it. No ticket's frontmatter can. |
+| `:669` | `run([flag])` for `--write`, `--check` | exit 1, `unrecognised argument "<flag>"`                                         | No. `parseArgs` throws at `scripts/status.mjs:454` before `main` reaches `readTickets` at `:487`. Tree-independent.                                                                                                 |
+
+Acceptance line satisfied: every `run(...)` that reads the ticket tree is rooted;
+the two that are not read it only in the sense of proving the derived root
+resolves.
+
+**No change needed —** `scripts/test/status.test.ts:156` and `:167` read the real
+board directly via `readTickets(REPO)`, outside the `run(...)` acceptance. They
+assert structural invariants (every ticket parses; repo tickets live in
+`docs/work/`), never _which_ tickets exist, and are deliberately board-coupled —
+they are the guard that real frontmatter parses. Correctly left alone.
+
+### 2. Independent mutation, with its positive control
+
+Did **not** reuse the builder's `:516` mutation. Mutation applied at parse time
+instead — `scripts/status.mjs:448`, inserted
+`if (arg === "--tool") { i++; continue; }` so the flag and its value are
+swallowed before `values` is built. This leaves `--root` intact, so the seam
+under test is unaffected.
+
+- **Positive control, unmutated tree, identical command** —
+  `npx vitest run scripts -t "narrows the view to one tool"`: **1 passed, exit 0.** Stated explicitly because a runner that exits 1 on a clean tree reports
+  itself, not the mutant.
+- **Mutated:** red.
+  ```
+  FAIL scripts/test/status.test.ts > --tool narrows the view to one tool
+  AssertionError: expected [ ...(3) ] to have a length of 2 but got 3
+   > scripts/test/status.test.ts:469:17
+  ```
+- **Full suite under this mutation:** 5 failed / 73 passed (78) — the two
+  rewritten cases, the `sniffer` case, and two of repo-6's. Same shape and count
+  as the builder reported for its _different_ mutation, which is corroboration
+  rather than transcription.
+- **Restore:** `cp` from a pristine copy, `touch`, then `git status --porcelain`
+  empty and md5 matched. Repeated after every mutation below; no mutated byte
+  survived any of them.
+
+### 3. The dodge, verified — and the generalised question
+
+**The builder's claim is true, and the tree was rebuilt to check it.**
+Reconstructed `repoWithADanglingDependency` (`pl-1` done, `pl-2` ready, `pl-3`
+ready -> `[pl-1]`, `repo-9` ready -> `[repo-404]`) and ran both views:
+
+```
+--tool planner --ready  ->  pl-2 / pl-3          (+ dangling warning on stderr)
+--ready                 ->  pl-2 / pl-3          (+ dangling warning on stderr)
+```
+
+Byte-identical stdout. `repo-9` is withheld from `--ready` because its dependency
+dangles, so narrowed and unnarrowed coincide and a `--tool` case built on that
+tree would have survived the mutation. The builder's decision to build a fresh
+tree with a **sound** `repo-9` is what makes `:469` load-bearing.
+
+**Every new/rewritten case, with the mutation that should kill it — all four
+die:**
+
+| Case                                               | Mutation                                                | Result                                                                         |
+| -------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `:460` `--tool narrows the view to one tool`       | `--tool` swallowed at parse time                        | red, `:469`                                                                    |
+| `:480` `--ready with nothing ready says so...`     | delete `scripts/status.mjs:543` fallback write          | red, **uniquely** (1 failed / 77)                                              |
+| `:631` `--markdown emits a table...`               | `--tool` swallowed                                      | red (repo-9 leaks into output)                                                 |
+| `:647` `--markdown on a tool with nothing open...` | delete `scripts/status.mjs:369-372` closed-board branch | red, together with the pre-existing `renderMarkdown` unit case (2 failed / 76) |
+
+No case in this diff passes for a reason other than the one it is named for.
+
+**No change needed —** two weaker properties, both benign. `:480` would also pass
+over an empty tree (it cannot distinguish "tickets present, none ready" from "no
+tickets"), and `:647` would also pass against a `--tool`-ignoring CLI (its tree
+is planner-only). Neither is what those cases are named for, and each is killed
+uniquely by the mutation that matters. Not worth churn.
+
+### 4. The preservation criterion — survives, and is not vacuous
+
+`not.toContain("generated:tickets")` is carried at
+`scripts/test/status.test.ts:641` (rewritten case) and `:656` (new pair) — one
+more site than before. To prove it is asserted against output that _could_
+contain the marker rather than against emptiness, `"<!-- generated:tickets -->"`
+was injected into `renderMarkdown`'s open-tickets header
+(`scripts/status.mjs:366`): **both cases went red.** The assertion is live in
+both, and both outputs are substantial markdown, not empty strings.
+
+### 5. Both measured board states — reproduced exactly
+
+Ran the brief's `sed` over the same four downloader tickets, then ran
+`origin/main`'s test file (`git show 567f9e5:scripts/test/status.test.ts`) and
+this branch's in each state:
+
+| board state         | `origin/main`                                                                                                   | this branch        |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------ |
+| four `done`         | **2 failed / 74 (76)** — `--tool` and `--markdown`                                                              | **78 passed (78)** |
+| four `in-flight`    | **1 failed / 75 (76)** — `--tool` only, `expected 'nothing is ready and unblocked' to contain '\tdownloader\t'` | **78 passed (78)** |
+| untouched (`ready`) | —                                                                                                               | **78 passed (78)** |
+
+Counts match the Log exactly, and the two states do fail differently:
+`in-flight` takes down only `:455` because the tickets are still open and
+`renderMarkdown` still emits its table. **Restored:** the four tickets are back
+to `status: ready` and `git status --porcelain` is empty.
+
+### 6. The repo's own gate, seen red first
+
+```
+node scripts/status.mjs --json > /dev/null; echo $?   ->  0
+```
+
+Then broke it: added a throwaway `docs/work/repo-999-gate-probe.md` with
+`depends_on: [repo-404]` -> gate printed
+`depends_on "repo-404", which is not a ticket` and **exited 1**. Removed it ->
+back to **0**, `git status` clean. Green here is evidence.
+
+### 7. `repo-9` — no functional collision; recommendation is not to rename here
+
+**Verified by test, not by reading.** The real
+`docs/work/repo-9-close-the-pl-26-annotation-loop.md` (`depends_on: [repo-7]`,
+from the sibling `repo-7-changelog-attribution` branch) was copied into this
+worktree's `docs/work/`, simulating it having landed on `main`:
+
+- Full `npx vitest run scripts`: **78 passed (78)** — unchanged.
+- `--root <synthetic tree> --show repo-9` resolved the **synthetic** ticket:
+  title `the repo-9 thing`, `file docs/work/repo-9-slug.md`,
+  `depends on repo-404` — not the real one sitting in the derived root.
+- Sharpest probe: a rooted tree containing **no** `repo-9` at all, with the real
+  file on disk -> `no ticket called "repo-9"`, exit 1. The real file is invisible
+  to a rooted run.
+
+Structurally airtight: `DEFAULT_ROOT` is read at exactly one place
+(`scripts/status.mjs:486`, `values.root ?? DEFAULT_ROOT`), and every filesystem
+read in `readTickets`/`ticketDirs` is a `path.join(repoRoot, ...)`. There is no
+path by which the real file leaks.
+
+**Recommendation: leave it.** `repo-9` as a fixture id is **not introduced by
+this branch** — repo-6 already uses it at `scripts/test/status.test.ts:119, 124,
+234, 237, 354, 709, 720, 733, 763`. This branch adds two more (`:464`, `:634`).
+Renaming only the two new uses would leave _two_ synthetic repo-id conventions in
+one file, which is strictly worse for the grepping reader than one; renaming all
+eleven rewrites cases repo-8 has no business touching, including repo-6's
+malformed-tree enumeration. A reader grepping `repo-9` already hits this file
+today, before this branch.
+
+If it is to be done, it belongs in its own `repo-` ticket covering all eleven
+sites, with fixture ids moved to a reserved `-9xx` band (`pl-901`, `repo-901`)
+that a real board will never reach — `repo-404` retained as the deliberately
+nonexistent id it already is at `:119`. That convention documents itself.
+
+### Findings
+
+**F1 — minor, cosmetic.** In this ticket's own Log, oxfmt reflowed the closing
+Gates line so an inline code span breaks across a blank line and the continuation
+begins with `>`, rendering as a paragraph ending in an unterminated backtick
+followed by a blockquote. `npx oxfmt --check` on both changed files passes, so
+**CI will not catch this** — it is oxfmt's own output. The same command is stated
+correctly in "Done when", so nothing is lost; only the Log reads garbled.
+
+**No change needed (recorded so the next reader does not re-derive them):** the
+sweep count and the two rootless call sites (section 1); the two
+`readTickets(REPO)` unit tests correctly left board-coupled (section 1); the two
+weaker-than-named properties at `:480` and `:647` (section 3); `repo-9`
+(section 7).
+
+### What this gate did NOT do
+
+- Did not re-run `npm run check` or the full `npm test` — settled before this
+  gate ran. Did run `npx oxfmt --check` on both changed files (clean) and
+  `npx vitest run scripts` many times (78/78 on every clean-tree run).
+- Everything above is local. CI was not observed, and nothing here proves the
+  `check` job's behaviour on a docs-only push beyond the oxfmt result on the two
+  changed files.
+- The e2e suites and container image gates do not run in this loop.
+
+### Citations, re-resolved
+
+**Re-resolved against the tree this section is committed with** — one commit
+past `b28fbee`, the tip the reviewer read — and checked programmatically after
+`npm run format`, not before it: every `file:line` above was re-read and
+asserted to still contain the thing it is cited for — 56 of them, 0 unresolved. `scripts/test/status.test.ts`
+and `scripts/status.mjs` are byte-identical to `b28fbee`, so the citations into
+them resolve against exactly what the reviewer saw; the reflow risk was in this
+file, which carries none.
+
+Five were wrong when written, all in the same direction — pointing at the
+comment block above a test rather than at its `test(` line — and are corrected
+here: `:479` to `:480`, `:627` to `:631`, `:644` to `:647`, `:656` for the
+second `generated:tickets` site (`:654` was a comment line), and
+`scripts/status.mjs:452` to `:454`, which is the `throw` in `parseArgs` rather
+than the `else if` two lines above it. The conclusion each supports is unchanged;
+each was verified by re-reading the corrected line.
+
+Left as the reviewer wrote them: `:455` and `:589` in section 5. They cite
+`567f9e5:scripts/test/status.test.ts` — the pre-branch file, where the two cases
+failed — and both resolve there, which is the whole point of quoting them.
+
+**F1 is fixed** in the closing paragraph of the Log below: the gates line is now
+a fenced block, which oxfmt cannot reflow, instead of an inline code span that
+wrapped its redirection onto a `>`-leading line.
+
 ## Log
 
-_Not started._
+### 2026-08-23 — built on `repo-8-tests-off-the-real-board`, base `567f9e5`
+
+Both board-bound cases now run against a throwaway tree from `repoWith`, and two
+cases the defect walked past are asserted for the first time. 76 tests before,
+78 after.
+
+**The two rewritten cases.**
+
+- `--tool narrows the view to one tool` builds **two tools** — `pl-1`, `pl-2`
+  and a sound `repo-9` — runs `--tool planner --ready` against it, and asserts
+  exactly two lines, each carrying `\tplanner\t`, with `repo-9` absent. Two
+  tools is the whole point: a one-tool tree passes against a CLI that never
+  reads `--tool` at all, which is the property the case is named for.
+- `--markdown emits a table…` builds `pl-1` plus a sound `repo-9`, runs
+  `--markdown --tool planner`, and keeps **both** of its old assertions —
+  `toContain("| Ticket ")` and `not.toContain("generated:tickets")`, repo-2's
+  preservation criterion for the generated region of the page it deleted — plus
+  the link to `pl-1` and the absence of `repo-9`.
+
+**The two cases added.** `--ready with nothing ready says so rather than
+printing nothing` pins `scripts/status.mjs:543`'s fallback line, which is what
+the old per-line assertion was actually colliding with. `--markdown on a tool
+with nothing open says so rather than emitting a table` pins
+`None. Every ticket this tool has is closed.` with `| Ticket ` absent.
+
+**Left rootless, deliberately, and commented as such in the file:**
+
+- `--tool with a name no tool has is a named failure, not an empty view`
+  (was `:459-464`, now `:495-500`) — asserts exit 1, empty stdout and the named
+  failure on stderr. Only a tool literally named `sniffer` could move it.
+- `--write and --check are gone, and say so rather than being ignored`
+  (was `:596-602`, now `:667-673`) — `parseArgs` throws before `main` ever
+  reaches `readTickets`, so no board can move it.
+
+Together they are the suite's only proof that the CLI runs at all against the
+root it derives from its own location. Rooting them would have traded that for a
+tidy `grep`, which the brief explicitly forbids and which is right.
+
+**Proof 1 — the reproduction no longer reproduces, in both states.** Ran the
+brief's `sed` over the same four downloader tickets, twice, and ran the old test
+file from `origin/main` in each state as the control that the reproduction is
+real here and not just in the brief:
+
+| board state              | `origin/main` tests | this branch's tests |
+| ------------------------ | ------------------- | ------------------- |
+| all four `done`          | 2 failed / 74 (76)  | **78 passed (78)**  |
+| all four `in-flight`     | 1 failed / 75 (76)  | **78 passed (78)**  |
+| untouched (four `ready`) | —                   | **78 passed (78)**  |
+
+The two failure counts match the brief's exactly: `done` takes down both
+`:455` and `:589`, `in-flight` takes down `:455` alone with the identical
+`nothing is ready and unblocked` message. Reverted with
+`git checkout -- tools/downloader/docs/work/`; `git status` is clean of any
+ticket edit but this file's.
+
+**Proof 2 — mutation, with its control.** `scripts/status.mjs:516` was replaced
+with `const selected = all;` — the CLI reading `--tool` and ignoring it.
+
+- Control, unmutated tree, identical command
+  (`npx vitest run scripts -t "narrows the view to one tool"`): **exit 0**.
+- Mutated: **exit 1**,
+  `AssertionError: expected [ …(3) ] to have a length of 2 but got 3` at
+  `status.test.ts:469`. The rewritten case dies on the mutant.
+- The full suite under the same mutation: 5 failed / 73 — the rewritten `--tool`
+  and `--markdown` cases, the `sniffer` case, and two of repo-6's.
+- `status.mjs` restored by `cp` from a copy and `touch`ed; `git status` shows it
+  unmodified, which is the check that no mutated byte survived.
+
+**What the brief had wrong, and one thing it did not know.**
+
+- **Step 3's "which is also unasserted today" is not quite true.** `renderMarkdown`
+  already had a unit case for `None. Every ticket this tool has is closed.` (now
+  `:427-432`). What was unasserted is the **CLI** path to it — the flag parse,
+  the narrowing and the exit code — and that is what the new case covers. The
+  overlap is one string in two layers and worth it; the layer that broke was the
+  flag path.
+- **Step 1's suggestion to reuse `repoWithADanglingDependency` would have
+  produced a test that passes against a CLI ignoring `--tool`.** Its only
+  non-planner ticket is `repo-9`, whose `depends_on` names nothing, and a ticket
+  with a dangling dependency is withheld from `--ready` anyway (asserted at
+  `:401-404`). So `--tool planner --ready` and a bare `--ready` return the same
+  two rows over that tree, and the mutation above would not have been caught.
+  The new case builds its own tree with a **sound** `repo-9` for exactly that
+  reason — which is the same trap the brief warns about one sentence earlier,
+  arriving by a different door.
+- Everything else in the brief holds: the line numbers, the sweep's four
+  rootless call sites, and both measured failure counts.
+
+**Gates.** `npm run check` and `npm test` are both green, and the gate CI reads
+exits 0. Written as a fenced block rather than inline, so no reflow can wrap the
+redirection onto a line that starts with `>` — which is what happened to this
+paragraph the first time round (gate 1, F1):
+
+```bash
+node scripts/status.mjs --json > /dev/null; echo $?   # 0
+```
