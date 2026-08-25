@@ -147,6 +147,79 @@ editing the expectation.
    Build 6).
 5. `npm run check` and `npm test -- --project downloader` pass.
 
+### Gate 1
+
+**2026-08-25 — CONCERNS.** Reviewed detached at `2d94dda`. Recorded here in
+full because the reviewer's worktree and the orchestrator's copy do not
+survive the session; this file is the only durable place for it.
+
+| # | Finding | Disposition |
+|---|---|---|
+| F1 | The fix defangs nine of dl-25's own regression rows | Accepted, fixed |
+| F2 | Row 3 still reads a scheme-less hostname; the comment asserts a defence nothing pins | Accepted, fixed by the same rows |
+| F3 | `URL_SHAPED` lets 26 of 43 probed URL shapes through | Recorded; comment only |
+| F4 | `dash.ts:338` / `ytdlp.ts:256` cited without a repo-root-relative path | Fixed; both say what was claimed |
+| F5 | Log said 212 tests; actual is 213 | Fixed; and see the class below |
+| F6 | The new `.mpd` `it` set is not conformant-packager output | Recorded, no change |
+| F7 | The three flipped rows were the only in-suite proof row 3 reaches a hostname | Closed by F1's rows |
+
+**F1, reproduced by this builder both ways before accepting it.** Dropping
+`(?![\w./-])` from rows 1 and 2 — reverting dl-25 — and running
+`npx vitest run tools/downloader/resolvers`:
+
+```
+origin/main    11 failed | 196 passed (207)
+this branch     2 failed | 211 passed (213)   only "vttx" and "srtx"
+```
+
+The nine that stop failing are dl-25's own: the `vtt`/`srt`/`webvtt` hostname
+and path-segment rows, the two `dl-25 cost` rows, and
+`application/ttml+xml https://srt.cdn.net/sub.ttml`. `claimsOnly` reduces
+`application/mp4 https://vtt.cdn.net/sub.mp4` to `application/mp4 mp4` before
+any row is scanned, so those rows pass whether or not dl-25's boundary exists.
+The failure that follows is concrete: an agent tidying `SUBTITLE_FORMATS` drops
+the lookahead — the dl-24 mistake this file's own comment warns against — sees
+only `vttx`/`srtx` red, "fixes" those with `(?!\w)` and ships green, reopening
+dl-25 for every hint `claimsOnly` does not cover. `vtt` and `srt` are inside
+`SUBTITLE_FORMATS_FFMPEG_READS`, so those wrong answers reach the disk.
+
+**F2 is the same hole from the other side, and it was this ticket's own defect
+still live.** On `2d94dda`, `subtitleFormat("stpp.cdn.net/sub.mp4")` and
+`subtitleFormat("ttml.cdn.net/sub.mp4")` both answered `ttml`: row 3 has no
+boundary and `claimsOnly` returns early on any hint without `://`. The gate
+grepped all 27 rows of the table and found every URL-bearing row to be
+scheme-bearing, so nothing pinned it.
+
+**F3 — the enumeration.** Of 43 probed URL shapes, `URL_SHAPED` admits 17 and
+lets **26** through unreduced: protocol-relative (`//host/…`), scheme-less,
+quoted and parenthesised, `blob:`, `data:`, comma-joined and percent-encoded
+forms. Only `ytdlp.ts` can reach any of them today. The gate drove
+protocol-relative and root-relative `<BaseURL>` values through `parseDash`
+live; both came back `unknown`, so the DASH path is fully closed by
+`resolveUrl`, and `hls.ts` passes a bare extension. The load-bearing invariant
+is therefore **"every caller normalises its URL before building the hint"**,
+and it was written nowhere. It is now stated in the `claimsOnly` comment.
+`ytdlp.ts` was deliberately not changed.
+
+**Settled, and the measurement is why.** Dropping the query string from
+`claimsOnly` fails exactly two tests, and one of them is dl-25's pre-existing
+`https://www.youtube.com/api/timedtext?lang=en&fmt=vtt` row — which is
+Done-when 3 of this ticket. So closing the query-string edge would overturn an
+inherited acceptance criterion, and the decision to leave it open and pin it is
+measured rather than argued. The fragment change also stands: a fragment is
+never transmitted, so no server can have stated a format in one,
+`…/sub.vtt#t=10` still answers `vtt`, and nothing in the repo emits one.
+
+**F6 in full.** The new `it` `AdaptationSet` carries `mimeType="application/mp4"`
+with no `codecs`, which a conformant packager would not emit. The gate compared
+all 16 fixtures in `tools/downloader/resolvers/test/fixtures/manifests/`: every
+one uses `example.*` hosts and none is a captured real payload, so this does not
+make the directory worse than it was.
+
+**What the gate did not do.** It did not run the Playwright e2e suite or the
+container build, and it did not re-review dl-25's rows as such — only their
+behaviour under the mutation above.
+
 ## Log
 
 - **2026-08-23** — Filed from dl-25, which fixed rows 1 and 2 and stopped there.
