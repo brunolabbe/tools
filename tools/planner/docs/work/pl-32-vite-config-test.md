@@ -64,6 +64,134 @@ its Log that a test was wanted and filed rather than grown into it.
 - Changing `strictPort` to `false` in `vite.config.ts` fails the suite —
   measured, not assumed.
 
+## Review
+
+### Gate 1 — 2026-08-25 — `pl-32-vite-config-test` — **PASS**
+
+Verdict recorded as given. Three findings, **all disposed no-change**, nothing
+above `low`. The gate reviewed commit `86b85a6` **in detached HEAD** — this
+worktree holds the branch name — so its evidence is against that tree, which is
+this branch minus the section you are reading and the Log entry under it.
+
+**On the citation tooling, because it bounds what "citations resolved" means
+here.** The orchestrator reports that `orch-resolve-citations.mjs` matched only
+**2** of the Log's references as it stood at the gate: it does not recognise a
+bare `:108`, nor a parenthesised ``(`:23`)``. Run against the finished record it
+sees **6** and resolves all 6 — after the one cited by bare filename
+rather than by repo-root-relative path was corrected, two files in this repo
+carrying the basename `vite-config.test.ts` and the script correctly refusing
+to guess between them. Every other coordinate —
+the bare `:NNN`, the ranges, the parenthesised forms, **23 lines in all** — was
+resolved **by hand**, by the gate and again here, and each says what the record
+claims of it. The script is a floor, not a ceiling, and a green run of it is not
+the claim being made.
+
+#### What the gate reproduced, on its own harness
+
+It wrote its own harness rather than running `pl32-mutate.sh`, and reproduced the
+mutation table **row for row, including which test goes red in each case**: M1
+reddens 2 of 3, M5 reddens 1 of 3. Controls green before and after.
+
+It added a sixth mutation of its own — `?? false` → `?? undefined` — which goes
+red with `expected undefined to be false`. That one proves something none of the
+builder's five could: `:55` is `Object.is`-strict rather than a truthiness
+assertion, a distinction invisible to any mutation that swaps one falsy value for
+another.
+
+It also ran the suite under `env -u HOST` and under `HOST=192.168.1.5`: **green
+both ways**, so the suite does not depend on this container's ambient `HOST`.
+That is the one property the builder's runs could not establish, since all of
+them inherited `HOST=0.0.0.0` from `.devcontainer/devcontainer.json:97`.
+
+**The `resetModules` experiment is the one worth carrying forward.** Deleting
+`vi.resetModules()` at `:31` turns the suite **red**, with the cached-module
+symptom exactly: `expected '0.0.0.0' to be false`. So the line the brief warned about is
+not defensive folklore inherited from the downloader; it is load-bearing here and
+now measured. Deleting the `afterEach` at `:39-42` left the suite green — F3.
+
+Independent confirmations: `npm test -- --project planner` → 50 files / 702
+tests, identical to the builder's report; a cold typecheck with the gate's own
+probe → `TS2322` at `(46,9)`, reverted → clean, and the line
+`Building project 'tools/planner/web/test/tsconfig.json'` present in all three
+cold runs; diff
+exactly the two files. Every Log citation resolved, **no mis-citation in either
+direction**.
+
+#### The gate's own harness failed first, which is why its negatives count
+
+Its **first** harness scored **exit 1 on a clean tree**. It had written
+`--reporter=basic`, which the pinned vitest does not ship, so zero tests ran.
+Every mutation would then have "died" unconditionally and the table would have
+been worthless — five reds meaning nothing at all. It caught this only because it
+was required to run the control **before** any mutation.
+
+Reproduced here first-hand rather than relayed, on the clean tree:
+
+```
+$ npx vitest run tools/planner/web/test/vite-config.test.ts --project planner --reporter=basic
+⎯⎯⎯ Startup Error ⎯⎯⎯
+Error: Failed to load custom Reporter from basic                        # exit 1
+tests actually run: 0
+```
+
+The same command without the flag: exit **0**, `Tests 3 passed (3)`. Pinned
+runner is `vitest/4.1.10 linux-x64 node-v22.23.2`. The mechanism that kept this
+failure out of the builder's harness is written up in the Log below, because it
+generalises past this ticket.
+
+#### Findings — three, all no-change
+
+**F1 — the Why at `:19-20` mis-cites the Dockerfile. Confirmed independently by
+builder, gate and orchestrator. No change.**
+`tools/planner/Dockerfile:110` does carry `ENV HOST=0.0.0.0`, but the image never
+runs Vite: `:130` is `EXPOSE 8090` and `:139` is
+`CMD ["node", "tools/planner/api/dist/main.js"]`, and the comment at `:108-109`
+names `API_DEFAULTS` itself. The real source of the dev server's `HOST` is
+`.devcontainer/devcontainer.json:97`, commented at `:95-96`. All five coordinates
+re-verified while writing this section. _Disposition:_ **Why** stays as the
+historical record of what was believed when the ticket was filed, and the Log
+carries the correction — this repo's stated convention for a brief that did not
+survive contact with the code.
+
+**F2 — `:59` passes a `HOST` the test does not use. Inert, not wrong. No
+change.**
+`tools/planner/web/test/vite-config.test.ts:59` calls
+`serverConfigWith("0.0.0.0")`, but that test asserts only `:63` `port` and `:64`
+`strictPort`, neither of which reads `HOST`. The helper's signature requires an
+argument and some value must be passed. Recorded so a later reader does not
+mistake it for a dependency and preserve it as one.
+
+**F3 — the `afterEach` at `:39-42` is uncovered by construction. Genuine
+hygiene, unproven. No change.**
+No mutation in this file can kill it: deleting it leaves the suite green, because
+every test sets or deletes `HOST` before importing. It exists against a future
+test that does not, and against leaking a mutated `HOST` to another file sharing
+the worker. Kept as hygiene, with the record noting plainly that no assertion
+demands it.
+
+#### Acceptance
+
+| Done when                                                                               | Verdict  | Proof                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm test -- --project planner` covers the three values; the unset case asserts `false` | verified | `tools/planner/web/test/vite-config.test.ts:47` (`host`), `:55` (`toBe(false)`, not a string), `:63` (`port`), `:64` (`strictPort`); gate's `?? undefined` mutation proves `:55` is `Object.is`-strict |
+| `npm run check` and `npm test` pass                                                     | verified | cold `npm run check` exit 0, `grep -c "error TS"` → 0; full `npm test` exit 0, 104 files / 1531 tests; gate independently 50 / 702 on `--project planner`                                              |
+| Changing `strictPort` to `false` fails the suite — measured, not assumed                | verified | M2 in the Log's mutation table: exit 1, `expected false to be true` against `:64`; gate reproduced it row for row on its own harness                                                                   |
+
+#### What this gate did NOT do
+
+- **The planner e2e suite and the container image gate did not run.** They live
+  in `.github/workflows/planner.yml` and only there, and no coverage of either is
+  implied. Mitigating but not a substitute: this branch adds one test file, ships
+  no code, and leaves `tools/planner/web/vite.config.ts` byte-identical to `HEAD`.
+- **It reviewed `86b85a6` in detached HEAD**, so it never saw this section or the
+  Log entry beneath it.
+- **It did not resolve citations by script alone** — the tooling reached 2 of
+  them; the rest are hand-resolved, as noted in the preamble above.
+
+**The coordinates in this section resolve against `86b85a6`**, and continue to
+hold at the commit that adds the section, because the only file that commit
+changes is this one and no citation here names this file by line.
+
 ## Log
 
 - **2026-08-25** — Built. One file added, `tools/planner/web/test/vite-config.test.ts`,
@@ -211,3 +339,69 @@ its Log that a test was wanted and filed rather than grown into it.
   one test file and ships no code, and `tools/planner/web/vite.config.ts` is
   byte-identical to `HEAD` (`git status --porcelain` on it, empty), so neither
   gate has new input — but that is an argument, not a run.
+
+- **2026-08-25 — why this harness did not hit the gate's `--reporter=basic`
+  failure.** Asked directly, and worth answering as mechanism rather than taking
+  the credit: **it was not the before-control.** Three things were in play and
+  only the first actually did the work here.
+
+  1. **The invocation was proven by hand before it was ever put in a script.**
+     The first thing run after writing the test was the bare command, as itself,
+     interactively —
+     `npx vitest run tools/planner/web/test/vite-config.test.ts --project planner`
+     → `Test Files 1 passed (1)`, `Tests 3 passed (3)`. `pl32-mutate.sh` then
+     reused that exact string verbatim, so the harness contained no untested
+     invocation. The controls on both ends were a real second net and I would
+     write them again, but they were never tested against a broken harness in
+     this run, so they cannot be claimed as the mechanism.
+
+  2. **The generalisable rule: shape the output _downstream_ of the command under
+     test, never by adding arguments to it.** The gate and I wanted the identical
+     thing — terser output to grep against. It reached for a reporter flag,
+     _inside_ the command; this harness reached for `grep -E` on the _outside_,
+     leaving the command byte-identical to the one already proven green. The
+     asymmetry is what matters: a pipe that mis-greps costs a blank line, whereas
+     a flag that does not exist costs exit 1 with zero tests run — which is
+     **indistinguishable from a caught mutation**. In a mutation harness that is
+     the worst available failure mode, because the harness is _supposed_ to be
+     producing failures and has no way to tell a real one from its own.
+
+  3. **The same family holds a second trap, and this harness stepped around it by
+     one line.** Piping into `grep | head` hands back the _last_ element's
+     status. Measured on the clean tree, using the gate's own broken invocation as
+     the failing case:
+
+     ```
+     PIPESTATUS array = 1 1 0
+       [0] vitest = 1     <- the real answer
+       [-1] head  = 0     <- what a bare $? after the pipe would have given
+     ```
+
+     So a bare `$?` would have scored a run in which **zero tests executed** as
+     green. `pl32-mutate.sh` reads `${PIPESTATUS[0]}` as the very next command
+     after the pipeline, which is what saved it — and the table's own shape is the
+     proof it worked: had that plumbing been wrong, every row would have read
+     exit 0, the five mutations included, and the table would have been uniformly
+     and falsely green rather than obviously broken.
+
+     Writing this up, the first version of the demonstration script proved the
+     adjacent fact by accident. It did `naive=$?` and _then_
+     `ps0=${PIPESTATUS[0]}`, and reported `0 0` for a run that genuinely exited 1.
+     **A bare assignment is a command, and it clobbers `PIPESTATUS`.** So "read it
+     immediately" is not style advice: one intervening line, of any kind, silently
+     zeroes it.
+
+  Short form for whoever writes the next mutation harness: _run the command by
+  hand before you script it; keep the harness's invocation byte-identical to the
+  one you proved; do your formatting after the pipe, not inside the command; and
+  read `PIPESTATUS[0]` on the very next line._
+
+- **Gate 1 recorded above — PASS, as given.** Three findings, all no-change and
+  all accepted: F1 is the Dockerfile mis-citation this Log already corrected, F2
+  is the inert `HOST` argument at `:59`, F3 is the uncovered `afterEach` at
+  `:39-42`. **No code changed in response to the gate**; the diff is still the
+  two files, and this commit touches only the ticket. The gate's own additions
+  worth keeping are its `?? undefined` mutation (which proves `:55` is
+  `Object.is`-strict, not truthiness) and its `env -u HOST` / `HOST=192.168.1.5`
+  runs (which prove the suite does not lean on this container's ambient `HOST`) —
+  both properties the builder's five mutations could not reach.
