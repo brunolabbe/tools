@@ -4,7 +4,7 @@ tool: planner
 title: Capture a real geocoder payload and hold locate's parser to it
 kind: fix
 milestone: P3
-status: ready
+status: done
 depends_on: []
 ---
 
@@ -282,3 +282,100 @@ not be the long pole.
 
 Both tickets stay open. `firstCoordinates` and
 `api/test/grounding-valhalla.test.ts` are unchanged on this branch.
+
+**2026-08-29 — real captures arrived; closed.** The user captured four real
+`nominatim.openstreetmap.org/search` replies on a networked machine
+(`PROVENANCE.txt`, reproduced in this file's own header): a match
+(`q=Percé, Québec`), a no-match (`q=Zzqqxv Nonexistent, Québec`), and an
+ambiguous bare name (`q=Saint-Jean`) at both `limit=1` and `limit=10`. All
+four HTTP 200, `application/json; charset=utf-8`. Checked in under
+`api/test/fixtures/`; provenance is the doc comment at the top of
+`api/test/grounding-valhalla.test.ts`, which is where the fixture is read, per
+Done-when.
+
+**Re-verified every claim independently rather than trusting the transcription:**
+
+```
+$ cat tools/planner/api/test/fixtures/nominatim-search-no-match.json
+[]
+$ node -e 'const j=require("./tools/planner/api/test/fixtures/nominatim-search-match.json"); console.log(typeof j[0].lat, typeof j[0].lon)'
+string string
+$ node -e 'const j=require("./tools/planner/api/test/fixtures/nominatim-search-ambiguous-limit10.json"); console.log(j.map(r=>r.importance))'
+[
+  0.5847674618973391,
+  0.5813204991715637,
+  0.6016125880228743,
+  0.371773638720501,
+  0.30093685344584264,
+  0.3363461829037416
+]
+$ node -e 'const j=require("./tools/planner/api/test/fixtures/nominatim-search-ambiguous-limit1.json"),
+  k=require("./tools/planner/api/test/fixtures/nominatim-search-ambiguous-limit10.json");
+  console.log(j[0].osm_id===k[0].osm_id, j[0].place_id, k[0].place_id)'
+true 85350419 85534243
+```
+
+All five of the coordinator's claims confirmed: no-match is a literal `[]`;
+`lat`/`lon` are strings; the highest importance (0.6016, index 2) is not
+first; `place_id` differs (85350419 vs 85534243) for the same `osm_id`
+(120280); every row carries a `licence` field (visible in the raw JSON,
+checked in verbatim). The `place_id` finding is informational here — nothing
+in `api/src` reads that field (`grep -rn "place_id" tools/planner/api/src`,
+no output) — recorded on pl-34 rather than acted on. The `licence`/ODbL
+attribution point is judged out of scope for this ticket: it is a UI-rendering
+question (does the plan display travel/locate's `Source`, which already
+carries the OSM attribution URL, anywhere a user sees it?), not a fixture or
+parser question, and `grep -rl "fetchedAt" tools/planner/web/src` shows only
+`Provenance.tsx` — which renders a candidate's or a cost's sources, never
+`PlanItem.travelFromPrevious`'s. That gap is real and distinct enough that it
+should be its own ticket rather than folded into pl-34; flagged for the
+coordinator to assign an id rather than one invented here.
+
+**`firstCoordinates` needed no change.** Both things nobody could have
+verified without a real reply — a no-match's exact shape and `lat`/`lon`
+being strings — were already handled. Pinned rather than patched:
+`describe("locate, over a payload a real Nominatim wrote")` in
+`api/test/grounding-valhalla.test.ts` adds a match test and an
+ambiguous-name test; the existing no-match test now asserts against
+`NOMINATIM_NO_MATCH` instead of `answering([])`.
+
+**Mutation control, proving the new tests can fail before trusting that they
+pass** (`trap ... EXIT INT TERM`, `cp` then `touch` then rebuild):
+
+```
+$ npx vitest run tools/planner/api/test/grounding-valhalla.test.ts --project planner
+ Test Files  1 passed (1)
+      Tests  27 passed (27)
+```
+
+Then `firstCoordinates`'s body replaced with `return null;`, rebuilt:
+
+```
+$ npx vitest run tools/planner/api/test/grounding-valhalla.test.ts --project planner
+ Test Files  1 failed (1)
+      Tests  2 failed | 25 passed (27)
+```
+
+Both new positive-path tests died; file restored by the trap, `git status`
+after clean.
+
+**What the captures exposed is not in `firstCoordinates` — filed as
+[pl-34](./pl-34-locality-free-query-confident-wrong-place.md).** `q=Saint-Jean`
+with no `locality` returns Saint-Jean, **Toulouse, France**, not the
+Québec/New-Brunswick near-miss this ticket's Build predicted, and raising
+`limit` to 10 recovers no Québec result at all. Reproduced as tests, not
+fixed — pl-34 carries the evidence and three options, choice left open.
+
+**All four Done-when lines are met:**
+
+- Real reply checked in under `api/test/fixtures/`, provenance at the point
+  of read. ✓
+- `locate` parses each offline: `npm test -- --project planner`, no network
+  in any test (all three geocoder fixtures go through `answering()`, a mocked
+  `fetch`). ✓
+- No-match reply yields `null`, asserted against the real `[]` rather than
+  one assumed. ✓
+- pl-28's Log says the gap is closed and by what — amended there in this
+  commit. ✓
+
+`status: done`.
