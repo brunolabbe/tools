@@ -2,17 +2,31 @@
  * How far a point is from a corridor — pure arithmetic, no network, no model.
  *
  * pl-29 Build step 4: "distance from the point to the route polyline is free
- * and rules out almost everything." This file is that filter, and it is
- * deliberately separate from the Overpass adapter that calls it: `nearby`'s
- * query already asks Overpass's own `around:` filter to restrict its reply to
- * the corridor's radius (see the header of `valhalla.ts`'s discovery section),
- * so everything this file discards on top of that is defence against a
- * boundary case Overpass's own filter might get right or might not — a
- * captured payload cannot prove a server-side filter is exact everywhere, only
- * that it was exact for the one query that produced it. Trusting the far side
- * of a network call to enforce this seam's contract is exactly the kind of
- * thing the rest of this tool refuses to do, and there is no reason to make an
- * exception for the one filter that happens to be cheap to redo.
+ * and rules out almost everything." This file is that filter, and it runs
+ * *after* `nearby`'s Overpass query has already asked its own `around:` filter
+ * to restrict the reply to the corridor's radius (see `valhalla.ts`'s
+ * discovery section) — so everything this file discards on top of that is
+ * defence against a boundary case the server's own filter might get right or
+ * might not. A captured payload cannot prove a server-side filter is exact
+ * everywhere, only that it was exact for the one query that produced it, and
+ * this environment has captured none yet (see pl-29's Log and pl-33).
+ * Trusting the far side of a network call to enforce this seam's contract is
+ * exactly the kind of thing the rest of this tool refuses to do, and there is
+ * no reason to make an exception for the one filter that happens to be cheap
+ * to redo.
+ *
+ * **Gate B (2026-08-29) found this paragraph false as first written**: the
+ * query it described built a bounding box, and `valhalla.ts` said so
+ * correctly two comments over — two files in one commit disagreeing about
+ * what the code did. The fix taken is the query, not the sentence: a bounding
+ * box around a diagonal corridor is dramatically oversized (measured 26–27x
+ * for this tool's own motivating Montréal→Percé example — see pl-29's Log),
+ * costs real bytes and parse time on a self-hosted, resource-constrained
+ * instance, and buys nothing this file's own re-filter did not already
+ * guarantee. `overpassQuery` (`valhalla.ts`) now sends `around:` with the
+ * corridor's own points, which is what pl-29's Build step 2 named as the
+ * reason to prefer Overpass in the first place — so this paragraph is true
+ * again because the code changed to match it, not because the words did.
  *
  * ## The projection is deliberately not exact
  *
@@ -24,6 +38,25 @@
  * trigonometry nobody needs here. `radiusMetres` in practice is a handful of
  * kilometres (pl-29's own title picks six), so the error this introduces is
  * irrelevant next to the radius it is being compared against.
+ *
+ * ## Unhandled: the antimeridian (gate B, 2026-08-29)
+ *
+ * `project` multiplies a longitude by a fixed metres-per-degree factor with no
+ * wraparound, so a corridor whose points straddle ±180° is measured as if they
+ * were on opposite sides of the earth rather than metres apart. Checked by
+ * hand rather than estimated: for a corridor from (0°, 179°) to (0°, -179°) —
+ * `haversineMetres` puts the two ends `222,389.85` m apart the short way — the
+ * point exactly between them the short way, (0°, 180°), comes back
+ * `111,194.93` m from `distanceToCorridorMetres`, not the near-zero a point
+ * genuinely on the corridor should measure. That is one degree of longitude
+ * at the equator, which is exactly what the naive (unwrapped) segment's
+ * nearest endpoint gives — the function measured to the wrong nearest point
+ * because it never noticed the corridor crosses the seam. Wrong, silently,
+ * not a crash. This tool plans trips inside Québec and nearby, so the
+ * antimeridian is not a route this deployment draws — the risk is real but
+ * the domain never reaches it — and it is written down here rather than
+ * fixed so the day this code is reused somewhere that crosses ±180°, the
+ * limit is the first thing a reader finds, not the last.
  */
 
 import type { Coordinates } from "@planner/contract";
@@ -160,56 +193,4 @@ export function distanceToCorridorMetres(point: Coordinates, corridor: Corridor)
     if (distance < closest) closest = distance;
   }
   return closest;
-}
-
-/** A bounding box padded by a radius, for a query that needs one cheaply. */
-export interface BoundingBox {
-  south: number;
-  west: number;
-  north: number;
-  east: number;
-}
-
-/**
- * The smallest box containing every point of the corridor, padded outward by
- * `radiusMetres` so a point just outside the corridor's own extent but still
- * within the radius is not excluded before the exact filter above ever sees
- * it.
- *
- * The padding is converted degree-by-degree from the corridor's own latitude
- * span, which is the same trade the projection above already makes: exact
- * enough at these distances, and there is no call to a routing engine hiding
- * in a bounding box.
- */
-export function corridorBoundingBox(corridor: Corridor, radiusMetres: number): BoundingBox {
-  if (corridor.length === 0) {
-    throw new RangeError("corridorBoundingBox: an empty corridor has no box to draw.");
-  }
-
-  let south = Number.POSITIVE_INFINITY;
-  let north = Number.NEGATIVE_INFINITY;
-  let west = Number.POSITIVE_INFINITY;
-  let east = Number.NEGATIVE_INFINITY;
-  for (const point of corridor) {
-    if (point.latitude < south) south = point.latitude;
-    if (point.latitude > north) north = point.latitude;
-    if (point.longitude < west) west = point.longitude;
-    if (point.longitude > east) east = point.longitude;
-  }
-
-  const metresPerDegreeLat = (Math.PI / 180) * EARTH_RADIUS_METRES;
-  const latPad = radiusMetres / metresPerDegreeLat;
-  // Padded at the box's most poleward latitude, where a degree of longitude is
-  // shortest — the conservative choice, so the box never ends up narrower than
-  // the radius really reaches at its other edge.
-  const widestLat = Math.max(Math.abs(south), Math.abs(north));
-  const metresPerDegreeLon = metresPerDegreeLat * Math.cos(toRadians(widestLat));
-  const lonPad = metresPerDegreeLon === 0 ? 180 : radiusMetres / metresPerDegreeLon;
-
-  return {
-    south: Math.max(-90, south - latPad),
-    north: Math.min(90, north + latPad),
-    west: Math.max(-180, west - lonPad),
-    east: Math.min(180, east + lonPad),
-  };
 }

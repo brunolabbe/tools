@@ -244,6 +244,50 @@ describe("discoverAlongCorridor", () => {
     expect(result.finds[0]?.name).toBe(only.name);
   });
 
+  /**
+   * Done-when, read literally: "the number of routing calls is asserted".
+   * Every other detour test above uses exactly one find, so none of them can
+   * tell "one matrix call regardless of find count" apart from "one call per
+   * find" — both produce the same result for N=1. This is the test that
+   * distinguishes them.
+   */
+  test("many finds still cost exactly one travel() call, not one per find", async () => {
+    const finds = [find({ name: "A" }), find({ name: "B" }), find({ name: "C" })];
+    let travelCalls = 0;
+    let sizes: { origins: number; destinations: number } | null = null;
+
+    const result = await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Québec City"),
+      provider: provider({
+        nearby: async () => answered(finds),
+        travel: async (request) => {
+          travelCalls += 1;
+          sizes = { origins: request.origins.length, destinations: request.destinations.length };
+          // origins/destinations are [endpoint, ...finds] — one row/column per
+          // find plus the baseline. Every cell answered with the same minutes
+          // so the assertion below is about *shape*, not arithmetic.
+          return request.origins.map(() =>
+            request.destinations.map(() =>
+              answered({
+                distanceMeters: 1_000,
+                durationMinutes: 1,
+                source: { url: "x", title: null, fetchedAt: "2027-01-01T00:00:00.000Z" },
+              }),
+            ),
+          );
+        },
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    expect(travelCalls).toBe(1);
+    expect(sizes).toEqual({ origins: 4, destinations: 4 }); // [endpoint, A, B, C]
+    expect(result.finds).toHaveLength(3);
+    expect(result.finds.map((f) => f.detourMinutes)).toEqual([1, 1, 1]);
+  });
+
   test("a detour matrix that could not be measured: finds still returned, with a null detour", async () => {
     const only = find();
     const result = await discoverAlongCorridor({

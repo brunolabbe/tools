@@ -6,11 +6,7 @@
 
 import { describe, expect, test } from "vitest";
 import type { Coordinates } from "@planner/contract";
-import {
-  corridorBoundingBox,
-  distanceToCorridorMetres,
-  haversineMetres,
-} from "../src/grounding/geometry.ts";
+import { distanceToCorridorMetres, haversineMetres } from "../src/grounding/geometry.ts";
 
 /** Montréal and Québec City, roughly — a real, well-known distance to check against. */
 const MONTREAL: Coordinates = { latitude: 45.5019, longitude: -73.5674 };
@@ -74,6 +70,18 @@ describe("distanceToCorridorMetres", () => {
     expect(Math.abs(toCorridor - toFarEnd)).toBeLessThan(5_000);
   });
 
+  test("a point before either end is measured to that end too — the symmetric clamp", () => {
+    // Gate B, 2026-08-29: the "past the far end" case above pins `t <= 1`
+    // (`Math.min(1, t)`) but nothing pinned `t >= 0` (`Math.max(0, ...)`) —
+    // an asymmetric pair of assertions is exactly the shape where a later
+    // edit breaks the untested half silently. Well before Montréal, roughly
+    // along the corridor's reverse bearing.
+    const before: Coordinates = { latitude: 44.3158, longitude: -75.7754 };
+    const toCorridor = distanceToCorridorMetres(before, [MONTREAL, QUEBEC_CITY]);
+    const toNearEnd = haversineMetres(before, MONTREAL);
+    expect(Math.abs(toCorridor - toNearEnd)).toBeLessThan(5_000);
+  });
+
   test("picks the nearer of several segments, not the first", () => {
     // A three-point corridor bent through Trois-Rivières; a point near the far
     // leg must not be measured against the near one just because it comes
@@ -94,32 +102,5 @@ describe("distanceToCorridorMetres", () => {
       haversineMetres(point, MONTREAL),
       -2,
     );
-  });
-});
-
-describe("corridorBoundingBox", () => {
-  test("contains both corridor ends", () => {
-    const box = corridorBoundingBox([MONTREAL, QUEBEC_CITY], 1_000);
-    expect(box.south).toBeLessThanOrEqual(Math.min(MONTREAL.latitude, QUEBEC_CITY.latitude));
-    expect(box.north).toBeGreaterThanOrEqual(Math.max(MONTREAL.latitude, QUEBEC_CITY.latitude));
-    expect(box.west).toBeLessThanOrEqual(Math.min(MONTREAL.longitude, QUEBEC_CITY.longitude));
-    expect(box.east).toBeGreaterThanOrEqual(Math.max(MONTREAL.longitude, QUEBEC_CITY.longitude));
-  });
-
-  test("a bigger radius makes a bigger box", () => {
-    const small = corridorBoundingBox([MONTREAL, QUEBEC_CITY], 1_000);
-    const big = corridorBoundingBox([MONTREAL, QUEBEC_CITY], 50_000);
-    expect(big.north - big.south).toBeGreaterThan(small.north - small.south);
-    expect(big.east - big.west).toBeGreaterThan(small.east - small.west);
-  });
-
-  test("clamps at the poles and the antimeridian rather than producing an invalid box", () => {
-    const box = corridorBoundingBox([{ latitude: 89.9, longitude: 179.9 }], 500_000);
-    expect(box.north).toBeLessThanOrEqual(90);
-    expect(box.east).toBeLessThanOrEqual(180);
-  });
-
-  test("refuses an empty corridor", () => {
-    expect(() => corridorBoundingBox([], 1_000)).toThrow(RangeError);
   });
 });

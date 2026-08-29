@@ -61,6 +61,7 @@
 
 import { MAX_FIND_NAME_CHARS, MAX_FIND_TAGS, MAX_FIND_TAG_CHARS } from "@planner/agent";
 import type {
+  Corridor,
   DiscoveryKind,
   Find,
   GroundingProvider,
@@ -73,7 +74,7 @@ import type {
 } from "@planner/agent";
 import { AppError, coordinatesSchema } from "@planner/contract";
 import type { Coordinates, Place, Source } from "@planner/contract";
-import { corridorBoundingBox, distanceToCorridorMetres } from "./geometry.ts";
+import { distanceToCorridorMetres } from "./geometry.ts";
 import type { AppLogger } from "../logger.ts";
 import { KEY_SEPARATOR } from "./place-key.ts";
 
@@ -255,13 +256,14 @@ export class ValhallaGroundingProvider implements GroundingProvider {
    * stood one up gets an empty list here, logged once, rather than a boot-time
    * refusal: measuring and geocoding do not need discovery to work.
    *
-   * The query asks a **bounding box**, not `around:` with the whole corridor
-   * threaded through it — cheap for Overpass to evaluate over a long corridor
-   * with many points, at the cost of a wider net than the radius actually
-   * wants. `distanceToCorridorMetres` (`geometry.ts`) then does the exact,
-   * free, client-side filter down to the radius the caller asked for, which is
-   * pl-29's Build step 4 read literally: geometry first, because it is free,
-   * and only the survivors go on to cost anything.
+   * The query asks Overpass's own `around:` filter to restrict the reply to
+   * the corridor's exact radius server-side — see `overpassQuery`'s own
+   * comment for why this is not a bounding box. `distanceToCorridorMetres`
+   * (`geometry.ts`) still re-filters every result against the same radius
+   * afterwards: this seam does not trust the far side of a network call to
+   * enforce its own contract, and a captured payload — which this ticket does
+   * not have — could only ever prove the server got it right for the one
+   * query that produced it.
    */
   async nearby(request: NearbyRequest): Promise<Find[]> {
     if (request.signal?.aborted === true) throw new AppError("CANCELED");
@@ -271,8 +273,7 @@ export class ValhallaGroundingProvider implements GroundingProvider {
       return [];
     }
 
-    const box = corridorBoundingBox(request.corridor, request.radiusMetres);
-    const query = overpassQuery(box, request.kinds);
+    const query = overpassQuery(request.corridor, request.radiusMetres, request.kinds);
 
     const body = await this.#overpassJson(query, request.signal);
     const at = this.#now();
@@ -622,8 +623,20 @@ const KIND_FILTERS: Record<DiscoveryKind, string> = {
 };
 
 /**
- * The Overpass QL text this adapter sends, over a bounding box rather than
- * `around:` with the whole corridor — see `nearby`'s own comment for why.
+ * The Overpass QL text this adapter sends: one `around:` filter per requested
+ * kind, over the corridor's own points — not a bounding box.
+ *
+ * **This was a bounding box until gate B, 2026-08-29.** A box is cheap to
+ * write but is the *enclosing rectangle* of the corridor's points, and a
+ * diagonal corridor's rectangle is mostly not the corridor: measured at
+ * 26–27x the corridor's own area for Montréal→Percé, this ticket's own
+ * motivating example (`geometry.ts`'s header carries the number and the
+ * measurement). `around:radius,lat1,lon1,lat2,lon2,...` is Overpass's own
+ * polyline filter — the feature pl-29's Build step 2 names as the reason to
+ * prefer Overpass at all — and it restricts the *server's* reply to the
+ * radius exactly, rather than to a rectangle `distanceToCorridorMetres` then
+ * has to shrink back down on this side of the wire. Switched before any
+ * payload was captured, so nothing downstream had to change to follow it.
  *
  * `[out:json]` is load-bearing: Overpass's default output is XML, and this
  * file has no XML parser and does not want one. `[timeout:25]` is Overpass's
@@ -637,18 +650,17 @@ const KIND_FILTERS: Record<DiscoveryKind, string> = {
  * the whole argument this repo makes against a hand-written fixture applies
  * exactly as hard to a hand-written query nobody ran.
  */
-export function overpassQuery(box: BoxLike, kinds: readonly DiscoveryKind[]): string {
-  const bbox = `${String(box.south)},${String(box.west)},${String(box.north)},${String(box.east)}`;
-  const clauses = kinds.map((kind) => `  node[${KIND_FILTERS[kind]}](${bbox});`).join("\n");
+export function overpassQuery(
+  corridor: Corridor,
+  radiusMetres: number,
+  kinds: readonly DiscoveryKind[],
+): string {
+  const points = corridor
+    .map((point) => `${String(point.latitude)},${String(point.longitude)}`)
+    .join(",");
+  const around = `around:${String(radiusMetres)},${points}`;
+  const clauses = kinds.map((kind) => `  node[${KIND_FILTERS[kind]}](${around});`).join("\n");
   return `[out:json][timeout:25];\n(\n${clauses}\n);\nout body;`;
-}
-
-/** The bit of `BoundingBox` this function needs, so a test can hand it a plain object. */
-export interface BoxLike {
-  south: number;
-  west: number;
-  north: number;
-  east: number;
 }
 
 interface OverpassElement {

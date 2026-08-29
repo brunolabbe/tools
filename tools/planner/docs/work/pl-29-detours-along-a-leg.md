@@ -142,6 +142,232 @@ specialist that proposes legs never gets to see what is beside them.
 - `npm run check` and `npm test -- --project planner` pass. The image gate and
   the e2e suite do not run locally; say so rather than reporting green.
 
+## Review
+
+Two gates, scoped separately by the orchestrator: **Gate A** on the contract
+and migration change, **Gate B** on the pass, the geometry and the prompts.
+Both ran against `db9f0c1`. Verdicts recorded as given — Gate B's is not
+softened to "CONCERNS, addressed" once its findings were fixed, per this
+repo's own rule that a gate record which edits itself once the work is done
+records nothing.
+
+### Gate A — 2026-08-29
+
+**Gate: PASS** · `db9f0c1` · scope: the `coverage` contract change and
+migration 7.
+
+**What it verified:**
+
+- Read every branch of `uncheckedFor` (`itinerary/src/unchecked.ts:157-382`
+  as reviewed) and confirmed all 13 pre-existing `UncheckedConstraintKind`s
+  are pure functions of `(brief, candidates, revision.days)` — no
+  counterexample. Named the specific derivations: `travel-time` off
+  `days[].items[].travelFromPrevious`, the rest off `brief`/`candidates`,
+  both persisted since migration 2. Confirmed `coverage` is not derivable the
+  same way, because `Candidate.specialist` records who _proposed_ a candidate
+  rather than whether discovery _surfaced_ it — there is nothing on a stored
+  candidate a derivation could read a thin corridor off.
+- **Measured the counterfactual directly**: built a revision with `coverage`
+  and with `coverage = []`, ran both through the real `uncheckedForRevision`,
+  and confirmed that without the column a reloaded plan silently claims full
+  corridor coverage — the note vanishes while every other unchecked entry
+  survives. This is the proof that the stored-not-derived design decision was
+  correct, not merely defensible.
+- **Enum blast radius**: an unfiltered repo-wide `grep` for
+  `UncheckedConstraintKind`, `UncheckedConstraint`, every literal kind string,
+  plus `assertNever`/`satisfies never`/`: never`. Zero switches, exhaustiveness
+  checks or per-kind mappings outside `unchecked.ts`'s own producing
+  if-chain. The one display site, `web/src/plan/PlanView.tsx:424-425`, keys
+  by `uncheckedConstraintKey` (content-based since pl-27) and labels via a
+  generic `humanise()` (`replaceAll("-", " ")`) — a new kind renders with zero
+  code changes. Zero instances, across all four packages, of the defect class
+  a prior session's ticket (pl-35, per the gate's own reference) named.
+- **Single write path**: only `api/src/runs/orchestrator.ts` (the `persist`
+  helper) inserts a revision, and `NewRevision`/`PlanRevision` both require
+  `coverage` at the type level, so no path can construct one unaware of the
+  column.
+- **Mutation-tested the repo's own `migrations.test.ts`**: dropped
+  `DEFAULT '[]'` from migration 7. The existing backfill test went red
+  (`null` where the assertion wants `'[]'`), restored, green at 7/7 for that
+  file. The harness is real.
+- Exercised migration 7 directly: old rows backfill to `'[]'`, round-trip is
+  byte-identical, corrupted `coverage_json` throws a controlled `INTERNAL`,
+  `migrate()` is idempotent, and a fresh schema is byte-identical to a
+  migrated one down to triggers and indexes.
+- **Caught and reported its own test-script error**: an apparent trigger
+  mismatch in its fresh-vs-migrated `PRAGMA` comparison was its own script
+  having dropped `plan_revisions_append_only` to hand-edit a row for another
+  check. Re-ran clean. Recorded because it is the reason that comparison's
+  result can be trusted rather than taken on faith.
+
+**Findings:**
+
+- **Observed, not a finding** — corrupted `coverage_json` has no dedicated
+  regression test. Verified by hand that it throws `INTERNAL`, and confirmed
+  `gaps_json`/`brief_json`/`candidate_json` are equally unpinned for
+  corruption — a pre-existing pattern this ticket did not introduce.
+  Disposition: no change. A repo-wide "every JSON column gets a corruption
+  test" pass is a `repo-` ticket, not a reason to single out `coverage_json`.
+- **Found in Gate B's lane, flagged rather than re-weighted**:
+  `api/test/discovery-run.test.ts`'s docstring claimed to prove "a corridor
+  with nothing on it produces the coverage note", but by mutation the test
+  actually exercises the `locate()` failure path (`intakeReadyToDraft`'s
+  `"somewhere"` placeholder is not in `FIXTURE_PLACES`, so both ends fail to
+  geocode before `nearby` is ever called). The branch the docstring named is
+  covered elsewhere — `api/test/discovery-pass.test.ts`'s own "a corridor
+  with nothing on it" unit test — so there is no coverage gap, only a wrong
+  claim about which test covers what. Disposition: **fixed** — see Gate B
+  finding 4 below, same defect, one fix.
+
+**What this gate did not do:** it did not review the discovery pass,
+`geometry.ts`, the prompts, the Overpass adapter, `RUN_TRANSITIONS`, purity,
+or the straight-line-corridor deviation — all Gate B's scope. It did not test
+migration behaviour under a concurrent writer or a crash mid-transaction,
+which is generic to all seven migrations and not introduced by this ticket.
+
+### Gate B — 2026-08-29
+
+**Gate: CONCERNS**, addressed in the round below — recorded as given, per
+this ticket's own rule that a verdict is not rewritten once the findings are
+fixed. `db9f0c1` · scope: the discovery pass, `geometry.ts`, the Overpass
+adapter, the prompts, `RUN_TRANSITIONS`, purity, and the disclosed
+narrowings.
+
+**What it verified:**
+
+- **Prompt injection**: established a positive control first (a harmless find
+  name provably reaches the prompt), then probed five payload classes of its
+  own — a 5000-char name, 100 tags, an embedded fake `Specialist:`/
+  `Trip shape:` line, unicode bidi overrides, a 1000-char tag value. All
+  truncate to the documented 200/40/255 limits (`MAX_FIND_NAME_CHARS`,
+  `MAX_FIND_TAGS`, `MAX_FIND_TAG_CHARS`), none crash, none are special-cased.
+  `readMarkers` is immune to marker-spoofing because it returns the _first_
+  matching line, always the legitimate one. Confirmed the disclosure in
+  `prompt.ts` — an instruction to the model, no escaping — is honest rather
+  than hidden.
+- `RUN_TRANSITIONS`: both new edges (`queued → grounding`,
+  `grounding → fanning-out`) added exactly as specified; pl-27's
+  `fanning-out → grounding` and `grounding → composing` intact; both skip
+  edges (`queued → fanning-out`, `fanning-out → composing`) still legal; no
+  new illegal edge appeared. `contract/test/run.test.ts` 18/18.
+- Byte-identical days genuinely proven — `toEqual` on `.revision.days` with
+  and without a coverage note, in `itinerary/test/compose.test.ts`.
+- "A run that discovers nothing never enters the state" verified directly
+  against `api/src/runs/orchestrator.ts`'s `hasCorridor` gate before the
+  first `moveTo(..., "grounding")`.
+- `itinerary/test/purity.test.ts`: 7/7, and proved the test itself can fail —
+  injected a stray `@planner/agent` import into `compose.ts`, confirmed 2
+  failed, restored, clean `git diff`.
+- Both disclosed narrowings — the hand-composed (not captured) Overpass
+  fixture, and the straight-line corridor — are at full strength in the test
+  file's own header, the ticket's Log and pl-33; a reader cannot mistake
+  `nearby`'s tests for payload-backed. Confirmed `GroundingProvider` genuinely
+  has no route-geometry method, so the straight-line narrowing was forced,
+  not a shortcut.
+- **Capture-script fidelity**: ran the Log's script verbatim, got a
+  byte-identical query to its own independent computation, and confirmed
+  `#overpassJson` sends `POST` to `${overpassUrl}/interpreter` with
+  `content-type: text/plain` and a raw body — matching the Log's curl
+  invocation exactly.
+
+**Findings:**
+
+- **F1 · high · fixed, and a design call taken** —
+  `api/src/grounding/geometry.ts` (as reviewed at `db9f0c1`, lines 7-8) said
+  _"`nearby`'s query already asks Overpass's own `around:` filter to
+  restrict its reply to the corridor's radius."_ False: `overpassQuery`
+  (`valhalla.ts`, as reviewed) built a bounding box, and `valhalla.ts` said so
+  correctly two comments over — two files in one commit disagreeing about
+  what the code did.
+
+  Measured 11.09x bbox-to-corridor area for Montréal→Québec City; reproduced
+  independently and then measured **Montréal→Percé — pl-29's own motivating
+  example** — at 27.5x (a 258,618 km² box for a 9,410 km² corridor). Confirmed
+  the client-side re-filter (`distanceToCorridorMetres`) keeps the returned
+  `Find[]` correct regardless — this was robustness and cost, never a wrong
+  plan — and confirmed `around:` was genuinely available (the corridor's two
+  geocoded points exist before `nearby()` runs, and Overpass's `around:`
+  filter accepts multiple lat/lon pairs directly).
+
+  Reproduced the Montréal→Percé figure myself before deciding, own units and
+  own approximation (`corridorBoundingBox`'s exact output against a simple
+  length-times-width strip, not the gate's own area method): bbox
+  `251,048 km²` against a corridor buffer of `9,408 km²` (783.97 km long,
+  12 km wide), `26.7x` — same order of magnitude as the gate's `27.5x`, close
+  enough given the two measurements use different approximations for the
+  corridor's own area, and decisive either way. Did not independently
+  reproduce the `11.09x` Montréal→Québec City figure; the Percé number is the
+  one the decision turns on and is the one checked by hand.
+
+  **Disposition: switched to `around:`.** The bbox was this branch's own
+  addition, motivated by "cheap query, exact client-side filter"; it is the
+  wrong trade for a diagonal corridor, which is the tool's own headline
+  example. No payload had been captured yet, so the switch cost no fixture.
+  `overpassQuery` (`valhalla.ts`) now sends `around:radiusMetres,lat1,lon1,
+lat2,lon2,...` over the corridor's own points; `corridorBoundingBox` and
+  `BoundingBox` are deleted from `geometry.ts` (dead code once nothing calls
+  them, not kept for an imagined caller). The client-side re-filter is
+  unchanged and, if anything, more load-bearing now: the primary filter is
+  also unverified against a real server. `geometry.ts`'s header and
+  `valhalla.ts`'s `overpassQuery`/`nearby` doc comments record the reasoning
+  and the measured numbers in place, rather than only in this table.
+
+- **F2 · med · fixed** — Done-when: "the number of routing calls is
+  **asserted** — not the timing." Every detour-costing test in
+  `api/test/discovery-pass.test.ts` used exactly one find, so none could
+  distinguish "one matrix call regardless of find count" from "one call per
+  find" — `detourCosts` (`api/src/runs/discovery.ts`) was already correct
+  (one `await provider.travel(...)`, no loop), only unproven. Added "many
+  finds still cost exactly one `travel()` call, not one per find" — three
+  finds, a call counter, asserts `travelCalls === 1` and the matrix shape
+  (`{ origins: 4, destinations: 4 }`). Verified live: reproduced red by
+  duplicating the `travel()` call in `detourCosts` (`travelCalls` came back
+  `2`), restored, confirmed green.
+
+- **F3 · low · documented** — the antimeridian. A corridor from (0°,179°) to
+  (0°,-179°) measures an on-corridor point (0°,180°) as roughly 111 km away
+  instead of near zero — checked by hand:
+  `haversineMetres` puts the two ends `222,389.85` m apart the short way,
+  `distanceToCorridorMetres` answers `111,194.93` m for the midpoint. Silently
+  wrong, not a crash. Not fixed, per the gate's own framing: this tool plans
+  trips inside Québec, the antimeridian is not a route it draws, and the risk
+  is real but the domain never reaches it. Documented in `geometry.ts`'s
+  header, beside `project`, with the exact figures above rather than
+  estimates.
+
+- **F4 · med · triaged, not blanket-fixed** — 18 mutations on `geometry.ts`,
+  12 caught, 6 survived. Dispositions:
+  - **The segment-projection lower clamp, `t ≥ 0`** (a point _before_ the
+    corridor's start) — **fixed**. The symmetric "past the end" direction was
+    pinned by an existing test; this one was not, which is exactly the
+    asymmetric-pair shape where a later edit breaks the untested half
+    silently. Added "a point before either end is measured to that end too"
+    in `api/test/geometry.test.ts`. Verified live: mutated the clamp to
+    `Math.min(1, t)` (dropping the `Math.max(0, ...)` half), the new test
+    failed (`expected 214566.9... to be less than 5000`), restored, confirmed
+    green.
+  - **`widestLat`'s conservative padding, the pole ternary, and the
+    `south`/`west` clamps** — all three lived in `corridorBoundingBox`, which
+    F1's fix deletes outright. **No longer applicable**: there is no code left
+    for these mutations to apply to. Recorded here rather than silently
+    dropped from the count, since "moot by deletion" and "triaged and kept"
+    are different outcomes and a reader comparing this table to Gate B's
+    original sweep should be able to tell which happened to which.
+  - **The haversine antipodal clamp** (`Math.min(1, Math.sqrt(h))` in
+    `haversineMetres`) — **no change, deliberately**. Already documented at
+    its own call site ("floating-point can push `h` fractionally past 1");
+    no test pins it, and none is added — a corridor this tool ever draws is
+    never (near-)antipodal, and a test asserting a value this file already
+    explains in prose would be pinning prose, not behaviour.
+
+**What this gate did not do:** it did not review the contract or migration
+change, `api/src/db/schema.ts`, or `api/src/db/plans.ts` — Gate A's scope. It
+did not reach a real Overpass or Wikipedia instance — the response-size risk
+in F1 was assessed by reading code and computing areas, not from an observed
+Overpass timeout. It swept `geometry.ts` exhaustively (all 18 mutation
+points) but sampled `discovery.ts`/`valhalla.ts` selectively rather than
+exhaustively. Neither this gate nor Gate A ran e2e or the image gate.
+
 ## Log
 
 **2026-08-29 — built, against a base with no Docker, no PostGIS and no route to
@@ -244,25 +470,37 @@ $ git diff origin/main -- tools/planner/api/src/grounding/valhalla.ts | grep -n 
 (no output — neither function's body appears in the diff)
 ```
 
-Query design: a bounding box over the corridor (`corridorBoundingBox`,
-`geometry.ts`), one Overpass clause per requested `DiscoveryKind`
-(`KIND_FILTERS`, `valhalla.ts`), `[out:json][timeout:25]`, `out body;`. Kinds:
-`viewpoint` (`tourism=viewpoint`), `waterfall` (`natural=waterfall`),
-`attraction` (`tourism=attraction`), `historic-site` (`historic` present).
-Client-side, every result is re-filtered by `distanceToCorridorMetres` against
-the caller's `radiusMetres` regardless of what the query's own bbox admitted —
+> **Amended in the gate round (Gate B finding 1): the paragraph below
+> described a bounding box, which this branch no longer sends.** Kept rather
+> than deleted, because the comment defect Gate B found was exactly two files
+> disagreeing about which of these two paragraphs was true — see `## Review`.
+> `overpassQuery` now sends `around:` over the corridor's own points, and
+> `corridorBoundingBox` is deleted from `geometry.ts`. What follows is history,
+> not current behaviour.
+
+Query design (as first built): a bounding box over the corridor
+(`corridorBoundingBox`, `geometry.ts`), one Overpass clause per requested
+`DiscoveryKind` (`KIND_FILTERS`, `valhalla.ts`), `[out:json][timeout:25]`,
+`out body;`. Kinds: `viewpoint` (`tourism=viewpoint`), `waterfall`
+(`natural=waterfall`), `attraction` (`tourism=attraction`), `historic-site`
+(`historic` present) — the kind list is unchanged by the gate round. Client-
+side, every result is re-filtered by `distanceToCorridorMetres` against the
+caller's `radiusMetres` regardless of what the query's own filter admitted —
 defence in depth against a server-side filter this environment cannot verify
-end to end (see `geometry.ts`'s header for the argument in full).
+end to end (see `geometry.ts`'s header for the argument in full), and this
+line is still true of the `around:`-based query that replaced the bbox one.
 
 `overpassQuery` is exported specifically so the capture script below uses the
 adapter's _real_ request rather than a hand-typed approximation of it.
 
 ### The geometric filter — fully built and fully proven, no network needed
 
-`api/src/grounding/geometry.ts`: `haversineMetres`, `distanceToCorridorMetres`
-(point-to-polyline, clamped per segment, picks the nearest of several),
-`corridorBoundingBox`. Pure, no import beyond `@planner/contract` and
-`@planner/agent`'s types.
+`api/src/grounding/geometry.ts`: `haversineMetres` and
+`distanceToCorridorMetres` (point-to-polyline, clamped per segment on both
+ends, picks the nearest of several). Pure, no import beyond `@planner/contract`
+and `@planner/agent`'s types. (`corridorBoundingBox` was here too as first
+built; deleted in the gate round once `overpassQuery` stopped calling it — see
+`## Review`, Gate B finding 1.)
 
 ```
 $ npx vitest run tools/planner/api/test/geometry.test.ts
@@ -406,14 +644,15 @@ pulled forward by wanting to.
 
 ### The capture script, using the adapter's own query verbatim
 
-Generated by calling the _shipped_ `overpassQuery` (not a re-typed copy of it)
-against a real corridor, so the query below is provably what the adapter
-sends and not an approximation of it:
+**Updated in the gate round** (Gate B finding 1): the query changed from a
+bounding box to `around:` over the corridor's own points — see `## Review`
+and the Log entry below it for the measured reason. Regenerated the same way
+as before, calling the _shipped_ `overpassQuery` rather than a re-typed copy
+of it, so the query below is provably what the adapter sends:
 
 ```bash
 # From the repo root, after `npm run build` (needs the compiled dist/).
 node --input-type=module -e "
-import { corridorBoundingBox } from './tools/planner/api/dist/grounding/geometry.js';
 import { overpassQuery } from './tools/planner/api/dist/grounding/valhalla.js';
 
 // Swap these for any corridor; these two match this file's own test fixtures.
@@ -421,26 +660,27 @@ const ORIGIN = { latitude: 45.5019, longitude: -73.5674 };      // Montréal
 const DESTINATION = { latitude: 46.8139, longitude: -71.208 };  // Québec City
 const RADIUS_METRES = 6000;                                     // DISCOVERY_RADIUS_METRES
 
-const box = corridorBoundingBox([ORIGIN, DESTINATION], RADIUS_METRES);
-const query = overpassQuery(box, ['viewpoint', 'waterfall', 'attraction', 'historic-site']);
+const query = overpassQuery([ORIGIN, DESTINATION], RADIUS_METRES, ['viewpoint', 'waterfall', 'attraction', 'historic-site']);
 process.stdout.write(query);
 " > /tmp/overpass-query.txt
 
 cat /tmp/overpass-query.txt
 # [out:json][timeout:25];
 # (
-#   node["tourism"="viewpoint"](45.44...,-73.64...,46.86...,-71.12...);
-#   node["natural"="waterfall"](45.44...,-73.64...,46.86...,-71.12...);
-#   node["tourism"="attraction"](45.44...,-73.64...,46.86...,-71.12...);
-#   node["historic"](45.44...,-73.64...,46.86...,-71.12...);
+#   node["tourism"="viewpoint"](around:6000,45.5019,-73.5674,46.8139,-71.208);
+#   node["natural"="waterfall"](around:6000,45.5019,-73.5674,46.8139,-71.208);
+#   node["tourism"="attraction"](around:6000,45.5019,-73.5674,46.8139,-71.208);
+#   node["historic"](around:6000,45.5019,-73.5674,46.8139,-71.208);
 # );
 # out body;
 
 # POST it exactly as the adapter does: method POST, raw body, content-type
 # text/plain, to <OVERPASS_URL>/interpreter. The public instance's usage
 # policy asks for a real purpose and moderate use — one request for a fixture
-# capture is what it is for. A self-hosted instance (docker.io/wiktorn/overpass-api
-# over a small regional .pbf) works identically and is kinder to the shared one.
+# capture is what it is for, and it is now a request Overpass evaluates over
+# an exact radius rather than a rectangle up to 27x larger. A self-hosted
+# instance (docker.io/wiktorn/overpass-api over a small regional .pbf) works
+# identically and is kinder to the shared one.
 curl -sS -X POST \
   -H 'content-type: text/plain' \
   --data-binary @/tmp/overpass-query.txt \
@@ -500,3 +740,134 @@ two slow jobs). Neither runs in this container.
   `itinerary/src/limits.ts`'s tables have, per the root `CLAUDE.md`'s rule that
   packing limits are content and are reviewed as content. It is not
   configurable on purpose; argue with the number rather than adding a flag.
+
+**2026-08-29 — gate round.** Both gates addressed; dispositions are in
+`## Review` above and are not repeated here. This entry is the arithmetic and
+the commands behind the one design call the gate left to me.
+
+**The bounding box was the wrong trade, reproduced by hand before deciding.**
+Gate B measured 27.5x for Montréal→Percé; I reproduced the same pair,
+independently, own approximation:
+
+```
+$ node --input-type=module -e "
+import { corridorBoundingBox, haversineMetres } from './tools/planner/api/dist/grounding/geometry.js';
+const MONTREAL = { latitude: 45.5019, longitude: -73.5674 };
+const PERCE = { latitude: 48.5233, longitude: -64.2143 };
+const RADIUS = 6000;
+const box = corridorBoundingBox([MONTREAL, PERCE], RADIUS);
+const R = 6371;
+const toRad = (d) => d * Math.PI/180;
+const latSpanKm = (box.north - box.south) * (Math.PI/180) * R;
+const midLat = (box.north+box.south)/2;
+const lonSpanKm = (box.east - box.west) * (Math.PI/180) * R * Math.cos(toRad(midLat));
+const bboxAreaKm2 = latSpanKm * lonSpanKm;
+const corridorLengthKm = haversineMetres(MONTREAL, PERCE)/1000;
+const corridorAreaKm2 = corridorLengthKm * (2*RADIUS/1000);
+console.log('bbox', bboxAreaKm2, 'corridor', corridorAreaKm2, 'ratio', bboxAreaKm2/corridorAreaKm2);
+"
+bbox 251048.0993352184 corridor 9407.650738427948 ratio 26.68552503865268
+```
+
+`26.7x` against the gate's `27.5x` — same order of magnitude, the difference
+explained by two different approximations of the corridor's own area (a
+simple length-times-width strip here, something more careful there). Decisive
+either way: this ticket's own headline route wastes over 26x the area it
+needs to search, on a self-hosted instance sized for a mini-PC.
+
+**Switched `overpassQuery` to `around:` over the corridor's own points**, per
+pl-29's own Build step 2 — the reason it names for choosing Overpass at all.
+`corridorBoundingBox` and `BoundingBox` are deleted from `geometry.ts`
+(`git log` shows they were added and removed in this branch; nothing external
+ever called them). New query, the same corridor as the capture script:
+
+```
+$ node --input-type=module -e "
+import { overpassQuery } from './tools/planner/api/dist/grounding/valhalla.js';
+const ORIGIN = { latitude: 45.5019, longitude: -73.5674 };
+const DESTINATION = { latitude: 46.8139, longitude: -71.208 };
+console.log(overpassQuery([ORIGIN, DESTINATION], 6000, ['viewpoint', 'waterfall', 'attraction', 'historic-site']));
+"
+[out:json][timeout:25];
+(
+  node["tourism"="viewpoint"](around:6000,45.5019,-73.5674,46.8139,-71.208);
+  node["natural"="waterfall"](around:6000,45.5019,-73.5674,46.8139,-71.208);
+  node["tourism"="attraction"](around:6000,45.5019,-73.5674,46.8139,-71.208);
+  node["historic"](around:6000,45.5019,-73.5674,46.8139,-71.208);
+);
+out body;
+```
+
+The capture script two sections up is updated to match — same corridor, same
+`curl`, a smaller and exact query in place of the bounding box.
+
+**The antimeridian bug is checked by hand, not estimated**, per Gate B finding
+3:
+
+```
+$ node --input-type=module -e "
+import { distanceToCorridorMetres, haversineMetres } from './tools/planner/api/dist/grounding/geometry.js';
+const A = { latitude: 0, longitude: 179 };
+const B = { latitude: 0, longitude: -179 };
+const onCorridorPoint = { latitude: 0, longitude: 180 };
+console.log('true distance A-B (short way):', haversineMetres(A, B));
+console.log('distanceToCorridorMetres for on-corridor point:', distanceToCorridorMetres(onCorridorPoint, [A, B]));
+"
+true distance A-B (short way): 222389.85328911655
+distanceToCorridorMetres for on-corridor point: 111194.92664455995
+```
+
+A point genuinely on the corridor (the antimeridian crossing itself) measures
+`111,194.93` m from it instead of near zero — one degree of longitude at the
+equator, which is exactly the naive unwrapped segment's nearest endpoint.
+Documented in `geometry.ts`'s header with these two figures rather than left
+as "roughly 110 km" or fixed — Gate B's own framing, and this tool never
+draws a route across ±180°.
+
+**Fixes verified live, each mutated, confirmed red, restored, confirmed
+green** — the same discipline as the first build round:
+
+- The multi-find call-count test (Gate B finding 2): mutated `detourCosts`
+  to call `provider.travel` twice; `travelCalls` came back `2`, the new test
+  failed, restored.
+- The `t ≥ 0` clamp (Gate B finding 4): mutated `Math.max(0, Math.min(1, t))`
+  to `Math.min(1, t)`; the new "before either end" test failed
+  (`expected 214566.9... to be less than 5000`), restored.
+
+```
+$ npx vitest run tools/planner/api/test/geometry.test.ts
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+$ npx vitest run tools/planner/api/test/discovery-pass.test.ts
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+$ npx vitest run tools/planner/api/test/grounding-valhalla.test.ts
+ Test Files  1 passed (1)
+      Tests  35 passed (35)
+$ npx vitest run tools/planner/api/test/discovery-run.test.ts
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+```
+
+**Full gates, after every fix:**
+
+```
+$ npm run build   → exit 0
+$ npm run check   → exit 0
+$ npm test -- --project planner
+ Test Files  53 passed (53)
+      Tests  757 passed (757)
+$ npm test        (repo-wide)
+ Test Files  107 passed (107)
+      Tests  1594 passed (1594)
+$ npx vitest run tools/planner/itinerary/test/purity.test.ts
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+```
+
+757 rather than the prior round's 758: the four `corridorBoundingBox` tests
+are gone with the function, three tests were added (the corridor-point
+threading test in `grounding-valhalla.test.ts`, the multi-find call-count
+test, the before-the-start clamp test) — net `758 - 4 + 3 = 757`. Not run,
+same as the first round and for the same reason: the image gate and the e2e
+suite.

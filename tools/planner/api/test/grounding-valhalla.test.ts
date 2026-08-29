@@ -601,14 +601,19 @@ const QUEBEC_CITY: Coordinates = { latitude: 46.8139, longitude: -71.208 };
 const CORRIDOR = [MONTREAL, QUEBEC_CITY];
 
 describe("overpassQuery — the request, which is this file's own to get right", () => {
-  test("asks a bounding box, one clause per requested kind", () => {
-    const query = overpassQuery({ south: 45, west: -74, north: 47, east: -71 }, [
-      "viewpoint",
-      "waterfall",
-    ]);
+  test("asks around: over the corridor's own points, one clause per requested kind", () => {
+    // Not a bounding box (gate B, 2026-08-29): a box around a diagonal
+    // corridor is the enclosing rectangle, measured at 26-27x the corridor's
+    // own area for this ticket's motivating Montréal-to-Percé example — see
+    // pl-29's Log. `around:` is Overpass's own polyline filter and is exact.
+    const query = overpassQuery([MONTREAL, QUEBEC_CITY], 6_000, ["viewpoint", "waterfall"]);
     expect(query).toContain("[out:json][timeout:25];");
-    expect(query).toContain('node["tourism"="viewpoint"](45,-74,47,-71);');
-    expect(query).toContain('node["natural"="waterfall"](45,-74,47,-71);');
+    expect(query).toContain(
+      `node["tourism"="viewpoint"](around:6000,${String(MONTREAL.latitude)},${String(MONTREAL.longitude)},${String(QUEBEC_CITY.latitude)},${String(QUEBEC_CITY.longitude)});`,
+    );
+    expect(query).toContain(
+      `node["natural"="waterfall"](around:6000,${String(MONTREAL.latitude)},${String(MONTREAL.longitude)},${String(QUEBEC_CITY.latitude)},${String(QUEBEC_CITY.longitude)});`,
+    );
     expect(query).toContain("out body;");
     // Only the two kinds asked for — a query is not entitled to more clauses
     // than the caller's `kinds` list, which is what bounds what comes back.
@@ -617,8 +622,20 @@ describe("overpassQuery — the request, which is this file's own to get right",
   });
 
   test("a historic site is tag presence, not a specific value", () => {
-    const query = overpassQuery({ south: 0, west: 0, north: 1, east: 1 }, ["historic-site"]);
-    expect(query).toContain('node["historic"](0,0,1,1);');
+    const query = overpassQuery([MONTREAL, QUEBEC_CITY], 6_000, ["historic-site"]);
+    expect(query).toContain('node["historic"](around:6000,');
+  });
+
+  test("threads every corridor point through, not only the first and last", () => {
+    // `around:` takes the *whole* polyline, and a query that dropped an
+    // interior waypoint would silently narrow what a real server searches —
+    // this is the one property a hand-composed reply test cannot catch,
+    // because the reply says nothing about what was asked for.
+    const waypoint: Coordinates = { latitude: 46.35, longitude: -72.55 };
+    const query = overpassQuery([MONTREAL, waypoint, QUEBEC_CITY], 6_000, ["viewpoint"]);
+    expect(query).toContain(
+      `around:6000,${String(MONTREAL.latitude)},${String(MONTREAL.longitude)},${String(waypoint.latitude)},${String(waypoint.longitude)},${String(QUEBEC_CITY.latitude)},${String(QUEBEC_CITY.longitude)}`,
+    );
   });
 });
 
