@@ -9,13 +9,20 @@ You dispatch, you gate, you decide. **You do not build and you do not review.** 
 context is the one thing that must survive the whole batch, so it holds the board
 and nothing else.
 
-This skill is written from four sessions, each applying the last one's lessons:
+This skill is written from five sessions, each applying the last one's lessons:
 ~4 M subagent tokens across 21 agents and 16 gates; then ~2.7 M across 17
 invocations and 6 gates; then 2.86 M across 12 agents and 18 invocations, five
 tickets to five merged pull requests, 8 gates and 8 that returned landable
 findings; then **2.04 M across 10 agents and 16 invocations, four tickets to four
 pull requests, 6 gates and 6 that returned findings, every builder producing a
-complete branch on its first round, and no branch ever needing a rebase.** Most of
+complete branch on its first round, and no branch ever needing a rebase**; then
+**877 k across 6 agents and 12 dispatches-or-messages, three tickets to three
+pull requests,
+3 gates, again every builder complete on its first round and no rebase — and a
+batch whose whole output was 266 non-documentation lines — 104 of them `src/`,
+the rest tests, a fixture and one config line — against **1,113 of
+documentation**. That 4.2:1 is the fifth session's real lesson and the reason two
+of its entries below are about cost rather than correctness.** Most of
 what follows is the cost of learning something the expensive way; numbers are quoted where they change a decision, and where the
 sessions disagree all are given, because the disagreement is usually the point.
 
@@ -64,8 +71,9 @@ builders alone means constantly rediscovering the cap.
 
 **The builder/reviewer split is not a planning constant, and it is not the lever.**
 Reviews were 60% of token spend in the first session, 23% in the second, 25% in
-the third and **30% in the fourth** (604 k of 2.04 M) — the third running 75%
-builder on the same loop and the same repo. Four sessions, four different answers.
+the third, **30% in the fourth** (604 k of 2.04 M) and **38% in the fifth**
+(333 k of 877 k) — the third running 75% builder on the same loop and the same
+repo. Five sessions, five different answers.
 Do not budget from any of those numbers. **Budget from resume cost**, which is the
 thing that actually moves: a resumed builder pays a full context reload priced by
 transcript length, not by the work in front of it. Measure your own split as you
@@ -261,6 +269,17 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   not uniformly. A self-generated docs ticket deserves one builder and at most one
   gate. See _Do not cap the gate count_ for the other half of this: the economy is
   in scope, never in refusing a gate that has something to check.
+- **Point every verification run at the narrowest thing that can fail.** This is
+  the largest single cost in a batch and the page said nothing about it for five
+  sessions. Measured on this repo, warm: one spec file **2 s**, the directory that
+  contains it **41 s**, the tool's whole project **~50 s**, plus **12 s** to rebuild.
+  A five-mutation sweep is `5 x (12 + 2)` or `5 x (12 + 41)` — **1.2 minutes or
+  4.4 minutes for identical evidence**, and the fifth session paid the second
+  figure across six agents. A mutation to one regex cannot break a spec that never
+  imports it, so run the spec, then run the project **once** at the end. Say it in
+  the prompt; agents reach for the directory by default. The 20x is this repo's
+  suites and will not transfer as a constant — the *shape* does, so have the agent
+  measure both once and use the number it gets.
 - **Some work needs no gate at all.** Filing a ticket that *records a defect* is
   the clear case: require the builder to reproduce the defect before writing it up,
   and the reproduction **is** the verification. In the second session that builder
@@ -382,9 +401,24 @@ behind, and that is the leak that reached 51 stale branches in the second sessio
 ### When every agent dies at once
 
 A session usage limit killed all five in-flight gates simultaneously in the fourth
-session. It is worth planning for because the recovery is cheap and the wrong
+session, and the fifth ended mid-batch on a deliberate machine shutdown. It is worth planning for because the recovery is cheap and the wrong
 recovery is expensive.
 
+- **A snapshot of a live worktree is a moment, not a state — and it goes stale
+  while you write it.** Facing a shutdown, the fifth session's orchestrator captured
+  each builder's uncommitted diff into a handover file. Both were wrong within
+  minutes: one builder was recorded with **one** dirty file and had **three**,
+  because it kept working after the capture; the other was written up as "assume
+  the work is lost" when it was in fact complete. **The worktree is the artefact;
+  a transcription of it is a second thing to keep true.** So capture *pointers* —
+  the worktree path, the branch, the pushed tip — and re-read the tree on the way
+  back in. Copy content out only for what dies with the session and exists nowhere
+  else: a reviewer's returned report is the clear case, an uncommitted diff is not.
+- **Prefer pushing over describing.** The best thing that happened under that
+  shutdown was a builder told to secure its work choosing to commit and push the
+  **gate record first**, ahead of its own half-finished code fixes, under a `docs`
+  type so it released nothing. That is the right instinct to name in the message:
+  *push the thing that exists nowhere else; the code you can rewrite.*
 - **Check for damage before resuming anything.** Agents die at an arbitrary
   instant, so one may have been mid-mutation with a source file still mutated, or
   one step from pushing a scratch branch. Confirm the shared checkout is clean,
@@ -785,6 +819,16 @@ the number the gate named" is exactly such a fix.
   after restoring, or force a clean rebuild, and grep `dist` to confirm the
   mutation is gone. Suspect this first when a suite fails in a way the diff cannot
   explain.
+- **Restore from a `trap`, not from the next line of the script.** The next line
+  does not run when you are killed. A mutation harness whose restore is a
+  subsequent statement leaves the tree mutated on any timeout, interrupt or usage
+  limit — and the fifth session's orchestrator did exactly this to itself, running
+  a sweep under a two-minute tool timeout and stranding a source file *and* its
+  `dist` with a security-relevant lookahead deleted. Write
+  `trap 'cp "$BAK" "$F"; touch "$F"; npm run build' EXIT INT TERM` **before** the
+  first mutation, and have the run print a line when it fires so you can see that
+  it did. This is the cheap half of *When every agent dies at once*: that section
+  tells you to check for a mutated tree afterwards, and this stops there being one.
 - **Measure the baseline yourself.** Never carry a delta across a rebase; check out
   the base, build there, run the suite.
 - **Docs need mechanical verification, not prose review.** Prose has no compiler.
@@ -829,7 +873,28 @@ caught it.
 A gate written into a reviewer's worktree **did not happen** — the worktree is
 discarded. So:
 
-- The reviewer returns the section; **the builder commits it** to the ticket, above
+- **Put the long form on the pull request and the short form in the ticket.** Both
+  are durable and the thread costs the repo nothing, so committing the full report
+  *and* posting it — which is what the rule below produced for five sessions — stores
+  every gate twice and creates two copies that can drift. Measured on the fifth
+  session's three tickets: **303 lines of gate record committed, 294 of the same
+  text posted.** Commit the verdict, the findings table with `file:line` and a
+  disposition each, and what the gate did **not** do; post the reasoning, the
+  enumerations and the reproductions to the thread, and link it.
+- **The Log is where the bloat is, not the gate record.** Same three tickets: Logs
+  **753 lines**, gate records **303** — and one of those Logs ran to **371 lines
+  for a three-line config change**. The cause is upstream, in the relay: every
+  *"say why"*, *"what is the mechanism"*, *"what could you not measure"* converts a
+  measurement into paragraphs, and those instructions are elsewhere on this page
+  because they are worth it. So keep asking — and put the answer where it is read
+  once. **The Log's shape is a claim, its command, and that command's output.** The
+  narrative belongs in the pull request body. **One carve-out, because the repo's
+  own `CLAUDE.md` says it has nowhere else to live:** what the brief turned out to
+  have wrong stays in the Log, as a claim with its command like any other. Judge a
+  Log by whether a later agent can re-run it, not by whether it reads well.
+
+- The reviewer returns the section; **the builder commits the short form of it**
+  (the two bullets above say which form) to the ticket, above
   `## Log`, one subsection per gate, never overwriting an earlier one.
 - The builder then posts the reviewer's report to the PR thread
   (`gh pr comment <n> --body-file <f>`). That is what makes a self-transcribed
