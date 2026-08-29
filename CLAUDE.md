@@ -57,6 +57,12 @@ Per-tool commands (`dev`, `e2e`) live in that tool's `CLAUDE.md`.
 Tooling: **oxlint** and **oxfmt** (not eslint/prettier). Config in
 `.oxlintrc.json` and `.oxfmtrc.json`.
 
+**Both config files are JSONC despite the `.json` extension** — they carry `//`
+comments, neither survives a strict `JSON.parse`, and no code here parses either
+one; only the oxc binaries read them, and oxfmt preserves the comments when it
+formats them. `.oxlintrc.json` has been commented since `b876906`. Editor JSON
+validators will squiggle both unless `files.associations` maps them to `jsonc`.
+
 `oxfmt` is opinionated in the gofmt sense — at the pinned version the only
 setting it honours is `ignorePatterns`. Style keys like `quoteStyle` and
 `lineWidth` parse without error but are silently ignored, so do not add them and
@@ -153,6 +159,21 @@ cannot strip TypeScript types without a flag, so `.ts` tests fail under it.
 Fixtures, not live network calls — real services change, rate-limit and geo-vary,
 which makes CI failures meaningless. Check in real payloads under
 `test/fixtures/` and parse them offline. E2E runs against a local fixture server.
+
+**What keeps the formatter off them is `**/test/fixtures/` in `.oxfmtrc.json`,
+and the `**/` is the whole of it.** These are gitignore-shaped patterns: an entry
+with an internal slash is anchored to the config's directory, so the bare
+`test/fixtures/` that stood there until repo-4 matched nothing, and every fixture
+**oxfmt claims** was formatted like source. That is the `.json`, `.html` and
+`.mjs` ones and only those — the `.m3u8`, `.mpd`, `.m4s`, `.mp4`, `.txt` and
+`.png` captures are extensions oxfmt never handled, so the manifests and segments
+were never at risk and no one should go hunting damage in them. For JSON the
+damage would be indentation only, but oxfmt reflows HTML text nodes and rewrites
+inline `<script>`, which is editing the thing under test. A fixture directory must therefore be named
+`test/fixtures/` to be covered; do not broaden the entry to `**/fixtures/`,
+which would swallow `tools/downloader/e2e/fixtures/hls-origin.ts`, TypeScript
+the repo does want formatted. Anything under a covered directory is exempt
+whatever its extension.
 
 CI runs lint, typecheck and every unit suite on every push. **`ci.yml`'s `check`
 job is filtered by nothing at all**, markdown included, because `npm run check`
