@@ -25,7 +25,7 @@ import {
   type RunEvent,
 } from "@planner/contract";
 import { AppError } from "@planner/contract";
-import type { GroundingProvider, TravelMatrix } from "@planner/agent";
+import type { Find, GroundingProvider, TravelMatrix } from "@planner/agent";
 import { FixtureGroundingProvider } from "../src/grounding/fixtures.ts";
 import {
   createRunHarness,
@@ -135,6 +135,10 @@ class SilentGrounding implements GroundingProvider {
   async travel(request: { origins: readonly Place[] }): Promise<TravelMatrix> {
     return request.origins.map(() => request.origins.map(() => null));
   }
+  /** This suite is about the travel-time pass; discovery is pl-29's own file. */
+  async nearby(): Promise<Find[]> {
+    return [];
+  }
 }
 
 /** A backend that is down. Every call throws, and the plan still has to ship. */
@@ -144,6 +148,9 @@ class BrokenGrounding implements GroundingProvider {
     throw new AppError("UNREACHABLE", "the routing service refused the connection");
   }
   async travel(): Promise<never> {
+    throw new AppError("UNREACHABLE", "the routing service refused the connection");
+  }
+  async nearby(): Promise<never> {
     throw new AppError("UNREACHABLE", "the routing service refused the connection");
   }
 }

@@ -161,7 +161,7 @@ describe("provenance", () => {
 
     show();
 
-    expect(await screen.findByText(/this was read from/i)).toBeDefined();
+    expect(await screen.findByText(/this is something we read at a source/i)).toBeDefined();
     expect(screen.getByText(/the cost is the assistant talking/i)).toBeDefined();
     // The source is a link, and the page it points at is untrusted text.
     const link = screen.getByRole("link", { name: "The museum" });
@@ -181,6 +181,30 @@ describe("provenance", () => {
     show();
 
     expect(await screen.findByText(/this is the assistant talking/i)).toBeDefined();
+  });
+
+  /**
+   * pl-29: discovery makes `grounded` genuinely ambiguous — a database row
+   * nobody vouched for is `grounded` in exactly the same sense a routing
+   * engine's measured distance is. `Provenance` gains no member for the
+   * difference, so the one sentence every grounded line renders has to be
+   * true of both, and a reader must not be able to read it as an
+   * endorsement — which the old "Checked ... was read from" wording, with its
+   * checkmark-shaped badge, invited.
+   */
+  test("a sourced line never reads as a recommendation", async () => {
+    const poi = candidate({ title: "A viewpoint nobody has reviewed", provenance: GROUNDED });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [poi],
+        revisions: [revision([day(0, [item({ candidateId: poi.id })])])],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/is not recommending it/i)).toBeDefined();
+    expect(screen.queryByText(/^Checked$/)).toBeNull();
   });
 });
 

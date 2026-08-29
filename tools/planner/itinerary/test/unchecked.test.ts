@@ -66,8 +66,9 @@ function planWith(
   brief: ReturnType<typeof briefFor>,
   candidates: Parameters<typeof compose>[0]["candidates"],
   travel: Parameters<typeof compose>[0]["travel"] = NOTHING_MEASURED,
+  coverage: Parameters<typeof compose>[0]["coverage"] = [],
 ): { plan: PlanDetail; composed: ReturnType<typeof compose> } {
-  const composed = compose({ brief, candidates, travel, revision: REVISION, now: NOW });
+  const composed = compose({ brief, candidates, travel, coverage, revision: REVISION, now: NOW });
   const base: PlanDetail = {
     id: "plan-1",
     title: "A trip",
@@ -173,6 +174,32 @@ describe("uncheckedForRevision", () => {
         revision: revisionOf(plan),
       }),
     ).toEqual(composed.unchecked);
+  });
+
+  /**
+   * pl-29: `coverage` is evidence stored on the revision, not something this
+   * function derives — see `uncheckedForRevision`'s own note. This is the
+   * survival test: read the plan back a second time, off the revision alone,
+   * with nothing re-run, and the note is still there.
+   */
+  test("carries a stored coverage note across a read back off the revision", () => {
+    const brief = briefFor({});
+    const thin = {
+      kind: "coverage" as const,
+      detail: "There is very little on the map along this route.",
+      candidateIds: [],
+    };
+    const { plan, composed } = planWith(
+      brief,
+      [candidate({ specialist: "activities" })],
+      NOTHING_MEASURED,
+      [thin],
+    );
+
+    expect(composed.unchecked).toContainEqual(thin);
+    expect(
+      uncheckedForRevision({ brief, candidates: plan.candidates, revision: revisionOf(plan) }),
+    ).toContainEqual(thin);
   });
 
   /**

@@ -59,16 +59,21 @@
  * and the failure is `TIMEOUT`, which is retryable in core.
  */
 
+import { MAX_FIND_NAME_CHARS, MAX_FIND_TAGS, MAX_FIND_TAG_CHARS } from "@planner/agent";
 import type {
+  DiscoveryKind,
+  Find,
   GroundingProvider,
   LocatedPlace,
   LocateRequest,
+  NearbyRequest,
   TravelEstimate,
   TravelMatrix,
   TravelRequest,
 } from "@planner/agent";
 import { AppError, coordinatesSchema } from "@planner/contract";
 import type { Coordinates, Place, Source } from "@planner/contract";
+import { corridorBoundingBox, distanceToCorridorMetres } from "./geometry.ts";
 import type { AppLogger } from "../logger.ts";
 import { KEY_SEPARATOR } from "./place-key.ts";
 
@@ -107,6 +112,15 @@ export interface ValhallaProviderOptions {
   routingUrl: string;
   /** Base URL of the Nominatim instance. Operator configuration; no default. */
   geocoderUrl: string;
+  /**
+   * Base URL of an Overpass API instance, for `nearby` (pl-29). Optional and
+   * with no default, unlike the two above: a deployment can measure and
+   * geocode without discovering anything, and requiring a third endpoint at
+   * boot would break every `valhalla` deployment pl-28 already describes. When
+   * absent, `nearby` answers an empty list and says so once, in the log — the
+   * same shape §5's amendment gives every other "the ground was thin" case.
+   */
+  overpassUrl?: string | undefined;
   /** Per-request ceiling. Short on purpose — see the header. */
   timeoutMs: number;
   /**
@@ -125,6 +139,7 @@ export class ValhallaGroundingProvider implements GroundingProvider {
 
   readonly #routingUrl: string;
   readonly #geocoderUrl: string;
+  readonly #overpassUrl: string | undefined;
   readonly #timeoutMs: number;
   readonly #now: () => Date;
   readonly #fetch: typeof globalThis.fetch;
@@ -133,6 +148,8 @@ export class ValhallaGroundingProvider implements GroundingProvider {
   constructor(options: ValhallaProviderOptions) {
     this.#routingUrl = trimSlash(options.routingUrl);
     this.#geocoderUrl = trimSlash(options.geocoderUrl);
+    this.#overpassUrl =
+      options.overpassUrl === undefined ? undefined : trimSlash(options.overpassUrl);
     this.#timeoutMs = options.timeoutMs;
     this.#now = options.now ?? ((): Date => new Date());
     this.#fetch = options.fetch ?? globalThis.fetch;
@@ -224,6 +241,82 @@ export class ValhallaGroundingProvider implements GroundingProvider {
         return estimate(cells.get(cellKey(from, to)), () => this.#source(ROUTED_BY, at));
       }),
     );
+  }
+
+  /**
+   * What OpenStreetMap knows near this corridor — pl-29, and the one method on
+   * this class that proposes rather than checks (see the header of
+   * `agent/src/grounding.ts`).
+   *
+   * **This is Overpass, not Valhalla**, the same way `locate` above is
+   * Nominatim and not Valhalla: a third service on the same regional extract,
+   * behind the one seam this file already implements two of. `overpassUrl` is
+   * optional — see `ValhallaProviderOptions` — and a deployment that has not
+   * stood one up gets an empty list here, logged once, rather than a boot-time
+   * refusal: measuring and geocoding do not need discovery to work.
+   *
+   * The query asks a **bounding box**, not `around:` with the whole corridor
+   * threaded through it — cheap for Overpass to evaluate over a long corridor
+   * with many points, at the cost of a wider net than the radius actually
+   * wants. `distanceToCorridorMetres` (`geometry.ts`) then does the exact,
+   * free, client-side filter down to the radius the caller asked for, which is
+   * pl-29's Build step 4 read literally: geometry first, because it is free,
+   * and only the survivors go on to cost anything.
+   */
+  async nearby(request: NearbyRequest): Promise<Find[]> {
+    if (request.signal?.aborted === true) throw new AppError("CANCELED");
+
+    if (this.#overpassUrl === undefined) {
+      this.#logger?.warn("nearby: no OVERPASS_URL configured, discovering nothing");
+      return [];
+    }
+
+    const box = corridorBoundingBox(request.corridor, request.radiusMetres);
+    const query = overpassQuery(box, request.kinds);
+
+    const body = await this.#overpassJson(query, request.signal);
+    const at = this.#now();
+
+    return elementsOf(body)
+      .map((element) => findFrom(element, at))
+      .filter((find): find is Find => find !== null)
+      .filter(
+        (find) =>
+          distanceToCorridorMetres(find.coordinates, request.corridor) <= request.radiusMetres,
+      );
+  }
+
+  /**
+   * One Overpass request, with the same timeout and failure mapping `#json`
+   * gives the other two endpoints — duplicated rather than shared because
+   * Overpass is a `POST` with a raw QL body and no JSON to send, where `#json`
+   * assumes a `RequestInit` its two other callers already agree on.
+   */
+  async #overpassJson(query: string, signal: AbortSignal | undefined): Promise<unknown> {
+    const deadline = AbortSignal.timeout(this.#timeoutMs);
+    const combined = signal === undefined ? deadline : AbortSignal.any([signal, deadline]);
+
+    let response: Response;
+    try {
+      response = await this.#fetch(`${this.#overpassUrl}/interpreter`, {
+        method: "POST",
+        headers: { "content-type": "text/plain" },
+        body: query,
+        signal: combined,
+      });
+    } catch (error: unknown) {
+      throw this.#reachFailure(error, signal);
+    }
+
+    if (!response.ok) {
+      throw new AppError("UNREACHABLE", undefined, { details: { status: response.status } });
+    }
+
+    try {
+      return await response.json();
+    } catch (error: unknown) {
+      throw this.#reachFailure(error, signal);
+    }
   }
 
   /** One `Source`, stamped with the moment the answer was read. */
@@ -504,4 +597,173 @@ function asNumber(value: unknown): number | undefined {
   if (typeof value !== "string" || value.trim() === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Discovery — building the Overpass query and reading its reply (pl-29)
+// ---------------------------------------------------------------------------
+
+/**
+ * The one OSM tag filter each `DiscoveryKind` means.
+ *
+ * A 1:1 mapping, deliberately narrow rather than a list of near-synonyms per
+ * kind: each entry is one Overpass clause, this list is what the capture
+ * script at the bottom of pl-29's ticket log builds its query from, and a
+ * kind whose filter is not obvious from reading this table is a kind that
+ * will not survive contact with the person capturing the fixture. Widening a
+ * kind to catch more tags is a one-line change here, not a signature change
+ * anywhere above it.
+ */
+const KIND_FILTERS: Record<DiscoveryKind, string> = {
+  viewpoint: '"tourism"="viewpoint"',
+  waterfall: '"natural"="waterfall"',
+  attraction: '"tourism"="attraction"',
+  "historic-site": '"historic"',
+};
+
+/**
+ * The Overpass QL text this adapter sends, over a bounding box rather than
+ * `around:` with the whole corridor — see `nearby`'s own comment for why.
+ *
+ * `[out:json]` is load-bearing: Overpass's default output is XML, and this
+ * file has no XML parser and does not want one. `[timeout:25]` is Overpass's
+ * own server-side ceiling and is unrelated to `GROUNDING_TIMEOUT_MS`, which
+ * bounds how long *this process* waits — the two are different clocks
+ * belonging to different machines, and setting them to the same number would
+ * be a coincidence, not a rule.
+ *
+ * Exported so the capture script quoted in pl-29's Log can build the *exact*
+ * query this adapter sends rather than a hand-written approximation of it —
+ * the whole argument this repo makes against a hand-written fixture applies
+ * exactly as hard to a hand-written query nobody ran.
+ */
+export function overpassQuery(box: BoxLike, kinds: readonly DiscoveryKind[]): string {
+  const bbox = `${String(box.south)},${String(box.west)},${String(box.north)},${String(box.east)}`;
+  const clauses = kinds.map((kind) => `  node[${KIND_FILTERS[kind]}](${bbox});`).join("\n");
+  return `[out:json][timeout:25];\n(\n${clauses}\n);\nout body;`;
+}
+
+/** The bit of `BoundingBox` this function needs, so a test can hand it a plain object. */
+export interface BoxLike {
+  south: number;
+  west: number;
+  north: number;
+  east: number;
+}
+
+interface OverpassElement {
+  type: unknown;
+  id: unknown;
+  lat: unknown;
+  lon: unknown;
+  tags: unknown;
+}
+
+/**
+ * The reply's `elements`, narrowed to the shape this file reads.
+ *
+ * Anything that is not an object with the fields below is dropped rather than
+ * thrown on — a node with no `tags` at all is a real thing Overpass can
+ * return, and the caller's own filtering (no name, wrong kind) already has to
+ * handle "nothing usable here" for exactly that reason.
+ */
+function elementsOf(body: unknown): OverpassElement[] {
+  const elements = (body as { elements?: unknown } | null)?.elements;
+  if (!Array.isArray(elements)) {
+    throw new AppError("UNREACHABLE", undefined, { details: { reason: "unexpected-body" } });
+  }
+  return elements.filter((element): element is OverpassElement => {
+    return typeof element === "object" && element !== null;
+  });
+}
+
+/** Which `DiscoveryKind` a node's tags mean, or `null` for none of the ones we asked about. */
+function kindOf(tags: ReadonlyMap<string, string>): DiscoveryKind | null {
+  if (tags.get("tourism") === "viewpoint") return "viewpoint";
+  if (tags.get("natural") === "waterfall") return "waterfall";
+  if (tags.get("tourism") === "attraction") return "attraction";
+  if (tags.has("historic")) return "historic-site";
+  return null;
+}
+
+/**
+ * One element's tags, as a `Map` and bounded.
+ *
+ * A `Map` for the reason every other lookup in this file is one (pl-28 step
+ * 4): every key and value is a string a stranger typed into OpenStreetMap, and
+ * a plain object answers for `constructor`, `__proto__` and `toString`.
+ * Bounded by count and by length because an OSM node can in principle carry
+ * an unbounded number of tags of unbounded length, and a find is meant to be a
+ * short reference a specialist reads — not a payload to smuggle a prompt
+ * through by exhausting `MAX_CANDIDATE_SUMMARY_CHARS` on the way there.
+ */
+function tagsOf(raw: unknown): ReadonlyMap<string, string> {
+  const tags = new Map<string, string>();
+  if (typeof raw !== "object" || raw === null) return tags;
+
+  for (const [key, value] of Object.entries(raw)) {
+    if (tags.size >= MAX_FIND_TAGS) break;
+    if (typeof value !== "string") continue;
+    tags.set(key.slice(0, MAX_FIND_TAG_CHARS), value.slice(0, MAX_FIND_TAG_CHARS));
+  }
+  return tags;
+}
+
+/**
+ * One element, as a `Find` — or `null` for one this adapter will not surface.
+ *
+ * Two reasons to refuse, and both are "nothing to show", not errors: no
+ * `name` tag, because a nameless thing is not a "here is what to call it" a
+ * specialist can write about, and no kind this file recognises, which the
+ * query should not produce but a caller of `elementsOf` is not the parser's
+ * business to trust blindly (§5: this is hostile text before it is anything
+ * else).
+ *
+ * **`name` is hostile text and is passed through as data, never interpreted.**
+ * It is bounded to `MAX_FIND_NAME_CHARS` and nothing else is done to it — no
+ * stripping, no escaping — because the defence against an injected instruction
+ * is that nothing here ever treats a find's text as anything but an opaque
+ * string (see `agent/src/prompt.ts`'s discovery block), not that this parser
+ * tries to sanitise a natural-language attack out of a name field.
+ */
+function findFrom(element: OverpassElement, at: Date): Find | null {
+  const latitude = asNumber(element.lat);
+  const longitude = asNumber(element.lon);
+  if (latitude === undefined || longitude === undefined) return null;
+
+  const coordinates = coordinatesSchema.safeParse({ latitude, longitude });
+  if (!coordinates.success) return null;
+
+  const tags = tagsOf(element.tags);
+  const rawName = tags.get("name");
+  const name = rawName?.trim().slice(0, MAX_FIND_NAME_CHARS) ?? "";
+  if (name === "") return null;
+
+  const kind = kindOf(tags);
+  if (kind === null) return null;
+
+  const id = typeof element.id === "number" ? element.id : null;
+  const url =
+    id === null
+      ? "https://www.openstreetmap.org/copyright"
+      : `https://www.openstreetmap.org/node/${String(id)}`;
+
+  return {
+    name,
+    coordinates: coordinates.data,
+    kind,
+    tags,
+    sources: [{ url, title: "OpenStreetMap", fetchedAt: at.toISOString() }],
+    // Wikipedia's geosearch and Wikivoyage are both unreachable from the
+    // environment this ticket was built in (see pl-29's Log), so this adapter
+    // populates nothing here yet — never `null`, because `notability: []`
+    // says "nothing checked", which is true, rather than "checked and found
+    // nothing", which would be a claim this file has no basis for.
+    notability: [],
+    // Filled in later, by the discovery pass, for the finds that survive the
+    // geometric filter — see `api/src/runs/discovery.ts`. Never this adapter's
+    // job: measuring a detour spends a `travel` call, and `nearby` itself must
+    // stay one call regardless of how many finds it returns.
+    detourMinutes: null,
+  };
 }

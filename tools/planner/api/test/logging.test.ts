@@ -57,7 +57,7 @@ describe("what boot writes down about grounding", () => {
       config: {
         databasePath: ":memory:",
         groundingProvider: "valhalla",
-        groundingEndpoints: { routing: ROUTING, geocoder: GEOCODER },
+        groundingEndpoints: { routing: ROUTING, geocoder: GEOCODER, discovery: undefined },
       },
     });
 

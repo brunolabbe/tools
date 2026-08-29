@@ -24,6 +24,7 @@ import {
   itemTravelSchema,
   planGapSchema,
   tripBriefSchema,
+  uncheckedConstraintSchema,
   type Candidate,
   type Plan,
   type PlanDay,
@@ -32,6 +33,7 @@ import {
   type PlanItem,
   type PlanRevision,
   type TripBrief,
+  type UncheckedConstraint,
 } from "@planner/contract";
 import type { Database } from "better-sqlite3";
 import { z } from "zod";
@@ -64,6 +66,7 @@ interface RevisionRow {
   parent_revision_id: string | null;
   reason: string;
   gaps_json: string;
+  coverage_json: string;
   created_at: string;
 }
 
@@ -184,8 +187,8 @@ export function insertCandidates(
 export function insertRevision(db: Database, revision: PlanRevision): void {
   db.prepare(
     `INSERT INTO plan_revisions
-       (id, plan_id, revision, parent_revision_id, reason, gaps_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (id, plan_id, revision, parent_revision_id, reason, gaps_json, coverage_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     revision.id,
     revision.planId,
@@ -193,6 +196,7 @@ export function insertRevision(db: Database, revision: PlanRevision): void {
     revision.parentRevisionId,
     revision.reason,
     JSON.stringify(revision.gaps),
+    JSON.stringify(revision.coverage),
     revision.createdAt,
   );
 
@@ -367,9 +371,16 @@ export function selectPlan(db: Database, id: string): PlanDetail | undefined {
 }
 
 const gapsSchema = z.array(planGapSchema);
+const coverageSchema = z.array(uncheckedConstraintSchema);
 
 function toRevision(db: Database, row: RevisionRow): PlanRevision {
   const gaps: PlanGap[] = parseOr(gapsSchema, row.gaps_json, "revision", row.id);
+  const coverage: UncheckedConstraint[] = parseOr(
+    coverageSchema,
+    row.coverage_json,
+    "revision",
+    row.id,
+  );
 
   const dayRows = db
     .prepare("SELECT * FROM plan_days WHERE revision_id = ? ORDER BY day_index")
@@ -391,6 +402,7 @@ function toRevision(db: Database, row: RevisionRow): PlanRevision {
     createdAt: row.created_at,
     days,
     gaps,
+    coverage,
   };
 }
 

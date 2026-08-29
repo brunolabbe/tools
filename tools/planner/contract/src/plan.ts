@@ -36,6 +36,8 @@ import { tripBriefSchema } from "./brief.ts";
 import type { TripBrief } from "./brief.ts";
 import { itemTravelSchema } from "./travel.ts";
 import type { ItemTravel } from "./travel.ts";
+import { uncheckedConstraintSchema } from "./unchecked.ts";
+import type { UncheckedConstraint } from "./unchecked.ts";
 
 // ---------------------------------------------------------------------------
 // Bounds
@@ -250,6 +252,24 @@ export interface PlanRevision {
   days: PlanDay[];
   /** What this draft could not cover, and why. Empty is a real and good answer. */
   gaps: PlanGap[];
+  /**
+   * What a corridor discovery pass found the ground too thin to say much
+   * about, before the fan-out ever ran (pl-29).
+   *
+   * **Not `uncheckedFor`'s business**, unlike the rest of `UncheckedConstraint`.
+   * Every other kind in that list is a pure function of the brief, the
+   * candidates and which of them a revision placed — re-derivable from a
+   * stored revision without asking anything outside this process again. A thin
+   * corridor is not: it is a fact a live backend answered once, at compose
+   * time, the same way a measured leg is (`PlanItem.travelFromPrevious`) —
+   * evidence, not a derivation, so it is stored here rather than recomputed on
+   * every read. `uncheckedForRevision` appends it to what it derives; nothing
+   * here is asked to derive it a second time.
+   *
+   * Empty is a real and good answer, the same as `gaps`: most corridors have
+   * something on the map.
+   */
+  coverage: UncheckedConstraint[];
 }
 
 export const planRevisionSchema = z
@@ -262,6 +282,11 @@ export const planRevisionSchema = z
     createdAt: z.iso.datetime(),
     days: z.array(planDaySchema).max(MAX_PLAN_DAYS),
     gaps: z.array(planGapSchema).max(SPECIALISTS.length),
+    // Unbounded by a specialist count the way `gaps` is: this is plan-wide and
+    // there is at most one sensible entry, but nothing here enforces that —
+    // the discovery pass builds the list and this schema just says what one
+    // entry looks like.
+    coverage: z.array(uncheckedConstraintSchema),
   })
   // The two ways the chain can be malformed, and both are only ever produced by
   // something assembling a revision by hand — `appendRevision` cannot make
@@ -375,7 +400,10 @@ export function pinnedCandidateIds(revision: PlanRevision): string[] {
 }
 
 /** What `appendRevision` needs told; everything else it derives from the plan. */
-export type NewRevision = Pick<PlanRevision, "id" | "reason" | "createdAt" | "days" | "gaps">;
+export type NewRevision = Pick<
+  PlanRevision,
+  "id" | "reason" | "createdAt" | "days" | "gaps" | "coverage"
+>;
 
 /**
  * Append a revision, returning a new plan.

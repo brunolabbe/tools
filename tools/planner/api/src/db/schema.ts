@@ -326,6 +326,21 @@ const MIGRATIONS: readonly string[] = [
     SELECT RAISE(ABORT, 'only pinned may change on a placed item');
   END;
   `,
+  // 7 — what a corridor discovery pass could not find much on (pl-29).
+  //
+  // Discovery runs *before* the fan-out and proposes what the specialists that
+  // read map data get to judge — see `00-ANALYSIS.md` §5's amendment. A
+  // corridor with little on it is a fact a live backend answered once, at
+  // compose time, and like `travel_json` in migration 6 it is evidence rather
+  // than a derivation: nothing re-asks the backend on a later read, so the
+  // answer has to survive the read some other way. Unlike `travel_json` it is
+  // plan-wide rather than per-item, so it rides on the revision itself, beside
+  // `gaps_json` — same reasoning (JSON, read whole, validated on the way out,
+  // no field SQL would ever filter on), different column because a gap names a
+  // specialist and this does not.
+  `
+  ALTER TABLE plan_revisions ADD COLUMN coverage_json TEXT NOT NULL DEFAULT '[]';
+  `,
 ];
 
 export function migrate(db: Database): void {

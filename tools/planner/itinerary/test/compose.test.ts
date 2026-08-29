@@ -30,7 +30,11 @@ function idsOf(result: ComposeResult): string[] {
 }
 
 /** What `appendRevision` would produce, so the result can go through the schema. */
-function asRevision(days: PlanRevision["days"], gaps: PlanRevision["gaps"]): PlanRevision {
+function asRevision(
+  days: PlanRevision["days"],
+  gaps: PlanRevision["gaps"],
+  coverage: PlanRevision["coverage"] = [],
+): PlanRevision {
   return {
     id: REVISION.id,
     planId: "plan-1",
@@ -40,6 +44,7 @@ function asRevision(days: PlanRevision["days"], gaps: PlanRevision["gaps"]): Pla
     createdAt: REVISION.createdAt,
     days,
     gaps,
+    coverage,
   };
 }
 
@@ -667,5 +672,96 @@ describe("what it says it did not check", () => {
     });
 
     expect(result.unchecked.map((entry) => entry.kind)).toContain("effort-assumed");
+  });
+});
+
+/**
+ * `coverage` — what a corridor discovery pass decided before this composer
+ * ever saw a candidate (pl-29).
+ *
+ * Unlike every other entry `uncheckedFor` derives, this one is not a function
+ * of the brief, the candidates or the days: it is evidence a live backend
+ * produced once, upstream, and `compose` carries it through rather than
+ * deriving it — see `ComposeInput.coverage`'s own note. So the tests here are
+ * about *plumbing*, not about `unchecked.ts`'s derivation: does the input
+ * reach both `revision.coverage` and the returned `unchecked` list, and does a
+ * corridor with nothing to say about it leave the days pl-27 would have
+ * produced untouched.
+ */
+describe("coverage", () => {
+  const fixture = loadFixture("road-trip");
+  const THIN = {
+    kind: "coverage" as const,
+    detail: "There is very little on the map along this route.",
+    candidateIds: [],
+  };
+
+  test("rides onto the revision and into the returned unchecked list, untouched", () => {
+    const result = compose({
+      brief: fixture.brief,
+      candidates: fixture.candidates,
+      travel: NOTHING_MEASURED,
+      coverage: [THIN],
+      revision: REVISION,
+      now: NOW,
+    });
+
+    expect(result.revision.coverage).toEqual([THIN]);
+    expect(result.unchecked).toContainEqual(THIN);
+  });
+
+  test("defaults to empty — every trip before this ticket, and every trip with no corridor", () => {
+    const result = compose({
+      brief: fixture.brief,
+      candidates: fixture.candidates,
+      travel: NOTHING_MEASURED,
+      revision: REVISION,
+      now: NOW,
+    });
+
+    expect(result.revision.coverage).toEqual([]);
+    expect(result.unchecked.some((entry) => entry.kind === "coverage")).toBe(false);
+  });
+
+  test("a corridor with nothing to say produces byte-identical days, plus the note", () => {
+    // The Done-when line, read literally: composing the *same* candidates
+    // with and without a coverage note must not move a single item, because
+    // discovery ran *before* the fan-out and added no candidate either way —
+    // it is stated once, plan-wide, and never a reason to pack differently.
+    const withoutCoverage = compose({
+      brief: fixture.brief,
+      candidates: fixture.candidates,
+      travel: NOTHING_MEASURED,
+      revision: REVISION,
+      now: NOW,
+    });
+    const withCoverage = compose({
+      brief: fixture.brief,
+      candidates: fixture.candidates,
+      travel: NOTHING_MEASURED,
+      coverage: [THIN],
+      revision: REVISION,
+      now: NOW,
+    });
+
+    expect(withCoverage.revision.days).toEqual(withoutCoverage.revision.days);
+    expect(withCoverage.unchecked).toEqual([...withoutCoverage.unchecked, THIN]);
+  });
+
+  test("the revision schema accepts it, plan-wide and with no candidate to name", () => {
+    const result = compose({
+      brief: fixture.brief,
+      candidates: fixture.candidates,
+      travel: NOTHING_MEASURED,
+      coverage: [THIN],
+      revision: REVISION,
+      now: NOW,
+    });
+
+    expect(() =>
+      planRevisionSchema.parse(
+        asRevision(result.revision.days, result.revision.gaps, result.revision.coverage),
+      ),
+    ).not.toThrow();
   });
 });

@@ -78,6 +78,7 @@ function supersedeDraft(harness: RunHarness, planId: string): PlanRevision {
     reason: "A second draft, so the first is no longer the one being read.",
     createdAt: NOW.toISOString(),
     gaps: previous.gaps,
+    coverage: previous.coverage,
     days: previous.days.map((day) => ({
       ...day,
       id: randomUUID(),

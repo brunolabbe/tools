@@ -69,10 +69,12 @@
  */
 
 import type {
+  Find,
   GroundingBudget,
   GroundingProvider,
   LocatedPlace,
   LocateRequest,
+  NearbyRequest,
   TravelEstimate,
   TravelMatrix,
   TravelMode,
@@ -254,6 +256,19 @@ export interface RunGrounding {
   locate(request: LocateRequest): Promise<GroundingOutcome<LocatedPlace>>;
   travel(request: TravelRequest): Promise<TravelOutcomeMatrix>;
   /**
+   * A corridor query, spending this run's budget the same way a miss on the
+   * two above does — one call, whatever the answer.
+   *
+   * **Not cached** (pl-29): the two above are cached because a re-plan asks
+   * the same questions about the same places, and a corridor's cache key would
+   * have to fold in its whole polyline plus a radius plus a kind list, which
+   * buys little for a call this run only ever makes once. `answered` still
+   * wraps a genuinely empty list — "the ground was thin" is a real answer, not
+   * "unknown" — so `unknown` is never produced here; only `answered` or
+   * `refused`.
+   */
+  nearby(request: NearbyRequest): Promise<GroundingOutcome<Find[]>>;
+  /**
    * Calls this run wanted, could not afford and never made.
    *
    * The per-lookup `refused` outcome is the authority and is what a caller
@@ -349,6 +364,12 @@ export class CachingGroundingProvider implements GroundingProvider, RunGrounding
   async travel(request: TravelRequest): Promise<TravelMatrix> {
     const outcomes = await this.#travel(request, null);
     return outcomes.map((row) => row.map((cell) => (cell.kind === "answered" ? cell.value : null)));
+  }
+
+  /** Same, for discovery. An empty list either way is not distinguishable here. */
+  async nearby(request: NearbyRequest): Promise<Find[]> {
+    const outcome = await this.#nearby(request, null);
+    return outcome.kind === "answered" ? outcome.value : [];
   }
 
   async #locate(
@@ -483,6 +504,24 @@ export class CachingGroundingProvider implements GroundingProvider, RunGrounding
   }
 
   /**
+   * A corridor query, spent as one call whatever it finds — never cached, see
+   * `RunGrounding.nearby`'s own note on why. `unknown` is never produced: a
+   * discovery backend that answered at all answered with a list, possibly
+   * empty, and an empty list is `answered([])` rather than "nobody knows" —
+   * §5's "the ground was thin" is a fact about the world, not an absence of
+   * one.
+   */
+  async #nearby(request: NearbyRequest, spend: RunSpend | null): Promise<GroundingOutcome<Find[]>> {
+    if (spend !== null && !spend.budget.claim()) {
+      spend.refuse();
+      return REFUSED;
+    }
+
+    const found = await this.#options.inner.nearby(request);
+    return answered(found);
+  }
+
+  /**
    * A per-run view that spends that run's budget on **misses only**, and that
    * says which of the three things happened to each lookup.
    *
@@ -506,6 +545,7 @@ export class CachingGroundingProvider implements GroundingProvider, RunGrounding
       },
       locate: (request) => this.#locate(request, spend),
       travel: (request) => this.#travel(request, spend),
+      nearby: (request) => this.#nearby(request, spend),
     };
   }
 

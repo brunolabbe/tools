@@ -78,7 +78,23 @@ describe("loadApiConfig", () => {
     // `VALHALLA_URL=` — what a commented-out line collapses into — is absent
     // rather than an empty string that would reach `new URL()` as a crash.
     const config = loadApiConfig({}, { VALHALLA_URL: "  ", GEOCODER_URL: "" });
-    expect(config.groundingEndpoints).toEqual({ routing: undefined, geocoder: undefined });
+    expect(config.groundingEndpoints).toEqual({
+      routing: undefined,
+      geocoder: undefined,
+      discovery: undefined,
+    });
+  });
+
+  test("carries OVERPASS_URL as written, with no default", () => {
+    // pl-29: a third endpoint, and unlike the two above it is genuinely
+    // optional — the field this test reads is the same `optionalText` parse
+    // as `VALHALLA_URL` and `GEOCODER_URL`, the boot-time requirement is not.
+    const config = loadApiConfig({}, { OVERPASS_URL: " http://overpass:8090 " });
+    expect(config.groundingEndpoints.discovery).toBe("http://overpass:8090");
+  });
+
+  test("discovery has no endpoint when OVERPASS_URL is unset, same as the other two", () => {
+    expect(loadApiConfig({}, {}).groundingEndpoints.discovery).toBeUndefined();
   });
 
   test("bounds a grounding request by a short timeout, from its own variable", () => {

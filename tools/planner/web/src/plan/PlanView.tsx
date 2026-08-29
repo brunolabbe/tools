@@ -7,7 +7,7 @@
  * honesty mechanisms are structured data that nothing rendered until now, and
  * each one is a section below:
  *
- * - **Provenance** (§5) — which lines were verified and which are the model
+ * - **Provenance** (§5) — which lines were sourced and which are the model
  *   talking, on the candidate and separately on its cost. `Provenance.tsx`.
  * - **Gaps** (§7) — a specialist that failed, was dropped for budget, or was
  *   never on the roster, in the body of the plan where its section would have

@@ -30,6 +30,7 @@ import { AppError, candidateSchema } from "@planner/contract";
 import type { Specialist, TripBrief, TripShape } from "@planner/contract";
 import { z } from "zod";
 import type { RunBudget } from "./budget.ts";
+import type { Find } from "./grounding.ts";
 import { systemPrompt, userPrompt } from "./prompt.ts";
 import type { ModelMessage, ModelProvider, ModelReply } from "./provider.ts";
 import type { TripCapacity } from "./specialists.ts";
@@ -56,6 +57,8 @@ export interface AskInput {
   brief: TripBrief;
   capacity: TripCapacity;
   budget: RunBudget;
+  /** What a corridor discovery pass found, for the specialists that read it (pl-29). */
+  finds?: readonly Find[] | undefined;
   signal?: AbortSignal | undefined;
 }
 
@@ -103,6 +106,7 @@ export async function askSpecialist(input: AskInput): Promise<AskResult> {
     brief: input.brief,
     shape: input.shape,
     capacity: input.capacity,
+    finds: input.finds,
   });
 
   const messages: ModelMessage[] = [{ role: "user", content: userPrompt(input.brief) }];

@@ -27,6 +27,7 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { groundingBudget } from "@planner/agent";
 import type {
+  Find,
   GroundingProvider,
   LocatedPlace,
   LocateRequest,
@@ -163,6 +164,11 @@ class CountingProvider implements GroundingProvider {
           : null,
       ),
     );
+  }
+
+  /** Not this suite's concern (pl-29) — nothing here ever calls it. */
+  async nearby(): Promise<Find[]> {
+    return [];
   }
 }
 

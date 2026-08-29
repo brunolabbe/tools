@@ -113,6 +113,41 @@ export const UNCHECKED_CONSTRAINTS = [
   "effort-assumed",
   /** The trip is longer than `MAX_PLAN_DAYS` and the plan stops short of its last day. */
   "trip-truncated",
+  /**
+   * A corridor discovery queried had little or nothing in it, so a stop
+   * nobody named might exist without this plan ever finding it. §5's
+   * amendment (pl-29): grounding may propose and not only check, and a place
+   * with thin map data produces a plan that *looks* exactly like one through a
+   * well-mapped region — which is precisely the gap this list exists to name.
+   *
+   * **Neither existing kind fits, and both fail the root `CLAUDE.md`'s test**:
+   * the copy would have to be re-worded at the raise site either way.
+   * `PlanGap` names a specialist that did not contribute, and every specialist
+   * here worked fine — route-and-logistics, activities, food and
+   * conditions-and-gear all answered normally; the thing missing is data
+   * nobody could read because nobody wrote it down. `travel-time` is about
+   * whether a *distance* was measured between two items already on the plan,
+   * not about whether something worth visiting was ever *found* — a corridor
+   * can have every transition measured to the metre and still have missed the
+   * waterfall six kilometres off the road, because nothing about a measured
+   * distance says anything about what else was nearby.
+   *
+   * It is plan-wide, like `season-no-calendar`: discovery runs **before** the
+   * fan-out (see `RUN_TRANSITIONS`'s note on the two grounding passes), so
+   * there are no candidates yet for this entry to name — nothing has been
+   * proposed for a specific find to be missing *from*. `candidateIds` is
+   * always empty for this kind.
+   *
+   * **It is evidence, stored, not derived** — `PlanRevision.coverage`, beside
+   * `gaps` and for the same reason `PlanItem.travelFromPrevious` is stored
+   * rather than recomputed (pl-27): the corridor query that decided this was
+   * thin ran once, at compose time, against a live backend whose answer
+   * cannot be re-asked for free on every later read of the plan. A re-read
+   * that re-queried the backend to reproduce this note would drift from the
+   * plan it is printed beside, in the same way re-composing `travel-time`
+   * would.
+   */
+  "coverage",
 ] as const;
 
 export type UncheckedConstraintKind = (typeof UNCHECKED_CONSTRAINTS)[number];

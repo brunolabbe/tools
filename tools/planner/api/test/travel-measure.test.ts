@@ -71,6 +71,10 @@ function gazetteer(entries: Record<string, { latitude: number; longitude: number
     async travel(request: TravelRequest): Promise<TravelOutcomeMatrix> {
       return request.origins.map(() => request.destinations.map(() => UNKNOWN));
     },
+    /** This suite is entirely about the measuring pass; discovery is pl-29's own file. */
+    async nearby(): Promise<GroundingOutcome<never[]>> {
+      return answered([]);
+    },
   };
 }
 
