@@ -368,6 +368,94 @@ Overpass timeout. It swept `geometry.ts` exhaustively (all 18 mutation
 points) but sampled `discovery.ts`/`valhalla.ts` selectively rather than
 exhaustively. Neither this gate nor Gate A ran e2e or the image gate.
 
+### Gate C — 2026-08-29
+
+**Gate: PASS** · `e95994f` · scope: the `around:` switch made in response to
+Gate B finding 1 — specifically, whether Overpass's own engine treats a
+multi-point `around:` filter as a polyline (what the switch assumes) or as a
+union of separate per-point circles (which would silently narrow discovery to
+the two named endpoints and miss anything between them, the failure mode that
+would have mattered).
+
+**What it verified, read from the engine's own source** — the live server is
+unreachable here, so it fetched Overpass's C++ from
+`github.com/drolbr/Overpass-API` at `master` via `raw.githubusercontent.com`
+rather than trusting documentation. **The file:line citations below are into
+that external repository at `master`, a moving target this repo does not
+vendor or pin — they are not paths in this tree and cannot be resolved
+locally; recorded for whoever wants to check them against whatever `master`
+is when they look:**
+
+- `src/overpass_api/statements/around.cc:392-441` (external, unpinned
+  `master`) — a QL `around:` criterion with more than one coordinate pair is
+  packed into a `polyline` attribute; a single pair becomes a plain
+  `lat`/`lon` pair instead — confirming the multi-point form is a distinct,
+  intentional code path, not an accidental repetition of the single-point one.
+- `around.cc:496-527` (same repository, same caveat) — the constructor parses
+  `polyline` back into a `points` vector.
+- `around.cc:763-795`, `826-842` (same) — for `points.size() > 1`, consecutive
+  points are chained into `simple_segments` — the polyline interpretation, not
+  a union of circles.
+- `around.cc:873-902`, function `is_inside` (same) — the membership test
+  matches a node by great-circle distance to **each segment**,
+  capsule-bounded at the ends (`limit = sqrt(gcdist² + radius²)`) — the same
+  clamped-segment-distance shape `distanceToCorridorMetres` computes on this
+  side of the wire, in the engine's own arithmetic instead.
+- `around.test.cc:198-210` (same) — the engine's own test suite exercises this
+  construction with 2–4 point polyline fixtures.
+
+**Conclusion: no correctness defect.** The polyline interpretation this
+branch's code and tests assume is what the engine implements, and the
+corridor's midpoint — where the severe failure (a corridor found nothing
+between its named ends) would have shown up — is genuinely covered by the
+segment-chaining and per-segment `is_inside` check, not merely by the two
+endpoint circles.
+
+**Proved its own harness before trusting it**: dropped the point list from
+the constructed `around` string in its own test drive, three tests went red
+with diffs that named the missing points, restored, 36/36 green again.
+
+**Also confirmed clean, independent of the correctness question:**
+
+- **Deletion blast radius** — an unfiltered repo-wide search for
+  `corridorBoundingBox`, `BoundingBox` and `BoxLike` found every remaining hit
+  inside this ticket's own historical narrative (the first Log entry's
+  now-superseded design description, and the amendment notes pointing at it);
+  zero in source, zero in any test, zero in any other document.
+- **This branch's own test-count arithmetic**, checked against the actual
+  diff rather than taken on trust: 4 tests removed (the `corridorBoundingBox`
+  block), 3 added, and two in-place renames that are not net additions —
+  `758 − 4 + 3 = 757`, matching a live run of the suite.
+- **Gate B's "three survivors lived in `corridorBoundingBox`" claim** — all
+  three (the pole ternary, the `south` clamp, the `west` clamp) are textually
+  inside the function body this branch deletes.
+- **`geometry.ts`'s header, lines 1-27 as currently written**, is true and
+  introduces no new false statement — the specific defect class Gate B's
+  finding 1 was about.
+- **The capture script** — byte-identical to what the adapter's `overpassQuery`
+  actually emits, and the `POST` it describes (`${overpassUrl}/interpreter`,
+  `content-type: text/plain`, raw body) matches `#overpassJson` exactly.
+
+**Recorded at the strength given, because it is the honest part**: whether
+`around:` over a linestring is cheaper or dearer for the server to evaluate
+than the bounding box it replaced is **read from source and inferred, not
+benchmarked** — no live Overpass instance was reachable to measure it against.
+The reasoning: the engine's range calculation expands a way-like index range
+rather than scanning a full rectangle, and a two-point corridor is the
+cheapest instance of that path; the per-candidate membership check is more
+arithmetic per node than a bounding-box comparison, but it runs over a far
+smaller candidate set given the range calculation above it. Net effect on
+this adapter's `[timeout:25]` risk: **likely reduced — not measured.** No
+`limit`/`[maxsize:]` clause was added to the query; unchanged from Gate B and
+not a regression this gate introduced.
+
+**What this gate did not do:** it did not reach a live Overpass or Nominatim
+instance — every conclusion about the engine's behaviour is from reading its
+source at `master`, not from an observed reply or a measured query time. It
+did not re-litigate Gates A or B, and did not redo their mutation sweeps
+beyond confirming where the three cited survivors' code now lives. It did not
+run e2e or the image gate.
+
 ## Log
 
 **2026-08-29 — built, against a base with no Docker, no PostGIS and no route to
@@ -871,3 +959,26 @@ threading test in `grounding-valhalla.test.ts`, the multi-find call-count
 test, the before-the-start clamp test) — net `758 - 4 + 3 = 757`. Not run,
 same as the first round and for the same reason: the image gate and the e2e
 suite.
+
+**2026-08-29 — Gate C round: no code changes, the record only.** Gate C
+reviewed the `around:` switch against Overpass's own C++ source and found no
+correctness defect and nothing to fix — see `## Review`. Re-ran the full gate
+set to confirm nothing had drifted since the last commit, since this entry
+adds no diff of its own beyond the ticket file:
+
+```
+$ npm run build   → exit 0
+$ npm run check   → exit 0
+$ npm test -- --project planner
+ Test Files  53 passed (53)
+      Tests  757 passed (757)
+$ npm test        (repo-wide)
+ Test Files  107 passed (107)
+      Tests  1594 passed (1594)
+$ npx vitest run tools/planner/itinerary/test/purity.test.ts
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+```
+
+Same figures as the prior round, as expected — nothing in `tools/planner/api`,
+`agent`, `contract`, `itinerary` or `web` changed this round.
