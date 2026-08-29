@@ -5,7 +5,7 @@ title: Capture a real geocoder payload and hold locate's parser to it
 kind: fix
 milestone: P3
 status: ready
-depends_on: [pl-28]
+depends_on: []
 ---
 
 # pl-30 — The half of pl-28 step 3 that could not be captured
@@ -98,3 +98,117 @@ outside. That is the cost of this ticket staying open, and it is why it is a
 - pl-28's Log says the gap is closed and by what.
 
 ## Log
+
+**2026-08-29 — `depends_on` was circular; dropped `pl-28`.** pl-28's own Log
+says it cannot go `done` until this ticket lands, while this ticket's
+frontmatter waited on pl-28 — a cycle `npm run status` can't resolve, and it
+was also handing pl-29 a blocker that could never clear. Before:
+
+```
+$ npm run status -- --show pl-30
+  depends on  pl-28
+  blocked by  pl-28 (ready)
+$ npm run status -- --tool planner
+  · pl-30  ... (waits on pl-28)
+```
+
+pl-28's code is already on `main`:
+
+```
+$ git log --oneline --all | grep pl-28
+60e48e7 feat(planner): measure legs against a real routing engine, self-hosted (pl-28) (#74)
+```
+
+So the edge is satisfied in substance; only pl-28's own ticket bookkeeping
+waits on this one. Set `depends_on: []`. After:
+
+```
+$ npm run status -- --show pl-30
+  depends on  nothing
+  unblocked
+$ npm run status -- --tool planner
+  • pl-30  Capture a real geocoder payload and hold locate's parser to it
+```
+
+pl-28's frontmatter stays `status: ready` — closing it is still gated on this
+ticket producing a fixture, which did not happen (below).
+
+**2026-08-29 — baseline reproduced before touching anything.** `firstCoordinates`
+in `api/src/grounding/valhalla.ts` replaced with `return null;` (scratch script,
+restore via `trap ... EXIT INT TERM` doing `cp` then `touch` then rebuild, so a
+kill mid-mutation can't leave a stale mutated `dist` behind):
+
+```
+$ npm run build --workspace=@planner/api   # 0.385s
+$ npm test -- --project planner
+ Test Files  50 passed (50)
+      Tests  702 passed (702)
+```
+
+702/702 — up from pl-28's Log's 698/698 by the 4 tests pl-31 added since,
+unrelated to this file. Confirms the gap pl-30 exists to close is still open:
+the harness cannot fail on this function. File restored and rebuilt by the
+trap; diff against `git status` after was empty.
+
+**2026-08-29 — Phase A: no capture, and not for the reason pl-28 hit.** Probed
+connectivity per host (the sandbox refuses a chained/looped command as
+"too complex to verify... stays inside the worktree", so one `curl` per host):
+
+```
+$ curl -s -o /dev/null -w "%{http_code}" https://registry.npmjs.org
+200
+$ curl -s -o /dev/null -w "%{http_code}" https://nominatim.openstreetmap.org
+(times out)
+$ curl -s -o /dev/null -w "%{http_code}" https://photon.komoot.io
+(times out)
+$ curl -s -o /dev/null -w "%{http_code}" https://api.mapbox.com
+(times out)
+```
+
+Confirms the brief: only npm and GitHub are reachable, no public or self-hosted
+geocoder is.
+
+Searched `registry.npmjs.org/-/v1/search?text=nominatim` (and a second pass on
+`offline geocoding server`) for this ticket's equivalent of
+`@valhallajs/valhallajs` — a package shipping a _runnable_ engine rather than a
+client of the public API. Everything else in both result sets is a thin HTTP
+wrapper around `nominatim.openstreetmap.org`. One is not:
+`@mailwoman/nominatim` — `npx @mailwoman/nominatim serve` stands up a genuine
+Nominatim-compatible `/search` over the "Mailwoman" engine
+(`github.com/sister-software/mailwoman`, 2 stars, commits as of today — a real,
+maintained project, not a placeholder). Its own repo shows the analogue of
+pl-28's synthetic-`.pbf`-through-the-real-pipeline move:
+`packages/resolver-wof-sqlite/test/integration/build-candidate.test.ts` builds a
+tiny fixture gazetteer and runs it through the project's own production
+`buildCandidateTable`, not a hand-written reply.
+
+**Stopped there — deliberately, on a licensing finding this ticket's brief
+never anticipated, not on feasibility.**
+
+```
+$ curl -s https://api.github.com/repos/sister-software/mailwoman/license
+"license": {"spdx_id": "NOASSERTION", ...}   # LICENSE.md: AGPL-3.0-only OR LicenseRef-Commercial
+```
+
+This repo's own `LICENSE` is MIT, and the root `CLAUDE.md` documents `repo-1`
+preparing this repo for public release. Generating a fixture by running an
+AGPL/commercial dual-licensed engine, then checking that output into an MIT
+tree headed for the public, is a different question from the laundering pl-28's
+builder rejected — nothing here would be hand-written or lifted from a test
+suite, the payload would be genuinely produced by real code — but whether an
+AGPL tool's _output_, embedded in an otherwise-MIT repo, carries any of that
+license's obligations forward is a real, unsettled question and not mine to
+resolve unilaterally mid-ticket. So the capture was not attempted.
+
+**What a networked, licensing-cleared machine would need**, either path: (a)
+the brief's own — `mediagis/nominatim` over Docker against a small `.pbf`, per
+`docs/02-DEPLOYMENT.md`'s grounding section, needing Docker and a route to
+`download.geofabrik.de` (or an extract already on disk); or (b) `npx
+@mailwoman/nominatim serve` against a hand-built tiny WOF SQLite admin table run
+through `@mailwoman/resolver-wof-sqlite`'s own `buildCandidateTable`, once
+someone with standing over this repo's licensing has cleared it — the
+engineering shape is a near-direct copy of pl-28's Valhalla capture and would
+not be the long pole.
+
+Both tickets stay open. `firstCoordinates` and
+`api/test/grounding-valhalla.test.ts` are unchanged on this branch.
