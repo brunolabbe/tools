@@ -539,6 +539,50 @@ describe("locate, over a payload a real Nominatim wrote", () => {
 });
 
 /**
+ * The four `firstCoordinates`/`asNumber` branches no capture could pin,
+ * named rather than left as a gap after gate 2 found them.
+ *
+ * **These are not fixtures and make no claim about Nominatim.** The rule
+ * against a hand-written payload is about the *happy-path shape* of a real
+ * reply — the thing nobody could have guessed without capturing one. These
+ * four inputs are the opposite: ordinary defensive unit testing of a small
+ * pure function against malformed input, the same kind of thing
+ * `describe("a reply that is not what the engine writes")` already does for
+ * `estimate`/`indexCells` below. Composing them by hand carries no risk of
+ * agreeing with the parser by construction, because none of them claims to be
+ * what a geocoder would send.
+ */
+describe("firstCoordinates, against malformed input no capture could justify", () => {
+  test("a first result that is null, not an object, is null — not a throw", async () => {
+    const { fetch } = answering([null]);
+    const somewhere: Place = { name: "Rimouski", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: somewhere })).resolves.toBeNull();
+  });
+
+  test("a result with neither lat nor lon is null", async () => {
+    const { fetch } = answering([{}]);
+    const somewhere: Place = { name: "Rimouski", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: somewhere })).resolves.toBeNull();
+  });
+
+  test("lat/lon present but empty strings parse to no number, so the result is null", async () => {
+    const { fetch } = answering([{ lat: "", lon: "" }]);
+    const somewhere: Place = { name: "Rimouski", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: somewhere })).resolves.toBeNull();
+  });
+
+  test("a coordinate outside Earth's range is no answer, not a place", async () => {
+    const { fetch } = answering([{ lat: "999", lon: "0" }]);
+    const somewhere: Place = { name: "Rimouski", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: somewhere })).resolves.toBeNull();
+  });
+});
+
+/**
  * Facts about the real replies that no code here reads, checked in as
  * evidence for pl-34 rather than left for a reader to eyeball out of raw
  * JSON. `locate` always requests `limit=1`, so `NOMINATIM_AMBIGUOUS_LIMIT_10`

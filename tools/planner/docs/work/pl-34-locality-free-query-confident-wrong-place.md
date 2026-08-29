@@ -140,8 +140,15 @@ this ticket's Build, not written here.
 ## Log
 
 **2026-08-29 — filed from pl-30's real captures, per the coordinator's
-direction, id held rather than computed (`pl-33` is in use elsewhere).** No
-fix attempted here — see "Options" above. The claim this ticket exists to
+direction, id held rather than computed.** The coordinator reserved `pl-33`
+for another in-flight planner ticket at the time of filing this one; it is
+not visible anywhere in this repository's history (gate 2 checked
+`git log --all`, every branch and every open pull request and found no
+reference to it), which is expected for an id reserved but not yet landed —
+if it goes unused it will be reclaimed. That is the coordinator's own claim,
+carried here rather than independently sourced, and stated as such rather
+than as a fact this repository's history can confirm. No fix attempted here
+— see "Options" above. The claim this ticket exists to
 carry forward is narrow and load-bearing: **`firstCoordinates` was already
 correct; the query was not.** Verified independently before filing:
 
