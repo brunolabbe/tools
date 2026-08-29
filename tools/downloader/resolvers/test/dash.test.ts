@@ -123,11 +123,36 @@ describe("on-demand manifest with per-representation BaseURLs", () => {
   // is — the mime type is application/mp4 and the file is .mp4, exactly like a
   // video representation. `wvtt` used to answer `unknown` here.
   test("classifies a WebVTT-in-mp4 representation from its codecs= sample entry", () => {
-    expect(parsed.subtitles).toHaveLength(2);
+    expect(parsed.subtitles).toHaveLength(4);
     expect(parsed.subtitles[1]).toMatchObject({
       url: "https://media.example.org/assets/sintel/sintel_fr.mp4",
       language: "fr",
       format: "vtt",
+    });
+  });
+
+  // dl-28: the only in-repo evidence for `stpp.ttml.im1t` used to be one row of
+  // the `subtitleFormat` table. This carries it through the real parser, and it
+  // is the string that rules out giving row 3 dl-25's `(?![\w./-])` boundary —
+  // the dots here separate a claim, so a boundary that rejects them costs a
+  // genuine TTML track.
+  test("classifies a TTML-in-mp4 representation from a full stpp.ttml.im1t codecs string", () => {
+    expect(parsed.subtitles[2]).toMatchObject({
+      url: "https://media.example.org/assets/sintel/sintel_es.mp4",
+      language: "es",
+      format: "ttml",
+    });
+  });
+
+  // dl-28: the same shape with no codecs and an `stpp`-named host. The hint
+  // dash.ts builds still contains that hostname; `claimsOnly` is what keeps it
+  // from being read as a TTML claim. Before dl-28 this was `ttml`, and the
+  // track would have been dropped by the engine's format gate.
+  test("an stpp-named host is not a format claim", () => {
+    expect(parsed.subtitles[3]).toMatchObject({
+      url: "https://stpp.cdn.example.net/sintel_it.mp4",
+      language: "it",
+      format: "unknown",
     });
   });
 });

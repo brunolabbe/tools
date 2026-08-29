@@ -220,47 +220,109 @@ export function compareVariantQuality(
   return (b.bitrateBps ?? 0) - (a.bitrateBps ?? 0);
 }
 
+/** A hint token that is an absolute URL — a scheme, then `://`. */
+const URL_SHAPED = /^[a-z][a-z0-9+.-]*:\/\//i;
+
 /**
- * Scanned in order. Under these boundaries no token any row names is a
- * substring of another, so `tt$` no longer decides `text/vtt` the way it did
- * before dl-24. Dropping a `(^|\W)` is the change that is never safe, and that
- * is what dl-24 was.
+ * Reduces every URL inside a hint to the part of it that can honestly claim a
+ * format — its path extension and its query string — and leaves every other
+ * whitespace-separated token (mime types, codecs, bare extensions) alone.
  *
- * Rows 1 and 2 used to match their tokens anywhere, so a URL could carry one
- * without claiming a format: `https://srt.cdn.net/sub.mp4` answered `srt` and
- * `https://vtt.cdn.net/sub.mp4` answered `vtt`, and both of those formats are
- * inside the engine's `SUBTITLE_FORMATS_FFMPEG_READS`, so the wrong answer was
- * a wrong *download*. Their `(?![\w./-])` — dl-25, and the boundary to copy
- * if you need another — says the token has to _end_ a claim rather than run
- * on into a hostname label or a non-terminal path segment. So `srt.cdn.net`,
- * `/srt/` and `srt-edge` no longer match, while `sub.srt`, `sub.srt?token=…`,
+ * This is dl-28, and it exists because a host and a path are not claims. Two
+ * of the three callers concatenate a whole URL into the hint
+ * (`dash.ts` builds `mimeType codecs fileUrl`, `ytdlp.ts` falls back to the
+ * URL when yt-dlp omits `ext`), so `https://stpp.cdn.net/sub.mp4` and
+ * `https://cdn.net/ttml/sub.mp4` used to answer `ttml` on the strength of a
+ * CDN name. A tighter regex cannot settle that one: `stpp.ttml.im1t` is a real
+ * DASH `codecs=` string whose dots separate a claim and `stpp.cdn.net` is a
+ * hostname whose dots do not, so dl-25's `(?![\w./-])` rejects both together —
+ * measured, it turns the `stpp.ttml.im1t` row of the table red. Cutting the
+ * host and the path out before matching is what tells them apart.
+ *
+ * **The query string survives on purpose, and that is the side of the trade
+ * that is paid.** yt-dlp subtitle URLs carry the format there routinely — a
+ * YouTube timedtext URL ends `…&fmt=vtt` — so dropping it would answer
+ * `unknown` where the format is stated plainly. The cost is that a signed URL
+ * whose *query* happens to contain `vtt`, `srt` or `ttml` is still read as a
+ * claim; that is pinned in the table so widening or narrowing it is a decision
+ * rather than an accident.
+ *
+ * The fragment does not survive, and that is not the same trade: a `#` never
+ * reaches the server, so nothing can have used it to state a format.
+ *
+ * **The invariant a fourth caller has to keep, found by gate 1 on dl-28.**
+ * `URL_SHAPED` recognises an absolute URL and nothing else: of 43 URL shapes
+ * probed at that gate it admits 17 and passes 26 through untouched —
+ * protocol-relative `//host/…`, scheme-less, quoted, parenthesised, `blob:`,
+ * `data:`, comma-joined and percent-encoded forms. That is safe today only
+ * because **every caller normalises its URL before building the hint**:
+ * `tools/downloader/resolvers/src/manifest/dash.ts` resolves every `BaseURL`
+ * through `resolveUrl` (protocol-relative and root-relative values were driven
+ * through `parseDash` at the gate and both came back `unknown`), and
+ * `tools/downloader/resolvers/src/manifest/hls.ts` passes a bare extension.
+ * Only `tools/downloader/resolvers/src/resolvers/ytdlp.ts` hands over a URL it
+ * did not resolve. Build a hint from a raw, unresolved URL and none of this
+ * holds.
+ */
+function claimsOnly(hint: string): string {
+  if (!hint.includes("://")) return hint;
+  return hint.replace(/\S+/g, (token) => {
+    if (!URL_SHAPED.test(token)) return token;
+    const hash = token.indexOf("#");
+    const addressed = hash === -1 ? token : token.slice(0, hash);
+    const query = addressed.indexOf("?");
+    return `${urlExtension(addressed) ?? ""}${query === -1 ? "" : addressed.slice(query)}`;
+  });
+}
+
+/**
+ * Scanned in order, against `claimsOnly(hint)` rather than the raw hint. Under
+ * these boundaries no token any row names is a substring of another, so `tt$`
+ * no longer decides `text/vtt` the way it did before dl-24. Dropping a
+ * `(^|\W)` is the change that is never safe, and that is what dl-24 was.
+ *
+ * Rows 1 and 2 also carry `(?![\w./-])` — dl-25, and the boundary to copy if
+ * you need another. It says the token has to _end_ a claim rather than run on
+ * into a further path segment or a suffix, so `sub.srt`, `sub.srt?token=…`,
  * `text/srt`, `text/vtt; charset=utf-8`, `codecs="wvtt"` and a bare `srt`
- * still do.
+ * match while `srt-edge` and `srt.cdn` do not. Since dl-28 the host of a
+ * *scheme-bearing* URL never reaches these patterns at all, so `claimsOnly`
+ * rather than the boundary is what stops `https://srt.cdn.net/sub.mp4`. The
+ * boundary is kept because it is the one that still works on a hint that
+ * carries a bare host with no scheme: `srt.cdn.net/sub.mp4` is not URL-shaped,
+ * so `claimsOnly` passes it straight through and the lookahead is all there is.
  *
- * **It is a trade, and here is the side that was paid.** The lookahead admits
- * every character except `[A-Za-z0-9_]`, `.`, `/` and `-`, so a real track
- * whose extension is followed by one of those is now `unknown`:
- * `.../sub.srt/download`, `sub.srt.gz`, `sub.srt-v2`. That is only reachable
- * from a hint carrying no mime type and no codec — all three answer `srt`
- * again the moment anything precedes the URL — so `dash.ts:338` (always
- * prefixes mime and codecs) and `hls.ts:278` (bare extension) cannot hit it,
- * and only `ytdlp.ts:256` can, and only when yt-dlp omits `ext`. Pinned in the
- * table so re-widening the boundary is a decision rather than an accident.
+ * **dl-25's boundary is a trade, and here is the side that was paid.** The
+ * lookahead admits every character except `[A-Za-z0-9_]`, `.`, `/` and `-`, so
+ * a real track whose extension runs on into one of those is `unknown` —
+ * `sub.srt-v2` is the case that still reaches it, since `urlExtension` reads
+ * that whole tail as the extension. (`.../sub.srt/download` and `sub.srt.gz`
+ * are `unknown` before the boundary is consulted at all: their extensions are
+ * nothing and `gz`.) All three are only reachable from a hint carrying no mime
+ * type and no codec — they answer `srt` again the moment anything precedes the
+ * URL — so `dash.ts` (always prefixes mime and codecs) and `hls.ts` (bare
+ * extension) cannot hit them, and only `ytdlp.ts` can, and only when yt-dlp
+ * omits `ext`. Pinned in the table so re-widening the boundary is a decision
+ * rather than an accident.
  *
- * The order is still load-bearing, for what is left overlapping: the
- * alternatives that are unanchored on purpose — `subrip` in row 2, and the
- * whole of row 3 — so `https://cdn.net/subrip/sub.vtt` still matches rows 1
- * and 2 both and answers `vtt` only because `vtt` is scanned first, and
- * `application/x-subrip https://cdn.net/s/sub.ttml` answers `srt` only because
- * row 2 precedes row 3. Reorder with that in mind; neither of those two is
- * pinned by a test.
+ * **The order is still load-bearing**, and what it now decides is a hint
+ * carrying two genuine competing claims rather than a hostname: an earlier row
+ * wins. `application/x-subrip https://cdn.net/s/sub.ttml` is a `subrip` mime
+ * type against a `.ttml` extension and answers `srt` only because row 2
+ * precedes row 3 — swap them and a real SubRip track classifies `ttml`, falls
+ * outside the engine's `SUBTITLE_FORMATS_FFMPEG_READS` and is silently
+ * dropped. That one is pinned by a test as of dl-28; the same shape across
+ * rows 1 and 2 (`text/vtt` against a `.srt` extension) is not.
  *
- * Row 3 is the one row that cannot take dl-25's boundary, so it keeps the
- * hostname defect — that is dl-28. A token boundary cannot settle it either
- * way, because `stpp.ttml.im1t` is a real `codecs=` string whose dots separate
- * a claim and `stpp.cdn.net` is a hostname whose dots do not; telling those
- * apart needs the caller to stop putting a whole URL in the hint, not a
- * tighter regex.
+ * Row 3 is unanchored on purpose and stays that way: `stpp.ttml.im1t` needs
+ * the dots a boundary would reject. **It is the row with no defence of its
+ * own**, so it over-matches wherever `claimsOnly` does not reach — the query
+ * string the trade above accounts for, and a host in a token with no scheme,
+ * where `stpp.cdn.net/sub.mp4` still answers `ttml`. Rows 1 and 2 survive that
+ * second case on dl-25's lookahead alone, which is why the two scheme-less
+ * rows in the table exist and why deleting that lookahead has to stay red.
+ * Row 3 has nothing equivalent; it is unfixed, and no caller can reach it
+ * while the invariant above holds.
  *
  * `wvtt` and `stpp` are the ISO-BMFF sample-entry codes for WebVTT and TTML in
  * fragmented mp4 — what a DASH `codecs=` carries when the mime type is only
@@ -276,11 +338,16 @@ const SUBTITLE_FORMATS: ReadonlyArray<readonly [RegExp, "vtt" | "srt" | "ttml"]>
   [/(^|\W)tt$/i, "ttml"],
 ];
 
-/** Classifies a subtitle by mime type, codec or file extension. */
+/**
+ * Classifies a subtitle by mime type, codec or file extension. A hint may
+ * contain whole URLs; only their extension and query string are consulted —
+ * see `claimsOnly`.
+ */
 export function subtitleFormat(hint: string | undefined): "vtt" | "srt" | "ttml" | "unknown" {
   if (hint === undefined) return "unknown";
+  const claims = claimsOnly(hint);
   for (const [pattern, format] of SUBTITLE_FORMATS) {
-    if (pattern.test(hint)) return format;
+    if (pattern.test(claims)) return format;
   }
   return "unknown";
 }

@@ -8,8 +8,9 @@ type Format = "vtt" | "srt" | "ttml" | "unknown";
  * build: a bare extension (`hls.ts`), a `mimeType codecs fileUrl` triple
  * (`dash.ts`), and a bare extension or a whole URL (`ytdlp.ts`). The boundary
  * probes are the point of the table — dl-24 was a row that answered `ttml` for
- * anything whose last two letters were `tt`, and dl-25 was two rows that read
- * a CDN hostname as a format claim.
+ * anything whose last two letters were `tt`, dl-25 was two rows that read a CDN
+ * hostname as a format claim, and dl-28 was the third such row plus the
+ * decision to stop showing any row a hostname at all.
  */
 const CASES: ReadonlyArray<readonly [string | undefined, Format, string]> = [
   // Row 1 — vtt.
@@ -76,29 +77,68 @@ const CASES: ReadonlyArray<readonly [string | undefined, Format, string]> = [
   ["ttx", "unknown", "boundary: tt has to end the hint"],
   ["xtt", "unknown", "boundary: a word character before a trailing tt is not a .tt"],
 
-  // Row 3 still reads a hostname as a format claim — the defect dl-25 fixed in
-  // rows 1 and 2. These three pin the wrong answers rather than the right ones,
-  // so that dl-28 has a failing target to flip. Row 3 cannot borrow dl-25's
-  // boundary: `stpp.ttml.im1t` above is a real codecs string and needs the dots
-  // that boundary rejects. Do not "fix" these expectations without fixing the
-  // code.
-  ["application/mp4 https://stpp.cdn.net/sub.mp4", "ttml", "dl-28, wrong: should be unknown"],
-  ["application/mp4 https://cdn.net/ttml/sub.mp4", "ttml", "dl-28, wrong: should be unknown"],
-  ["application/mp4 https://cdn.net/dfxp/sub.mp4", "ttml", "dl-28, wrong: should be unknown"],
+  // dl-28 — row 3 used to read a hostname or a path segment as a format claim,
+  // and could not borrow dl-25's boundary to stop: `stpp.ttml.im1t` above is a
+  // real codecs string and needs the dots that boundary rejects. `claimsOnly`
+  // settles it instead, by cutting the host and the path out of the hint
+  // before any row is scanned. These three were pinned as the wrong answers on
+  // the dl-25 branch; they are flipped here.
+  ["application/mp4 https://stpp.cdn.net/sub.mp4", "unknown", "dl-28: stpp is a hostname label"],
+  ["application/mp4 https://cdn.net/ttml/sub.mp4", "unknown", "dl-28: ttml is a path segment"],
+  ["application/mp4 https://cdn.net/dfxp/sub.mp4", "unknown", "dl-28: dfxp is a path segment"],
+  [
+    "https://stpp.cdn.net/sub.mp4",
+    "unknown",
+    "dl-28: the ytdlp.ts fallback shape is covered too, not just the dash.ts triple",
+  ],
+  [
+    "application/x-subrip https://cdn.net/s/sub.ttml",
+    "srt",
+    "dl-28: rows 2 and 3 in that order — a subrip mime type outranks a .ttml extension",
+  ],
+  // dl-28 keeps the query string of a URL, because that is where yt-dlp states
+  // the format (`&fmt=vtt`, pinned in row 1 above). The cost is this: a signed
+  // URL whose query happens to carry a format token is still read as a claim.
+  // Pinned so that narrowing it — or widening it further — is a decision.
+  [
+    "application/mp4 https://cdn.net/sub.mp4?x=ttml",
+    "ttml",
+    "dl-28 cost: the query string is still a claim, on purpose",
+  ],
+  [
+    "application/mp4 https://cdn.net/sub.mp4#fmt=vtt",
+    "unknown",
+    "dl-28: a fragment never reaches the server, so it cannot be stating a format",
+  ],
 
   // dl-25 bought its hostname boundary at a price, and this is the price. The
   // lookahead `(?![\w./-])` rejects a real extension followed by `/`, `.`, `-`
-  // or a word character, so these three genuine tracks are now `unknown`. It
-  // only bites a hint with no mime type and no codec: prefix any of them with
-  // `text/srt` or `application/x-subrip` and they answer `srt` again, which is
-  // why dash.ts and hls.ts cannot reach it and only ytdlp.ts can. Pinned so
-  // that re-widening the boundary is a decision and not an accident.
+  // or a word character, so these genuine tracks are `unknown`. It only bites a
+  // hint with no mime type and no codec: prefix any of them with `text/srt` or
+  // `application/x-subrip` and they answer `srt` again, which is why dash.ts
+  // and hls.ts cannot reach it and only ytdlp.ts can. Pinned so that
+  // re-widening the boundary is a decision and not an accident. Since dl-28 the
+  // first of the three is `unknown` for a second, simpler reason: `claimsOnly`
+  // reads its extension as nothing at all, because `download` has no dot.
   ["https://cdn.example.com/s/sub.srt/download", "unknown", "dl-25 cost: extension not last"],
   ["https://cdn.example.com/s/sub.srt.gz", "unknown", "dl-25 cost: a suffix after the extension"],
   [
     "text/srt https://cdn.example.com/s/sub.srt/download",
     "srt",
     "dl-25 cost is recovered by any mime type in front",
+  ],
+
+  // Gate 1 on dl-28, F1 and F2. Every other URL-bearing row above carries a
+  // scheme, and `claimsOnly` returns early on a hint that has no `://` — so
+  // without these two the whole table passes with dl-25's `(?![\w./-])`
+  // deleted from rows 1 and 2 except `vttx` and `srtx`, and a later agent
+  // tidying the table would "fix" those with `(?!\w)` and ship dl-25's defect
+  // again, green. These are the rows that redden when that boundary goes.
+  ["srt.cdn.net/sub.mp4", "unknown", "gate 1 F1: a scheme-less host is not a claim either"],
+  [
+    "vtt.cdn.net/sub.mp4",
+    "unknown",
+    "gate 1 F1: and vtt reaches the disk, so this is the costly one",
   ],
 
   // No row.

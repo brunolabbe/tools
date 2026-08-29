@@ -42,5 +42,17 @@
         <BaseURL>sintel_fr.mp4</BaseURL>
       </Representation>
     </AdaptationSet>
+    <AdaptationSet mimeType="application/mp4" contentType="text" lang="es">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
+      <Representation id="sub-es" bandwidth="1000" codecs="stpp.ttml.im1t">
+        <BaseURL>sintel_es.mp4</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet mimeType="application/mp4" contentType="text" lang="it">
+      <Role schemeIdUri="urn:mpeg:dash:role:2011" value="subtitle"/>
+      <Representation id="sub-it" bandwidth="1000">
+        <BaseURL>https://stpp.cdn.example.net/sintel_it.mp4</BaseURL>
+      </Representation>
+    </AdaptationSet>
   </Period>
 </MPD>
