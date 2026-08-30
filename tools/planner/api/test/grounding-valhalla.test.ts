@@ -32,14 +32,51 @@
  * units the request asked for; and every cell carries its own
  * `from_index`/`to_index`.
  *
- * ## What is not covered here, and it is a real gap
+ * ## Where the `nominatim-search-*.json` fixtures came from, exactly
  *
- * **There is no geocoder fixture.** Nominatim needs PostgreSQL, PostGIS and an
- * import of the same extract, none of which this environment has, and the
- * public instance is not reachable either. `locate`'s reply parsing is
- * therefore written against Nominatim's documented shape and asserted by
- * nothing. Only its transport behaviour is tested below. See pl-28's Log and
- * pl-30.
+ * pl-30 closes the gap the paragraph above used to describe. This container
+ * still cannot reach any geocoder — Nominatim, self-hosted or public — so the
+ * four replies below were captured 2026-08-29 on a networked machine, by the
+ * repo owner, against the **public Nominatim instance**
+ * (`nominatim.openstreetmap.org/search`, `format=jsonv2`), with this
+ * provider's own `User-Agent`. All four came back **HTTP 200**,
+ * `application/json; charset=utf-8`. Nothing has been edited since capture
+ * except `oxfmt`'s formatting.
+ *
+ * | File                                      | `q=`                           | `limit=` |
+ * | ----------------------------------------- | ------------------------------ | -------- |
+ * | `nominatim-search-match.json`              | `Percé, Québec`                | 1        |
+ * | `nominatim-search-no-match.json`           | `Zzqqxv Nonexistent, Québec`   | 1        |
+ * | `nominatim-search-ambiguous-limit1.json`   | `Saint-Jean`                    | 1        |
+ * | `nominatim-search-ambiguous-limit10.json`  | `Saint-Jean`                    | 10       |
+ *
+ * ## What they settled
+ *
+ * **`firstCoordinates` was already correct**, on both things nobody could
+ * have verified without a real reply: a no-match is a **literal `[]`**, HTTP
+ * 200 — not a 404, not an object, not omitted — which is exactly what this
+ * parser already treated as `null`; and `lat`/`lon` arrive as **strings**
+ * (`"48.5222989"`), which `asNumber` already parses. No line of
+ * `firstCoordinates` changed for this ticket. The tests below exist to pin
+ * that against the real shape rather than against `[]` assumed, per pl-30's
+ * Done-when.
+ *
+ * **Two things a hand-written fixture would not have surfaced:** results are
+ * **not** sorted by `importance` — in the `limit=10` reply the highest
+ * `importance` (0.6016, St. John's, Newfoundland) sits at index 2, behind
+ * 0.5848 and 0.5813 — and `place_id` is not stable across requests for the
+ * same place (`osm_id` 120280 is `place_id` 85350419 at `limit=1` and
+ * 85534243 at `limit=10`, n=2). Neither matters to `firstCoordinates`, which
+ * reads only `body[0]`, but both are worth knowing before anything else in
+ * this tool keys on either field — see pl-25's cache.
+ *
+ * **What they exposed is not in `firstCoordinates` at all.** `q=Saint-Jean`
+ * with no locality returns Saint-Jean, Toulouse, **France** at `limit=1`, and
+ * at `limit=10` none of the six results is in Québec. A `locate` call built
+ * from a candidate whose `locality` is `null` gets a confident, wrong
+ * coordinate rather than an honest `null` — filed as
+ * [pl-34](../../docs/work/pl-34-locality-free-query-confident-wrong-place.md), reproduced by
+ * the ambiguous-name tests below rather than fixed here.
  */
 
 import { readFileSync } from "node:fs";
@@ -58,6 +95,18 @@ const CAPTURED: unknown = JSON.parse(
     "utf8",
   ),
 );
+
+/** One `nominatim-search-*.json` capture, parsed. See the header for provenance. */
+function nominatimFixture(name: string): unknown {
+  return JSON.parse(
+    readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), "utf8"),
+  );
+}
+
+const NOMINATIM_MATCH = nominatimFixture("nominatim-search-match.json");
+const NOMINATIM_NO_MATCH = nominatimFixture("nominatim-search-no-match.json");
+const NOMINATIM_AMBIGUOUS_LIMIT_1 = nominatimFixture("nominatim-search-ambiguous-limit1.json");
+const NOMINATIM_AMBIGUOUS_LIMIT_10 = nominatimFixture("nominatim-search-ambiguous-limit10.json");
 
 const AT = new Date("2026-08-23T12:00:00.000Z");
 
@@ -406,8 +455,12 @@ describe("locate", () => {
     expect(headers?.["user-agent"]).toMatch(/\S/u);
   });
 
-  test("a name nobody matched is null, not an error", async () => {
-    const { fetch } = answering([]);
+  test("a name nobody matched is null, not an error — against a real reply, not [] assumed", async () => {
+    // pl-30: this used to be `answering([])`, an assumption. It is now the
+    // literal body Nominatim sent for a name that matches nothing — see the
+    // header for provenance. It happens to equal `[]`, which is itself a
+    // fact worth having confirmed rather than guessed.
+    const { fetch } = answering(NOMINATIM_NO_MATCH);
     await expect(provider(fetch).locate({ place: somewhere })).resolves.toBeNull();
   });
 
@@ -442,6 +495,130 @@ describe("locate", () => {
 
     await expect(provider(fetch).locate({ place: blank })).resolves.toBeNull();
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("locate, over a payload a real Nominatim wrote", () => {
+  test("a place that matches parses into LocatedPlace, lat/lon strings included", async () => {
+    const { fetch } = answering(NOMINATIM_MATCH);
+    const perce: Place = { name: "Percé", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: perce })).resolves.toEqual({
+      coordinates: { latitude: 48.5222989, longitude: -64.2136423 },
+      source: {
+        url: "https://www.openstreetmap.org/copyright",
+        title: "OpenStreetMap, geocoded by Nominatim",
+        fetchedAt: AT.toISOString(),
+      },
+    });
+  });
+
+  /**
+   * **This is pl-34's reproduction, not a defect in this file.** `locate`
+   * parses the reply correctly — that is the point being pinned. The wrong
+   * answer is already on the wire by the time it arrives: a candidate whose
+   * `locality` is `null` sends Nominatim the bare name `"Saint-Jean"`, and the
+   * real reply's first (and, per pl-34, not best-ranked) result is Saint-Jean,
+   * **Toulouse, France**. `firstCoordinates` has no way to know that, and
+   * nothing here should grow one — the fix is a query- or disambiguation-level
+   * decision, filed rather than made.
+   */
+  test("an ambiguous bare name resolves confidently to the wrong place — pl-34, not fixed here", async () => {
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_1);
+    const bareName: Place = { name: "Saint-Jean", locality: null, coordinates: null };
+
+    await expect(provider(fetch).locate({ place: bareName })).resolves.toEqual({
+      coordinates: { latitude: 43.6648247, longitude: 1.5041143 },
+      source: {
+        url: "https://www.openstreetmap.org/copyright",
+        title: "OpenStreetMap, geocoded by Nominatim",
+        fetchedAt: AT.toISOString(),
+      },
+    });
+  });
+});
+
+/**
+ * The four `firstCoordinates`/`asNumber` branches no capture could pin,
+ * named rather than left as a gap after gate 2 found them.
+ *
+ * **These are not fixtures and make no claim about Nominatim.** The rule
+ * against a hand-written payload is about the *happy-path shape* of a real
+ * reply — the thing nobody could have guessed without capturing one. These
+ * four inputs are the opposite: ordinary defensive unit testing of a small
+ * pure function against malformed input, the same kind of thing
+ * `describe("a reply that is not what the engine writes")` already does for
+ * `estimate`/`indexCells` below. Composing them by hand carries no risk of
+ * agreeing with the parser by construction, because none of them claims to be
+ * what a geocoder would send.
+ */
+describe("firstCoordinates, against malformed input no capture could justify", () => {
+  test("a first result that is null, not an object, is null — not a throw", async () => {
+    const { fetch } = answering([null]);
+    const somewhere: Place = { name: "Rimouski", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: somewhere })).resolves.toBeNull();
+  });
+
+  test("a result with neither lat nor lon is null", async () => {
+    const { fetch } = answering([{}]);
+    const somewhere: Place = { name: "Rimouski", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: somewhere })).resolves.toBeNull();
+  });
+
+  test("lat/lon present but empty strings parse to no number, so the result is null", async () => {
+    const { fetch } = answering([{ lat: "", lon: "" }]);
+    const somewhere: Place = { name: "Rimouski", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: somewhere })).resolves.toBeNull();
+  });
+
+  test("a coordinate outside Earth's range is no answer, not a place", async () => {
+    const { fetch } = answering([{ lat: "999", lon: "0" }]);
+    const somewhere: Place = { name: "Rimouski", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: somewhere })).resolves.toBeNull();
+  });
+});
+
+/**
+ * Facts about the real replies that no code here reads, checked in as
+ * evidence for pl-34 rather than left for a reader to eyeball out of raw
+ * JSON. `locate` always requests `limit=1`, so `NOMINATIM_AMBIGUOUS_LIMIT_10`
+ * never reaches this provider in production — it is here because pl-34's
+ * brief cites it.
+ */
+describe("what the ambiguous-name replies show, beyond what locate reads", () => {
+  test("the ten results are not ordered by importance", () => {
+    const results = NOMINATIM_AMBIGUOUS_LIMIT_10 as Array<{ importance: number }>;
+    const importances = results.map((r) => r.importance);
+    const sortedDescending = importances.toSorted((a, b) => b - a);
+
+    expect(importances).not.toEqual(sortedDescending);
+    // The highest importance (St. John's, Newfoundland) sits at index 2,
+    // behind two lower-scored results — named because "not sorted" alone
+    // would survive a mutant that merely shuffled two adjacent rows.
+    expect(importances.indexOf(Math.max(...importances))).toBe(2);
+  });
+
+  test("none of the ten results is in Québec", () => {
+    const results = NOMINATIM_AMBIGUOUS_LIMIT_10 as Array<{ display_name: string }>;
+    const inQuebec = results.filter((r) => /qu[ée]bec/iu.test(r.display_name));
+
+    expect(inQuebec).toHaveLength(0);
+  });
+
+  test("the same osm_id carries a different place_id across these two captures", () => {
+    const atLimit1 = (
+      NOMINATIM_AMBIGUOUS_LIMIT_1 as Array<{ osm_id: number; place_id: number }>
+    )[0];
+    const atLimit10 = (
+      NOMINATIM_AMBIGUOUS_LIMIT_10 as Array<{ osm_id: number; place_id: number }>
+    )[0];
+
+    expect(atLimit1?.osm_id).toBe(atLimit10?.osm_id);
+    expect(atLimit1?.place_id).not.toBe(atLimit10?.place_id);
   });
 });
 

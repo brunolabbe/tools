@@ -4,7 +4,7 @@ tool: planner
 title: A real routing backend behind the seam, self-hosted
 kind: work-package
 milestone: P3
-status: ready
+status: done
 depends_on: [pl-24, pl-25]
 ---
 
@@ -689,3 +689,26 @@ entitled to repeat.
 > unaffected by the correction — only the number is. pl-30's Log carries the
 > command and the sibling arithmetic this number feeds: 702 = 699 + 3 (pl-32's
 > three tests), not 698 + 4.
+
+> **Amended 2026-08-29 by pl-30: the geocoder gap is closed, and `status:
+done` follows.** Real `nominatim.openstreetmap.org/search` replies —
+> a match, a no-match, and an ambiguous bare name at `limit=1` and
+> `limit=10` — were captured on a networked machine and checked in under
+> `api/test/fixtures/`. `firstCoordinates` needed no change: a no-match is a
+> real `[]`, and `lat`/`lon` are real strings, both already handled. That is
+> pinned rather than patched, in
+> `describe("locate, over a payload a real Nominatim wrote")` in
+> `api/test/grounding-valhalla.test.ts`.
+>
+> ```
+> $ npm test -- --project planner
+>  Test Files  50 passed (50)
+>       Tests  707 passed (707)
+> ```
+>
+> The captures did expose a real defect, but not in this file's parsing: a
+> `locate` query built from a `Place` with `locality: null` sends Nominatim a
+> bare name, and a real reply for `q=Saint-Jean` resolves to Toulouse, France
+> — not the same-country near-miss pl-30's own brief predicted. Filed as
+> [pl-34](./pl-34-locality-free-query-confident-wrong-place.md), reproduced as
+> a test, not fixed on this branch. `status: done` for both pl-28 and pl-30.

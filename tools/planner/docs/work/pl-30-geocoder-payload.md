@@ -4,7 +4,7 @@ tool: planner
 title: Capture a real geocoder payload and hold locate's parser to it
 kind: fix
 milestone: P3
-status: ready
+status: done
 depends_on: []
 ---
 
@@ -134,6 +134,35 @@ the Log. Its `699/699` measurement at `60e48e7` was reproduced independently in
 this pass rather than taken on faith; its mutation-control confirmation
 (`702/702` with `firstCoordinates` gutted) was not rerun here since nothing
 about that function changed on this branch.
+
+### Gate 2 — 2026-08-29
+
+**Verdict: PASS**
+
+| #   | Finding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Severity | Disposition                                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Coverage claim overstated. `tools/planner/docs/work/pl-30-geocoder-payload.md:45` **as reviewed at `0f604e3`** (pinned, not repointed — it is the finding's own evidence) states "None of its seven branches is pinned by anything"; `:334` **at the same commit** then says `firstCoordinates` "needed no change" without walking that claim back. Gate 2 mutated all eight `firstCoordinates`/`asNumber` branches individually: the happy path and `[]` no-match are pinned, the non-array case is TypeScript-enforced, the empty-array and non-finite-parse cases are equivalent mutants, and four (non-object first result, missing `lat`/`lon`, a value neither a usable string nor a number, an out-of-range coordinate) were pinned by nothing. A *Why*→Log skim reads as full coverage without that gap being stated anywhere. | med      | Closed rather than only described. Added `describe("firstCoordinates, against malformed input no capture could justify")` — four tests over `[null]`, `[{}]`, `[{lat:"",lon:""}]`, `[{lat:"999",lon:"0"}]` — and a dated Log entry naming exactly what was and wasn't pinned before this. Each of the four verified load-bearing with its own targeted mutation (below), not merely written. |
+| 2   | Unsourced id claim. `tools/planner/docs/work/pl-34-locality-free-query-confident-wrong-place.md:143` **as reviewed at `0f604e3`** says "`pl-33` is in use elsewhere" as if it were a fact about this repository. `git log --all`, every branch and every open pull request carry zero references to `pl-33` — reported by the gate as unverifiable, not false, since an id reserved but not yet landed is expected to be invisible here.                                                                                                                                                                                                                                                                                                                                                                                               | low      | Fixed. Rewritten to state the sourceable version: the coordinator reserved `pl-33` for another in-flight planner ticket at filing time, it is expected to be absent from this repo's history for exactly that reason, and it will be reclaimed if unused — attributed to the coordinator's own claim rather than asserted as a fact this repository can confirm.                             |
+
+**Also from this gate, needing no further action:** verified both pl-30's
+four and pl-28's seven Done-when lines against the tree (all eleven met);
+proved the dangling-`depends_on` check fails when it should (`exit 1`,
+`"kind": "dangling-dependency"`); and overwrote
+`nominatim-search-no-match.json` with a non-empty payload to confirm the
+no-match test genuinely reads the file rather than asserting a hardcoded
+`[]` — the test failed as it should have, so all four fixtures are
+load-bearing and none were changed in response.
+
+**What this gate did not do.** It did not choose between folding the four
+missing branches in versus only correcting the Log — it named the option and
+left the choice to the builder, with reasoning for why folding them in does
+not violate the ticket's own no-hand-written-fixture rule. It did not itself
+resolve the ODbL/attribution gap the previous round surfaced — that is filed
+as [pl-35](./pl-35-travel-source-unattributed.md), separately, per the
+coordinator's instruction not to fold it into pl-34 either. It did not re-run
+gate 1's earlier mutation sweep or citation checks; its scope this round was
+the two findings above plus the Done-when/dangling-dependency verification
+named here.
 
 ## Log
 
@@ -282,3 +311,182 @@ not be the long pole.
 
 Both tickets stay open. `firstCoordinates` and
 `api/test/grounding-valhalla.test.ts` are unchanged on this branch.
+
+**2026-08-29 — real captures arrived; closed.** The user captured four real
+`nominatim.openstreetmap.org/search` replies on a networked machine
+(`PROVENANCE.txt`, reproduced in this file's own header): a match
+(`q=Percé, Québec`), a no-match (`q=Zzqqxv Nonexistent, Québec`), and an
+ambiguous bare name (`q=Saint-Jean`) at both `limit=1` and `limit=10`. All
+four HTTP 200, `application/json; charset=utf-8`. Checked in under
+`api/test/fixtures/`; provenance is the doc comment at the top of
+`api/test/grounding-valhalla.test.ts`, which is where the fixture is read, per
+Done-when.
+
+**Re-verified every claim independently rather than trusting the transcription:**
+
+```
+$ cat tools/planner/api/test/fixtures/nominatim-search-no-match.json
+[]
+$ node -e 'const j=require("./tools/planner/api/test/fixtures/nominatim-search-match.json"); console.log(typeof j[0].lat, typeof j[0].lon)'
+string string
+$ node -e 'const j=require("./tools/planner/api/test/fixtures/nominatim-search-ambiguous-limit10.json"); console.log(j.map(r=>r.importance))'
+[
+  0.5847674618973391,
+  0.5813204991715637,
+  0.6016125880228743,
+  0.371773638720501,
+  0.30093685344584264,
+  0.3363461829037416
+]
+$ node -e 'const j=require("./tools/planner/api/test/fixtures/nominatim-search-ambiguous-limit1.json"),
+  k=require("./tools/planner/api/test/fixtures/nominatim-search-ambiguous-limit10.json");
+  console.log(j[0].osm_id===k[0].osm_id, j[0].place_id, k[0].place_id)'
+true 85350419 85534243
+```
+
+All five of the coordinator's claims confirmed: no-match is a literal `[]`;
+`lat`/`lon` are strings; the highest importance (0.6016, index 2) is not
+first; `place_id` differs (85350419 vs 85534243) for the same `osm_id`
+(120280); every row carries a `licence` field (visible in the raw JSON,
+checked in verbatim). The `place_id` finding is informational here — nothing
+in `api/src` reads that field (`grep -rn "place_id" tools/planner/api/src`,
+no output) — recorded on pl-34 rather than acted on. The `licence`/ODbL
+attribution point is judged out of scope for this ticket: it is a UI-rendering
+question (does the plan display travel/locate's `Source`, which already
+carries the OSM attribution URL, anywhere a user sees it?), not a fixture or
+parser question, and `grep -rl "fetchedAt" tools/planner/web/src` shows only
+`Provenance.tsx` — which renders a candidate's or a cost's sources, never
+`PlanItem.travelFromPrevious`'s. That gap is real and distinct enough that it
+should be its own ticket rather than folded into pl-34; flagged for the
+coordinator to assign an id rather than one invented here. Filed as
+[pl-35](./pl-35-travel-source-unattributed.md) once the coordinator assigned
+it.
+
+**`firstCoordinates` needed no change.** Both things nobody could have
+verified without a real reply — a no-match's exact shape and `lat`/`lon`
+being strings — were already handled. Pinned rather than patched:
+`describe("locate, over a payload a real Nominatim wrote")` in
+`api/test/grounding-valhalla.test.ts` adds a match test and an
+ambiguous-name test; the existing no-match test now asserts against
+`NOMINATIM_NO_MATCH` instead of `answering([])`.
+
+**Mutation control, proving the new tests can fail before trusting that they
+pass** (`trap ... EXIT INT TERM`, `cp` then `touch` then rebuild):
+
+```
+$ npx vitest run tools/planner/api/test/grounding-valhalla.test.ts --project planner
+ Test Files  1 passed (1)
+      Tests  27 passed (27)
+```
+
+Then `firstCoordinates`'s body replaced with `return null;`, rebuilt:
+
+```
+$ npx vitest run tools/planner/api/test/grounding-valhalla.test.ts --project planner
+ Test Files  1 failed (1)
+      Tests  2 failed | 25 passed (27)
+```
+
+Both new positive-path tests died; file restored by the trap, `git status`
+after clean.
+
+**What the captures exposed is not in `firstCoordinates` — filed as
+[pl-34](./pl-34-locality-free-query-confident-wrong-place.md).** `q=Saint-Jean`
+with no `locality` returns Saint-Jean, **Toulouse, France**, not the
+Québec/New-Brunswick near-miss this ticket's Build predicted, and raising
+`limit` to 10 recovers no Québec result at all. Reproduced as tests, not
+fixed — pl-34 carries the evidence and three options, choice left open.
+
+**All four Done-when lines are met:**
+
+- Real reply checked in under `api/test/fixtures/`, provenance at the point
+  of read. ✓
+- `locate` parses each offline: `npm test -- --project planner`, no network
+  in any test (all three geocoder fixtures go through `answering()`, a mocked
+  `fetch`). ✓
+- No-match reply yields `null`, asserted against the real `[]` rather than
+  one assumed. ✓
+- pl-28's Log says the gap is closed and by what — amended there in this
+  commit. ✓
+
+`status: done`.
+
+**2026-08-29 — gate 2's finding 1: the coverage claim above overstated what
+landed, and this ticket's own _Why_ made the gap easy to miss.** This
+ticket's _Why_ diagnoses the original problem as "none of its seven branches
+is pinned by anything" — true when written, and still true of the commit
+this Log's closing entry describes as done. Gate 2 mutated `firstCoordinates`
+and `asNumber` case by case and found: the happy path and the `[]` no-match
+are genuinely pinned; the non-array-body case is TypeScript-enforced (the
+mutation does not compile); the empty-array and non-finite-parse cases are
+equivalent mutants (the neighbouring guard and `coordinatesSchema` already
+catch them independently); and **four branches — a non-object first result,
+missing `lat`/`lon`, a value that is neither a usable string nor a number,
+and a coordinate `coordinatesSchema` should reject as out of range — were
+pinned by nothing.** A reader skimming _Why_ then the closing Log entry above
+would have read "fully covered" without that being written anywhere.
+
+**Closed rather than only described**, because none of the four needs a
+captured payload: the "no hand-written fixture" rule is about a real reply's
+_happy-path shape_, which nobody could have guessed — it says nothing about
+testing this function's own guards against input no geocoder would need to
+send. `describe("firstCoordinates, against malformed input no capture could
+justify")` in `api/test/grounding-valhalla.test.ts` adds four tests over
+`[null]`, `[{}]`, `[{lat:"",lon:""}]` and `[{lat:"999",lon:"0"}]`.
+
+**Verified each one is load-bearing, not merely written**, with a control run
+first and one targeted mutation per test (`trap ... EXIT INT TERM`, `cp` then
+`touch` then rebuild, narrowest spec per run):
+
+```
+$ npx vitest run tools/planner/api/test/grounding-valhalla.test.ts --project planner
+ Test Files  1 passed (1)
+      Tests  31 passed (31)
+```
+
+Mutation A — drop `first === null` from the object guard:
+
+```
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 passed (31)
+```
+
+(`[null]` — a `TypeError` destructuring `lat` off `null`, correctly turning
+into a rejected promise rather than the `null` the test expects.)
+
+Mutation B — default a missing/unparseable number to `0` instead of
+`undefined`:
+
+```
+ Test Files  1 failed (1)
+      Tests  2 failed | 29 passed (31)
+```
+
+(`[{}]` and `[{lat:"",lon:""}]` — both would silently resolve to Null
+Island, `{latitude:0, longitude:0}`, instead of `null`.)
+
+Mutation C — bypass `coordinatesSchema`'s range check and trust `asNumber`'s
+parse directly:
+
+```
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 passed (31)
+```
+
+(`[{lat:"999",lon:"0"}]` — `999` would be accepted as a latitude.)
+
+All three restored by the trap; a fourth check confirmed `[{}]`'s `lat` being
+`undefined` also kills a mutant that drops the "not a string" half of
+`asNumber`'s guard (`undefined.trim()` throws), so the "non-string,
+non-number" branch gate 2 named is covered by the same test as "missing
+`lat`/`lon`" rather than needing a fifth. Final control after every restore:
+
+```
+$ npx vitest run tools/planner/api/test/grounding-valhalla.test.ts --project planner
+ Test Files  1 passed (1)
+      Tests  31 passed (31)
+$ git status --porcelain tools/planner/api/src/grounding/valhalla.ts
+(no output)
+```
+
+`api/src/grounding/valhalla.ts` is otherwise untouched — this is test-only.
