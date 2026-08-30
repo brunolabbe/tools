@@ -27,6 +27,8 @@
     "test:repo": "vitest run --project repo",
     "e2e": "npm run e2e:downloader",
     "e2e:downloader": "playwright test -c tools/downloader/playwright.config.ts",
+    "// e2e:downloader:sniffer": "The slow half, kept out of `e2e:downloader` so the suite a developer runs between edits stays fast: the API launches its own Chromium and a probe takes 10-20 s. Its own config rather than its own project, because Playwright starts every `webServer` in a config whatever `--project` selects. See tools/downloader/playwright.sniffer.config.ts.",
+    "e2e:downloader:sniffer": "playwright test -c tools/downloader/playwright.sniffer.config.ts",
     "e2e:planner": "playwright test -c tools/planner/playwright.config.ts",
     "e2e:install": "playwright install --with-deps chromium",
     "// e2e:serve": "The downloader's, from before there was a second tool to disambiguate against. Its playwright.config.ts names it.",

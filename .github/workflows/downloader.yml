@@ -52,8 +52,35 @@ jobs:
   # The whole stack in one piece: real UI, real API, real ffmpeg, real file.
   # Linux only — it is the slowest job and the thing it proves is not
   # platform-specific.
+  #
+  # **Two suites, two runners, and the split is not cosmetic.** `direct` is the
+  # fast journey with the sniffer off; `sniffer` (dl-16) is the one where the
+  # API launches its own Chromium — so that leg has Playwright's browser and the
+  # API's browser alive at once, and giving it a runner of its own is what keeps
+  # that from being the other suite's problem too. The matrix also means a
+  # failure arrives named: `e2e (sniffer)` rather than a step buried in `e2e`.
+  # The price is one extra `npm ci` + `npm run build` + browser install, which
+  # is what a matrix over an expensive setup costs and is bought deliberately.
+  #
+  # `fail-fast: false`: "the sniffer broke" and "the whole stack broke" are
+  # different diagnoses and both are worth having in the same run.
+  #
+  # Renaming this check is safe as of the ruleset read recorded in `ci.yml`
+  # (2026-08-23): `main` carries no `required_status_checks` rule and no classic
+  # protection, so no required check is named `e2e`.
   e2e:
+    name: e2e (${{ matrix.suite }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: direct
+            script: e2e:downloader
+            artifacts: tools/downloader/e2e/.artifacts/results
+          - suite: sniffer
+            script: e2e:downloader:sniffer
+            artifacts: tools/downloader/e2e/.artifacts/sniffer-results
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -77,14 +104,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
           echo "FFMPEG_PATH=/usr/bin/ffmpeg" >> "$GITHUB_ENV"
-      - run: npm run e2e:downloader
+      - run: npm run ${{ matrix.script }}
       # Traces and video, kept only when something failed — that is the whole
-      # reason `trace: retain-on-failure` is set.
+      # reason `trace: retain-on-failure` is set. A sniffer failure is exactly
+      # the case where the trace *is* the diagnosis: the probe happens inside
+      # the API, and all the test can see is that no variants came back.
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: e2e-artifacts
-          path: tools/downloader/e2e/.artifacts/results
+          # Per leg: two uploads under one name collide.
+          name: e2e-artifacts-${{ matrix.suite }}
+          path: ${{ matrix.artifacts }}
           retention-days: 7
 
   # `docker compose up` from a clean machine is the M4 acceptance criterion, so
