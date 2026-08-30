@@ -105,6 +105,23 @@ discarded. So:
   gate record citing text a later correction deleted outright — inherent to
   committing a gate in the branch that fixes it. Say so in the record's preamble
   rather than repointing them.
+- **A count with no denominator is not a measurement.** "Removing the guard fails
+  3" says nothing without the command it was taken from and the total it is out
+  of. Two builders in one session recorded per-**scenario** counts while their
+  gates recorded per-**run** ones — neither wrong, both looking wrong, and the
+  disagreement cost a round each. One re-measured at a stated scope and found a
+  **third** figure nobody had disputed; all of its errors traced to one habit,
+  reading a `| head`-truncated failure list instead of the runner's own total.
+  Write the command and the denominator beside the number — `4 of 71,
+  npx vitest run <spec>` — and **never adopt the other party's figure to settle
+  what is actually a disagreement about scope.** This is the same defect as a
+  positional reference with no file: a number whose object is unstated.
+- **A Log citing a path under the scratchpad is a promise only the session that
+  wrote it can keep.** `/tmp` does not survive a container rebuild, and no later
+  agent can re-run what it names. What makes such an entry durable is the command
+  and its **output**, pasted in — a path sitting beside them reads like an artifact
+  anyone can reproduce and is not one. If the harness is worth re-running, commit
+  it; if it is not, cite the output and drop the path.
 - Record what the gate **did not** do, alongside what it did. A narrow second gate
   that says "did not re-sweep the citations, did not re-run the full suite, ran
   `--project repo` because that is what parses the ticket tree" is far more useful

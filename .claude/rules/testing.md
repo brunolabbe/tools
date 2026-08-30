@@ -66,6 +66,25 @@ which would swallow `tools/downloader/e2e/fixtures/hls-origin.ts`, TypeScript
 the repo does want formatted. Anything under a covered directory is exempt
 whatever its extension.
 
+**A test that runs a tool out of `node_modules` cannot spawn its `bin` directly,
+because Windows does not honour a shebang.** `packages/core`'s oxfmt scan learned
+this the expensive way. `node_modules/oxfmt/bin/oxfmt` is a three-line
+`#!/usr/bin/env node` script reached through a symlink; npm writes `.cmd` and
+`.ps1` shims beside it, and spawning either needs a shell — which this repo
+forbids outright and enforces in `packages/core/test/spawn-safety.test.ts`, so the
+easy way out is closed by design. The process then simply never starts: both pipes
+come back `undefined`, a `?? ""` collapses them to `""`, and an assertion about
+the tool's output blames a missing _message_ for a missing _process_. It fails on
+Windows only, and it reads as a wording change in the tool.
+
+Resolve the package and run its entry under `process.execPath` instead —
+`createRequire(import.meta.url).resolve("<pkg>/package.json")`, then its `bin`
+field — and **assert the spawn itself succeeded** (`expect(result.error).toBeUndefined()`)
+so the next platform difference cannot disguise itself as a failed assertion. Then
+assert on what the tool *did* to a file, never on the words it printed: a
+third-party diagnostic is not yours to depend on, and the exit code alone cannot
+tell "excluded" from "clean".
+
 CI runs lint, typecheck and every unit suite on every push. **`ci.yml`'s `check`
 job is filtered by nothing at all**, markdown included, because `npm run check`
 runs `oxfmt --check` and oxfmt formats markdown here — a documentation-only
