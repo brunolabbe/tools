@@ -102,12 +102,26 @@ both surfaces with one code path.
    ([`probe.ts:101`](../../api/src/routes/probe.ts),
    [`orchestrator.ts:210`](../../api/src/jobs/orchestrator.ts)) get it for free.
 
-   **Trap:** the sweep is `assertAllAllowed`, which _throws_. A thumbnail on a
-   blocked address must not fail the whole probe — the video is still
-   downloadable. Drop the thumbnail and continue; do not let a decorative image
-   turn a working probe into an error. This is the one place the thumbnail must
-   be treated differently from the URLs already in that list, and it is why
-   adding it naively to the existing array is wrong.
+   **Trap, and the decision it forces.** The sweep is `assertAllAllowed`, which
+   _throws_ on any member. A thumbnail on a blocked address must not fail the
+   whole probe — the video is still downloadable — so the thumbnail cannot
+   simply join the array those two call sites hand in. Gate 1 caught this brief
+   asking for both at once ("one authoritative list" and "one member handled
+   non-fatally") while naming no mechanism that delivers them together. Two do.
+   **Pick one and record it in the Log:**
+
+   - **Recommended — one function, two lists.** `urlsInProbeResult` returns
+     `{ mustPass: string[]; bestEffort: string[] }`, the thumbnail being the
+     only member of the second. Both call sites keep passing `mustPass` to
+     `assertAllAllowed` exactly as they do today, so their throwing behaviour is
+     untouched; `probe.ts` additionally vets `bestEffort` inside its own
+     `try`/`catch` and drops the thumbnail on refusal. One file still answers
+     "what does a probe cause us to fetch", which is the property worth keeping.
+   - **A second, separately caught check.** Leave `urlsInProbeResult` exactly as
+     it is and vet the thumbnail on its own line in `probe.ts`. Cheaper, and it
+     splits the answer to that question across two places. **If you take this,
+     rewrite Done-when 6** — it demands the thumbnail be in that function's
+     return value, and this option provably cannot deliver that.
 
 2. **Fetch it once, after the sweep, in `probe.ts`.** Use the injected
    `guardedFetch` (`guarded-fetch.ts` re-checks every redirect hop — a thumbnail
@@ -123,9 +137,10 @@ both surfaces with one code path.
      serve `X-Content-Type-Options: nosniff`.
    - **every failure is non-fatal.** Timeout, 404, oversized, wrong type,
      blocked address — the probe returns exactly as it does today, with no
-     preview. Nothing here throws an `AppError` into the probe path, and **no
-     new error code is needed**; do not add one to
-     [`DOWNLOADER_ERROR_CODES`](../../contract/src/errors.ts).
+     preview. Nothing here throws an `AppError` into the probe path. **This
+     sentence is about the fetch failures only** — it is not a rule for the
+     whole feature, and the route in step 3 does add a code. Gate 1 found the
+     earlier wording ambiguous enough to be read either way.
 
 3. **Store the bytes and mint a token.** A bounded, TTL'd, in-memory store,
    modelled on [`ProbeCache`](../../api/src/jobs/probe-cache.ts) — which is the
@@ -138,6 +153,26 @@ both surfaces with one code path.
 
    Add `ROUTES.thumbnail: (token: string) => ` `` `/api/thumbnail/${token}` `` to
    [`ROUTES`](../../contract/src/api.ts) at `api.ts:278`.
+
+   **An unknown or expired token raises a new downloader code — decided, not
+   open.** Add `THUMBNAIL_NOT_FOUND` to `DOWNLOADER_ERROR_CODES`
+   ([`errors.ts:27`](../../contract/src/errors.ts)), a message to
+   `DEFAULT_ERROR_MESSAGES` (`errors.ts:66`), and `THUMBNAIL_NOT_FOUND: 404` to
+   `STATUS_BY_CODE` in [`http-errors.ts`](../../api/src/http-errors.ts). Neither
+   of the last two is a step you can forget — both are exhaustive
+   `Record<ErrorCode, …>` tables, so omitting either fails `npm run check`.
+
+   The two codes already in reach are both wrong, and gate 1 established why.
+   Core's `NOT_FOUND` says of itself that it is _"About the transport, never
+   about a document: a missing job is `JOB_NOT_FOUND` and a missing
+   anything-else belongs to the tool's own taxonomy"_ — which is this case, and
+   an instruction to do exactly what this paragraph says. `JOB_NOT_FOUND` is
+   what [`files.ts:74`](../../api/src/routes/files.ts) reaches for on a bad file
+   token, and it has to overwrite the copy at both raise sites to make it read
+   (`"That download link is not valid."`). The root `CLAUDE.md` names that
+   precise move as the tell: _"If the copy has to be replaced where the error is
+   raised, the code is the wrong one."_ So `files.ts` is a precedent for the
+   anti-pattern, not for the code — do not follow it here.
 
 4. **Put the token in the probe response, not the origin URL.** The client needs
    something to put in `<img src>`, and it must be our path. Keep
@@ -172,15 +207,34 @@ both surfaces with one code path.
    one this run just minted — it does not depend on the probe cache still
    holding anything.
 
-   **Trap:** check whether the job store's persistence layer needs a schema
-   version bump. [`job-store.ts:20`](../../web/src/lib/job-store.ts) is
-   `"downloader:jobs:v1"` and is documented as _"Versioned so a contract change
-   can invalidate old entries instead of crashing on them"_. Adding an **optional
-   or nullable** field is backward-compatible — an old persisted job parses fine
-   and simply has no preview — so the bump is probably **not** needed, and
-   bumping it would throw away every user's in-flight job list for a decorative
-   image. Confirm it against `jobSchema` rather than assuming, and if you make
-   the field non-optional you have chosen the bump; prefer not to.
+   **Trap: `.nullable()` alone is not enough, and copying `variant`'s schema is
+   how you get it wrong.** [`job-store.ts:20`](../../web/src/lib/job-store.ts) is
+   `"downloader:jobs:v1"`, documented as _"Versioned so a contract change can
+   invalidate old entries instead of crashing on them"_ — so the question is
+   whether this needs a bump. It does not, but only if the field is spelled
+   correctly. Measured on the repo's pinned zod (4.4.3):
+
+   ```
+   z.object({ b: z.string().nullable() }).safeParse({})            -> false
+   z.object({ b: z.string().nullable().optional() }).safeParse({}) -> true
+   ```
+
+   `variant` gets away with a bare `.nullable()` because every persisted job
+   already carries the key. `thumbnailUrl` is **new**, so every record written
+   under `downloader:jobs:v1` today lacks it — and `loadJobs` keeps only what
+   parses ([`job-store.ts:50-54`](../../web/src/lib/job-store.ts):
+   `if (parsedJob.success) jobs.push(...)`, with no `else`). A bare `.nullable()`
+   would therefore fail every existing record and **silently empty every user's
+   job list on their first load after deploy** — no error, no bump, just an empty
+   downloads section.
+
+   So write it `.nullable().optional()` in `jobSchema` and
+   `thumbnailUrl?: string | null | undefined` on the interface (the repo builds
+   with `exactOptionalPropertyTypes`; see the note at
+   [`job.ts:137`](../../contract/src/job.ts)). Then no version bump is needed,
+   which is the outcome to want — bumping discards the list for a decorative
+   image. Prove it with Done-when 4's second half rather than by reading this
+   paragraph.
 
 ### The UI
 
@@ -239,8 +293,11 @@ both surfaces with one code path.
 5. The origin thumbnail URL is **not** present in the probe response sent to the
    client — the client receives only the proxied path. Proven by an API test
    asserting on the response body, not by reading the code.
-6. `urlsInProbeResult` includes the thumbnail URL, proven by a unit test in
-   `api/test/ssrf.test.ts` (which already covers this function at `:152`).
+6. `urlsInProbeResult` accounts for the thumbnail URL — in `bestEffort` under
+   Build 1's recommended option — proven by a unit test in
+   `api/test/ssrf.test.ts` (which already covers this function at `:152`). If
+   Build 1's second option was taken, this line must be rewritten first; it
+   cannot be satisfied as written.
 7. A thumbnail on a blocked address does not fail the probe: the probe returns
    its variants normally, with no preview. Proven by an API test with a guard
    stubbed to refuse that host — this is the trap in Build 1 and the one most
@@ -248,10 +305,13 @@ both surfaces with one code path.
 8. An oversized response and a non-image `Content-Type` are both discarded, and
    the probe still succeeds. Proven by tests against a fixture server, not live
    network.
-9. `GET /api/thumbnail/<unknown-token>` answers a clean 404-shaped error rather
-   than a 500, and there is no route shape anywhere that accepts a caller-supplied
-   URL to fetch.
-10. `npm run check` and `npm test -- --project downloader` pass.
+9. `GET /api/thumbnail/<unknown-token>` answers `THUMBNAIL_NOT_FOUND` as a 404,
+   not a 500 and not `JOB_NOT_FOUND`, proven by a route test.
+10. No route shape anywhere accepts a caller-supplied URL to fetch. This one is
+    **not** a unit test — it is a property of the diff, checked by reading it,
+    and a reviewer should treat it as such rather than marking it unproven for
+    want of a test file. Gate 1 raised the mismatch.
+11. `npm run check` and `npm test -- --project downloader` pass.
 
 ## Review
 
@@ -340,3 +400,61 @@ Three `med` findings, no `high`. Under the strict reading of the rubric (all ten
   the Why is likewise reasoned from `og:image` being page-controlled — it was not
   demonstrated against a running browser. Neither premise is load-bearing for the
   decision, which the user has taken either way.
+
+- **2026-08-30** — Gate 1's three `med` findings addressed in the brief. No code
+  exists yet; these are all changes to what the brief tells a builder to do.
+
+  **F1 — the one that mattered.** Build 5 pointed at `variant`'s
+  `mediaVariantSchema.nullable()` as the precedent and said "same sentence, same
+  reason". Verified against the repo's pinned zod before changing anything:
+
+  ```
+  zod 4.4.3
+  z.object({ b: z.string().nullable() }).safeParse({})            -> false
+  z.object({ b: z.string().nullable().optional() }).safeParse({}) -> true
+  z.object({ b: z.string().nullable() }).safeParse({b: null})     -> true
+  ```
+
+  `variant` survives on `.nullable()` only because every persisted job already
+  has that key; a **new** field does not. Confirmed the consequence rather than
+  assuming it: `loadJobs` keeps only records that parse
+  (`job-store.ts:50-54`, `if (parsedJob.success) jobs.push(...)`, no `else`), so
+  the brief as filed would have emptied every user's downloads list on their
+  first load after deploy — silently, since nothing throws. The trap now states
+  `.nullable().optional()` and says why `variant` is not the precedent it looks
+  like. **My error, not the reviewer's find of someone else's.**
+
+  **F2.** Build 1 asked for "one authoritative list" and "one member handled
+  non-fatally" and named no mechanism reaching both. It now offers the two that
+  do — `urlsInProbeResult` returning `{ mustPass, bestEffort }` (recommended), or
+  a separate caught check — and says which Done-when line the second option
+  forces a rewrite of. Left as a builder decision on purpose, per the repo's rule
+  about surfacing rather than resolving; what was wrong was leaving it _unnamed_.
+
+  **F3 — decided by the user, not folded in quietly.** An unknown or expired
+  thumbnail token raises a **new** `THUMBNAIL_NOT_FOUND` (404). Both codes in
+  reach were measured and rejected: core's `NOT_FOUND` documents itself as
+  transport-only and says "a missing anything-else belongs to the tool's own
+  taxonomy"; `JOB_NOT_FOUND` is what `files.ts:74` uses for a bad file token, and
+  it overwrites the copy at **both** raise sites to make it read — which the root
+  `CLAUDE.md` names as the tell that the code is wrong. So `files.ts` is a
+  precedent for the anti-pattern, not for the code. Build 2's "no new error code
+  is needed" is now explicitly scoped to the fetch failures, which is the
+  ambiguity gate 1 caught.
+
+  **Two of the four `low` findings were folded in** because this pass made them
+  free: Done-when 9 was split, so the un-unit-testable "no route accepts a
+  caller-supplied URL" clause is now its own line (10) and labelled as a
+  read-the-diff property rather than a missing test; and Done-when 6 now says
+  which of Build 1's options it is written against. **The other two are
+  deliberately not done** — Build 4's `withoutEgressProxy` line-ordering
+  imprecision, and the probe-cache read path and its TTL relationship to
+  `PROBE_CACHE_TTL_CEILING_MS`. Both are real and both are design detail a
+  builder will meet with the code in front of them, which is a better place to
+  settle them than a brief.
+
+  One thing corrected while writing this: the first draft of the F3 paragraph
+  named a `DOWNLOADER_ERROR_MESSAGES` constant, which does not exist. It is
+  `DEFAULT_ERROR_MESSAGES` at `errors.ts:66`, and like `STATUS_BY_CODE` it is an
+  exhaustive `Record<ErrorCode, …>` — so both fail `npm run check` if a new code
+  is added without them, which is worth a builder knowing.
