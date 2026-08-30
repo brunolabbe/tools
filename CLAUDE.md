@@ -5,6 +5,14 @@ Each tool under `tools/` has its own `CLAUDE.md` carrying the rules that apply
 only there — **read that one too** before touching its code, and do not import
 its rules into another tool.
 
+This page holds only what is true in **every** session. A rule that matters in one
+part of the tree is a path-scoped rule in `.claude/rules/`, which loads itself when
+you open a matching file; a multi-step procedure is a skill in `.claude/skills/`;
+a role you dispatch is a subagent in `.claude/agents/`; and something that must
+happen every time without exception is a hook in `.claude/hooks/`, wired up in
+`.claude/settings.json`. Put a new convention in the narrowest of those that fits
+— this page is the one that costs every session.
+
 ## What this is
 
 A repo of small, independent web tools that share a toolchain, a CI pipeline and
@@ -57,17 +65,11 @@ Per-tool commands (`dev`, `e2e`) live in that tool's `CLAUDE.md`.
 Tooling: **oxlint** and **oxfmt** (not eslint/prettier). Config in
 `.oxlintrc.json` and `.oxfmtrc.json`.
 
-**Both config files are JSONC despite the `.json` extension** — they carry `//`
-comments, neither survives a strict `JSON.parse`, and no code here parses either
-one; only the oxc binaries read them, and oxfmt preserves the comments when it
-formats them. `.oxlintrc.json` has been commented since `b876906`. Editor JSON
-validators will squiggle both unless `files.associations` maps them to `jsonc`.
-
-`oxfmt` is opinionated in the gofmt sense — at the pinned version the only
-setting it honours is `ignorePatterns`. Style keys like `quoteStyle` and
-`lineWidth` parse without error but are silently ignored, so do not add them and
-do not argue with its output (it uses double quotes). Run `npm run format` and
-move on. Lint rules, by contrast, are fully configurable in `.oxlintrc.json`.
+Both config files are **JSONC despite the `.json` extension**, and `oxfmt` honours
+only `ignorePatterns` at the pinned version — do not argue with its output, run
+`npm run format` and move on. The detail, and why the fixture ignore pattern needs
+its `**/`, is in
+[`.claude/rules/toolchain-config.md`](./.claude/rules/toolchain-config.md).
 
 ## Rules
 
@@ -113,158 +115,140 @@ show an indeterminate state.
 
 **An image ships every workspace its API resolves**, and **a package declares
 every workspace it imports under `src`** — in `dependencies`, not
-`devDependencies`, because the runtime stage is built after `npm prune
---omit=dev`. Each `Dockerfile` keeps that list by hand twice, once as manifests
-before `npm ci` and once as a `package.json` + `dist` pair per workspace, and the
-two fail differently: miss the runtime pair and the container boots and throws on
-first use, miss the manifest and `npm ci` never made the symlink at all. Enforced
-repo-wide by a scan in `packages/core/test/image-closure.test.ts`, which walks the
-graph from each tool's `api` and fails naming the missing line. It does not
-replace the per-tool image gate — a scan over text cannot prove a container
-boots.
+`devDependencies`. Both are enforced by a scan in
+`packages/core/test/image-closure.test.ts`, which fails naming the missing line.
+Why each `Dockerfile` keeps that list by hand twice and how the two halves fail
+differently is in [`.claude/rules/image-closure.md`](./.claude/rules/image-closure.md),
+which loads itself when you open one.
 
 ## Testing
 
-**vitest**, configured once in the root `vitest.config.ts` as one project per
-tool plus one for `packages/`. Tests live in `<package>/test/**/*.test.{ts,tsx}`.
-Import `test`/`expect`/`vi` explicitly — globals are off on purpose, so oxlint's
-`no-undef` keeps working.
+**vitest**, one project per tool plus one for `packages/`, configured in the root
+`vitest.config.ts`. Tests live in `<package>/test/**/*.test.{ts,tsx}` and are
+typechecked by the same `npm run check` the source is. Import `test`/`expect`/`vi`
+explicitly — globals are off on purpose. Fixtures, not live network calls.
 
-**Tests are typechecked, and by the same gate the source is.** So `npm run
-check` holds a fake to the signature of the thing it fakes, and there is no
-second command to remember. `tsconfig.tests.json` at the root covers every suite
-that runs under node — its `include` is a glob, so **a new package's tests cost
-one reference line there, not a file**. Only a genuinely different compiler surface earns a file of
-its own, and there are three beyond the default: the `web` surface (Bundler +
-DOM + JSX), the Playwright surface (DOM + Playwright's types) and
-`scripts/test` (`allowJs`). They split on `lib` and `types` being per-project,
-which is what keeps `document` out of scope in an API test — enforced, not
-aspirational.
-
-**A surface is shared; a project file is not.** `tools/downloader/e2e` and
-`tools/planner/e2e` are the same surface and still need one file each, because a
-project's `include` is rooted at its own directory — there is no way to write one
-that spans both without moving the specs. The same is true of the `web` surface
-since pl-12: `tools/downloader/web/test` and `tools/planner/web/test` are twins.
-So the count of surfaces is three and the count of files is five, and a second
-tool's e2e or `web` suite costs a file of its own copied from the first. That is
-not the per-package `test/tsconfig.json` shape below returning: it is one file
-per _tool's_ suite on a shared surface, of which there are as many as there are
-tools with one.
-
-Do not add a `test/tsconfig.json` back per package; that shape existed briefly and
-was eight copies of the same five lines. Do not reach for `node:test`: the pinned Node (22.15)
-cannot strip TypeScript types without a flag, so `.ts` tests fail under it.
-
-Fixtures, not live network calls — real services change, rate-limit and geo-vary,
-which makes CI failures meaningless. Check in real payloads under
-`test/fixtures/` and parse them offline. E2E runs against a local fixture server.
-
-**What keeps the formatter off them is `**/test/fixtures/` in `.oxfmtrc.json`,
-and the `**/` is the whole of it.** These are gitignore-shaped patterns: an entry
-with an internal slash is anchored to the config's directory, so the bare
-`test/fixtures/` that stood there until repo-4 matched nothing, and every fixture
-**oxfmt claims** was formatted like source. That is the `.json`, `.html` and
-`.mjs` ones and only those — the `.m3u8`, `.mpd`, `.m4s`, `.mp4`, `.txt` and
-`.png` captures are extensions oxfmt never handled, so the manifests and segments
-were never at risk and no one should go hunting damage in them. For JSON the
-damage would be indentation only, but oxfmt reflows HTML text nodes and rewrites
-inline `<script>`, which is editing the thing under test. A fixture directory must therefore be named
-`test/fixtures/` to be covered; do not broaden the entry to `**/fixtures/`,
-which would swallow `tools/downloader/e2e/fixtures/hls-origin.ts`, TypeScript
-the repo does want formatted. Anything under a covered directory is exempt
-whatever its extension.
+The rest — how the tsconfig projects split, why a new package costs one reference
+line and a `web` or `e2e` suite costs a file, and what `**/test/fixtures/` in
+`.oxfmtrc.json` is protecting — is in
+[`.claude/rules/testing.md`](./.claude/rules/testing.md), which loads itself when
+you open a test, a fixture or a tsconfig.
 
 CI runs lint, typecheck and every unit suite on every push. **`ci.yml`'s `check`
 job is filtered by nothing at all**, markdown included, because `npm run check`
 runs `oxfmt --check` and oxfmt formats markdown here — a documentation-only
-change can break it, and used to merge green because CI skipped `**.md`
-entirely. The unit matrix still skips a change that is all `.md`, through a
-`changes` job rather than a trigger filter. A tool's slow gates (e2e, container
-build) live in `.github/workflows/<tool>.yml`, path-filtered so work on one tool
-does not pay for another's.
+change can break it, and used to merge green because CI skipped `**.md` entirely.
+The unit matrix still skips an all-`.md` change, through a `changes` job rather
+than a trigger filter. A tool's slow gates (e2e, container build) live in
+`.github/workflows/<tool>.yml`, path-filtered so work on one tool does not pay for
+another's.
 
 ## Documentation and work
 
 **A tool's documentation lives with its code**, in `tools/<tool>/docs/`, on the
 same spine for every tool: `00-ANALYSIS`, `01-ARCHITECTURE`, `02-ROADMAP`, and
-`work/`. The root `docs/` holds only what is true of the repo —
-the tool index, the ticket format, and ADRs for decisions binding more than one
-tool. A document that describes two tools is where two tools start to fuse.
+`work/`. The root `docs/` holds only what is true of the repo — the tool index,
+the ticket format, and ADRs for decisions binding more than one tool. A document
+that describes two tools is where two tools start to fuse.
 
 **Work is one file per ticket** in `tools/<tool>/docs/work/`, carrying its brief
-and its log together. Ids are prefixed per tool (`dl-`, `pl-`), and repo-wide
-work — the toolchain, the conventions, CI — is `repo-` in `docs/work/`. The
-format, the fields and the preamble to hand an agent are in
+and its log together. Ids are prefixed per tool (`dl-`, `pl-`), and repo-wide work
+— the toolchain, the conventions, CI — is `repo-` in `docs/work/`. The format, the
+fields and the preamble to hand an agent are in
 [docs/01-TICKETS.md](./docs/01-TICKETS.md).
 
-Append to a ticket's Log when you finish work on it, including whatever the
-brief turned out to have wrong. That is the note the next agent needs, and there
-is nowhere else for it: the roadmap is deliberately too thin to hold it, and
-there is no status page at all.
+**A ticket carries a decision or a reproduction. If the work has neither left, do
+it now** — a typo, a stale sentence, a rename the change you are making already
+implies, work this branch has just made free. Filing costs an intake slot, a
+dispatch, a gate, a pull request and a merge, paid later by someone with none of
+the context; and nothing forces it, since `scripts/commit-message.mjs` accepts a
+subject with no id. **Size is not the test** — a one-line fix for a _defect_ still
+earns a ticket, because the reproduction is the deliverable. The threshold, the
+inverse cases and what to do with a ticket you fold in are in
+[docs/01-TICKETS.md](./docs/01-TICKETS.md).
 
-**There is no status page.** `repo-1` emptied `03-STATUS.md` of everything a
-person had to keep true, and `repo-2` deleted what was left, because a projection
-kept in version control needs a writer and every writer available here was
-unsafe, noisy or racy — the one that shipped was rejected by branch protection on
-every merge it ever attempted, while the guard meant to catch that compared two
-equally stale copies. **The view is `npm run status`**, computed on every run
-from the tickets, so it cannot disagree with them. A gap worth recording is a
-ticket worth filing;
-[docs/01-TICKETS.md](./docs/01-TICKETS.md) says where each other kind of fact
-goes. The reasoning is in
-[adr/003](./docs/adr/003-the-status-page-is-generated.md) and its amendment.
+Append to a ticket's Log when you finish work on it, including whatever the brief
+turned out to have wrong. That is the note the next agent needs, and there is
+nowhere else for it: the roadmap is deliberately too thin to hold it.
 
-**A ticket's frontmatter is the only place its state is recorded**, and
-`npm run status` is the view over it — `-- --ready` for what is ready and
-unblocked, `-- --json` for an agent, `-- --prs` to fold in what is in review,
-`-- --tool <name>` for one tool, `-- --show <id>` for one ticket and what blocks
-it, `-- --markdown` for a table to paste into a pull request. Move a ticket to
-`done` by editing the ticket, in the commit that earns it.
+**There is no status page. The view is `npm run status`**, computed on every run
+from the tickets so it cannot disagree with them — `-- --ready`, `-- --json`,
+`-- --prs`, `-- --tool <name>`, `-- --show <id>`, `-- --markdown`. A projection
+kept in version control needs a writer, and every writer available here was
+unsafe, noisy or racy; the reasoning is in
+[adr/003](./docs/adr/003-the-status-page-is-generated.md). A gap worth recording
+is a ticket worth filing.
+
+**A ticket's frontmatter is the only place its state is recorded.** Move a ticket
+to `done` by editing the ticket, in the commit that earns it.
 
 **A ticket file does not know about a branch.** It says `status: ready` until
 something merges, so "what is next" is `gh pr list` first and the ticket files
 second — otherwise a ticket that has been in review for four days reads as
-untouched, and gets built twice. Check the base branch too: a pull request
-opened against another feature branch disappears with it, and its own page still
-says merged.
+untouched, and gets built twice. Check the base branch too: a pull request opened
+against another feature branch disappears with it, and its own page still says
+merged.
 
-**Commits are conventional, and it is enforced.** `type(scope): subject`, with
-the scope naming a tool (`downloader`, `planner`) or `core` · `repo` · `ci` ·
-`deps`, and the ticket id in the subject: `fix(downloader): stop re-probing in
-place (dl-9)`. `feat` and `fix` require a scope — they are the two that reach a
-changelog. Versions and changelogs are generated from these commits per tool, so
-a message is not paperwork: it is the release note. `.githooks/commit-msg`
-rejects a bad one as you write it, and the rule itself lives in
-`scripts/commit-message.mjs`. The taxonomy, the escape hatches and how a release
-is cut are in [docs/03-RELEASING.md](./docs/03-RELEASING.md).
+**Commits are conventional, and it is enforced.** `type(scope): subject`, with the
+scope naming a tool (`downloader`, `planner`) or `core` · `repo` · `ci` · `deps`,
+and the ticket id in the subject: `fix(downloader): stop re-probing in place
+(dl-9)`. `feat` and `fix` require a scope — they are the two that reach a
+changelog. `.githooks/commit-msg` rejects a bad one as you write it, and the rule
+lives in `scripts/commit-message.mjs`.
 
-**The pull request title is the message that lands.** This repo squash-merges,
-so a branch's own commits are working notes and the title is the changelog line
-— check yours with `node scripts/commit-message.mjs --text "<title>"` before
-opening the pull request. A commit that touches two tools lands in both
-changelogs under one sentence written for one of them, which is the tell that it
-should have been two commits — meaning **two pull requests**, since a squash
-merge lands one title carrying every path in the branch, and two commits on one
-branch separate nothing.
+**The pull request title is the message that lands.** This repo squash-merges, so
+a branch's own commits are working notes and the title is the changelog line —
+check yours with `node scripts/commit-message.mjs --text "<title>"` before opening
+the pull request. A commit that touches two tools lands in both changelogs under
+one sentence written for one of them, which is the tell that it should have been
+two commits — meaning **two pull requests**, since a squash merge lands one title
+carrying every path in the branch.
 
-**Changelog attribution is by path, and the type decides whether there is one at
+**Changelog attribution is by path; the type decides whether there is one at
 all.** release-please routes a commit to a tool by the files it touched, never by
-the scope in its subject — so a `fix(repo):` whose only path under `tools/` is a
-single `.md` file releases that tool anyway, with your repo-scoped sentence as
-its changelog line. Measured: one such commit touching only
-`tools/planner/docs/work/pl-26-…md` cuts planner `0.4.1`. The way out is the
-type, not the scope: `docs` is `hidden` in `release-please-config.json`, and the
-same commit as `docs(planner): …` releases nothing, and so does `docs(repo): …`
-carrying the same path. **So an annotation onto another tool's ticket rides in a
-pull request whose title carries a `hidden` type** — its own pull request
-whenever the branch's own title carries a type that is **not** `hidden` in
-`changelog-sections`, today `feat`, `fix`, `perf` and `revert`. The type is the
-constraint; the scope is the usual convention and names whatever the pull request
-is about. Read the test off the config rather than off this sentence; a type
-added there without `hidden` is releasing the day it is added. The worked
-examples, all three measurements and the commands that produced them are in
+the scope in its subject — so a `fix(repo):` whose only path under `tools/` is one
+`.md` file releases that tool anyway. The way out is the type, not the scope:
+`docs` is `hidden` in `release-please-config.json`. **Read the test off that config
+rather than off this sentence** — a type added there without `hidden` is releasing
+the day it is added. Worked examples and measurements:
 [docs/03-RELEASING.md](./docs/03-RELEASING.md).
+
+## What is denied
+
+`.claude/settings.json` denies merging a pull request, cutting a release,
+`gh api`, printing the gh auth token, `npm publish`, pushing to `main`, and
+reading a real `.env` (`.env.example` stays readable). **A deny rule binds in
+every permission mode, `--dangerously-skip-permissions` included** — it is the
+only rule that still holds in the devcontainer, where prompts are off. Merging and
+releasing are denied because they are **yours to decide**: the gate workflow
+deliberately ends at "open the PR", and releases are cut by release-please from
+merged commits.
+
+**It is a guardrail, not a boundary** — a string-prefix match with no
+understanding of intent, and measured escapes exist (`/bin/echo` defeats a deny on
+`echo`). So **if you hit one, stop and say so; do not find another spelling.**
+Routing around it defeats a decision the repo made on purpose, and it will work.
+
+## Decisions
+
+**Surface a decision as a question with options; never resolve it in prose.**
+Whenever two readings of a task lead to materially different work — scope that
+widens past what was asked, a contract-adjacent change, an architectural choice
+two implementations would both satisfy, a defect that could be fixed here or
+filed — ask, with `AskUserQuestion`, giving the concrete options and their real
+costs, the recommended one first. Do not settle it with an assumption buried in a
+paragraph and do not leave it as an observation in a document: an open decision
+written as prose goes stale, and the next agent inherits it as a fact.
+
+**Batch the questions** to a checkpoint rather than asking one at a time, and
+**hold a question until you can bring a measurement rather than a guess** — where
+the answer turns on a fact a single command would settle, spend the command and
+ask once, with the number attached.
+
+If you genuinely cannot ask — you are a subagent, and your report goes to whoever
+dispatched you — then put the decision in the report **as options with a
+recommendation**, labelled as an open decision, so the agent that can ask still
+can. Never convert it into a choice you made quietly.
 
 ## Style
 
@@ -274,47 +258,6 @@ No `console` — use the logger. Comment _why_, not _what_.
 
 ## Adding a tool
 
-1. `tools/<name>/contract` — its types and its error catalog, built on
-   `@webtools/core` (copy `tools/downloader/contract/src/errors.ts`, which is the
-   worked example).
-2. Its packages, scoped `@<name>/*`, each with a `tsconfig.json` referencing the
-   ones it depends on.
-3. Register each package's `src` project in the root `tsconfig.json`, and add a
-   vitest project in `vitest.config.ts`. Its tests are already inside
-   `tsconfig.tests.json`'s glob, so they need only a `references` entry there.
-   A `web` package is the exception, and it announces itself: the glob picks its
-   tests up too, and they fail loudly against the node surface — no DOM lib, no
-   JSX. Give it its own `test/tsconfig.json` beside the downloader's, add its
-   path to that glob's `exclude`, and reference it from the root. The `exclude`
-   names `tools/downloader/web/test/**` and nothing wider on purpose — a pattern
-   that pre-excluded every tool's `web` would drop a new one into no project at
-   all, and pass green while checking nothing.
-
-   An `e2e` package is the quieter exception: its specs are `*.spec.ts` and sit
-   outside any `test/` directory, so the glob never sees them and nothing fails
-   to tell you they are unchecked. Copy `tools/planner/e2e/tsconfig.json`, which
-   also pulls in the tool's `playwright.config.ts` from a directory up, and add
-   the reference from the root. Skipping this is silent, which is exactly why it
-   is listed here.
-
-4. `tools/<name>/CLAUDE.md` — what the tool is, and only the rules specific to
-   it. Do not restate anything on this page.
-5. `tools/<name>/docs/02-ROADMAP.md` and an empty `work/`, plus a row in
-   [docs/00-TOOLS.md](./docs/00-TOOLS.md). The rest of the spine arrives when
-   there is something true to put in it — a young tool with two documents is an
-   honest young tool.
-6. `.github/workflows/<name>.yml` for anything slow, path-filtered to that tool.
-7. To make it releasable: `tools/<name>/Dockerfile`, a `version.txt`, and an
-   entry in both `release-please-config.json` and
-   `.release-please-manifest.json`. Nothing in `release.yml` changes — it builds
-   whatever was released. Add the image gate in step 6 _before_ the first
-   release, so that release is not the first time the image is built.
-
-   Copy a `Dockerfile` from an existing tool and its two hand-kept workspace
-   lists come with it. `packages/core/test/image-closure.test.ts` checks both
-   against what your `api` actually resolves as soon as the file exists, so it
-   will tell you what to delete and what you forgot — but **it finds your service
-   by name, at `@<name>/api`**, and a tool that calls it something else has to
-   teach the scan that; the test fails by name saying so. It also expects the two
-   stages to be `AS build` and `AS runtime`. The scan proves the list, never the
-   image: keep the workflow job.
+Seven steps, two of which fail silently if skipped. They are in the
+[`add-tool`](./.claude/skills/add-tool/SKILL.md) skill — run `/add-tool` rather
+than working from memory.
