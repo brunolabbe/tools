@@ -90,6 +90,75 @@ sentence written down without being run.
 - Anything still unmeasured after this — the five hidden types repo-7 assumed
   behave like `docs` — is named as unmeasured rather than quietly folded in.
 
+## Gate 1 — `repo-10-measure-the-unmeasured-types` @ `d2e21ad` — **CONCERNS**
+
+Relayed to the builder by the coordinator rather than handed over verbatim, so
+this record is the coordinator's account of the gate plus the builder's own
+reproduction of its one finding — not the gate's own words. The long form is on
+the pull request thread; this is the short one, kept short on purpose so the two
+copies cannot drift.
+
+Citations resolve against **`d2e21ad`**, the commit the gate reviewed. A record
+committed together with the fix it demanded cannot cite the SHA it lands in, and
+the fix rewrites the very line F1 names.
+`node scripts/citations.mjs <this file> --rev d2e21ad` → **4/4 resolve**, each
+`CLAUDE.md:195` landing on the sentence F1 quotes. Against the working tree all
+four still resolve, but that one lands on the _replacement_ — a change of content
+under a citation that still points somewhere, which the script says it cannot
+judge. This paragraph is the judgement.
+
+### Findings
+
+#### F1 — med. The claim this ticket corrected survives in a third file, and it is `CLAUDE.md`
+
+`CLAUDE.md:195` — _"`feat` and `fix` require a scope — they are the two that
+reach a changelog."_ The second clause is false by this ticket's own
+measurement: `release-please-config.json:28-29` gives `perf` and `revert` no
+`hidden` flag, so both reach a changelog. Severity is about the file, not the
+sentence — `CLAUDE.md`'s own header says it overrides default behaviour, and
+every session loads it.
+
+_Reproduced before accepting, not transcribed._ `sed -n '193,198p' CLAUDE.md`
+returns the sentence; `git diff origin/main -- CLAUDE.md` is empty, so the line
+is untouched by this branch and identical on `main`;
+`grep -n 'perf\|revert' release-please-config.json` returns `:28` and `:29` with
+no `hidden` key on either.
+
+_Disposition:_ **fixed in the commit carrying this record**, as a fold-in. The
+blocking reason for filing it separately was gone because this branch is what
+removed it. The replacement is written off the mechanism rather than off a list
+of type names — the same discipline that made this ticket's own page read the
+test off `hidden` — and is deliberately neutral on the open `SCOPE_REQUIRED`
+question below, since that decision is the user's.
+
+### Verified correct — no change needed
+
+- **The offline harness calls release-please rather than reimplementing it.** The
+  gate read the real source and confirmed `postProcessCommits` is the identity,
+  `changelogEmpty` is `entry.split('\n').length <= 1`, and `Simple` overrides
+  neither.
+- **The harness reproduces.** Re-run independently, byte-identical rows.
+- **The two controls match what `03-RELEASING.md` records for repo-7's real dry
+  runs**, which is the harness's whole warrant.
+- **`chore(planner)!` reproduces** — a `hidden` type carrying `!` is not skipped.
+- **The offline harness is labelled correctly** rather than presented as a dry run.
+- **No credential workaround anywhere on the branch or in the scratch artifacts.**
+  The gate grepped for one; every hit was prose describing what was _not_ done.
+
+### What this gate did NOT do
+
+- **It could not verify the scratch branch was cut from `ece6ec0`, nor that
+  `gh run list --branch repo-10-verify-scratch` returned nothing** — because the
+  branch was correctly deleted from `origin` before the gate ran. Those two
+  claims rest on the builder's report alone. The deletion is the right call and
+  the unverifiability is its price; anyone wanting them checked has to re-run the
+  push, and that is a worse trade than believing them.
+- It did not run an end-to-end `release-please --dry-run` either. Nothing in
+  this ticket has been through one; see **Still unmeasured** on
+  [03-RELEASING.md](../03-RELEASING.md).
+- It did not settle the `SCOPE_REQUIRED` question, which is not a gate's to
+  settle.
+
 ## Log
 
 ### 2026-08-30 — measured. `perf` bumps a version, and the brief's least-expected outcome is the true one
@@ -153,7 +222,7 @@ So a token is required, and `.claude/settings.json` denies `Bash(gh auth token*)
 Per CLAUDE.md that is a stop, not a spelling to route around: no
 `git credential fill`, no `~/.config/gh/hosts.yml`, no `--show-token`.
 `--local` was checked as a possible way out and is not one —
-`LocalGitHub.releaseIterator` (`build/src/local-github.js:510`) delegates
+`LocalGitHub.releaseIterator` (`build/src/local-github.js`) delegates
 straight to `this.gitHubApi.releaseIterator`.
 
 **The branch was deleted as the immediate next action, before any of this was
@@ -196,7 +265,7 @@ const config = require("/workspaces/tools/release-please-config.json");
 
 const notesBuilder = new DefaultChangelogNotes({});
 const strategy = new DefaultVersioningStrategy({ bumpMinorPreMajor: true });
-const changelogEmpty = (entry) => entry.split("\n").length <= 1; // base.js:316-318
+const changelogEmpty = (entry) => entry.split("\n").length <= 1; // BaseStrategy
 
 (async () => {
   for (const subject of process.argv.slice(2)) {
@@ -207,9 +276,9 @@ const changelogEmpty = (entry) => entry.split("\n").length <= 1; // base.js:316-
         files: ["tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md"],
       },
     ]);
-    const next = strategy.bump(Version.parse("0.4.0"), commits); // base.js:338
+    const next = strategy.bump(Version.parse("0.4.0"), commits); // buildNewVersion
     const notes = await notesBuilder.buildNotes(commits, {
-      // base.js:113-127
+      // buildReleaseNotes
       owner: "brunolabbe",
       repository: "tools",
       version: next.toString(),
@@ -218,14 +287,14 @@ const changelogEmpty = (entry) => entry.split("\n").length <= 1; // base.js:316-
       changelogSections: config["changelog-sections"],
       commits,
     });
-    // base.js:172 — the skip
+    // buildReleasePullRequest — the skip
     console.log(subject, changelogEmpty(notes), next.toString(), notes);
   }
 })();
 ```
 
 Nothing between the parse and those two calls was skipped:
-`BaseStrategy.postProcessCommits` is the identity (`base.js:110-112`) and
+`BaseStrategy.postProcessCommits` is the identity and
 `Simple` overrides neither `buildReleaseNotes` nor `changelogEmpty`.
 
 **It reproduces both of repo-7's real runs**, which is the reason to trust it on
@@ -336,7 +405,7 @@ and `commit.type === 'feat' || 'feature'` — and ends
 gets its patch by the same fall-through `perf` and `revert` get theirs, which is
 why "release-please's rule is `feat`/`fix`/breaking" was never true. The release
 is stopped, when it is stopped, one level up:
-`changelogEmpty(releaseNotesBody)` at `base.js:172`, where
+`changelogEmpty(releaseNotesBody)` in `BaseStrategy.buildReleasePullRequest`, where
 `changelogEmpty` is `entry.split('\n').length <= 1` — empty exactly when every
 commit rendered to nothing, i.e. every type in scope is `hidden`.
 
@@ -391,3 +460,63 @@ commit rendered to nothing, i.e. every type in scope is `hidden`.
 _Filed from [repo-7](./repo-7-changelogs-are-attributed-by-path.md) on
 2026-08-24, whose two gates disagreed about whether this gap mattered. Gate 2's
 side of that disagreement was the correct one._
+
+### 2026-08-30 — gate 1, and why the sweep missed the third copy
+
+Gate 1 returned **CONCERNS** on one finding: the same false claim this ticket
+corrected, alive in `CLAUDE.md`. Reproduced, then folded in. The record is above.
+
+**The sentence is the cheap part. This is the part worth keeping.**
+
+I found and corrected this claim in two files and missed the third. Two searches
+ran, and both were blind to `CLAUDE.md:195` for reasons that generalise:
+
+1. `grep -rn "perf" docs CLAUDE.md scripts .githooks` — this **did** search
+   `CLAUDE.md` and could not have matched, because the defective sentence is an
+   enumeration that _omits_ `perf`. **A stale list is invisible to a search for
+   the member it leaves out.** Grepping the token is exactly the wrong shape of
+   query for this defect; the durable thing to grep is the **predicate** —
+   "reach a changelog", "move a version", "require a scope" — which is what does
+   not change when the list goes stale.
+2. `grep -rn "move a version\|releases nothing\|no user facing"` — a query built
+   out of the three sentences **the brief quoted**. `CLAUDE.md:195` is a
+   differently-worded sibling: it is about _reaching a changelog_, not about
+   _moving a version_. I inherited the brief's enumeration of instances and
+   searched for those, which finds what is already known and nothing else.
+
+**And the sharp version, which the two above only lead up to:** I had the missing
+phrase in my hands. `03-RELEASING.md` carried "`feat` and `fix` require one:
+**they are the two that reach a changelog**" — near word-for-word `CLAUDE.md`'s
+line — and I corrected it in place and never fed it back into the search. My
+query set was frozen before I knew what the phrasings were. That is the whole
+mechanism of the miss.
+
+So: **a claim repeated across files is usually repeated in the wording of
+whichever file said it first, which means every correction hands you a new search
+string — and the sweep is not finished until a correction produces one that finds
+nothing new.** Grep the corrected sentence, not the wrong one. The gate found
+this exactly that way, by chasing a differently-worded sibling.
+
+Two smaller things this pass produced:
+
+- **Seven citations in the entry above were dangling and I had not checked.**
+  They named line numbers inside the pinned npx copy of release-please —
+  `strategies/base.js` and its siblings — which are not tracked files, so
+  `node scripts/citations.mjs` reported `0/7 resolve`. Correct of it. They are
+  now symbol names in a version-pinned package, which is the more durable
+  citation and is checkable by a human where a line number into a build artifact
+  is not. Worth knowing that a Log quoting third-party source will do this.
+- **Writing that bullet created an eighth.** The first draft quoted one of the
+  seven in its `file.js:NNN` form as an illustration, and `citations.mjs`
+  extracted the illustration as a citation and failed it — a record about
+  dangling citations, dangling. There is no way to quote the broken form
+  without re-creating it, so the form is not quoted. The coordinator had
+  flagged this exact hazard from a sibling builder and it still landed; it is a
+  strong enough attractor to be worth naming rather than treating as
+  carelessness.
+- **The `CLAUDE.md` wording is neutral on `SCOPE_REQUIRED` by construction.** It
+  says the two sets are settled in different files and neither is derivable from
+  the other — true whether or not `SCOPE_REQUIRED` is later widened. Writing
+  "the requirement is narrower than the set that reaches a changelog" would have
+  been true today and false the day someone widens it, which is the same failure
+  mode as the sentence it replaces.
