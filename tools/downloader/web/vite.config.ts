@@ -4,10 +4,10 @@ import { defineConfig } from "vite";
 
 // Pinned to this file's directory rather than process.cwd(), so the config
 // behaves identically whether it is run from the workspace or the repo root
-// (`vite build --config apps/web/vite.config.ts`).
+// (`vite build --config tools/downloader/web/vite.config.ts`).
 const root = fileURLToPath(new URL(".", import.meta.url));
 
-/** Where `apps/api` listens in development. Matches `API_DEFAULTS`. */
+/** Where `tools/downloader/api` listens in development. Matches `API_DEFAULTS`. */
 const API_TARGET = process.env["VITE_API_PROXY_TARGET"] ?? "http://127.0.0.1:8080";
 
 /**
@@ -20,6 +20,16 @@ const API_TARGET = process.env["VITE_API_PROXY_TARGET"] ?? "http://127.0.0.1:808
  * IPv4 — reaches nothing. The page is simply blank, with no error anywhere to
  * explain it. The container sets `HOST=0.0.0.0` for precisely this reason; the
  * API honoured it and this did not.
+ *
+ * This block is duplicated, word for word, in the other tool's config. That is
+ * deliberate and repo-5 is where it was decided: 14 of its 15 lines are this
+ * docblock, and a shared `@webtools/*` import would put the one line of code
+ * behind a built dependency. With that dependency's `dist` missing, Vite
+ * refuses to start at all, behind an esbuild stack blaming a `package.json`;
+ * today the same broken state starts the server and prints an error naming the
+ * exact source line. This is the file whose failures are already silent, and it
+ * does not get another one. `packages/core/test/host-resolution.test.ts` is what
+ * keeps the copies honest instead — including for a tool that does not exist yet.
  *
  * `false` is Vite's own "localhost only" and stays the default off a container,
  * so nothing is published on a laptop's network without asking.
