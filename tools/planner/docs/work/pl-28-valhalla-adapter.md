@@ -267,6 +267,11 @@ the second answer was identical.
   it was found and left alone: widening it is a repo-wide toolchain change that
   touches both tools and wants a `repo-` ticket, not a line in a planner branch.
 
+  [**Later — this advice was corrected, and not by this gate.** See the dated
+  entry in this ticket's Log,
+  [2026-08-30](#2026-08-30--the-fixture-formatting-passages-above-are-stale-in-three-places),
+  added by `repo-11`. The finding above is unchanged.]
+
 **`status` stays `ready`.** The gate agrees with the builder that this is a
 partial: step 3's geocoder half is not done, two acceptance rows above are
 `unproven`, and a review neither moves `status` nor decides whether the work

@@ -275,3 +275,43 @@ search for the token "F6" to connect them. Both this branch's annotation and thi
 Log say so out loud. Fixing it means editing a historical gate record in place,
 which is a decision for the user and not for a builder, and it is queued as one
 rather than resolved quietly here.
+
+### 2026-08-30 — F6 got its pointer, in a follow-up
+
+**A decision taken, not a new deliverable.** This ticket stays `done` and #108
+stays merged; the follow-up branch is `repo-11-f6-pointer`.
+
+The gate round left one thing open and explicitly refused to settle it: F6 at
+`pl-28-valhalla-adapter.md:264` is corrected ~450 lines below itself, with no
+pointer of any kind between them, findable only by someone who happens to
+full-text search the literal token "F6". The user has now ruled — the append-only
+correction was not discoverable enough on its own, and F6 gets a minimal in-place
+forward pointer.
+
+That is a real amendment to how this repo treats a historical gate record, so the
+constraints are the substance:
+
+- **F6's claim and its verdict are byte-identical.** Verified rather than
+  asserted: `sed -n '264,268p' … | md5sum` is `5eeb3966fb5518526684cdbb75be1ce7`
+  before and after the edit, and the diff over the whole file is **5 insertions,
+  0 deletions**. Gate 1's "no change, deliberately" reads exactly as Gate 1 wrote
+  it.
+- **The pointer points; it does not restate.** It names the date of the Log entry
+  that carries the correction and says the finding above is unchanged. Nothing
+  about anchored patterns or exempt fixtures is repeated into it. Two copies of
+  the substance is the drift this record format exists to prevent, and the
+  substance already has three homes — the annotation, this Log, and #108's
+  thread.
+- **Nothing else moved.** No other finding, no other gate record, no change to
+  any `## Review` structure.
+
+**One consequence worth writing down, because it is the trap this ticket is
+about.** Inserting five lines above the pl-28 annotation moved that annotation
+down by five, from line 716 to line 721. Gate 1's acceptance table above still
+cites the old number. It is **left as written and not remapped**: the record says
+which commit its citations resolve against, `citations.mjs --rev` is the
+sanctioned way to read it, and the script's own header argues that pinning a
+record to the tree it was checked against is cheaper and safer than chasing lines
+that move. A reader on the tip wanting the annotation should look for the dated
+heading rather than the number. Recording it here so the discrepancy is a known
+one rather than a discovered one.
