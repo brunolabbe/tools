@@ -712,3 +712,49 @@ done` follows.** Real `nominatim.openstreetmap.org/search` replies —
 > — not the same-country near-miss pl-30's own brief predicted. Filed as
 > [pl-34](./pl-34-locality-free-query-confident-wrong-place.md), reproduced as
 > a test, not fixed on this branch. `status: done` for both pl-28 and pl-30.
+
+### 2026-08-30 — the fixture-formatting passages above are stale, in three places
+
+[repo-4](../../../../docs/work/repo-4-fixture-ignore-pattern.md) landed as
+`13d9735` on 2026-08-29. It is the `repo-` ticket F6 deferred to, and it anchored
+`.oxfmtrc.json`'s entry to `**/test/fixtures/`. Three passages in this file
+recorded the old behaviour accurately and now read as current advice. All three
+are left as written; this is the correction:
+
+- **`pl-28-valhalla-adapter.md:264`** — F6, "no change, deliberately … every
+  checked-in fixture in the repo is being formatted despite an entry that says
+  otherwise". The change was made, on its own branch, for exactly the reason F6
+  gave for not making it here. F6 sits under `## Review` rather than `## Log`,
+  so nothing appended down here is visible from it — read this note as attached
+  to it anyway.
+- **`:472`** — "`test/fixtures/` in `.oxfmtrc.json`'s `ignorePatterns` does not
+  actually exempt it". It does now.
+- **`:608`** — the gate line "`npm run format` — run; the deployment doc, the
+  adapter and the fixture were all reformatted by it". True of that run and not
+  of the next one: the doc and the adapter still get reformatted, the fixture no
+  longer does.
+
+Measured on `1d420b7`, not inferred from the config:
+
+```
+$ npx oxfmt --check tools/planner/api/test/fixtures/valhalla-sources-to-targets.json
+Checking formatting...
+
+Expected at least one target file. All matched files may have been excluded by ignore rules.
+                                                                             # exit 2
+```
+
+and a fixture re-indented on purpose survives `npm run format` byte-identical,
+after which `npm run format:check` exits 0 and reports every matched file
+correctly formatted.
+
+The consequence for anyone extending this adapter: **do not run `npm run format`
+after editing `api/test/fixtures/valhalla-sources-to-targets.json` expecting a
+diff.** There will not be one, and `format:check` will not object to whatever
+shape you leave. The capture's bytes are now yours alone to keep faithful, which
+is what this ticket wanted of them in the first place — the fixture is a record
+of what Valhalla said, and the formatter was the last thing still permitted to
+edit it.
+
+Recorded by
+[repo-11](../../../../docs/work/repo-11-stale-fixture-formatting-notes.md).

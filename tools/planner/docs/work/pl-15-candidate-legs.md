@@ -161,3 +161,33 @@ Two tickets and one rules page did not know about the union and now do:
 [pl-9](./pl-9-composer-and-critic.md)'s log carries an amendment rather than an
 edit: its argument for why travel time is unchecked rests on the premise this
 ticket removed, and the repo's habit is to keep the argument and override it.
+
+**2026-08-30 — amendment: the fixture-formatting bullet above has inverted.**
+[repo-4](../../../../docs/work/repo-4-fixture-ignore-pattern.md) landed as
+`13d9735` on 2026-08-29 and anchored the entry to `**/test/fixtures/` — the
+`**/` this Log said it would need. So the third bullet
+(`pl-15-candidate-legs.md:123`) is left as written, because it was right when
+written, and every instruction in it now points the wrong way:
+
+- **Fixtures are exempt.** `npx oxfmt --check
+tools/planner/contract/test/fixtures/road-trip.json` prints "Expected at least
+  one target file. All matched files may have been excluded by ignore rules."
+  and exits 2 — how a genuinely ignored file has always read here.
+- **A fixture edit must _not_ be followed by `npm run format`.** Measured, not
+  reasoned: `road-trip.json` re-indented to eight spaces (4776 → 9910 bytes),
+  `npm run format` leaves it at 9910, and `npm run format:check` still exits 0
+  with "All matched files use the correct format." The formatter produces no
+  diff, and an agent expecting one goes looking for what it broke.
+- **"Nothing depends on the ignore working" is the clause that aged hardest.**
+  No test pins the pattern even now, but `.claude/rules/testing.md` is written
+  on top of it, and carries the reason JSON indentation hid: oxfmt reflows HTML
+  text nodes and rewrites inline `<script>`, so on an `.html` fixture the
+  formatter edits the thing under test. That is a dependency; it was simply not
+  visible from a directory of JSON.
+
+Two claims above survive and should not be re-derived. The compact style in the
+candidate sets **is** oxfmt's own output rather than authored — repo-4 changed
+the pattern and reverted nothing, so those files keep the shape the formatter
+gave them, now frozen with nothing maintaining it. And the twenty minutes are
+still there to lose; only the direction reversed. The trap is no longer assuming
+fixtures are hand-formatted, it is assuming they are formatted at all.
