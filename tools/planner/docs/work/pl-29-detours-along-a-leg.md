@@ -4,7 +4,7 @@ tool: planner
 title: Find what is worth stopping for along a leg
 kind: work-package
 milestone: P3
-status: ready
+status: done
 depends_on: [pl-24, pl-27, pl-28]
 ---
 
@@ -1089,3 +1089,9 @@ $ npx vitest run tools/planner/itinerary/test/purity.test.ts
 Same test figures as the pl-35 fold-in round — this round's diff is entirely
 inside `tools/planner/docs/work/`, so nothing in `src` or `test` changed and
 none of these numbers were expected to move.
+
+- **2026-08-30 — status corrected to `done`.** This ticket merged in #102 on
+  2026-08-29 and its frontmatter still read `status: ready`, so
+  `npm run status -- --ready` had been offering merged work as available for a
+  day. Nothing else about the ticket changed. The gap that let it happen is
+  `repo-12`; this line is the reproduction that ticket cites.

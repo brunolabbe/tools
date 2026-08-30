@@ -11,13 +11,15 @@
   // list every file in its program, and they live one level up from the tests.
   // `status.mjs` is here for the same reason and on the same terms: its
   // `{ id, status, milestone, … }` shape is what the tests assert, and
-  // `allowJs` is what lets tsc infer it from the source.
+  // `allowJs` is what lets tsc infer it from the source. `citations.mjs`
+  // joins them on identical terms — a new script here costs one entry in
+  // this list, and forgetting it fails loudly as TS6307 rather than quietly.
   "extends": "../../tsconfig.tests.json",
   "compilerOptions": {
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["**/*.ts", "../commit-message.mjs", "../status.mjs"],
+  "include": ["**/*.ts", "../commit-message.mjs", "../status.mjs", "../citations.mjs"],
   // Restated, not inherited — the root's exclude is about the root's program.
   "exclude": []
 }

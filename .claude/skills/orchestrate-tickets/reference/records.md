@@ -65,6 +65,20 @@ discarded. So:
      rewrapping gate tables broke a self-referential row twice on one branch and
      was confirmed on another. Format first, resolve second.
 
+  **There is a script for this now: `node scripts/citations.mjs <ticket-file>`**,
+  and `--rev <sha>` resolves against the commit the gate reviewed rather than the
+  working tree, which is the cheaper answer to mode 1. It enumerates rather than
+  spot-checks, reads the `line` column of a findings table, resolves the bare
+  filenames real records actually contain, **fails an ambiguous one instead of
+  guessing** (this repo has two `logging.test.ts`), and exits non-zero so it can
+  gate a commit. It prints each cited line so you can judge the content.
+
+  It cannot judge two of the four modes, and says so: a citation whose *content*
+  changed still resolves, and a citation that is a finding's own evidence must
+  stay wrong. Those are yours. Run it as the genuinely last action before
+  `git add` regardless — it is a second and cheaper thing to be last, not a
+  replacement for being careful about the order.
+
   Three mechanics make the check actually catch things, all learned by nearly
   missing them:
 
