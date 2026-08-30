@@ -122,11 +122,16 @@ function parseList(value, file, line) {
  * graph, and by then it is a link in a table pointing at nothing.
  *
  * **A dangling `depends_on` is not raised from here** — see
- * `danglingDependencies`. Everything else still is: a ticket this function
+ * `danglingDependencies` — and neither is a gate record on a `ready` ticket,
+ * see `reviewedButReady`. Everything else still is: a ticket this function
  * cannot parse has no row to print, so there is nothing to fall back to.
  *
+ * `reviewed` is the one field read from the body rather than the frontmatter.
+ * It is on the record because the body is already in hand here and reading the
+ * file twice to answer one boolean is the kind of thing that goes stale.
+ *
  * @param {string} [repoRoot]
- * @returns {Array<{id: string, tool: string, title: string, kind: string, status: string, milestone: string | null, depends_on: string[], note: string | null, file: string, number: number}>}
+ * @returns {Array<{id: string, tool: string, title: string, kind: string, status: string, milestone: string | null, depends_on: string[], note: string | null, file: string, number: number, reviewed: boolean}>}
  */
 export function readTickets(repoRoot = DEFAULT_ROOT) {
   const tickets = [];
@@ -145,8 +150,9 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
     for (const entry of entries.toSorted()) {
       if (!entry.endsWith(".md")) continue;
       const file = `${docs}/work/${entry}`;
-      const fields = parseFrontmatter(fs.readFileSync(path.join(dir, entry), "utf8"), file);
-      tickets.push({ ...validate(fields, tool, entry, file), file });
+      const text = fs.readFileSync(path.join(dir, entry), "utf8");
+      const fields = parseFrontmatter(text, file);
+      tickets.push({ ...validate(fields, tool, entry, file), file, reviewed: hasGateRecord(text) });
     }
   }
 
@@ -157,6 +163,100 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
     throw new Error(`${duplicate?.file}: "${duplicate?.id}" is used by more than one ticket`);
   }
   return tickets.toSorted(byIdOrder);
+}
+
+/**
+ * Whether a ticket's body carries a `## Review` gate record.
+ *
+ * Fenced blocks are skipped. A ticket about the review gate quotes the heading
+ * it is about — `docs/01-TICKETS.md`'s own ticket template is a fenced block
+ * containing one — and a check that fails CI for every reader must not fire on
+ * somebody's example.
+ * Only `##` counts: that is the level `docs/01-TICKETS.md` fixes the section
+ * at, and an inline mention like the one in repo-12's own Build section is not
+ * at the start of a line at all.
+ *
+ * **A fence that is never closed swallows the rest of the file**, so a real
+ * gate record below one is not seen and the ticket is not flagged. Left that
+ * way rather than hardened, and pinned by a test so the next reader finds it
+ * here: repairing it means guessing which of an odd number of fences was the
+ * typo, and guessing wrong turns a missed row on the board into a red pipeline
+ * for every reader. It falls on the tolerable side of the asymmetry below.
+ *
+ * @param {string} text The whole file, frontmatter included.
+ * @returns {boolean}
+ */
+function hasGateRecord(text) {
+  let fenced = false;
+  for (const line of text.split("\n")) {
+    if (line.startsWith("```") || line.startsWith("~~~")) fenced = !fenced;
+    else if (!fenced && /^##\s+Review\b/.test(line)) return true;
+  }
+  return false;
+}
+
+/**
+ * Tickets the board offers as `ready` while carrying a gate record.
+ *
+ * `pl-29` was on the ready board for a day after it merged (#102), because
+ * `status: done` is a hand edit and nothing checked it — the second class of
+ * board defect to need a mechanical check rather than a convention, `repo-6`'s
+ * being the first. So it lands beside that one, reported the same way and
+ * carried into CI by the same exit code.
+ *
+ * **Which signal, measured rather than argued** — on `main` at `1d420b7`, over
+ * the 11 open tickets there:
+ *
+ * - _A merged pull request naming the ticket_ is out before it starts: a pull
+ *   request routinely **files** a ticket rather than finishing one. `repo-5` is
+ *   `ready` with #79 merged and is right to be, and `repo-12` is a second live
+ *   instance, created by #106. Commit subjects and PR titles both lie.
+ * - _The ticket file's git history_, `--diff-filter=A` telling creation from
+ *   modification, flags `dl-16` and `pl-2`: both genuinely open, both edited by
+ *   another ticket's pull request, which is a convention rather than an
+ *   accident — a review finding about a shape lands on the sibling tickets that
+ *   share it, in the same pull request as the fix. Two false positives in 11.
+ *   It is also blind exactly where it has to run: `ci.yml`'s `check` job checks
+ *   out at `actions/checkout`'s default depth of 1, so there is no history to
+ *   read and the check would pass by seeing nothing.
+ * - _The `## Review` section_ flags none of the 11, and catches `pl-29` at its
+ *   merge commit `98b5e61`, where the file is `status: ready` with a gate
+ *   record already in it. It needs no git, no network and no `gh`.
+ *
+ * **`ready` only, and `in-flight` deliberately not** — which is narrower than
+ * repo-12's brief asked for, because the wider rule leaves a real state with
+ * nowhere to go. `docs/01-TICKETS.md` says a review "never moves `status`" and
+ * that a FAIL "is a report, and whether the work stops is the author's call",
+ * so a gate record on unfinished work is an expected state and `in-flight` is
+ * its honest name. `pl-28` is the measured case: it landed as a partial in #74
+ * with two gates that each wrote "**`status` stays `ready`**", and sat on the
+ * ready board for seven days until #104 closed it. Flagging `in-flight` too
+ * would have told its builder to move a status that had no correct value left
+ * — `done` was a lie while two acceptance rows read `unproven`. Flagging
+ * `ready` alone says only what nothing disputes: a ticket with a gate record
+ * has been picked up, and `ready` means nobody has. It is also where the harm
+ * is, since `--ready` is the board and never offers an `in-flight` ticket.
+ *
+ * **It is a floor, not a proof.** A ticket can finish without a gate record —
+ * `pl-16` is `done` and carries none, and `pl-5`'s Log records that finding
+ * being raised against it and dropped — so this never fires on ungated work,
+ * and the inverse check (`done` implies a gate record) would be false today.
+ * The asymmetry is deliberate: a false negative costs a stale row on the board,
+ * a false positive costs every reader a red pipeline over a tree that is fine.
+ *
+ * @param {ReturnType<typeof readTickets>} tickets
+ * @returns {Array<{file: string, kind: string, id: string, status: string, message: string}>}
+ */
+export function reviewedButReady(tickets) {
+  return tickets
+    .filter((ticket) => ticket.reviewed && ticket.status === "ready")
+    .map((ticket) => ({
+      file: ticket.file,
+      kind: "reviewed-but-ready",
+      id: ticket.id,
+      status: ticket.status,
+      message: `${ticket.file}: status is "ready" but the ticket carries a ## Review gate record, which nothing unstarted has`,
+    }));
 }
 
 /**
@@ -460,7 +560,12 @@ function parseArgs(argv) {
 }
 
 /**
- * Which views a dangling `depends_on` fails, and which merely warn.
+ * Which views a problem fails, and which it merely warns beside.
+ *
+ * There are two kinds of problem now — a dangling `depends_on` (repo-6) and a
+ * gate record on a ticket still marked `ready` (repo-12) — and they are treated
+ * identically here on purpose: both are facts about the board that a reader
+ * should see and a pipeline should refuse.
  *
  * The payload and the exit code are separable and are separated: every view
  * prints what it could read, and only `--json` also ends non-zero.
@@ -481,11 +586,23 @@ function parseArgs(argv) {
  */
 const EXIT_ON_PROBLEMS = ["json"];
 
+/**
+ * Either kind of problem, which is what `main` builds and every view receives.
+ *
+ * Named because `renderView` used to be documented as taking
+ * `ReturnType<typeof danglingDependencies>` and quietly stopped being handed
+ * one when repo-12 concatenated the second check into the same list — a
+ * signature that reads as narrower than the value it gets. `checkJs` is off for
+ * this file, so nothing would have caught it.
+ *
+ * @typedef {ReturnType<typeof danglingDependencies>[number] | ReturnType<typeof reviewedButReady>[number]} Problem
+ */
+
 function main() {
   const { flags, values } = parseArgs(process.argv.slice(2));
   const repoRoot = values.root ?? DEFAULT_ROOT;
   const all = readTickets(repoRoot);
-  const problems = danglingDependencies(all);
+  const problems = [...danglingDependencies(all), ...reviewedButReady(all)];
 
   renderView(all, problems, flags, values, repoRoot);
 
@@ -499,7 +616,7 @@ function main() {
 
 /**
  * @param {ReturnType<typeof readTickets>} all
- * @param {ReturnType<typeof danglingDependencies>} problems
+ * @param {Problem[]} problems
  * @param {Set<string>} flags
  * @param {Record<string, string>} values
  * @param {string} repoRoot
@@ -647,7 +764,39 @@ function printOpenPullRequests(repoRoot) {
   }
 }
 
+/**
+ * A reader that stops reading is not an error.
+ *
+ * `npm run status -- --ready | head -5` closes the pipe while the view is still
+ * writing, and node's default for that is an unhandled `error` event: eleven
+ * lines of stack trace under the answer the reader already had. Reproduced on
+ * `origin/main` as well as here, so it predates repo-12 and is fixed here only
+ * because that ticket was in this file.
+ *
+ * Ignored rather than fatal, and only for `EPIPE`. The exit code is left
+ * exactly as it was — `--json`'s is the whole of CI's gate, and a closed pipe
+ * says nothing about the board. Anything else still raises, which surfaces as
+ * an uncaught exception rather than being swallowed by a handler that was
+ * installed to make one specific noise stop.
+ *
+ * Exported and taking its streams as an argument because the real case is a
+ * race — whether the reader closes before or after the writer finishes depends
+ * on a 64 KB pipe buffer — and a test that has to win a race is a test that
+ * fails on somebody's laptop. The handler is what broke; the handler is what is
+ * asserted.
+ *
+ * @param {Array<{on: (event: string, listener: (error: Error) => void) => unknown}>} streams
+ */
+export function ignoreClosedPipe(streams) {
+  for (const stream of streams) {
+    stream.on("error", (error) => {
+      if (/** @type {NodeJS.ErrnoException} */ (error).code !== "EPIPE") throw error;
+    });
+  }
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  ignoreClosedPipe([process.stdout, process.stderr]);
   try {
     main();
   } catch (error) {

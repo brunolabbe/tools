@@ -19,6 +19,13 @@ record — and neither is one written into a worktree that is about to be delete
 which is the sharper version of the same rule and the reason the caller commits
 it rather than the reviewer.
 
+**Unless the pull request only *files* a ticket**, in which case the record goes
+under a heading of its own and `## Review` stays empty until something is built —
+`docs/01-TICKETS.md`, "The review gate". A brief has no work in it to check, and
+`repo-12`'s board check reads `status: ready` plus a `## Review` gate record as
+work that merged without its status being flipped. `dl-29` is the worked example:
+gated as a filing, recorded under `## The gate on this filing`.
+
 ## Arguments
 
 `/review-ticket <id> [level]` — e.g. `pl-16`, or `dl-9 high`.

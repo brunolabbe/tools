@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -6,11 +7,13 @@ import { expect, test } from "vitest";
 import {
   danglingDependencies,
   describeTicket,
+  ignoreClosedPipe,
   milestones,
   parseFrontmatter,
   readTickets,
   readyTickets,
   renderMarkdown,
+  reviewedButReady,
 } from "../status.mjs";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
@@ -123,6 +126,9 @@ function repoWithADanglingDependency(): string {
 /** The message the reader has always produced, and the only one this asserts. */
 const DANGLING = `${atRepo("repo-9")}: depends_on "repo-404", which is not a ticket`;
 
+/** repo-12's, asserted whole: the file, the status it disputes, and why. */
+const GATED = `${at("pl-29")}: status is "ready" but the ticket carries a ## Review gate record, which nothing unstarted has`;
+
 // ---------------------------------------------------------------------------
 // The real tickets
 // ---------------------------------------------------------------------------
@@ -161,6 +167,17 @@ test("every ticket in the repo parses, and its dependencies resolve", () => {
     ...fs.readdirSync(path.join(REPO, "tools")).toSorted(),
     "repo",
   ]);
+});
+
+// The real board, and the only case in this file that reads it for something
+// other than the parse. It is not the repo-8 shape — a test that goes red when
+// the project *succeeds* — because the state it forbids is the defect itself:
+// a ticket carrying a gate record while the board still offers it as ready.
+// `ci.yml`'s `--json` step is the other half and the one that runs on an
+// all-markdown pull request; this half is what `npm test` gives the builder
+// who is about to open one.
+test("no ticket on the board is ready with a gate record already on it", () => {
+  expect(reviewedButReady(readTickets(REPO))).toEqual([]);
 });
 
 test("repo-wide tickets live in docs/work", () => {
@@ -786,4 +803,179 @@ test.each([[[] as string[]], [["--ready"]], [["--markdown"]], [["--json"]]])(
 test("--json on a healthy repo carries an empty problems list, not a missing one", () => {
   const root = repoWith({ [at("pl-1")]: pl("pl-1") });
   expect(JSON.parse(run(["--json"], root).stdout).problems).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// A gated ticket still on the ready board — repo-12
+// ---------------------------------------------------------------------------
+
+// The `pl-29` shape, which is the whole reproduction: the work merged in #102
+// carrying a gate record, `status: ready` was never flipped, and the board
+// offered a finished ticket for a day. Written as a body rather than a
+// frontmatter field because the signal *is* the body — the file at that merge
+// commit (`98b5e61`) is `status: ready` with a `## Review` section in it.
+const gated = (body: string) => `${body}\n## Review\n\n### Gate 1 — 2026-08-29\n\n**Gate: PASS**\n`;
+
+test("a gate record on a ready ticket is reported, with the file and the id", () => {
+  const root = repoWith({ [at("pl-29")]: gated(pl("pl-29")) });
+  expect(reviewedButReady(readTickets(root))).toEqual([
+    {
+      file: at("pl-29"),
+      kind: "reviewed-but-ready",
+      id: "pl-29",
+      status: "ready",
+      message: GATED,
+    },
+  ]);
+});
+
+// **The false positive the naive check produces, and the reason this ticket
+// carried a decision at all.** `repo-5` is `status: ready` with its pull
+// request (#79) merged, and it is correct: #79 *filed* it. `repo-12` is the
+// second live instance, created by #106 the day this was built. Neither
+// carries a gate record, and nothing that reads a merged pull request's title
+// can tell either of them from `pl-29`.
+test.each([["repo-5"], ["repo-12"]])(
+  "a ready ticket whose merged pull request only filed it is not reported (%s)",
+  (id) => {
+    const root = repoWith({ [atRepo(id)]: repoTicket(id) });
+    expect(reviewedButReady(readTickets(root))).toEqual([]);
+  },
+);
+
+// `in-flight` is out of scope on purpose, and it is the one place this is
+// narrower than repo-12's brief asked for. `docs/01-TICKETS.md`: a review
+// "never moves `status`", and a FAIL "is a report" — so a gate record on
+// unfinished work is expected, and `in-flight` is what it should say. `pl-28`
+// is the measured case: it landed as a partial in #74 with two gates that each
+// wrote "`status` stays `ready`", and `done` would have been a lie while two of
+// its acceptance rows read `unproven`. Flagging `in-flight` as well would leave
+// that ticket no correct status at all.
+test("a gate record on an in-flight ticket is a report on work in progress, not a defect", () => {
+  const root = repoWith({ [at("pl-28")]: gated(pl("pl-28", { status: "in-flight" })) });
+  expect(reviewedButReady(readTickets(root))).toEqual([]);
+});
+
+// The far side: the check must not become "a done ticket needs a gate record".
+// `pl-16` is `done` and carries none, and `pl-5`'s Log records that very
+// finding being raised and dropped — a ticket may be closed by a dated Log
+// entry alone.
+test.each([["done"], ["dropped"]])("a %s ticket is not reported, gate record or not", (status) => {
+  const root = repoWith({
+    [at("pl-1")]: gated(pl("pl-1", { status })),
+    [at("pl-2")]: pl("pl-2", { status }),
+  });
+  expect(reviewedButReady(readTickets(root))).toEqual([]);
+});
+
+// A ticket about the review gate quotes the heading it is about —
+// `docs/01-TICKETS.md` does exactly that — and a check that fails CI for every
+// reader must not fire on somebody's example.
+test("a ## Review inside a fenced block is an example, not a gate record", () => {
+  const body = `${pl("pl-1")}\n\`\`\`md\n## Review\n\n**Gate: PASS**\n\`\`\`\n`;
+  const root = repoWith({ [at("pl-1")]: body });
+  expect(readTickets(root).map((t) => t.reviewed)).toEqual([false]);
+  expect(reviewedButReady(readTickets(root))).toEqual([]);
+});
+
+// The other fence character. Gate 1 found this branch hand-verified and
+// uncommitted, which is the state a branch rots from: `~~~` is what a markdown
+// author reaches for when the block itself contains backticks, and a ticket
+// quoting a fenced example is exactly such a block.
+test("a ## Review inside a tilde-fenced block is an example too", () => {
+  const body = `${pl("pl-1")}\n~~~md\n## Review\n\n**Gate: PASS**\n~~~\n`;
+  const root = repoWith({ [at("pl-1")]: body });
+  expect(readTickets(root).map((t) => t.reviewed)).toEqual([false]);
+});
+
+// **A known miss, pinned rather than fixed.** An unclosed fence swallows the
+// rest of the file, so a real gate record below one is not seen and a ticket
+// that should be flagged is not. Repairing it means guessing which of an odd
+// number of fences was the typo, and guessing wrong converts a missed row on
+// the board into a red pipeline for every reader — the wrong side of the
+// asymmetry this check is built on. Asserted so the next reader learns it from
+// the suite instead of from a ticket that quietly went unflagged.
+test("an unclosed fence hides a real gate record below it, and that is the tolerated direction", () => {
+  const body = `${pl("pl-1")}\n\`\`\`md\nan example nobody closed\n\n## Review\n\n**Gate: PASS**\n`;
+  const root = repoWith({ [at("pl-1")]: body });
+  expect(readTickets(root).map((t) => t.reviewed)).toEqual([false]);
+  expect(reviewedButReady(readTickets(root))).toEqual([]);
+});
+
+// An inline mention is not a heading either. repo-12's own Build section names
+// `## Review` mid-sentence, indented under a list item.
+test("an inline mention of ## Review is not a gate record", () => {
+  const root = repoWith({
+    [at("pl-1")]: `${pl("pl-1")}\n- The \`## Review\` section is stronger.\n`,
+  });
+  expect(readTickets(root).map((t) => t.reviewed)).toEqual([false]);
+});
+
+// End to end, and the half a green run cannot prove: the exit code CI reads
+// (`node scripts/status.mjs --json > /dev/null`) and the message beside it.
+test("--json exits non-zero on a gated ready ticket and names it on stderr", () => {
+  const root = repoWith({
+    [at("pl-28")]: pl("pl-28", { status: "done" }),
+    [at("pl-29")]: gated(pl("pl-29")),
+  });
+  const { stdout, stderr, status } = run(["--json"], root);
+  expect(status).toBe(1);
+  expect(stderr.trimEnd().split("\n")).toEqual([GATED]);
+  expect(JSON.parse(stdout).problems).toEqual([
+    { file: at("pl-29"), kind: "reviewed-but-ready", id: "pl-29", status: "ready", message: GATED },
+  ]);
+});
+
+// repo-6's shape, held to: the warning goes beside the view, not instead of it.
+// A person asked a question and gets the answer to it, with the finished ticket
+// still listed — it is a stale status, not an unreadable ticket.
+test("the default view still renders beside a gated ready ticket, and exits 0", () => {
+  const root = repoWith({ [at("pl-29")]: gated(pl("pl-29")) });
+  const { stdout, stderr, status } = run([], root);
+  expect(status).toBe(0);
+  expect(stdout).toContain("• pl-29");
+  expect(stderr.trimEnd().split("\n")).toEqual([GATED]);
+});
+
+// Both kinds at once, because `main` concatenates them and a reader with two
+// problems must be told about both — one fixed, re-run, told about the next is
+// the shape repo-6 explicitly rejected for dangling edges.
+test("a dangling dependency and a gated ready ticket are both reported", () => {
+  const root = repoWith({
+    [at("pl-29")]: gated(pl("pl-29", { depends_on: "[pl-404]" })),
+  });
+  const { stderr, status } = run(["--json"], root);
+  expect(status).toBe(1);
+  expect(stderr.trimEnd().split("\n")).toEqual([
+    `${at("pl-29")}: depends_on "pl-404", which is not a ticket`,
+    GATED,
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// A reader that stops reading
+// ---------------------------------------------------------------------------
+
+// `npm run status -- --ready | head -5` crashed with an unhandled `EPIPE` and
+// eleven lines of stack trace under an answer the reader already had. It
+// predates this ticket — reproduced against `origin/main`'s own copy of the
+// script — and was fixed here because repo-12 was already in the file.
+//
+// Driven through a fake stream rather than a real pipe. Whether the reader
+// closes before or after the writer finishes is a race against a 64 KB pipe
+// buffer, and a test that has to win a race fails on somebody's laptop; the
+// crash was in the missing handler, so the handler is what is asserted. The
+// end-to-end case was verified by hand, before and after, with the command
+// above.
+test("a closed pipe is ignored, and no other stream error is", () => {
+  const stream = new EventEmitter();
+  ignoreClosedPipe([stream]);
+
+  const epipe = Object.assign(new Error("write EPIPE"), { code: "EPIPE" });
+  expect(() => stream.emit("error", epipe)).not.toThrow();
+
+  // The half that makes the first half mean something: a handler that swallowed
+  // everything would satisfy it and would hide a real failure to write.
+  const eacces = Object.assign(new Error("write EACCES"), { code: "EACCES" });
+  expect(() => stream.emit("error", eacces)).toThrow(/EACCES/);
 });

@@ -115,17 +115,26 @@ lists above, or an `id` that disagrees with its own filename. A parser that
 shrugs at what it does not understand reports a clean status view having read
 half the tickets.
 
-**A `depends_on` naming a ticket that does not exist is the one exception, and
-it is a warning rather than an ending** ([repo-6](./work/repo-6-dangling-dependency-kills-the-view.md)).
-It is still named by file and by id, on stderr beside the view; every ticket
-still renders, and `--show` on the offending one prints
-`repo-404 (not a ticket)` where a blocker would be. Only `--json` also exits
-non-zero, which is what `.github/workflows/ci.yml`'s `check` job reads — so the
-check is not softened, it is paid for by the pipeline rather than by every
-reader. The difference from the failures above is that a dangling id is
-frequently just a forward reference: a ticket depending on one still in review
-is valid on its own branch and becomes dangling for everybody else the moment it
-merges first.
+**Two checks warn rather than end, and both are about the board rather than
+about a file it cannot read.** Each is named by file and by id on stderr beside
+the view; every ticket still renders, and only `--json` also exits non-zero,
+which is what `.github/workflows/ci.yml`'s `check` job reads — so neither check
+is softened, they are paid for by the pipeline rather than by every reader.
+
+- **A `depends_on` naming a ticket that does not exist**
+  ([repo-6](./work/repo-6-dangling-dependency-kills-the-view.md)). `--show` on
+  the offending ticket prints `repo-404 (not a ticket)` where a blocker would
+  be. The difference from the failures above is that a dangling id is frequently
+  just a forward reference: a ticket depending on one still in review is valid on
+  its own branch and becomes dangling for everybody else the moment it merges
+  first.
+- **A ticket that is `ready` and already carries a `## Review` section**
+  ([repo-12](./work/repo-12-board-shows-merged-work.md)). `pl-29` merged with its
+  gate record and `status: ready`, so the board offered a finished ticket for a
+  day. A gate record means the work was picked up, and `ready` means nobody has
+  picked it up — the two cannot both be true. `in-flight` is deliberately not
+  flagged: a review never moves `status`, a FAIL is a report, and a ticket that
+  lands as a partial has to have somewhere to sit.
 
 **`dropped` tickets stay.** A ticket that was considered and rejected is worth
 more than a deleted file: the next person to have the idea finds the reason it
@@ -141,6 +150,17 @@ checklist that only its author can read.
 someone else checked it**, and it is on the ticket for the same reason the Log
 is: a verdict that lives in a chat scrollback is not a record, and the next
 person to touch this code cannot find it.
+
+**A gate on a pull request that only _files_ a ticket does not go in `## Review`.**
+That section answers one question — was _the work_ checked, and by whom — and a
+filing has no work in it to check: its `Done when` lines describe an
+implementation that does not exist yet, so a gate applying them literally would
+fail every filing on principle. Record such a gate anywhere else on the ticket —
+`dl-29` keeps its own under `## The gate on this filing`, unedited and in place —
+and leave `## Review` empty until something is built. This is not bookkeeping:
+`repo-12`'s board check reads `status: ready` **plus** a `## Review` gate record
+as a ticket whose work merged without its status being flipped, and a filing gate
+in that section makes a perfectly ordinary unstarted ticket look like a defect.
 
 It is one table — a row per acceptance line, naming the test that proves it,
 `file.test.ts:88` rather than "covered" — a list of findings by severity, and a
