@@ -268,3 +268,35 @@ edits a gated-but-`ready` filing, which is the same convention that produced the
 four lines of documentation and leaves the check reading nothing but the ticket.
 If a filing gate lands in `## Review` again despite both notes, this is the
 fallback and the measurements above are the starting point.
+
+**2026-08-30 — the oxfmt scan died on Windows, and not for the reason it was
+diagnosed.** `test (windows-latest)` failed on the fold-in above with
+`AssertionError: expected '' to contain 'excluded by ignore rules'`, which reads as
+a coupling to oxfmt's diagnostic wording. That was the finding handed to me and
+it was wrong. The process never started:
+
+```console
+$ cat node_modules/oxfmt/bin/oxfmt
+#!/usr/bin/env node
+
+import "../dist/cli.js";
+```
+
+A shebang script behind a symlink. Windows does not honour `#!`; npm writes
+`.cmd` and `.ps1` shims beside it, and node refuses to spawn those without a
+shell. So `stdout` and `stderr` came back `undefined`, `?? ""` collapsed them to
+`''`, and the assertion blamed a missing _message_ for a missing _process_.
+Fixing only the wording would have left the test dead on Windows and looking
+repaired.
+
+**The half that is bigger than this ticket: a package's `bin` cannot be spawned
+directly on Windows in a repo that forbids `shell: true`** — and this one does,
+repo-wide, enforced by `packages/core/test/spawn-safety.test.ts`. Resolve the
+package and run its entry under `process.execPath` instead:
+`createRequire(import.meta.url).resolve("<pkg>/package.json")`, then its `bin`
+field. That has no platform-specific spelling. Anyone here writing a test that
+shells out to a tool will hit this, and the easy way out is closed by design.
+
+The scan now also asserts `expect(result.error).toBeUndefined()`, so a spawn that
+fails fails **by name** rather than disguising itself as an assertion about
+output — which is the whole reason this cost a CI leg to find.
