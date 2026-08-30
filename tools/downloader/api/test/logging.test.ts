@@ -249,6 +249,52 @@ describe("what boot says about how far TLS verification reaches", () => {
     const configured = lines.filter((line) => line.msg === "egress configured");
     expect(configured).toHaveLength(1);
     expect(configured[0]?.["ffmpegProxyTls"]).toBe("terminate");
+    // Two proxies, and ffmpeg is not on the tiers' one.
+    expect(harness.app.context.ffmpegProxyUrl).not.toBe(harness.app.context.egressProxyUrl);
+  });
+
+  test("FFMPEG_TLS_INTERCEPT=false puts ffmpeg back on the tiers' proxy, and says so", async () => {
+    // The third operator state. **Its own line, not a quieter version of the
+    // other two**: it is narrower than `FFMPEG_ALLOW_UNVERIFIED_TLS` and it is
+    // not free, and an operator who reads "interception off" without reading
+    // "the segments are unverified" has kept something they did not.
+    const { logger, lines } = capturing("info");
+    harness = await createHarness({ logger, config: { ffmpegTlsIntercept: false } });
+
+    const warnings = lines.filter((line) => line.level === "warn");
+    const off = warnings.filter((line) => /FFMPEG_TLS_INTERCEPT is off/u.test(line.msg));
+    expect(off).toHaveLength(1);
+    expect(off[0]?.msg).toMatch(/not checked at all/u);
+    // The cost, in the operator's own terms rather than as a reference.
+    expect(String(off[0]?.["hint"])).toMatch(/substitute/u);
+    expect(String(off[0]?.["hint"])).toMatch(/dl-21/u);
+
+    // Still exactly one line about how far verification reaches.
+    expect(warnings.some((line) => /terminates TLS/u.test(line.msg))).toBe(false);
+    expect(warnings.some((line) => /FFMPEG_ALLOW_UNVERIFIED_TLS/u.test(line.msg))).toBe(false);
+
+    // And there is genuinely no second proxy — the same tunnel serves both,
+    // rather than an identical listener started to no end.
+    const configured = lines.filter((line) => line.msg === "egress configured");
+    expect(configured[0]?.["ffmpegProxyTls"]).toBe("tunnel");
+    expect(harness.app.context.ffmpegProxyUrl).toBe(harness.app.context.egressProxyUrl);
+  });
+
+  test("turning verification off outranks the interception knob", async () => {
+    // Both knobs at once is a state an operator can reach, and it must not
+    // produce two lines saying different-sized things about the same deployment.
+    // `FFMPEG_ALLOW_UNVERIFIED_TLS` is the larger fact and wins.
+    const { logger, lines } = capturing("info");
+    harness = await createHarness({
+      logger,
+      config: { ffmpegAllowUnverifiedTls: true, ffmpegTlsIntercept: false },
+    });
+
+    const warnings = lines.filter((line) => line.level === "warn");
+    expect(warnings.filter((line) => /FFMPEG_ALLOW_UNVERIFIED_TLS/u.test(line.msg))).toHaveLength(
+      1,
+    );
+    expect(warnings.some((line) => /FFMPEG_TLS_INTERCEPT is off/u.test(line.msg))).toBe(false);
   });
 
   test("a deployment with verification off gets dl-19's louder line instead", async () => {

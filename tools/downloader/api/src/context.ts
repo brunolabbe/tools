@@ -37,6 +37,17 @@ export interface AppContext {
    * to a client. See `egress-proxy.ts` and dl-12.
    */
   egressProxyUrl: string;
+  /**
+   * The proxy **ffmpeg** is given, which is a different one since dl-27 — it
+   * terminates TLS so the segment origins get verified at all.
+   *
+   * It is here so the two tunnelling causes can be told apart. Since
+   * `FFMPEG_TLS_INTERCEPT=false` makes "ffmpeg is on the tiers' proxy" a
+   * legitimate state, equality with `egressProxyUrl` no longer means the wiring
+   * broke — it means the operator asked. Nothing outside a test should read it,
+   * and like `egressProxyUrl` it must never reach a client.
+   */
+  ffmpegProxyUrl: string;
   queue: JobQueue;
   events: JobEventHub;
   probeCache: ProbeCache;

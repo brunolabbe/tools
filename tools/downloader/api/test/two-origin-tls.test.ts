@@ -184,6 +184,36 @@ async function startEngine(
   return engine;
 }
 
+/**
+ * A real `createApp`, differing between the two wiring tests **only** in the
+ * flag under test.
+ *
+ * `FFMPEG_CA_FILE` is origin A and nothing else in both, which is what makes the
+ * pair comparable: the whole question is whether origin B gets checked, and the
+ * two legitimate answers are opposite.
+ */
+async function wiredApp(
+  label: string,
+  overrides: { ffmpegTlsIntercept?: boolean },
+): Promise<Awaited<ReturnType<typeof createApp>>> {
+  const app = await createApp({
+    startGc: false,
+    logger: NOOP_LOGGER,
+    config: {
+      databasePath: ":memory:",
+      storageDir: path.join(storageDir, label),
+      ssrfAllowPrivateAddresses: true,
+      enableBrowserResolver: false,
+      enableYtdlpResolver: false,
+      // Origin A only. The whole question is whether B is checked.
+      ffmpegCaFile: manifestCertificate.caPath,
+      ...overrides,
+    },
+  });
+  cleanups.push(() => app.shutdown());
+  return app;
+}
+
 function downloadRequest(jobId: string): DownloadRequest {
   return {
     jobId,
@@ -357,25 +387,14 @@ describe("dl-27: the proxy verifies what ffmpeg cannot", () => {
       // measured surviving before this test existed.
       //
       // It also pins the CA swap, which nothing else does. `FFMPEG_CA_FILE` is
-      // the *proxy's* trust store now and the engine's `-ca_file` is the
+      // the *proxy's* trust store here and the engine's `-ca_file` is the
       // generated root; passing the operator's root to ffmpeg instead — the
       // arrangement dl-19 shipped — leaves ffmpeg unable to verify the one
       // certificate it is ever shown, and the download dies at the manifest
-      // with a different reason than this asserts.
-      const app = await createApp({
-        startGc: false,
-        logger: NOOP_LOGGER,
-        config: {
-          databasePath: ":memory:",
-          storageDir: storageDir,
-          ssrfAllowPrivateAddresses: true,
-          enableBrowserResolver: false,
-          enableYtdlpResolver: false,
-          // Origin A only. The whole question is whether B is checked.
-          ffmpegCaFile: manifestCertificate.caPath,
-        },
-      });
-      cleanups.push(() => app.shutdown());
+      // rather than at the segments, which is what the last two assertions
+      // separate.
+      const app = await wiredApp("wired-intercepting", {});
+      expect(app.context.ffmpegProxyUrl).not.toBe(app.context.egressProxyUrl);
 
       const beforeManifest = manifestOrigin.requests.length;
       const beforeSegments = segmentOrigin.requests.length;
@@ -389,6 +408,44 @@ describe("dl-27: the proxy verifies what ffmpeg cannot", () => {
       // that says the terminating proxy was on the segment connections.
       expect(manifestOrigin.requests.length).toBeGreaterThan(beforeManifest);
       expect(segmentOrigin.requests.slice(beforeSegments)).toEqual([]);
+    },
+    SLOW,
+  );
+
+  test(
+    "`FFMPEG_TLS_INTERCEPT=false` reopens the hole, and that is what it is for",
+    async () => {
+      // **The other half of the wiring pair, and the reason the pair exists.**
+      // Adding the flag made "ffmpeg is on the tunnelling proxy" a *legitimate*
+      // state, so no single test can any longer say "ffmpeg must never be
+      // tunnelling" — that assertion would now fail on a correct deployment, and
+      // the mutation that used to kill would be a false positive.
+      //
+      // What still separates the two causes is that the legitimate states have
+      // **opposite** outcomes on this fixture, while both broken pairings have a
+      // third outcome that is neither:
+      //
+      //   intercepting  + generated root  -> fails at the *segments*  (test above)
+      //   tunnelling    + operator root   -> succeeds, B serves it all (this test)
+      //   tunnelling    + generated root  -> fails at the *manifest*, A serves nothing
+      //   intercepting  + operator root   -> fails at the *manifest*, A serves nothing
+      //
+      // So a split pair fails both tests and an operator-requested tunnel fails
+      // neither. That is the discrimination, and it is why this test asserts
+      // that origin A *was* served rather than only that the download worked.
+      const app = await wiredApp("wired-tunnelling", { ffmpegTlsIntercept: false });
+      // Same tunnel for everyone: no second proxy is started at all.
+      expect(app.context.ffmpegProxyUrl).toBe(app.context.egressProxyUrl);
+
+      const beforeManifest = manifestOrigin.requests.length;
+      const beforeSegments = segmentOrigin.requests.length;
+      const outcome = await app.context.engine.download(downloadRequest("wired-tunnelled"));
+
+      // dl-21's hole, exactly: the whole video off an origin nobody checked.
+      expect(outcome.sizeBytes).toBeGreaterThan(10_000);
+      expect(manifestOrigin.requests.length).toBeGreaterThan(beforeManifest);
+      const served = segmentOrigin.requests.slice(beforeSegments);
+      expect(served.filter((request) => request.url.endsWith(".ts")).length).toBeGreaterThan(1);
     },
     SLOW,
   );

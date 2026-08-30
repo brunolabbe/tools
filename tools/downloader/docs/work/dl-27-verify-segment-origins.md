@@ -232,13 +232,13 @@ mode is an image that builds, boots, and throws `ERR_MODULE_NOT_FOUND`. The
 branch's Log already said so; this gate's contribution is to split that into the
 half that can be settled here and the half that cannot.
 
-| #   | Question                                                                 | Verdict         | Proof                                                                                                                                                                                                                                                        |
-| --- | ------------------------------------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | Does `npm prune --omit=dev` keep `node-forge` after the manifest change? | proven          | Scratch copy outside the repo mirroring the Dockerfile's build-stage manifest list: `npm ci` → 324 packages; prune → **160 packages, 342M → 152M**, node-forge surviving while `@types/node-forge` and `typescript` are dropped. Run twice from clean copies |
-| 2   | Does the image itself boot and answer `/api/health`?                     | unproven (gate) | Docker cannot run in this environment. This is the actual gate and it is the pull request's `docker` job                                                                                                                                                     |
-| 3   | Does that job run on a pull request from this branch?                    | proven          | `.github/workflows/downloader.yml:29` is the `pull_request` trigger, path-filtered to a set matching every non-`.md` file this branch touches                                                                                                                |
-| 4   | Does it do real work rather than skip?                                   | proven          | `docker` and `e2e` executed 2m9s and 1m19s on `main` at `790c4a2`                                                                                                                                                                                            |
-| 5   | Is `FFMPEG_ALLOW_UNVERIFIED_TLS` genuinely the only knob?                | proven          | Confirmed; and recorded **only** in this ticket's Log, not in `01-ARCHITECTURE.md`'s env table and not in the boot warning's hint                                                                                                                            |
+| #   | Question                                                                 | Verdict                        | Proof                                                                                                                                                                                                                                                                                      |
+| --- | ------------------------------------------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Does `npm prune --omit=dev` keep `node-forge` after the manifest change? | proven                         | Scratch copy outside the repo mirroring the Dockerfile's build-stage manifest list: `npm ci` → 324 packages; prune → **160 packages, 342M → 152M**, node-forge surviving while `@types/node-forge` and `typescript` are dropped. Run twice from clean copies                               |
+| 2   | Does the image itself boot and answer `/api/health`?                     | unproven (gate)                | Docker cannot run in this environment. This is the actual gate and it is the pull request's `docker` job                                                                                                                                                                                   |
+| 3   | Does that job run on a pull request from this branch?                    | proven                         | `.github/workflows/downloader.yml:29` is the `pull_request` trigger, path-filtered to a set matching every non-`.md` file this branch touches                                                                                                                                              |
+| 4   | Does it do real work rather than skip?                                   | proven                         | `docker` and `e2e` executed 2m9s and 1m19s on `main` at `790c4a2`                                                                                                                                                                                                                          |
+| 5   | Is `FFMPEG_ALLOW_UNVERIFIED_TLS` genuinely the only knob?                | proven, **and since acted on** | Confirmed at `ff12315`, and recorded **only** in this ticket's Log — not in `01-ARCHITECTURE.md`'s env table and not in either boot hint. That gap is what the user weighed in deciding to add `FFMPEG_TLS_INTERCEPT`; the table now carries both rows. See the Log entry of the same date |
 
 Points 3 and 4 were re-verified independently while writing this record, by
 reading the workflow rather than taking it on report: the `pull_request` trigger
@@ -283,6 +283,86 @@ this CONCERNS says nothing about them. It could not run Docker, which is the
 whole reason its central question is deferred rather than answered.
 
 ## Log
+
+**2026-08-30 (later) — `FFMPEG_TLS_INTERCEPT` added, overruling this Log's own
+recommendation.** "Deliberately not done" below argued against a second knob and
+the user weighed it and decided the other way. The argument that beat mine is
+better than mine: gate 2 established that "there is only one knob" was recorded
+**only here**, not in `01-ARCHITECTURE.md`'s environment table and not in either
+boot hint — so the realistic path for an operator broken by the interception was
+to find `FFMPEG_ALLOW_UNVERIFIED_TLS`, the one escape the table did name, and
+give up the manifest check as well. **Trading all verification for a proxy
+problem is the worst of the three states this service can be in**, and a smaller
+escape that is documented next to the larger one is what stops it. The bullet
+below is left standing rather than rewritten, and this paragraph is what
+overrules it.
+
+**Interception stays the default.** `FFMPEG_TLS_INTERCEPT=true` unless an
+operator says otherwise, and `bool()` falls back to the default on anything it
+cannot parse — so `FFMPEG_TLS_INTERCEPT=flase` leaves interception **on**. That
+direction is not luck and it is not the parser: `FFMPEG_ALLOW_UNVERIFIED_TLS`
+gets the same fallback and is safe because its default is `false`. For a flag
+whose _off_ state reopens a hole, only a default of `true` makes an unparseable
+value fail closed. Pinned in `queue-and-shutdown.test.ts`, both spellings.
+
+**With interception off, no second proxy is started at all.** A tunnelling proxy
+is what `tierProxy` already is, so a second one would be an identical listener
+and two RSA keygens to no purpose; `ffmpegProxyUrl` and `egressProxyUrl` are then
+the same string, and both are `null` at shutdown. The trust store swaps back with
+it — ffmpeg is meeting the origin again, so `FFMPEG_CA_FILE` returns to ffmpeg,
+which is dl-19's arrangement unchanged.
+
+### How the flag was kept from costing gate 1's kill
+
+**This is the part that needed care, and the coordinator was right to name it.**
+Gate 1 verified the two-proxy wiring by mutating `server.ts` so ffmpeg receives
+the tunnelling proxy, and confirmed a test went red. The flag makes that state
+**legitimately reachable**, so a test asserting "ffmpeg is never on the tunnelling
+proxy" would now fail on a correct deployment and gate 1's kill would become a
+false positive.
+
+What separates the two causes is that the proxy and the trust store are only ever
+correct **as a pair**, and the two legitimate pairings have _opposite_ outcomes on
+the two-origin fixture while both split pairings have a third outcome that is
+neither:
+
+| ffmpeg's proxy | ffmpeg's `-ca_file` | outcome with `FFMPEG_CA_FILE` = origin A    |
+| -------------- | ------------------- | ------------------------------------------- |
+| terminating    | generated root      | fails at the **segments**; A served, B not  |
+| tunnelling     | operator root       | **succeeds**; B serves the whole video      |
+| tunnelling     | generated root      | fails at the **manifest**; A served nothing |
+| terminating    | operator root       | fails at the **manifest**; A served nothing |
+
+So there are two end-to-end tests through a real `createApp`, differing only in
+the flag, asserting opposite results — and each asserts that origin A _was_
+served, which is the assertion that tells a manifest failure from a segment one.
+A split pair fails both; an operator-requested tunnel fails neither. `server.ts`
+now also chooses the pair in **one** place, a single `ffmpegEgress` object, so
+the split states are harder to reach by accident than by mutation.
+
+Six mutations, over `two-origin-tls`, `logging` and `queue-and-shutdown`:
+
+| Mutation                                     | Result                                               |
+| -------------------------------------------- | ---------------------------------------------------- |
+| split pair: tunnelling proxy, generated root | **killed** — 2, incl. the intercepting wiring test   |
+| split pair: terminating proxy, operator root | **killed** — 1, the intercepting wiring test only    |
+| the flag ignored, interception always off    | **killed** — 4                                       |
+| the flag ignored, interception always on     | **killed** — 3, incl. the **tunnelling** wiring test |
+| the default flipped to off                   | **killed** — 4                                       |
+| the off-state boot warning deleted           | **killed** — 1                                       |
+
+**The first and the fourth rows are the whole answer.** Gate 1's original
+mutation is row 1 and it still dies, so nothing was lost. Row 4 — a build that
+ignores the flag and always intercepts — dies on the _other_ test, which is the
+half that did not exist before. Neither test alone can tell the two tunnelling
+causes apart; the pair can, and each row above proves one direction of it.
+
+Two smaller notes. `AppContext` gains `ffmpegProxyUrl` beside `egressProxyUrl`,
+because equality between them is now meaningful rather than a bug — it is how a
+test says "the operator asked for the tunnel" without running a download. And
+`FFMPEG_ALLOW_UNVERIFIED_TLS` still outranks the new flag: both set produces
+dl-19's single louder line, never two lines describing the same deployment at
+different sizes, which is `logging.test.ts`'s standing invariant.
 
 **2026-08-30 — Built, with step 1 answered yes and the mechanism measured both
 ways.** The proxy terminates ffmpeg's TLS, verifies each origin itself, and
@@ -538,13 +618,18 @@ the fact is a security posture rather than a status.
 
 ### Deliberately not done
 
-- **No new environment variable for the interception.** `FFMPEG_ALLOW_UNVERIFIED_TLS`
-  now means "the proxy does not verify origins" and stays the single escape
-  hatch; a second knob would multiply the states an operator can be in and each
-  one needs its own boot line. The consequence is real and worth stating: **an
-  operator whom interception breaks for some other reason has no way back to a
-  tunnel**, and would have to set the escape hatch, which turns off more than
-  they want. If that turns up, it is a ticket.
+- **No new environment variable for the interception. — OVERRULED the same day;
+  see the entry at the top of this Log.** Kept as written because the reasoning
+  is the input the user weighed, not because it is still what the code does.
+  `FFMPEG_ALLOW_UNVERIFIED_TLS` now means "the proxy does not verify origins" and
+  stays the single escape hatch; a second knob would multiply the states an
+  operator can be in and each one needs its own boot line. The consequence is
+  real and worth stating: **an operator whom interception breaks for some other
+  reason has no way back to a tunnel**, and would have to set the escape hatch,
+  which turns off more than they want. If that turns up, it is a ticket. — It
+  turned up immediately, in gate 2's observation that the constraint was
+  documented nowhere an operator reads, and it became `FFMPEG_TLS_INTERCEPT`
+  rather than a ticket.
 - **`proxied-https.test.ts`'s tunnel assertions are kept, not repointed.** The
   origin-certificate-reaches-the-client test is still true — of the tiers, which
   is now says — and deleting it would delete the coverage Chromium and yt-dlp

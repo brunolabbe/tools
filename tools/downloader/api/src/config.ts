@@ -69,6 +69,29 @@ export interface ApiConfig {
    */
   ffmpegAllowUnverifiedTls: boolean;
   /**
+   * Whether ffmpeg's egress proxy **terminates** its TLS, which is how the
+   * segment connections get verified at all. On by default; this is dl-27's
+   * behaviour and the reason that ticket exists.
+   *
+   * Off puts ffmpeg back behind the tunnelling proxy dl-14 built, which is
+   * dl-21's state exactly: the manifest connection is verified and the segments
+   * are not, because libavformat propagates neither TLS option onto them.
+   *
+   * **It exists so that an operator broken by the interception has somewhere to
+   * go that is not `ffmpegAllowUnverifiedTls`.** Those two are not
+   * interchangeable and the difference is the whole point of having both: this
+   * one narrows what is verified, that one stops verifying. An operator who can
+   * only find the second reaches for it, and gives up the manifest check and
+   * every `guardedFetch`-adjacent expectation with it, to fix a problem in the
+   * proxy.
+   *
+   * A value this parser does not recognise falls back to the default, so a
+   * typo'd `FFMPEG_TLS_INTERCEPT=flase` leaves interception **on**. That
+   * direction is deliberate: for a flag whose off state reopens a hole, the
+   * unparseable case has to fail closed.
+   */
+  ffmpegTlsIntercept: boolean;
+  /**
    * An extra CA bundle for the **egress proxy** to trust, merged with the system
    * store.
    *
@@ -77,6 +100,11 @@ export interface ApiConfig {
    * verifies the real origin. It is merged rather than substituted — `-ca_file`
    * and Node's `ca` option both *replace* a store, and a deployment given only
    * its operator's root would refuse every public origin.
+   *
+   * **It moves back to ffmpeg when `ffmpegTlsIntercept` is off**, because then
+   * ffmpeg is the party meeting the origin again and the proxy is a tunnel that
+   * sees no certificate. `server.ts` picks the proxy and the trust store as one
+   * decision for exactly that reason.
    */
   ffmpegCaFile: string | undefined;
 
@@ -292,6 +320,7 @@ export function loadApiConfig(
     ffmpegPath: overrides.ffmpegPath ?? env["FFMPEG_PATH"] ?? undefined,
     ffmpegAllowUnverifiedTls:
       overrides.ffmpegAllowUnverifiedTls ?? bool(env["FFMPEG_ALLOW_UNVERIFIED_TLS"], false),
+    ffmpegTlsIntercept: overrides.ffmpegTlsIntercept ?? bool(env["FFMPEG_TLS_INTERCEPT"], true),
     ffmpegCaFile: overrides.ffmpegCaFile ?? optionalPath(env["FFMPEG_CA_FILE"]),
     ytdlpPath: overrides.ytdlpPath ?? env["YTDLP_PATH"] ?? undefined,
     // Resolved so a relative WEB_DIR means the same thing wherever the process
