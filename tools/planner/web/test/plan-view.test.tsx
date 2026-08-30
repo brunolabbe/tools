@@ -580,3 +580,86 @@ describe("a plan whose run has not finished", () => {
     expect(await screen.findByText(/no draft yet/i)).toBeDefined();
   });
 });
+
+/**
+ * pl-35: a measured leg's OSM attribution is stored (`ItemTravel.measured`'s
+ * `Provenance`) and was never shown. These pin that it now reaches the page —
+ * once for the plan, not once per leg (see `TravelSources`'s own comment in
+ * `PlanView.tsx` for why that shape was chosen and what was rejected).
+ */
+describe("travel sources", () => {
+  const MEASURED_SOURCE = {
+    url: "https://www.openstreetmap.org/copyright",
+    title: "OpenStreetMap, routed by Valhalla",
+    fetchedAt: "2027-01-01T00:00:00.000Z",
+  };
+
+  /**
+   * Positive, and it is the half of the pair that actually proves something:
+   * a negative-only suite (`queryByText(...).toBeNull()`) passes just as well
+   * if `TravelSources` were deleted outright or never wired into `Document`.
+   * This fails in exactly that case.
+   */
+  test("shows where a measured leg's distance and travel time came from, once for two legs that share a source", async () => {
+    const first = candidate({ title: "A viewpoint" });
+    const second = candidate({ title: "A lighthouse" });
+    const third = candidate({ title: "A harbour" });
+    const measured = {
+      kind: "measured" as const,
+      distanceMeters: 12_000,
+      durationMinutes: 15,
+      provenance: { kind: "grounded" as const, sources: [MEASURED_SOURCE] },
+    };
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [first, second, third],
+        revisions: [
+          revision([
+            day(0, [
+              item({ candidateId: first.id }),
+              // Two legs, both citing the exact same source -- the case that
+              // actually exercises deduplication. A fixture with only one
+              // measured leg would pass the "one link" assertion below
+              // whether or not dedup exists at all.
+              item({ candidateId: second.id, position: 1, travelFromPrevious: measured }),
+              item({ candidateId: third.id, position: 2, travelFromPrevious: measured }),
+            ]),
+          ]),
+        ],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/distance and travel time on this plan/i)).toBeDefined();
+    // The copy rule from pl-29's Provenance fix applies here too: a measured
+    // leg is not an endorsement of anything, and the same sentence says so.
+    expect(screen.getByText(/is not recommending it/i)).toBeDefined();
+    // One link, not two, for the two legs that cite the same source -- dedup
+    // is the point of the feature, not an incidental property of the fixture.
+    expect(screen.getAllByRole("link", { name: "OpenStreetMap, routed by Valhalla" })).toHaveLength(
+      1,
+    );
+  });
+
+  test("shows nothing when nothing on the plan was measured", async () => {
+    const activity = candidate({ title: "A long walk" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [activity],
+        revisions: [
+          revision([
+            day(0, [
+              item({ candidateId: activity.id, travelFromPrevious: { kind: "not-established" } }),
+            ]),
+          ]),
+        ],
+      }),
+    );
+
+    show();
+
+    await screen.findByText("A long walk");
+    expect(screen.queryByText(/distance and travel time on this plan/i)).toBeNull();
+  });
+});

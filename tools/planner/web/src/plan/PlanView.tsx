@@ -34,6 +34,7 @@ import {
   type PlanGap,
   type PlanItem,
   type PlanView as PlanViewDocument,
+  type Source,
   type TripShape,
   uncheckedConstraintKey,
   type UncheckedConstraint,
@@ -230,6 +231,7 @@ function Document({
 
           <Gaps gaps={revision.gaps} />
           <Unchecked unchecked={view.unchecked} candidates={plan.candidates} />
+          <TravelSources days={revision.days} />
         </>
       )}
 
@@ -428,6 +430,65 @@ function Unchecked({
           );
         })}
       </ul>
+    </section>
+  );
+}
+
+/**
+ * The distances and travel times this plan measured, deduplicated by source
+ * — once for the whole document, not once per leg (pl-35).
+ *
+ * **Why once, and not `ProvenanceNote` under every item.** Every leg on a
+ * plan is measured by the same backend in the same run, so a per-item block
+ * would repeat one citation dozens of times over a multi-day trip — the
+ * "clutter" pl-35 named as the risk on the other side of "too thin". A single
+ * deduplicated list is the document-level attribution a map's own "©
+ * OpenStreetMap contributors" caption already is: shown once, wherever the
+ * data appears, not once per feature that used it. Rejected: a per-day
+ * summary, which would repeat the same one or two sources once per day for no
+ * reason — the source does not change with the day, only the leg does.
+ *
+ * **Reuses `ProvenanceNote`, not a second renderer.** The two callers already
+ * in this file render a `Provenance`; this one builds a synthetic `grounded`
+ * `Provenance` out of every unique `Source` a measured leg carries and hands
+ * it to the same component, so the wording — "is something we read at a
+ * source — reading it is not recommending it" — is the one sentence this
+ * file has for a grounded fact, not a second one invented for this case that
+ * could drift from it.
+ *
+ * **Only `kind === "measured"` legs contribute.** `not-established` and
+ * `over-budget` have no `Provenance` to cite — nothing here would be sourcing
+ * a leg nothing measured, which is exactly the thing pl-35's Done-when named
+ * as the trap.
+ */
+function travelSourcesOf(days: readonly PlanDay[]): Source[] {
+  const byUrl = new Map<string, Source>();
+  for (const day of days) {
+    for (const item of day.items) {
+      const travel = item.travelFromPrevious;
+      if (travel === null || travel.kind !== "measured") continue;
+      if (travel.provenance.kind !== "grounded") continue;
+      for (const source of travel.provenance.sources) {
+        // First seen wins — every candidate for the same URL is the same
+        // citation, and a plan measured across one run shares one `fetchedAt`
+        // per backend call regardless of which one is kept.
+        if (!byUrl.has(source.url)) byUrl.set(source.url, source);
+      }
+    }
+  }
+  return [...byUrl.values()];
+}
+
+function TravelSources({ days }: { days: readonly PlanDay[] }): React.ReactElement | null {
+  const sources = travelSourcesOf(days);
+  if (sources.length === 0) return null;
+
+  return (
+    <section className="travel-sources">
+      <ProvenanceNote
+        provenance={{ kind: "grounded", sources }}
+        what="Distance and travel time on this plan"
+      />
     </section>
   );
 }
