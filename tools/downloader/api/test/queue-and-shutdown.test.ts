@@ -134,6 +134,29 @@ describe("resolver composition (M2)", () => {
     ).toBe(false);
   });
 
+  test("interception is on unless it is switched off in so many words", () => {
+    // dl-27's default, and the same one-character regression as the test above
+    // pointing the other way: this flag defaults to **true**, so flipping the
+    // default puts every deployment that never heard of it back on dl-21's
+    // unverified segment connections.
+    expect(loadApiConfig({}, {}).ffmpegTlsIntercept).toBe(true);
+
+    expect(loadApiConfig({}, { FFMPEG_TLS_INTERCEPT: "false" }).ffmpegTlsIntercept).toBe(false);
+    expect(loadApiConfig({ ffmpegTlsIntercept: false }, {}).ffmpegTlsIntercept).toBe(false);
+
+    // **The typo case matters more here than on the flag above, and in the
+    // opposite direction.** `FFMPEG_ALLOW_UNVERIFIED_TLS` defaults to off, so an
+    // unparseable value there falls back to the safe state by luck of the
+    // default. This one defaults to *on*, so the same fallback is what keeps a
+    // fat-fingered value from quietly reopening the hole — it is the default
+    // that makes the parser's behaviour correct, not the parser.
+    expect(loadApiConfig({}, { FFMPEG_TLS_INTERCEPT: "flase" }).ffmpegTlsIntercept).toBe(true);
+    expect(loadApiConfig({}, { FFMPEG_TLS_INTERCEPT: "" }).ffmpegTlsIntercept).toBe(true);
+    // And the spellings that are meant to work, do.
+    expect(loadApiConfig({}, { FFMPEG_TLS_INTERCEPT: "0" }).ffmpegTlsIntercept).toBe(false);
+    expect(loadApiConfig({}, { FFMPEG_TLS_INTERCEPT: "OFF" }).ffmpegTlsIntercept).toBe(false);
+  });
+
   test("a usable PROXY_URL survives verbatim, credentials and all", () => {
     // Round-tripping the URL through `new URL().href` would normalise the path
     // and re-encode the credentials, which is not this function's business.

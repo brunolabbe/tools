@@ -19,12 +19,27 @@ import { buildRequestContextArgs } from "./headers.ts";
  * `-nostdin` matters: without it ffmpeg reads the parent's stdin and a service
  * with an inherited terminal ends up consuming keystrokes. `-y` because the
  * destination is a path we just created inside our own tmp dir.
+ *
+ * **`warning`, not `error`, and that one word is load-bearing.** Since dl-27 the
+ * egress proxy verifies each origin itself and refuses a bad one by answering
+ * the `CONNECT` with `502 TLS certificate verification failed (<code>)`. ffmpeg
+ * logs a proxy's status line verbatim — `[httpproxy] HTTP error 502 <phrase>` —
+ * **at `AV_LOG_WARNING`**, so at `error` the reason is dropped on the floor and
+ * an intercepted CDN arrives as `Invalid data found when processing input`,
+ * indistinguishable from a corrupt stream. Measured both ways in dl-27, on the
+ * manifest connection and on the segment connections, which is the case that has
+ * no other channel at all: dl-21 established that no certificate semantics reach
+ * ffmpeg from a segment fetch by any other route.
+ *
+ * The noise it buys is nil where it was measured — a clean HLS download over the
+ * terminating proxy emits **zero** bytes of stderr at this level — and what does
+ * arrive goes to `logger.debug` and to a failure's stderr tail.
  */
 export const GLOBAL_ARGS: readonly string[] = [
   "-hide_banner",
   "-nostdin",
   "-loglevel",
-  "error",
+  "warning",
   "-y",
 ];
 

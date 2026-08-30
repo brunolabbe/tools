@@ -1,40 +1,43 @@
 /**
- * dl-21: the manifest is verified. The video is not.
+ * dl-21 pinned the defect here. dl-27 closes it, and this file is where the
+ * difference is observable at all.
  *
  * dl-19 put `-tls_verify 1` on every remote input, and it verifies the
  * connection ffmpeg opens to the **manifest**. The HLS and DASH demuxers open
  * their own connections for segments, and libavformat copies only a fixed list
- * of options onto those. The list is a compile-time array in
- * `libavformat/aviobuf.c`'s `ffio_copy_url_options` — `headers`, `user_agent`,
- * `cookies`, `http_proxy`, `referer`, `rw_timeout`, `icy` — and neither
- * `tls_verify` nor `ca_file` is in it. `hls.c`'s `open_url` builds each segment
- * connection's options from that copy plus a couple of per-call keys, so there
- * is no option, prefix or dictionary that puts the TLS settings back; dl-21
- * measured sixteen candidates and read the source. `dashdec.c` calls the same
- * function, so DASH is identical by construction rather than by coincidence.
+ * of options onto those — `headers`, `user_agent`, `cookies`, `http_proxy`,
+ * `referer`, `rw_timeout`, `icy`, a compile-time array in
+ * `ffio_copy_url_options` — with neither `tls_verify` nor `ca_file` in it. dl-21
+ * measured sixteen candidate arguments against that and read the array out of
+ * the binary: **there is no argv answer, and there is not going to be one.**
  *
- * **So this file pins a defect rather than proving a fix.** The download below
- * succeeds while the origin serving the whole video is untrusted, and that is
- * what the tool does today: an attacker on the path lets the verified manifest
- * through untouched, intercepts only the segment connections, and the
- * substituted video is remuxed into the user's file while the job reports
- * success. Closing it needs a mechanism outside the argv — dl-27 is the ticket,
- * and it carries the one that was measured working. **When dl-27 lands, the
- * middle test here goes red, and that is the point of it.**
+ * One of the seven propagated options is `http_proxy`, and since dl-11 every
+ * ffmpeg egress already goes through this service's loopback proxy. dl-27 makes
+ * that proxy **terminate** those connections: it verifies the real origin itself
+ * and re-encrypts to ffmpeg under a leaf it issued. ffmpeg checks that leaf on
+ * the manifest, where `-tls_verify 1` reaches, and ignores it on the segments,
+ * where it never could — and either way the origin has been verified.
  *
- * `proxied-https.test.ts` cannot express any of this: it serves the playlist
- * and the segments from **one** origin with **one** certificate, so an
- * untrusted chain kills the run at the manifest — which is exactly what its
- * dl-19 test asserts happens. The two connections have to be able to *disagree
- * about trust* before the difference between them is observable at all. This
+ * So the middle test below is the one that turned around. Until dl-27 it
+ * asserted that the whole video arrived from an untrusted origin with exit 0;
+ * it now asserts the download fails, carrying `TLS_VERIFICATION_FAILED`, with
+ * the both-CAs case beside it still succeeding — the failure is about trust and
+ * not about the second origin existing. dl-21's version is kept as the last test
+ * in the file, against a **tunnelling** proxy, because the hole is still exactly
+ * there for any client that takes that path: what changed is the mechanism, not
+ * the fixture.
+ *
+ * `proxied-https.test.ts` cannot express any of this: it serves the playlist and
+ * the segments from **one** origin with **one** certificate, so an untrusted
+ * chain kills the run at the manifest. The two connections have to be able to
+ * *disagree about trust* before the difference between them is observable. This
  * file is that fixture: origin A serves the playlists, origin B serves the
  * segments, and their certificates are unrelated.
  *
- * Nothing here reaches the network. Both origins are loopback, both
- * certificates are generated per run, and the clip is made by ffmpeg at
- * `beforeAll`. Nothing here turns verification off, either — the "trust both"
- * case is one PEM holding both certificates, because `-ca_file` takes one
- * bundle and replaces the system store.
+ * Nothing here reaches the network. Both origins are loopback, both certificates
+ * are generated per run, and the clip is made by ffmpeg at `beforeAll`. Nothing
+ * here turns verification off, either — "trust both" is one PEM holding both
+ * certificates, because a trust store is replaced rather than added to.
  */
 
 import fs from "node:fs/promises";
@@ -46,6 +49,12 @@ import type { DownloadRequest } from "@downloader/engine";
 import { AppError } from "@downloader/contract";
 import type { RequestContext } from "@downloader/contract";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { startEgressProxy } from "../src/egress-proxy.ts";
+import type { EgressProxy } from "../src/egress-proxy.ts";
+import { createApp } from "../src/server.ts";
+import { createSsrfGuard } from "../src/ssrf.ts";
+import { createTlsInterception } from "../src/tls-interception.ts";
+import type { TlsInterception } from "../src/tls-interception.ts";
 import type { FixtureCertificate, TlsOrigin } from "./helpers/tls-origin.ts";
 import {
   assertDecodable,
@@ -66,6 +75,14 @@ const CONTEXT: RequestContext = {
   headers: { Referer: "https://player.example/watch/42", "User-Agent": "Mozilla/5.0 (Fixture)" },
 };
 
+const NOOP_LOGGER = {
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+  child: () => NOOP_LOGGER,
+};
+
 /** Origin A: the playlists. Kilobytes of text. */
 let manifestCertificate: FixtureCertificate;
 let manifestOrigin: TlsOrigin;
@@ -77,6 +94,8 @@ let bothCas: { path: string; cleanup(): Promise<void> };
 let playlistDir: string;
 let segmentDir: string;
 let storageDir: string;
+
+const cleanups: (() => Promise<void>)[] = [];
 
 beforeAll(async () => {
   // Distinct common names, and it is not cosmetic: a CA bundle is indexed by
@@ -102,6 +121,7 @@ beforeAll(async () => {
 }, SLOW);
 
 afterAll(async () => {
+  for (const cleanup of cleanups.splice(0)) await cleanup();
   await manifestOrigin?.close();
   await segmentOrigin?.close();
   await manifestCertificate?.cleanup();
@@ -116,15 +136,82 @@ function masterUrl(): string {
   return `https://127.0.0.1:${manifestOrigin.port}/master.m3u8`;
 }
 
+/**
+ * The proxy `server.ts` gives ffmpeg: it verifies each origin against `caFile`
+ * and re-encrypts under a leaf it issued.
+ *
+ * The guard allows private addresses because both origins are on loopback and
+ * this proxy is the only thing resolving anything — the same trade dl-8
+ * documents for a deployment behind an operator proxy. It is not what is under
+ * test here; trust is.
+ */
+async function startFfmpegProxy(
+  caFile: string,
+): Promise<EgressProxy & { intercept: TlsInterception }> {
+  const intercept = await createTlsInterception({ caFile });
+  cleanups.push(() => intercept.close());
+  const proxy = await startEgressProxy({
+    guard: createSsrfGuard({ allowPrivateAddresses: true }),
+    logger: NOOP_LOGGER,
+    interceptTls: intercept,
+  });
+  cleanups.push(() => proxy.close());
+  return { ...proxy, intercept };
+}
+
+/** dl-14's proxy, which the browser and yt-dlp tiers still get. */
+async function startTunnellingProxy(): Promise<EgressProxy> {
+  const proxy = await startEgressProxy({
+    guard: createSsrfGuard({ allowPrivateAddresses: true }),
+    logger: NOOP_LOGGER,
+  });
+  cleanups.push(() => proxy.close());
+  return proxy;
+}
+
 /** The production engine, verifying, trusting exactly the bundle it is given. */
-async function startEngine(caFile: string): Promise<ReturnType<typeof createEngine>> {
+async function startEngine(
+  proxyUrl: string,
+  caFile: string,
+): Promise<ReturnType<typeof createEngine>> {
   const engine = createEngine({
     storageDir,
     maxFileSizeBytes: 256 * 1024 * 1024,
+    proxyUrl,
     tlsCaFile: caFile,
   });
   await engine.init();
   return engine;
+}
+
+/**
+ * A real `createApp`, differing between the two wiring tests **only** in the
+ * flag under test.
+ *
+ * `FFMPEG_CA_FILE` is origin A and nothing else in both, which is what makes the
+ * pair comparable: the whole question is whether origin B gets checked, and the
+ * two legitimate answers are opposite.
+ */
+async function wiredApp(
+  label: string,
+  overrides: { ffmpegTlsIntercept?: boolean },
+): Promise<Awaited<ReturnType<typeof createApp>>> {
+  const app = await createApp({
+    startGc: false,
+    logger: NOOP_LOGGER,
+    config: {
+      databasePath: ":memory:",
+      storageDir: path.join(storageDir, label),
+      ssrfAllowPrivateAddresses: true,
+      enableBrowserResolver: false,
+      enableYtdlpResolver: false,
+      // Origin A only. The whole question is whether B is checked.
+      ffmpegCaFile: manifestCertificate.caPath,
+      ...overrides,
+    },
+  });
+  cleanups.push(() => app.shutdown());
+  return app;
 }
 
 function downloadRequest(jobId: string): DownloadRequest {
@@ -147,14 +234,6 @@ function downloadRequest(jobId: string): DownloadRequest {
     title: "segments on a second origin",
     durationSec: CLIP_SECONDS,
   };
-}
-
-async function attempt(jobId: string, caFile: string): Promise<AppError | null> {
-  const engine = await startEngine(caFile);
-  return engine.download(downloadRequest(jobId)).then(
-    () => null,
-    (error: unknown) => AppError.from(error),
-  );
 }
 
 /** A verified TLS handshake against one origin, using one CA. */
@@ -202,65 +281,97 @@ describe("the fixture itself, before anything is claimed about ffmpeg", () => {
   });
 
   test("the both-CAs bundle really holds both, and both origins verify against it", async () => {
-    // `createCaBundle` needs its own proof, because **the download that uses it
-    // cannot give one today**. A mutation run made the point: drop the second
-    // certificate from the bundle and the "both CAs" download below still
-    // passes — trusting origin A alone is already enough, since the segment
-    // connections are not verified at all. So the bundle is checked here, where
-    // the assertion is about the file rather than about ffmpeg, and dl-27
-    // inherits a helper that was actually tested.
+    // `createCaBundle` needed its own proof when dl-21 wrote it, because the
+    // download that used it could not give one — trusting A alone was already
+    // enough while segments went unverified, so a mutation that dropped the
+    // second certificate survived. dl-27 changes that: the both-CAs download
+    // below now fails without B's certificate in this file. The assertion stays
+    // anyway, because it is about the file rather than about ffmpeg, and it is
+    // what tells a one-certificate bundle apart from two PEMs concatenated into
+    // something no TLS stack will parse.
     const bundle = await fs.readFile(bothCas.path, "utf8");
     expect(bundle.match(/-----BEGIN CERTIFICATE-----/gu)).toHaveLength(2);
-    // And it is a usable trust store for each of them, not merely two PEMs
-    // concatenated into something no TLS stack will parse.
     await expect(handshake(manifestOrigin.port, bundle)).resolves.toBeUndefined();
     await expect(handshake(segmentOrigin.port, bundle)).resolves.toBeUndefined();
   });
 });
 
-describe("how far dl-19's verification actually reaches", () => {
+describe("dl-27: the proxy verifies what ffmpeg cannot", () => {
   test(
-    "the manifest connection IS verified: trusting only the segment origin fails it",
+    "the positive control: an untrusted manifest origin is refused before a byte is served",
     async () => {
-      // The control that keeps the next test honest. Same fixture, same argv,
-      // one PEM different — and here `-tls_verify 1` bites, at the very first
-      // connection, before a byte of playlist is served. So when the next test
-      // downloads the whole video over an untrusted segment origin, that is not
-      // verification being off somewhere.
+      // **This runs first on purpose.** Every claim below is "the download was
+      // refused", and a harness that could not produce a refusal at all would
+      // report exactly the same green. So: same fixture, same wiring, one PEM
+      // different — the proxy trusts B and meets A — and the run has to die at
+      // the very first connection, with the reason surviving all the way to the
+      // job's error code.
+      const proxy = await startFfmpegProxy(segmentCertificate.caPath);
+      const engine = await startEngine(proxy.url, proxy.intercept.rootCaPath);
+
       const before = manifestOrigin.requests.length;
-      const failure = await attempt("manifest-untrusted", segmentCertificate.caPath);
+      const failure = await engine.download(downloadRequest("manifest-untrusted")).then(
+        () => null,
+        (error: unknown) => AppError.from(error),
+      );
 
       expect(failure?.code).toBe("TLS_VERIFICATION_FAILED");
       expect(failure?.retryable).toBe(false);
       expect(String(failure?.details?.["stderr"] ?? "")).toMatch(/certificate/iu);
-      // It failed at the handshake: nothing was served.
+      // It failed at the handshake the proxy made: nothing was served.
       expect(manifestOrigin.requests.length).toBe(before);
     },
     SLOW,
   );
 
   test(
-    "the segment connections are NOT: the whole video arrives from an untrusted origin",
+    "the segment origin is verified too: trusting only the manifest origin fails the download",
     async () => {
-      // **This is the defect, pinned.** ffmpeg is given `-tls_verify 1` and a CA
-      // that covers A and not B, verifies A, and then fetches every segment of
-      // the video from B over a certificate it never checks. Exit 0, playable
-      // file, job reports success.
-      //
-      // The assertions are deliberately on what happens rather than on what
-      // should: the download succeeding here is the security hole, and dl-27 is
-      // the ticket that closes it. When it does, this test turns red on the first
-      // line and the next reader is told where to look — which is the only thing
-      // a characterization test is for.
-      const before = segmentOrigin.requests.length;
-      const engine = await startEngine(manifestCertificate.caPath);
+      // **The test dl-21 wrote to go red, turned around.** It asserted that the
+      // whole video arrived from B over a certificate nobody checked, exit 0,
+      // playable file, job reports success. The proxy checks it now, so the
+      // same fixture and the same one-PEM difference produce a refusal — and
+      // it is a refusal at the *segment* connections, which is the half no
+      // ffmpeg argument has ever reached.
+      const proxy = await startFfmpegProxy(manifestCertificate.caPath);
+      const engine = await startEngine(proxy.url, proxy.intercept.rootCaPath);
 
-      const outcome = await engine.download(downloadRequest("segments-untrusted"));
+      const beforeManifest = manifestOrigin.requests.length;
+      const beforeSegments = segmentOrigin.requests.length;
+      const failure = await engine.download(downloadRequest("segments-untrusted")).then(
+        () => null,
+        (error: unknown) => AppError.from(error),
+      );
+
+      expect(failure?.code).toBe("TLS_VERIFICATION_FAILED");
+      expect(failure?.retryable).toBe(false);
+      // And it got as far as the manifest, which is what makes this a *segment*
+      // refusal rather than the control above repeated: A was served, B was not.
+      expect(manifestOrigin.requests.length).toBeGreaterThan(beforeManifest);
+      expect(segmentOrigin.requests.slice(beforeSegments)).toEqual([]);
+      // The reason travelled: dl-21 measured that a refused segment origin
+      // reaches ffmpeg as `Invalid data found`, exit 183, with no certificate
+      // wording anywhere. It carries the proxy's reason phrase now.
+      expect(String(failure?.details?.["stderr"] ?? "")).toMatch(/certificate/iu);
+    },
+    SLOW,
+  );
+
+  test(
+    "the same download succeeds when the proxy trusts both origins",
+    async () => {
+      // The other half, and what keeps the two above from being "this fixture
+      // cannot download at all". One PEM with both certificates in it: a trust
+      // store replaces rather than adds, so this is the only way to trust two
+      // origins without turning verification off anywhere.
+      const proxy = await startFfmpegProxy(bothCas.path);
+      const engine = await startEngine(proxy.url, proxy.intercept.rootCaPath);
+
+      const before = segmentOrigin.requests.length;
+      const outcome = await engine.download(downloadRequest("both-trusted"));
 
       expect(outcome.sizeBytes).toBeGreaterThan(10_000);
       await assertDecodable(FFMPEG, outcome.path);
-      // And the bytes really are B's: a download that had somehow stopped at the
-      // playlist would have produced no file at all.
       const served = segmentOrigin.requests.slice(before);
       expect(served.filter((request) => request.url.endsWith(".ts")).length).toBeGreaterThan(1);
     },
@@ -268,20 +379,95 @@ describe("how far dl-19's verification actually reaches", () => {
   );
 
   test(
-    "the same download succeeds when both CAs are in one bundle",
+    "the wiring: a real `createApp` gives ffmpeg the terminating proxy and the generated root",
     async () => {
-      // What the fix is supposed to look like from the outside, and today the
-      // proof that the fixture is a working HLS download rather than a broken
-      // one. One PEM with both certificates in it: `-ca_file` takes one bundle
-      // and replaces the system store, so this is the only way to trust two
-      // origins without turning verification off.
-      const before = segmentOrigin.requests.length;
-      const engine = await startEngine(bothCas.path);
+      // **Everything above builds its own proxy, so none of it can see a
+      // `server.ts` that handed ffmpeg the wrong one** — and that mutation is
+      // silent, restoring dl-21's hole with every other test green. It was
+      // measured surviving before this test existed.
+      //
+      // It also pins the CA swap, which nothing else does. `FFMPEG_CA_FILE` is
+      // the *proxy's* trust store here and the engine's `-ca_file` is the
+      // generated root; passing the operator's root to ffmpeg instead — the
+      // arrangement dl-19 shipped — leaves ffmpeg unable to verify the one
+      // certificate it is ever shown, and the download dies at the manifest
+      // rather than at the segments, which is what the last two assertions
+      // separate.
+      const app = await wiredApp("wired-intercepting", {});
+      expect(app.context.ffmpegProxyUrl).not.toBe(app.context.egressProxyUrl);
 
-      const outcome = await engine.download(downloadRequest("both-trusted"));
+      const beforeManifest = manifestOrigin.requests.length;
+      const beforeSegments = segmentOrigin.requests.length;
+      const failure = await app.context.engine.download(downloadRequest("wired-untrusted")).then(
+        () => null,
+        (error: unknown) => AppError.from(error),
+      );
+
+      expect(failure?.code).toBe("TLS_VERIFICATION_FAILED");
+      // Through the manifest and stopped at the segments, which is the shape
+      // that says the terminating proxy was on the segment connections.
+      expect(manifestOrigin.requests.length).toBeGreaterThan(beforeManifest);
+      expect(segmentOrigin.requests.slice(beforeSegments)).toEqual([]);
+    },
+    SLOW,
+  );
+
+  test(
+    "`FFMPEG_TLS_INTERCEPT=false` reopens the hole, and that is what it is for",
+    async () => {
+      // **The other half of the wiring pair, and the reason the pair exists.**
+      // Adding the flag made "ffmpeg is on the tunnelling proxy" a *legitimate*
+      // state, so no single test can any longer say "ffmpeg must never be
+      // tunnelling" — that assertion would now fail on a correct deployment, and
+      // the mutation that used to kill would be a false positive.
+      //
+      // What still separates the two causes is that the legitimate states have
+      // **opposite** outcomes on this fixture, while both broken pairings have a
+      // third outcome that is neither:
+      //
+      //   intercepting  + generated root  -> fails at the *segments*  (test above)
+      //   tunnelling    + operator root   -> succeeds, B serves it all (this test)
+      //   tunnelling    + generated root  -> fails at the *manifest*, A serves nothing
+      //   intercepting  + operator root   -> fails at the *manifest*, A serves nothing
+      //
+      // So a split pair fails both tests and an operator-requested tunnel fails
+      // neither. That is the discrimination, and it is why this test asserts
+      // that origin A *was* served rather than only that the download worked.
+      const app = await wiredApp("wired-tunnelling", { ffmpegTlsIntercept: false });
+      // Same tunnel for everyone: no second proxy is started at all.
+      expect(app.context.ffmpegProxyUrl).toBe(app.context.egressProxyUrl);
+
+      const beforeManifest = manifestOrigin.requests.length;
+      const beforeSegments = segmentOrigin.requests.length;
+      const outcome = await app.context.engine.download(downloadRequest("wired-tunnelled"));
+
+      // dl-21's hole, exactly: the whole video off an origin nobody checked.
+      expect(outcome.sizeBytes).toBeGreaterThan(10_000);
+      expect(manifestOrigin.requests.length).toBeGreaterThan(beforeManifest);
+      const served = segmentOrigin.requests.slice(beforeSegments);
+      expect(served.filter((request) => request.url.endsWith(".ts")).length).toBeGreaterThan(1);
+    },
+    SLOW,
+  );
+
+  test(
+    "the hole is still exactly there through a tunnelling proxy, which is why the fix is the proxy",
+    async () => {
+      // dl-21's characterization test, kept as a control rather than deleted.
+      // Same fixture, same argv, same untrusted B — and through the proxy the
+      // tiers still use, the whole video arrives from B with exit 0. So what
+      // the three tests above measure is the interception, not a fixture that
+      // quietly stopped being able to reach origin B. It is also the shape of
+      // the regression to fear: `server.ts` handing ffmpeg the tunnelling proxy
+      // would restore this silently, which is why `logging.test.ts` pins
+      // `ffmpegProxyTls`.
+      const proxy = await startTunnellingProxy();
+      const engine = await startEngine(proxy.url, manifestCertificate.caPath);
+
+      const before = segmentOrigin.requests.length;
+      const outcome = await engine.download(downloadRequest("tunnelled-untrusted"));
 
       expect(outcome.sizeBytes).toBeGreaterThan(10_000);
-      await assertDecodable(FFMPEG, outcome.path);
       const served = segmentOrigin.requests.slice(before);
       expect(served.filter((request) => request.url.endsWith(".ts")).length).toBeGreaterThan(1);
     },

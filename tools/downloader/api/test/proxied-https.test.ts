@@ -40,6 +40,8 @@ import { startEgressProxy } from "../src/egress-proxy.ts";
 import type { EgressProxy } from "../src/egress-proxy.ts";
 import { createGuardedFetch } from "../src/guarded-fetch.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
+import { createTlsInterception } from "../src/tls-interception.ts";
+import type { TlsInterception } from "../src/tls-interception.ts";
 import type { FixtureCertificate, TlsOrigin } from "./helpers/tls-origin.ts";
 import {
   assertDecodable,
@@ -105,6 +107,29 @@ async function startPinnedProxy(): Promise<EgressProxy & { port: number }> {
   });
 }
 
+/**
+ * The proxy `server.ts` gives ffmpeg since dl-27: it verifies the origin here
+ * and re-encrypts under a leaf it issued.
+ *
+ * `caFile` is what the proxy trusts, and it is the fixture CA rather than
+ * nothing — the point of the pair below is trust, not reachability. Passing no
+ * `caFile` leaves the system store, against which the fixture is genuinely
+ * untrusted, which is the negative case.
+ */
+async function startTerminatingProxy(
+  caFile?: string,
+): Promise<EgressProxy & { port: number; intercept: TlsInterception }> {
+  const intercept = await createTlsInterception(caFile === undefined ? {} : { caFile });
+  cleanups.push(() => intercept.close());
+  const proxy = await startProxy({
+    guard: guardAllowingOrigin(),
+    logger: NOOP_LOGGER,
+    resolve: resolveToLoopback,
+    interceptTls: intercept,
+  });
+  return { ...proxy, intercept };
+}
+
 function masterUrl(): string {
   return `https://${ORIGIN_HOST}:${origin.port}/master.m3u8`;
 }
@@ -157,21 +182,25 @@ async function topLevelBoxes(file: string): Promise<string[]> {
 function connectTunnel(
   proxyPort: number,
   target: string,
-): Promise<{ status: number; socket: net.Socket }> {
+): Promise<{ status: number; statusLine: string; socket: net.Socket }> {
   return new Promise((resolve, reject) => {
     const socket = net.connect(proxyPort, "127.0.0.1", () => {
       socket.write(`CONNECT ${target} HTTP/1.1\r\nHost: ${target}\r\n\r\n`);
     });
     let buffer = "";
+    // The reason phrase, not only the code. Since dl-27 it is the channel a
+    // refused certificate travels out on, so a test that read only the number
+    // could not tell "we refused the certificate" from "the socket died".
+    const line = (): string => buffer.split("\r\n")[0] ?? "";
+    const code = (): number => Number(/^HTTP\/1\.[01] (\d{3})/u.exec(buffer)?.[1] ?? 0);
     const onData = (chunk: Buffer): void => {
       buffer += chunk.toString("latin1");
       const end = buffer.indexOf("\r\n\r\n");
       if (end === -1) return;
       socket.removeListener("data", onData);
-      const status = Number(/^HTTP\/1\.[01] (\d{3})/u.exec(buffer)?.[1] ?? 0);
       const leftover = Buffer.from(buffer.slice(end + 4), "latin1");
       if (leftover.length > 0) socket.unshift(leftover);
-      resolve({ status, socket });
+      resolve({ status: code(), statusLine: line(), socket });
     };
     socket.on("data", onData);
     socket.setTimeout(10_000, () => {
@@ -181,8 +210,7 @@ function connectTunnel(
     socket.once("error", reject);
     socket.once("close", () => {
       // A refusal ends the socket without a tunnel; report the status anyway.
-      const status = Number(/^HTTP\/1\.[01] (\d{3})/u.exec(buffer)?.[1] ?? 0);
-      resolve({ status, socket });
+      resolve({ status: code(), statusLine: line(), socket });
     });
   });
 }
@@ -200,6 +228,7 @@ async function getThroughTunnel(
   host: string,
   port: number,
   requestPath: string,
+  ca: string = certificate.ca,
 ): Promise<{ body: string; peerCertificate: tls.PeerCertificate }> {
   const { status, socket } = await connectTunnel(proxyPort, `${host}:${port}`);
   if (status !== 200) {
@@ -210,7 +239,7 @@ async function getThroughTunnel(
   const secure = tls.connect({
     socket,
     servername: host,
-    ca: certificate.ca,
+    ca,
     rejectUnauthorized: true,
   });
 
@@ -496,8 +525,17 @@ describe("ffmpeg verifies the certificates it is encrypting to", () => {
   });
 });
 
-describe("the CONNECT tunnel, end to end", () => {
+describe("the CONNECT tunnel, end to end — which is what the tiers still get", () => {
   test("an allowed target's certificate reaches the client unaltered", async () => {
+    // **Still true, and still worth pinning, but of a narrower client than it
+    // was.** dl-14 chose a tunnel so the certificate reaching the client is the
+    // origin's own; dl-27 gave ffmpeg a terminating proxy instead, because
+    // ffmpeg cannot verify its own segment connections. Chromium and yt-dlp
+    // can, so they keep this one — and pointing them at the terminating proxy
+    // would break every HTTPS page Chromium loads for no gain. The
+    // ffmpeg-facing half of this assertion is the first test in the block
+    // below, which asserts the opposite because the opposite is what is true
+    // there.
     const proxy = await startPinnedProxy();
 
     const { body, peerCertificate } = await getThroughTunnel(
@@ -514,6 +552,7 @@ describe("the CONNECT tunnel, end to end", () => {
     expect(peerCertificate.fingerprint256).toBe(
       new X509Certificate(certificate.cert).fingerprint256,
     );
+    expect(proxy.tls).toBe("tunnel");
   });
 
   test("a blocked target is refused before any handshake", async () => {
@@ -601,5 +640,114 @@ describe("chained mode, which is what PROXY_URL actually describes", () => {
     const { body } = await getThroughTunnel(chained.port, ORIGIN_HOST, origin.port, "/master.m3u8");
 
     expect(body).toContain("#EXTM3U");
+  });
+});
+
+/**
+ * dl-27. The proxy `server.ts` hands ffmpeg terminates TLS rather than
+ * tunnelling it, and these are the properties that follow at the proxy — the
+ * download outcomes are in `two-origin-tls.test.ts`, where a second origin makes
+ * "which connection was verified" answerable at all.
+ *
+ * Nothing here turns verification off. The negative case is a proxy holding the
+ * system store, against which the generated fixture chain is genuinely
+ * untrusted; the positive one is the same proxy holding the fixture CA.
+ */
+describe("the terminating proxy, which is the one ffmpeg gets", () => {
+  test("the client is handed a certificate this process issued, not the origin's", async () => {
+    // The replacement for what the tunnel test above asserts, stated as what is
+    // true rather than as a deletion: ffmpeg never sees an origin certificate
+    // again, and the chain it does see ends at the root `-ca_file` names.
+    const proxy = await startTerminatingProxy(certificate.caPath);
+    expect(proxy.tls).toBe("terminate");
+
+    const { body, peerCertificate } = await getThroughTunnel(
+      proxy.port,
+      ORIGIN_HOST,
+      origin.port,
+      "/master.m3u8",
+      proxy.intercept.rootCaPem,
+    );
+
+    expect(body).toContain("#EXTM3U");
+    // It verified against the generated root — `getThroughTunnel` keeps
+    // `rejectUnauthorized` on — and it is emphatically not the origin's key.
+    expect(peerCertificate.subject.CN).toBe(ORIGIN_HOST);
+    expect(peerCertificate.issuer.CN).toBe("downloader egress proxy root");
+    expect(peerCertificate.fingerprint256).not.toBe(
+      new X509Certificate(certificate.cert).fingerprint256,
+    );
+  });
+
+  test("an origin the proxy does not trust is refused, and the status line says why", async () => {
+    // The out-of-band channel, at the only place it exists. dl-21 measured that
+    // no certificate semantics survive to ffmpeg from a refused segment fetch —
+    // a dropped tunnel is `Invalid data found`, a bare 502 is `Server returned
+    // 5XX` — so the reason phrase is the whole of what anyone downstream gets,
+    // and `runner.ts` classifies on it. If this string stops carrying both
+    // "certificate" and "verification", a MITM starts arriving as a dead link.
+    const proxy = await startTerminatingProxy();
+
+    const { status, socket, statusLine } = await connectTunnel(
+      proxy.port,
+      `${ORIGIN_HOST}:${origin.port}`,
+    );
+    socket.destroy();
+
+    expect(status).toBe(502);
+    expect(statusLine).toMatch(/certificate/iu);
+    expect(isTlsVerificationFailure(statusLine)).toBe(true);
+    // And the verify code travels with it, so an operator reading the proxy log
+    // and a developer reading ffmpeg's stderr see the same fact.
+    expect(statusLine).toContain("SELF_SIGNED");
+  });
+
+  test("a certificate valid for another name does not pass either", async () => {
+    // A proxy that checked the chain and forgot the name would verify a
+    // certificate issued for anything at all, which is most of the value gone.
+    // `BLOCKED_HOST` is in this fixture's SAN list and `elsewhere.test` is not.
+    const intercept = await createTlsInterception({ caFile: certificate.caPath });
+    cleanups.push(() => intercept.close());
+    const proxy = await startProxy({
+      guard: createSsrfGuard({
+        allowHosts: ["elsewhere.test"],
+        lookup: async () => ["93.184.216.34"],
+      }),
+      logger: NOOP_LOGGER,
+      resolve: resolveToLoopback,
+      interceptTls: intercept,
+    });
+
+    const { status, socket, statusLine } = await connectTunnel(
+      proxy.port,
+      `elsewhere.test:${origin.port}`,
+    );
+    socket.destroy();
+
+    expect(status).toBe(502);
+    expect(statusLine).toMatch(/certificate/iu);
+    expect(statusLine).toContain("ERR_TLS_CERT_ALTNAME_INVALID");
+  });
+
+  test("real ffmpeg downloads through it, and fails on trust when the proxy has no CA", async () => {
+    // dl-19's pair, re-run on the wiring production now uses. The engine's
+    // `-ca_file` is the generated root in both halves; the only thing that
+    // moves is what the *proxy* trusts.
+    const trusting = await startTerminatingProxy(certificate.caPath);
+    const ok = await startEngine(trusting.url, { tlsCaFile: trusting.intercept.rootCaPath });
+    const outcome = await ok.download(downloadRequest("terminating-trusted"));
+    expect(outcome.sizeBytes).toBeGreaterThan(10_000);
+    await assertDecodable(FFMPEG, outcome.path);
+
+    const refusing = await startTerminatingProxy();
+    const engine = await startEngine(refusing.url, { tlsCaFile: refusing.intercept.rootCaPath });
+    const failure = await engine.download(downloadRequest("terminating-untrusted")).then(
+      () => null,
+      (error: unknown) => AppError.from(error),
+    );
+
+    expect(failure?.code).toBe("TLS_VERIFICATION_FAILED");
+    expect(failure?.retryable).toBe(false);
+    expect(String(failure?.details?.["stderr"] ?? "")).toMatch(/certificate/iu);
   });
 });

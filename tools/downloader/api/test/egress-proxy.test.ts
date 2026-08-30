@@ -18,6 +18,9 @@ import type { EgressProxy } from "../src/egress-proxy.ts";
 import type { AppLogger } from "../src/logger.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
 import type { SsrfGuard } from "../src/ssrf.ts";
+import { createTlsInterception } from "../src/tls-interception.ts";
+import type { TlsInterception } from "../src/tls-interception.ts";
+import { createFixtureCertificate, startTlsOrigin } from "./helpers/tls-origin.ts";
 
 const NOOP_LOGGER = {
   debug: () => {},
@@ -173,6 +176,33 @@ function getThrough(proxyPort: number, url: string): Promise<{ status: number; b
   return sendThrough(proxyPort, "GET", url);
 }
 
+/**
+ * A TLS origin whose chain ends nowhere any store knows.
+ *
+ * The interception below it holds the **system store**, against which this
+ * fixture is genuinely untrusted — nothing is simulated and nothing is switched
+ * off, which is the trap dl-14, dl-19 and dl-21 all carry.
+ */
+async function startUntrustedTlsOrigin(): Promise<{ port: number }> {
+  const certificate = await createFixtureCertificate({
+    ipAddresses: ["127.0.0.1"],
+    dnsNames: ["untrusted.test"],
+    commonName: "dl27-egress-origin",
+  });
+  cleanups.push(() => certificate.cleanup());
+  const origin = await startTlsOrigin(certificate, (_request, response) => {
+    response.writeHead(200).end("the media");
+  });
+  cleanups.push(() => origin.close());
+  return { port: origin.port };
+}
+
+async function interception(caFile?: string): Promise<TlsInterception> {
+  const intercept = await createTlsInterception(caFile === undefined ? {} : { caFile });
+  cleanups.push(() => intercept.close());
+  return intercept;
+}
+
 describe("the holes dl-11 closes", () => {
   test("a segment URI that never reached a ProbeResult is refused", async () => {
     // The whole point: nothing vetted this URL earlier, because it did not
@@ -268,6 +298,38 @@ describe("what the log says happened", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.msg).toBe("refused a subprocess fetch");
     expect(warnings[0]?.fields["code"]).toBe("BLOCKED_TARGET");
+  });
+
+  test("a certificate this proxy refused is neither a policy refusal nor a dead network", async () => {
+    // **dl-27's third outcome on the socket dl-26 split in two.** A pinning
+    // verdict, an `ETIMEDOUT` and a rejected origin certificate all arrive as
+    // the same `error` event, and this one is the one whose only surviving
+    // evidence is this line: dl-21 measured that no certificate semantics reach
+    // ffmpeg from a refused segment fetch by any other route. Filed as
+    // unreachable it reads as a flaky CDN; filed as a refusal it sends the
+    // reader into `ssrf.ts` looking for a rule that never fired.
+    const { logger, warnings } = recordingLogger();
+    const origin = await startUntrustedTlsOrigin();
+    const guard = createSsrfGuard({ allowHosts: ["untrusted.test"] });
+    const proxy = await startProxy({
+      guard,
+      logger,
+      resolve: resolverFor([v4("127.0.0.1")]),
+      interceptTls: await interception(),
+    });
+
+    const result = await connectThrough(proxy.port, `untrusted.test:${origin.port}`);
+
+    expect(result.status).toBe(502);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.msg).toBe(
+      "refused a subprocess fetch: the origin's certificate did not verify",
+    );
+    // The verify code, so this log and ffmpeg's stderr name the same fact.
+    expect(warnings[0]?.fields["code"]).toBe("DEPTH_ZERO_SELF_SIGNED_CERT");
+    // And neither of the other two verdicts, which is the whole point.
+    expect(warnings[0]?.fields["errno"]).toBeUndefined();
+    expect(warnings[0]?.msg).not.toContain("could not connect");
   });
 
   test("no message claims the fetch was ffmpeg's", async () => {
@@ -445,6 +507,49 @@ describe("chaining to an operator proxy", () => {
 
     expect(seen).toEqual(["origin.test:443"]);
     expect(result.status).toBe(502);
+  });
+
+  test("terminating still verifies the origin when the tunnel is the operator's", async () => {
+    // `PROXY_URL` and dl-27 together, which is a real deployment and a code path
+    // nothing else reaches: the handshake this proxy verifies happens *inside*
+    // the upstream's tunnel, after `chainConnect` has agreed it. Getting the
+    // order wrong here would verify the operator's proxy instead of the origin
+    // and nothing downstream would notice.
+    const origin = await startUntrustedTlsOrigin();
+    const upstream = http.createServer();
+    upstream.on("connect", (request, socket, head) => {
+      const port = Number((request.url ?? "").split(":").pop());
+      const onward = net.connect(port, "127.0.0.1", () => {
+        socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+        if (head.length > 0) onward.write(head);
+        socket.pipe(onward);
+        onward.pipe(socket);
+      });
+      onward.once("error", () => socket.destroy());
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    cleanups.push(
+      () =>
+        new Promise<void>((resolve) => {
+          upstream.close(() => resolve());
+        }),
+    );
+
+    const { logger, warnings } = recordingLogger();
+    const proxy = await startProxy({
+      guard: createSsrfGuard({ allowPrivateAddresses: true }),
+      logger,
+      upstreamProxyUrl: `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`,
+      interceptTls: await interception(),
+    });
+
+    expect(proxy.mode).toBe("chained");
+    expect(proxy.tls).toBe("terminate");
+    const result = await connectThrough(proxy.port, `untrusted.test:${origin.port}`);
+
+    expect(result.status).toBe(502);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.msg).toContain("certificate did not verify");
   });
 
   test("an upstream that agrees produces a working tunnel", async () => {

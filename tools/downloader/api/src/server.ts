@@ -20,6 +20,7 @@ import { JobStore } from "./db/job-store.ts";
 import { migrate } from "./db/schema.ts";
 import { createEgressDispatcher } from "./dispatcher.ts";
 import { startEgressProxy } from "./egress-proxy.ts";
+import type { EgressProxy } from "./egress-proxy.ts";
 import { createGuardedFetch } from "./guarded-fetch.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import { JobEventHub } from "./jobs/events.ts";
@@ -38,6 +39,7 @@ import { registerJobRoutes } from "./routes/jobs.ts";
 import { registerProbeRoute } from "./routes/probe.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 import { createSsrfGuard } from "./ssrf.ts";
+import { createTlsInterception } from "./tls-interception.ts";
 import { ROUTES } from "@downloader/contract";
 
 export interface CreateAppOptions {
@@ -83,14 +85,97 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   // ffmpeg fetches through libavformat and the resolver tiers fetch from their
   // own subprocesses, so all three get a proxy that runs this guard on every
   // request. See `egress-proxy.ts`.
-  const egressProxy = await startEgressProxy({
+  const tierProxy = await startEgressProxy({
     guard,
     logger,
     ...(config.proxyUrl === undefined ? {} : { upstreamProxyUrl: config.proxyUrl }),
   });
+
+  // **Two proxies, and which one a subprocess gets is the whole of dl-27.**
+  //
+  // Chromium and yt-dlp verify their own connections without being asked, so
+  // they keep the one above: a `CONNECT` is tunnelled, the origin's own
+  // certificate reaches them, and nothing needs a trust-store change. ffmpeg
+  // cannot — libavformat propagates a fixed seven-name option list onto the
+  // connections its HLS and DASH demuxers open for segments and the TLS
+  // settings are not in it, so `-tls_verify 1` reaches the manifest and nothing
+  // else (dl-21 measured sixteen ways round it). The one option that *is*
+  // propagated is `http_proxy`, so this proxy is already on every segment
+  // connection; making it terminate them is what puts a verification there at
+  // all. Pointing the tiers at this one instead would break every HTTPS page
+  // Chromium loads, for no gain it does not already have.
+  //
+  // `FFMPEG_TLS_INTERCEPT=false` is the way out for an operator the interception
+  // breaks for some reason of their own. It is a separate knob from
+  // `FFMPEG_ALLOW_UNVERIFIED_TLS` on purpose: without it, the only escape an
+  // operator can find in the environment table is the one that stops verifying
+  // anything at all, and giving up the manifest check to fix a proxy problem is
+  // the worst of the three states this service can be in.
+  const ffmpegInterception = config.ffmpegTlsIntercept
+    ? await createTlsInterception({
+        // The two CA settings swap sides here and getting it backwards fails
+        // closed on every public origin. `-ca_file` *replaces* ffmpeg's store,
+        // so ffmpeg's becomes the generated root and nothing else; the proxy is
+        // the side that meets real origins, so the operator's root goes here,
+        // merged with the system store.
+        ...(config.ffmpegCaFile === undefined ? {} : { caFile: config.ffmpegCaFile }),
+        verifyOrigins: !config.ffmpegAllowUnverifiedTls,
+      }).catch((error: unknown) => {
+        // dl-19 recorded that a typo'd `FFMPEG_CA_FILE` was discovered one
+        // download at a time. It cannot be now: the file is a trust anchor this
+        // proxy needs before it can verify anything, and quietly carrying on
+        // with the system store would refuse the operator's own origins in a way
+        // that reads like their CDN is compromised.
+        throw new AppError("INTERNAL", "FFMPEG_CA_FILE could not be read.", {
+          cause: error,
+          details: { path: config.ffmpegCaFile },
+        });
+      })
+    : null;
+
+  // **The proxy ffmpeg gets and the trust store it is given are one decision,
+  // written once, and that is not tidiness.** They are only ever correct as a
+  // pair: a terminating proxy with the operator's root leaves ffmpeg unable to
+  // verify the one certificate it is shown, and a tunnel with the generated root
+  // leaves it unable to verify the origin's. Both mismatches fail every download
+  // at the manifest, which looks nothing like the setting that caused them.
+  // Choosing them in two places is how they drift.
+  //
+  // With interception off there is no second proxy at all. A tunnelling proxy is
+  // what `tierProxy` already is, so a second one would be an identical listener
+  // and two RSA keygens to no end.
+  let ffmpegProxy: EgressProxy | null = null;
+  let ffmpegEgress: {
+    proxyUrl: string;
+    tlsCaFile: string | undefined;
+    tls: "tunnel" | "terminate";
+  };
+  if (ffmpegInterception === null) {
+    ffmpegEgress = {
+      proxyUrl: tierProxy.url,
+      // Back to ffmpeg, because ffmpeg is meeting the origin again. This is
+      // dl-19's arrangement, unchanged.
+      tlsCaFile: config.ffmpegCaFile,
+      tls: tierProxy.tls,
+    };
+  } else {
+    ffmpegProxy = await startEgressProxy({
+      guard,
+      logger,
+      ...(config.proxyUrl === undefined ? {} : { upstreamProxyUrl: config.proxyUrl }),
+      interceptTls: ffmpegInterception,
+    });
+    ffmpegEgress = {
+      proxyUrl: ffmpegProxy.url,
+      tlsCaFile: ffmpegInterception.rootCaPath,
+      tls: ffmpegProxy.tls,
+    };
+  }
+
   logger.info("egress configured", {
     mode: egress.mode,
-    subprocessProxyMode: egressProxy.mode,
+    subprocessProxyMode: tierProxy.mode,
+    ffmpegProxyTls: ffmpegEgress.tls,
     // Whether a proxy is set, never which: the URL routinely carries
     // credentials, and this line is not worth a leak.
     proxied: config.proxyUrl !== undefined,
@@ -102,25 +187,40 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   // set it for an afternoon and forgot has a line in every startup log saying so.
   if (config.ffmpegAllowUnverifiedTls) {
     logger.warn(
-      "FFMPEG_ALLOW_UNVERIFIED_TLS is on: ffmpeg will not check the certificates it downloads over",
+      "FFMPEG_ALLOW_UNVERIFIED_TLS is on: nothing checks the certificates this service downloads video over",
       {
-        hint: "Prefer FFMPEG_CA_FILE with your proxy's root certificate. Anything on the path to a CDN can substitute the video while this is set.",
+        hint: "Since dl-27 it is the egress proxy that verifies, so this turns off the check for manifests and segments alike. Prefer FFMPEG_CA_FILE with your proxy's root certificate; anything on the path to a CDN can substitute the video while this is set.",
+      },
+    );
+  } else if (ffmpegInterception === null) {
+    // The third state, and the one this line exists to make impossible to be in
+    // by accident. `FFMPEG_TLS_INTERCEPT=false` is a narrower escape than
+    // `FFMPEG_ALLOW_UNVERIFIED_TLS` and it is not a free one: it puts this
+    // service back exactly where dl-21 found it. An escape hatch that undersells
+    // its cost is worse than no escape hatch, because the operator who used it
+    // believes they kept something they did not.
+    logger.warn(
+      "FFMPEG_TLS_INTERCEPT is off: HLS and DASH segment certificates are not checked at all",
+      {
+        hint: "This is dl-21's hole, reopened deliberately. ffmpeg verifies the manifest connection only — libavformat does not propagate the TLS options onto a demuxer's segment connections and no argument changes that — so the manifest is kilobytes and the segments are the whole video. An attacker on the path to the segment origin can substitute it and the job will report success. Prefer FFMPEG_CA_FILE, and turn this back on. See tools/downloader/docs/work/dl-27-verify-segment-origins.md.",
       },
     );
   } else {
-    // The other half of the same honesty, and the reason it is a warning rather
-    // than an info line: with verification on, an operator reasonably believes
-    // the video is authenticated, and it is not. libavformat copies only a
-    // fixed seven-name list of options onto the connections the HLS and DASH
-    // demuxers open for segments (`ffio_copy_url_options`, `libavformat/
-    // aviobuf.c`), and the TLS settings are not in it — so `-tls_verify 1`
-    // reaches the manifest and nothing else. dl-21 measured it and could not
-    // close it from the argv; dl-27 is the ticket. Saying so once per boot is
-    // the only place an operator meets this before an incident does.
+    // The other half of the same honesty, and still a warning rather than an
+    // info line — for the opposite reason it was one until dl-27.
+    //
+    // Until dl-27 this said the segments were **not** covered, because they
+    // were not and an operator reasonably believed otherwise. They are now, and
+    // what an operator reasonably believes otherwise is the *shape* of it:
+    // dl-14 chose a `CONNECT` tunnel precisely so the certificate reaching
+    // ffmpeg is the origin's own, and this reverses that. Every media byte now
+    // crosses this process in plaintext, and the certificate ffmpeg checks is
+    // one this process minted. That is a deployment fact worth one line per
+    // boot, not a fact for a documentation page.
     logger.warn(
-      "ffmpeg verifies the manifest connection only: HLS and DASH segment certificates are not checked",
+      "ffmpeg's egress proxy terminates TLS: this process verifies every manifest and segment origin, and ffmpeg sees a certificate issued here",
       {
-        hint: "The manifest is kilobytes and the segments are the whole video. An attacker on the path to the segment origin can substitute it. See tools/downloader/docs/work/dl-21-verified-hls-segments.md.",
+        hint: "It is the only way segment origins get verified at all — libavformat does not propagate the TLS options to a demuxer's segment connections. The cost is that media passes through this process in plaintext. See tools/downloader/docs/work/dl-27-verify-segment-origins.md.",
       },
     );
   }
@@ -139,10 +239,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       fetchImpl: guardedFetch,
       ...(config.ffmpegPath === undefined ? {} : { ffmpegPath: config.ffmpegPath }),
       tlsVerify: !config.ffmpegAllowUnverifiedTls,
-      ...(config.ffmpegCaFile === undefined ? {} : { tlsCaFile: config.ffmpegCaFile }),
-      // Not `config.proxyUrl`: ffmpeg goes through the local guarded proxy,
-      // which chains to the operator's when there is one.
-      proxyUrl: egressProxy.url,
+      // **Both halves come from `ffmpegEgress` and neither is read from
+      // `config` here.** Interception on, that is the terminating proxy and the
+      // generated root; off, it is the tunnel and the operator's own
+      // `FFMPEG_CA_FILE`. Reaching past it for either one is how the pair gets
+      // split.
+      ...(ffmpegEgress.tlsCaFile === undefined ? {} : { tlsCaFile: ffmpegEgress.tlsCaFile }),
+      proxyUrl: ffmpegEgress.proxyUrl,
     });
   await engine.init();
 
@@ -184,7 +287,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     // Not `config.proxyUrl`, for the same reason the engine does not get it:
     // the browser and yt-dlp tiers fetch from their own subprocesses, so the
     // only check that can reach them is the one at this proxy. See dl-12.
-    proxyUrl: egressProxy.url,
+    proxyUrl: tierProxy.url,
     fileUrl: (token) => ROUTES.file(token),
     now,
   });
@@ -199,7 +302,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     tiers: { ytdlp, browser },
     startedAt: now(),
     guard,
-    egressProxyUrl: egressProxy.url,
+    egressProxyUrl: tierProxy.url,
+    ffmpegProxyUrl: ffmpegEgress.proxyUrl,
     queue,
     events,
     probeCache,
@@ -279,8 +383,17 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       });
       // Same ordering rule: an open tunnel here belongs to an ffmpeg the queue
       // has already stopped.
-      await egressProxy.close().catch((error: unknown) => {
+      await tierProxy.close().catch((error: unknown) => {
+        logger.warn("the tiers' egress proxy did not close cleanly", { error: String(error) });
+      });
+      // Both are null when `FFMPEG_TLS_INTERCEPT` is off — there is no second
+      // proxy and no generated root to take down.
+      await ffmpegProxy?.close().catch((error: unknown) => {
         logger.warn("the ffmpeg egress proxy did not close cleanly", { error: String(error) });
+      });
+      // The generated root's temp directory. Its private key was never on disk.
+      await ffmpegInterception?.close().catch((error: unknown) => {
+        logger.warn("the generated egress CA did not clean up", { error: String(error) });
       });
       db.close();
       logger.info("shutdown complete");
