@@ -53,8 +53,10 @@ container at a dedicated clone.
 
 `init-firewall.sh` sets the default policy to DROP and then allows: loopback,
 the Docker host subnet, DNS, GitHub's published address ranges (fetched from
-`api.github.com/meta`), and the A records of every name in
-`allowed-domains.txt`. It verifies both directions before exiting — that
+`api.github.com/meta`), and the A records of every name in the allowlist. The
+copy it reads is `/usr/local/share/devcontainer/allowed-domains.txt`, baked
+into the image by the `Dockerfile` and owned by root — **not** the
+`.devcontainer/allowed-domains.txt` you edit. It verifies both directions before exiting — that
 `example.com` is blocked and that `api.anthropic.com` is not — so a rule set
 that failed open or closed says so at startup rather than three hours later.
 
@@ -68,6 +70,23 @@ ipset holds whatever they resolved to at container start. Re-run it:
 ```bash
 sudo /usr/local/bin/init-firewall.sh
 ```
+
+**That re-run is not how you add a host, and the difference has cost time.** It
+rebuilds the ipset from scratch, but from the baked copy — so it re-resolves the
+same names and picks up nothing you edited in the repo. The two copies drift
+silently and stay drifted: a container built before `download.docker.com` was
+added ran that script at every start for weeks without ever holding it. To see
+which list is actually in force, diff them:
+
+```bash
+diff /usr/local/share/devcontainer/allowed-domains.txt \
+     .devcontainer/allowed-domains.txt
+```
+
+Only a rebuild re-bakes it. That is the point of the design, not a wrinkle in
+it — `sudo` here is `NOPASSWD` for `init-firewall.sh` and `fix-mounts.sh` and
+nothing else, so an agent can re-apply the allowlist it was given and cannot
+write itself a new one.
 
 **Consequence worth knowing:** the resolver tiers exist to probe arbitrary
 third-party sites, and in here they can reach none of them. Every unit test and

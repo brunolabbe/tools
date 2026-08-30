@@ -68,3 +68,21 @@ download.docker.com
 # against local fixtures by design, so that is not a problem for tests. If you
 # genuinely need to probe a real site, add its hostname (and its media CDN's)
 # here and rebuild.
+
+# --- Planner: geocoding, places and notability -----------------------------
+# Capturing real payloads to commit as fixtures. pl-28 and pl-30 both existed
+# to replace hand-composed fixtures whose assumptions turned out false, so the
+# planner's adapters are fixtured from captures, and a capture needs the live
+# service once.
+#
+# Nominatim is behind Fastly, and this allowlist is keyed on resolved
+# addresses — so this line opens four Fastly edge addresses that front many
+# unrelated sites. That is the cost of an IP-keyed allowlist, and it is worth
+# knowing before adding another CDN-hosted name here.
+nominatim.openstreetmap.org
+overpass-api.de
+# Every language of both projects answers on one Wikimedia anycast address, so
+# these two lines already cover fr.wikipedia.org and fr.wikivoyage.org. Adding
+# per-language names would resolve to the same address and change nothing.
+en.wikipedia.org
+en.wikivoyage.org
