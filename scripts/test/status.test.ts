@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -6,6 +7,7 @@ import { expect, test } from "vitest";
 import {
   danglingDependencies,
   describeTicket,
+  ignoreClosedPipe,
   milestones,
   parseFrontmatter,
   readTickets,
@@ -876,6 +878,30 @@ test("a ## Review inside a fenced block is an example, not a gate record", () =>
   expect(reviewedButReady(readTickets(root))).toEqual([]);
 });
 
+// The other fence character. Gate 1 found this branch hand-verified and
+// uncommitted, which is the state a branch rots from: `~~~` is what a markdown
+// author reaches for when the block itself contains backticks, and a ticket
+// quoting a fenced example is exactly such a block.
+test("a ## Review inside a tilde-fenced block is an example too", () => {
+  const body = `${pl("pl-1")}\n~~~md\n## Review\n\n**Gate: PASS**\n~~~\n`;
+  const root = repoWith({ [at("pl-1")]: body });
+  expect(readTickets(root).map((t) => t.reviewed)).toEqual([false]);
+});
+
+// **A known miss, pinned rather than fixed.** An unclosed fence swallows the
+// rest of the file, so a real gate record below one is not seen and a ticket
+// that should be flagged is not. Repairing it means guessing which of an odd
+// number of fences was the typo, and guessing wrong converts a missed row on
+// the board into a red pipeline for every reader — the wrong side of the
+// asymmetry this check is built on. Asserted so the next reader learns it from
+// the suite instead of from a ticket that quietly went unflagged.
+test("an unclosed fence hides a real gate record below it, and that is the tolerated direction", () => {
+  const body = `${pl("pl-1")}\n\`\`\`md\nan example nobody closed\n\n## Review\n\n**Gate: PASS**\n`;
+  const root = repoWith({ [at("pl-1")]: body });
+  expect(readTickets(root).map((t) => t.reviewed)).toEqual([false]);
+  expect(reviewedButReady(readTickets(root))).toEqual([]);
+});
+
 // An inline mention is not a heading either. repo-12's own Build section names
 // `## Review` mid-sentence, indented under a list item.
 test("an inline mention of ## Review is not a gate record", () => {
@@ -924,4 +950,32 @@ test("a dangling dependency and a gated ready ticket are both reported", () => {
     `${at("pl-29")}: depends_on "pl-404", which is not a ticket`,
     GATED,
   ]);
+});
+
+// ---------------------------------------------------------------------------
+// A reader that stops reading
+// ---------------------------------------------------------------------------
+
+// `npm run status -- --ready | head -5` crashed with an unhandled `EPIPE` and
+// eleven lines of stack trace under an answer the reader already had. It
+// predates this ticket — reproduced against `origin/main`'s own copy of the
+// script — and was fixed here because repo-12 was already in the file.
+//
+// Driven through a fake stream rather than a real pipe. Whether the reader
+// closes before or after the writer finishes is a race against a 64 KB pipe
+// buffer, and a test that has to win a race fails on somebody's laptop; the
+// crash was in the missing handler, so the handler is what is asserted. The
+// end-to-end case was verified by hand, before and after, with the command
+// above.
+test("a closed pipe is ignored, and no other stream error is", () => {
+  const stream = new EventEmitter();
+  ignoreClosedPipe([stream]);
+
+  const epipe = Object.assign(new Error("write EPIPE"), { code: "EPIPE" });
+  expect(() => stream.emit("error", epipe)).not.toThrow();
+
+  // The half that makes the first half mean something: a handler that swallowed
+  // everything would satisfy it and would hide a real failure to write.
+  const eacces = Object.assign(new Error("write EACCES"), { code: "EACCES" });
+  expect(() => stream.emit("error", eacces)).toThrow(/EACCES/);
 });

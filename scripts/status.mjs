@@ -176,6 +176,13 @@ export function readTickets(repoRoot = DEFAULT_ROOT) {
  * at, and an inline mention like the one in repo-12's own Build section is not
  * at the start of a line at all.
  *
+ * **A fence that is never closed swallows the rest of the file**, so a real
+ * gate record below one is not seen and the ticket is not flagged. Left that
+ * way rather than hardened, and pinned by a test so the next reader finds it
+ * here: repairing it means guessing which of an odd number of fences was the
+ * typo, and guessing wrong turns a missed row on the board into a red pipeline
+ * for every reader. It falls on the tolerable side of the asymmetry below.
+ *
  * @param {string} text The whole file, frontmatter included.
  * @returns {boolean}
  */
@@ -579,6 +586,18 @@ function parseArgs(argv) {
  */
 const EXIT_ON_PROBLEMS = ["json"];
 
+/**
+ * Either kind of problem, which is what `main` builds and every view receives.
+ *
+ * Named because `renderView` used to be documented as taking
+ * `ReturnType<typeof danglingDependencies>` and quietly stopped being handed
+ * one when repo-12 concatenated the second check into the same list — a
+ * signature that reads as narrower than the value it gets. `checkJs` is off for
+ * this file, so nothing would have caught it.
+ *
+ * @typedef {ReturnType<typeof danglingDependencies>[number] | ReturnType<typeof reviewedButReady>[number]} Problem
+ */
+
 function main() {
   const { flags, values } = parseArgs(process.argv.slice(2));
   const repoRoot = values.root ?? DEFAULT_ROOT;
@@ -597,7 +616,7 @@ function main() {
 
 /**
  * @param {ReturnType<typeof readTickets>} all
- * @param {ReturnType<typeof danglingDependencies>} problems
+ * @param {Problem[]} problems
  * @param {Set<string>} flags
  * @param {Record<string, string>} values
  * @param {string} repoRoot
@@ -745,7 +764,39 @@ function printOpenPullRequests(repoRoot) {
   }
 }
 
+/**
+ * A reader that stops reading is not an error.
+ *
+ * `npm run status -- --ready | head -5` closes the pipe while the view is still
+ * writing, and node's default for that is an unhandled `error` event: eleven
+ * lines of stack trace under the answer the reader already had. Reproduced on
+ * `origin/main` as well as here, so it predates repo-12 and is fixed here only
+ * because that ticket was in this file.
+ *
+ * Ignored rather than fatal, and only for `EPIPE`. The exit code is left
+ * exactly as it was — `--json`'s is the whole of CI's gate, and a closed pipe
+ * says nothing about the board. Anything else still raises, which surfaces as
+ * an uncaught exception rather than being swallowed by a handler that was
+ * installed to make one specific noise stop.
+ *
+ * Exported and taking its streams as an argument because the real case is a
+ * race — whether the reader closes before or after the writer finishes depends
+ * on a 64 KB pipe buffer — and a test that has to win a race is a test that
+ * fails on somebody's laptop. The handler is what broke; the handler is what is
+ * asserted.
+ *
+ * @param {Array<{on: (event: string, listener: (error: Error) => void) => unknown}>} streams
+ */
+export function ignoreClosedPipe(streams) {
+  for (const stream of streams) {
+    stream.on("error", (error) => {
+      if (/** @type {NodeJS.ErrnoException} */ (error).code !== "EPIPE") throw error;
+    });
+  }
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  ignoreClosedPipe([process.stdout, process.stderr]);
   try {
     main();
   } catch (error) {
