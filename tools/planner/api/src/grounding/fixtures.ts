@@ -31,7 +31,9 @@ import type {
   GroundingProvider,
   LocatedPlace,
   LocateRequest,
+  NearbyArticle,
   NearbyRequest,
+  NotabilityRequest,
   TravelEstimate,
   TravelMatrix,
   TravelRequest,
@@ -124,6 +126,17 @@ export class FixtureGroundingProvider implements GroundingProvider {
    * default with no map data behind it should say.
    */
   async nearby(request: NearbyRequest): Promise<Find[]> {
+    throwIfAborted(request.signal);
+    return [];
+  }
+
+  /**
+   * Nothing, for the same reason `nearby` returns nothing: these fixtures are
+   * a fixed set of places and legs, not a map, and an encyclopedia lookup over
+   * a corridor they do not describe has no honest answer to give. Empty means
+   * "asked, nothing near there" here as everywhere else on this seam.
+   */
+  async articlesNear(request: NotabilityRequest): Promise<NearbyArticle[]> {
     throwIfAborted(request.signal);
     return [];
   }

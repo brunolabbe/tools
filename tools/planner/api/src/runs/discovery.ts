@@ -50,11 +50,18 @@
  */
 
 import { AppError, isAnswered } from "@planner/contract";
-import type { Place, RunProgress, TripBrief, UncheckedConstraint } from "@planner/contract";
-import type { Find } from "@planner/agent";
+import type {
+  Coordinates,
+  Place,
+  RunProgress,
+  TripBrief,
+  UncheckedConstraint,
+} from "@planner/contract";
+import type { Corridor, Find, NearbyArticle } from "@planner/agent";
 import { DISCOVERY_KINDS } from "@planner/agent";
 import { unchecked } from "@planner/itinerary";
 import type { GroundingOutcome, RunGrounding, TravelOutcomeMatrix } from "../grounding/cache.ts";
+import { haversineMetres } from "../grounding/geometry.ts";
 import type { AppLogger } from "../logger.ts";
 
 /**
@@ -65,6 +72,35 @@ import type { AppLogger } from "../logger.ts";
  * changes what "still basically on the road" means.
  */
 export const DISCOVERY_RADIUS_METRES = 6_000;
+
+/**
+ * Wikipedia's geosearch ceiling, and the tile size that follows from it.
+ *
+ * 10 km is the largest radius the API accepts; asking for more is an error
+ * rather than more coverage.
+ */
+const NOTABILITY_TILE_METRES = 10_000;
+
+/**
+ * How many geosearch calls one corridor may cost.
+ *
+ * Six, against a `MAX_GROUNDING_CALLS` of 40 — enough to spread over a long
+ * corridor without letting one pass eat the run's allowance, since `locate`
+ * and `travel` still have to be paid for out of the same 40. A corridor longer
+ * than six tiles is covered in patches rather than end to end, and
+ * `notability: []` on an unreached find already means "nothing checked".
+ */
+const MAX_NOTABILITY_TILES = 6;
+
+/**
+ * How close an article has to be to a find to be *about* it.
+ *
+ * 250 m: near enough that a monument and its article are the same thing, far
+ * enough to survive the disagreement between where OSM puts a node and where
+ * Wikipedia puts a coordinate. Wrong in both directions occasionally, which is
+ * why this attaches a `Source` and never a score — §5's amendment again.
+ */
+const NOTABILITY_MATCH_METRES = 250;
 
 /** Every kind this pass asks a corridor query for. Discovery does not filter by shape. */
 const KINDS = DISCOVERY_KINDS;
@@ -210,10 +246,149 @@ export async function discoverAlongCorridor(input: DiscoverInput): Promise<Disco
     };
   }
 
-  const withDetours = await detourCosts(provider, origin, destination, finds, signal, logger);
+  const backed = await notability(provider, corridor, finds, signal, logger);
+  const withDetours = await detourCosts(provider, origin, destination, backed, signal, logger);
   finished();
 
   return { finds: withDetours, coverage: [] };
+}
+
+/**
+ * Editorial backing for the finds, from an encyclopedia — pl-33 Build step 2.
+ *
+ * ## Why this is here and not in `nearby`
+ *
+ * `nearby` is one call however many finds it returns, and its own doc comment
+ * says so. A geosearch is one call **per point**, and Wikipedia refuses a
+ * corridor-sized bounding box outright (`toobig`, measured). So a corridor
+ * costs several, which makes this a budgeted pass beside `detourCosts` rather
+ * than more work hidden inside a method that promises to cost one.
+ *
+ * ## What it spends, and what happens when it runs out
+ *
+ * One call per tile, up to `MAX_NOTABILITY_TILES`, and it stops the moment the
+ * budget refuses. A half-tiled corridor is not a failure and is not reported
+ * as a gap: `notability: []` already means "nothing checked" rather than
+ * "nothing found", so a find the budget never reached is indistinguishable
+ * from one nobody has written about — which is honest, because from here they
+ * are the same thing.
+ *
+ * ## The language
+ *
+ * Counted from the corridor's own `wikipedia` tags, not configured and not
+ * derived from a country. The finds state it: pl-33 measured 16 `fr:` to 3
+ * `en:` on this corridor, and 426 French articles to 189 English ones over one
+ * 10 km radius in the same region. A corridor whose finds name no language at
+ * all is not guessed at — there is nothing to count, so nothing is asked.
+ */
+async function notability(
+  provider: RunGrounding,
+  corridor: readonly Place[],
+  finds: readonly Find[],
+  signal: AbortSignal,
+  logger: AppLogger,
+): Promise<Find[]> {
+  const language = dominantLanguage(finds);
+  if (language === null) return [...finds];
+
+  // Same narrowing `nearby` does: a corridor endpoint that never geocoded has
+  // no coordinates and cannot be asked about.
+  const points = corridor
+    .map((place) => place.coordinates)
+    .filter((point): point is Coordinates => point !== null);
+
+  const articles: NearbyArticle[] = [];
+  for (const point of notabilityTiles(points)) {
+    let outcome;
+    try {
+      outcome = await provider.articlesNear({
+        coordinates: point,
+        radiusMetres: NOTABILITY_TILE_METRES,
+        language,
+        signal,
+      });
+    } catch (error: unknown) {
+      if (isCancellation(error, signal)) throw error;
+      // One tile failing is not the pass failing: the rest of the corridor is
+      // still worth asking about, and a find nobody reached keeps the same
+      // empty `notability` a find nobody wrote about has.
+      logger.warn("a notability lookup failed, continuing with the rest", {
+        provider: provider.name,
+        code: AppError.from(error).code,
+      });
+      continue;
+    }
+
+    if (outcome.kind === "refused") break;
+    if (outcome.kind === "answered") articles.push(...outcome.value);
+  }
+
+  if (articles.length === 0) return [...finds];
+
+  return finds.map((find) => {
+    const near = articles.filter(
+      (article) =>
+        haversineMetres(find.coordinates, article.coordinates) <= NOTABILITY_MATCH_METRES,
+    );
+    if (near.length === 0) return find;
+
+    // The map's own tags first, then anything geosearch added that the tags
+    // did not already name. Same url means same article, whichever found it.
+    const seen = new Set(find.notability.map((source) => source.url));
+    const added = near.filter((article) => !seen.has(article.source.url));
+    return { ...find, notability: [...find.notability, ...added.map((a) => a.source)] };
+  });
+}
+
+/**
+ * Which language edition to ask, counted from what the mappers wrote.
+ *
+ * `null` when the corridor's finds name none — the honest answer to "which
+ * language is this region written in" when the region has not said.
+ */
+function dominantLanguage(finds: readonly Find[]): string | null {
+  const counts = new Map<string, number>();
+  for (const find of finds) {
+    for (const source of find.notability) {
+      const match = /^https:\/\/([a-z-]+)\.wikipedia\.org\//i.exec(source.url);
+      const language = match?.[1];
+      if (language === undefined) continue;
+      counts.set(language, (counts.get(language) ?? 0) + 1);
+    }
+  }
+
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [language, count] of counts) {
+    if (count > bestCount) {
+      best = language;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * Points to ask about, spaced so their circles tile the corridor rather than
+ * overlap it.
+ *
+ * Bounded by `MAX_NOTABILITY_TILES` before the budget is even consulted: a
+ * 950 km corridor would otherwise ask for fifty calls and be refused after
+ * `MAX_GROUNDING_CALLS`, having spent the whole run's allowance on one pass.
+ * Evenly spaced along the polyline's own points, so a long corridor gets
+ * coverage spread over it rather than a dense start and nothing after.
+ */
+function notabilityTiles(corridor: Corridor): Coordinates[] {
+  if (corridor.length === 0) return [];
+  if (corridor.length <= MAX_NOTABILITY_TILES) return [...corridor];
+
+  const step = (corridor.length - 1) / (MAX_NOTABILITY_TILES - 1);
+  const points: Coordinates[] = [];
+  for (let index = 0; index < MAX_NOTABILITY_TILES; index += 1) {
+    const point = corridor[Math.round(index * step)];
+    if (point !== undefined) points.push(point);
+  }
+  return points;
 }
 
 async function locate(

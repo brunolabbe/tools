@@ -34,6 +34,7 @@ import type {
   ModelProvider,
   ModelReply,
   ModelRequest,
+  NearbyArticle,
   TravelMatrix,
   TravelRequest,
 } from "@planner/agent";
@@ -167,6 +168,10 @@ class CountingProvider implements GroundingProvider {
   }
 
   /** Not this suite's concern (pl-29) — nothing here ever calls it. */
+  async articlesNear(): Promise<NearbyArticle[]> {
+    return [];
+  }
+
   async nearby(): Promise<Find[]> {
     return [];
   }

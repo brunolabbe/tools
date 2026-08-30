@@ -67,7 +67,9 @@ import type {
   GroundingProvider,
   LocatedPlace,
   LocateRequest,
+  NearbyArticle,
   NearbyRequest,
+  NotabilityRequest,
   TravelEstimate,
   TravelMatrix,
   TravelRequest,
@@ -315,6 +317,62 @@ export class ValhallaGroundingProvider implements GroundingProvider {
         (find) =>
           distanceToCorridorMetres(find.coordinates, request.corridor) <= request.radiusMetres,
       );
+  }
+
+  /**
+   * Articles Wikipedia has near one point — pl-33.
+   *
+   * `list=geosearch` is free, unkeyed and needs no account. It is capped at a
+   * 10 km radius and refuses a corridor-sized bounding box outright
+   * (`toobig`), which is why this takes a point and the tiling lives a layer
+   * up where the call budget is.
+   *
+   * The language reaches a **hostname**, and it is derived from OSM tag text —
+   * data this deployment did not write. `WIKI_LANGUAGE` is therefore a strict
+   * allow-shape rather than a sanitiser: anything that is not a plain language
+   * code is refused before a url is built, so no tag can steer this request at
+   * a host of its choosing.
+   */
+  async articlesNear(request: NotabilityRequest): Promise<NearbyArticle[]> {
+    if (request.signal?.aborted === true) throw new AppError("CANCELED");
+
+    if (!WIKI_LANGUAGE.test(request.language)) {
+      throw new AppError("INVALID_URL", undefined, {
+        details: { reason: "language", language: request.language },
+      });
+    }
+
+    const url = new URL(`https://${request.language.toLowerCase()}.wikipedia.org/w/api.php`);
+    url.searchParams.set("action", "query");
+    url.searchParams.set("format", "json");
+    url.searchParams.set("list", "geosearch");
+    url.searchParams.set(
+      "gscoord",
+      `${String(request.coordinates.latitude)}|${String(request.coordinates.longitude)}`,
+    );
+    url.searchParams.set("gsradius", String(Math.min(request.radiusMetres, MAX_GEOSEARCH_METRES)));
+    url.searchParams.set("gslimit", String(MAX_GEOSEARCH_RESULTS));
+
+    const body = await this.#json(url, { headers: { accept: "application/json" } }, request.signal);
+    const at = this.#now();
+
+    return geosearchOf(body).flatMap((entry) => {
+      const coordinates = coordinatesSchema.safeParse({
+        latitude: entry.lat,
+        longitude: entry.lon,
+      });
+      if (!coordinates.success || entry.title.trim() === "") return [];
+      return [
+        {
+          source: {
+            url: wikipediaUrl(request.language, entry.title),
+            title: entry.title,
+            fetchedAt: at.toISOString(),
+          },
+          coordinates: coordinates.data,
+        },
+      ];
+    });
   }
 
   /**
@@ -781,6 +839,46 @@ function elementsOf(body: unknown): OverpassElement[] {
   }
   return elements.filter((element): element is OverpassElement => {
     return typeof element === "object" && element !== null;
+  });
+}
+
+/**
+ * A wiki language code, and nothing else — this value becomes a hostname.
+ *
+ * Plain subdomain-safe codes only: `fr`, `en`, `pt-br`, `zh-yue`. No dots, no
+ * slashes, no userinfo, so `evil.example.com` and `a@b` are refused rather
+ * than escaped.
+ */
+const WIKI_LANGUAGE = /^[a-z]{2,12}(-[a-z0-9]{2,8})?$/i;
+
+/** Wikipedia's own geosearch ceilings. Asking for more is an error, not more. */
+const MAX_GEOSEARCH_METRES = 10_000;
+const MAX_GEOSEARCH_RESULTS = 500;
+
+interface GeosearchEntry {
+  title: string;
+  lat: number;
+  lon: number;
+}
+
+/**
+ * `query.geosearch`, narrowed to the three fields this file reads.
+ *
+ * Shaped like `elementsOf`: anything that is not the expected object is
+ * dropped rather than thrown on, because a page with no coordinates is a real
+ * thing the API can return and the caller already handles a short list.
+ */
+function geosearchOf(body: unknown): GeosearchEntry[] {
+  const rows = (body as { query?: { geosearch?: unknown } } | null)?.query?.geosearch;
+  if (!Array.isArray(rows)) return [];
+  return rows.filter((row): row is GeosearchEntry => {
+    if (typeof row !== "object" || row === null) return false;
+    const entry = row as Record<string, unknown>;
+    return (
+      typeof entry["title"] === "string" &&
+      typeof entry["lat"] === "number" &&
+      typeof entry["lon"] === "number"
+    );
   });
 }
 

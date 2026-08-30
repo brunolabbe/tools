@@ -1265,3 +1265,95 @@ describe("notability, from tags a real payload already carries", () => {
     }
   });
 });
+
+/**
+ * `articlesNear` — pl-33 Build step 2, over a payload Wikipedia really wrote.
+ *
+ * `wikipedia-geosearch.json` is the verbatim reply of `fr.wikipedia.org` to
+ * `list=geosearch` at the Québec City coordinate with a 10 km radius, captured
+ * 2026-08-30. 426 articles, against 189 for the English edition over the same
+ * circle — which is the measurement behind asking the corridor's own language
+ * rather than a configured one.
+ */
+const GEOSEARCH_CAPTURED = overpassFixture("wikipedia-geosearch.json");
+
+describe("articlesNear, over a payload Wikipedia really wrote", () => {
+  const QC: Coordinates = { latitude: 46.8139, longitude: -71.208 };
+
+  function wikiProvider(fetch: typeof globalThis.fetch): ValhallaGroundingProvider {
+    return new ValhallaGroundingProvider({
+      routingUrl: "http://valhalla.internal:8002",
+      geocoderUrl: "http://nominatim.internal:8080",
+      timeoutMs: 5_000,
+      now: () => AT,
+      fetch,
+    });
+  }
+
+  test("parses every article, and encodes an accented title into its url", async () => {
+    const { fetch, calls } = answering(GEOSEARCH_CAPTURED);
+    const articles = await wikiProvider(fetch).articlesNear({
+      coordinates: QC,
+      radiusMetres: 10_000,
+      language: "fr",
+    });
+
+    expect(articles).toHaveLength(426);
+    expect(articles[0]).toEqual({
+      source: {
+        url: "https://fr.wikipedia.org/wiki/Biblioth%C3%A8que_de_Qu%C3%A9bec",
+        title: "Bibliothèque de Québec",
+        fetchedAt: AT.toISOString(),
+      },
+      coordinates: { latitude: 46.8139, longitude: -71.208 },
+    });
+    // 278 of the 426 titles carry an accent, so encoding is not an edge case
+    // here — it is most of the corpus.
+    expect(String(calls[0]?.url)).toContain("https://fr.wikipedia.org/w/api.php");
+  });
+
+  test("asks the language it was given, in the hostname", async () => {
+    const { fetch, calls } = answering(GEOSEARCH_CAPTURED);
+    await wikiProvider(fetch).articlesNear({
+      coordinates: QC,
+      radiusMetres: 10_000,
+      language: "pt-br",
+    });
+
+    expect(String(calls[0]?.url)).toContain("https://pt-br.wikipedia.org/w/api.php");
+  });
+
+  test("refuses a language that is not one, before building a url", async () => {
+    // The language comes from OSM tag text — data this deployment did not
+    // write — and it reaches a *hostname*. `evil.example.com/` as a "language"
+    // must not become the host this asks.
+    const { fetch, calls } = answering(GEOSEARCH_CAPTURED);
+
+    for (const language of ["evil.example.com", "fr/../en", "a@b", "", "fr:8080"]) {
+      await expect(
+        wikiProvider(fetch).articlesNear({ coordinates: QC, radiusMetres: 10_000, language }),
+      ).rejects.toMatchObject({ code: "INVALID_URL" });
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  test("clamps the radius to what geosearch actually accepts", async () => {
+    const { fetch, calls } = answering(GEOSEARCH_CAPTURED);
+    await wikiProvider(fetch).articlesNear({
+      coordinates: QC,
+      radiusMetres: 50_000,
+      language: "fr",
+    });
+
+    // 10 km is the API's own ceiling: asking for more is an error, not more.
+    expect(String(calls[0]?.url)).toContain("gsradius=10000");
+  });
+
+  test("a reply with no geosearch block is an empty list, not a throw", async () => {
+    const { fetch } = answering({ batchcomplete: "" });
+
+    await expect(
+      wikiProvider(fetch).articlesNear({ coordinates: QC, radiusMetres: 10_000, language: "fr" }),
+    ).resolves.toEqual([]);
+  });
+});

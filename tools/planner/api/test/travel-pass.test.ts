@@ -25,7 +25,7 @@ import {
   type RunEvent,
 } from "@planner/contract";
 import { AppError } from "@planner/contract";
-import type { Find, GroundingProvider, TravelMatrix } from "@planner/agent";
+import type { Find, GroundingProvider, NearbyArticle, TravelMatrix } from "@planner/agent";
 import { FixtureGroundingProvider } from "../src/grounding/fixtures.ts";
 import {
   createRunHarness,
@@ -136,6 +136,10 @@ class SilentGrounding implements GroundingProvider {
     return request.origins.map(() => request.origins.map(() => null));
   }
   /** This suite is about the travel-time pass; discovery is pl-29's own file. */
+  async articlesNear(): Promise<NearbyArticle[]> {
+    return [];
+  }
+
   async nearby(): Promise<Find[]> {
     return [];
   }
@@ -150,6 +154,10 @@ class BrokenGrounding implements GroundingProvider {
   async travel(): Promise<never> {
     throw new AppError("UNREACHABLE", "the routing service refused the connection");
   }
+  async articlesNear(): Promise<never> {
+    throw new Error("not reached");
+  }
+
   async nearby(): Promise<never> {
     throw new AppError("UNREACHABLE", "the routing service refused the connection");
   }
