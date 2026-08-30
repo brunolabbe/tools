@@ -87,7 +87,7 @@ off for that, and only that:
 
 ```bash
 RATE_LIMIT_PROBE_PER_MINUTE=0 RATE_LIMIT_JOBS_PER_MINUTE=0 \
-  npm run dev -w @downloader/api
+  RATE_LIMIT_FILES_PER_MINUTE=0 npm run dev -w @downloader/api
 ```
 
 ## Rules

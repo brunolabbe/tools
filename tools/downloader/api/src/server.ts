@@ -317,6 +317,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
         perMinute: config.rateLimitJobsPerMinute,
         now: () => now().getTime(),
       }),
+      files: new RateLimiter({
+        perMinute: config.rateLimitFilesPerMinute,
+        now: () => now().getTime(),
+      }),
     },
     probeGate: new ConcurrencyGate(config.maxConcurrentProbes),
     now,
