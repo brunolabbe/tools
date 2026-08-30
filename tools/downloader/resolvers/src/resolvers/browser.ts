@@ -30,11 +30,13 @@ import type { BrowserPoolStats } from "../browser/pool.ts";
 import { provokePlayback, readMetadata, readSignals, waitForQuiet } from "../browser/provoke.ts";
 import { rankHits } from "../browser/rank.ts";
 import { buildRequestContext } from "../browser/request-context.ts";
+import { createRequestSizeProbe } from "../browser/size-probe.ts";
 import type { NetworkHit } from "../browser/types.ts";
 import { opaqueManifestVariant, progressiveVariants } from "../browser/variants.ts";
 import { parseDash } from "../manifest/dash.ts";
 import { parseHls } from "../manifest/hls.ts";
 import type { DashParser, HlsParser, ParsedManifest } from "../manifest/types.ts";
+import { measureVariantSizes } from "../size-sample.ts";
 
 export const BROWSER_RESOLVER_NAME = "browser";
 export const BROWSER_RESOLVER_PRIORITY = 50;
@@ -295,8 +297,20 @@ export class BrowserResolver implements Resolver {
       }
       if (parsed.variants.length === 0) continue;
 
+      // dl-30: the parser's sizes come from declared bitrates, which overstate
+      // VBR content by up to 2x. Weigh one rendition and rescale from that.
+      // oxlint-disable-next-line no-await-in-loop
+      const variants = await measureVariantSizes(
+        parsed.variants,
+        createRequestSizeProbe(context.request, replayHeaders(hit), deadline),
+        {
+          isLive: parsed.isLive,
+          durationSec: parsed.durationSec,
+        },
+      );
+
       return {
-        variants: parsed.variants,
+        variants,
         subtitles: parsed.subtitles,
         isLive: parsed.isLive,
         durationSec: parsed.durationSec,

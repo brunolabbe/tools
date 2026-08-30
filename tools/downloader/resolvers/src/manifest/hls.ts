@@ -480,3 +480,52 @@ function buildMasterVariant(
     }),
   };
 }
+
+/** One media segment of a rendition, and the seconds of playback it covers. */
+export interface MediaSegment {
+  url: string;
+  durationSec: number;
+}
+
+/**
+ * The segment list of a media playlist, for `size-sample.ts` to measure against.
+ *
+ * Separate from `parseHls` rather than a field on `ParsedManifest`: one consumer
+ * does not earn a field every parser has to fill in, and a long VOD playlist is
+ * thousands of entries nothing else would read. It lives here anyway because the
+ * EXTINF grammar does, and a second copy of that grammar would drift from this
+ * one.
+ *
+ * Returns nothing rather than something wrong in the two shapes where a URI line
+ * is not a whole segment:
+ *  - `#EXT-X-BYTERANGE`, where several segments share one URL and a
+ *    `Content-Length` describes the file rather than the segment;
+ *  - a playlist with no `EXTINF` at all, which is a master playlist.
+ *
+ * `#EXT-X-MAP` needs no special case: an init segment's URI is an attribute of
+ * its tag, never a bare line, so this walk cannot pick one up as media.
+ */
+export function listMediaSegments(text: string, baseUrl: string): MediaSegment[] {
+  const segments: MediaSegment[] = [];
+  let pendingDuration: number | undefined;
+
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line === "") continue;
+
+    if (line.startsWith("#")) {
+      const tag = parseTag(line);
+      if (tag === undefined) continue;
+      if (tag.name === "EXT-X-BYTERANGE") return [];
+      if (tag.name === "EXTINF") pendingDuration = toNumber(tag.value.split(",")[0]);
+      continue;
+    }
+
+    if (pendingDuration !== undefined && pendingDuration > 0) {
+      segments.push({ url: resolveUrl(line, baseUrl), durationSec: pendingDuration });
+    }
+    pendingDuration = undefined;
+  }
+
+  return segments;
+}

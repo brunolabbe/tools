@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPD
+  xmlns="urn:mpeg:dash:schema:mpd:2011"
+  profiles="urn:mpeg:dash:profile:isoff-on-demand:2011"
+  type="static"
+  mediaPresentationDuration="PT42M18S"
+  minBufferTime="PT2.0S">
+  <BaseURL>https://media.example.org/podcast/</BaseURL>
+  <Period duration="PT42M18S">
+    <AdaptationSet mimeType="audio/mp4" contentType="audio" lang="en" subsegmentAlignment="true">
+      <Representation id="a-hi" bandwidth="128000" codecs="mp4a.40.2" audioSamplingRate="48000">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <BaseURL>episode-128k.m4a</BaseURL>
+        <SegmentBase indexRange="700-2200" indexRangeExact="true">
+          <Initialization range="0-699"/>
+        </SegmentBase>
+      </Representation>
+      <Representation id="a-lo" bandwidth="64000" codecs="mp4a.40.2" audioSamplingRate="44100">
+        <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+        <BaseURL>episode-64k.m4a</BaseURL>
+        <SegmentBase indexRange="700-2200" indexRangeExact="true">
+          <Initialization range="0-699"/>
+        </SegmentBase>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>
