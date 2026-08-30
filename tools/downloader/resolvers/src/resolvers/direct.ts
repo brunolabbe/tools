@@ -27,6 +27,8 @@ import { buildLabel, optional, urlExtension } from "../common.ts";
 import { parseDash } from "../manifest/dash.ts";
 import { parseHls } from "../manifest/hls.ts";
 import type { DashParser, HlsParser, ParsedManifest } from "../manifest/types.ts";
+import { createFetchSizeProbe } from "../size-probe.ts";
+import { measureVariantSizes } from "../size-sample.ts";
 
 /** Sent when the caller supplied nothing better; a bare fetch UA is refused by many CDNs. */
 const DEFAULT_USER_AGENT =
@@ -196,11 +198,28 @@ export class DirectUrlResolver implements Resolver {
       throw new AppError("NO_MEDIA_FOUND", undefined, { details: { url: url.href } });
     }
 
+    // Declared bitrates overstate VBR content by up to 2x (dl-30), so the sizes
+    // the parser derived from them are corrected against a rendition we weigh
+    // ourselves. Fails open: an unmeasurable manifest keeps what it declared.
+    const variants = await measureVariantSizes(
+      parsed.variants,
+      createFetchSizeProbe({
+        fetch: this.#fetch,
+        headers: requestContext.headers,
+        signal: options.signal,
+      }),
+      {
+        isLive: parsed.isLive,
+        signal: options.signal,
+        ...optional({ durationSec: parsed.durationSec }),
+      },
+    );
+
     return {
       sourceUrl: url.href,
       resolver: this.name,
       title: titleFromUrl(url),
-      variants: parsed.variants,
+      variants,
       subtitles: parsed.subtitles,
       requestContext,
       drm: parsed.drm,
