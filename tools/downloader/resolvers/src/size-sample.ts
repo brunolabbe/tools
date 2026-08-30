@@ -95,6 +95,12 @@ interface Component {
   bytesPerSecond: number;
   /** Set only when the whole component was weighed, not sampled. */
   exactBytes: number | undefined;
+  /**
+   * What the segment list covers, when we read one. An HLS master carries no
+   * duration anywhere — the media playlist is where it lives — so without this
+   * the whole ladder would be unmeasurable for want of a number we just read.
+   */
+  durationSec: number | undefined;
 }
 
 function durationOf(variant: MediaVariant, options: SampleOptions): number | undefined {
@@ -142,7 +148,12 @@ async function measureSegments(
   }
 
   if (weighed < MIN_SAMPLED_SEGMENTS || seconds < MIN_SAMPLED_SECONDS) return undefined;
-  return { bytesPerSecond: bytes / seconds, exactBytes: undefined };
+  const covered = segments.reduce((total, segment) => total + segment.durationSec, 0);
+  return {
+    bytesPerSecond: bytes / seconds,
+    exactBytes: undefined,
+    durationSec: covered > 0 ? covered : undefined,
+  };
 }
 
 /** How a URL could be weighed, if at all. */
@@ -157,7 +168,8 @@ function approachFor(
   assumeFile: boolean,
 ): Approach | undefined {
   const supplied = options.segmentsByUrl?.get(url);
-  if (supplied !== undefined && supplied.length > 0) return { kind: "segments", segments: supplied };
+  if (supplied !== undefined && supplied.length > 0)
+    return { kind: "segments", segments: supplied };
 
   const extension = urlExtension(url);
   if (extension !== undefined && PLAYLIST_EXTENSIONS.has(extension)) return { kind: "playlist" };
@@ -172,7 +184,7 @@ async function measureComponent(
   url: string,
   probe: SizeProbe,
   options: SampleOptions,
-  duration: number,
+  duration: number | undefined,
   assumeFile: boolean,
 ): Promise<Component | undefined> {
   const approach = approachFor(url, options, assumeFile);
@@ -190,17 +202,28 @@ async function measureComponent(
     return await measureSegments(segments, probe, options.signal);
   }
 
+  // A whole file is a size, not a rate, until something says how long it plays.
+  if (duration === undefined) return undefined;
   const total = await probe.contentLength(url);
   if (total === undefined || total <= 0) return undefined;
-  return { bytesPerSecond: total / duration, exactBytes: total };
+  return { bytesPerSecond: total / duration, exactBytes: total, durationSec: duration };
 }
 
-/** True when both halves of the rendition — however many there are — can be reached. */
+/**
+ * True when both halves of the rendition — however many there are — can be
+ * reached, and when a duration will exist by the time it is needed: a segment
+ * list brings its own, a whole file has to have been told.
+ */
 function isSamplable(variant: MediaVariant, options: SampleOptions): boolean {
   const assumeFile = variant.protocol === "progressive";
-  if (approachFor(variant.url, options, assumeFile) === undefined) return false;
+  const video = approachFor(variant.url, options, assumeFile);
+  if (video === undefined) return false;
+  if (video.kind === "file" && durationOf(variant, options) === undefined) return false;
   if (variant.audioUrl === undefined || variant.audioUrl === "") return true;
-  return approachFor(variant.audioUrl, options, false) !== undefined;
+  // The audio half is shaped like the video half — a progressive variant's
+  // paired audio is another plain file, and yt-dlp's URLs carry their format in
+  // a query string rather than an extension, so the protocol has to say so.
+  return approachFor(variant.audioUrl, options, assumeFile) !== undefined;
 }
 
 /** Rebuilds a variant's size and the label that carries it. */
@@ -244,34 +267,38 @@ export async function measureVariantSizes(
     // Best-first, and among equals by id, so the rendition we spend requests on
     // does not depend on the order a parser happened to emit.
     const reference = variants
-      .filter(
-        (variant) =>
-          (variant.bitrateBps ?? 0) > 0 &&
-          durationOf(variant, options) !== undefined &&
-          isSamplable(variant, options),
-      )
+      .filter((variant) => (variant.bitrateBps ?? 0) > 0 && isSamplable(variant, options))
       .toSorted(
         (a, b) =>
           (b.bitrateBps ?? 0) - (a.bitrateBps ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
       )[0];
 
-    const duration = reference === undefined ? undefined : durationOf(reference, options);
-    if (reference === undefined || duration === undefined) return unchanged;
+    if (reference === undefined) return unchanged;
     if (options.signal?.aborted === true) return unchanged;
 
     const video = await measureComponent(
       reference.url,
       probe,
       options,
-      duration,
+      durationOf(reference, options),
       reference.protocol === "progressive",
     );
     if (video === undefined) return unchanged;
 
+    // The playlist may have been the only thing that knew how long this plays.
+    const duration = durationOf(reference, options) ?? video.durationSec;
+    if (duration === undefined) return unchanged;
+
     const split = reference.audioUrl !== undefined && reference.audioUrl !== "";
     const audio = split
-      ? await measureComponent(reference.audioUrl ?? "", probe, options, duration, false)
-      : { bytesPerSecond: 0, exactBytes: 0 };
+      ? await measureComponent(
+          reference.audioUrl ?? "",
+          probe,
+          options,
+          duration,
+          reference.protocol === "progressive",
+        )
+      : { bytesPerSecond: 0, exactBytes: 0, durationSec: duration };
     // Half a rendition weighed against a declaration covering both halves is
     // the understatement this module refuses to make.
     if (audio === undefined) return unchanged;
@@ -279,7 +306,11 @@ export async function measureVariantSizes(
     const declaredBytesPerSecond = (reference.bitrateBps ?? 0) / 8;
     if (declaredBytesPerSecond <= 0) return unchanged;
     const factor = (video.bytesPerSecond + audio.bytesPerSecond) / declaredBytesPerSecond;
-    if (!Number.isFinite(factor) || factor < MIN_PLAUSIBLE_FACTOR || factor > MAX_PLAUSIBLE_FACTOR) {
+    if (
+      !Number.isFinite(factor) ||
+      factor < MIN_PLAUSIBLE_FACTOR ||
+      factor > MAX_PLAUSIBLE_FACTOR
+    ) {
       return unchanged;
     }
 
@@ -301,8 +332,10 @@ export async function measureVariantSizes(
       if (variant.filesizeBytes !== undefined) return variant;
 
       // A rung that never carried a size at all — an HLS master variant — can
-      // have one now, because the measurement is what it was missing.
-      const variantDuration = durationOf(variant, options);
+      // have one now, because the measurement is what it was missing. Rungs of
+      // one ladder are one piece of content, so the reference's duration is
+      // theirs when they do not carry their own.
+      const variantDuration = durationOf(variant, options) ?? duration;
       const bitrate = variant.bitrateBps ?? 0;
       if (variantDuration === undefined || bitrate <= 0) return variant;
       return withSize(variant, Math.round((bitrate / 8) * variantDuration * factor), true);

@@ -79,7 +79,46 @@ describe("HLS manifest URLs", () => {
     expect(probe.variants[0]?.height).toBe(1080);
     expect(probe.title).toBe("master");
     expect(probe.drm.protected).toBe(false);
-    expect(stub.calls.map((call) => call.method)).toEqual(["HEAD", "GET"]);
+    // The third call is dl-30 reaching for a media playlist to weigh. This stub
+    // answers every GET with the master, which lists no segments, so the sample
+    // is discarded and the variants are exactly what the parser produced.
+    expect(stub.calls.map((call) => call.method)).toEqual(["HEAD", "GET", "GET"]);
+    expect(probe.variants.every((variant) => variant.filesizeBytes === undefined)).toBe(true);
+  });
+
+  test("weighs a rendition and puts a measured size on every rung (dl-30)", async () => {
+    const master = "https://cdn.example.com/hls/2026/master.m3u8";
+    const media = "https://cdn.example.com/hls/2026/v9/prog_index.m3u8";
+    const stub = stubFetch((call) => {
+      if (call.method === "HEAD" && call.url === master) {
+        return new Response(null, { headers: { "content-type": "application/vnd.apple.mpegurl" } });
+      }
+      // A segment: 700 000 bytes for each second it plays.
+      if (call.method === "HEAD") {
+        return new Response(null, { headers: { "content-length": "6983669" } });
+      }
+      return new Response(
+        fixture(call.url === media ? "hls-media-aes128.m3u8" : "hls-master-multibitrate.m3u8"),
+        { headers: { "content-type": "application/vnd.apple.mpegurl" } },
+      );
+    });
+    const resolver = new DirectUrlResolver({ fetch: stub.fetch });
+
+    const probe = await resolver.resolve(new URL(master), options());
+
+    expect(probe.variants.every((variant) => (variant.filesizeBytes ?? 0) > 0)).toBe(true);
+    expect(probe.variants[0]?.label).toContain("~37.8 MB");
+    // Master HEAD, master GET, media playlist GET, three segment HEADs.
+    expect(stub.calls.map((call) => call.method)).toEqual([
+      "HEAD",
+      "GET",
+      "GET",
+      "HEAD",
+      "HEAD",
+      "HEAD",
+    ]);
+    // The replay reaches the segments too, not just the manifest.
+    expect(stub.calls.at(-1)?.headers["Referer"]).toBe("https://cdn.example.com/");
   });
 
   test("replays the caller's cookie and locale on every request", async () => {

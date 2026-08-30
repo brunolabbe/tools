@@ -205,8 +205,11 @@ Traps, all of them things that would produce a confidently wrong number:
 4. Every failure mode leaves the variants exactly as parsed — probe throws,
    probe times out, no `Content-Length`, live stream, no duration, factor out of
    range, fewer than 2 segments — proven by a test per mode.
-5. Sampling costs at most 4 requests for a ladder of any size, proven by a test
-   counting calls on a stub.
+5. Sampling costs at most 4 requests **per component** for a ladder of any size,
+   and a split rendition has two components — so 8 is the ceiling and 2 or 4 is
+   what the fixtures actually cost. Proven by tests counting calls on a stub.
+   _Rewritten during the build; it said 4 outright. Why the component split is
+   not optional is in the Log._
 6. `buildLabel` round-trips: rebuilding a parsed variant with its own size
    reproduces its label byte for byte, proven by a test over the DASH and yt-dlp
    producers both.
@@ -227,3 +230,88 @@ Traps, all of them things that would produce a confidently wrong number:
   estimate-vs-actual first and deciding later), on the grounds in the Why's
   second half: a measurement is the only one of the four that improves the
   pre-flight cap and the label at the same time.
+
+- **2026-08-30** — Built. `npm run check` green, `npm test -- --project downloader`
+  green at 52 files / 788 tests, and the `core` and `repo` projects green at
+  5 / 99 — those two carry the repo-wide source scans, and `--project packages`
+  in Done-when 8 is not a project name (the four are `core`, `repo`,
+  `downloader`, `planner`). Nothing here was written before the command that
+  proves it exited.
+
+  **Three things the brief had wrong, each found by building it.**
+
+  **The request budget was wrong, and Done-when 5 is rewritten above rather than
+  quietly satisfied.** The brief said "at most 4 requests per probe", which
+  assumed a rendition is one thing to weigh. It is not: a variant with an
+  `audioUrl` is two files whose _combined_ bitrate is what `bitrateBps`
+  declares. Weighing only the video and dividing by that declaration understates
+  the factor by the audio's share — 4% on a 3 Mbps rung, 18% on a 600 kbps one —
+  and understating is the direction that matters, because the same
+  `filesizeBytes` feeds the pre-flight cap at
+  [`engine/src/estimate.ts:64`](../../engine/src/estimate.ts), where erring high
+  is deliberate. Every video representation in
+  `dash-ondemand-baseurl.mpd` is split, so this is not a corner: it is the first
+  fixture the ticket touches. Both halves are weighed or neither is, which costs
+  a second component and puts the ceiling at 8. Measured cost on the two
+  fixtures: **2 requests** for the split DASH pair, **4** for the HLS playlist.
+
+  **A duration is not always available before the sample, and the HLS half of
+  the ticket turns on it.** An HLS master carries no `EXT-X-ENDLIST` and no
+  duration anywhere — `parseHls` returns `durationSec: undefined` for one, and
+  every variant is a media-playlist URL. So the brief's ordering (find a
+  duration, then measure) makes step 5 impossible, and the whole ladder would
+  have been unmeasurable for want of a number the sample itself reads. The
+  segment list now reports what it covers and the duration falls out of the
+  measurement. Verified against the fixture: `hls-master-multibitrate.m3u8` has
+  five rungs, no sizes and no duration before, and five sizes after.
+
+  **A yt-dlp format URL has no path extension** —
+  `videoplayback?itag=140&mime=audio%2Fmp4` — so the first cut, which decided
+  reachability from the extension alone, judged the _audio_ half of every
+  YouTube-shaped split format unreachable and skipped the rendition. The
+  variant's `protocol` is what says a URL is a plain file, and it now governs
+  both halves rather than only the first.
+
+  **Which resolver produced the reported cards is still not established, and the
+  fix covers all three tiers anyway.** The network is blocked in this container
+  (`curl https://twitter.yandex.com.tr/` times out), so nothing was probed
+  against the reported URLs, and there was no job store to read a `resolver`
+  field out of. What is now measured rather than argued: `yt-dlp` is priority 20
+  and `enableYtdlpResolver` defaults true, so it is tried first; the browser
+  tier at 50 is the other candidate; and `hls.ts`'s `buildMasterVariant`
+  attaches no `filesizeBytes` at all, so an HLS master could not have produced a
+  `~107 MB` label under any tier. That leaves `parseDash` and `mapYtDlpInfo`,
+  and both are now sampled.
+
+  **Step 5 survived step 3, which the brief was unsure of.** The label rebuild
+  goes through `buildLabel` from the variant's own fields, and the round-trip is
+  pinned in both directions: a DASH variant and a yt-dlp variant, each rescaled
+  by a factor of exactly 1.0, keep their labels byte for byte. The
+  `humanAudioCodec` double-application the brief warned about is real but
+  harmless — `lookup(codec, NAMES) ?? codec` falls through on an
+  already-humanised name — so no producer needed changing.
+
+  **A behaviour change worth naming: the direct resolver now makes a third
+  request on a manifest probe.** `direct.test.ts` pinned the sequence as
+  `["HEAD", "GET"]` and it is now `["HEAD", "GET", "GET"]`; that test asserts
+  the new sequence and, beside it, that the sample changed nothing — its stub
+  answers every GET with the master playlist, which lists no segments. A second
+  test drives the whole path with a stub that does serve a media playlist, and
+  checks that the `Referer` replay reaches the segment HEADs and not just the
+  manifest.
+
+  **What is not proved.** No e2e run and no container build — neither runs
+  locally, and nothing here changes what the image ships or what the browser
+  loads, but that is an argument from the diff rather than from a run. The
+  browser tier's `#sizeProbe` is wired the same way as `#loadManifest` and is
+  covered by no test of its own: Playwright's `APIRequestContext` is not
+  stubbable from the resolvers suite the way a `fetch` is, and the sampler it
+  hands off to is tested directly. That is the thinnest part of this branch and
+  the place a reviewer should look first.
+
+  **Not folded in, deliberately.** The `~` in a picker label means "estimate",
+  and after this ticket it can mean two quite different things — a rung scaled
+  from another rung's measurement, and a declaration nothing could weigh. The
+  contract has no field for that distinction (`filesizeIsEstimate` is a boolean)
+  and `CLAUDE.md` forbids editing a contract unilaterally, so it is left alone
+  rather than smuggled in.
