@@ -138,3 +138,143 @@ whether the allowlist is per-session, per-image or per-organisation, and whether
 it can be widened by asking. No one was asked. If you are reading this somewhere
 with a route to `overpass-api.de`, disregard all of it and run the capture block
 in [pl-29](./pl-29-detours-along-a-leg.md)'s Log, which is still copy-pasteable.
+
+---
+
+**2026-08-30 (later the same day) — the entry above is superseded, and the
+hosts are reachable now.** It is kept, not deleted: it was a true measurement
+when taken, and the correction belongs where the claim is. What changed is the
+environment, not the ticket. `.devcontainer/allowed-domains.txt` gained
+`overpass-api.de`, `en.wikipedia.org`, `en.wikivoyage.org` and
+`nominatim.openstreetmap.org` (PR #116), and the container was rebuilt — which
+is the part that applies an allowlist edit, since `init-firewall.sh` reads a
+root-owned copy baked into the image and re-running it never picks up a repo
+change.
+
+The entry's own closing sentence answered itself: it named "whether the
+allowlist can be widened by asking" as unestablished because nobody had asked.
+Somebody asked.
+
+### The capture, written out rather than cited
+
+pl-29's Log gives the block, and its `/tmp/overpass-query.txt` is the shape to
+avoid: a Log that cites a scratchpad path is a promise only the session that
+wrote it can keep. The procedure, whole:
+
+```bash
+# 1. Build the query from the shipped adapter, never a re-typed copy.
+npm run build
+node --input-type=module -e "
+import { overpassQuery } from './tools/planner/api/dist/grounding/valhalla.js';
+process.stdout.write(overpassQuery(
+  [{ latitude: 45.5019, longitude: -73.5674 },   // Montréal
+   { latitude: 46.8139, longitude: -71.208 }],   // Québec City
+  6000,                                          // DISCOVERY_RADIUS_METRES
+  ['viewpoint', 'waterfall', 'attraction', 'historic-site'],
+  180,                                           // server ceiling; see below
+));" > query.txt
+
+# 2. POST it as the adapter does: raw body, text/plain, /interpreter.
+curl -sS -X POST -H 'content-type: text/plain' \
+  -H 'user-agent: webtools-planner/1.0 (fixture capture for pl-33)' \
+  --data-binary @query.txt --max-time 240 \
+  https://overpass-api.de/api/interpreter \
+  -o tools/planner/api/test/fixtures/overpass-nearby.json
+
+# 3. Check for a `remark` BEFORE checking it in. This is the whole lesson.
+node -e "const r=require('./tools/planner/api/test/fixtures/overpass-nearby.json');
+console.log(r.elements.length,'elements | remark:', r.remark ?? 'none');"
+```
+
+Step 3 exists because step 2 succeeded and produced nothing, twice over: HTTP
+200, `elements: []`, and a `remark` saying the query timed out. That reply is
+checked in as `overpass-timed-out.json` and is the regression test.
+
+### What the capture found, which the Build did not know about
+
+Three defects, none of them about notability, all of them in code pl-29 shipped
+through its gates:
+
+|     | defect                                                             | measured                                                                        |
+| --- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| 1   | `groundingTimeoutMs: 5_000` bounded **both** routing and discovery | Overpass needs 28.7 s for Montréal→Québec City and **149 s** for Montréal→Percé |
+| 2   | `[timeout:25]` hardcoded in `overpassQuery`                        | below the same numbers                                                          |
+| 3   | `elementsOf` read `elements` and ignored `remark`                  | a timed-out reply parsed as a corridor with nothing on it                       |
+
+Defect 3 is the serious one and the ordering matters: today's 5 s abort makes
+the failure **loud**. Fixing the timeouts alone would have traded a loud
+failure for a silent wrong answer — the planner reporting "nothing worth
+stopping for" on a corridor with 657 nodes on it. `assertAnswered` therefore
+landed in the same commit as the timeout change, not after it.
+
+**pl-29 shipped `nearby` through two gates and nothing ever ran it against an
+Overpass instance, because nothing could.** The gates verified the calling code
+faithfully and the machinery underneath had never once done its work. The
+lesson generalises past this ticket: a ticket resting on an external service
+needs one gate that confirms the service answers, not only that the code
+calling it is correct.
+
+### Measurements behind the decisions
+
+Query cost, public instance, `out count`, the adapter's real query shape:
+
+| query                                          | nodes | time                |
+| ---------------------------------------------- | ----- | ------------------- |
+| four kinds, Montréal→Québec City               | 657   | 28.7 s              |
+| the same minus unvalued `node["historic"]`     | 200   | 6.3 s               |
+| `historic` narrowed to 9 explicit values       | 424   | 24.0 s              |
+| every clause additionally requiring `["name"]` | 276   | **55.5 s** — slower |
+| four kinds, Montréal→Percé                     | 492   | **149 s**           |
+
+Cost is roughly **~2 s per `around:` clause** over a long corridor, not tag
+selectivity — which is why narrowing buys 16% and costs a product decision, and
+why it was not done. Requiring `["name"]` server-side is _slower_ despite
+returning fewer rows: it forces a scan rather than using the tag index.
+
+Of the 657 elements, 276 survive `findFrom`'s name filter. **All 163 `cannon`
+nodes are unnamed** — they cost ~22 s of the 29 and produce zero `Find`s.
+
+Notability sources, `geosearch`, 10 km around Québec City:
+
+|            | en  | fr      |
+| ---------- | --- | ------- |
+| wikipedia  | 189 | **426** |
+| wikivoyage | 2   | 7       |
+
+### Decisions this ticket was asked to make
+
+**Language: taken from the find's own `wikipedia` tag.** A tag is written
+`fr:Title` — the language is in the data, chosen by the mapper who knows the
+place, so nothing guesses. 16 of the 18 wikipedia tags in the capture are `fr:`,
+which is the same answer the geosearch counts give and reached independently.
+`Cénotaphe` in Montréal is tagged `es:`, so any scheme keyed on _where a find
+sits_ would have linked to nothing. For the geosearch tier still owed, the
+language comes from counting the corridor's own tags rather than from a country
+mapping: `Place` carries no country, so country-derivation would need a type
+change across the `@planner/agent` seam plus an unmeasured table, and the
+corridor's own data already states the answer.
+
+**Wikivoyage: not a per-find call.** 2 to 7 articles for an entire city is
+city-level coverage, and a `Find` is a POI. A per-find call would almost always
+return nothing while spending budget against `MAX_GROUNDING_CALLS`.
+
+**A single call over the corridor's bounding box — the Build's own suggestion —
+is not available.** `geosearch` rejects a corridor-sized `gsbbox` outright with
+`toobig`; a ~5 km box is fine. So the choice is not "one call versus many", it
+is "many calls versus a different mechanism".
+
+### What is done, and what is not
+
+Done: Build step 1 in full, and step 4 for what the map already states —
+`notability` carries `wikipedia`, `wikipedia:<lang>` and `wikidata` tags at no
+call cost, covering **34 of 276 finds (12%)**. That is a floor, not the
+geosearch tier. `compose.planner.yaml` gains an `overpass` service on the same
+regional extract the other two import, because the 149 s measurement means the
+public instance cannot serve this feature and no client-side number fixes that.
+
+Not done, and the reason is a design constraint rather than a difficulty:
+`nearby`'s own doc comment says it "must stay one call regardless of how many
+finds it returns", and a geosearch tier spends N calls. It therefore belongs in
+`runs/discovery.ts` as a budgeted pass beside `detourCosts`, which means a new
+method on the grounding provider seam rather than more work inside `nearby` —
+a change to `@planner/agent`'s interface that should be decided, not assumed.
