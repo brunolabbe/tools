@@ -85,6 +85,13 @@ interface Draft {
  * Every omitted field becomes `null`, which is what `null` means here: nobody
  * established it. Writing the nulls out longhand forty times would bury the
  * three fields that differ between one candidate and the next.
+ *
+ * **No `provenance`, since pl-36.** It is not a specialist's to state — the
+ * scripted one included, and especially the scripted one, since it is the
+ * default and a fixture that stamped its own would be the shape a real provider
+ * copied. `accept` in `orchestrator.ts` stamps every candidate, so this script
+ * is `model-asserted` in the plan exactly as it was before, by the code that
+ * decides rather than by forty repetitions of a constant.
  */
 function draft(input: Draft): CandidateProposal {
   return {
@@ -95,7 +102,6 @@ function draft(input: Draft): CandidateProposal {
     cost: input.cost ?? null,
     season: input.season ?? null,
     bookingLeadTimeDays: input.bookingLeadTimeDays ?? null,
-    provenance: MODEL_ASSERTED,
   };
 }
 

@@ -49,7 +49,7 @@
  */
 
 import type { TravelEstimate } from "@planner/agent";
-import { AppError, NOT_ESTABLISHED, OVER_BUDGET } from "@planner/contract";
+import { AppError, MAX_SOURCES, NOT_ESTABLISHED, OVER_BUDGET } from "@planner/contract";
 import type {
   Candidate,
   CandidateLocation,
@@ -57,6 +57,7 @@ import type {
   ItemTravel,
   Place,
   RunProgress,
+  Source,
 } from "@planner/contract";
 import type { TravelTable } from "@planner/itinerary";
 import {
@@ -284,6 +285,20 @@ export async function measureTravel(input: MeasureInput): Promise<MeasureResult>
   };
 
   const located = new Map<string, Coordinates>();
+  /**
+   * What geocoded each place *this pass* located, per place — pl-36.
+   *
+   * `locate` has always answered with a `Source` beside its coordinates and
+   * this pass has always dropped it, so every geocoded point on every plan was
+   * unattributed: `located` is `Map<string, Coordinates>` and there was no
+   * field for a citation to survive in. It rides here rather than on the
+   * `Place` — see `measured` for where it lands and why nothing in the contract
+   * had to move.
+   *
+   * A place that arrived carrying its own coordinates is absent, deliberately:
+   * nothing looked it up, so there is nothing to cite for it.
+   */
+  const geocoded = new Map<string, Source>();
   /** Places with no coordinates, and why — `unknown` or `refused`, per place. */
   const unlocated = new Map<string, ItemTravel>();
   for (const each of places.all) {
@@ -293,8 +308,10 @@ export async function measureTravel(input: MeasureInput): Promise<MeasureResult>
   for (const each of places.toLocate) {
     try {
       const outcome = await provider.locate({ place: each.place, signal });
-      if (outcome.kind === "answered") located.set(each.key, outcome.value.coordinates);
-      else unlocated.set(each.key, unanswered(outcome));
+      if (outcome.kind === "answered") {
+        located.set(each.key, outcome.value.coordinates);
+        geocoded.set(each.key, outcome.value.source);
+      } else unlocated.set(each.key, unanswered(outcome));
     } catch (error: unknown) {
       if (isCancellation(error, signal)) throw error;
       // One place that would not resolve is not a failed run — it is a place
@@ -327,7 +344,7 @@ export async function measureTravel(input: MeasureInput): Promise<MeasureResult>
     // Not one place located, so there is no matrix to send and the step ends
     // here rather than being skipped — see the note on `total` above.
     finished();
-    return { candidates, travel: tableFor(null, order, unlocated, ends) };
+    return { candidates, travel: tableFor(null, order, unlocated, ends, geocoded) };
   }
 
   const asked = order.map((each) => ({
@@ -349,7 +366,7 @@ export async function measureTravel(input: MeasureInput): Promise<MeasureResult>
   }
   finished();
 
-  return { candidates, travel: tableFor(matrix, order, unlocated, ends) };
+  return { candidates, travel: tableFor(matrix, order, unlocated, ends, geocoded) };
 }
 
 /**
@@ -369,6 +386,8 @@ function tableFor(
   order: readonly RunPlace[],
   unlocated: ReadonlyMap<string, ItemTravel>,
   ends: ReadonlyMap<string, { begins: string; ends: string }>,
+  /** What geocoded each end, for the legs that turn out to be measured (pl-36). */
+  geocoded: ReadonlyMap<string, Source>,
   /** What a leg is when the whole matrix call threw. Nobody declined to pay. */
   whenNoMatrix: ItemTravel = NOT_ESTABLISHED,
 ): TravelTable {
@@ -393,27 +412,87 @@ function tableFor(
       if (matrix === null) return whenNoMatrix;
 
       const outcome: GroundingOutcome<TravelEstimate> = travelOutcome(matrix, origin, destination);
-      return outcome.kind === "answered" ? measured(outcome.value) : unanswered(outcome);
+      return outcome.kind === "answered"
+        ? measured(outcome.value, [geocoded.get(originKey), geocoded.get(destinationKey)])
+        : unanswered(outcome);
     },
   };
 }
 
 /**
+ * Every distinct citation behind one fact, the oldest reading of each kept.
+ *
+ * **Deduplicated on the URL *and* the title, not the URL alone** — pl-36. This
+ * provider cites one URL for everything it answers
+ * (`https://www.openstreetmap.org/copyright`, the attribution page the ODbL
+ * asks for, and deliberately not the deployment's own endpoint) and tells its
+ * services apart in the title: "OpenStreetMap, routed by Valhalla" against
+ * "OpenStreetMap, geocoded by Nominatim". Keying on the URL alone would keep
+ * whichever arrived first and silently drop the other, so a plan measured
+ * across two services would name one of them.
+ *
+ * **The earliest `fetchedAt` wins.** Two lookups against one backend read it at
+ * two moments; §5 ages a grounded fact out by when it was read, and keeping the
+ * fresher of the two for both is the plan claiming to know something more
+ * recently than it does.
+ */
+function citations(sources: readonly (Source | undefined)[]): Source[] {
+  const kept = new Map<string, Source>();
+  for (const source of sources) {
+    if (source === undefined) continue;
+    const key = `${source.url}\u0000${source.title ?? ""}`;
+    const seen = kept.get(key);
+    // The separator is `runPlaceKey`'s, for its reason: a byte neither half can
+    // contain, so two different pairs cannot concatenate into one key.
+    //
+    // `Map.set` on a key it already holds keeps that key's position, so the
+    // routing citation stays first however many geocodes follow it.
+    if (seen === undefined || source.fetchedAt < seen.fetchedAt) kept.set(key, source);
+  }
+  // Cannot bite today — this provider has two distinct citations and
+  // `MAX_SOURCES` is five. It is here so a seam with more of them cannot build
+  // a `Provenance` that `provenanceSchema` then refuses on the way to the
+  // database, which would cost the whole revision rather than one citation.
+  return [...kept.values()].slice(0, MAX_SOURCES);
+}
+
+/**
  * One answered cell as the plan records it.
  *
- * The `Source` the seam returned becomes a `grounded` `Provenance`, which is
- * the vocabulary the plan view already renders (pl-10) and the one
+ * The `Source`s behind it become a `grounded` `Provenance`, which is the
+ * vocabulary the plan view already renders (pl-10) and the one
  * `provenanceSchema` refuses to build without a source. Everything else on the
  * candidate stays `model-asserted`: knowing where a place is is not evidence
  * that the thing proposed there exists, which is §5's item 3 and a different
  * question from this one.
+ *
+ * ## Why the geocoder is cited here too — pl-36
+ *
+ * This number was not read off one service. It is a route between two points a
+ * *geocoder* supplied, so a wrong geocode is a wrong distance: both reads are
+ * links in the chain that produced the figure the composer packs days under,
+ * and a citation naming only the second of them under-reports what the plan
+ * depended on. Nothing in the contract had to move to say so —
+ * `Provenance.sources` is a list, and this is that list used for what it is
+ * for.
+ *
+ * **This is where a located place's citation lands, and it is the only place a
+ * reader can be shown one.** A geocoded coordinate is never itself rendered —
+ * nothing under `web/src` reads a `latitude` — so the only user-visible fact
+ * derived from one is the leg measured across it. Hanging the citation off that
+ * fact rather than off the `Place` also costs no contract change and no rewrite
+ * of every stored candidate; the alternatives are weighed in pl-36's Log.
+ *
+ * An end this pass did **not** look up contributes nothing: a place that
+ * arrived carrying its own coordinates was located by somebody else, and citing
+ * a geocoder for it would be claiming a lookup that never happened.
  */
-function measured(cell: TravelEstimate): ItemTravel {
+function measured(cell: TravelEstimate, ends: readonly (Source | undefined)[]): ItemTravel {
   return {
     kind: "measured",
     distanceMeters: cell.distanceMeters,
     durationMinutes: cell.durationMinutes,
-    provenance: { kind: "grounded", sources: [cell.source] },
+    provenance: { kind: "grounded", sources: citations([cell.source, ...ends]) },
   };
 }
 

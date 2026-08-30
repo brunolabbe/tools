@@ -662,4 +662,68 @@ describe("travel sources", () => {
     await screen.findByText("A long walk");
     expect(screen.queryByText(/distance and travel time on this plan/i)).toBeNull();
   });
+
+  /**
+   * pl-36. The two OSM services this tool talks to cite the **same** URL —
+   * `openstreetmap.org/copyright` is the attribution page the ODbL asks for,
+   * and deliberately not the deployment's own endpoint — and are told apart
+   * only by their title. `travelSourcesOf` deduplicated on the URL alone, so
+   * the moment a leg started citing its geocoder as well as its router (which
+   * is the other half of this ticket) the plan would have credited one of the
+   * two backends it actually used and silently dropped the other.
+   */
+  test("credits both OSM services when they share one attribution URL", async () => {
+    const first = candidate({ title: "A ferry terminal" });
+    const second = candidate({ title: "A lighthouse" });
+    const measured = {
+      kind: "measured" as const,
+      distanceMeters: 12_000,
+      durationMinutes: 15,
+      provenance: {
+        kind: "grounded" as const,
+        sources: [
+          MEASURED_SOURCE,
+          {
+            url: MEASURED_SOURCE.url,
+            title: "OpenStreetMap, geocoded by Nominatim",
+            fetchedAt: "2027-01-01T00:00:00.000Z",
+          },
+        ],
+      },
+    };
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [first, second],
+        revisions: [
+          revision([
+            day(0, [
+              item({ candidateId: first.id }),
+              item({ candidateId: second.id, position: 1, travelFromPrevious: measured }),
+            ]),
+          ]),
+        ],
+      }),
+    );
+
+    // `ProvenanceNote` keys its source list, and a key of the URL alone is a
+    // collision for exactly this pair. React does not fail on one — it warns
+    // and renders both anyway — so the assertion above would stay green while
+    // the list quietly became "unsupported and could change in a future
+    // version". Spying is the only way to see it from here.
+    const warned = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      show();
+
+      await screen.findByText(/distance and travel time on this plan/i);
+      expect(
+        screen.getAllByRole("link", { name: "OpenStreetMap, routed by Valhalla" }),
+      ).toHaveLength(1);
+      expect(
+        screen.getAllByRole("link", { name: "OpenStreetMap, geocoded by Nominatim" }),
+      ).toHaveLength(1);
+      expect(warned).not.toHaveBeenCalled();
+    } finally {
+      warned.mockRestore();
+    }
+  });
 });

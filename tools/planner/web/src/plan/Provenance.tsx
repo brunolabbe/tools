@@ -78,7 +78,13 @@ export function ProvenanceNote({
       <span className="mark">Sourced</span> {what} is something we read at a source — reading it is
       not recommending it:{" "}
       {provenance.sources.map((source, index) => (
-        <span key={source.url}>
+        // Keyed on the URL **and** the title — pl-36. One backend can cite one
+        // URL for two services and tell them apart in the title only, which
+        // this tool's own grounding provider does: `openstreetmap.org/copyright`
+        // for both "routed by Valhalla" and "geocoded by Nominatim". A key of
+        // the URL alone is a duplicate-key warning and two nodes React treats
+        // as one.
+        <span key={`${source.url}\u0000${source.title ?? ""}`}>
           {index > 0 && ", "}
           <SourceLink source={source} />
           {/*

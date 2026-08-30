@@ -460,23 +460,33 @@ function Unchecked({
  * `over-budget` have no `Provenance` to cite — nothing here would be sourcing
  * a leg nothing measured, which is exactly the thing pl-35's Done-when named
  * as the trap.
+ *
+ * **Deduplicated on the URL *and* the title** — pl-36, and this changed. A leg
+ * now cites the geocoder that placed its two ends as well as the router that
+ * measured between them, and the provider gives both the *same* URL: it cites
+ * `openstreetmap.org/copyright` for everything, because that is the attribution
+ * page the ODbL asks for rather than the deployment's own endpoint, and names
+ * the service in the title. Keying on the URL alone kept whichever leg was read
+ * first and dropped the other service entirely, so the plan would have credited
+ * one of the two backends it actually used.
  */
 function travelSourcesOf(days: readonly PlanDay[]): Source[] {
-  const byUrl = new Map<string, Source>();
+  const distinct = new Map<string, Source>();
   for (const day of days) {
     for (const item of day.items) {
       const travel = item.travelFromPrevious;
       if (travel === null || travel.kind !== "measured") continue;
       if (travel.provenance.kind !== "grounded") continue;
       for (const source of travel.provenance.sources) {
-        // First seen wins — every candidate for the same URL is the same
-        // citation, and a plan measured across one run shares one `fetchedAt`
-        // per backend call regardless of which one is kept.
-        if (!byUrl.has(source.url)) byUrl.set(source.url, source);
+        // First seen wins — every candidate for the same URL and title is the
+        // same citation, and a plan measured across one run shares one
+        // `fetchedAt` per backend call regardless of which one is kept.
+        const key = `${source.url}\u0000${source.title ?? ""}`;
+        if (!distinct.has(key)) distinct.set(key, source);
       }
     }
   }
-  return [...byUrl.values()];
+  return [...distinct.values()];
 }
 
 function TravelSources({ days }: { days: readonly PlanDay[] }): React.ReactElement | null {
