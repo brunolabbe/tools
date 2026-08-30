@@ -313,7 +313,9 @@ both surfaces with one code path.
     want of a test file. Gate 1 raised the mismatch.
 11. `npm run check` and `npm test -- --project downloader` pass.
 
-## Review
+## The gate on this filing
+
+**This is a gate on the pull request that _filed_ this ticket, and it sat under `## Review` until 2026-08-30.** Its text, findings, verdict and inner headings are unedited; only this section's own title changed, and this paragraph was added. `docs/01-TICKETS.md` gives `## Review` one job — recording whether _the work_ was checked, and by whom — and the gate below checked a brief, at a point where no implementation existed to check. Moved by the `repo-12` branch, whose new board check reads a `## Review` on a `ready` ticket as work that merged without its status being flipped, and was reporting this ticket as exactly that. **This ticket's authoring session had ended by then, so the edit went unopposed rather than approved.**
 
 I checked out `d74a9fc1765f180752cf6186500008ad16f5199e` via `git fetch origin && git checkout --detach d74a9fc1765f180752cf6186500008ad16f5199e`. `git log --oneline -1` reports `d74a9fc docs(downloader): file dl-29, a preview image for a rendition and a job (dl-29)` — matches the sha given. `git diff --stat origin/main...HEAD` reports one file, `tools/downloader/docs/work/dl-29-preview-image-for-a-rendition.md`, 297 insertions — matches what I was told to expect. `origin/main` resolves to `1d420b79fdbe85ea9a0ff70c142171d903195249`, matching the ticket's own "measured at filing time" base.
 
