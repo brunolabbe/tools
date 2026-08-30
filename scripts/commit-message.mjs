@@ -24,9 +24,15 @@ import { fileURLToPath } from "node:url";
  * The types release-please understands, plus the ones that describe work it
  * should ignore.
  *
- * `feat` and `fix` are the only two that move a version on their own — minor
- * and patch respectively — so the taxonomy is really "does this change what a
- * user of the tool gets". Everything else lands silently and is fine.
+ * Four of them move a version on their own, not two: the four that are **not**
+ * `hidden` in `release-please-config.json`. `feat` bumps the minor; `fix`,
+ * `perf` and `revert` each bump the patch, because release-please names only
+ * `feat` and a breaking change and falls through to a patch for everything it
+ * did not skip. The other six are `hidden`, and a commit set made only of those
+ * is skipped outright — that is what "lands silently" means and it is the
+ * `hidden` flag that decides it, not this list. Measured for repo-10; the runs
+ * are in docs/03-RELEASING.md. So the taxonomy is really "does this change what
+ * a user of the tool gets".
  *
  * There is no `security` type, although this repo's history has one. A security
  * fix is a `fix`: it should bump the patch version and appear in the changelog,
@@ -45,8 +51,51 @@ export const TYPES = [
   "revert",
 ];
 
-/** Types whose changelog entry is ambiguous in a repo with more than one tool. */
-const SCOPE_REQUIRED = new Set(["feat", "fix"]);
+/**
+ * The set required to carry a scope when `release-please-config.json` cannot be
+ * read.
+ *
+ * Same reasoning as `toolScopes`' empty return: a hook that cannot find its
+ * config should not block every commit on a bad guess about where it is
+ * running. It should not silently stop enforcing either, so the fallback is the
+ * historical minimum rather than nothing — these two have been required since
+ * the rule existed and are unambiguous whatever the config says.
+ */
+const SCOPE_REQUIRED_FALLBACK = ["feat", "fix"];
+
+/**
+ * The types that reach a changelog, computed from `release-please-config.json`
+ * rather than listed here.
+ *
+ * **This is the rule read off the config, not off a list of type names.** A
+ * type is in a changelog exactly when it is not `hidden` in
+ * `changelog-sections` — measured for repo-10, with the runs in
+ * docs/03-RELEASING.md — so a type added to that file without `hidden` starts
+ * requiring a scope the day it is added, and nobody has to remember to edit
+ * this file. A hand-written set went stale here once already: it said `feat`
+ * and `fix` while `perf` and `revert` had been reaching a changelog all along.
+ *
+ * `null` rather than `[]` when the config cannot be read, so the caller can
+ * tell "unreadable" from "everything is hidden".
+ *
+ * @param {string} [repoRoot]
+ * @returns {string[] | null}
+ */
+export function releasingTypes(repoRoot = path.resolve(fileURLToPath(import.meta.url), "../..")) {
+  try {
+    const config = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, "release-please-config.json"), "utf8"),
+    );
+    const sections = config["changelog-sections"];
+    if (!Array.isArray(sections)) return null;
+    return sections
+      .filter((section) => section?.hidden !== true)
+      .map((section) => section?.type)
+      .filter((type) => typeof type === "string");
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Scopes that are not a tool.
@@ -94,11 +143,19 @@ export function toolScopes(repoRoot = path.resolve(fileURLToPath(import.meta.url
 
 /**
  * @param {string} message A full commit message, or a pull request title.
- * @param {{ scopes?: string[] }} [options]
+ * @param {{ scopes?: string[], releasingTypes?: string[] | null }} [options]
  * @returns {{ ok: boolean, errors: string[] }}
  */
 export function validate(message, options = {}) {
   const scopes = options.scopes ?? [...toolScopes(), ...EXTRA_SCOPES];
+  // `undefined` means "not supplied, go and read the config"; `null` means
+  // "the config could not be read", which is what `releasingTypes()` itself
+  // returns in that case. Keeping them distinct is what lets anything at all
+  // reach `SCOPE_REQUIRED_FALLBACK` — with a single `??` chain the fallback was
+  // unreachable except on a machine where the repo's own config is missing, so
+  // emptying it broke nothing that any test could see.
+  const declared = options.releasingTypes === undefined ? releasingTypes() : options.releasingTypes;
+  const releasing = new Set(declared ?? SCOPE_REQUIRED_FALLBACK);
 
   // Comments are what `git commit` appends to the buffer it opens; they are not
   // part of the message and must not be measured or parsed.
@@ -130,17 +187,29 @@ export function validate(message, options = {}) {
     return { ok: false, errors };
   }
 
-  const { type, scope, subject } = match.groups;
+  const { type, scope, subject, breaking } = match.groups;
+
+  // What reaches a changelog is "not `hidden`, **and** not breaking" — the same
+  // two-clause test docs/03-RELEASING.md states, because a `hidden` type
+  // carrying `!` is not skipped: the `BREAKING CHANGES` heading makes the
+  // changelog entry non-empty on its own. Measured for repo-10. Deriving the
+  // scope rule from `hidden` alone would let `chore!: …` cut an unattributed
+  // changelog line, which is the one thing the scope rule exists to stop.
+  const isBreaking =
+    breaking === "!" || lines.slice(1).some((line) => /^BREAKING[ -]CHANGE: /.test(line));
 
   if (!TYPES.includes(type)) {
     errors.push(`"${type}" is not a known type. Use one of: ${TYPES.join(", ")}`);
   }
 
   if (scope === undefined) {
-    if (SCOPE_REQUIRED.has(type)) {
+    if (releasing.has(type) || isBreaking) {
+      const reason = releasing.has(type)
+        ? `it is not "hidden" in release-please-config.json, so it reaches a changelog`
+        : "a breaking change reaches a changelog whatever its type";
       errors.push(
-        `"${type}" needs a scope — it is the only thing telling a reader which ` +
-          `tool's changelog this belongs in. Use one of: ${scopes.join(", ")}`,
+        `"${type}" needs a scope — ${reason}, and a changelog line is the only ` +
+          `thing telling a reader which tool it belongs to. Use one of: ${scopes.join(", ")}`,
       );
     }
   } else if (scopes.length > 0 && !scopes.includes(scope)) {
