@@ -85,9 +85,10 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { AppError } from "@planner/contract";
 import type { Coordinates, Place } from "@planner/contract";
 import { travelCell } from "@planner/agent";
-import type { TravelEstimate } from "@planner/agent";
+import type { Find, TravelEstimate } from "@planner/agent";
 import type { AppLogger } from "../src/logger.ts";
 import { overpassQuery, ValhallaGroundingProvider } from "../src/grounding/valhalla.ts";
+import { distanceToCorridorMetres } from "../src/grounding/geometry.ts";
 
 const CAPTURED: unknown = JSON.parse(
   readFileSync(
@@ -1055,5 +1056,212 @@ describe("nearby, over a hand-composed (not captured) Overpass reply", () => {
       }),
     ).rejects.toMatchObject({ code: "CANCELED" });
     expect(calls).toHaveLength(0);
+  });
+});
+
+/**
+ * `nearby`, over a payload a real Overpass wrote — pl-33's deliverable.
+ *
+ * The block above composes its bodies by hand and says so. This one does not:
+ * `overpass-nearby.json` is the verbatim reply of `overpass-api.de` to the
+ * query `overpassQuery` itself builds, for the Montréal→Québec City corridor
+ * at a 6 km radius over all four kinds, captured 2026-08-30. The procedure is
+ * in pl-33's Log, written out rather than cited by a path, because a capture
+ * script under someone's scratchpad is a promise only that session can keep.
+ *
+ * **Capturing it found three defects the composed bodies could not.** The
+ * first attempt returned `elements: []` and a `remark` — the shipped
+ * `[timeout:25]` is below what this corridor costs — and the adapter read that
+ * as a corridor with nothing on it. `overpass-timed-out.json` is that reply,
+ * kept, and the `TIMEOUT` test below is its regression.
+ *
+ * What a real payload proves that a composed one cannot: that 465 of the 657
+ * nodes carry a `historic` tag and only 182 of those survive the name filter,
+ * so the expensive clause earns far less than its cost; and that a single node
+ * can be `tourism=viewpoint` *and* `historic=monument` at once, which is the
+ * precedence `kindOf` has always claimed and nothing had ever exercised.
+ */
+function overpassFixture(name: string): unknown {
+  return JSON.parse(
+    readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), "utf8"),
+  );
+}
+
+const OVERPASS_CAPTURED = overpassFixture("overpass-nearby.json");
+const OVERPASS_TIMED_OUT = overpassFixture("overpass-timed-out.json");
+
+describe("nearby, over a payload a real Overpass wrote", () => {
+  async function findsFromCapture(): Promise<Find[]> {
+    const { fetch } = answering(OVERPASS_CAPTURED);
+    return discoveryProvider(fetch, "http://overpass.internal:8090").nearby({
+      corridor: CORRIDOR,
+      radiusMetres: 6_000,
+      kinds: ["viewpoint", "waterfall", "attraction", "historic-site"],
+    });
+  }
+
+  test("parses the capture into Finds, every one named and inside the radius", async () => {
+    const finds = await findsFromCapture();
+
+    // 657 elements in, 276 out: the difference is entirely the name filter,
+    // which is `findFrom`'s and not the server's. Asserted as a number so a
+    // parser change that silently drops or invents rows fails here.
+    expect(finds).toHaveLength(276);
+    for (const find of finds) {
+      expect(find.name.trim()).not.toBe("");
+      expect(distanceToCorridorMetres(find.coordinates, CORRIDOR)).toBeLessThanOrEqual(6_000);
+    }
+  });
+
+  test("a node tagged both viewpoint and monument is a viewpoint, as kindOf claims", async () => {
+    // Earl Grey Terrace, OSM node 343473014, carries `tourism=viewpoint` and
+    // `historic=monument` together. No composed fixture in this file had
+    // thought to, so the precedence in `kindOf` was asserted by its own source
+    // and by nothing else.
+    const finds = await findsFromCapture();
+    const both = finds.find((find) => find.name === "Earl Grey Terrace");
+
+    expect(both).toBeDefined();
+    expect(both?.kind).toBe("viewpoint");
+  });
+
+  test("a find carries the node's own OSM url, not the attribution fallback", async () => {
+    const finds = await findsFromCapture();
+    const belvedere = finds.find((find) => find.name === "Belvédère Léo-Ayotte");
+
+    expect(belvedere).toMatchObject({
+      kind: "viewpoint",
+      coordinates: { latitude: 45.5232225, longitude: -73.5687441 },
+      sources: [{ url: "https://www.openstreetmap.org/node/291483301" }],
+    });
+  });
+
+  test("a timed-out reply is a loud TIMEOUT, not an empty corridor", async () => {
+    // The regression pl-33 exists to close. Overpass answers a query it could
+    // not finish with HTTP 200, `elements: []` and a `remark`; reading only
+    // `elements` turned a backend failure into "nothing worth stopping for" on
+    // a corridor with 657 nodes on it. A silent wrong answer is worse than the
+    // loud one the 5 s client abort used to give, which is why `assertAnswered`
+    // landed with the timeout change and not after it.
+    const { fetch } = answering(OVERPASS_TIMED_OUT);
+
+    await expect(
+      discoveryProvider(fetch, "http://overpass.internal:8090").nearby({
+        corridor: CORRIDOR,
+        radiusMetres: 6_000,
+        kinds: ["viewpoint", "waterfall", "attraction", "historic-site"],
+      }),
+    ).rejects.toMatchObject({ code: "TIMEOUT" });
+  });
+
+  test("a remark that is not a timeout is UNREACHABLE, and keeps the text", async () => {
+    const { fetch } = answering({
+      version: 0.6,
+      elements: [],
+      remark: "runtime error: Query run out of memory using about 2048 MB of RAM.",
+    });
+
+    await expect(
+      discoveryProvider(fetch, "http://overpass.internal:8090").nearby({
+        corridor: CORRIDOR,
+        radiusMetres: 6_000,
+        kinds: ["viewpoint"],
+      }),
+    ).rejects.toMatchObject({
+      code: "UNREACHABLE",
+      details: { backend: "overpass", remark: expect.stringContaining("out of memory") },
+    });
+  });
+
+  test("asks the server for a ceiling below this process's, so the server answers first", async () => {
+    // The ordering is the point, not the arithmetic: a server that gives up
+    // first explains itself in a `remark`; a client that gives up first knows
+    // only that nothing arrived.
+    const { fetch, calls } = answering(OVERPASS_CAPTURED);
+    await new ValhallaGroundingProvider({
+      routingUrl: "http://valhalla.internal:8002",
+      geocoderUrl: "http://nominatim.internal:8080",
+      overpassUrl: "http://overpass.internal:8090",
+      timeoutMs: 5_000,
+      discoveryTimeoutMs: 30_000,
+      now: () => AT,
+      fetch,
+    }).nearby({ corridor: CORRIDOR, radiusMetres: 6_000, kinds: ["viewpoint"] });
+
+    expect(String(calls[0]?.init?.body)).toContain("[out:json][timeout:28];");
+  });
+});
+
+/**
+ * `Find.notability`, from what the map already states — pl-33 Build step 4.
+ *
+ * Measured against the capture rather than assumed: 34 of 276 finds (12%)
+ * carry a `wikipedia` or `wikidata` tag. That is a floor, not a substitute for
+ * a geosearch tier, and the Log says what a geosearch tier would cost. What it
+ * buys for free is the half of Build step 2 that never needed a call: a
+ * `wikipedia` tag names its own language, so nothing here guesses one.
+ */
+describe("notability, from tags a real payload already carries", () => {
+  async function findsFromCapture(): Promise<Find[]> {
+    const { fetch } = answering(OVERPASS_CAPTURED);
+    return discoveryProvider(fetch, "http://overpass.internal:8090").nearby({
+      corridor: CORRIDOR,
+      radiusMetres: 6_000,
+      kinds: ["viewpoint", "waterfall", "attraction", "historic-site"],
+    });
+  }
+
+  test("attaches the article the map names, with the title percent-encoded", async () => {
+    const finds = await findsFromCapture();
+    const monument = finds.find((find) => find.name === "Monument à Maisonneuve");
+
+    // `wikipedia=fr:Monument à Maisonneuve` — an accent and a space, which is
+    // why the url is encoded and the title is not.
+    expect(monument?.notability).toContainEqual({
+      url: "https://fr.wikipedia.org/wiki/Monument_%C3%A0_Maisonneuve",
+      title: "Monument à Maisonneuve",
+      fetchedAt: AT.toISOString(),
+    });
+  });
+
+  test("takes the language from the tag, never from the corridor's country", async () => {
+    // `Cénotaphe` in Montréal is tagged `wikipedia=es:Cenotafio de Montreal`.
+    // Any scheme that picked a language from where the find *is* would produce
+    // a French or English url here and link to nothing.
+    const finds = await findsFromCapture();
+    const cenotaph = finds.find((find) => find.name === "Cénotaphe");
+
+    expect(cenotaph?.notability.map((source) => source.url)).toContain(
+      "https://es.wikipedia.org/wiki/Cenotafio_de_Montreal",
+    );
+  });
+
+  test("a wikidata id is its own source, beside the article", async () => {
+    const finds = await findsFromCapture();
+    const monument = finds.find((find) => find.name === "Monument à Maisonneuve");
+
+    // Sorted before comparing: the order follows the order the mapper wrote
+    // the tags in, which is data and not a property this parser promises.
+    expect((monument?.notability ?? []).map((source) => source.url).toSorted()).toEqual([
+      "https://fr.wikipedia.org/wiki/Monument_%C3%A0_Maisonneuve",
+      "https://www.wikidata.org/wiki/Q924951",
+    ]);
+  });
+
+  test("34 of the 276 finds carry any notability at all, and the rest say nothing", async () => {
+    // The number is the point: it is the measurement that says a geosearch
+    // tier is still owed, and it fails loudly if the parser starts inventing
+    // backing the map never stated.
+    const finds = await findsFromCapture();
+    const backed = finds.filter((find) => find.notability.length > 0);
+
+    expect(backed).toHaveLength(34);
+    for (const find of finds) {
+      for (const source of find.notability) {
+        expect(source.url).toMatch(
+          /^https:\/\/[a-z-]+\.wikipedia\.org\/wiki\/|^https:\/\/www\.wikidata\.org\/wiki\/Q/,
+        );
+      }
+    }
   });
 });

@@ -122,8 +122,25 @@ export interface ValhallaProviderOptions {
    * same shape §5's amendment gives every other "the ground was thin" case.
    */
   overpassUrl?: string | undefined;
-  /** Per-request ceiling. Short on purpose — see the header. */
+  /** Per-request ceiling for routing and geocoding. Short on purpose — see the header. */
   timeoutMs: number;
+  /**
+   * Per-request ceiling for discovery, which is a different backend doing a
+   * different kind of work and does not belong on the same clock.
+   *
+   * A Valhalla matrix over a warm regional graph is milliseconds, so
+   * `timeoutMs` is deliberately impatient — anything near it is an instance in
+   * trouble. An Overpass corridor search is not that: pl-33 measured 28.7 s
+   * for Montréal→Québec City and **149 s** for Montréal→Percé against the
+   * public instance, with the query this adapter really sends. Sharing one
+   * 5 s ceiling meant `nearby` aborted every real corridor it was ever asked
+   * about, and no test caught it because none of them crossed a wire.
+   *
+   * Defaults to `timeoutMs` when a caller states only one, so existing
+   * constructions keep their present behaviour rather than silently gaining a
+   * longer one.
+   */
+  discoveryTimeoutMs?: number | undefined;
   /**
    * Injected so a test drives the parser over a checked-in payload with no
    * socket anywhere, and so the boot wiring can hand this the same clock the
@@ -142,6 +159,7 @@ export class ValhallaGroundingProvider implements GroundingProvider {
   readonly #geocoderUrl: string;
   readonly #overpassUrl: string | undefined;
   readonly #timeoutMs: number;
+  readonly #discoveryTimeoutMs: number;
   readonly #now: () => Date;
   readonly #fetch: typeof globalThis.fetch;
   readonly #logger: AppLogger | undefined;
@@ -152,6 +170,7 @@ export class ValhallaGroundingProvider implements GroundingProvider {
     this.#overpassUrl =
       options.overpassUrl === undefined ? undefined : trimSlash(options.overpassUrl);
     this.#timeoutMs = options.timeoutMs;
+    this.#discoveryTimeoutMs = options.discoveryTimeoutMs ?? options.timeoutMs;
     this.#now = options.now ?? ((): Date => new Date());
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#logger = options.logger;
@@ -273,10 +292,21 @@ export class ValhallaGroundingProvider implements GroundingProvider {
       return [];
     }
 
-    const query = overpassQuery(request.corridor, request.radiusMetres, request.kinds);
+    // The server's own ceiling, kept just under this process's, so a corridor
+    // too big to answer comes back as Overpass's `remark` — which
+    // `assertAnswered` turns into a loud `TIMEOUT` — rather than as this side
+    // aborting mid-flight with less to say. See `overpassQuery`.
+    const query = overpassQuery(
+      request.corridor,
+      request.radiusMetres,
+      request.kinds,
+      serverTimeoutSeconds(this.#discoveryTimeoutMs),
+    );
 
     const body = await this.#overpassJson(query, request.signal);
     const at = this.#now();
+
+    assertAnswered(body);
 
     return elementsOf(body)
       .map((element) => findFrom(element, at))
@@ -294,7 +324,7 @@ export class ValhallaGroundingProvider implements GroundingProvider {
    * assumes a `RequestInit` its two other callers already agree on.
    */
   async #overpassJson(query: string, signal: AbortSignal | undefined): Promise<unknown> {
-    const deadline = AbortSignal.timeout(this.#timeoutMs);
+    const deadline = AbortSignal.timeout(this.#discoveryTimeoutMs);
     const combined = signal === undefined ? deadline : AbortSignal.any([signal, deadline]);
 
     let response: Response;
@@ -639,11 +669,24 @@ const KIND_FILTERS: Record<DiscoveryKind, string> = {
  * payload was captured, so nothing downstream had to change to follow it.
  *
  * `[out:json]` is load-bearing: Overpass's default output is XML, and this
- * file has no XML parser and does not want one. `[timeout:25]` is Overpass's
- * own server-side ceiling and is unrelated to `GROUNDING_TIMEOUT_MS`, which
- * bounds how long *this process* waits — the two are different clocks
- * belonging to different machines, and setting them to the same number would
- * be a coincidence, not a rule.
+ * file has no XML parser and does not want one.
+ *
+ * **The server ceiling is now derived from `GROUNDING_TIMEOUT_MS`, and this
+ * paragraph used to say it should not be** — that the two are different clocks
+ * on different machines and matching them would be a coincidence, not a rule.
+ * They are still different clocks, but they are not independent, and pl-33
+ * measured what the independence cost. The literal was `[timeout:25]` against
+ * a `GROUNDING_TIMEOUT_MS` of 5 000: the client gave up at 5 s on work that
+ * takes 28.7 s for Montréal→Québec City and 149 s for Montréal→Percé, this
+ * tool's own motivating example, against the public instance. `nearby` could
+ * not once have succeeded on a real corridor.
+ *
+ * The rule that replaces the coincidence: **the server's ceiling sits just
+ * under this process's**, so a corridor too large to answer comes back as
+ * Overpass's own `remark` — which `assertAnswered` raises as `TIMEOUT` — in
+ * preference to this side aborting mid-flight, which knows only that nothing
+ * arrived. Ordering the two clocks is what makes the failure legible; setting
+ * them equal would race.
  *
  * Exported so the capture script quoted in pl-29's Log can build the *exact*
  * query this adapter sends rather than a hand-written approximation of it —
@@ -654,13 +697,65 @@ export function overpassQuery(
   corridor: Corridor,
   radiusMetres: number,
   kinds: readonly DiscoveryKind[],
+  timeoutSeconds: number = DEFAULT_SERVER_TIMEOUT_SECONDS,
 ): string {
   const points = corridor
     .map((point) => `${String(point.latitude)},${String(point.longitude)}`)
     .join(",");
   const around = `around:${String(radiusMetres)},${points}`;
   const clauses = kinds.map((kind) => `  node[${KIND_FILTERS[kind]}](${around});`).join("\n");
-  return `[out:json][timeout:25];\n(\n${clauses}\n);\nout body;`;
+  return `[out:json][timeout:${String(timeoutSeconds)}];\n(\n${clauses}\n);\nout body;`;
+}
+
+/**
+ * Overpass's server-side ceiling when no caller states one, in seconds.
+ *
+ * Only reached by `overpassQuery`'s exported form, which the capture procedure
+ * in pl-33's Log calls directly; `nearby` always derives it from the process
+ * timeout instead.
+ */
+const DEFAULT_SERVER_TIMEOUT_SECONDS = 25;
+
+/** How far the server's ceiling sits under this process's, in milliseconds. */
+const SERVER_TIMEOUT_MARGIN_MS = 2_000;
+
+/**
+ * The `[timeout:]` to ask Overpass for, given how long this process will wait.
+ *
+ * Under, never over: a server that gives up first says *why* in a `remark`,
+ * and `assertAnswered` turns that into a `TIMEOUT` naming the backend. A
+ * client that gives up first produces an abort that cannot distinguish a slow
+ * corridor from an unplugged cable.
+ */
+function serverTimeoutSeconds(processTimeoutMs: number): number {
+  return Math.max(1, Math.floor((processTimeoutMs - SERVER_TIMEOUT_MARGIN_MS) / 1_000));
+}
+
+/**
+ * Throw if the reply is Overpass reporting a failure rather than an answer.
+ *
+ * **A timed-out Overpass query is HTTP 200.** The body carries `elements: []`
+ * beside a `remark`, and before pl-33 this file read only `elements` — so a
+ * corridor the server could not finish searching returned no finds, cleanly,
+ * and the planner said there was nothing worth stopping for. That is a silent
+ * wrong answer where the code one layer up would have raised a loud one, and
+ * it is strictly the worse failure: the reproduction is in
+ * `test/fixtures/overpass-timed-out.json`, captured from the public instance
+ * with the query this adapter really sends.
+ *
+ * `remark` is Overpass's channel for runtime trouble generally, not only
+ * timeouts, so the text decides the code: a timeout is core's `TIMEOUT`,
+ * anything else is `UNREACHABLE` with the remark kept in `details`. Neither is
+ * invented here — both already describe a backend that did not answer.
+ */
+function assertAnswered(body: unknown): void {
+  const remark = (body as { remark?: unknown } | null)?.remark;
+  if (typeof remark !== "string" || remark.trim() === "") return;
+
+  const timedOut = /timed out/i.test(remark);
+  throw new AppError(timedOut ? "TIMEOUT" : "UNREACHABLE", undefined, {
+    details: { backend: "overpass", remark },
+  });
 }
 
 interface OverpassElement {
@@ -687,6 +782,67 @@ function elementsOf(body: unknown): OverpassElement[] {
   return elements.filter((element): element is OverpassElement => {
     return typeof element === "object" && element !== null;
   });
+}
+
+/**
+ * Editorial backing the map itself already carries, at no call cost.
+ *
+ * OSM mappers record `wikipedia=<lang>:<Title>`, `wikipedia:<lang>=<Title>`
+ * and `wikidata=Q…` on the objects they know are written about. pl-33 measured
+ * this against a real corridor: 34 of 276 finds (12%) carry one, so this is a
+ * floor and not a substitute for a geosearch tier — but it is free, it is
+ * per-find, and it needs no language guessed at, because a `wikipedia` tag
+ * states its own language. 16 of the 18 wikipedia tags in that capture are
+ * `fr:`, chosen by mappers who know the place, which is the same answer the
+ * geosearch counts give (426 fr articles to 189 en over one 10 km radius) and
+ * arrived at independently.
+ *
+ * Title-cased `Source.title` is the article title as written; the url is
+ * percent-encoded because these titles carry accents and spaces routinely
+ * (`Percé`, `Chute Montmorency`) and a raw one is not a valid url.
+ */
+function notabilityFrom(tags: ReadonlyMap<string, string>, at: Date): Source[] {
+  const found: Source[] = [];
+  const seen = new Set<string>();
+  const push = (url: string, title: string | null): void => {
+    if (seen.has(url)) return;
+    seen.add(url);
+    found.push({ url, title, fetchedAt: at.toISOString() });
+  };
+
+  for (const [key, value] of tags) {
+    const text = value.trim();
+    if (text === "") continue;
+
+    if (key === "wikipedia") {
+      // `<lang>:<Title>`. Split once: titles contain colons of their own.
+      const separator = text.indexOf(":");
+      if (separator <= 0) continue;
+      const language = text.slice(0, separator);
+      const title = text.slice(separator + 1).trim();
+      if (title === "" || !/^[a-z-]{2,12}$/i.test(language)) continue;
+      push(wikipediaUrl(language, title), title);
+      continue;
+    }
+
+    if (key.startsWith("wikipedia:")) {
+      const language = key.slice("wikipedia:".length);
+      if (!/^[a-z-]{2,12}$/i.test(language)) continue;
+      push(wikipediaUrl(language, text), text);
+      continue;
+    }
+
+    if (key === "wikidata" && /^Q[1-9][0-9]*$/.test(text)) {
+      push(`https://www.wikidata.org/wiki/${text}`, text);
+    }
+  }
+
+  return found;
+}
+
+/** One article url, with the title encoded — these carry accents and spaces. */
+function wikipediaUrl(language: string, title: string): string {
+  return `https://${language.toLowerCase()}.wikipedia.org/wiki/${encodeURIComponent(title.replaceAll(" ", "_"))}`;
 }
 
 /** Which `DiscoveryKind` a node's tags mean, or `null` for none of the ones we asked about. */
@@ -766,12 +922,11 @@ function findFrom(element: OverpassElement, at: Date): Find | null {
     kind,
     tags,
     sources: [{ url, title: "OpenStreetMap", fetchedAt: at.toISOString() }],
-    // Wikipedia's geosearch and Wikivoyage are both unreachable from the
-    // environment this ticket was built in (see pl-29's Log), so this adapter
-    // populates nothing here yet — never `null`, because `notability: []`
-    // says "nothing checked", which is true, rather than "checked and found
-    // nothing", which would be a claim this file has no basis for.
-    notability: [],
+    // Whatever the map already states, and nothing bought with a call — see
+    // `notabilityFrom`. Still `[]` for most finds, and that keeps meaning
+    // "nothing checked" rather than "checked and found nothing": a geosearch
+    // tier that would justify the stronger reading does not exist yet.
+    notability: notabilityFrom(tags, at),
     // Filled in later, by the discovery pass, for the finds that survive the
     // geometric filter — see `api/src/runs/discovery.ts`. Never this adapter's
     // job: measuring a detour spends a `travel` call, and `nearby` itself must
