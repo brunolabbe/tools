@@ -620,6 +620,19 @@ describe("choosing among several results (pl-34)", () => {
     await expect(provider(fetch).locate({ place: inQuebec })).resolves.toBeNull();
   });
 
+  test("one result that contradicts the locality is refused, not accepted for being alone", async () => {
+    // The captured `limit=1` reply, asked for by a candidate that says where
+    // it is: Québec in, Toulouse out. A rule that only refused *disagreeing*
+    // results would accept this one — there is nothing for it to disagree
+    // with — which is how a lone wrong answer looks exactly like a lone right
+    // one. Found by mutating `bestMatches` to fall back to every result when
+    // none matches; the ambiguous cases below did not notice.
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_1);
+    const inQuebec: Place = { name: "Saint-Jean", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: inQuebec })).resolves.toBeNull();
+  });
+
   test("a locality is matched without regard to case or accents", async () => {
     const { fetch } = answering(NOMINATIM_MATCH);
     const unaccented: Place = { name: "Perce", locality: "quebec", coordinates: null };
@@ -627,6 +640,21 @@ describe("choosing among several results (pl-34)", () => {
     await expect(provider(fetch).locate({ place: unaccented })).resolves.toMatchObject({
       coordinates: { latitude: 48.5222989, longitude: -64.2136423 },
     });
+  });
+
+  test("a fragment too short to mean anything is not allowed to pick a place", async () => {
+    // `ey` is inside `Jersey` and inside nothing else in this real reply, so
+    // with no floor on a hint's length a two-character locality — a truncated
+    // one, a stray code, whatever a model wrote — locates Saint-Jean in the
+    // Channel Islands with one accidental substring behind it. Dropped
+    // instead, which leaves nothing to disambiguate with and falls through to
+    // the six-way disagreement. Found by mutating `MIN_HINT_CHARS` to 0; the
+    // agreement test rescues almost every other short fragment, which is why
+    // this one had to be chosen to match exactly one result.
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const noisy: Place = { name: "Saint-Jean", locality: "ey", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: noisy })).resolves.toBeNull();
   });
 
   test("results that agree about where they are are one place, not an ambiguity", async () => {

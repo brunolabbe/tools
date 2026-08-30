@@ -4,7 +4,7 @@ tool: planner
 title: A locality-free geocoder query resolves confidently to the wrong country
 kind: fix
 milestone: P3
-status: ready
+status: done
 depends_on: []
 ---
 
@@ -127,6 +127,22 @@ and what a rejected/refused `locate` should mean for the plan (a new
 `UncheckedConstraint`? a different one from the existing `travel-time`?), is
 this ticket's Build, not written here.
 
+## Build — option 2, decided 2026-08-30 by the user
+
+**Raise the request `limit` and disambiguate on `display_name`.** In
+`api/src/grounding/valhalla.ts`:
+
+1. Ask the geocoder for ten results rather than one.
+2. Choose among them by matching the candidate's own `locality` against each
+   result's `display_name` — not by Nominatim's order and not by `importance`,
+   both of which this ticket's capture already shows would pick a European
+   result over both Canadian ones.
+3. Where nothing separates the results and nothing points at one of them, do
+   not answer. `locate` says `null`, as it already may.
+
+(3) closes option 3 as a side effect: it comes out of the same scoring rule
+rather than being a second rule, so it is folded in rather than left filed.
+
 ## Done when
 
 - A decision is recorded for which of the options above (or a fourth) closes
@@ -162,3 +178,114 @@ capture (`place_id` differs between the two captures for the same `osm_id`)
 is informational for this ticket and not a live defect — noted rather than
 acted on. `api/src/grounding/cache.ts`'s `locateKey`/`travelKey` are keyed on
 the requested `Place`, never on anything the reply returns.
+
+**2026-08-30 — option 2 built, reproduction pinned red first.** Branch
+`pl-34-locality-free-query-disambiguation`, cut from `origin/main`. `locate`
+asks for ten results and `chooseResult` picks among them; before this it asked
+for one and answered `body[0]`.
+
+The reproduction was written and watched fail before any source changed: six
+tests red at `d3feb4b`'s parent, including
+`locate({ name: "Saint-Jean", locality: null })` over
+`nominatim-search-ambiguous-limit10.json` answering Toulouse, France where it
+must answer nothing.
+
+**The rule, and why it is not the naive version.** Each comma-separated
+fragment of `locality` is an unlabelled hint; a result scores one point per
+hint appearing in its `display_name`, folded to lowercase with diacritics
+stripped so `"quebec"` matches `"Québec"`; the highest-scoring results survive
+and a result matching nothing does not; the survivors must then agree about
+where they are, within 25 km, or the place is not located. That last clause is
+the whole of the answer when `locality` is `null`, which is the case this
+ticket was filed for.
+
+Nothing here reads `importance` and nothing reads Nominatim's order except as
+a tiebreak among results that already agree. The brief is right that the naive
+version fails and it understates it slightly: `importance` would have picked
+**St. John's, Newfoundland** (0.6016, index 2), and taking the first would
+have picked **Toulouse** — three different answers from one reply, none of
+them a Québec place, which is pinned as a test rather than asserted.
+
+**What the brief had wrong or left stale.**
+
+- _"The ten results"_, said four times. The captured
+  `q=Saint-Jean&limit=10` reply holds **six** results; the brief's own
+  "the six distinct places are…" is the accurate sentence and the counts
+  elsewhere are not. The test names in `grounding-valhalla.test.ts` now say
+  six and the file's header says why.
+- _"production's actual request shape: `locate` always asks for `limit=1`"_
+  and _"captured only for this ticket's evidence"_, of the two captures. As
+  of this commit that is exactly inverted: `limit=10` is production's shape
+  and the two `limit=1` captures are the historical one. Both statements were
+  true when written; they are recorded here rather than edited out of the
+  Reproduction section, which is that section's job.
+- _Option 3 described as untouched by option 2_ — "does not touch the case
+  reproduced here". True of option 3 alone, but option 2's scoring produces
+  option 3 for free: a result that mentions none of the locality's hints is
+  refused whether or not there is anything else in the reply. The
+  pl-30-predicted failure (`{ name: "Saint-Jean", locality: "Québec" }`
+  answering Toulouse) is closed by this commit and pinned over the real
+  `limit=1` capture. **No separate ticket for it.**
+
+**Three fold-ins, all in this commit.** The stale `firstCoordinates`
+reference in `api/src/runs/discovery.ts`'s header (the function is now
+`geocoderResults`), the two stale claims about the captures in the test
+file's header, and option 3 above. A fourth was declined: `MIN_HINT_CHARS`
+and the 25 km radius are the kind of constant `docs/01-ARCHITECTURE.md` might
+mention, and it does not mention the geocoder's request shape at all today, so
+adding a first mention of it there is a documentation change with no ticket
+behind it rather than a stale sentence being fixed.
+
+**Every rule was mutation-checked, and one mutant survived long enough to be
+worth writing down.** Six mutations run individually against the spec:
+dropping the diacritic fold, a zero agreement radius, `score > 0` instead of
+`score === top`, a constant `top = 1`, and `MIN_HINT_CHARS` at 0 all failed a
+named test. `if (top === 0) return []` mutated to `return [...results]`
+**passed all 54 tests** — because in every ambiguous case the survivors then
+disagree geographically and the answer is `null` either way. The case that
+distinguishes them is a _lone_ result that contradicts the locality, which is
+precisely the pl-30-predicted failure, and it now has its own test over the
+real `limit=1` capture (`one result that contradicts the locality is refused,
+not accepted for being alone`). Without that mutation the ticket would have
+shipped believing option 3 was covered when only its ambiguous half was.
+
+**What is unmeasured, named rather than reasoned about.**
+
+- **No successful lookup has been captured at `limit=10`.** This container
+  reaches no geocoder — verified again today: `example.com`,
+  `en.wikipedia.org` and `download.geofabrik.de` all fail to connect while
+  `registry.npmjs.org` returns 200, so it is an allowlist. What
+  `q=Percé, Québec&limit=10` actually returns is therefore unknown, and the
+  rule's behaviour on the ordinary case is inferred from a `limit=1` capture
+  plus reasoning, not observed. **This is the ticket's largest open risk**:
+  if Nominatim returns Percé's town node and its `Le Rocher-Percé` municipality
+  as rows more than 25 km apart, an ordinary lookup that used to answer would
+  now decline. The capture that would settle it is one command on a networked
+  machine and is worth taking before this reaches a deployment.
+- **How far apart a geocoder's duplicate rows for one town are** is likewise
+  unsourced; 25 km is chosen inside the gap between that (single-digit km in
+  any reasonable description) and the closest pair in the real ambiguous reply
+  (**402 km**, St John, Jersey to Sint-Jan, Belgium — computed from the
+  fixture, not estimated). Any threshold in that range decides every case in
+  this repo identically. The test that pins the near side composes its two
+  rows by hand and says in the test body that it is not a claim about
+  Nominatim.
+
+**For pl-36 (`travel.ts:286-310`), which is serialised behind this.** That
+loop is **not touched by this commit** — no line of `api/src/runs/travel.ts`
+changed, so its shape is exactly what pl-36's brief describes. What changed is
+underneath it: an `outcome.kind` of `unknown` from `locate` now means either
+"nobody matched this name" _or_ "several places matched and nothing separated
+them". The loop maps both to `NOT_ESTABLISHED` and the plan calls the leg
+unmeasured, which is truthful but coarser than it was. If pl-36 is
+re-shaping that loop anyway, it is the cheapest place to carry a distinction —
+see the open decision below, which is pl-36's to inherit if it is not settled
+first.
+
+**Open decision, not settled here: does an ambiguous name deserve its own
+word?** `locate` answers `LocatedPlace | null` and this commit widened what
+`null` covers without widening the vocabulary, which is the third bullet of
+Done-when. Deliberately left for the user because it is contract-adjacent —
+`@planner/agent`'s `LocateRequest`/`GroundingProvider` seam and
+`@planner/contract`'s `UNCHECKED_CONSTRAINTS`, whose sibling packages depend
+on both. The options are in this dispatch's report.
