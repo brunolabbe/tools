@@ -327,6 +327,16 @@ export class ValhallaGroundingProvider implements GroundingProvider {
    * (`toobig`), which is why this takes a point and the tiling lives a layer
    * up where the call budget is.
    *
+   * **This uses `#json`, so it is bounded by `timeoutMs` (5 s) and not by
+   * `discoveryTimeoutMs` (30 s), and that is deliberate rather than an
+   * oversight this file happened not to notice.** The 30 s clock exists
+   * because Overpass evaluates an `around:` polyline over a whole corridor and
+   * measurably takes tens of seconds. Geosearch does not: measured at 0.195 s
+   * to 0.273 s across five points along this corridor, so 5 s is roughly 25x
+   * headroom and anything approaching it is an instance in trouble — which is
+   * the same argument `groundingTimeoutMs`'s own comment makes for a routing
+   * matrix. Two clocks, and Wikipedia belongs with the fast one.
+   *
    * The language reaches a **hostname**, and it is derived from OSM tag text —
    * data this deployment did not write. `WIKI_LANGUAGE` is therefore a strict
    * allow-shape rather than a sanitiser: anything that is not a plain language

@@ -526,6 +526,51 @@ describe("discoverAlongCorridor, attaching notability", () => {
     expect(sites.every((entry) => entry.endsWith(":fr"))).toBe(true);
   });
 
+  test("notability spends first, so a tight budget costs the detour and not the find", async () => {
+    // pl-33's gate raised this as an ordering nobody had written down: the two
+    // notability passes now run *before* `detourCosts`, where `detourCosts`
+    // used to be the only consumer after `nearby`. Up to 8 calls (6 tiles plus
+    // 2 corridor ends) can go first, so on a corridor whose budget is tight
+    // the thing that loses is detour costing.
+    //
+    // That is the right way round and this pins it rather than leaving it to
+    // be rediscovered: a find with no detour measured is still a find, and
+    // says so with `detourMinutes: null` — the same "nobody measured this"
+    // §5 asks for everywhere else. A find with no notability that was never
+    // asked about is indistinguishable from one nobody wrote about, which is
+    // the weaker outcome of the two.
+    const result = await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Percé"),
+      provider: provider({
+        nearby: async () => answered([findAt("Belvédère", MONTREAL, [TAGGED_FR])]),
+        articlesNear: async () =>
+          answered([
+            {
+              source: {
+                url: "https://fr.wikipedia.org/wiki/Proche",
+                title: "Proche",
+                fetchedAt: AT,
+              },
+              coordinates: MONTREAL,
+            },
+          ]),
+        // The budget is gone by the time the matrix is asked for.
+        travel: async (request) =>
+          request.origins.map(() => request.destinations.map(() => REFUSED)),
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: progressOf().onProgress,
+    });
+
+    expect(result.finds).toHaveLength(1);
+    // Never faked, and never dropped: the find survives with its backing.
+    expect(result.finds[0]?.detourMinutes).toBeNull();
+    expect(result.finds[0]?.notability.map((source) => source.url)).toContain(
+      "https://fr.wikipedia.org/wiki/Proche",
+    );
+  });
+
   test("attaches an article near a find, and leaves a distant one alone", async () => {
     const near = { latitude: MONTREAL.latitude + 0.001, longitude: MONTREAL.longitude };
     const far = { latitude: MONTREAL.latitude + 0.05, longitude: MONTREAL.longitude };

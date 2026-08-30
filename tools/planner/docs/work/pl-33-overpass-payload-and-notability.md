@@ -346,13 +346,53 @@ did.
 
 ```
 $ npm run check                  # exit 0
-$ npm test                       # 114 files, 1734 tests, all passing
-$ npm test -- --project planner  # 787 passing
+$ npm test                       # 114 files, 1737 tests, all passing
+$ npm test -- --project planner  # 790 passing
 ```
 
 Baseline for the planner project on this branch's `origin/main` (`ec1dd6b`) was
-**774**. What this branch adds is 13 tests over two captured payloads and the
+**774**. What this branch adds is 16 tests over two captured payloads and the
 two passes that read them.
+
+**These numbers were wrong here until the gate caught it** — recorded as
+1 734 and 787, which is what they were before the last two tests were written,
+and committed without re-running. The gate's reviewer re-ran both suites twice
+rather than reading this block back, which is the only reason it was caught. Its
+own figures (1 736 / 789) were right when it measured them and are one behind
+now, because closing its fourth finding added a test. Measured again on the tip
+that carries the repairs, which is the discipline the finding was actually
+about: **re-run, do not remember.**
+
+### The gate's four findings, all closed
+
+The gate is above, and every row of it stands as written. All four `low`
+findings were real and none was argued with.
+
+1. **The counts in this Log were stale.** Corrected, and the block above now
+   says how it happened. Worth more than its severity: the reviewer caught it
+   only because it re-ran both suites instead of reading the numbers back, which
+   is exactly what the `verified` verdict exists to force.
+2. **`docs/02-DEPLOYMENT.md` never mentioned the new service.** It documented
+   Valhalla and Nominatim and said "it is two services", while
+   `compose.planner.yaml` pointed readers at it three times. A deployer
+   following it would never have learned discovery could be turned on. It now
+   names the third service, `OVERPASS_URL` as the one optional endpoint,
+   `GROUNDING_DISCOVERY_TIMEOUT_MS`, and the 149 s measurement that says not to
+   point it at the public instance.
+3. **`articlesNear` used the 5 s clock, not the 30 s discovery one.** The gate
+   was right that this file argues at length for two clocks and then never said
+   which one Wikipedia belonged on. Measured rather than reasoned about: five
+   geosearch calls along this corridor returned in **0.195–0.273 s**, so 5 s is
+   ~25x headroom and anything near it is an instance in trouble — the same
+   argument `groundingTimeoutMs` already makes for a routing matrix. Kept, with
+   the measurement recorded at the call site so the next reader does not have to
+   re-derive it.
+4. **Nothing pinned what the new ordering costs.** `notability` and
+   `corridorReading` now spend up to 8 calls ahead of `detourCosts`, so on a
+   tight budget detour costing is what loses. That is the right way round — a
+   find with no detour still says `detourMinutes: null`, while a find nobody
+   asked about is indistinguishable from one nobody wrote about — and there is
+   now a test for it rather than an assumption.
 
 ### What a reviewer should look at hardest
 
