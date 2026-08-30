@@ -279,6 +279,7 @@ describe("weighing a rendition (dl-30)", () => {
     expect(measuredByYtDlp?.filesizeIsEstimate).toBe(false);
 
     expect(calls[0]).toBe(`GET ${MANIFEST}`);
-    expect(calls).toHaveLength(4);
+    // The playlist, then one HEAD per segment: six here, under the cap of eight.
+    expect(calls).toHaveLength(7);
   });
 });

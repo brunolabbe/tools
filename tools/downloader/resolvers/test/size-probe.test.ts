@@ -145,19 +145,4 @@ describe("text", () => {
       }).text("u"),
     ).toBeUndefined();
   });
-
-  test("a skip reports a redacted URL, never the signed one", async () => {
-    const seen: string[] = [];
-    const { fetch } = stub(() => new Response(null, { status: 404 }));
-    const probe = createFetchSizeProbe({
-      fetch,
-      headers: HEADERS,
-      onSkip: (_reason, url) => seen.push(url),
-    });
-
-    await probe.text("https://cdn.example.net/v/index.m3u8?Signature=deadbeef&Key-Pair-Id=abc");
-
-    expect(seen).toHaveLength(1);
-    expect(seen[0]).not.toContain("deadbeef");
-  });
 });

@@ -11,8 +11,6 @@
  * on every manifest probe.
  */
 
-import { redactUrl } from "@downloader/contract";
-
 /** Headers a caller has already built: the `RequestContext` replay, verbatim. */
 export interface FetchSizeProbeOptions {
   fetch: typeof globalThis.fetch;
@@ -22,8 +20,6 @@ export interface FetchSizeProbeOptions {
   timeoutMs?: number;
   /** A playlist larger than this is not one we should be reading. */
   maxTextBytes?: number;
-  /** Called with an already-redacted URL. Nothing here logs on its own. */
-  onSkip?: (reason: string, url: string) => void;
 }
 
 const DEFAULT_TIMEOUT_MS = 4000;
@@ -45,11 +41,6 @@ export function createFetchSizeProbe(options: FetchSizeProbeOptions) {
   function signalFor(): AbortSignal {
     const deadline = AbortSignal.timeout(timeoutMs);
     return options.signal === undefined ? deadline : AbortSignal.any([options.signal, deadline]);
-  }
-
-  function skip(reason: string, url: string): undefined {
-    options.onSkip?.(reason, redactUrl(url));
-    return undefined;
   }
 
   return {
@@ -76,15 +67,12 @@ export function createFetchSizeProbe(options: FetchSizeProbeOptions) {
           redirect: "follow",
         });
         await ranged.body?.cancel();
-        if (!ranged.ok) return skip(`status ${ranged.status}`, url);
+        if (!ranged.ok) return undefined;
         // On a 206 the Content-Length is the length of the *range*. Only
         // Content-Range names the resource.
-        return (
-          totalFromContentRange(ranged.headers.get("content-range")) ??
-          skip("no content-range", url)
-        );
-      } catch (cause) {
-        return skip(cause instanceof Error ? cause.name : "failed", url);
+        return totalFromContentRange(ranged.headers.get("content-range"));
+      } catch {
+        return undefined;
       }
     },
 
@@ -98,17 +86,17 @@ export function createFetchSizeProbe(options: FetchSizeProbeOptions) {
         });
         if (!response.ok) {
           await response.body?.cancel();
-          return skip(`status ${response.status}`, url);
+          return undefined;
         }
         const declared = Number(response.headers.get("content-length"));
         if (Number.isFinite(declared) && declared > maxTextBytes) {
           await response.body?.cancel();
-          return skip("too large", url);
+          return undefined;
         }
         const body = await response.text();
-        return body.length > maxTextBytes ? skip("too large", url) : body;
-      } catch (cause) {
-        return skip(cause instanceof Error ? cause.name : "failed", url);
+        return body.length > maxTextBytes ? undefined : body;
+      } catch {
+        return undefined;
       }
     },
   };

@@ -3,7 +3,7 @@ id: dl-30
 tool: downloader
 title: Measure a rendition instead of trusting its declared bitrate
 kind: fix
-status: in-flight
+status: done
 milestone: null
 depends_on: []
 ---
@@ -196,7 +196,9 @@ Traps, all of them things that would produce a confidently wrong number:
 
 1. A DASH manifest whose declared `@bandwidth` overstates its real segment bytes
    produces a variant size within 10% of the fixture's true byte count, proven
-   by a test over a checked-in fixture and a stubbed `SizeProbe`.
+   by a test over a checked-in fixture and a stubbed `SizeProbe`. **The fixture
+   has to be able to fail the claim** — a uniform one cannot, since any sample of
+   it is its own mean.
 2. An HLS master whose media playlist can be sampled produces sizes on every
    variant in the ladder, proven by a test; the sampled rendition's is within
    10% of the fixture's true bytes.
@@ -205,11 +207,12 @@ Traps, all of them things that would produce a confidently wrong number:
 4. Every failure mode leaves the variants exactly as parsed — probe throws,
    probe times out, no `Content-Length`, live stream, no duration, factor out of
    range, fewer than 2 segments — proven by a test per mode.
-5. Sampling costs at most 4 requests **per component** for a ladder of any size,
-   and a split rendition has two components — so 8 is the ceiling and 2 or 4 is
-   what the fixtures actually cost. Proven by tests counting calls on a stub.
-   _Rewritten during the build; it said 4 outright. Why the component split is
-   not optional is in the Log._
+5. Sampling costs at most 9 requests **per component** — a playlist body and 8
+   segment reads — for a ladder of any size, and a split rendition has two
+   components, so 18 is the ceiling. Proven by tests counting calls on a stub.
+   _Rewritten twice during the build: it said 4 outright, then 4 per component.
+   Both numbers are in the Log with the measurement that moved them._
+
 6. `buildLabel` round-trips: rebuilding a parsed variant with its own size
    reproduces its label byte for byte, proven by a test over the DASH and yt-dlp
    producers both.
@@ -217,6 +220,123 @@ Traps, all of them things that would produce a confidently wrong number:
    proven by the existing yt-dlp suite passing unchanged.
 8. `npm run check` and `npm test -- --project downloader` pass, and so does the
    `packages` project, since the repo-wide source scans live there.
+
+### Gate 1
+
+_Citations resolve against the tip of this branch, not against the commit
+reviewed: the branch moved under every finding below, and a table pointing at
+lines that no longer hold what it claims is worse than no table. Where a finding
+quotes what the reviewed tree did, it says so._
+
+**2026-08-30 — CONCERNS**, reviewed at `2478756` on a different model from the
+one that wrote the code, as `docs/01-TICKETS.md` requires. Recorded here in full
+because the reviewer's worktree does not survive its session and this file is
+the only durable place for it. Every finding was reproduced by this builder
+before being accepted; all five are fixed or closed, and two of them changed the
+design rather than the tests.
+
+| #   | Done when                                        | Proven by                                                                                                                                                                                         | Verdict  |
+| --- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | DASH overstatement corrected to within 10%       | `size-sample.test.ts:156` — declaration is 1.5x over the truth, correction lands inside 10%                                                                                                       | proven   |
+| 2   | HLS master ladder gains sizes; sampled rung ≤10% | `size-sample.test.ts:195` (every rung) and `:202` (0.2% against a 2.5x VBR spread)                                                                                                                | proven   |
+| 3   | Single-file rendition exact, no `~`              | `size-sample.test.ts:148`                                                                                                                                                                         | proven   |
+| 4   | Every failure mode leaves the variants as parsed | `size-sample.test.ts:261` throw, `:275` no length, `:281` half a split, `:288` live, `:296` no duration, `:304` implausible factor, `:314` too few segments, `:322` aborted, `:335` templated MPD | proven   |
+| 5   | ≤9 requests per component, ≤18 for a split       | `size-sample.test.ts:220` (9, one component) and `:233` (14, two components, asserted under 18)                                                                                                   | proven   |
+| 6   | `buildLabel` round-trips byte for byte           | `size-sample.test.ts:361` (DASH audio-only, the one that could not) and `:381` (yt-dlp)                                                                                                           | proven   |
+| 7   | `YtDlpResolver` with no `fetch` is unchanged     | `ytdlp.test.ts:235`, beside `:245` which drives the sampled path                                                                                                                                  | proven   |
+| 8   | `check`, `downloader`, and the repo-wide scans   | re-run at the tip: `npm run check` exit 0; downloader 53 files / 797 tests; `core` + `repo` 5 / 99                                                                                                | verified |
+
+| #   | Finding                                                                   | Disposition                          |
+| --- | ------------------------------------------------------------------------- | ------------------------------------ |
+| F1  | The one-rung factor is asserted, and the 10% fixture could not falsify it | Accepted; **changed the sampler**    |
+| F2  | `BrowserResolver#sizeProbe` is not merely untested but unobservable       | Accepted; **extracted and tested**   |
+| F3  | The round-trip pin misses `dash.ts`'s audio-only producer, the named trap | Accepted; producer fixed and pinned  |
+| F4  | The 18-request ceiling is derived, never produced by a test               | Accepted; fixture found, test added  |
+| F5  | `onSkip` has no consumer, so the fail-open path is invisible              | Accepted; hook removed, gap recorded |
+
+**F1 is the finding that earned the gate, and it was worse than reported.** The
+reviewer observed that the HLS fixture applied one bytes-per-second figure to
+every segment, so a 3-segment sample was its own mean and the "within 10%" claim
+could not fail. Reproducing that meant building a fixture that could: 60
+segments of 6 s under a capped-VBR profile, segments ranging 2.42 MB to 6.08 MB.
+Against it, the shipped sampler was **29.2% low** — the same order as the error
+this ticket exists to remove. It would have passed its own acceptance and been
+wrong in production.
+
+Two things came out of measuring the fix rather than guessing it, across a family
+of profiles (scene periods 7 to 41, a motion component, and a bursty profile
+where 8% of segments carry 2.6x the mean), at playlist lengths from 20 to 900:
+
+```
+k     evenly spaced, worst      low-discrepancy, worst
+3            27.7%                      27.7%
+4            28.9%                      18.6%
+6            25.0%                      13.8%
+8           100.7%                      13.8%
+10           17.8%                       9.3%
+12           16.8%                       9.1%
+```
+
+**Taking more evenly spaced samples does not converge** — 8 is worse than 6, and
+peaks at a 101% error where the sample stride lines up with the burst period.
+That is aliasing, and it is the real defect: video is periodic, and a fixed
+stride samples it in step. Sample placement now comes from the golden ratio,
+which is low-discrepancy by construction, and the count is 8 rather than 3. On
+the VBR fixture the error is **0.20%**, and `size-sample.test.ts:202` pins it
+inside 1% — a bound the shipped sampler missed by two orders of magnitude.
+
+The eight reads are now concurrent rather than sequential. The comment they
+replace claimed sequential requests were politer to a rate-limiting CDN; at
+three that cost little, but eight sequential HEADs against a slow origin would
+put the sampler's own worst case past the caller's whole deadline, and eight
+concurrent ones are fewer than any media player opens to start playing.
+
+**What F1 leaves open, deliberately, and it is the honest limit of this ticket.**
+Nothing validates that the reference rung's factor describes the _other_ rungs.
+Packagers routinely give lower rungs a tighter rate-control profile, and that is
+exactly where a top-rung factor would miscalibrate — in the understating
+direction, which is the one the pre-flight cap cares about. Sampling a second
+rung would close it and doubles the request budget. This is recorded rather than
+resolved: it is a decision about how much a probe may spend, and the ticket's
+own budget argument is the thing it would reopen. The `[0.2, 1.5]` band does not
+help here — it bounds the reference rung's own plausibility and nothing else.
+
+**F2 was reproduced exactly as described.** The suite's recording parsers set no
+`bitrateBps` (`test/browser/helpers/fake-parsers.ts:38-45`), so the sampler's
+`(variant.bitrateBps ?? 0) > 0` filter was empty for every browser test and
+`#sizeProbe` was never called; the one test using the real parsers asserts only
+`variants.length > 0`. A correct probe and a broken one were indistinguishable.
+The fix is not another test but a seam: the probe moved to
+`src/browser/size-probe.ts` behind an `ApiRequestLike` interface naming the three
+Playwright calls it makes, so the call shape is now checkable without launching
+a browser — `test/browser/size-probe.test.ts`, 7 tests including the ranged-GET
+fallback, the `Content-Range`-only rule, and the deadline it refuses to spend.
+
+**F3 is fixed at the producer, not at the test.** `dash.ts` passed
+`humanAudioCodec(audioCodec)` into `buildLabel` while storing the raw codec on
+the variant, so that one label was not reproducible from the variant's own
+fields — the exact trap the Build section named. The reviewer's finding that
+`humanAudioCodec` is idempotent over its whole table is correct and was
+re-derived here, so no label changed; but relying on a fixed-point property that
+nothing tests is what the Build section said not to accept. The producer now
+passes the raw codec, and `dash-audio-only.mpd` plus `size-sample.test.ts:361`
+pin the round trip.
+
+**F4 needed no new fixture, only the right one.** `hls-master-split-audio.m3u8`
+has audio renditions carrying their own `URI`, so both components take the
+playlist path — the shape that actually approaches the ceiling. Measured at 14
+requests, asserted under 18.
+
+**F5: the hook is gone rather than wired.** `onSkip` had no consumer, and the
+resolvers are libraries with no logger to give it. A seam with no caller is not
+observability, it is the appearance of it. The gap the reviewer names is real
+and is recorded in the Log: a CDN that refuses every HEAD is currently
+indistinguishable from a source with nothing to improve.
+
+**What the gate did not do**, and neither did this builder: no Playwright e2e run
+and no container build. Neither runs locally; nothing here changes what the image
+ships or what the browser bundle loads, but that is an argument from the diff
+rather than from a run.
 
 ## Log
 
@@ -315,3 +435,61 @@ Traps, all of them things that would produce a confidently wrong number:
   contract has no field for that distinction (`filesizeIsEstimate` is a boolean)
   and `CLAUDE.md` forbids editing a contract unilaterally, so it is left alone
   rather than smuggled in.
+
+- **2026-08-30, after gate 1** — Five findings, all accepted, two of them design
+  changes rather than test changes. The record is in the Review section above;
+  what belongs here is what the next person needs and cannot read off the diff.
+
+  **The sampler that passed its own acceptance was 29% wrong.** Three evenly
+  spaced samples looked fine against a fixture that applied one bytes-per-second
+  figure to every segment, and that fixture is why it looked fine. This is the
+  lesson worth keeping: an accuracy claim tested against uniform data is not an
+  accuracy claim, and I wrote one without noticing. The fixture is now
+  `hls-media-vbr.m3u8` and the profile that fills it is in the test, not in the
+  playlist.
+
+  **Aliasing, not sample count, was the defect.** Going from 3 evenly spaced
+  samples to 8 made the worst case _worse_ — 25% to 101% — because a fixed
+  stride falls into step with periodic content. The table is in the Review
+  section. Anyone tempted to tune `MAX_SEGMENT_SAMPLES` should change the
+  placement rule first and re-run that measurement; the constant's comment says
+  so, and the numbers there are measured, not reasoned.
+
+  **A known interaction, from dl-27's builder via its orchestrator, recorded here
+  because it will otherwise cost someone a long afternoon.** `FFMPEG_CA_FILE`
+  reaches the egress proxy and ffmpeg but has never reached the undici
+  dispatcher (`EgressDispatcherOptions.requestTls` is documented "Unset in
+  production"). On a deployment whose origins chain to the operator's private
+  root, an ffmpeg download therefore succeeds while a `GuardedFetch` request
+  fails on trust. That asymmetry is pre-existing — resolvers already fetch
+  manifests through `GuardedFetch` — and dl-30 does not cause it, but dl-30 makes
+  it reachable on _segment_ origins for the first time. If a size probe ever
+  fails on trust in such a deployment while the download works, that is the
+  reason. Both sessions agreed it is a separate ticket and not a blocker; it is
+  unfiled as of this writing.
+
+  **Two gaps this branch knowingly leaves open.** Neither is a defect, both are
+  places a later reader might otherwise think the code is trying and failing:
+
+  - **The cross-rung assumption** — the reference rung's factor is applied to
+    every other rung, and nothing checks that it should be. See the Review
+    section for why closing it is a budget decision rather than a fix.
+  - **A sampling failure is silent.** With `onSkip` removed there is no signal
+    anywhere that the fail-open path is firing, so a CDN that refuses every HEAD
+    looks exactly like a source with nothing to improve. Giving the resolvers a
+    logger is a larger change than this ticket, and a hook with no caller was
+    not a substitute for one.
+
+  **Not done, deliberately: `EXT-X-BYTERANGE` playlists are skipped when they
+  could be exact.** Such a playlist states every segment's length in the manifest
+  itself, so summing them would give the true size with _zero_ requests — better
+  than any sample. `listMediaSegments` returns `[]` for them instead, because one
+  URL there is many segments and a `Content-Length` describes the file. Closing
+  it is a self-contained improvement and a good next ticket; it is named here
+  rather than filed because it is an enhancement with no reproduction behind it.
+
+  **Gates at the tip.** `npm run check` exit 0. `npm test -- --project downloader`
+  exit 0, 53 files / 797 tests. `npm test -- --project core --project repo`
+  exit 0, 5 files / 99 tests — that is where the repo-wide spawn-safety and
+  image-closure scans live. Done-when 8 says `--project packages`, which is not a
+  project name; the four are `core`, `repo`, `downloader`, `planner`.

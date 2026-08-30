@@ -30,13 +30,12 @@ import type { BrowserPoolStats } from "../browser/pool.ts";
 import { provokePlayback, readMetadata, readSignals, waitForQuiet } from "../browser/provoke.ts";
 import { rankHits } from "../browser/rank.ts";
 import { buildRequestContext } from "../browser/request-context.ts";
+import { createRequestSizeProbe } from "../browser/size-probe.ts";
 import type { NetworkHit } from "../browser/types.ts";
 import { opaqueManifestVariant, progressiveVariants } from "../browser/variants.ts";
 import { parseDash } from "../manifest/dash.ts";
 import { parseHls } from "../manifest/hls.ts";
 import type { DashParser, HlsParser, ParsedManifest } from "../manifest/types.ts";
-import { totalFromContentRange } from "../size-probe.ts";
-import type { SizeProbe } from "../size-sample.ts";
 import { measureVariantSizes } from "../size-sample.ts";
 
 export const BROWSER_RESOLVER_NAME = "browser";
@@ -303,7 +302,7 @@ export class BrowserResolver implements Resolver {
       // oxlint-disable-next-line no-await-in-loop
       const variants = await measureVariantSizes(
         parsed.variants,
-        this.#sizeProbe(context, hit, deadline),
+        createRequestSizeProbe(context.request, replayHeaders(hit), deadline),
         {
           isLive: parsed.isLive,
           durationSec: parsed.durationSec,
@@ -352,57 +351,6 @@ export class BrowserResolver implements Resolver {
    * about to hand the engine actually works. Falls back to the body captured at
    * interception time when the replay fails.
    */
-  /**
-   * A `SizeProbe` over the browser's own request context, for the same reason
-   * `#loadManifest` uses it: the session cookies that gate a segment live in
-   * that context and not in this process. Answers `undefined` on every failure
-   * — the sample is an improvement on a declared size, never a precondition.
-   */
-  #sizeProbe(context: BrowserContext, hit: NetworkHit, deadline: number): SizeProbe {
-    const headers = replayHeaders(hit);
-    return {
-      async contentLength(url: string): Promise<number | undefined> {
-        const timeout = budget(deadline, 4000);
-        if (timeout <= 500) return undefined;
-        try {
-          const head = await context.request.head(url, {
-            headers,
-            timeout,
-            failOnStatusCode: false,
-          });
-          if (head.ok()) {
-            const length = Number(head.headers()["content-length"]);
-            if (Number.isFinite(length) && length > 0) return length;
-          }
-          const ranged = await context.request.get(url, {
-            headers: { ...headers, Range: "bytes=0-0" },
-            timeout,
-            failOnStatusCode: false,
-          });
-          if (!ranged.ok()) return undefined;
-          // A 206's Content-Length describes the range, not the resource.
-          return totalFromContentRange(ranged.headers()["content-range"] ?? null);
-        } catch {
-          return undefined;
-        }
-      },
-      async text(url: string): Promise<string | undefined> {
-        const timeout = budget(deadline, 8000);
-        if (timeout <= 500) return undefined;
-        try {
-          const response = await context.request.get(url, {
-            headers,
-            timeout,
-            failOnStatusCode: false,
-          });
-          return response.ok() ? await response.text() : undefined;
-        } catch {
-          return undefined;
-        }
-      },
-    };
-  }
-
   async #loadManifest(
     context: BrowserContext,
     collector: HitCollector,

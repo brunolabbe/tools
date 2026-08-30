@@ -56,6 +56,21 @@ const dashVariants = parseDash(fixture("dash-ondemand-baseurl.mpd"), MPD_BASE).v
 const hlsVariants = parseHls(fixture("hls-master-multibitrate.m3u8"), HLS_BASE).variants;
 const MEDIA_PLAYLIST = fixture("hls-media-aes128.m3u8");
 
+/**
+ * The encode `hls-media-vbr.m3u8` stands for: a capped-VBR profile whose 6 s
+ * segments range from 2.42 MB to 6.08 MB. Nothing reads these bytes off the
+ * playlist — they are what the test pretends the CDN would answer.
+ */
+function segmentBytes(index: number): number {
+  return Math.round(
+    700_000 *
+      (1 +
+        0.3 * Math.sin((2 * Math.PI * index) / 17) +
+        0.15 * Math.cos((2 * Math.PI * index) / 7)) *
+      6,
+  );
+}
+
 describe("listMediaSegments", () => {
   test("pairs each EXTINF with the URI line under it, resolved against the playlist", () => {
     const segments = listMediaSegments(MEDIA_PLAYLIST, V9_PLAYLIST);
@@ -91,14 +106,27 @@ describe("listMediaSegments", () => {
 });
 
 describe("spreadIndices", () => {
-  test("spreads across the run and never opens with the first segment", () => {
-    expect(spreadIndices(100, 3)).toEqual([25, 50, 75]);
-    expect(spreadIndices(6, 3)).toEqual([1, 3, 4]);
+  test("places samples by a low-discrepancy sequence, not at a fixed stride", () => {
+    const picked = spreadIndices(60, 8);
+    expect(picked).toEqual([7, 12, 21, 30, 35, 44, 49, 58]);
+
+    // The property that matters is that no single stride describes them: an
+    // even stride is what aliases against periodic content.
+    const gaps = picked.slice(1).map((index, i) => index - (picked[i] ?? 0));
+    expect(new Set(gaps).size).toBeGreaterThan(1);
+  });
+
+  test("stays inside the playlist and never repeats a segment", () => {
+    for (const count of [1, 2, 5, 13, 60, 901]) {
+      const picked = spreadIndices(count, 8);
+      expect(new Set(picked).size).toBe(picked.length);
+      expect(picked.every((index) => index >= 0 && index < count)).toBe(true);
+    }
   });
 
   test("takes everything it has when the run is shorter than the sample", () => {
-    expect(spreadIndices(2, 3)).toEqual([0, 1]);
-    expect(spreadIndices(0, 3)).toEqual([]);
+    expect(spreadIndices(2, 8)).toEqual([0, 1]);
+    expect(spreadIndices(0, 8)).toEqual([]);
   });
 });
 
@@ -146,16 +174,22 @@ describe("a DASH ladder whose declared bandwidth is a ceiling", () => {
 });
 
 describe("an HLS master, which carries no size and no duration at all", () => {
-  // 700 000 bytes of media per second of playback, against 959 580 declared.
-  const BYTES_PER_SECOND = 700_000;
-  const PLAYLIST_DURATION = 5 * 9.97667 + 6.67333;
-
+  /**
+   * `hls-media-vbr.m3u8` is 60 segments of 6 s. The bytes below are the encode
+   * this test pretends the CDN is serving — a capped-VBR profile whose segments
+   * range from 2.42 MB to 6.08 MB, a 2.5x spread. A uniform fixture would make
+   * the accuracy claim below unfalsifiable, which is what gate 1 found.
+   */
+  const VBR_PLAYLIST = fixture("hls-media-vbr.m3u8");
+  const V9_VBR = V9_PLAYLIST;
+  const segments = listMediaSegments(VBR_PLAYLIST, V9_VBR);
   const segmentLengths: Record<string, number> = {};
-  for (const segment of listMediaSegments(MEDIA_PLAYLIST, V9_PLAYLIST)) {
-    segmentLengths[segment.url] = Math.round(segment.durationSec * BYTES_PER_SECOND);
-  }
+  segments.forEach((segment, index) => {
+    segmentLengths[segment.url] = segmentBytes(index);
+  });
+  const TRUE_TOTAL = segments.reduce((total, _segment, index) => total + segmentBytes(index), 0);
 
-  const probe = stubProbe(segmentLengths, { [V9_PLAYLIST]: MEDIA_PLAYLIST });
+  const probe = stubProbe(segmentLengths, { [V9_VBR]: VBR_PLAYLIST });
   const sampled = measureVariantSizes(hlsVariants, probe, {});
 
   test("every rung of the ladder gains a size it never had before", async () => {
@@ -163,12 +197,15 @@ describe("an HLS master, which carries no size and no duration at all", () => {
     expect(hlsVariants.every((variant) => variant.filesizeBytes === undefined)).toBe(true);
     expect(measured.every((variant) => (variant.filesizeBytes ?? 0) > 0)).toBe(true);
     expect(measured.every((variant) => variant.filesizeIsEstimate === true)).toBe(true);
-    expect(byId(measured, "hls-1").label).toBe("1080p60 · H.264 + AAC · ~37.8 MB");
   });
 
-  test("the rung it sampled is within 10% of what that playlist really weighs", async () => {
-    const truth = BYTES_PER_SECOND * PLAYLIST_DURATION;
-    expect(within(byId(await sampled, "hls-1").filesizeBytes ?? 0, truth, 0.1)).toBe(true);
+  test("the rung it sampled lands within 10% of what that playlist really weighs", async () => {
+    const measured = byId(await sampled, "hls-1").filesizeBytes ?? 0;
+    expect(within(measured, TRUE_TOTAL, 0.1)).toBe(true);
+    // Eight low-discrepancy samples of a 2.5x segment spread: 0.2% here. Three
+    // evenly spaced ones were 29% low on this same profile, which is what put
+    // the sample count and the placement rule where they are.
+    expect(within(measured, TRUE_TOTAL, 0.01)).toBe(true);
   });
 
   test("the rest of the ladder is scaled by declared bitrate, keeping its order", async () => {
@@ -180,17 +217,41 @@ describe("an HLS master, which carries no size and no duration at all", () => {
     );
   });
 
-  test("one playlist and three segments, whatever the size of the ladder", async () => {
+  test("one playlist and eight segments, whatever the size of the ladder", async () => {
     await sampled;
-    expect(probe.calls).toHaveLength(4);
+    expect(probe.calls).toHaveLength(9);
     expect(probe.calls.filter((call) => call.startsWith("TXT"))).toHaveLength(1);
-    expect(probe.calls[0]).toBe(`TXT ${V9_PLAYLIST}`);
-    // Spread across the playlist, and never its first segment.
-    expect(probe.calls.slice(1)).toEqual([
-      "LEN https://cdn.example.com/hls/2026/v9/segment-001.ts",
-      "LEN https://cdn.example.com/hls/2026/v9/segment-003.ts",
-      "LEN https://cdn.example.com/hls/2026/v9/segment-004.ts",
-    ]);
+    expect(probe.calls[0]).toBe(`TXT ${V9_VBR}`);
+  });
+});
+
+describe("a rendition whose audio is a second playlist", () => {
+  const splitVariants = parseHls(fixture("hls-master-split-audio.m3u8"), HLS_BASE).variants;
+  const VIDEO = "https://cdn.example.com/hls/2026/video/1080p/playlist.m3u8";
+  const AUDIO = "https://cdn.example.com/hls/2026/audio/en/384k/playlist.m3u8";
+
+  test("weighs both playlists, and that is the ceiling the budget describes", async () => {
+    const lengths: Record<string, number> = {};
+    for (const [base, perSecond] of [
+      [VIDEO, 500_000],
+      [AUDIO, 48_000],
+    ] as const) {
+      for (const segment of listMediaSegments(MEDIA_PLAYLIST, base)) {
+        lengths[segment.url] = Math.round(segment.durationSec * perSecond);
+      }
+    }
+    const probe = stubProbe(lengths, { [VIDEO]: MEDIA_PLAYLIST, [AUDIO]: MEDIA_PLAYLIST });
+
+    const measured = await measureVariantSizes(splitVariants, probe, {});
+
+    // Both halves weighed: 548 000 B/s against 531 250 declared, a factor of
+    // 1.03. Weighing the video alone would have said 0.94 and understated
+    // every rung by the audio's share.
+    expect(byId(measured, "hls-2").filesizeBytes).toBeGreaterThan(0);
+    // Two playlist bodies and two runs of segment reads, each capped at 8.
+    expect(probe.calls.filter((call) => call.startsWith("TXT"))).toHaveLength(2);
+    expect(probe.calls.length).toBeLessThanOrEqual(18);
+    expect(probe.calls).toHaveLength(14);
   });
 });
 
@@ -295,6 +356,26 @@ describe("the label is rebuilt, not patched", () => {
     expect(byId(measured, "dash-1").label).toBe(
       byId(dashVariants, "dash-1").label.replace("~", ""),
     );
+  });
+
+  test("the DASH audio-only producer round-trips too, which is where it could not", async () => {
+    // `dash.ts` used to hand `buildLabel` an already-humanised codec while
+    // storing the raw one, so this label was the one shape `withSize` could not
+    // reproduce from the variant. Gate 1, finding C.
+    const audioOnly = parseDash(fixture("dash-audio-only.mpd"), MPD_BASE).variants;
+    const top = byId(audioOnly, "dash-a-hi");
+    expect(top.label).toBe("Audio only · AAC · ~38.7 MB");
+
+    const probe = stubProbe({
+      "https://media.example.org/podcast/episode-128k.m4a": top.filesizeBytes ?? 0,
+    });
+    const measured = await measureVariantSizes(audioOnly, probe, {});
+
+    expect(byId(measured, "dash-a-hi").label).toBe("Audio only · AAC · 38.7 MB");
+    expect(byId(measured, "dash-a-lo").filesizeBytes).toBe(
+      byId(audioOnly, "dash-a-lo").filesizeBytes,
+    );
+    expect(byId(measured, "dash-a-lo").label).toBe(byId(audioOnly, "dash-a-lo").label);
   });
 
   test("a yt-dlp variant rescaled by exactly 1 keeps its label byte for byte", async () => {

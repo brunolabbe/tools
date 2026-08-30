@@ -107,15 +107,14 @@ describe("HLS manifest URLs", () => {
     const probe = await resolver.resolve(new URL(master), options());
 
     expect(probe.variants.every((variant) => (variant.filesizeBytes ?? 0) > 0)).toBe(true);
-    expect(probe.variants[0]?.label).toContain("~37.8 MB");
-    // Master HEAD, master GET, media playlist GET, three segment HEADs.
+    expect(probe.variants[0]?.label).toMatch(/· ~[\d.]+ MB$/);
+    // Master HEAD, master GET, the media playlist GET, then one HEAD per
+    // segment — this playlist has six, fewer than the eight samples allowed.
     expect(stub.calls.map((call) => call.method)).toEqual([
       "HEAD",
       "GET",
       "GET",
-      "HEAD",
-      "HEAD",
-      "HEAD",
+      ...Array.from({ length: 6 }, () => "HEAD"),
     ]);
     // The replay reaches the segments too, not just the manifest.
     expect(stub.calls.at(-1)?.headers["Referer"]).toBe("https://cdn.example.com/");
