@@ -164,6 +164,67 @@ because the first three declined an ordinary lookup:
   and pl-27's `UncheckedConstraint` vocabulary are updated to say so, rather
   than silently returning `null` for a case the plan should be able to name.
 
+## Review
+
+### Gate 2 — 2026-08-30 — PASS
+
+Scope: round 2 only — the `addresstype` tiebreak, the ten captured fixtures,
+the threshold's new bound, and the round-2 Log. **Gate 1's ground is not
+re-covered here and this record does not claim it**: round 1's reproduction,
+its six mutations, the brief corrections and its citation work were gated
+separately, and that record was relayed rather than committed, so it is absent
+from this file rather than superseded by what follows.
+
+| Done when                                                                                                  | Verdict                               | What proves it                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A decision is recorded for which option closes this gap                                                    | met                                   | `## Build — option 2, decided 2026-08-30 by the user`, plus its `Amended` fourth step. Options 1 and 3 weighed in place rather than re-derived; option 3 folded in and said to be folded in.                                                                                                                                               |
+| The chosen fix is implemented, and the reproduction is pinned as a test that fails without it              | met                                   | `an ambiguous bare name is not located at all, rather than located wrongly` was watched red before any source changed. Round 2's regression is pinned by the ten-capture block, red under `Tiebreak removed entirely` (4 of 71).                                                                                                           |
+| If the fix changes what `locate`/`travel` can return, `@planner/contract` and `UncheckedConstraint` say so | **not met — deferred, not satisfied** | `locate` still answers `LocatedPlace \| null` and round 2 widened what `null` covers a third time. No contract or vocabulary change was made. Deliberate: contract-adjacent, escalated, and the user chose pl-37 instead. Recorded as an open decision in the Log, and this row says unmet rather than reading the deferral as compliance. |
+
+**Findings**
+
+- **Low 1 — two ambiguous citations.** `pl-34` Log `:285` cited
+  `travel.ts:286-310`, which `citations.mjs` resolves against three tracked
+  `travel.ts` files; `pl-37` `:60` cited `brief.ts:505`, ambiguous between
+  `contract/src/brief.ts` and `intake/src/brief.ts`. Neither miscited content.
+  **Fixed**: both qualified with their package paths. The habit behind them is
+  now stated durably in
+  `.claude/skills/orchestrate-tickets/reference/records.md` — a bare filename
+  is not a citation here, it is a coin flip the resolver refuses to make — on
+  the gate's observation that this had bitten four times in one day across
+  three tickets.
+- **Low 2 — two mutation counts did not reproduce.** The gate re-ran them and
+  got 4 and 7 where the Log said 3 and 5, inspected every extra failure by
+  hand, and found no hidden defect: aggregate summary tests, a duplicate
+  assertion, and unrelated robustness tests tripping on the same mutation.
+  **Fixed, and it was worse than reported**: re-measuring all four found a
+  _third_ wrong number — unscoping the tiebreak is 4, not the 3 recorded — so
+  three of the four were low, all from reading a `| head`-truncated FAIL list
+  instead of vitest's own count. The counts are now a table with the command
+  and the denominator (71) stated, per dl-27's builder's fix for the same
+  shape, rather than replaced with the gate's numbers.
+
+**`citations.mjs` reports 2 of 4 resolving on this file, and that is correct.**
+The two that fail are the two quoted in Low 1 — they are the finding's own
+evidence, and a citation that _is_ the finding must stay as written, which is
+the exception the script documents and cannot judge for itself. The two real
+citations, `contract/src/candidate.ts:263` and
+`api/src/runs/travel.ts:286-310`, both resolve, and the second was
+content-checked by hand: the range covers the `locate` loop pl-36 rewrites.
+The script gates no workflow and no hook, so this costs a reader one sentence
+rather than a red build.
+
+**What the gate verified that this builder had only argued.** All ten fixtures
+checked individually for `place_id`, `licence`, `osm_type`, `osm_id`,
+`addresstype`, `place_rank` and `importance` — the full genuine reply shape,
+not a composed subset. The scoping boundary shown load-bearing by
+construction: unscoped, bare `Percé` goes from `null` to Québec's coordinates
+and 3 tests fail. And the unrecognised-type case this builder reasoned about
+but had no capture for — two disagreeing rows whose types are both absent from
+the allowlist — was built and confirmed to answer `null` rather than pick
+wrongly, which turns the allowlist safety argument from an argument into a
+demonstration.
+
 ## Log
 
 **2026-08-29 — filed from pl-30's real captures, per the coordinator's
@@ -282,7 +343,7 @@ shipped believing option 3 was covered when only its ambiguous half was.
   rows by hand and says in the test body that it is not a claim about
   Nominatim.
 
-**For pl-36 (`travel.ts:286-310`), which is serialised behind this.** That
+**For pl-36 (`api/src/runs/travel.ts:286-310`), which is serialised behind this.** That
 loop is **not touched by this commit** — no line of `api/src/runs/travel.ts`
 changed, so its shape is exactly what pl-36's brief describes. What changed is
 underneath it: an `outcome.kind` of `unknown` from `locate` now means either
@@ -366,12 +427,33 @@ the answer comes from the type rather than the ordering. Verified: passes at
 118 km, fails at 200 km. The _floor_ is now the unsupported side, and the
 comment on the constant says so.
 
-**Mutation results, round 2.** Removing the tiebreak fails 4 tests (this is
-the regression, reproduced). Unscoping it to locality-free queries fails 3,
-including bare `Percé`. Dropping `town` from the allowlist fails 3. Filtering
-to settlements unconditionally instead of only after a disagreement fails 5,
-including three ordinary lookups. **One mutant survives and is recorded rather
-than papered over:** filtering to settlements _before_ the agreement test but
+**Mutation results, round 2 — counted at
+`npx vitest run tools/planner/api/test/grounding-valhalla.test.ts`, whose
+denominator is 71 tests.** Stating the scope is the point: an earlier version
+of this paragraph gave three of these four numbers too low, because they were
+read off a `| head`-truncated FAIL list rather than off vitest's own count, and
+a bare "fails 3" gives a reader nothing to catch that with.
+
+| Mutation                                               | Failed  | What it proves                          |
+| ------------------------------------------------------ | ------- | --------------------------------------- |
+| Tiebreak removed entirely                              | 4 of 71 | the regression, reproduced              |
+| Tiebreak unscoped to locality-free queries             | 4 of 71 | bare `Percé` stops declining            |
+| `town` dropped from the allowlist                      | 4 of 71 | the allowlist is read                   |
+| Settlements filtered always, not only after a conflict | 7 of 71 | order matters; 3 ordinary lookups break |
+
+**These counts are per-scenario and they include collateral, which is the
+honest reading of them.** Most of these mutations trip aggregate tests — the
+ten-capture block's own "nine locate, one declines" summary, and a duplicate
+assertion of the same case in the tiebreak block — so a count is evidence that
+a rule is _load-bearing_, never a measure of how narrowly it is pinned. Gate 2
+reproduced 4 and 7 for the last two and inspected every extra failure by hand;
+none revealed a hidden defect. Its phrase is the right one to keep: misleading
+as evidence of precision, not as evidence of correctness. This is the same
+defect dl-27's builder named in its own table hours earlier — "N failed" with
+no denominator — and the fix is the same one it took: say what the count was
+taken over rather than move to someone else's number.
+
+**One mutant survives and is recorded rather than papered over:** filtering to settlements _before_ the agreement test but
 only when a settlement exists is behaviourally identical on all ten captures.
 It differs only for a reply mixing a large-area row and a settlement row
 _within_ the threshold, where mine answers by reply order and it answers the

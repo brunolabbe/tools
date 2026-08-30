@@ -57,7 +57,7 @@ is the thing that generalises.
    free-text prose it is, on the same "nothing may parse structure out of it"
    rule `Place.locality` carries. It is optional: `discovery.ts` grounds
    corridor endpoints before the fan-out and a brief may have declined a
-   destination (`brief.ts:505` — "A declined destination is an instruction").
+   destination (`contract/src/brief.ts:505` — "A declined destination is an instruction").
 2. **Thread it from both call sites.** `api/src/runs/travel.ts:295` and
    `api/src/runs/discovery.ts:226`. Neither has the brief in hand today, so
    this is a plumbing change through `MeasureInput` and its discovery
