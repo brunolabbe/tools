@@ -151,6 +151,17 @@ someone else checked it**, and it is on the ticket for the same reason the Log
 is: a verdict that lives in a chat scrollback is not a record, and the next
 person to touch this code cannot find it.
 
+**A gate on a pull request that only _files_ a ticket does not go in `## Review`.**
+That section answers one question — was _the work_ checked, and by whom — and a
+filing has no work in it to check: its `Done when` lines describe an
+implementation that does not exist yet, so a gate applying them literally would
+fail every filing on principle. Record such a gate anywhere else on the ticket —
+`dl-29` keeps its own under `## The gate on this filing`, unedited and in place —
+and leave `## Review` empty until something is built. This is not bookkeeping:
+`repo-12`'s board check reads `status: ready` **plus** a `## Review` gate record
+as a ticket whose work merged without its status being flipped, and a filing gate
+in that section makes a perfectly ordinary unstarted ticket look like a defect.
+
 It is one table — a row per acceptance line, naming the test that proves it,
 `file.test.ts:88` rather than "covered" — a list of findings by severity, and a
 single word:

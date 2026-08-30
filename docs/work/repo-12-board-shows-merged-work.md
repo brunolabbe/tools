@@ -46,6 +46,10 @@ mentioned one_, and that is the decision this ticket carries.
 --diff-filter=A` distinguishes creation from modification.
    - **The `## Review` section.** A finished ticket carries a gate record; a
      filed one does not. Stronger signal, and it is already required.
+     **Falsified on 2026-08-30, one commit after this was written** — see the
+     Log. `dl-29` was filed by #107 and its filing pull request was itself
+     gated, so a filed ticket can carry a gate record too. The signal survives;
+     the convention had to change, in `docs/01-TICKETS.md` and in PR #111.
    - Anything reading PR titles is out, for the reason in _Why_.
 2. Implement it where `repo-6` put its check — in `scripts/status.mjs`, reachable
    from `status --json`, so CI gets it for free through the exit code rather than
@@ -228,3 +232,39 @@ does not", was falsified one commit after the ticket was written. Merging as-is
 would redden `ci.yml`'s `check` job on `main` immediately, and the real-board
 case in `scripts/test/status.test.ts` with it. The options are in this branch's
 report to the orchestrator; none of them is a builder's to take alone.
+
+**2026-08-30 — the `dl-29` false positive, resolved by fixing the concept.** The
+user ruled: a gate on a pull request that only _files_ a ticket is not a
+`## Review`, because that section answers one question — was _the work_ checked —
+and a filing has no work in it. **No code changed.** `dl-29` keeps its gate,
+unedited and where its author put it, under `## The gate on this filing`; only
+the section title changed, plus a paragraph saying it moved and why (PR #111,
+`docs(downloader)`, three insertions and one deletion). The rule it follows is
+now in `docs/01-TICKETS.md` under "The review gate", and in
+`.claude/skills/review-ticket/SKILL.md`, which `git check-ignore` confirms is
+tracked and can carry it — a convention that lives only in a document the
+reviewer does not open is a convention that gets broken again next week.
+
+It ships as **two** pull requests because release-please routes a commit to a
+tool by the files it touched, never by the scope in its subject: this branch is a
+`fix(repo)`, `fix` is not hidden, so one `.md` under `tools/downloader/` in it
+would have cut a downloader release for a ticket-file edit. #111 is
+`docs(downloader)`, which is hidden, and it must merge first — until it does,
+this check reports `dl-29` and `main` goes red.
+
+**The composite signal was considered and not taken, and the objection that
+killed it earlier was mine and was wrong.** Requiring a gate record _and_ a file
+modified after creation would clear `dl-29` (created by #107, untouched since)
+while still catching `pl-29` and `pl-28`: zero false positives across both boards
+measured. I first rejected it because `ci.yml`'s `check` job has no `fetch-depth`
+and reads a depth-1 checkout — true, but the repository is **535.96 KiB packed
+over 182 commits**, so `fetch-depth: 0` costs seconds and that objection was
+cheaply removable. It was withdrawn. What replaced it is a real cost and a real
+risk: the CLI tests drive throwaway trees that are not git repositories at all,
+so the history read needs an injected seam and the fixtures need rework, roughly
+40 to 60 lines; and the signal fires again the moment any sibling pull request
+edits a gated-but-`ready` filing, which is the same convention that produced the
+`dl-16` and `pl-2` false positives in the first place. Fixing the concept costs
+four lines of documentation and leaves the check reading nothing but the ticket.
+If a filing gate lands in `## Review` again despite both notes, this is the
+fallback and the measurements above are the starting point.
