@@ -170,6 +170,118 @@ work.
   which avoid that demuxer entirely — the technique is worth reusing, and the
   answer was that 7.0.2 behaves exactly as 6.1.1 does.
 
+## Gates
+
+### Gate 1 — 2026-08-30 — PASS
+
+Reviewed at `ff12315`. The reviewer's report is posted to the pull request
+thread; this section is the record of it, relayed rather than read first-hand —
+what follows is the dispatching agent's summary of that report, and where this
+record adds a measurement of its own it says so.
+
+**Scope: the security claim, reproduced adversarially.** This gate did not
+review the code, the packaging or the repo's invariants. Its question was
+whether the branch's central claim survives someone actively trying to break it.
+
+| #   | Claim under test                                                           | Verdict | Proof                                                                                                                              |
+| --- | -------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Every mutation in the Log's table is killed                                | proven  | All twelve re-run with `tsc --build` between each — **12 run, 12 killed, 0 survived**                                              |
+| 2   | The positive control is real, not a green harness                          | proven  | Rebuilt two independent ways, one a standalone script driving the production `buildManifestDownloadArgs` and `runFfmpeg`           |
+| 3   | The POS byte count is the branch's, not a coincidence                      | proven  | **104,610 bytes to the byte** through that path; 104,667 through the full `engine.download()` pipeline, +57 from `-metadata title` |
+| 4   | `-loglevel` is what carries the refusal reason                             | proven  | The Log's table reproduced row for row against ffmpeg 6.1.1                                                                        |
+| 5   | Raising the level costs nothing on the happy path                          | proven  | Zero bytes of stderr on a clean run at `warning`, independently confirmed                                                          |
+| 6   | The sticky classifier is load-bearing and the fixture cannot show it       | proven  | Asymmetry reproduced exactly: survives `two-origin-tls.test.ts`, killed only by `ffmpeg-runner.test.ts`                            |
+| 7   | The wiring mutation is not silent                                          | proven  | Confirmed caught                                                                                                                   |
+| 8   | The operator root is merged with the system store rather than replacing it | proven  | Arithmetic pinned on this machine: **145 roots, 146 after the merge**                                                              |
+
+**Findings.**
+
+- **1 (low) — the mutation table understates the kill breadth on three rows.
+  Addressed in this commit, and not by taking the gate's numbers.** Every
+  discrepancy runs in the direction of more tests catching a mutation than the
+  table claimed, so nothing about the branch is weaker than recorded; what was
+  wrong was the table's usefulness to whoever re-measures. **The cause is that
+  "N failed" had no denominator** — the original rows were each scoped to
+  whatever spec files that row needed, and this gate's rows were scoped to its
+  own run, so the two sets of numbers differ from each other and from the
+  project. All twelve are re-measured in the Log at one stated scope,
+  `vitest run --project downloader`, 771 tests. Three rows moved upward: the
+  operator root 3 → 7, `rejectUnauthorized: false` 4 → 8, the AKID 2 → 6. The
+  gate reported 5 and 4 for the latter two, which is neither the old figure nor
+  the new one and is not a contradiction — a narrower run. **Its third named row,
+  `-loglevel` → `error`, is recorded as not reproduced**: the relay carried no
+  figure for it and at project scope it measures 4, which is what the table
+  already said. Correcting it to a number nobody measured would be the same
+  defect the finding is about.
+
+**What this gate did not do.** It could not reach a live public certificate
+authority — outbound egress is blocked in this environment and it confirmed that
+directly, `curl https://example.com` timing out — so the system-store merge is
+proven as arithmetic and **not** as a handshake against a real CA. It did not
+review code, packaging or repo invariants; those were gate 2's and are not
+covered by this PASS.
+
+### Gate 2 — 2026-08-30 — CONCERNS
+
+Reviewed at `ff12315`. Relayed rather than read first-hand, as above. The verdict
+is recorded as given.
+
+**The concern is not a defect and not an unmeasurable.** `node-forge` moving to
+`dependencies` cannot be proven by anything `npm test` runs, because the failure
+mode is an image that builds, boots, and throws `ERR_MODULE_NOT_FOUND`. The
+branch's Log already said so; this gate's contribution is to split that into the
+half that can be settled here and the half that cannot.
+
+| #   | Question                                                                 | Verdict         | Proof                                                                                                                                                                                                                                                        |
+| --- | ------------------------------------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Does `npm prune --omit=dev` keep `node-forge` after the manifest change? | proven          | Scratch copy outside the repo mirroring the Dockerfile's build-stage manifest list: `npm ci` → 324 packages; prune → **160 packages, 342M → 152M**, node-forge surviving while `@types/node-forge` and `typescript` are dropped. Run twice from clean copies |
+| 2   | Does the image itself boot and answer `/api/health`?                     | unproven (gate) | Docker cannot run in this environment. This is the actual gate and it is the pull request's `docker` job                                                                                                                                                     |
+| 3   | Does that job run on a pull request from this branch?                    | proven          | `.github/workflows/downloader.yml:29` is the `pull_request` trigger, path-filtered to a set matching every non-`.md` file this branch touches                                                                                                                |
+| 4   | Does it do real work rather than skip?                                   | proven          | `docker` and `e2e` executed 2m9s and 1m19s on `main` at `790c4a2`                                                                                                                                                                                            |
+| 5   | Is `FFMPEG_ALLOW_UNVERIFIED_TLS` genuinely the only knob?                | proven          | Confirmed; and recorded **only** in this ticket's Log, not in `01-ARCHITECTURE.md`'s env table and not in the boot warning's hint                                                                                                                            |
+
+Points 3 and 4 were re-verified independently while writing this record, by
+reading the workflow rather than taking it on report: the `pull_request` trigger
+carries `tools/downloader/**`, `packages/**`, `package.json`,
+`package-lock.json`, with `!**.md` last so a docs-only change is excluded; and
+the `docker` job at `.github/workflows/downloader.yml:93` builds this tool's
+image, runs `docker compose up -d --no-build`, and polls `/api/health` for five
+minutes. A missing `node-forge` surfaces there as **"the service never became
+healthy"** — `.github/workflows/downloader.yml:133` — followed by a
+`docker compose logs` dump, not as a named module error. So that job going red
+has to be read, not glanced at.
+
+**Findings.**
+
+- **1 (concern) — the packaging change has no local gate. Not addressed in code;
+  addressed by opening the pull request.** Nothing in `npm test` can see it:
+  `packages/core/test/image-closure.test.ts:114` filters every manifest's
+  dependencies down to the repo's own scopes, so an ordinary npm package like
+  `node-forge` is outside what that scan looks at by construction. What decides
+  whether the image carries it is `tools/downloader/api/package.json:23` and
+  `tools/downloader/Dockerfile:65`. Disposition: the branch is not
+  merged on a green `npm test`; the `docker` job on the pull request is the
+  gate, and its result is read before anything else happens.
+- **2 (low) — this ticket had zero `file:line` citations, so `citations.mjs`
+  reported 0/0 and nothing could go stale. Partly addressed, and the shortfall is
+  recorded rather than papered over.** Both gates reached this builder as prose
+  and neither relay carried a single `file:line`, so writing the records
+  reproduced the problem: `citations.mjs` over the first draft of them still said
+  **0/0**. Manufacturing line numbers to make that count non-zero would invent
+  precision and attribute it to a gate that never claimed it — the same defect
+  pointing the other way. What is cited above is therefore only what **this
+  builder verified first-hand while writing the record**: the workflow trigger,
+  the `docker` job and the message it fails with, and the three lines that decide
+  whether the image carries `node-forge`. The gates' own findings stay in prose,
+  because prose is what they were. `node scripts/citations.mjs` is run as the
+  last action before the commit that carries this section, and its count is in
+  the Log's gate commands.
+
+**What this gate did not do.** It re-ran none of the ffmpeg work, none of the
+mutations and none of the `-loglevel` measurements — those were gate 1's, and
+this CONCERNS says nothing about them. It could not run Docker, which is the
+whole reason its central question is deferred rather than answered.
+
 ## Log
 
 **2026-08-30 — Built, with step 1 answered yes and the mechanism measured both
@@ -311,29 +423,56 @@ the interception rather than a fixture that quietly lost its second origin.
 
 ### The mutation run
 
-Twelve mutations. Every one is now killed; three of the first sweep's results
-were wrong and the reasons matter more than the table.
+Twelve mutations, **every count below re-measured at one scope**:
+`npx vitest run --project downloader`, 771 tests. The first table mixed
+scopes — each row was "N failed" over whatever spec files that row happened to
+need — which is how a mutation table under-reports without anyone lying. Gate 1
+found three rows understated and it was right about the shape; the numbers below
+are not its numbers either, for the same reason. **A kill count without a
+denominator is not a measurement**, so the denominator is now stated once and
+every row shares it.
 
-| Mutation                                                        | Result                                                     |
-| --------------------------------------------------------------- | ---------------------------------------------------------- |
-| `connectFailed` collapsed to one `refused` (dl-26's tripwire)   | **killed** — 3 fail, 17 pass in `egress-proxy.test.ts`     |
-| the certificate leg folded into `unreachable`                   | **killed** — 2 fail                                        |
-| `server.ts` hands ffmpeg the tunnelling proxy                   | **killed** — by the wiring test, added because it survived |
-| the CA swap reverted (engine gets `FFMPEG_CA_FILE`)             | **killed** — by the same test                              |
-| the proxy loses the operator root entirely                      | **killed** — 3 fail                                        |
-| the proxy **replaces** the system store instead of merging      | **killed** — by `tls-interception.test.ts`, added for it   |
-| the proxy stops verifying origins (`rejectUnauthorized: false`) | **killed** — 4 fail                                        |
-| `-loglevel warning` back to `error`                             | **killed** — 4 fail                                        |
-| the sticky stderr classifier removed                            | **killed** — by `ffmpeg-runner.test.ts`, added for it      |
-| the leaf's AKID back to `keyIdentifier: true`                   | **killed** — 2 fail                                        |
-| every leaf SAN forced to `DNS:` (the IP-has-no-SNI trap)        | **killed** — 4 fail                                        |
-| the root's private key written beside its certificate           | **killed** — 1 fail                                        |
+| Mutation                                                        | Failing tests | Where the strongest one is                    |
+| --------------------------------------------------------------- | ------------- | --------------------------------------------- |
+| `connectFailed` collapsed to one `refused` (dl-26's tripwire)   | **3**         | `egress-proxy.test.ts`, incl. dl-26's own     |
+| the certificate leg folded into `unreachable`                   | **2**         | `egress-proxy.test.ts`                        |
+| `server.ts` hands ffmpeg the tunnelling proxy                   | **1**         | `two-origin-tls.test.ts`, the wiring test     |
+| the CA swap reverted (engine gets `FFMPEG_CA_FILE`)             | **1**         | the same wiring test, its only other guard    |
+| the proxy loses the operator root entirely                      | **7**         | four suites at once                           |
+| the proxy **replaces** the system store instead of merging      | **1**         | `tls-interception.test.ts`, written for it    |
+| the proxy stops verifying origins (`rejectUnauthorized: false`) | **8**         | the broadest — it is the whole mechanism      |
+| `-loglevel warning` back to `error`                             | **4**         | `two-origin-tls.test.ts` × 3                  |
+| the sticky stderr classifier removed                            | **1**         | `ffmpeg-runner.test.ts`, written for it       |
+| the leaf's AKID back to `keyIdentifier: true`                   | **6**         | reproduces the historical both-directions bug |
+| every leaf SAN forced to `DNS:` (the IP-has-no-SNI trap)        | **4**         | `tls-interception.test.ts` + three downloads  |
+| the root's private key written beside its certificate           | **1**         | `tls-interception.test.ts`                    |
 
-**dl-26's tripwire now fails three tests where the brief measured one, and that
-is the correct evolution rather than a loss of precision**: the collapse takes
-out its own test (_"an allowed host we cannot reach is not reported as a
-refusal"_) plus the two dl-27 added for the third leg. The split is still the
-only thing holding them apart.
+Twelve run, twelve killed, none survived.
+
+**dl-26's tripwire now fails three tests where its own ticket measured one, and
+that is the correct evolution rather than a loss of precision**: collapsing
+`connectFailed` takes out dl-26's test (_"an allowed host we cannot reach is not
+reported as a refusal"_) plus the two dl-27 added for the third leg. The split is
+still the only thing holding the three apart.
+
+**Three rows moved on re-measurement and all three moved upward** — the operator
+root 3 → 7, `rejectUnauthorized: false` 4 → 8, the AKID 2 → 6. Gate 1 named
+`rejectUnauthorized` and the AKID too, with 5 and 4 against this table's 4 and 2,
+which are different again: its run and the first one here were both narrower than
+the project. **The three sets of numbers do not contradict each other and none of
+them was wrong; they answered three different questions.** Gate 1 also named
+`-loglevel` as understated and the relay carried no figure for it; at project
+scope it is **4**, which is what this table already said, so that one is recorded
+as not reproduced rather than corrected to a number nobody measured.
+
+Two rows are worth reading for their shape rather than their size. The AKID
+mutation kills **6**, and it is the one that matters most to a later reader:
+reverting it reproduces exactly the historical defect described above, where NEG
+and POS failed identically because ffmpeg was rejecting our own leaf. And the
+two `1`s at the top — the wiring and the CA swap — are single-test kills on
+purpose: **one test is the only thing standing between this branch and silently
+restoring dl-21's hole**, which is a reason to treat it as load-bearing rather
+than to add company for it.
 
 **Three mutations in the first sweep were invalid and reported green.** `-loglevel`
 and the sticky classifier live in `engine/src`, and the API suites import
@@ -342,7 +481,8 @@ is not rebuilt is a mutation the suite never sees. Re-run with
 `tsc --build` in the loop, both die. Anyone re-measuring these on this branch
 has to rebuild the engine between mutation and run; that is the single most
 likely way to conclude, wrongly, that this branch's engine changes are
-unnecessary.
+unnecessary. Gate 1 reproduced all twelve with a build between every one and got
+twelve kills.
 
 The third was `server.ts` handing ffmpeg the wrong proxy. It survived
 **legitimately**: every test built its own proxy, so nothing looked at the
@@ -420,19 +560,29 @@ the fact is a security posture rather than a status.
   needed it. Writing that scan is a repo-wide gate with its own allowlist
   problem, not dl-27, and it is named in the report as a ticket to file.
 
-### Gates
+### Gate commands
 
-Measured on this branch at `26d6b86`, based on `origin/main` at `1d420b7`.
-`origin/main` moved to `6b6c785` during the work and this branch is **not**
-rebased onto it.
+Measured on this branch, based on `origin/main` at `1d420b7`. `origin/main`
+moved to `6b6c785` during the work and this branch is **not** rebased onto it.
 
-| Command                            | Result                      |
-| ---------------------------------- | --------------------------- |
-| `npm run build`                    | exit 0                      |
-| `npm run check`                    | exit 0                      |
-| `npm test -- --project downloader` | **52 files / 771 tests**    |
-| `npm test`                         | **110 files / 1,638 tests** |
-| `npm run e2e:downloader`           | 3 passed                    |
+| Command                                  | Result                      |
+| ---------------------------------------- | --------------------------- |
+| `npm run build`                          | exit 0                      |
+| `npm run check`                          | exit 0                      |
+| `npm test -- --project downloader`       | **52 files / 771 tests**    |
+| `npm test`                               | **110 files / 1,638 tests** |
+| `npm run e2e:downloader`                 | 3 passed                    |
+| `node scripts/citations.mjs <this file>` | **5/5 resolve**             |
+
+The citations line is new and was **0/0 until the gate records above were
+written** — this ticket had no `file:line` in it at all, which is why nothing in
+it could go stale and also why nothing in it could be checked. The five are the
+claims verified first-hand rather than relayed; see gate 2's finding 2. One more
+citation in that section, `tools/downloader/Dockerfile:65`, is **not** counted by
+the script: its path matcher requires a file extension, so a `Dockerfile`
+reference is invisible to it and can rot unnoticed. Verified by hand at the tip
+(`RUN npm prune --omit=dev`) and recorded here as the one that has no automatic
+guard.
 
 **The baseline was re-measured rather than derived**, by checking `1d420b7` out
 in this worktree and running both: **108 files / 1,615 tests** and **50 files /
