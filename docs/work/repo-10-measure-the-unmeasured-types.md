@@ -171,6 +171,87 @@ is the more useful half of this finding.
 - It did not settle the `SCOPE_REQUIRED` question, which is not a gate's to
   settle.
 
+## Gate 2 — `repo-10-measure-the-unmeasured-types` @ `a0cf644` — **CONCERNS**
+
+Relayed by the coordinator rather than handed over verbatim, as gate 1 was. Both
+findings sit in the delta gate 1 asked for; everything gate 1 raised had already
+been checked and passed. The long form is on the pull request thread.
+
+Citations resolve against **`a0cf644`**, the commit gate 2 reviewed — a different
+commit from gate 1's `d2e21ad`, so the two records above and below resolve
+against different revisions and each says which.
+
+### Findings
+
+#### F1 — med. The fallback that must not fail open was unreachable by any test
+
+`SCOPE_REQUIRED_FALLBACK` is what the scope rule falls back to when
+`release-please-config.json` cannot be read. Its whole job is "do not silently
+stop enforcing". Set it to `[]` — precisely the failure it exists to prevent —
+and the suite stayed green.
+
+_Reproduced before fixing._ `sed -i '64s/.*/const SCOPE_REQUIRED_FALLBACK =
+[];/'` then `npx vitest run scripts/test/commit-message.test.ts` → **24 passed**.
+Nothing noticed.
+
+_Cause._ The test claiming to cover it asserted `releasingTypes(dir)` is `null`
+for an empty temp directory — true, and unrelated — then called `validate`
+**without** overriding `releasingTypes`, so `validate`'s internal zero-argument
+call resolved against the real repo root through its default parameter and read
+the real, readable config every time. The fallback branch was never entered.
+
+_This is the same defect class as the one this branch fixed one level up._ The
+synthetic-config test exists because a test passing against a hardcoded list
+proves nothing. This was that shape again, in the safety net instead of in the
+rule — and a safety net nothing exercises is indistinguishable from one that is
+not there.
+
+_Disposition:_ **fixed in `d6b5a63`**, and by a narrower route than the gate's
+option (a). Rather than adding a repo-root parameter whose only consumer would be
+a test, `validate` now distinguishes an **absent** `releasingTypes` option from
+an explicit **`null`** — which is exactly what `releasingTypes()` itself returns
+when it cannot read the config. A test reaches the branch by passing `null`. No
+new parameter; the existing option's type widens from `string[]` to
+`string[] | null`, which is the type it should always have had, since it mirrors
+a function returning `string[] | null`.
+
+Option (b) was rejected for the reason the gate gave: asserting the exported
+constant equals `["feat", "fix"]` still passes under the empty-fallback mutation
+if the constant is not the thing being consulted.
+
+_Verified by mutation, three ways, all three green before and red after:_
+
+| mutation at `scripts/commit-message.mjs`         | before  | after        |
+| ------------------------------------------------ | ------- | ------------ |
+| `SCOPE_REQUIRED_FALLBACK = []`                   | 24 pass | **1 failed** |
+| `SCOPE_REQUIRED_FALLBACK = ["feat"]`             | 24 pass | **1 failed** |
+| drop `?? SCOPE_REQUIRED_FALLBACK` from the chain | 24 pass | **1 failed** |
+
+#### F2 — low. Two positional references to the same test, wrong by two different amounts
+
+A comment in the test file said "three tests up" and was off by one; the Log said
+"two tests earlier" and was off by a different amount. Same target, two
+independent authors of the same sentence, two different wrong answers.
+
+_Disposition:_ **fixed in the commit carrying this record — by naming the test
+rather than correcting the counts.** The general form is in the Log below and is
+the part worth keeping: a positional count is a citation with no file. Nothing
+resolves it, `scripts/citations.mjs` cannot see it, and it is invalidated by any
+edit anywhere above it — which is the same argument as reading the scope
+requirement off the config instead of a list of type names.
+
+### What gate 2 did NOT re-verify
+
+Everything gate 1 covered, deliberately, so the two records do not overlap: the
+offline harness and whether it calls release-please rather than reimplementing
+it; the two controls against repo-7's real dry runs; the `chore(planner)!`
+breaking-hidden result; the scratch branch's creation point and deletion; the
+enumeration of the false claim across files; and the `hidden` flags in
+`release-please-config.json`. Those rest on gate 1 and on this ticket's own runs.
+
+It also ran no end-to-end `release-please --dry-run`, which nothing in this
+ticket has been through.
+
 ## Log
 
 ### 2026-08-30 — measured. `perf` bumps a version, and the brief's least-expected outcome is the true one
@@ -606,7 +687,8 @@ would not have distinguished the derivation from a hardcoded list.
 The test that carries the weight is **"un-hiding a type in the config widens the
 requirement, with no edit here"**: it writes a synthetic config into a temp
 directory with `docs` stripped of its `hidden` flag, and asserts `docs:` — free
-unscoped against the real config two tests earlier — is then rejected. Checking
+unscoped against the real config in "accepts a scopeless commit for a type that
+does not reach a changelog" — is then rejected. Checking
 today's four would have passed against the list it replaced.
 
 **Own commits checked, per the warning that a rule rejecting the commit that
@@ -638,3 +720,68 @@ and a number. Where the reproduction genuinely is the evidence — a finding who
 whole content is "the text is at :94-95, not :93-94" — the checker already says
 that case must stay as written and be judged by a human, which is the same
 boundary seen from the other side.
+
+### 2026-08-30 — gate 2: the safety net had no net, and a count is a citation with no file
+
+Gate 2 returned **CONCERNS** on two findings, both inside the delta gate 1 asked
+for. Reproduced both, fixed both. The record is above.
+
+**The med is the more useful one, because of where it sat.** One commit earlier
+this branch replaced a hand-written type list with one computed from the config,
+and wrote a test whose entire purpose was that _a test passing against a
+hardcoded list proves nothing_. The fallback guarding that computation then
+turned out to be verified by a test that never reached it — the same defect,
+one layer down, written by the same hand in the same hour.
+
+That is worth naming precisely rather than filing as carelessness:
+**a test written to cover a fallback will pass for the wrong reason unless
+something forces the fallback path, and the default-parameter idiom that makes
+production code convenient is exactly what silently prevents that.**
+`releasingTypes(repoRoot = <real root>)` is good for callers and invisible
+poison for tests, because a test that does not pass the parameter gets the real
+world rather than an error. The tell is a test whose assertions are all _true_
+statements that are true for reasons unconnected to the thing under test —
+`releasingTypes(dir) === null` was true, `validate("feat: …").ok === false` was
+true, and neither one touched `SCOPE_REQUIRED_FALLBACK`.
+
+The check that would have caught it is the one gate 2 ran and I did not:
+**mutate the constant and see whether anything goes red.** I proved the _rule_
+by failing first and did not extend the same discipline to the rule's fallback.
+Coverage of a defensive branch is not established by a test that mentions it.
+
+**A narrower fix than the one offered.** The gate's option (a) was to inject a
+repo root into `validate`. That works, but it adds a parameter no caller wants
+and duplicates a seam that already exists — `validate` already takes
+`releasingTypes`. The gap was never a missing seam; it was that `??` collapsed
+"you did not tell me" and "there is nothing to tell" into one case. Splitting
+those two is one line, adds no parameter, and widens the option's type to
+`string[] | null` — the type it should always have had, since it stands in for a
+function that returns exactly that. Three mutations that all passed before now
+each fail.
+
+**The low generalises further than the finding.** Two people — the gate and me —
+wrote a positional reference to the same test, and both were wrong, by different
+amounts. That is not two mistakes; it is one property. **A positional count is a
+citation with no file.** `scripts/citations.mjs` resolves a path-and-line
+reference and can tell you it is impossible; it cannot see "three tests up",
+nothing can, and any edit anywhere above the reference invalidates it silently. The same argument this
+ticket has been making all along, in a third costume: read the requirement off
+the config, not a list of type names; cite the file and line, not a count; and
+**name the thing you mean, because a name survives an edit and a position does
+not.** Both references now name the test.
+
+Worth noticing that this ticket has now produced four instances of one shape — a
+stale type list, a stale sentence in a third file, a self-invalidating citation
+count, and a positional test reference. Each was a fact recorded in a form that
+nothing could re-derive.
+
+**And a third strike on the citation attractor, inside the sentence naming it.**
+The paragraph above originally illustrated "a citation with no file" by
+typesetting one that looked real, and `scripts/citations.mjs` failed it —
+`5/6 resolve` — while it was explaining why such things cannot be checked. That
+is now three occurrences on this branch: the seven third-party line numbers, the
+one quoted to describe them, and this one. The rule stated two entries above —
+_describe a broken citation, never reproduce it_ — was written by someone who
+then immediately reproduced one. It is a strong enough attractor that the working
+answer is mechanical rather than attentional: **run the resolver after the last
+edit to the record and believe it over your own care.** It caught all three.
