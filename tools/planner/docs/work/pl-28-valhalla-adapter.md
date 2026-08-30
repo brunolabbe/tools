@@ -669,3 +669,23 @@ equivalent mutant and is left unkilled on purpose; the reasoning is in the
 Review, under F5. An overstated mutation row on the branch whose whole
 correction is about overstated mutation rows is the failure this Log is least
 entitled to repeat.
+
+> **Amended 2026-08-29 by pl-30: the 698/698 measured throughout this Log and
+> Review was never re-taken against this ticket's own merged tip, and it is
+> wrong there.**
+>
+> ```
+> $ git archive 60e48e7 | tar -x -C <scratch>   # same symlinked node_modules
+> $ npm run build
+> $ npm test -- --project planner   # run twice
+>  Test Files  49 passed (49)
+>       Tests  699 passed (699)
+> ```
+>
+> 699/699 at `60e48e7`, both runs — not 698/698. Every "698" above (the
+> thinness claim, the Gates bullet, the mutation-sweep note) was measured at
+> some earlier point on this branch and never retaken at the commit that
+> actually reached `main`. This ticket's `firstCoordinates`-is-thin argument is
+> unaffected by the correction — only the number is. pl-30's Log carries the
+> command and the sibling arithmetic this number feeds: 702 = 699 + 3 (pl-32's
+> three tests), not 698 + 4.
