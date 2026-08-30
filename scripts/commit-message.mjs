@@ -143,12 +143,19 @@ export function toolScopes(repoRoot = path.resolve(fileURLToPath(import.meta.url
 
 /**
  * @param {string} message A full commit message, or a pull request title.
- * @param {{ scopes?: string[], releasingTypes?: string[] }} [options]
+ * @param {{ scopes?: string[], releasingTypes?: string[] | null }} [options]
  * @returns {{ ok: boolean, errors: string[] }}
  */
 export function validate(message, options = {}) {
   const scopes = options.scopes ?? [...toolScopes(), ...EXTRA_SCOPES];
-  const releasing = new Set(options.releasingTypes ?? releasingTypes() ?? SCOPE_REQUIRED_FALLBACK);
+  // `undefined` means "not supplied, go and read the config"; `null` means
+  // "the config could not be read", which is what `releasingTypes()` itself
+  // returns in that case. Keeping them distinct is what lets anything at all
+  // reach `SCOPE_REQUIRED_FALLBACK` — with a single `??` chain the fallback was
+  // unreachable except on a machine where the repo's own config is missing, so
+  // emptying it broke nothing that any test could see.
+  const declared = options.releasingTypes === undefined ? releasingTypes() : options.releasingTypes;
+  const releasing = new Set(declared ?? SCOPE_REQUIRED_FALLBACK);
 
   // Comments are what `git commit` appends to the buffer it opens; they are not
   // part of the message and must not be measured or parsed.

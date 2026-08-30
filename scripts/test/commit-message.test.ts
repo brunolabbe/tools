@@ -63,7 +63,8 @@ test("un-hiding a type in the config widens the requirement, with no edit here",
     const widened = releasingTypes(dir);
     expect(widened).toEqual(["feat", "docs"]);
 
-    // `docs:` is accepted unscoped against the real config, three tests up.
+    // `docs:` is accepted unscoped against the real config — see
+    // "accepts a scopeless commit for a type that does not reach a changelog".
     expect(check("docs: give every tool its own roadmap").ok).toBe(true);
     const { ok, errors } = validate("docs: give every tool its own roadmap", {
       scopes,
@@ -99,19 +100,33 @@ test("a breaking change needs a scope even when its type is hidden", () => {
   expect(footer.errors.join(" ")).toContain("breaking change reaches a changelog");
 });
 
-test("the scope requirement falls back rather than vanishing when the config is unreadable", () => {
-  // `releasingTypes()` returns null outside the repo. Failing open entirely
-  // would silently stop enforcing the rule; the fallback is the historical
-  // minimum, which is unambiguous whatever the config says.
+test("an unreadable config still rejects, rather than silently stopping enforcement", () => {
+  // The safety net's only job. An earlier version of this test asserted
+  // `releasingTypes(dir) === null` and then called `validate` *without*
+  // `releasingTypes`, so `validate` read the real, readable config and the
+  // fallback was never reached: emptying `SCOPE_REQUIRED_FALLBACK` to `[]`
+  // left the whole suite green. Passing `null` — exactly what
+  // `releasingTypes()` returns when it cannot read the config — is what makes
+  // the branch reachable.
+  const unreadable = { scopes, releasingTypes: null };
+
+  expect(validate("feat: add a thing", unreadable).ok).toBe(false);
+  expect(validate("fix: repair a thing", unreadable).ok).toBe(false);
+
+  // And it stays a *fallback*, not a blanket block: a hidden type is still free.
+  expect(validate("docs: give every tool its own roadmap", unreadable).ok).toBe(true);
+});
+
+test("a config that cannot be read reports null rather than an empty set", () => {
+  // The other half of the fallback, kept separate because it is a different
+  // claim: `[]` would mean "nothing reaches a changelog" and would disable the
+  // rule just as silently as an empty fallback would.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "commit-message-"));
   try {
     expect(releasingTypes(dir)).toBe(null);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
-
-  expect(validate("feat: add a thing", { scopes }).ok).toBe(false);
-  expect(validate("fix: repair a thing", { scopes }).ok).toBe(false);
 });
 
 test("rejects a type nobody has agreed on", () => {
