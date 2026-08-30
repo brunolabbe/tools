@@ -63,6 +63,67 @@ that branch would have released planner.
   `node scripts/commit-message.mjs --text "<title>"` accepts it.
 - No planner release is cut by the merge.
 
+## Review
+
+### Gate 1 — 2026-08-30 · PASS
+
+Sonnet, against an Opus build, on `075f4fb`.
+
+| Done when                                                                                                                                                 | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Both logs carry a dated annotation naming repo-4 and stating that fixtures are now exempt and `npm run format` is no longer required after a fixture edit | **proven** · `pl-15-candidate-legs.md:165` and `pl-28-valhalla-adapter.md:716`, both dated, both naming `13d9735`. Proven by reproduction rather than by reading the annotations: the gate re-mangled a fixture itself, and ran the **positive control** — it misformatted a _non-ignored_ file, confirmed `npm run format` rewrote that one, and only then accepted that the formatter declining to touch a fixture means something |
+| The pull request title's type is `hidden` in `release-please-config.json`, and `node scripts/commit-message.mjs --text "<title>"` accepts it              | **proven** · `release-please-config.json:31` carries `"hidden": true` for `docs`, read off the config rather than off the brief; the title exits 0                                                                                                                                                                                                                                                                                   |
+| No planner release is cut by the merge                                                                                                                    | **unproven (gate)** · follows from the row above and from the branch touching no planner file outside `docs/work/`, but release-please runs from merged commits and nothing on a pre-merge branch can observe it                                                                                                                                                                                                                     |
+
+**Findings against the branch: none.** The table is empty rather than omitted:
+the gate returned zero findings at every severity, and a record listing only the
+findings that produced a diff cannot be told apart from one that dropped the
+rest. One thing was raised and it was not a defect here:
+
+- **`info` · not a branch defect, no change** — the gate flagged the diff-scope
+  figure it was given as wrong. It was: the dispatch brief fused two scopes into
+  one sentence, "143 insertions and 0 deletions across `tools/planner/`, four
+  `.md` files touched", which reads as a whole-branch claim. Both figures are
+  right about different objects — `git diff --numstat origin/main HEAD --
+tools/planner/` is 143/0, and `git diff --numstat 1d420b7 HEAD` over all four
+  files is 266/2, the two deletions being `status: ready` and `_Not started._`
+  in this ticket's own file. Re-derived here, both. The append-only claim about
+  the three planner logs was never in question. Recorded because it is the same
+  failure this ticket exists to fix — a sentence true of one object, read as
+  true of another — and because the gate caught it by re-deriving rather than
+  trusting its brief.
+
+Everything the gate tried to falsify reproduced: the ignore pattern's
+genuineness; the HTML-reflow mechanism behind the pl-15 rewrite; all three stale
+passages **and no fourth**, swept across all 18 planner work files that mention
+fixtures; every pl-33 host, including the `example.com` control and both Build
+fallbacks; and the citation failure as pre-existing.
+
+**What this gate did not do.** It did not re-run `npm test`. It took the
+builder's **1615 passed, 108 files** as read, on the grounds that the diff
+touches zero source files — true of this branch, and the reason that figure is
+_unverified by the gate_ rather than wrong. `npm run check` was re-run and is
+green.
+
+**The gate reviewed `075f4fb`; the citations above resolve against the commit
+that carries this record**, which is one commit later and differs from it only by
+this section and the Log entry below. They were re-enumerated with
+`node scripts/citations.mjs` as the genuinely last action before staging, after
+`npm run format` and with nothing between — a record cannot cite its own SHA, and
+naming the reviewed commit instead would be naming a tree these line numbers were
+not checked against. `repo-11` 9/9, `pl-15` 1/1, `pl-28` 23/24. One citation in
+pl-28 does not resolve and is deliberately left alone: its record line 154 cites
+a bare `logging.test.ts` with a line number, and both tools have a tracked file
+by that name. It means `tools/planner/api/test/logging.test.ts:53`. It is
+pre-existing — the gate confirmed it at `origin/main` by extracting the file at
+that revision and running `citations.mjs --rev origin/main`, getting 22/23 with
+the identical ambiguity — and it sits inside gate 1's own acceptance table,
+which this ticket must not edit.
+
+The long-form report is on the pull request thread rather than duplicated here:
+the two are written by different models and are meant to be held against each
+other, and two durable copies that can drift is worse than one of each.
+
 ## Log
 
 **2026-08-30 — done.** Both annotations appended, plus a third passage the brief
@@ -169,11 +230,12 @@ repo-4 is `13d9735`, merged 2026-08-29 as #98. Named in both annotations.
   project: no source changed, so there was nothing to scope to. The tree was
   confirmed clean of the fixture mangling first.
 - `node scripts/citations.mjs` on both annotated tickets. pl-15: 1/1. pl-28:
-  23/24, and **the one failure is pre-existing and not this branch's** —
-  `logging.test.ts:53` at record line 154, which the resolver reports as
-  ambiguous because both tools have a `logging.test.ts`. It is inside gate 1's
-  acceptance table, which this ticket must not edit. Every citation this branch
-  wrote resolves: `pl-15-candidate-legs.md:123` and
+  23/24, and **the one failure is pre-existing and not this branch's** — its
+  record line 154 cites a bare file name with a line number, and the resolver
+  calls it ambiguous because both tools have a tracked file called
+  `logging.test.ts`. It means `tools/planner/api/test/logging.test.ts:53`. It is
+  inside gate 1's acceptance table, which this ticket must not edit. Every
+  citation this branch wrote resolves: `pl-15-candidate-legs.md:123` and
   `pl-28-valhalla-adapter.md:264` both print the intended line. The `:472` and
   `:608` references are bare line numbers the script does not parse as
   citations, so they were checked by hand with `sed -n '472p;608p'` and both hit
@@ -187,3 +249,29 @@ start here (repo-11)"` exits 0.
 - **No planner release is cut** — asserted from the config above and from the
   branch touching no planner file outside `docs/work/`, not observed. Nothing
   here ran release-please, and nothing on a pre-merge branch can.
+
+### 2026-08-30 — gate round
+
+One gate, `PASS`, zero findings against the branch; recorded above as
+[Gate 1](#gate-1--2026-08-30--pass) rather than here, since the format keeps the
+verdict in `## Review` and the working notes in `## Log`. Nothing in the branch
+changed as a result — the only correction the round produced was to the dispatch
+brief's diff-scope sentence, and it is written up in the gate record because
+that is where the reader looking for "was every finding answered" will be.
+
+Two things the round is worth remembering for. The gate ran a **positive
+control** the builder had not: misformatting a non-ignored file to prove
+`npm run format` was working at all, before accepting that its silence on a
+fixture meant exemption. A formatter that is broken and a formatter that is
+correctly ignoring a file produce the same empty diff, and only the control
+separates them. And it verified the pre-existing citation failure by extracting
+pl-28 at `origin/main` and re-running `citations.mjs --rev origin/main`, rather
+than reasoning that a failure the builder called pre-existing probably was.
+
+Left undone on purpose: **the F6 discoverability problem is not fixed here.** F6
+sits at `pl-28-valhalla-adapter.md:264` under `## Review`; its correction is at
+`:716` under `## Log`, with no pointer between them and nothing but a full-text
+search for the token "F6" to connect them. Both this branch's annotation and this
+Log say so out loud. Fixing it means editing a historical gate record in place,
+which is a decision for the user and not for a builder, and it is queued as one
+rather than resolved quietly here.
