@@ -129,21 +129,35 @@ const GEOCODER_RESULT_LIMIT = 10;
 /**
  * How far apart two results may sit and still be taken for one place.
  *
- * This is the near side of `chooseResult`'s ambiguity test, and it exists
- * because a geocoder answers one town as several rows — a settlement node and
- * its administrative boundary, a village and its parish — which is not a
- * disagreement about where the place is. Without a near side the rule would
- * refuse an ordinary lookup for looking like Saint-Jean.
+ * **The reason this constant was first written is false, and the captures
+ * that disproved it are checked in.** It was justified by a geocoder
+ * answering one town as several rows — a settlement node beside its own
+ * administrative boundary — and Nominatim does not do that. `Percé, Québec`
+ * returns **one** row whose `display_name` is `Percé, Le Rocher-Percé,
+ * Gaspésie–Îles-de-la-Madeleine, Québec, Canada`: the containing municipality
+ * is *inside the address hierarchy of the same row*, not a second row. The
+ * same holds for Tadoussac, Baie-Saint-Paul, Québec, Charlevoix and
+ * Saint-Jean — six locality-supplied lookups, six single-row replies. See
+ * `nominatim-search-perce-quebec.json` and its five siblings.
  *
- * **The number is chosen inside a gap, not measured.** Measured: the closest
- * pair among the six results in the captured `Saint-Jean` reply — St John,
- * Jersey and Sint-Jan, Belgium — is **402 km** apart, and the furthest from
- * the first is 5 513 km. Unmeasured, because no capture in this repo shows
- * one: how far apart a geocoder's duplicate rows for a single town actually
- * are, which is single-digit kilometres in every reasonable description of
- * that case. Any threshold between the two decides every case here
- * identically, so 25 km buys margin on the unmeasured side and still refuses
- * an ambiguity two orders of magnitude away.
+ * **What is measured is the far side, and it is what the number now has to
+ * respect.** `Gaspé, Québec` returns two rows — the town
+ * (`Gaspé, La Côte-de-Gaspé, …`) and the peninsula (`Gaspésie, Québec,
+ * Canada`) — **118.6 km** apart, both mentioning Québec, both surviving
+ * `bestMatches`. That pair *must* read as a disagreement, because the
+ * settlement tiebreak in `chooseResult` is what resolves it and the tiebreak
+ * only runs on a disagreement. A threshold at or above 118.6 km would call
+ * them one place and answer whichever row Nominatim happened to send first —
+ * the correct town today, the peninsula the day the order changes. So the
+ * ceiling is real: **this must stay below 118.6 km**, and
+ * `grounding-valhalla.test.ts` fails if it does not, by feeding the same two
+ * rows reversed.
+ *
+ * The floor is now the unsupported side: no capture in this repo shows two
+ * rows that *are* one place, so nothing measures how much slack is needed and
+ * 25 km is a deliberate margin rather than a finding. Its cost if it is too
+ * generous is bounded — a pair inside it is answered by reply order, which is
+ * what every version of this file before pl-34 did for every reply.
  */
 const SAME_PLACE_METRES = 25_000;
 
@@ -158,6 +172,40 @@ const SAME_PLACE_METRES = 25_000;
  * through to the agreement test.
  */
 const MIN_HINT_CHARS = 3;
+
+/**
+ * The `addresstype` values `chooseResult` will prefer when the locality has
+ * already said where, and two survivors still disagree about the point.
+ *
+ * A trip's item is somewhere you go, not the region you are in. `Gaspé,
+ * Québec` answers the town **and** the Gaspé peninsula, both correctly in
+ * Québec and 118.6 km apart; a plan means the town. This list is what says so.
+ *
+ * **Every member is a value a checked-in capture actually carries** — `town`
+ * (Percé, Gaspé, Baie-Saint-Paul), `village` (Tadoussac), `city` (Québec,
+ * and St. John's and Saint John in the ambiguous reply) and `municipality`
+ * (Lingwala, Kinshasa). Nothing is here on the strength of being a plausible
+ * OSM tag.
+ *
+ * **It is an allowlist and that is the whole safety argument.** A type not on
+ * it is not *rejected*; it merely fails to be preferred, so a reply whose
+ * rows are all unfamiliar types stays a disagreement and `locate` declines.
+ * The failure mode of an incomplete list is therefore a place that is not
+ * located, never a place located wrongly — which is the direction this ticket
+ * exists to protect. A denylist of large-area features would invert that: an
+ * unrecognised type would beat a `peninsula` on the strength of nobody having
+ * heard of it.
+ *
+ * Types deliberately absent because a capture shows them being the *wrong*
+ * answer: `county` (Nez Perce County, Idaho, for a bare `Percé`), `peninsula`
+ * (Gaspésie), `highway` (a bus stop named Sainte-Anne — see pl-34's Log).
+ */
+const SETTLEMENT_ADDRESS_TYPES: ReadonlySet<string> = new Set([
+  "city",
+  "town",
+  "village",
+  "municipality",
+]);
 
 export interface ValhallaProviderOptions {
   /** Base URL of the Valhalla instance. Operator configuration; no default. */
@@ -642,6 +690,14 @@ interface GeocoderResult {
    * than unusable.
    */
   displayName: string;
+  /**
+   * Nominatim's `addresstype` — `town`, `village`, `peninsula`, `county`,
+   * `highway`. What *kind* of thing the row is, as opposed to where it is,
+   * and the only field besides `display_name` that `chooseResult` reads.
+   * `""` when the reply omits it, which simply means this row cannot win the
+   * settlement tiebreak.
+   */
+  addressType: string;
 }
 
 /**
@@ -664,7 +720,12 @@ function geocoderResults(body: unknown): GeocoderResult[] {
   for (const entry of body as readonly unknown[]) {
     if (typeof entry !== "object" || entry === null) continue;
 
-    const { lat, lon, display_name: displayName } = entry as Record<string, unknown>;
+    const {
+      lat,
+      lon,
+      display_name: displayName,
+      addresstype: addressType,
+    } = entry as Record<string, unknown>;
     const parsed = coordinatesSchema.safeParse({
       latitude: asNumber(lat),
       longitude: asNumber(lon),
@@ -674,6 +735,7 @@ function geocoderResults(body: unknown): GeocoderResult[] {
     results.push({
       coordinates: parsed.data,
       displayName: typeof displayName === "string" ? displayName : "",
+      addressType: typeof addressType === "string" ? addressType : "",
     });
   }
   return results;
@@ -709,6 +771,32 @@ function geocoderResults(body: unknown): GeocoderResult[] {
  * is what makes the bare `Saint-Jean` case honest: six places, no hint to
  * separate them, so nothing was located.
  *
+ * ## The settlement tiebreak, and why it may only run second
+ *
+ * A locality can say where and still leave two rows disagreeing about the
+ * point. `Gaspé, Québec` is the captured case: the town and the Gaspé
+ * peninsula, both in Québec, both scoring the same hint, 118.6 km apart. A
+ * plan means the town, and `addresstype` is the field that says which row is
+ * a town — so the survivors are narrowed once more, to
+ * `SETTLEMENT_ADDRESS_TYPES`, and asked to agree again.
+ *
+ * **It runs only when a locality hint did the narrowing, and that boundary is
+ * load-bearing rather than cautious.** The two fields answer different
+ * questions: the locality answers *where*, `addresstype` answers *what kind*.
+ * Letting "what kind" loose on a set nothing has narrowed silently promotes it
+ * to answering "where", which is this ticket's entire defect wearing a new
+ * hat. The captured proof is a bare `Percé`: two rows, the town in Québec and
+ * Nez Perce County in Idaho, 3 882 km apart. Exactly one is a settlement, so
+ * an unscoped tiebreak would answer Québec with real confidence and no
+ * evidence — nothing in that request ever said Canada. It declines instead.
+ *
+ * The order matters as much as the scope. Agreement is tested **before** the
+ * tiebreak, so a lone row of an unfamiliar type is still an answer: the
+ * captured `Saint-Jean, Québec` is `addresstype: political` and the captured
+ * `Sainte-Anne, Québec` is `highway`, neither of them a settlement, and both
+ * are located because there was nothing to break a tie between. An
+ * incomplete allowlist costs nothing until two rows actually conflict.
+ *
  * ## `null` here says "ambiguous" in a voice that only says "unmatched"
  *
  * `locate` answers `LocatedPlace | null` and both outcomes collapse into that
@@ -720,12 +808,35 @@ function geocoderResults(body: unknown): GeocoderResult[] {
  */
 function chooseResult(results: readonly GeocoderResult[], place: Place): Coordinates | null {
   const hints = localityHints(place.locality);
-  const shortlist = hints.length === 0 ? results : bestMatches(results, hints);
 
-  const best = shortlist[0];
+  // Nothing narrows a reply to a name alone, so it has to speak for itself:
+  // either its rows are one place or this call has no answer.
+  if (hints.length === 0) return agreedPoint(results);
+
+  const shortlist = bestMatches(results, hints);
+  const located = agreedPoint(shortlist);
+  if (located !== null) return located;
+
+  // The locality has already said where; `addresstype` may now say what kind.
+  // See the header — this is the only place it is allowed to run.
+  return agreedPoint(shortlist.filter((each) => SETTLEMENT_ADDRESS_TYPES.has(each.addressType)));
+}
+
+/**
+ * The point these results agree on, or `null` if they do not agree on one.
+ *
+ * "Agree" is measured from the first of them rather than pairwise, which is
+ * the same claim for the purpose — a set every member of which is within
+ * `SAME_PLACE_METRES` of one member is a set that describes one place at this
+ * scale — and is linear rather than quadratic. An empty list agrees on
+ * nothing, which is why every caller can hand this a filtered list without
+ * checking it first.
+ */
+function agreedPoint(results: readonly GeocoderResult[]): Coordinates | null {
+  const best = results[0];
   if (best === undefined) return null;
 
-  const agree = shortlist.every(
+  const agree = results.every(
     (each) => haversineMetres(best.coordinates, each.coordinates) <= SAME_PLACE_METRES,
   );
   return agree ? best.coordinates : null;

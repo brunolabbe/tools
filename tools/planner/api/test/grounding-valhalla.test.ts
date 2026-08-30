@@ -119,6 +119,31 @@ const NOMINATIM_NO_MATCH = nominatimFixture("nominatim-search-no-match.json");
 const NOMINATIM_AMBIGUOUS_LIMIT_1 = nominatimFixture("nominatim-search-ambiguous-limit1.json");
 const NOMINATIM_AMBIGUOUS_LIMIT_10 = nominatimFixture("nominatim-search-ambiguous-limit10.json");
 
+/**
+ * The ten `limit=10` captures pl-34's second round took — see the header.
+ *
+ * Keyed by the exact query string sent, because that is the only thing that
+ * makes a capture checkable against the request the provider builds.
+ */
+const CAPTURED_AT_LIMIT_10: ReadonlyMap<string, unknown> = new Map([
+  ["Percé, Québec", nominatimFixture("nominatim-search-perce-quebec.json")],
+  ["Tadoussac, Québec", nominatimFixture("nominatim-search-tadoussac-quebec.json")],
+  ["Baie-Saint-Paul, Québec", nominatimFixture("nominatim-search-baie-saint-paul-quebec.json")],
+  ["Percé", nominatimFixture("nominatim-search-perce-bare.json")],
+  ["Québec, Québec", nominatimFixture("nominatim-search-quebec-quebec.json")],
+  ["Gaspé, Québec", nominatimFixture("nominatim-search-gaspe-quebec.json")],
+  ["Charlevoix, Québec", nominatimFixture("nominatim-search-charlevoix-quebec.json")],
+  ["Percé, Le Rocher-Percé", nominatimFixture("nominatim-search-perce-le-rocher-perce.json")],
+  ["Sainte-Anne, Québec", nominatimFixture("nominatim-search-sainte-anne-quebec.json")],
+  ["Saint-Jean, Québec", nominatimFixture("nominatim-search-saint-jean-quebec.json")],
+]);
+
+function captured(query: string): unknown {
+  const body = CAPTURED_AT_LIMIT_10.get(query);
+  if (body === undefined) throw new Error(`no capture for ${query}`);
+  return body;
+}
+
 const AT = new Date("2026-08-23T12:00:00.000Z");
 
 /** The three places the captured matrix is about, in the order it was asked. */
@@ -693,6 +718,188 @@ describe("choosing among several results (pl-34)", () => {
 
     await expect(provider(fetch).locate({ place: inQuebec })).resolves.toMatchObject({
       coordinates: { latitude: 45.3167, longitude: -73.2667 },
+    });
+  });
+});
+
+/**
+ * The ten real `limit=10` replies, each run through `locate` as production
+ * would run it.
+ *
+ * **This block exists because the previous round's stated risk was wrong.**
+ * pl-34's first commit named its largest open risk as a town returned
+ * alongside its own containing municipality as two far-apart rows, and
+ * `nominatim-search-perce-quebec.json` disproves it: `Percé, Québec` is
+ * **one** row, and `Le Rocher-Percé` is inside that row's own `display_name`.
+ * Six of the ten queries below are single-row replies for the same reason.
+ *
+ * The regression was real and arrived through a different shape — a town
+ * beside a **larger geographic feature sharing its name prefix**, which is
+ * `Gaspé, Québec`. Nothing predicted that shape; a capture found it. The
+ * cases are checked in as a block rather than as prose so the next change to
+ * `chooseResult` is measured against all ten at once.
+ */
+describe("every captured limit=10 reply, through locate (pl-34 round 2)", () => {
+  /** Sends the capture whose query matches the URL the provider actually built. */
+  function answeringCaptures(): { fetch: typeof globalThis.fetch; queries: string[] } {
+    const queries: string[] = [];
+    const fetch = vi.fn(async (input: unknown) => {
+      const query = new URL(String(input)).searchParams.get("q") ?? "";
+      queries.push(query);
+      return new Response(JSON.stringify(captured(query)), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    return { fetch: fetch as unknown as typeof globalThis.fetch, queries };
+  }
+
+  /**
+   * Nine locality-supplied lookups and one bare name, with the outcome each
+   * must have. `null` is an outcome and not a hole: a query nothing can
+   * resolve honestly has to decline.
+   */
+  const cases: ReadonlyArray<{
+    readonly place: Place;
+    readonly expected: Coordinates | null;
+    readonly why: string;
+  }> = [
+    {
+      place: { name: "Percé", locality: "Québec", coordinates: null },
+      expected: { latitude: 48.5222989, longitude: -64.2136423 },
+      why: "one row; the municipality is inside its display_name, not beside it",
+    },
+    {
+      place: { name: "Tadoussac", locality: "Québec", coordinates: null },
+      expected: { latitude: 48.1433429, longitude: -69.7174574 },
+      why: "one row, addresstype village",
+    },
+    {
+      place: { name: "Baie-Saint-Paul", locality: "Québec", coordinates: null },
+      expected: { latitude: 47.444343, longitude: -70.505447 },
+      why: "one row, addresstype town",
+    },
+    {
+      place: { name: "Québec", locality: "Québec", coordinates: null },
+      expected: { latitude: 46.8137431, longitude: -71.2084061 },
+      why: "one row, addresstype city",
+    },
+    {
+      place: { name: "Gaspé", locality: "Québec", coordinates: null },
+      expected: { latitude: 48.8317223, longitude: -64.4837569 },
+      why: "two rows 118.6 km apart, both in Québec, and the settlement tiebreak decides it",
+    },
+    {
+      place: { name: "Charlevoix", locality: "Québec", coordinates: null },
+      expected: { latitude: 47.6493447, longitude: -70.7362215 },
+      why: "one row, addresstype county, and a region is a fine answer when it is the only one",
+    },
+    {
+      place: { name: "Percé", locality: "Le Rocher-Percé", coordinates: null },
+      expected: { latitude: 48.5222989, longitude: -64.2136423 },
+      why: "the municipality as the locality matches the same single row",
+    },
+    {
+      place: { name: "Sainte-Anne", locality: "Québec", coordinates: null },
+      expected: { latitude: 46.8454004, longitude: -71.2149837 },
+      why: "one row, and it is a bus stop: located, and wrong, and not this fix's to catch",
+    },
+    {
+      place: { name: "Saint-Jean", locality: "Québec", coordinates: null },
+      expected: { latitude: 45.2129063, longitude: -73.2194252 },
+      why: "the Québec Saint-Jean does exist; supplying the locality is what finds it",
+    },
+    {
+      place: { name: "Percé", locality: null, coordinates: null },
+      expected: null,
+      why: "a town in Québec and a county in Idaho, 3882 km apart, and nothing to choose between them",
+    },
+  ];
+
+  for (const { place, expected, why } of cases) {
+    const where = place.locality === null ? " (no locality)" : `, ${place.locality}`;
+    test(`${place.name}${where} — ${why}`, async () => {
+      const { fetch, queries } = answeringCaptures();
+      const located = await provider(fetch).locate({ place });
+
+      // The capture is keyed by query, so a changed `placeQuery` throws rather
+      // than quietly testing a reply to a different question.
+      expect(queries).toHaveLength(1);
+      expect(located === null ? null : located.coordinates).toEqual(expected);
+    });
+  }
+
+  test("nine of the ten locality-supplied lookups locate, and the bare name declines", async () => {
+    // The count itself, so a change that starts declining ordinary lookups
+    // fails here with a number rather than only in whichever case it broke.
+    const outcomes = await Promise.all(
+      cases.map(async ({ place }) => {
+        const { fetch } = answeringCaptures();
+        return await provider(fetch).locate({ place });
+      }),
+    );
+
+    expect(outcomes.filter((each) => each !== null)).toHaveLength(9);
+    expect(outcomes.at(-1)).toBeNull();
+  });
+});
+
+/** The settlement tiebreak: what it decides, and what it is not allowed to. */
+describe("preferring a settlement over a larger feature (pl-34 round 2)", () => {
+  const GASPE_TOWN: Coordinates = { latitude: 48.8317223, longitude: -64.4837569 };
+
+  test("the town wins over the peninsula that shares its name", async () => {
+    const { fetch } = answering(captured("Gaspé, Québec"));
+    const gaspe: Place = { name: "Gaspé", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: gaspe })).resolves.toMatchObject({
+      coordinates: GASPE_TOWN,
+    });
+  });
+
+  /**
+   * **This is the test that pins `SAME_PLACE_METRES`**, which every value from
+   * ~1.6 km to 403 km previously satisfied identically.
+   *
+   * The two captured rows are 118.6 km apart. Reversed, the peninsula comes
+   * first — so a threshold at or above 118.6 km calls them one place and
+   * answers `results[0]`, which is then the peninsula, and this fails. Below
+   * it they are the disagreement they are, and `addresstype` decides. The
+   * reversal is the point twice over: it bounds the constant, and it proves
+   * the answer comes from the *type* rather than from Nominatim's ordering.
+   */
+  test("reversing the two rows changes nothing, which is what bounds the threshold", async () => {
+    const reversed = [...(captured("Gaspé, Québec") as unknown[])].reverse();
+    const { fetch } = answering(reversed);
+    const gaspe: Place = { name: "Gaspé", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: gaspe })).resolves.toMatchObject({
+      coordinates: GASPE_TOWN,
+    });
+  });
+
+  test("with no locality it does not fire, even though exactly one row is a settlement", async () => {
+    // Bare `Percé`: the town in Québec and Nez Perce County in Idaho. Exactly
+    // one is a settlement, so an unscoped tiebreak answers Québec — with real
+    // confidence and nothing behind it, since nothing in this request ever
+    // said Canada. That is this ticket's own defect in a new hat, and the
+    // boundary in `chooseResult` is what stops it.
+    const { fetch } = answering(captured("Percé"));
+    const bare: Place = { name: "Percé", locality: null, coordinates: null };
+
+    await expect(provider(fetch).locate({ place: bare })).resolves.toBeNull();
+  });
+
+  test("an unfamiliar addresstype still locates when nothing contradicts it", async () => {
+    // `Saint-Jean, Québec` is `addresstype: political` and `Sainte-Anne,
+    // Québec` is `highway`; neither is on the allowlist. Both locate, because
+    // agreement is tested before the tiebreak and a lone row has nothing to
+    // tie with. An incomplete allowlist costs nothing until rows conflict.
+    const { fetch } = answering(captured("Saint-Jean, Québec"));
+    const political: Place = { name: "Saint-Jean", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: political })).resolves.toMatchObject({
+      coordinates: { latitude: 45.2129063, longitude: -73.2194252 },
     });
   });
 });
