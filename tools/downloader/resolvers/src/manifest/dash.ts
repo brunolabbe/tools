@@ -25,7 +25,6 @@ import {
   buildLabel,
   compareVariantQuality,
   estimateSizeBytes,
-  humanAudioCodec,
   optional,
   resolveUrl,
   splitCodecs,
@@ -463,7 +462,10 @@ export function parseDash(xml: string, baseUrl: string): ParsedManifest {
           hasAudio: true,
           label: buildLabel({
             hasVideo: false,
-            audioCodec: humanAudioCodec(audioCodec),
+            // Raw, not humanised: `buildLabel` humanises, and a label that is
+            // not reproducible from the variant's own fields cannot be rebuilt
+            // when a measurement replaces its size (dl-30).
+            audioCodec,
             bitrateBps: rep.bandwidth,
             filesizeBytes,
             filesizeIsEstimate: true,

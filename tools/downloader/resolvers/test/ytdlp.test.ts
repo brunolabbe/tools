@@ -220,3 +220,66 @@ describe("the spawn path", () => {
     await expect(pending).rejects.toThrow();
   });
 });
+
+function mediaPlaylist(): string {
+  return readFileSync(
+    new URL("./fixtures/manifests/hls-media-aes128.m3u8", import.meta.url),
+    "utf8",
+  );
+}
+
+describe("weighing a rendition (dl-30)", () => {
+  const MANIFEST =
+    "https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/1772294400/itag/96/index.m3u8";
+
+  test("with no fetch injected nothing is weighed and nothing changes", async () => {
+    const probe = await fakeResolver("youtube-like").resolve(SOURCE, options());
+    const muxed = probe.variants.find((variant) => variant.id === "96");
+
+    // `tbr` x duration, exactly as it was before this ticket: 4 666.503 kbps
+    // over 635 s. No fetch exists, so no request could have been made.
+    expect(muxed?.filesizeBytes).toBe(Math.round((4666.503 * 1000 * 635) / 8));
+    expect(muxed?.filesizeIsEstimate).toBe(true);
+  });
+
+  test("with a fetch injected the top rung is sampled and the ladder rescaled", async () => {
+    const calls: string[] = [];
+    const fetchImpl: typeof globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      calls.push(`${method} ${url}`);
+      if (method === "HEAD") {
+        // 700 000 bytes for each second of the 9.97667 s segment.
+        return await Promise.resolve(
+          new Response(null, { headers: { "content-length": "6983669" } }),
+        );
+      }
+      return await Promise.resolve(new Response(mediaPlaylist()));
+    };
+
+    const resolver = new YtDlpResolver({
+      binaryPath: process.execPath,
+      binaryArgs: [FAKE_BINARY, "youtube-like"],
+      fetch: fetchImpl,
+    });
+    const probe = await resolver.resolve(SOURCE, options());
+    const muxed = probe.variants.find((variant) => variant.id === "96");
+
+    // 700 000 B/s measured against 583 312 B/s declared is a factor of 1.2, so
+    // this fixture's declaration understates rather than overstates — the
+    // correction has to work in both directions or it is a fudge.
+    const declared = Math.round((4666.503 * 1000 * 635) / 8);
+    expect(muxed?.filesizeBytes).toBeGreaterThan(declared);
+    expect(muxed?.filesizeIsEstimate).toBe(true);
+
+    // A format yt-dlp measured itself is left alone: 137 carries a real
+    // `filesize`, which beats anything we could infer from another rung.
+    const measuredByYtDlp = probe.variants.find((variant) => variant.id === "137");
+    expect(measuredByYtDlp?.filesizeBytes).toBe(349605888 + 11238910);
+    expect(measuredByYtDlp?.filesizeIsEstimate).toBe(false);
+
+    expect(calls[0]).toBe(`GET ${MANIFEST}`);
+    // The playlist, then one HEAD per segment: six here, under the cap of eight.
+    expect(calls).toHaveLength(7);
+  });
+});

@@ -30,7 +30,16 @@ import type {
   SubtitleTrack,
 } from "@downloader/contract";
 import { toAbortError } from "../abort.ts";
-import { buildLabel, compareVariantQuality, optional, subtitleFormat } from "../common.ts";
+import {
+  buildLabel,
+  compareVariantQuality,
+  optional,
+  resolveUrl,
+  subtitleFormat,
+} from "../common.ts";
+import type { MediaSegment } from "../manifest/hls.ts";
+import { createFetchSizeProbe } from "../size-probe.ts";
+import { measureVariantSizes } from "../size-sample.ts";
 
 /** yt-dlp JSON is far larger than a manifest; this is a memory bound, not a policy. */
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -55,6 +64,17 @@ export interface YtDlpFormat {
   container?: string;
   has_drm?: boolean;
   http_headers?: Record<string, string>;
+  /** `http_dash_segments` and some HLS formats arrive with their segments listed. */
+  fragments?: YtDlpFragment[];
+  /** What a fragment's `path` is relative to, when it has one. */
+  fragment_base_url?: string;
+}
+
+/** One entry of a format's `fragments` list. Either `url` or `path` is set. */
+export interface YtDlpFragment {
+  url?: string;
+  path?: string;
+  duration?: number;
 }
 
 export interface YtDlpSubtitle {
@@ -94,6 +114,13 @@ export interface YtDlpResolverOptions {
   /** Defaults to `ENABLE_YTDLP_RESOLVER !== "false"`. */
   enabled?: boolean;
   env?: NodeJS.ProcessEnv;
+  /**
+   * Used only to weigh a rendition after extraction (dl-30), never to extract.
+   * The API hands over the same `GuardedFetch` the direct tier gets. Omitted —
+   * as it is everywhere but the API and its own tests — the resolver behaves
+   * exactly as it did before: declared sizes, unsampled.
+   */
+  fetch?: typeof globalThis.fetch;
 }
 
 export class YtDlpResolver implements Resolver {
@@ -104,11 +131,13 @@ export class YtDlpResolver implements Resolver {
   /** Resolved once at construction — `canHandle` runs on every request and must not do I/O. */
   readonly #binaryPath: string | undefined;
   readonly #enabled: boolean;
+  readonly #fetch: typeof globalThis.fetch | undefined;
 
   constructor(options: YtDlpResolverOptions = {}) {
     const env = options.env ?? process.env;
     this.#enabled = options.enabled ?? env["ENABLE_YTDLP_RESOLVER"] !== "false";
     this.#binaryArgs = options.binaryArgs ?? [];
+    this.#fetch = options.fetch;
     const requested = options.binaryPath ?? env["YTDLP_PATH"] ?? "yt-dlp";
     this.#binaryPath = this.#enabled ? findExecutable(requested) : undefined;
   }
@@ -181,8 +210,65 @@ export class YtDlpResolver implements Resolver {
     if (probe.variants.length === 0) {
       throw new AppError("NO_MEDIA_FOUND", undefined, { details: { url: url.href } });
     }
-    return probe;
+
+    const fetchImpl = this.#fetch;
+    if (fetchImpl === undefined) return probe;
+
+    // dl-30: `tbr` on an adaptive format is the manifest's declared bandwidth,
+    // which is a ceiling rather than an average. Weigh one rendition against it.
+    const variants = await measureVariantSizes(
+      probe.variants,
+      createFetchSizeProbe({
+        fetch: fetchImpl,
+        headers: probe.requestContext.headers,
+        signal: options.signal,
+      }),
+      {
+        isLive: probe.isLive,
+        segmentsByUrl: fragmentSegments(info),
+        signal: options.signal,
+        ...optional({ durationSec: probe.durationSec }),
+      },
+    );
+    return { ...probe, variants };
   }
+}
+
+/**
+ * Segment lists yt-dlp already handed us, keyed by the format URL they belong
+ * to — which is how a variant's `url` and its `audioUrl` both find theirs.
+ *
+ * A `http_dash_segments` format arrives with every fragment and its duration
+ * enumerated, which is exactly what the sampler needs and what our own DASH
+ * parser cannot produce — it does not expand `SegmentTemplate`. A format whose
+ * fragments carry no durations is left out: without them the bytes weigh
+ * nothing.
+ */
+export function fragmentSegments(info: YtDlpInfo): Map<string, MediaSegment[]> {
+  const byUrl = new Map<string, MediaSegment[]>();
+  for (const format of info.formats ?? []) {
+    const fragments = format.fragments;
+    if (fragments === undefined || fragments.length === 0) continue;
+
+    const base = format.fragment_base_url ?? format.url;
+    const segments: MediaSegment[] = [];
+    for (const fragment of fragments) {
+      const duration = fragment.duration;
+      if (duration === undefined || duration <= 0) continue;
+      const href =
+        fragment.url ??
+        (fragment.path === undefined || base === undefined
+          ? undefined
+          : resolveUrl(fragment.path, base));
+      if (href === undefined || href === "") continue;
+      segments.push({ url: href, durationSec: duration });
+    }
+
+    if (segments.length > 0 && format.url !== undefined && format.url !== "") {
+      byUrl.set(format.url, segments);
+    }
+  }
+  return byUrl;
 }
 
 function firstEntry(parsed: unknown): YtDlpInfo | undefined {

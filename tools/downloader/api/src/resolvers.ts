@@ -35,7 +35,10 @@ export interface BuildRegistryOptions {
   logger: AppLogger;
   /**
    * Redirect-checking fetch. Handed to the direct resolver, which follows
-   * redirects to manifests and would otherwise be an SSRF hole.
+   * redirects to manifests and would otherwise be an SSRF hole, and to the
+   * yt-dlp resolver, which uses it only to weigh a rendition (dl-30) — a
+   * request to a URL an extractor produced, which is exactly the kind the guard
+   * exists for.
    */
   fetchImpl: GuardedFetch;
 }
@@ -66,10 +69,10 @@ export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
     // No `binaryPath` key at all when unset: the resolver falls back to
     // `YTDLP_PATH` and then to `yt-dlp` on `PATH`, and passing an explicit
     // undefined would defeat that.
-    ytdlp =
-      config.ytdlpPath === undefined
-        ? new YtDlpResolver()
-        : new YtDlpResolver({ binaryPath: config.ytdlpPath });
+    ytdlp = new YtDlpResolver({
+      fetch: options.fetchImpl,
+      ...(config.ytdlpPath === undefined ? {} : { binaryPath: config.ytdlpPath }),
+    });
     resolvers.push(ytdlp);
   }
 

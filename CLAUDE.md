@@ -192,9 +192,15 @@ merged.
 **Commits are conventional, and it is enforced.** `type(scope): subject`, with the
 scope naming a tool (`downloader`, `planner`) or `core` · `repo` · `ci` · `deps`,
 and the ticket id in the subject: `fix(downloader): stop re-probing in place
-(dl-9)`. `feat` and `fix` require a scope — they are the two that reach a
-changelog. `.githooks/commit-msg` rejects a bad one as you write it, and the rule
-lives in `scripts/commit-message.mjs`.
+(dl-9)`. **Anything that reaches a changelog requires a scope**, because a
+changelog line that does not say which tool it belongs to is noise. That set is
+not written down anywhere: `scripts/commit-message.mjs` computes it from the
+types that are not `hidden` in `release-please-config.json`, plus anything
+breaking. So a type added to that config without `hidden` starts requiring a
+scope the day it is added, with nothing here to update — which is the point, since
+the hand-written list this replaced had been wrong about `perf` and `revert` for
+as long as it existed. `.githooks/commit-msg` rejects a bad message as you write
+it.
 
 **The pull request title is the message that lands.** This repo squash-merges, so
 a branch's own commits are working notes and the title is the changelog line —
