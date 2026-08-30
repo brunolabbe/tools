@@ -15,6 +15,31 @@ That is the whole point of the format. Splitting a plan across a roadmap row, a
 brief and a status entry means three places to keep in sync by hand, and they
 drift the moment anything interesting happens.
 
+## What does not get a ticket
+
+**A ticket carries a decision or a reproduction.** When the work in front of you
+has neither left — a typo, a stale sentence, a dead link, a rename the current
+change already implies, a thing this branch has just made free — do it in the
+commit at hand instead of filing. The commit convention does not require a ticket
+id (`scripts/commit-message.mjs` accepts a subject without one), so nothing
+structural is forcing the file.
+
+The arithmetic is not close. Folding it in costs the rest of a session that
+already holds the context. Filing costs an intake slot, a dispatch, a gate, a pull
+request and a merge, paid later by someone with none of it.
+
+**Size is not the test**, and reading it as one gets the inverse wrong: a one-line
+fix for a _defect_ is worth a ticket, because the reproduction is the deliverable
+and the fix may not be. So is anything whose approach is still open, and anything
+reaching into a tool you are not currently working in. The test is whether
+anything is left to decide.
+
+**A ticket you fold in is marked `done`, never deleted** — in the commit that
+earns it, with its Log rewritten to say it was folded in and why that became
+possible. The brief usually records why the work became affordable, which is not
+derivable from a one-line diff, and gate records on the branch may already cite
+that file's id and frontmatter.
+
 ## The file
 
 `tools/<tool>/docs/work/<id>-<slug>.md`
@@ -74,6 +99,12 @@ wrong in the brief. This is what a future reader actually needs.
 
 The id prefix exists so `dl-8` means something in a commit message and in
 conversation, where the directory is not there to disambiguate it.
+
+**The next free id is the union of two lists, not one.** `ls` the `work/`
+directory _and_ the ids named in existing ticket Logs and gate records: an id can
+be spoken for before its file exists — promised in another ticket's Log as the
+follow-up it filed — and reusing one silently attaches new work to an old
+conversation. Take the highest of both and add one.
 
 `note` is the one editorial field, and it should stay rare: a title that reads
 badly in a table column is usually a title worth fixing.
@@ -148,10 +179,13 @@ is to make the state of the thing legible, not to decide it.
 
 The procedure is a skill —
 [`.claude/skills/review-ticket`](../.claude/skills/review-ticket/SKILL.md),
-invoked as `/review-ticket <id>`. It reads the ticket, delegates defect-hunting
-to the `code-review` skill rather than repeating it, and spends its own effort on
-the two things a general-purpose reviewer cannot know: what this change was
-supposed to do, and the rules in this repo's `CLAUDE.md` files that each exist
+invoked as `/review-ticket <id>`, and the reviewer it dispatches is the
+[`ticket-reviewer`](../.claude/agents/ticket-reviewer.md) subagent. It reads the
+ticket, runs a defect hunt — delegated to `code-review` when the skill is invoked
+in a main session, run in its own context when it is the subagent, which has no
+`Skill` tool for the purpose — and spends the rest of its effort on the two things
+a general-purpose reviewer cannot know: what this change was supposed to do, and
+the rules in this repo's `CLAUDE.md` files and `.claude/rules/` that each exist
 because something once went wrong.
 
 **The model that wrote the code does not gate it.** The skill dispatches a

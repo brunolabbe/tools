@@ -1,6 +1,7 @@
 ---
 name: review-ticket
-description: Review finished work against its ticket and record a gate on the ticket file. Use when work on a ticket is done and someone asks to review it, check it against its acceptance, or decide whether it can land — "review pl-16", "is dl-9 ready", "gate this before I open the PR". Checks acceptance-to-test traceability and this repo's own invariants, which a generic code review does not know about; delegates defect-hunting to the code-review skill rather than repeating it.
+description: Review finished work against its ticket and record a gate on the ticket file. Use when work on a ticket is done and someone asks to review it, check it against its acceptance, or decide whether it can land — "review pl-16", "is dl-9 ready", "gate this before I open the PR". Checks acceptance-to-test traceability and this repo's own invariants, which a generic code review does not know about, rather than repeating a generic defect hunt.
+allowed-tools: Bash(npm run status*) Bash(git diff*) Bash(git log*) Bash(git show*) Bash(gh pr view*) Bash(gh pr diff*) Bash(gh run list*)
 ---
 
 # Reviewing a ticket
@@ -56,20 +57,32 @@ for a job whose whole content is holding a ticket, a diff and a page of
 invariants in mind at once, and a gate they produce is worth less than no gate,
 because it still reads as PASS.
 
-Dispatch with the Agent tool — `subagent_type: general-purpose`, `model:` from
-the table — and hand it the ticket id, the diff range, and the steps below.
+Dispatch with the Agent tool — `subagent_type: ticket-reviewer`, `model:` from the
+table — and hand it the ticket id, the sha under review, and the diff range. The
+agent definition at `.claude/agents/ticket-reviewer.md` already carries the rest:
+it preloads this skill, has no `Write`, `Edit`, `Agent` or `Skill` tool, and gets
+its own worktree. Those tool omissions are what make "returns text, commits
+nothing" and "runs the defect hunt itself" facts rather than requests.
 
-**If the work is in a worktree, the first instruction in the prompt is to enter
-it**: call `EnterWorktree` with `path: <the worktree path>`, before anything
-else, and stop and say so if that fails. A subagent's working directory is pinned
-at launch and it will not go looking. One that skips this reviews whatever tree
-it started in — normally the default checkout, sitting on `main`, where the diff
-does not exist — and that does not fail loudly. It produces a fluent, correctly
-formatted gate that marks every acceptance line `unproven`, which reads exactly
-like a review that ran and found the work wanting. Nothing downstream catches it:
-the section still names a range and still cites the ticket.
+**Do not tell it to call `EnterWorktree`.** An earlier version of this page said
+the reviewer's first instruction should be `EnterWorktree` with the builder's
+worktree path. That is wrong and it stalls: a subagent's cwd is pinned at launch,
+`EnterWorktree` by name is refused outright, and by path it moves only write
+access while the Bash sandbox stays pinned to the parent's tree, refusing every
+command including `pwd`. Two agents launched that way stalled, and one concluded
+it should work in the shared checkout instead. The agent has `isolation: worktree`
+and reaches the branch with `git fetch origin && git checkout --detach <sha>`.
 
-**Hand it the ticket id, the worktree path and the diff range — not your reading
+**The failure that paragraph was guarding against is real, so keep guarding it**:
+a reviewer that reads the wrong tree does not fail loudly. It produces a fluent,
+correctly formatted gate that marks every acceptance line `unproven`, which reads
+exactly like a review that ran and found the work wanting, and nothing downstream
+catches it — the section still names a range and still cites the ticket. That is
+why the agent is told to print `git log --oneline -1` and a `--stat` before
+reviewing anything: name the sha you gave it in the report, and check it came
+back.
+
+**Hand it the ticket id, the sha and the diff range — not your reading
 of the ticket.** A caller who summarises the acceptance into the prompt anchors
 the reviewer to its own reading of what the ticket asked, which is a quieter
 version of the thing this whole split exists to prevent. The reviewer opens the
@@ -123,9 +136,17 @@ is the caller's alone.
    PR's diff if given one. Say which range you reviewed — a gate against an
    unstated range cannot be reproduced.
 
-3. **Hunt defects with the existing skill.** Invoke `code-review` at `level`
-   against that range. Do not re-run its analysis yourself — that is the one
-   thing this step delegates.
+3. **Hunt defects.** How depends on where you are running, and the two are not
+   interchangeable:
+
+   - **Invoked directly in a main session** (`/review-ticket pl-16`): invoke
+     `code-review` at `level` against that range and do not re-run its analysis
+     yourself. That is the one thing this step delegates.
+   - **Running as the `ticket-reviewer` subagent**: run the hunt **yourself**, in
+     your own context, to the same depth. You have no `Skill` tool, by design —
+     dispatch belongs to whoever dispatched you, and nesting it hides cost and
+     makes the agent tree unreadable. Record the range and the depth you used
+     where the header below says `code-review at <level>`.
 
    **Read what its finders actually returned, not only the summary it hands
    back, and account for every finding.** Carrying is a decision per finding, not
@@ -264,6 +285,15 @@ is the caller's alone.
    ask twice — the second time "or you are saying it's already fixed?" — to learn
    which of the two acts had taken place.
 
+### A shape-level finding goes onto the siblings too
+
+When a finding is not about this change but about a **shape** the change shares
+with its siblings — the same wrong assumption in three resolvers, one rule
+restated in four ticket briefs — it belongs in the siblings' `## Build` sections,
+in the same pull request as the fix. Naming it only in this ticket's `## Review`
+records it where nobody building the sibling will read it, and the next agent
+rebuilds the defect from the brief that still describes it.
+
 ## Severity and the gate
 
 | Severity | Means                                                                    |
@@ -318,8 +348,8 @@ no severity, and it never changes the verdict.
 **The `findings` line is required even when nothing was dropped.** `2 returned,
 2 carried, 0 dropped` looks like a formality and is the opposite: it is the only
 line that separates a gate whose defect hunt found nothing from one whose defect
-hunt never ran. The header above hard-codes the words *code-review at medium*, so
-a reviewer that skipped step 3 entirely still writes them, and every other part
+hunt never ran. The header above names the hunt and its depth, so a reviewer that
+skipped step 3 entirely still writes them, and every other part
 of the section would look exactly the same. The count also has to reconcile
 against the bullets, which is what makes a merged bullet safe to write.
 
