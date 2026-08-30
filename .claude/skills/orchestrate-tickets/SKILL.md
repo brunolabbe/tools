@@ -45,7 +45,13 @@ you are there.
    - **`git fetch` again immediately before dispatch.** `main` moved between the
      status call and the dispatch, landing a commit that deleted machinery three
      builder prompts went on to reference. Harmless that time; it need not be.
-2. **Ask which** — never pick the batch yourself. See _Decisions_.
+2. **Map the seams, then ask which** — never pick the batch yourself. Dispatch
+   `subagent_type: "seam-mapper"` over the candidate ids: it reads every ticket in
+   full and returns a collision matrix instead of the tickets. Reading them
+   yourself costs the one context that must survive the batch — measured at
+   **~27,800 est. tokens for nine candidates** on 2026-08-30. Then bring the user
+   the batches that break up the collisions. See _Decisions_ and
+   [reference/concurrency.md](reference/concurrency.md).
 3. **Dispatch builders** — `subagent_type: "builder"`, one per ticket. The agent
    definition carries the worktree, the setup order and the scope rules; your
    prompt carries the ticket. See [reference/dispatching.md](reference/dispatching.md).
