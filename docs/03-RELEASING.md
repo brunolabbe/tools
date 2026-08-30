@@ -59,21 +59,38 @@ which is the actual specification — this table is a summary of it.
 | Type                                                      | Version                            | In the changelog |
 | --------------------------------------------------------- | ---------------------------------- | ---------------- |
 | `feat`                                                    | minor                              | yes              |
-| `fix`                                                     | patch                              | yes              |
-| `perf`, `revert`                                          | none                               | yes              |
-| `refactor`, `docs`, `test`, `build`, `ci`, `chore`        | none                               | no               |
+| `fix`, `perf`, `revert`                                   | patch                              | yes              |
+| `refactor`, `docs`, `test`, `build`, `ci`, `chore`        | none — the release is skipped      | no               |
 | any of the above with `!`, or a `BREAKING CHANGE:` footer | minor, while a tool is below 1.0.0 | yes              |
 
-Only `feat`, `fix` and a breaking change move a version — that is release-please's
-rule, not a choice made here. **A `perf:` commit on its own therefore releases
-nothing**; it is listed in the changelog of whatever release comes next. If a
-performance fix needs to ship by itself, it is a `fix`.
+**Two decisions, made by different code, and reading them as one is how this page
+used to be wrong.** _Whether there is a release at all_ is decided by the
+`hidden` flags in [`release-please-config.json`](../release-please-config.json)'s
+`changelog-sections`: release-please renders the changelog entry first and skips
+the release when it comes out empty — `No user facing commits found … -
+skipping` — which happens exactly when every commit in scope has a `hidden` type.
+_How big the bump is_ is decided afterwards, and only two cases are named there,
+a breaking change and `feat`. **Everything else falls through to a patch.** `fix`
+is not special-cased; it reaches its patch by the same fall-through as `perf` and
+`revert` do.
+
+So **a `perf:` or a `revert:` commit on its own opens a release pull request and
+bumps the patch version**, under `### Performance` or `### Reverts`. It does not
+wait for the next release, and if a performance fix needs to ship by itself it
+can stay a `perf`. **Read the releasing set off the config's `hidden` flags
+rather than off this table** — a type added to `changelog-sections` without
+`hidden` releases the day it is added. The runs are under
+[What `perf`, `revert` and the five assumed types do](#what-perf-revert-and-the-five-assumed-types-do).
 
 **Scopes** are the tool directories — `downloader`, `planner` — plus `core`,
 `repo`, `ci` and `deps`. The list is read off `tools/` at runtime, so a new tool
-is a valid scope the moment its directory exists. `feat` and `fix` require one:
-they are the two that reach a changelog, and a changelog line that does not say
-which tool it belongs to is noise.
+is a valid scope the moment its directory exists. `feat` and `fix` require one,
+because a changelog line that does not say which tool it belongs to is noise.
+That requirement is **narrower than the set that reaches a changelog**: `perf`
+and `revert` reach one too, and `SCOPE_REQUIRED` in
+[`scripts/commit-message.mjs`](../scripts/commit-message.mjs) does not ask them
+for a scope. No `perf` or `revert` commit exists here yet, so no unscoped
+changelog line has been cut.
 
 **There is no `security` type**, although this repo's history has one. A
 security fix is a `fix` — it should bump the patch version and appear in the
@@ -175,11 +192,11 @@ scope names that tool (`docs(planner)`) or not (`docs(repo)`).
 So **a cross-tool documentation annotation rides in a pull request whose title
 carries a `hidden` type**. That is the whole constraint, and it is the test
 release-please applies rather than a list to memorise: **is the title's type
-`hidden` in `changelog-sections`?** Where it is — any `docs`, `refactor`, `test`,
-`build`, `ci` or `chore` title — the annotation is free and goes in that same
-pull request. Where it is not, which today means `feat`, `fix`, `perf` and
-`revert`, the annotation is its own pull request, and that second pull request is
-the price.
+`hidden` in `changelog-sections`, and is the title free of `!`?** Where both
+hold — any `docs`, `refactor`, `test`, `build`, `ci` or `chore` title — the
+annotation is free and goes in that same pull request. Where they do not, which
+today means `feat`, `fix`, `perf`, `revert` and anything breaking, the
+annotation is its own pull request, and that second pull request is the price.
 
 **The scope is the usual convention, not part of the constraint.** Name what the
 pull request is about: `docs(planner): …` when annotating a planner ticket is
@@ -196,18 +213,76 @@ a tool** are not telling you to: this repo squash-merges, so the title is the on
 and it carries every path in the branch. Only a second pull request separates the
 paths.
 
-Only two types were ever run — `fix` and `docs`, across three runs.
-`release-please-config.json` hides six types,
-so the other **five** — `refactor`, `test`, `build`, `ci`, `chore` — are read off
-the config and assumed to behave like `docs`, not measured.
+### What `perf`, `revert` and the five assumed types do
 
-`perf` and `revert` are not `hidden`, so the "no user facing commits" skip above
-is the one thing that can be said about them: it does not apply, and they reach
-whatever release-please does next. What that is was not run. **This does not
-contradict "a `perf:` commit on its own therefore releases nothing" further up** —
-that sentence is about the version bump, this one is about the skip, and the case
-where the two meet is untested. It is filed as
-[repo-10](./work/repo-10-measure-the-unmeasured-types.md).
+**Two things re-running that harness costs, learned for repo-10.** The token is
+not optional even though this repository is public — release-please looks the
+previous releases up over **GraphQL**, and GitHub's GraphQL API answers an
+unauthenticated request with `401 Bad credentials`. The REST half succeeds
+without one, so the run gets as far as `Fetching releases with cursor undefined`
+before it fails, and `--local` does not help: `LocalGitHub.releaseIterator`
+delegates straight back to the API. **`.claude/settings.json` denies
+`gh auth token`, so an agent cannot run the harness end to end at all** — that is
+not a spelling to route around. And the scratch branch has to be cut from the
+**last release commit**, not from `main`: off `main` every unreleased commit is
+in scope and `Considering: 1 commits` becomes `Considering: 18 commits`. Those
+were the same commit when repo-7 ran this, and stopped being so as soon as work
+landed.
+
+The three runs above are end-to-end `--dry-run`s. **The runs below are not, and
+the difference comes first because it bounds what they are worth.** repo-10 could
+not reach GitHub, for the reason just given, so what it ran instead is
+release-please 17.11.1's **own** decision code, offline, against a synthetic
+single-file commit: `parseConventionalCommits`, then the two branches of
+`BaseStrategy.buildReleasePullRequest` — `changelogEmpty(buildNotes(…))` for the
+skip and `DefaultVersioningStrategy.bump` for the version — with this
+repository's `changelog-sections` and `bump-minor-pre-major`. `Simple` overrides
+neither, and `postProcessCommits` is the identity, so nothing between the parse
+and those two calls was skipped.
+
+**Its warrant is that it reproduces the runs that were real.** Given
+`fix(repo): scratch measurement, annotate a planner ticket only (repo-7)` it
+returns `0.4.1` under `### Fixes` with the same changelog line as the first run
+above, and given the same commit as `docs(planner): …` it returns the skip. It is
+still one step short of a dry run, and any of these worth acting on is worth
+re-running with a token.
+
+| One commit, one file under `tools/planner/`                | Skipped? | 0.4.0 →   | Section       |
+| ---------------------------------------------------------- | -------- | --------- | ------------- |
+| `fix(repo): …` — reproduces the first run                  | no       | 0.4.1     | `Fixes`       |
+| `docs(planner): …` — reproduces the second                 | **yes**  | —         | —             |
+| `perf(planner): …`                                         | no       | **0.4.1** | `Performance` |
+| `revert: …`                                                | no       | **0.4.1** | `Reverts`     |
+| `feat(planner): …`                                         | no       | 0.5.0     | `Features`    |
+| `chore(planner)!: …`                                       | **no**   | 0.5.0     | `Chores`      |
+| `refactor` · `test` · `build` · `ci` · `chore`, each alone | **yes**  | —         | —             |
+
+**`perf` and `revert` release.** They are not skipped, they bump the patch, and
+they open a release pull request of their own. The two sentences this page used
+to carry about `perf` were not describing two behaviours that coexist: the
+version is computed on **every** run, the `docs` one included, and the skip fires
+afterwards and throws it away. "Declines to skip but declines to bump" is not a
+state release-please has — not skipping _is_ releasing. The older sentence was
+the wrong one and is gone.
+
+**The five that were assumed now match `docs`.** `refactor`, `test`, `build`,
+`ci` and `chore` each skip on their own, as reading `hidden` off the config
+predicted — measured here rather than inferred, at the evidence level this
+section carries.
+
+**A `hidden` type still releases if it is breaking.** `chore(planner)!:` is not
+skipped: the `⚠ BREAKING CHANGES` heading makes the changelog non-empty by
+itself, and the bump is a minor. Nothing in this repository has ever been written
+that way; it is recorded because the run turned it up, and it is why the test
+above is `hidden` **and** no `!`.
+
+**Still unmeasured, and named rather than folded in:** nothing in this section
+has been through an end-to-end `release-pr --dry-run`. Four decision points sit
+between the offline harness and a real run — the commit walk from the target
+branch, the release lookup, the path filter that assigns a commit to a package,
+and `Manifest.buildPullRequests` itself. The first three are exercised by the
+three real runs above and are not type-dependent, which is the argument for
+believing this section; it is an argument, not a run.
 
 ### The one case that needs a footer
 

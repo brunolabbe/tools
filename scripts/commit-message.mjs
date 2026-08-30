@@ -24,9 +24,15 @@ import { fileURLToPath } from "node:url";
  * The types release-please understands, plus the ones that describe work it
  * should ignore.
  *
- * `feat` and `fix` are the only two that move a version on their own — minor
- * and patch respectively — so the taxonomy is really "does this change what a
- * user of the tool gets". Everything else lands silently and is fine.
+ * Four of them move a version on their own, not two: the four that are **not**
+ * `hidden` in `release-please-config.json`. `feat` bumps the minor; `fix`,
+ * `perf` and `revert` each bump the patch, because release-please names only
+ * `feat` and a breaking change and falls through to a patch for everything it
+ * did not skip. The other six are `hidden`, and a commit set made only of those
+ * is skipped outright — that is what "lands silently" means and it is the
+ * `hidden` flag that decides it, not this list. Measured for repo-10; the runs
+ * are in docs/03-RELEASING.md. So the taxonomy is really "does this change what
+ * a user of the tool gets".
  *
  * There is no `security` type, although this repo's history has one. A security
  * fix is a `fix`: it should bump the patch version and appear in the changelog,
