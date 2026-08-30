@@ -37,9 +37,9 @@ $ grep -n "ProvenanceNote" tools/planner/web/src/plan/PlanView.tsx
 `ProvenanceNote` — the component that renders a `Provenance`'s `sources` as
 links, with title and date — is wired up for a candidate's own provenance and
 its cost's, and nothing else. `PlanItem.travelFromPrevious`
-(`tools/planner/contract/src/plan.ts:114`) is a separate `ItemTravel` union
+(`tools/planner/contract/src/plan.ts:116`) is a separate `ItemTravel` union
 whose `measured` member carries its own `provenance: Provenance`
-(`tools/planner/contract/src/travel.ts:95`) — the **same** `Provenance` type
+(`tools/planner/contract/src/travel.ts:62`) — the **same** `Provenance` type
 `ProvenanceNote` already knows how to render — and nothing in `PlanView.tsx`
 reads it. Every geocoded and routed leg the tool measures carries a `Source`
 citing OpenStreetMap that no user of the plan ever sees.
@@ -177,3 +177,19 @@ either branch did anything wrong. Told to the coordinator directly, since
 
 **Not done here**: nothing about `pl-34` (the geocoder query issue) or any
 other open pl-30-branch ticket. This entry closes pl-35 alone.
+
+**2026-08-29 — Gate D found two stale citations in the Why section above, both
+now fixed.** `plan.ts:114` was `plan.ts:116`, and `travel.ts:95` — which lands
+mid-comment above an unrelated declaration — was `travel.ts:62`. Both
+verified independently against `15162df` before fixing. Worth naming the
+mechanism, because it is not carelessness and it will recur: this ticket file
+was _added_ in a commit that touched neither `plan.ts` nor `travel.ts`, so it
+was never on either file's own re-derive list — the citations were correct
+when the original session on pl-30's branch wrote them, and drifted from
+edits to those two files earlier in _this_ branch's life, made before this
+file ever existed on it. A citation can go stale from a change on a branch
+that never touches the file carrying it, as long as the file is added after
+the change rather than alongside it — the edit-list and the re-derive-list
+are not the same list, and nothing enforces that every citation gets
+re-walked when a new document arrives late to a branch that already moved
+the things it points at.

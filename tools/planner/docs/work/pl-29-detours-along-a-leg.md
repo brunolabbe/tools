@@ -456,6 +456,83 @@ did not re-litigate Gates A or B, and did not redo their mutation sweeps
 beyond confirming where the three cited survivors' code now lives. It did not
 run e2e or the image gate.
 
+### Gate D — 2026-08-29
+
+**Gate: PASS** · `15162df` · scope: pl-35's fold-in (the `TravelSources`
+component, its dedup, its tests) and the ticket file itself.
+
+**What it verified:**
+
+- **Reproduced the dedup mutation work independently** rather than trusting
+  the Log's account of it: confirmed that salting the map key defeats
+  deduplication and fails the **count** assertion —
+  `expected [...] to have a length of 1 but got 2` at
+  `web/test/plan-view.test.tsx:640` — and not merely the incidental React
+  duplicate-key warning that mutation also produces as a side effect. A test
+  that only watched the console for that warning would have been checking a
+  symptom rather than the behaviour.
+- Confirmed removing the `<TravelSources days={revision.days} />` wiring line
+  times out the positive test on `findByText`, matching the builder's own
+  mutation record.
+- **Confirmed the rendered sentence carries a real, clickable link** to
+  `https://www.openstreetmap.org/copyright` — the ODbL attribution page
+  itself, not an opaque label or a dead anchor — which is what the ODbL
+  obligation pl-35 exists for actually requires.
+- Confirmed reusing pl-29 Build step 6's exact sentence ("is something we
+  read at a source — reading it is not recommending it") rather than writing
+  new copy for this case avoids a second wording that could drift from the
+  first — the placement reasoning (one deduplicated plan-wide list, not one
+  block per leg or per day) stands as given.
+
+**Findings:**
+
+- **F1 · low · fixed** — `pl-35-travel-source-unattributed.md`'s Why section
+  cited `contract/src/plan.ts:114` and `contract/src/travel.ts:95`. At
+  `15162df` both are wrong: `travelFromPrevious: ItemTravel | null;` is at
+  `plan.ts:116`, and `provenance: Provenance;` is at `travel.ts:62` — line 95
+  there lands mid-comment above an unrelated declaration. Independently
+  confirmed `travel.ts:62` before accepting the finding. Neither file is
+  touched between `446b12c` and `15162df`, so the citations drifted from
+  contract edits earlier in the branch's life and were never re-resolved when
+  the ticket document itself was added later — the doc's own commit touched
+  neither file, so it was on no file's re-derive list. Both citations
+  corrected; the mechanism is recorded in pl-35's own Log rather than only
+  here, since it is the transferable lesson and pl-35's Log is where the next
+  reader of that file will look.
+- **F2 · med · filed, not folded** — traced, not assumed, two further
+  attribution gaps of the same shape as pl-35 but one step earlier, where a
+  `Source` is built and then discarded before anything downstream could store
+  it:
+  - `api/src/runs/travel.ts:296` — `located.set(each.key,
+outcome.value.coordinates)` keeps a geocoded place's coordinates and
+    drops `outcome.value.source`; `located` is typed `Map<string,
+Coordinates>`, so there is no field for the source to survive in even if
+    the line kept it.
+  - `agent/src/providers/scripted-fan-out.ts:98` — every candidate is
+    stamped `provenance: MODEL_ASSERTED` regardless of whether it was written
+    from a discovered `Find`, and nothing anywhere copies `Find.sources` onto
+    the `Candidate` a specialist proposes from one.
+
+  **Disposition: filed as [pl-36](./pl-36-more-osm-attribution-gaps.md),
+  deliberately not folded into this branch.** Two reasons, both checked
+  rather than assumed: neither file is touched by
+  `origin/main...origin/pl-29-detours-along-a-leg`, unlike pl-35 where
+  `Provenance.tsx` was already open for an adjacent reason — there is no
+  adjacency to fold into here. And the discovery half carries a real,
+  undecided taxonomy question — whether a candidate proposed _from_ a `Find`
+  is `grounded` or `model-asserted` — that pl-29 Build step 6 deliberately
+  did not answer for the discovered-POI case one layer up, and answering it
+  by accident inside an unrelated gate-fix commit would be exactly the kind
+  of taxonomy decision this ticket has repeatedly said is not the builder's
+  to make silently. pl-36's brief carries both traces as reproduction, names
+  the question, and does not pick an answer.
+
+**What this gate did not do:** it did not re-review anything Gates A, B or C
+already settled. It did not touch the known add/add conflict with
+`origin/pl-30-geocoder-fixtures` — expected, and explicitly not this gate's
+or this branch's to resolve, since that branch rebases onto `main` after
+`#101` merges regardless. It did not run e2e or the image gate.
+
 ## Log
 
 **2026-08-29 — built, against a base with no Docker, no PostGIS and no route to
@@ -982,3 +1059,33 @@ $ npx vitest run tools/planner/itinerary/test/purity.test.ts
 
 Same figures as the prior round, as expected — nothing in `tools/planner/api`,
 `agent`, `contract`, `itinerary` or `web` changed this round.
+
+**2026-08-29 — Gate D round: two stale citations fixed in pl-35, pl-36 filed,
+no other code changed.** Gate D reviewed pl-35's fold-in and found no defect
+in the rendering or the tests — see `## Review`. Its one finding against this
+branch was two stale `file:line` citations in pl-35's own ticket, fixed
+there (and the mechanism recorded in pl-35's Log, since that is where the
+next reader of that file looks). Its second finding — two further OSM
+sources built and dropped before anything could attribute them — is filed as
+[pl-36](./pl-36-more-osm-attribution-gaps.md) rather than folded in, because
+neither file it touches is open on this branch and the discovery half of it
+carries an undecided `Provenance` taxonomy question this branch has no
+standing to answer inside an unrelated commit.
+
+```
+$ npm run build   → exit 0
+$ npm run check   → exit 0
+$ npm test -- --project planner
+ Test Files  53 passed (53)
+      Tests  759 passed (759)
+$ npm test        (repo-wide)
+ Test Files  107 passed (107)
+      Tests  1596 passed (1596)
+$ npx vitest run tools/planner/itinerary/test/purity.test.ts
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+```
+
+Same test figures as the pl-35 fold-in round — this round's diff is entirely
+inside `tools/planner/docs/work/`, so nothing in `src` or `test` changed and
+none of these numbers were expected to move.
