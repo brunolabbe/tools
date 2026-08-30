@@ -3,7 +3,7 @@ id: repo-12
 tool: repo
 title: The board shows merged work as ready, and nothing catches it
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -77,3 +77,72 @@ mentioned one_, and that is the decision this ticket carries.
   to check is a real decision with wrong answers.
 - `repo-5` was tested against the naive heuristic and is a false positive. It is
   named in _Done when_ so the implementation cannot pass without handling it.
+
+**2026-08-30 — built. The signal is the `## Review` section, and the check is
+narrower than this brief asked for.** `scripts/status.mjs` gained
+`hasGateRecord` and `reviewedButReady` beside `danglingDependencies`, wired into
+`main`'s one `problems` list — so `--json` exits 1 through the exit code
+`ci.yml`'s `check` job already reads, every other view prints the warning on
+stderr beside the table, and `--json`'s payload carries it as
+`kind: "reviewed-but-ready"`. `readTickets` now returns one field read from the
+body rather than the frontmatter, `reviewed`. Eleven cases in
+`scripts/test/status.test.ts`, and each was proven by mutation rather than by a
+green run: reverting the check to `OPEN.has(status)`, removing the fence
+handling, and dropping the wiring out of `main` each turn exactly the cases
+named for them red.
+
+**Step 1's decision, with the measurements.** Over the 11 open tickets on `main`
+at `1d420b7`:
+
+- _The ticket file's git history_ (`--diff-filter=A`) flags `dl-16` and `pl-2`:
+  two false positives in 11, both genuinely open, both edited after creation by
+  another ticket's pull request — which is the convention that a shape-level
+  review finding lands on the sibling tickets in the same PR as the fix, not an
+  accident. It is also blind exactly where it must run: `ci.yml`'s `check` job
+  has no `fetch-depth`, so it gets a depth-1 checkout with no history, and a
+  history-based check would pass there by seeing nothing. **The two candidate
+  signals in step 1 therefore disagree on real tickets, and the cheaper one is
+  the wrong one.**
+- _The `## Review` section_ flags none of the 11, and catches `pl-29` at its
+  merge commit `98b5e61` — reproduced by extracting that tree with `git archive`
+  and running the CLI at `--root`. It needs no git, no network and no `gh`.
+  It would also have gone red on #102's own branch, before the merge.
+
+**Where the brief was wrong: `ready` or `in-flight`.** _Done when_ asks for both,
+and the wider rule has a false positive the brief did not know about. Running the
+check over the whole board at `98b5e61` returned **two** hits, not one: `pl-29`,
+and `pl-28`, which had landed as a partial in #74 with two gate records that each
+wrote "**`status` stays `ready`**" and sat on the ready board for seven days
+until #104 closed it. That makes `pl-28` a third instance of this defect — but it
+also means that flagging `in-flight` would leave a landed partial no correct
+status at all, since `done` was a lie while two of its acceptance rows read
+`unproven`. So the check fires on `ready` only. That is the claim nothing
+disputes — a gate record means the work was picked up, and `ready` means nobody
+has — and it is where the harm is, because `--ready` is the board and never
+offers an `in-flight` ticket. **Note for the reviewer: this is a deliberate
+miss against _Done when_'s first line, not an oversight.**
+
+**What it cannot see.** A ticket can finish without a gate record — `pl-16` is
+`done` and carries none, and `pl-5`'s Log records that finding being raised and
+dropped — so the check is a floor, not a proof, and the inverse (`done` implies a
+gate record) would be false today. Nothing here reads a pull request, merged or
+otherwise; "demonstrably merged" is inferred from the ticket's own body, which is
+what makes it work in a shallow CI checkout.
+
+**Folded in rather than deferred:** `docs/01-TICKETS.md` said a dangling
+`depends_on` was "the one exception" to the strict parser, which this change
+falsifies — it is now a two-item list naming both checks. `ci.yml`'s comment
+listing what its `--json` step catches gained the new case, and the reason a
+history-based check could not have lived there.
+
+**An open decision, for whoever can ask.** Should a ticket that lands as a
+partial be allowed to sit at `ready`? Two gates said yes on `pl-28`; this check
+says no and points at `in-flight`. If the answer is that `ready` must stay legal
+for a partial, the exemption needs somewhere to live that is not prose — a
+frontmatter field is the only candidate, and that is a ticket-format change, so
+it was not made here.
+
+**Gates:** `npm run check` and the full `npm test` pass; `node scripts/status.mjs
+--json` over the real board exits 0. No container, e2e or CI run was exercised —
+the depth-1 claim about `ci.yml` is read off the workflow file, not observed in
+Actions.

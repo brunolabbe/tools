@@ -97,8 +97,14 @@ jobs:
       - run: npm run check
       # Parses every ticket, and fails by file and line on anything it does not
       # understand — an unknown field, a status outside the taxonomy, an id that
-      # disagrees with its filename, a `depends_on` pointing at nothing. Nothing
-      # else in CI reads them.
+      # disagrees with its filename, a `depends_on` pointing at nothing, a
+      # ticket still `ready` with a gate record already on it. Nothing else in
+      # CI reads them.
+      #
+      # **It reads the checkout, not the history.** There is no `fetch-depth`
+      # above, so this job gets a depth-1 clone and any check written against
+      # `git log` would pass here by seeing nothing — which is why repo-12's
+      # check reads the ticket's own body instead of its commits.
       #
       # This lived in a `status.yml` of its own for exactly one reason: `ci.yml`
       # skipped markdown, so the pull requests whose frontmatter needed parsing
