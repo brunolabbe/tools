@@ -202,6 +202,20 @@ export interface NotabilityRequest {
    * place that knows.
    */
   language: string;
+  /**
+   * Which project to ask. Same API, same geosearch, different corpus.
+   *
+   * `wikipedia` is per-place and fills `Find.notability`. `wikivoyage` is not:
+   * pl-33 measured 2 English and 7 French articles for an entire city, all of
+   * them *about the city* rather than about anything in it, which is why its
+   * answers hang off the revision as `PlanRevision.reading` instead of being
+   * attached to a viewpoint that the article never mentions.
+   *
+   * One parameter rather than a second method because the request, the reply
+   * shape and the parsing are identical — only the host and what the caller
+   * does with the answer differ.
+   */
+  site?: "wikipedia" | "wikivoyage" | undefined;
   signal?: AbortSignal | undefined;
 }
 

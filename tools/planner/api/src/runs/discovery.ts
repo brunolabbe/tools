@@ -49,11 +49,12 @@
  * corridor with forty finds still costs one `travel` call, not forty.
  */
 
-import { AppError, isAnswered } from "@planner/contract";
+import { AppError, isAnswered, MAX_REVISION_READING } from "@planner/contract";
 import type {
   Coordinates,
   Place,
   RunProgress,
+  Source,
   TripBrief,
   UncheckedConstraint,
 } from "@planner/contract";
@@ -102,6 +103,15 @@ const MAX_NOTABILITY_TILES = 6;
  */
 const NOTABILITY_MATCH_METRES = 250;
 
+/**
+ * How wide to look for a Wikivoyage entry about a corridor end.
+ *
+ * 10 km, the API's ceiling: these are city and region articles whose
+ * coordinate is a downtown pin, and a corridor end geocoded to a suburb should
+ * still find the city it is in.
+ */
+const READING_RADIUS_METRES = 10_000;
+
 /** Every kind this pass asks a corridor query for. Discovery does not filter by shape. */
 const KINDS = DISCOVERY_KINDS;
 
@@ -129,10 +139,18 @@ export interface DiscoverResult {
    * declined destination has nothing this entry could honestly be about.
    */
   coverage: UncheckedConstraint[];
+  /**
+   * Editorial context about the route itself — Wikivoyage entries for the
+   * corridor's own ends (pl-33). Carried onto `PlanRevision.reading` rather
+   * than onto any find: measured at 2 English and 7 French articles for an
+   * entire city, all of them about the city, so attaching one to a viewpoint
+   * would claim a relationship the source does not have.
+   */
+  reading: Source[];
 }
 
 /** Nothing to discover along, and nothing to say about it — the common shape before this ticket. */
-const NOTHING: DiscoverResult = { finds: [], coverage: [] };
+const NOTHING: DiscoverResult = { finds: [], coverage: [], reading: [] };
 
 /** Steps this pass always counts, whether or not each one ends up doing anything — see the header. */
 const TOTAL_STEPS = 4;
@@ -198,6 +216,7 @@ export async function discoverAlongCorridor(input: DiscoverInput): Promise<Disco
     finished();
     return {
       finds: [],
+      reading: [],
       coverage: [
         unchecked(
           "coverage",
@@ -215,6 +234,7 @@ export async function discoverAlongCorridor(input: DiscoverInput): Promise<Disco
     finished();
     return {
       finds: [],
+      reading: [],
       coverage: [
         unchecked(
           "coverage",
@@ -237,6 +257,7 @@ export async function discoverAlongCorridor(input: DiscoverInput): Promise<Disco
     finished();
     return {
       finds: [],
+      reading: [],
       coverage: [
         unchecked(
           "coverage",
@@ -247,10 +268,11 @@ export async function discoverAlongCorridor(input: DiscoverInput): Promise<Disco
   }
 
   const backed = await notability(provider, corridor, finds, signal, logger);
+  const reading = await corridorReading(provider, corridor, backed, signal, logger);
   const withDetours = await detourCosts(provider, origin, destination, backed, signal, logger);
   finished();
 
-  return { finds: withDetours, coverage: [] };
+  return { finds: withDetours, coverage: [], reading };
 }
 
 /**
@@ -338,6 +360,73 @@ async function notability(
     const added = near.filter((article) => !seen.has(article.source.url));
     return { ...find, notability: [...find.notability, ...added.map((a) => a.source)] };
   });
+}
+
+/**
+ * Wikivoyage for the corridor's own ends — pl-33 Build step 3.
+ *
+ * **Not per find, and that is the measurement rather than a preference.** A
+ * geosearch of `en.wikivoyage.org` around Québec City returns 2 articles and
+ * `fr.` returns 7, against 189 and 426 on Wikipedia over the same circle. They
+ * are city articles: attaching "Québec City" to a viewpoint inside it would
+ * assert that the article is about the viewpoint, which is exactly the fusion
+ * §5's amendment refuses.
+ *
+ * So one lookup per corridor end, a tight radius, and the answers ride on the
+ * revision. Two calls at most, and they come out of the same budget as
+ * everything else — a run that has spent its allowance gets `reading: []`,
+ * which means "nothing checked" here as everywhere.
+ */
+async function corridorReading(
+  provider: RunGrounding,
+  corridor: readonly Place[],
+  finds: readonly Find[],
+  signal: AbortSignal,
+  logger: AppLogger,
+): Promise<Source[]> {
+  const language = dominantLanguage(finds);
+  if (language === null) return [];
+
+  const ends = corridor
+    .map((place) => place.coordinates)
+    .filter((point): point is Coordinates => point !== null);
+
+  const reading: Source[] = [];
+  const seen = new Set<string>();
+  for (const point of ends) {
+    let outcome;
+    try {
+      outcome = await provider.articlesNear({
+        coordinates: point,
+        radiusMetres: READING_RADIUS_METRES,
+        language,
+        site: "wikivoyage",
+        signal,
+      });
+    } catch (error: unknown) {
+      if (isCancellation(error, signal)) throw error;
+      logger.warn("a corridor reading lookup failed, continuing", {
+        provider: provider.name,
+        code: AppError.from(error).code,
+      });
+      continue;
+    }
+
+    if (outcome.kind === "refused") break;
+    if (outcome.kind !== "answered") continue;
+
+    for (const article of outcome.value) {
+      if (seen.has(article.source.url)) continue;
+      seen.add(article.source.url);
+      reading.push(article.source);
+      // Bounded because it is stored — `MAX_REVISION_READING`. Both ends of a
+      // long corridor deserve a turn, so this stops rather than letting the
+      // first end fill the list.
+      if (reading.length >= MAX_REVISION_READING) return reading;
+    }
+  }
+
+  return reading;
 }
 
 /**

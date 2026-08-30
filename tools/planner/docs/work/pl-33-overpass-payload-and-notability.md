@@ -4,7 +4,7 @@ tool: planner
 title: Capture a real Overpass payload, and wire up notability
 kind: fix
 milestone: P3
-status: ready
+status: done
 depends_on: [pl-29]
 ---
 
@@ -278,3 +278,72 @@ finds it returns", and a geosearch tier spends N calls. It therefore belongs in
 `runs/discovery.ts` as a budgeted pass beside `detourCosts`, which means a new
 method on the grounding provider seam rather than more work inside `nearby` —
 a change to `@planner/agent`'s interface that should be decided, not assumed.
+
+### Build steps 2 and 3, and the contract change they needed
+
+**Step 2 landed as a budgeted pass, not as more work inside `nearby`.**
+`articlesNear` on the grounding seam is one geosearch: one point, one call.
+Two measurements forced that shape rather than a corridor-wide method — the
+API refuses a corridor-sized `gsbbox` outright, and the run budget is
+denominated in calls, so a seam method that quietly made six would stop
+`MAX_GROUNDING_CALLS` describing what a run spends. The tiling therefore sits
+in `runs/discovery.ts` beside `detourCosts`, bounded at `MAX_NOTABILITY_TILES`
+(6, against a budget of 40 that `locate` and `travel` also come out of), and
+stops at the first refusal instead of grinding through tiles it has been told
+it cannot afford.
+
+The language is counted from the corridor's own `wikipedia` tags. Not
+configured, and **not** derived from a country: `Place` carries none, so that
+route needed a type change across the `@planner/agent` seam plus a mapping
+table with no measurement behind it, while the finds already state the answer.
+
+`WIKI_LANGUAGE` is an allow-shape rather than a sanitiser, because the language
+comes from OSM tag text and reaches a _hostname_. `evil.example.com` as a
+language is refused before a url exists, and there is a test for it.
+
+**Step 3 needed somewhere to put a corridor-level answer, and that was a
+contract change.** `Find.notability` is per-find and Wikivoyage is not: 2
+English and 7 French articles for an entire city, every one of them about the
+city. Attaching one to a viewpoint inside it asserts a relationship the source
+does not have — the fusion §5's amendment exists to refuse.
+
+So `PlanRevision.reading: Source[]`, with migration 8 and
+`MAX_REVISION_READING`. Stored rather than derived, for `coverage`'s reason
+exactly: it is what a live backend answered once at compose time. It is
+deliberately _not_ appended to `unchecked` the way `coverage` is — that list is
+what could not be checked, and this is something found and worth reading.
+
+**This was surfaced as options and chosen, not decided here.** The contract
+edit, the seam addition and the geosearch tiering were each put as a question
+with costs attached; the record of what was picked and what it cost is this
+Log. `CLAUDE.md` forbids editing a contract unilaterally, and the sibling cost
+showed up exactly where it says it would — four test builders across
+`contract`, `itinerary`, `api` and `web` needed the new field, and nothing else
+did.
+
+### Gates
+
+```
+$ npm run check                  # exit 0
+$ npm test                       # 114 files, 1734 tests, all passing
+$ npm test -- --project planner  # 787 passing
+```
+
+Baseline for the planner project on this branch's `origin/main` (`ec1dd6b`) was
+**774**. What this branch adds is 13 tests over two captured payloads and the
+two passes that read them.
+
+### What a reviewer should look at hardest
+
+Not the parsing — that is proven against real payloads now. The two places
+where judgement is load-bearing:
+
+1. **`NOTABILITY_MATCH_METRES = 250`.** It decides whether an article is _about_
+   a find. Measured against nothing: it is a guess at how far OSM's node and
+   Wikipedia's coordinate can disagree while still meaning the same thing. It
+   is the same class of unmeasured constant pl-34 found in the geocoder, and it
+   should be treated with the same suspicion.
+2. **`MAX_NOTABILITY_TILES = 6`.** Chosen against a budget of 40, not measured
+   against corridor lengths. A 950 km corridor gets six 10 km circles and is
+   therefore covered in patches; nothing yet says whether that is a sensible
+   fraction or a token gesture.

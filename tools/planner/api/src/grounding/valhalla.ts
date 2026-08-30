@@ -342,7 +342,8 @@ export class ValhallaGroundingProvider implements GroundingProvider {
       });
     }
 
-    const url = new URL(`https://${request.language.toLowerCase()}.wikipedia.org/w/api.php`);
+    const site = request.site ?? "wikipedia";
+    const url = new URL(`https://${request.language.toLowerCase()}.${site}.org/w/api.php`);
     url.searchParams.set("action", "query");
     url.searchParams.set("format", "json");
     url.searchParams.set("list", "geosearch");
@@ -365,7 +366,7 @@ export class ValhallaGroundingProvider implements GroundingProvider {
       return [
         {
           source: {
-            url: wikipediaUrl(request.language, entry.title),
+            url: articleUrl(request.language, site, entry.title),
             title: entry.title,
             fetchedAt: at.toISOString(),
           },
@@ -940,7 +941,13 @@ function notabilityFrom(tags: ReadonlyMap<string, string>, at: Date): Source[] {
 
 /** One article url, with the title encoded — these carry accents and spaces. */
 function wikipediaUrl(language: string, title: string): string {
-  return `https://${language.toLowerCase()}.wikipedia.org/wiki/${encodeURIComponent(title.replaceAll(" ", "_"))}`;
+  return articleUrl(language, "wikipedia", title);
+}
+
+/** The same, for either project — they share a url shape as well as an API. */
+function articleUrl(language: string, site: "wikipedia" | "wikivoyage", title: string): string {
+  const path = encodeURIComponent(title.replaceAll(" ", "_"));
+  return `https://${language.toLowerCase()}.${site}.org/wiki/${path}`;
 }
 
 /** Which `DiscoveryKind` a node's tags mean, or `null` for none of the ones we asked about. */

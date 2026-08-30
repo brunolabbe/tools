@@ -61,7 +61,7 @@ function emptyPlan(): PlanDetail {
 }
 
 function draft(id: string, createdAt: string, days: PlanDay[] = []): NewRevision {
-  return { id, reason: "First draft", createdAt, days, gaps: [], coverage: [] };
+  return { id, reason: "First draft", createdAt, days, gaps: [], coverage: [], reading: [] };
 }
 
 describe("appendRevision", () => {
@@ -176,6 +176,7 @@ describe("the revision schema", () => {
     days: [],
     gaps: [],
     coverage: [],
+    reading: [],
   };
 
   test("only the first revision may have no parent", () => {

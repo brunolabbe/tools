@@ -138,7 +138,7 @@ describe("discoverAlongCorridor", () => {
       onProgress,
     });
 
-    expect(result).toEqual({ finds: [], coverage: [] });
+    expect(result).toEqual({ finds: [], coverage: [], reading: [] });
     expect(called).toBe(false);
     expect(events).toEqual([]);
   });
@@ -457,9 +457,73 @@ describe("discoverAlongCorridor, attaching notability", () => {
       onProgress: progressOf().onProgress,
     });
 
-    // One refusal ends the pass: the budget is a run-level ceiling and the
-    // remaining tiles would each be refused in turn for nothing.
-    expect(calls).toBe(1);
+    // Two, and the number is the point: each pass stops at its *own* first
+    // refusal rather than carrying on through its remaining tiles. The
+    // notability tiling gives up after one, and the corridor-reading pass then
+    // asks once and gives up too. A refused call is not a spent one, so this
+    // costs the budget nothing — what it proves is that neither pass grinds
+    // through a list it has already been told it cannot afford.
+    expect(calls).toBe(2);
+  });
+
+  test("a wikivoyage entry rides on the plan, never on a find", async () => {
+    // pl-33's measurement: Wikivoyage returns 2 English and 7 French articles
+    // for an entire city, all of them *about the city*. Attaching one to a
+    // viewpoint inside it would assert a relationship the source does not
+    // have, so it lands on the revision instead — even though this one sits
+    // exactly on top of the find.
+    const result = await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Percé"),
+      provider: provider({
+        nearby: async () => answered([findAt("Belvédère", MONTREAL, [TAGGED_FR])]),
+        articlesNear: async (request) =>
+          answered(
+            request.site === "wikivoyage"
+              ? [
+                  {
+                    source: {
+                      url: "https://fr.wikivoyage.org/wiki/Montr%C3%A9al",
+                      title: "Montréal",
+                      fetchedAt: AT,
+                    },
+                    coordinates: MONTREAL,
+                  },
+                ]
+              : [],
+          ),
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: progressOf().onProgress,
+    });
+
+    expect(result.reading.map((source) => source.url)).toEqual([
+      "https://fr.wikivoyage.org/wiki/Montr%C3%A9al",
+    ]);
+    // Same coordinates as the find, and still not attached to it.
+    expect(result.finds[0]?.notability.map((source) => source.url)).toEqual([TAGGED_FR.url]);
+  });
+
+  test("asks wikivoyage in the same language the corridor named", async () => {
+    const sites: string[] = [];
+    await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Percé"),
+      provider: provider({
+        nearby: async () => answered([findAt("Belvédère", MONTREAL, [TAGGED_FR])]),
+        articlesNear: async (request) => {
+          sites.push(`${request.site ?? "wikipedia"}:${request.language}`);
+          return answered([]);
+        },
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: progressOf().onProgress,
+    });
+
+    // Both projects, one language, counted from the corridor's own tags.
+    expect(sites).toContain("wikivoyage:fr");
+    expect(sites).toContain("wikipedia:fr");
+    expect(sites.every((entry) => entry.endsWith(":fr"))).toBe(true);
   });
 
   test("attaches an article near a find, and leaves a distant one alone", async () => {

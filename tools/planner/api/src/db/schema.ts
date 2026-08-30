@@ -341,6 +341,23 @@ const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE plan_revisions ADD COLUMN coverage_json TEXT NOT NULL DEFAULT '[]';
   `,
+
+  // 8. Editorial context about the route rather than about a place on it —
+  // pl-33's `PlanRevision.reading`.
+  //
+  // Its own column beside `coverage_json` for the same reason that one is
+  // beside `gaps_json`: JSON on migration 2's rule, read whole and validated
+  // on the way out, with no field SQL would filter on — but a different kind
+  // of thing. `coverage_json` is what could *not* be checked; this is what was
+  // found and is worth reading. Folding them together would need a discriminant
+  // on every read to tell them apart again.
+  //
+  // `DEFAULT '[]'` so every revision written before this migration reads back
+  // as "nothing checked", which is what they are — the same shape migration 7
+  // used, and the reason neither needed a backfill.
+  `
+  ALTER TABLE plan_revisions ADD COLUMN reading_json TEXT NOT NULL DEFAULT '[]';
+  `,
 ];
 
 export function migrate(db: Database): void {

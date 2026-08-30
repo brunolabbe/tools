@@ -46,6 +46,7 @@ import {
   type PlanGap,
   type PlanItem,
   type PlanRevision,
+  type Source,
   type Specialist,
   type TripBrief,
 } from "@planner/contract";
@@ -88,6 +89,16 @@ export interface ComposeInput {
    * which discovers nothing.
    */
   coverage?: readonly UncheckedConstraint[];
+  /**
+   * Editorial context about the route itself, carried straight onto the
+   * revision (`NewRevision.reading`) — pl-33.
+   *
+   * Unlike `coverage` it is *not* appended to `unchecked`: it is not a gap and
+   * not a caveat, it is something worth reading. It rides through this
+   * function untouched for the same reason `coverage` does — it is evidence a
+   * live backend produced once, and nothing here can derive it a second time.
+   */
+  reading?: readonly Source[];
   /**
    * What the grounding pass measured between these candidates (pl-27).
    *
@@ -238,6 +249,7 @@ export function compose(input: ComposeInput): ComposeResult {
   // careful — including about which transitions were measured.
   const days = toPlanDays(packed, input.revision.id);
   const coverage = [...(input.coverage ?? [])];
+  const reading = [...(input.reading ?? [])];
 
   return {
     revision: {
@@ -247,6 +259,7 @@ export function compose(input: ComposeInput): ComposeResult {
       days,
       gaps: [...(input.gaps ?? []), ...gapsFor(input.candidates, packed)],
       coverage,
+      reading,
     },
     // Derived from what was placed, not from the pack — so a reader of the
     // stored revision gets the identical list without re-composing. See

@@ -45,6 +45,7 @@ function asRevision(
     days,
     gaps,
     coverage,
+    reading: [],
   };
 }
 
