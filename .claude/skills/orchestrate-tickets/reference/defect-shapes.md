@@ -22,6 +22,16 @@ whole markup block is gone. It needs a sibling that fails in that case.
 produce the input the criterion describes, the assertion was never live. Amending
 such a line is honest — but the amendment needs an outside check.
 
+**A tolerance is the sharpest version of that**, because the number reads as
+rigour. A sibling session shipped a sampler whose accuracy fixture gave every
+segment the same bitrate — so any sample of it was its own mean, and "within 10%"
+could not fail. Against a fixture with real variance the sampler was **29% low**:
+it would have passed its own acceptance and been wrong in production. **A
+tolerance-phrased criterion is worth exactly the variance in the fixture behind
+it, and a fixture with none turns a tolerance into a tautology.** Read every
+acceptance line containing a percentage as a claim about the fixture, not about
+the code.
+
 **A correction that is false in a new place.** A gate finds a claim false, the
 builder rewrites it, and the rewrite is wrong differently — and now it *reads as
 reviewed*, so the next reader trusts it harder than the original. Twice on one
@@ -143,6 +153,17 @@ the number the gate named" is exactly such a fix.
   quietly removed the thing under test. The mutation-testing control run below is
   one instance of this rule, not the whole of it.
 - **Build before testing** in a fresh worktree, always.
+- **A worktree with no farm at all is worse than a stale `dist`, because it does
+  not fail — it resolves somewhere else.** Node walks parent directories, so a
+  worktree under `.claude/worktrees/` with no `node_modules` finds the **shared
+  checkout's**, whose `dist` is whatever branch that checkout last built. A gate
+  hit this and saw three or four tests fail exactly as a successful `-loglevel` or
+  sticky-classifier mutation would, with nothing looking wrong — it was reading
+  another branch's build. Run the farm and `npm run build` **before** measuring
+  anything, and confirm the farm points inward:
+  `readlink -f node_modules/@<scope>/<pkg>` must land inside the worktree. The
+  stale-`dist` traps below all assume resolution is at least local; this one
+  removes that assumption, so check it first.
 - **Stale `dist` fakes a passing mutation.** Where a package resolves a sibling
   through `dist`, mutating that sibling and seeing green may mean the build never
   ran. Rebuild, then re-mutate.
