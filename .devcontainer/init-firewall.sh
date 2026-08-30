@@ -22,6 +22,9 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# The image's own copy, root-owned, not the repo's .devcontainer/ file. Editing
+# that one and re-running this script does nothing: the two drift, and a re-run
+# only re-resolves the names in here. Adding a host means a rebuild.
 readonly ALLOWLIST=/usr/local/share/devcontainer/allowed-domains.txt
 readonly SET=allowed-domains
 
