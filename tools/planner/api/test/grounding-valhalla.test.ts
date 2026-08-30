@@ -52,31 +52,93 @@
  *
  * ## What they settled
  *
- * **`firstCoordinates` was already correct**, on both things nobody could
+ * **The reply parser was already correct**, on both things nobody could
  * have verified without a real reply: a no-match is a **literal `[]`**, HTTP
- * 200 — not a 404, not an object, not omitted — which is exactly what this
- * parser already treated as `null`; and `lat`/`lon` arrive as **strings**
- * (`"48.5222989"`), which `asNumber` already parses. No line of
- * `firstCoordinates` changed for this ticket. The tests below exist to pin
- * that against the real shape rather than against `[]` assumed, per pl-30's
- * Done-when.
+ * 200 — not a 404, not an object, not omitted — which is exactly what it
+ * already treated as `null`; and `lat`/`lon` arrive as **strings**
+ * (`"48.5222989"`), which `asNumber` already parses. No line of it changed
+ * for pl-30. The tests below pin that against the real shape rather than
+ * against `[]` assumed, per pl-30's Done-when.
  *
  * **Two things a hand-written fixture would not have surfaced:** results are
  * **not** sorted by `importance` — in the `limit=10` reply the highest
  * `importance` (0.6016, St. John's, Newfoundland) sits at index 2, behind
  * 0.5848 and 0.5813 — and `place_id` is not stable across requests for the
  * same place (`osm_id` 120280 is `place_id` 85350419 at `limit=1` and
- * 85534243 at `limit=10`, n=2). Neither matters to `firstCoordinates`, which
- * reads only `body[0]`, but both are worth knowing before anything else in
- * this tool keys on either field — see pl-25's cache.
+ * 85534243 at `limit=10`, n=2). Nothing in this tool reads either field, but
+ * both are worth knowing before anything keys on one — see pl-25's cache. The
+ * first is also why `chooseResult` does not rank on `importance`: it would
+ * have chosen St. John's, Newfoundland for a Québec trip.
  *
- * **What they exposed is not in `firstCoordinates` at all.** `q=Saint-Jean`
- * with no locality returns Saint-Jean, Toulouse, **France** at `limit=1`, and
- * at `limit=10` none of the six results is in Québec. A `locate` call built
- * from a candidate whose `locality` is `null` gets a confident, wrong
- * coordinate rather than an honest `null` — filed as
- * [pl-34](../../docs/work/pl-34-locality-free-query-confident-wrong-place.md), reproduced by
- * the ambiguous-name tests below rather than fixed here.
+ * **What they exposed was not in the parser at all.** `q=Saint-Jean` with no
+ * locality returns Saint-Jean, Toulouse, **France** at `limit=1`, and at
+ * `limit=10` none of the six results is in Québec. A `locate` call built from
+ * a candidate whose `locality` is `null` got a confident, wrong coordinate
+ * rather than an honest `null` — filed as
+ * [pl-34](../../docs/work/pl-34-locality-free-query-confident-wrong-place.md)
+ * and fixed there, in `chooseResult` rather than in the parser.
+ *
+ * ## What pl-34 changed about the table above
+ *
+ * `locate` now asks for **ten** results, not one, so the `limit=10` captures
+ * are production's request shape and the two `limit=1` ones are the
+ * historical shape. `nominatim-search-match.json` is still a real reply to a
+ * real query; what it is no longer is the reply this deployment would receive
+ * for `Percé, Québec`.
+ *
+ * ## The ten `limit=10` captures — pl-34 round 2, 2026-08-30
+ *
+ * The first round said outright that no successful lookup had been captured
+ * at `limit=10` and named the gap. It has since been closed: the egress
+ * allowlist was opened, and ten queries were run against the public Nominatim
+ * instance at `limit=10` and checked in unedited. Every row carries
+ * `"licence": "Data © OpenStreetMap contributors, ODbL 1.0…"`, which is the
+ * public instance's own string. They were captured by the coordinating
+ * session rather than by this one — this container still cannot reach a
+ * geocoder — so the queries and the payloads are first-hand and the
+ * *conditions* (headers, exact host) are carried on that session's word.
+ *
+ * | File                                          | `q=`                      | rows |
+ * | --------------------------------------------- | ------------------------- | ---- |
+ * | `nominatim-search-perce-quebec.json`           | `Percé, Québec`           | 1    |
+ * | `nominatim-search-tadoussac-quebec.json`       | `Tadoussac, Québec`       | 1    |
+ * | `nominatim-search-baie-saint-paul-quebec.json` | `Baie-Saint-Paul, Québec` | 1    |
+ * | `nominatim-search-perce-bare.json`             | `Percé`                   | 2    |
+ * | `nominatim-search-quebec-quebec.json`          | `Québec, Québec`          | 1    |
+ * | `nominatim-search-gaspe-quebec.json`           | `Gaspé, Québec`           | 2    |
+ * | `nominatim-search-charlevoix-quebec.json`      | `Charlevoix, Québec`      | 1    |
+ * | `nominatim-search-perce-le-rocher-perce.json`  | `Percé, Le Rocher-Percé`  | 1    |
+ * | `nominatim-search-sainte-anne-quebec.json`     | `Sainte-Anne, Québec`     | 1    |
+ * | `nominatim-search-saint-jean-quebec.json`      | `Saint-Jean, Québec`      | 1    |
+ *
+ * ## What round 2 settled, including against round 1
+ *
+ * **A hypothesis round 1 built a constant on is false.** `SAME_PLACE_METRES`
+ * was justified by a geocoder returning a town beside its own containing
+ * municipality as two rows. It does not: `Percé, Québec` is **one** row whose
+ * `display_name` already contains `Le Rocher-Percé`. Six of the ten replies
+ * are single-row for the same reason, and no capture in this repo shows two
+ * rows that are one place.
+ *
+ * **The regression round 1 could not see is real, through a shape nobody
+ * predicted** — a town beside a *larger geographic feature sharing its name*.
+ * `Gaspé, Québec` returns the town and the Gaspé peninsula, both correctly in
+ * Québec, **118.6 km** apart, and round 1's rule declined it. That is what
+ * `SETTLEMENT_ADDRESS_TYPES` exists for, and 118.6 km is what now bounds the
+ * threshold from above.
+ *
+ * **`addresstype` is a field worth reading and `importance` still is not.**
+ * The ten captures carry `addresstype` values `town`, `village`, `city`,
+ * `county`, `peninsula`, `highway` and `political`. `importance` remains
+ * unread: in the `Gaspé` reply the peninsula scores higher (0.4923) than the
+ * town (0.4690), so ranking on it would pick the peninsula.
+ *
+ * **One capture records a wrong answer this ticket does not fix.**
+ * `Sainte-Anne, Québec` resolves to a **bus stop** in Québec City
+ * (`addresstype: highway`, `importance` 7.2e-05) rather than to any of the
+ * towns called Sainte-Anne-something. It is a single-row reply, so there is
+ * no tie to break and nothing here fires; it is the same *class* of failure
+ * as this ticket's and needs a different instrument. Named in pl-34's Log.
  */
 
 import { readFileSync } from "node:fs";
@@ -107,6 +169,31 @@ const NOMINATIM_MATCH = nominatimFixture("nominatim-search-match.json");
 const NOMINATIM_NO_MATCH = nominatimFixture("nominatim-search-no-match.json");
 const NOMINATIM_AMBIGUOUS_LIMIT_1 = nominatimFixture("nominatim-search-ambiguous-limit1.json");
 const NOMINATIM_AMBIGUOUS_LIMIT_10 = nominatimFixture("nominatim-search-ambiguous-limit10.json");
+
+/**
+ * The ten `limit=10` captures pl-34's second round took — see the header.
+ *
+ * Keyed by the exact query string sent, because that is the only thing that
+ * makes a capture checkable against the request the provider builds.
+ */
+const CAPTURED_AT_LIMIT_10: ReadonlyMap<string, unknown> = new Map([
+  ["Percé, Québec", nominatimFixture("nominatim-search-perce-quebec.json")],
+  ["Tadoussac, Québec", nominatimFixture("nominatim-search-tadoussac-quebec.json")],
+  ["Baie-Saint-Paul, Québec", nominatimFixture("nominatim-search-baie-saint-paul-quebec.json")],
+  ["Percé", nominatimFixture("nominatim-search-perce-bare.json")],
+  ["Québec, Québec", nominatimFixture("nominatim-search-quebec-quebec.json")],
+  ["Gaspé, Québec", nominatimFixture("nominatim-search-gaspe-quebec.json")],
+  ["Charlevoix, Québec", nominatimFixture("nominatim-search-charlevoix-quebec.json")],
+  ["Percé, Le Rocher-Percé", nominatimFixture("nominatim-search-perce-le-rocher-perce.json")],
+  ["Sainte-Anne, Québec", nominatimFixture("nominatim-search-sainte-anne-quebec.json")],
+  ["Saint-Jean, Québec", nominatimFixture("nominatim-search-saint-jean-quebec.json")],
+]);
+
+function captured(query: string): unknown {
+  const body = CAPTURED_AT_LIMIT_10.get(query);
+  if (body === undefined) throw new Error(`no capture for ${query}`);
+  return body;
+}
 
 const AT = new Date("2026-08-23T12:00:00.000Z");
 
@@ -444,7 +531,9 @@ describe("locate", () => {
     expect(url.origin).toBe("http://nominatim.internal:8080");
     expect(url.pathname).toBe("/search");
     expect(url.searchParams.get("q")).toBe("Rimouski, Québec");
-    expect(url.searchParams.get("limit")).toBe("1");
+    // Ten since pl-34, one before it. The locality is in the *question* and
+    // also in the choice made among the answers — see the pl-34 block below.
+    expect(url.searchParams.get("limit")).toBe("10");
 
     // Nominatim's usage policy refuses a request with no identifying
     // `User-Agent`, and pointing `GEOCODER_URL` at the public instance is on
@@ -514,33 +603,364 @@ describe("locate, over a payload a real Nominatim wrote", () => {
   });
 
   /**
-   * **This is pl-34's reproduction, not a defect in this file.** `locate`
-   * parses the reply correctly — that is the point being pinned. The wrong
-   * answer is already on the wire by the time it arrives: a candidate whose
-   * `locality` is `null` sends Nominatim the bare name `"Saint-Jean"`, and the
-   * real reply's first (and, per pl-34, not best-ranked) result is Saint-Jean,
-   * **Toulouse, France**. `firstCoordinates` has no way to know that, and
-   * nothing here should grow one — the fix is a query- or disambiguation-level
-   * decision, filed rather than made.
+   * **pl-34's reproduction.** This is the reply production now gets for a
+   * candidate whose `locality` is `null`: the bare name `"Saint-Jean"` at the
+   * limit `locate` asks for, and six places on three continents come back.
+   * Before pl-34 this call answered `body[0]` — Saint-Jean, **Toulouse,
+   * France** — with a source attached and nothing marked uncertain, and the
+   * plan measured a leg to it. Nothing about the six results says which one
+   * was meant and nothing this call knows can break the tie, so the honest
+   * answer is that the place was not located.
    */
-  test("an ambiguous bare name resolves confidently to the wrong place — pl-34, not fixed here", async () => {
+  test("an ambiguous bare name is not located at all, rather than located wrongly", async () => {
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const bareName: Place = { name: "Saint-Jean", locality: null, coordinates: null };
+
+    await expect(provider(fetch).locate({ place: bareName })).resolves.toBeNull();
+  });
+
+  test("the wrong answer it used to give is the reply's first result, not its best-ranked one", async () => {
+    // Pins what the fix is *against*, so a regression that reinstated
+    // `body[0]` fails with the actual wrong coordinate named rather than with
+    // "expected null". Toulouse is index 0 and index 2 scores higher on
+    // `importance` — see the block at the bottom of this file.
+    const first = (NOMINATIM_AMBIGUOUS_LIMIT_10 as Array<{ lat: string; lon: string }>)[0];
+
+    expect(first).toMatchObject({ lat: "43.6648247", lon: "1.5041143" });
+  });
+
+  /**
+   * The `limit=1` capture is no longer production's request shape — pl-34
+   * raised the limit — so this asserts what it always did about the *parser*
+   * rather than about the deployment: a reply with one result and nothing to
+   * check it against is taken at its word. That is not a wrong answer here,
+   * it is the absence of any evidence of ambiguity; the fix is that this
+   * request is not the one `locate` makes.
+   */
+  test("a lone result with nothing to check it against is still taken at its word", async () => {
     const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_1);
     const bareName: Place = { name: "Saint-Jean", locality: null, coordinates: null };
 
-    await expect(provider(fetch).locate({ place: bareName })).resolves.toEqual({
+    await expect(provider(fetch).locate({ place: bareName })).resolves.toMatchObject({
       coordinates: { latitude: 43.6648247, longitude: 1.5041143 },
-      source: {
-        url: "https://www.openstreetmap.org/copyright",
-        title: "OpenStreetMap, geocoded by Nominatim",
-        fetchedAt: AT.toISOString(),
-      },
     });
   });
 });
 
 /**
- * The four `firstCoordinates`/`asNumber` branches no capture could pin,
- * named rather than left as a gap after gate 2 found them.
+ * pl-34: which of several results is the place that was asked about.
+ *
+ * `locate` asks for ten results and chooses among them; before pl-34 it asked
+ * for one and took it. Nominatim's own order is not the tiebreak and neither
+ * is `importance` — the captured ambiguous reply puts Toulouse first and
+ * scores St. John's, Newfoundland highest, and neither is the Québec place a
+ * Québec trip meant. What breaks the tie is `locality`, matched against each
+ * result's `display_name`; where nothing breaks it, the place is not located.
+ */
+describe("choosing among several results (pl-34)", () => {
+  test("asks the geocoder for more than one result", async () => {
+    const { fetch, calls } = answering([]);
+    await provider(fetch).locate({
+      place: { name: "Saint-Jean", locality: null, coordinates: null },
+    });
+
+    const url = new URL(String(calls[0]?.url));
+    expect(Number(url.searchParams.get("limit"))).toBeGreaterThan(1);
+  });
+
+  test("the locality picks its own country out of a reply spread across five", async () => {
+    // The same captured six results, asked for by a candidate that *does*
+    // name where it is. `City of Saint John, New Brunswick` is index 1,
+    // behind Toulouse; `importance` would have chosen St. John's,
+    // Newfoundland at index 2. Only the locality separates them.
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const inNewBrunswick: Place = {
+      name: "Saint-Jean",
+      locality: "New Brunswick, Canada",
+      coordinates: null,
+    };
+
+    await expect(provider(fetch).locate({ place: inNewBrunswick })).resolves.toMatchObject({
+      coordinates: { latitude: 45.272764, longitude: -66.0627914 },
+    });
+  });
+
+  test("a locality no result mentions is not located, rather than located as the first result", async () => {
+    // The failure pl-30 predicted, with this capture's own twist: the
+    // candidate says Québec, the geocoder returned six places and none of
+    // them is in Québec. Answering `body[0]` here is the same defect as the
+    // bare-name case with a locality attached to make it look checked.
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const inQuebec: Place = { name: "Saint-Jean", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: inQuebec })).resolves.toBeNull();
+  });
+
+  test("one result that contradicts the locality is refused, not accepted for being alone", async () => {
+    // The captured `limit=1` reply, asked for by a candidate that says where
+    // it is: Québec in, Toulouse out. A rule that only refused *disagreeing*
+    // results would accept this one — there is nothing for it to disagree
+    // with — which is how a lone wrong answer looks exactly like a lone right
+    // one. Found by mutating `bestMatches` to fall back to every result when
+    // none matches; the ambiguous cases below did not notice.
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_1);
+    const inQuebec: Place = { name: "Saint-Jean", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: inQuebec })).resolves.toBeNull();
+  });
+
+  test("a locality is matched without regard to case or accents", async () => {
+    const { fetch } = answering(NOMINATIM_MATCH);
+    const unaccented: Place = { name: "Perce", locality: "quebec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: unaccented })).resolves.toMatchObject({
+      coordinates: { latitude: 48.5222989, longitude: -64.2136423 },
+    });
+  });
+
+  test("a fragment too short to mean anything is not allowed to pick a place", async () => {
+    // `ey` is inside `Jersey` and inside nothing else in this real reply, so
+    // with no floor on a hint's length a two-character locality — a truncated
+    // one, a stray code, whatever a model wrote — locates Saint-Jean in the
+    // Channel Islands with one accidental substring behind it. Dropped
+    // instead, which leaves nothing to disambiguate with and falls through to
+    // the six-way disagreement. Found by mutating `MIN_HINT_CHARS` to 0; the
+    // agreement test rescues almost every other short fragment, which is why
+    // this one had to be chosen to match exactly one result.
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const noisy: Place = { name: "Saint-Jean", locality: "ey", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: noisy })).resolves.toBeNull();
+  });
+
+  test("results that agree about where they are are one place, not an ambiguity", async () => {
+    // **This body is composed, and round 2 proved the shape it imagines does
+    // not occur.** It was written for "a town beside its own administrative
+    // boundary"; `nominatim-search-perce-quebec.json` shows Nominatim puts
+    // the municipality *inside the row's own `display_name`* and returns one
+    // row. So this is not a claim about Nominatim and no longer even a guess
+    // at one — it pins the deliberate floor under `SAME_PLACE_METRES`, which
+    // is the side of that constant no capture supports. The ceiling is
+    // captured and is pinned separately, by the reversed `Gaspé` reply.
+    const { fetch } = answering([
+      { lat: "48.5222989", lon: "-64.2136423", display_name: "Percé, Québec, Canada" },
+      { lat: "48.5361", lon: "-64.2136", display_name: "Percé (municipalité), Québec, Canada" },
+    ]);
+    const perce: Place = { name: "Percé", locality: null, coordinates: null };
+
+    await expect(provider(fetch).locate({ place: perce })).resolves.toMatchObject({
+      coordinates: { latitude: 48.5222989, longitude: -64.2136423 },
+    });
+  });
+
+  test("the best-matching locality wins, not the first result that mentions any of it", async () => {
+    // "Québec, Canada" is two hints and neither is labelled — City of Saint
+    // John matches one of them and comes first. A rule that took the first
+    // result mentioning anything known would answer New Brunswick.
+    const inQuebecToo = [
+      ...(NOMINATIM_AMBIGUOUS_LIMIT_10 as unknown[]),
+      {
+        lat: "45.3167",
+        lon: "-73.2667",
+        display_name: "Saint-Jean-sur-Richelieu, Le Haut-Richelieu, Québec, Canada",
+      },
+    ];
+    const { fetch } = answering(inQuebecToo);
+    const inQuebec: Place = { name: "Saint-Jean", locality: "Québec, Canada", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: inQuebec })).resolves.toMatchObject({
+      coordinates: { latitude: 45.3167, longitude: -73.2667 },
+    });
+  });
+});
+
+/**
+ * The ten real `limit=10` replies, each run through `locate` as production
+ * would run it.
+ *
+ * **This block exists because the previous round's stated risk was wrong.**
+ * pl-34's first commit named its largest open risk as a town returned
+ * alongside its own containing municipality as two far-apart rows, and
+ * `nominatim-search-perce-quebec.json` disproves it: `Percé, Québec` is
+ * **one** row, and `Le Rocher-Percé` is inside that row's own `display_name`.
+ * Six of the ten queries below are single-row replies for the same reason.
+ *
+ * The regression was real and arrived through a different shape — a town
+ * beside a **larger geographic feature sharing its name prefix**, which is
+ * `Gaspé, Québec`. Nothing predicted that shape; a capture found it. The
+ * cases are checked in as a block rather than as prose so the next change to
+ * `chooseResult` is measured against all ten at once.
+ */
+describe("every captured limit=10 reply, through locate (pl-34 round 2)", () => {
+  /** Sends the capture whose query matches the URL the provider actually built. */
+  function answeringCaptures(): { fetch: typeof globalThis.fetch; queries: string[] } {
+    const queries: string[] = [];
+    const fetch = vi.fn(async (input: unknown) => {
+      const query = new URL(String(input)).searchParams.get("q") ?? "";
+      queries.push(query);
+      return new Response(JSON.stringify(captured(query)), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    return { fetch: fetch as unknown as typeof globalThis.fetch, queries };
+  }
+
+  /**
+   * Nine locality-supplied lookups and one bare name, with the outcome each
+   * must have. `null` is an outcome and not a hole: a query nothing can
+   * resolve honestly has to decline.
+   */
+  const cases: ReadonlyArray<{
+    readonly place: Place;
+    readonly expected: Coordinates | null;
+    readonly why: string;
+  }> = [
+    {
+      place: { name: "Percé", locality: "Québec", coordinates: null },
+      expected: { latitude: 48.5222989, longitude: -64.2136423 },
+      why: "one row; the municipality is inside its display_name, not beside it",
+    },
+    {
+      place: { name: "Tadoussac", locality: "Québec", coordinates: null },
+      expected: { latitude: 48.1433429, longitude: -69.7174574 },
+      why: "one row, addresstype village",
+    },
+    {
+      place: { name: "Baie-Saint-Paul", locality: "Québec", coordinates: null },
+      expected: { latitude: 47.444343, longitude: -70.505447 },
+      why: "one row, addresstype town",
+    },
+    {
+      place: { name: "Québec", locality: "Québec", coordinates: null },
+      expected: { latitude: 46.8137431, longitude: -71.2084061 },
+      why: "one row, addresstype city",
+    },
+    {
+      place: { name: "Gaspé", locality: "Québec", coordinates: null },
+      expected: { latitude: 48.8317223, longitude: -64.4837569 },
+      why: "two rows 118.6 km apart, both in Québec, and the settlement tiebreak decides it",
+    },
+    {
+      place: { name: "Charlevoix", locality: "Québec", coordinates: null },
+      expected: { latitude: 47.6493447, longitude: -70.7362215 },
+      why: "one row, addresstype county, and a region is a fine answer when it is the only one",
+    },
+    {
+      place: { name: "Percé", locality: "Le Rocher-Percé", coordinates: null },
+      expected: { latitude: 48.5222989, longitude: -64.2136423 },
+      why: "the municipality as the locality matches the same single row",
+    },
+    {
+      place: { name: "Sainte-Anne", locality: "Québec", coordinates: null },
+      expected: { latitude: 46.8454004, longitude: -71.2149837 },
+      why: "one row, and it is a bus stop: located, and wrong, and not this fix's to catch",
+    },
+    {
+      place: { name: "Saint-Jean", locality: "Québec", coordinates: null },
+      expected: { latitude: 45.2129063, longitude: -73.2194252 },
+      why: "the Québec Saint-Jean does exist; supplying the locality is what finds it",
+    },
+    {
+      place: { name: "Percé", locality: null, coordinates: null },
+      expected: null,
+      why: "a town in Québec and a county in Idaho, 3882 km apart, and nothing to choose between them",
+    },
+  ];
+
+  for (const { place: subject, expected, why } of cases) {
+    const where = subject.locality === null ? " (no locality)" : `, ${subject.locality}`;
+    test(`${subject.name}${where} — ${why}`, async () => {
+      const { fetch, queries } = answeringCaptures();
+      const located = await provider(fetch).locate({ place: subject });
+
+      // The capture is keyed by query, so a changed `placeQuery` throws rather
+      // than quietly testing a reply to a different question.
+      expect(queries).toHaveLength(1);
+      expect(located === null ? null : located.coordinates).toEqual(expected);
+    });
+  }
+
+  test("nine of the ten locality-supplied lookups locate, and the bare name declines", async () => {
+    // The count itself, so a change that starts declining ordinary lookups
+    // fails here with a number rather than only in whichever case it broke.
+    const outcomes = await Promise.all(
+      cases.map(async ({ place: subject }) => {
+        const { fetch } = answeringCaptures();
+        return await provider(fetch).locate({ place: subject });
+      }),
+    );
+
+    expect(outcomes.filter((each) => each !== null)).toHaveLength(9);
+    expect(outcomes.at(-1)).toBeNull();
+  });
+});
+
+/** The settlement tiebreak: what it decides, and what it is not allowed to. */
+describe("preferring a settlement over a larger feature (pl-34 round 2)", () => {
+  const GASPE_TOWN: Coordinates = { latitude: 48.8317223, longitude: -64.4837569 };
+
+  test("the town wins over the peninsula that shares its name", async () => {
+    const { fetch } = answering(captured("Gaspé, Québec"));
+    const gaspe: Place = { name: "Gaspé", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: gaspe })).resolves.toMatchObject({
+      coordinates: GASPE_TOWN,
+    });
+  });
+
+  /**
+   * **This is the test that pins `SAME_PLACE_METRES`**, which every value from
+   * ~1.6 km to 403 km previously satisfied identically.
+   *
+   * The two captured rows are 118.6 km apart. Reversed, the peninsula comes
+   * first — so a threshold at or above 118.6 km calls them one place and
+   * answers `results[0]`, which is then the peninsula, and this fails. Below
+   * it they are the disagreement they are, and `addresstype` decides. The
+   * reversal is the point twice over: it bounds the constant, and it proves
+   * the answer comes from the *type* rather than from Nominatim's ordering.
+   */
+  test("reversing the two rows changes nothing, which is what bounds the threshold", async () => {
+    const reversed = (captured("Gaspé, Québec") as unknown[]).toReversed();
+    const { fetch } = answering(reversed);
+    const gaspe: Place = { name: "Gaspé", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: gaspe })).resolves.toMatchObject({
+      coordinates: GASPE_TOWN,
+    });
+  });
+
+  test("with no locality it does not fire, even though exactly one row is a settlement", async () => {
+    // Bare `Percé`: the town in Québec and Nez Perce County in Idaho. Exactly
+    // one is a settlement, so an unscoped tiebreak answers Québec — with real
+    // confidence and nothing behind it, since nothing in this request ever
+    // said Canada. That is this ticket's own defect in a new hat, and the
+    // boundary in `chooseResult` is what stops it.
+    const { fetch } = answering(captured("Percé"));
+    const bare: Place = { name: "Percé", locality: null, coordinates: null };
+
+    await expect(provider(fetch).locate({ place: bare })).resolves.toBeNull();
+  });
+
+  test("an unfamiliar addresstype still locates when nothing contradicts it", async () => {
+    // `Saint-Jean, Québec` is `addresstype: political` and `Sainte-Anne,
+    // Québec` is `highway`; neither is on the allowlist. Both locate, because
+    // agreement is tested before the tiebreak and a lone row has nothing to
+    // tie with. An incomplete allowlist costs nothing until rows conflict.
+    const { fetch } = answering(captured("Saint-Jean, Québec"));
+    const political: Place = { name: "Saint-Jean", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: political })).resolves.toMatchObject({
+      coordinates: { latitude: 45.2129063, longitude: -73.2194252 },
+    });
+  });
+});
+
+/**
+ * The four `geocoderResults`/`asNumber` branches no capture could pin,
+ * named rather than left as a gap after gate 2 found them. (`firstCoordinates`
+ * until pl-34, which made it read every row rather than only `body[0]`; the
+ * branches are the same four.)
  *
  * **These are not fixtures and make no claim about Nominatim.** The rule
  * against a hand-written payload is about the *happy-path shape* of a real
@@ -552,7 +972,22 @@ describe("locate, over a payload a real Nominatim wrote", () => {
  * agreeing with the parser by construction, because none of them claims to be
  * what a geocoder would send.
  */
-describe("firstCoordinates, against malformed input no capture could justify", () => {
+describe("geocoderResults, against malformed input no capture could justify", () => {
+  test("a bad row is skipped, not fatal — and a reply of only one is null", async () => {
+    // pl-34: a malformed row no longer condemns the reply it is in. The rows
+    // around it are still answers, and before pl-34 only `body[0]` was read at
+    // all, so a bad first row discarded five good ones.
+    const { fetch } = answering([
+      null,
+      { lat: "48.5222989", lon: "-64.2136423", display_name: "Percé, Québec, Canada" },
+    ]);
+    const perce: Place = { name: "Percé", locality: "Québec", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: perce })).resolves.toMatchObject({
+      coordinates: { latitude: 48.5222989, longitude: -64.2136423 },
+    });
+  });
+
   test("a first result that is null, not an object, is null — not a throw", async () => {
     const { fetch } = answering([null]);
     const somewhere: Place = { name: "Rimouski", locality: "Québec", coordinates: null };
@@ -584,13 +1019,20 @@ describe("firstCoordinates, against malformed input no capture could justify", (
 
 /**
  * Facts about the real replies that no code here reads, checked in as
- * evidence for pl-34 rather than left for a reader to eyeball out of raw
- * JSON. `locate` always requests `limit=1`, so `NOMINATIM_AMBIGUOUS_LIMIT_10`
- * never reaches this provider in production — it is here because pl-34's
- * brief cites it.
+ * evidence for pl-34 rather than left for a reader to eyeball out of raw JSON.
+ *
+ * **`limit=10` is now what `locate` asks for**, so this capture does reach the
+ * provider in production — that sentence read the other way round when pl-30
+ * wrote it. What no code reads is `importance` and `place_id`, and the first
+ * of those is the reason: `chooseResult` ignores the ranking these tests
+ * measure, because the ranking is wrong for this tool's question.
+ *
+ * `q=Saint-Jean&limit=10` returned **six** results, not ten — Nominatim
+ * answered with what it had. pl-34's brief says "the ten results" throughout
+ * and means these six; the count in these test names is the reply's.
  */
 describe("what the ambiguous-name replies show, beyond what locate reads", () => {
-  test("the ten results are not ordered by importance", () => {
+  test("the six results are not ordered by importance", () => {
     const results = NOMINATIM_AMBIGUOUS_LIMIT_10 as Array<{ importance: number }>;
     const importances = results.map((r) => r.importance);
     const sortedDescending = importances.toSorted((a, b) => b - a);
@@ -602,7 +1044,7 @@ describe("what the ambiguous-name replies show, beyond what locate reads", () =>
     expect(importances.indexOf(Math.max(...importances))).toBe(2);
   });
 
-  test("none of the ten results is in Québec", () => {
+  test("none of the six results is in Québec", () => {
     const results = NOMINATIM_AMBIGUOUS_LIMIT_10 as Array<{ display_name: string }>;
     const inQuebec = results.filter((r) => /qu[ée]bec/iu.test(r.display_name));
 

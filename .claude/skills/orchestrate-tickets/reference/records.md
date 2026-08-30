@@ -73,6 +73,16 @@ discarded. So:
   guessing** (this repo has two `logging.test.ts`), and exits non-zero so it can
   gate a commit. It prints each cited line so you can judge the content.
 
+  **So a bare filename is not a citation in this repo — it is a coin flip the
+  tool refuses to make.** `travel.ts:286` matches three tracked files and
+  `brief.ts:505` matches two; the resolver fails both rather than picking, which
+  is the right design and is also the reason the habit has to be to *write* the
+  qualifying path, not to fix it when the script complains. Four ambiguous
+  citations across three tickets in one day is what made this worth stating.
+  Qualify far enough left to be unique — `api/src/runs/travel.ts:286-310`,
+  `contract/src/brief.ts:505` — and the check becomes a confirmation instead of
+  a rework.
+
   It cannot judge two of the four modes, and says so: a citation whose *content*
   changed still resolves, and a citation that is a finding's own evidence must
   stay wrong. Those are yours. Run it as the genuinely last action before

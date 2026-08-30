@@ -74,7 +74,7 @@ import type {
 } from "@planner/agent";
 import { AppError, coordinatesSchema } from "@planner/contract";
 import type { Coordinates, Place, Source } from "@planner/contract";
-import { distanceToCorridorMetres } from "./geometry.ts";
+import { distanceToCorridorMetres, haversineMetres } from "./geometry.ts";
 import type { AppLogger } from "../logger.ts";
 import { KEY_SEPARATOR } from "./place-key.ts";
 
@@ -107,6 +107,105 @@ const GEOCODED_BY = "OpenStreetMap, geocoded by Nominatim";
  * and a header that only works on one of the two would be found the hard way.
  */
 const USER_AGENT = "webtools-planner/1.0 (+https://github.com/webtools)";
+
+/**
+ * How many results `locate` asks the geocoder for — pl-34.
+ *
+ * **It was `1` and that was the defect.** One result is not the geocoder's
+ * best guess about the place that was asked for; it is the top of a list whose
+ * length was hidden. pl-30's captures showed the whole of it: `q=Saint-Jean`
+ * returns Saint-Jean in **Toulouse, France** at `limit=1`, and at `limit=10`
+ * six places on three continents — France, New Brunswick, Newfoundland,
+ * Jersey, Belgium and Kinshasa. At `limit=1` nothing downstream could tell
+ * that reply apart from an unambiguous one, so a wrong coordinate arrived
+ * sourced, fully formed, and got measured against.
+ *
+ * Ten, because that is the limit the reply this rule was written against was
+ * captured at, and because the cost is a longer JSON body from a service on
+ * the same box, not another request.
+ */
+const GEOCODER_RESULT_LIMIT = 10;
+
+/**
+ * How far apart two results may sit and still be taken for one place.
+ *
+ * **The reason this constant was first written is false, and the captures
+ * that disproved it are checked in.** It was justified by a geocoder
+ * answering one town as several rows — a settlement node beside its own
+ * administrative boundary — and Nominatim does not do that. `Percé, Québec`
+ * returns **one** row whose `display_name` is `Percé, Le Rocher-Percé,
+ * Gaspésie–Îles-de-la-Madeleine, Québec, Canada`: the containing municipality
+ * is *inside the address hierarchy of the same row*, not a second row. The
+ * same holds for Tadoussac, Baie-Saint-Paul, Québec, Charlevoix and
+ * Saint-Jean — six locality-supplied lookups, six single-row replies. See
+ * `nominatim-search-perce-quebec.json` and its five siblings.
+ *
+ * **What is measured is the far side, and it is what the number now has to
+ * respect.** `Gaspé, Québec` returns two rows — the town
+ * (`Gaspé, La Côte-de-Gaspé, …`) and the peninsula (`Gaspésie, Québec,
+ * Canada`) — **118.6 km** apart, both mentioning Québec, both surviving
+ * `bestMatches`. That pair *must* read as a disagreement, because the
+ * settlement tiebreak in `chooseResult` is what resolves it and the tiebreak
+ * only runs on a disagreement. A threshold at or above 118.6 km would call
+ * them one place and answer whichever row Nominatim happened to send first —
+ * the correct town today, the peninsula the day the order changes. So the
+ * ceiling is real: **this must stay below 118.6 km**, and
+ * `grounding-valhalla.test.ts` fails if it does not, by feeding the same two
+ * rows reversed.
+ *
+ * The floor is now the unsupported side: no capture in this repo shows two
+ * rows that *are* one place, so nothing measures how much slack is needed and
+ * 25 km is a deliberate margin rather than a finding. Its cost if it is too
+ * generous is bounded — a pair inside it is answered by reply order, which is
+ * what every version of this file before pl-34 did for every reply.
+ */
+const SAME_PLACE_METRES = 25_000;
+
+/**
+ * The shortest locality fragment allowed to separate two results.
+ *
+ * A one- or two-character fragment matches by accident far more often than it
+ * matches on purpose — `ca` is inside `Canada`, `Casablanca` and
+ * `Vaticano` — and a spurious match is the dangerous direction here: it
+ * promotes a result nothing actually pointed at. A fragment this short is
+ * dropped, which at worst leaves nothing to disambiguate with and falls
+ * through to the agreement test.
+ */
+const MIN_HINT_CHARS = 3;
+
+/**
+ * The `addresstype` values `chooseResult` will prefer when the locality has
+ * already said where, and two survivors still disagree about the point.
+ *
+ * A trip's item is somewhere you go, not the region you are in. `Gaspé,
+ * Québec` answers the town **and** the Gaspé peninsula, both correctly in
+ * Québec and 118.6 km apart; a plan means the town. This list is what says so.
+ *
+ * **Every member is a value a checked-in capture actually carries** — `town`
+ * (Percé, Gaspé, Baie-Saint-Paul), `village` (Tadoussac), `city` (Québec,
+ * and St. John's and Saint John in the ambiguous reply) and `municipality`
+ * (Lingwala, Kinshasa). Nothing is here on the strength of being a plausible
+ * OSM tag.
+ *
+ * **It is an allowlist and that is the whole safety argument.** A type not on
+ * it is not *rejected*; it merely fails to be preferred, so a reply whose
+ * rows are all unfamiliar types stays a disagreement and `locate` declines.
+ * The failure mode of an incomplete list is therefore a place that is not
+ * located, never a place located wrongly — which is the direction this ticket
+ * exists to protect. A denylist of large-area features would invert that: an
+ * unrecognised type would beat a `peninsula` on the strength of nobody having
+ * heard of it.
+ *
+ * Types deliberately absent because a capture shows them being the *wrong*
+ * answer: `county` (Nez Perce County, Idaho, for a bare `Percé`), `peninsula`
+ * (Gaspésie), `highway` (a bus stop named Sainte-Anne — see pl-34's Log).
+ */
+const SETTLEMENT_ADDRESS_TYPES: ReadonlySet<string> = new Set([
+  "city",
+  "town",
+  "village",
+  "municipality",
+]);
 
 export interface ValhallaProviderOptions {
   /** Base URL of the Valhalla instance. Operator configuration; no default. */
@@ -168,6 +267,14 @@ export class ValhallaGroundingProvider implements GroundingProvider {
    * `LocateRequest` carries the whole `Place` for exactly that reason:
    * Sainte-Anne-des-Monts in Québec is not the other one, and a backend handed
    * a bare name has to guess.
+   *
+   * **And so does the choice among the answers** — pl-34. Asking well is not
+   * enough: the geocoder answers a ranked list either way, and taking the top
+   * of it turns "several places are called this" into a confident coordinate.
+   * So this asks for `GEOCODER_RESULT_LIMIT` results and `chooseResult` picks
+   * among them, which means `null` here now also covers *ambiguous*, not only
+   * *unmatched*. See `chooseResult` for why those are one value today and
+   * what it costs.
    */
   async locate(request: LocateRequest): Promise<LocatedPlace | null> {
     const query = placeQuery(request.place);
@@ -176,14 +283,14 @@ export class ValhallaGroundingProvider implements GroundingProvider {
     const url = new URL(`${this.#geocoderUrl}/search`);
     url.searchParams.set("q", query);
     url.searchParams.set("format", "jsonv2");
-    url.searchParams.set("limit", "1");
+    url.searchParams.set("limit", String(GEOCODER_RESULT_LIMIT));
 
     const body = await this.#json(
       url,
       { method: "GET", headers: { "user-agent": USER_AGENT, accept: "application/json" } },
       request.signal,
     );
-    const coordinates = firstCoordinates(body);
+    const coordinates = chooseResult(geocoderResults(body), request.place);
     if (coordinates === null) return null;
 
     // A fresh object, never one held anywhere in this provider. `Object.freeze`
@@ -571,26 +678,223 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+/** One geocoder result this code can use: where it is, and what it says it is. */
+interface GeocoderResult {
+  coordinates: Coordinates;
+  /**
+   * Nominatim's own prose for the place — `"Percé, Le Rocher-Percé,
+   * Gaspésie–Îles-de-la-Madeleine, Québec, Canada"`. Read as prose and never
+   * split into fields: which comma holds the country varies by country, and
+   * the field this tool would want is `address`, which it does not ask for.
+   * `""` when the reply omits it, which makes the result unmatchable rather
+   * than unusable.
+   */
+  displayName: string;
+  /**
+   * Nominatim's `addresstype` — `town`, `village`, `peninsula`, `county`,
+   * `highway`. What *kind* of thing the row is, as opposed to where it is,
+   * and the only field besides `display_name` that `chooseResult` reads.
+   * `""` when the reply omits it, which simply means this row cannot win the
+   * settlement tiebreak.
+   */
+  addressType: string;
+}
+
 /**
- * The first result's coordinates, or `null`.
+ * Every result in the reply that names a point on Earth, in the order sent.
  *
  * Nominatim answers `lat` and `lon` as **strings** in its JSON, which is the
  * one thing about this reply worth writing down; numbers are accepted too so
  * that pointing `GEOCODER_URL` at something else does not fail on a detail
  * neither side promised. `coordinatesSchema` is what decides the pair is a
  * point on Earth, so a `lat` of 900 is no answer rather than a place.
+ *
+ * A row that fails any of that is **skipped, not fatal**: it is one row of a
+ * list, and the rows around it are still answers. Before pl-34 only `body[0]`
+ * was read, so a malformed first row meant the whole reply was `null`.
  */
-function firstCoordinates(body: unknown): Coordinates | null {
-  if (!Array.isArray(body) || body.length === 0) return null;
-  const first: unknown = body[0];
-  if (typeof first !== "object" || first === null) return null;
+function geocoderResults(body: unknown): GeocoderResult[] {
+  if (!Array.isArray(body)) return [];
 
-  const { lat, lon } = first as Record<string, unknown>;
-  const parsed = coordinatesSchema.safeParse({
-    latitude: asNumber(lat),
-    longitude: asNumber(lon),
+  const results: GeocoderResult[] = [];
+  for (const entry of body as readonly unknown[]) {
+    if (typeof entry !== "object" || entry === null) continue;
+
+    const {
+      lat,
+      lon,
+      display_name: displayName,
+      addresstype: addressType,
+    } = entry as Record<string, unknown>;
+    const parsed = coordinatesSchema.safeParse({
+      latitude: asNumber(lat),
+      longitude: asNumber(lon),
+    });
+    if (!parsed.success) continue;
+
+    results.push({
+      coordinates: parsed.data,
+      displayName: typeof displayName === "string" ? displayName : "",
+      addressType: typeof addressType === "string" ? addressType : "",
+    });
+  }
+  return results;
+}
+
+/**
+ * Which of the geocoder's answers is the place that was asked about — pl-34.
+ *
+ * **Not the first one, and not the best-scored one.** Both were measured
+ * against the captured `q=Saint-Jean` reply and both are wrong: the first is
+ * Toulouse, France, and the highest `importance` is St. John's, Newfoundland.
+ * Nominatim's ranking is a statement about how prominent a place is, not about
+ * which place a trip meant, and no amount of trusting it harder turns one into
+ * the other.
+ *
+ * So the tie is broken by what this tool knows and the geocoder does not: the
+ * candidate's own `locality`. Each of its comma-separated fragments is a
+ * *hint* — unlabelled, all equal, none of them read as a country or a region —
+ * and a result scores one point per hint its `display_name` mentions. The
+ * highest-scoring results survive; a result matching nothing does not.
+ *
+ * **That is not parsing structure out of `locality`**, which the contract
+ * forbids. Nothing here decides that `"Canada"` is the country in
+ * `"Québec, Canada"`, or that the last fragment means anything in particular.
+ * Both fragments are searched for in the same way and the only thing counted
+ * is how many of them appear, which is why `"Québec, Canada"` beats
+ * `"…, Canada"` alone without either fragment having a role. The day the
+ * country needs to be *known* rather than *matched*, it becomes a field.
+ *
+ * The survivors then have to agree about where they are, within
+ * `SAME_PLACE_METRES`. That is the whole answer when there is no locality at
+ * all — `Place.locality` is nullable and a model omits it routinely — and it
+ * is what makes the bare `Saint-Jean` case honest: six places, no hint to
+ * separate them, so nothing was located.
+ *
+ * ## The settlement tiebreak, and why it may only run second
+ *
+ * A locality can say where and still leave two rows disagreeing about the
+ * point. `Gaspé, Québec` is the captured case: the town and the Gaspé
+ * peninsula, both in Québec, both scoring the same hint, 118.6 km apart. A
+ * plan means the town, and `addresstype` is the field that says which row is
+ * a town — so the survivors are narrowed once more, to
+ * `SETTLEMENT_ADDRESS_TYPES`, and asked to agree again.
+ *
+ * **It runs only when a locality hint did the narrowing, and that boundary is
+ * load-bearing rather than cautious.** The two fields answer different
+ * questions: the locality answers *where*, `addresstype` answers *what kind*.
+ * Letting "what kind" loose on a set nothing has narrowed silently promotes it
+ * to answering "where", which is this ticket's entire defect wearing a new
+ * hat. The captured proof is a bare `Percé`: two rows, the town in Québec and
+ * Nez Perce County in Idaho, 3 882 km apart. Exactly one is a settlement, so
+ * an unscoped tiebreak would answer Québec with real confidence and no
+ * evidence — nothing in that request ever said Canada. It declines instead.
+ *
+ * The order matters as much as the scope. Agreement is tested **before** the
+ * tiebreak, so a lone row of an unfamiliar type is still an answer: the
+ * captured `Saint-Jean, Québec` is `addresstype: political` and the captured
+ * `Sainte-Anne, Québec` is `highway`, neither of them a settlement, and both
+ * are located because there was nothing to break a tie between. An
+ * incomplete allowlist costs nothing until two rows actually conflict.
+ *
+ * ## `null` here says "ambiguous" in a voice that only says "unmatched"
+ *
+ * `locate` answers `LocatedPlace | null` and both outcomes collapse into that
+ * `null`, so the plan says the leg is unmeasured without being able to say
+ * that the *name* was the problem. That is a real loss of resolution and it is
+ * pl-34's open question rather than an oversight — naming it needs a word in
+ * `@planner/agent`'s seam and in `UncheckedConstraint`, which is
+ * contract-adjacent. Recorded in pl-34's Log; not decided here.
+ */
+function chooseResult(results: readonly GeocoderResult[], place: Place): Coordinates | null {
+  const hints = localityHints(place.locality);
+
+  // Nothing narrows a reply to a name alone, so it has to speak for itself:
+  // either its rows are one place or this call has no answer.
+  if (hints.length === 0) return agreedPoint(results);
+
+  const shortlist = bestMatches(results, hints);
+  const located = agreedPoint(shortlist);
+  if (located !== null) return located;
+
+  // The locality has already said where; `addresstype` may now say what kind.
+  // See the header — this is the only place it is allowed to run.
+  return agreedPoint(shortlist.filter((each) => SETTLEMENT_ADDRESS_TYPES.has(each.addressType)));
+}
+
+/**
+ * The point these results agree on, or `null` if they do not agree on one.
+ *
+ * "Agree" is measured from the first of them rather than pairwise, which is
+ * the same claim for the purpose — a set every member of which is within
+ * `SAME_PLACE_METRES` of one member is a set that describes one place at this
+ * scale — and is linear rather than quadratic. An empty list agrees on
+ * nothing, which is why every caller can hand this a filtered list without
+ * checking it first.
+ */
+function agreedPoint(results: readonly GeocoderResult[]): Coordinates | null {
+  const best = results[0];
+  if (best === undefined) return null;
+
+  const agree = results.every(
+    (each) => haversineMetres(best.coordinates, each.coordinates) <= SAME_PLACE_METRES,
+  );
+  return agree ? best.coordinates : null;
+}
+
+/**
+ * The results that mention the most hints, in reply order. Empty when none
+ * mentions any: a reply that says nothing about where the candidate claims to
+ * be has not found it, whatever it found instead.
+ */
+function bestMatches(
+  results: readonly GeocoderResult[],
+  hints: readonly string[],
+): GeocoderResult[] {
+  const scored = results.map((result) => {
+    const haystack = foldForMatching(result.displayName);
+    return { result, score: hints.filter((hint) => haystack.includes(hint)).length };
   });
-  return parsed.success ? parsed.data : null;
+
+  const top = Math.max(0, ...scored.map(({ score }) => score));
+  if (top === 0) return [];
+  return scored.filter(({ score }) => score === top).map(({ result }) => result);
+}
+
+/**
+ * The candidate's `locality` as a set of things to look for.
+ *
+ * Split on commas because that is how the prose is written — `"Québec,
+ * Canada"`, `"Trieste, Italy"` — and folded so that a candidate saying
+ * `"quebec"` still matches a `display_name` saying `"Québec"`. Fragments
+ * shorter than `MIN_HINT_CHARS` are dropped; duplicates are collapsed so a
+ * repeated word cannot outvote a distinct one.
+ */
+function localityHints(locality: string | null): string[] {
+  if (locality === null) return [];
+  const parts = foldForMatching(locality)
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length >= MIN_HINT_CHARS);
+  return [...new Set(parts)];
+}
+
+/**
+ * Lowercased and stripped of diacritics, for comparing two pieces of prose
+ * that came from different writers.
+ *
+ * A specialist writes `"Quebec"` and OpenStreetMap writes `"Québec"`; the
+ * accent is the writer's, not the place's. `NFD` splits an accented letter
+ * into its base and its mark and the mark is what is removed, so this holds
+ * for every accent rather than for a list of them. The character class has no
+ * quantifier, so it carries none of the backtracking cost `trimSlash`'s
+ * comment is about.
+ */
+function foldForMatching(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
 }
 
 function asNumber(value: unknown): number | undefined {

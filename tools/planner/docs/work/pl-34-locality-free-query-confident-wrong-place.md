@@ -4,7 +4,7 @@ tool: planner
 title: A locality-free geocoder query resolves confidently to the wrong country
 kind: fix
 milestone: P3
-status: ready
+status: done
 depends_on: []
 ---
 
@@ -127,6 +127,33 @@ and what a rejected/refused `locate` should mean for the plan (a new
 `UncheckedConstraint`? a different one from the existing `travel-time`?), is
 this ticket's Build, not written here.
 
+## Build — option 2, decided 2026-08-30 by the user
+
+**Raise the request `limit` and disambiguate on `display_name`.** In
+`api/src/grounding/valhalla.ts`:
+
+1. Ask the geocoder for ten results rather than one.
+2. Choose among them by matching the candidate's own `locality` against each
+   result's `display_name` — not by Nominatim's order and not by `importance`,
+   both of which this ticket's capture already shows would pick a European
+   result over both Canadian ones.
+3. Where nothing separates the results and nothing points at one of them, do
+   not answer. `locate` says `null`, as it already may.
+
+(3) closes option 3 as a side effect: it comes out of the same scoring rule
+rather than being a second rule, so it is folded in rather than left filed.
+
+**Amended 2026-08-30, after the captures landed.** A fourth step, added
+because the first three declined an ordinary lookup:
+
+4. When the locality has narrowed the reply and the survivors _still_
+   disagree, break the tie on `addresstype` — prefer settlement types over
+   large-area features — and require agreement again. Only then: a reply that
+   nothing has narrowed is not eligible, or the tiebreak starts answering
+   "where" instead of "what kind". `Gaspé, Québec` (town vs peninsula, 118.6
+   km) is what it fixes; bare `Percé` (town in Québec vs county in Idaho, 3882
+   km) is what it must not touch. Both are captured.
+
 ## Done when
 
 - A decision is recorded for which of the options above (or a fourth) closes
@@ -136,6 +163,67 @@ this ticket's Build, not written here.
 - If the fix changes what `locate` or `travel` can return, `@planner/contract`
   and pl-27's `UncheckedConstraint` vocabulary are updated to say so, rather
   than silently returning `null` for a case the plan should be able to name.
+
+## Review
+
+### Gate 2 — 2026-08-30 — PASS
+
+Scope: round 2 only — the `addresstype` tiebreak, the ten captured fixtures,
+the threshold's new bound, and the round-2 Log. **Gate 1's ground is not
+re-covered here and this record does not claim it**: round 1's reproduction,
+its six mutations, the brief corrections and its citation work were gated
+separately, and that record was relayed rather than committed, so it is absent
+from this file rather than superseded by what follows.
+
+| Done when                                                                                                  | Verdict                               | What proves it                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A decision is recorded for which option closes this gap                                                    | met                                   | `## Build — option 2, decided 2026-08-30 by the user`, plus its `Amended` fourth step. Options 1 and 3 weighed in place rather than re-derived; option 3 folded in and said to be folded in.                                                                                                                                               |
+| The chosen fix is implemented, and the reproduction is pinned as a test that fails without it              | met                                   | `an ambiguous bare name is not located at all, rather than located wrongly` was watched red before any source changed. Round 2's regression is pinned by the ten-capture block, red under `Tiebreak removed entirely` (4 of 71).                                                                                                           |
+| If the fix changes what `locate`/`travel` can return, `@planner/contract` and `UncheckedConstraint` say so | **not met — deferred, not satisfied** | `locate` still answers `LocatedPlace \| null` and round 2 widened what `null` covers a third time. No contract or vocabulary change was made. Deliberate: contract-adjacent, escalated, and the user chose pl-37 instead. Recorded as an open decision in the Log, and this row says unmet rather than reading the deferral as compliance. |
+
+**Findings**
+
+- **Low 1 — two ambiguous citations.** `pl-34` Log `:285` cited
+  `travel.ts:286-310`, which `citations.mjs` resolves against three tracked
+  `travel.ts` files; `pl-37` `:60` cited `brief.ts:505`, ambiguous between
+  `contract/src/brief.ts` and `intake/src/brief.ts`. Neither miscited content.
+  **Fixed**: both qualified with their package paths. The habit behind them is
+  now stated durably in
+  `.claude/skills/orchestrate-tickets/reference/records.md` — a bare filename
+  is not a citation here, it is a coin flip the resolver refuses to make — on
+  the gate's observation that this had bitten four times in one day across
+  three tickets.
+- **Low 2 — two mutation counts did not reproduce.** The gate re-ran them and
+  got 4 and 7 where the Log said 3 and 5, inspected every extra failure by
+  hand, and found no hidden defect: aggregate summary tests, a duplicate
+  assertion, and unrelated robustness tests tripping on the same mutation.
+  **Fixed, and it was worse than reported**: re-measuring all four found a
+  _third_ wrong number — unscoping the tiebreak is 4, not the 3 recorded — so
+  three of the four were low, all from reading a `| head`-truncated FAIL list
+  instead of vitest's own count. The counts are now a table with the command
+  and the denominator (71) stated, per dl-27's builder's fix for the same
+  shape, rather than replaced with the gate's numbers.
+
+**`citations.mjs` reports 2 of 4 resolving on this file, and that is correct.**
+The two that fail are the two quoted in Low 1 — they are the finding's own
+evidence, and a citation that _is_ the finding must stay as written, which is
+the exception the script documents and cannot judge for itself. The two real
+citations, `contract/src/candidate.ts:263` and
+`api/src/runs/travel.ts:286-310`, both resolve, and the second was
+content-checked by hand: the range covers the `locate` loop pl-36 rewrites.
+The script gates no workflow and no hook, so this costs a reader one sentence
+rather than a red build.
+
+**What the gate verified that this builder had only argued.** All ten fixtures
+checked individually for `place_id`, `licence`, `osm_type`, `osm_id`,
+`addresstype`, `place_rank` and `importance` — the full genuine reply shape,
+not a composed subset. The scoping boundary shown load-bearing by
+construction: unscoped, bare `Percé` goes from `null` to Québec's coordinates
+and 3 tests fail. And the unrecognised-type case this builder reasoned about
+but had no capture for — two disagreeing rows whose types are both absent from
+the allowlist — was built and confirmed to answer `null` rather than pick
+wrongly, which turns the allowlist safety argument from an argument into a
+demonstration.
 
 ## Log
 
@@ -162,3 +250,244 @@ capture (`place_id` differs between the two captures for the same `osm_id`)
 is informational for this ticket and not a live defect — noted rather than
 acted on. `api/src/grounding/cache.ts`'s `locateKey`/`travelKey` are keyed on
 the requested `Place`, never on anything the reply returns.
+
+**2026-08-30 — option 2 built, reproduction pinned red first.** Branch
+`pl-34-locality-free-query-disambiguation`, cut from `origin/main`. `locate`
+asks for ten results and `chooseResult` picks among them; before this it asked
+for one and answered `body[0]`.
+
+The reproduction was written and watched fail before any source changed: six
+tests red at `d3feb4b`'s parent, including
+`locate({ name: "Saint-Jean", locality: null })` over
+`nominatim-search-ambiguous-limit10.json` answering Toulouse, France where it
+must answer nothing.
+
+**The rule, and why it is not the naive version.** Each comma-separated
+fragment of `locality` is an unlabelled hint; a result scores one point per
+hint appearing in its `display_name`, folded to lowercase with diacritics
+stripped so `"quebec"` matches `"Québec"`; the highest-scoring results survive
+and a result matching nothing does not; the survivors must then agree about
+where they are, within 25 km, or the place is not located. That last clause is
+the whole of the answer when `locality` is `null`, which is the case this
+ticket was filed for.
+
+Nothing here reads `importance` and nothing reads Nominatim's order except as
+a tiebreak among results that already agree. The brief is right that the naive
+version fails and it understates it slightly: `importance` would have picked
+**St. John's, Newfoundland** (0.6016, index 2), and taking the first would
+have picked **Toulouse** — three different answers from one reply, none of
+them a Québec place, which is pinned as a test rather than asserted.
+
+**What the brief had wrong or left stale.**
+
+- _"The ten results"_, said four times. The captured
+  `q=Saint-Jean&limit=10` reply holds **six** results; the brief's own
+  "the six distinct places are…" is the accurate sentence and the counts
+  elsewhere are not. The test names in `grounding-valhalla.test.ts` now say
+  six and the file's header says why.
+- _"production's actual request shape: `locate` always asks for `limit=1`"_
+  and _"captured only for this ticket's evidence"_, of the two captures. As
+  of this commit that is exactly inverted: `limit=10` is production's shape
+  and the two `limit=1` captures are the historical one. Both statements were
+  true when written; they are recorded here rather than edited out of the
+  Reproduction section, which is that section's job.
+- _Option 3 described as untouched by option 2_ — "does not touch the case
+  reproduced here". True of option 3 alone, but option 2's scoring produces
+  option 3 for free: a result that mentions none of the locality's hints is
+  refused whether or not there is anything else in the reply. The
+  pl-30-predicted failure (`{ name: "Saint-Jean", locality: "Québec" }`
+  answering Toulouse) is closed by this commit and pinned over the real
+  `limit=1` capture. **No separate ticket for it.**
+
+**Three fold-ins, all in this commit.** The stale `firstCoordinates`
+reference in `api/src/runs/discovery.ts`'s header (the function is now
+`geocoderResults`), the two stale claims about the captures in the test
+file's header, and option 3 above. A fourth was declined: `MIN_HINT_CHARS`
+and the 25 km radius are the kind of constant `docs/01-ARCHITECTURE.md` might
+mention, and it does not mention the geocoder's request shape at all today, so
+adding a first mention of it there is a documentation change with no ticket
+behind it rather than a stale sentence being fixed.
+
+**Every rule was mutation-checked, and one mutant survived long enough to be
+worth writing down.** Six mutations run individually against the spec:
+dropping the diacritic fold, a zero agreement radius, `score > 0` instead of
+`score === top`, a constant `top = 1`, and `MIN_HINT_CHARS` at 0 all failed a
+named test. `if (top === 0) return []` mutated to `return [...results]`
+**passed all 54 tests** — because in every ambiguous case the survivors then
+disagree geographically and the answer is `null` either way. The case that
+distinguishes them is a _lone_ result that contradicts the locality, which is
+precisely the pl-30-predicted failure, and it now has its own test over the
+real `limit=1` capture (`one result that contradicts the locality is refused,
+not accepted for being alone`). Without that mutation the ticket would have
+shipped believing option 3 was covered when only its ambiguous half was.
+
+**What is unmeasured, named rather than reasoned about.**
+
+- **No successful lookup has been captured at `limit=10`.** This container
+  reaches no geocoder — verified again today: `example.com`,
+  `en.wikipedia.org` and `download.geofabrik.de` all fail to connect while
+  `registry.npmjs.org` returns 200, so it is an allowlist. What
+  `q=Percé, Québec&limit=10` actually returns is therefore unknown, and the
+  rule's behaviour on the ordinary case is inferred from a `limit=1` capture
+  plus reasoning, not observed. **This is the ticket's largest open risk**:
+  if Nominatim returns Percé's town node and its `Le Rocher-Percé` municipality
+  as rows more than 25 km apart, an ordinary lookup that used to answer would
+  now decline. The capture that would settle it is one command on a networked
+  machine and is worth taking before this reaches a deployment.
+- **How far apart a geocoder's duplicate rows for one town are** is likewise
+  unsourced; 25 km is chosen inside the gap between that (single-digit km in
+  any reasonable description) and the closest pair in the real ambiguous reply
+  (**402 km**, St John, Jersey to Sint-Jan, Belgium — computed from the
+  fixture, not estimated). Any threshold in that range decides every case in
+  this repo identically. The test that pins the near side composes its two
+  rows by hand and says in the test body that it is not a claim about
+  Nominatim.
+
+**For pl-36 (`api/src/runs/travel.ts:286-310`), which is serialised behind this.** That
+loop is **not touched by this commit** — no line of `api/src/runs/travel.ts`
+changed, so its shape is exactly what pl-36's brief describes. What changed is
+underneath it: an `outcome.kind` of `unknown` from `locate` now means either
+"nobody matched this name" _or_ "several places matched and nothing separated
+them". The loop maps both to `NOT_ESTABLISHED` and the plan calls the leg
+unmeasured, which is truthful but coarser than it was. If pl-36 is
+re-shaping that loop anyway, it is the cheapest place to carry a distinction —
+see the open decision below, which is pl-36's to inherit if it is not settled
+first.
+
+**Open decision, not settled here: does an ambiguous name deserve its own
+word?** `locate` answers `LocatedPlace | null` and this commit widened what
+`null` covers without widening the vocabulary, which is the third bullet of
+Done-when. Deliberately left for the user because it is contract-adjacent —
+`@planner/agent`'s `LocateRequest`/`GroundingProvider` seam and
+`@planner/contract`'s `UNCHECKED_CONSTRAINTS`, whose sibling packages depend
+on both. The options are in this dispatch's report.
+
+**2026-08-30 (round 2) — the network opened, and the capture overturned the
+risk this ticket's first round named.** Ten `limit=10` queries were run
+against the public Nominatim instance by the coordinating session and are
+checked in under `api/test/fixtures/nominatim-search-*.json`, unedited. They
+are first-hand payloads; the capture _conditions_ (host, headers) are carried
+on that session's word, since this container still reaches no geocoder.
+
+**The stated open risk was false, and this is the correction the Log exists
+for.** Round 1 named its largest risk as "a town returned alongside its
+containing municipality as two rows more than 25 km apart", and built
+`SAME_PLACE_METRES`'s floor on it. **Nominatim does not produce that shape.**
+`Percé, Québec` returns **one** row whose `display_name` is already
+`Percé, Le Rocher-Percé, Gaspésie–Îles-de-la-Madeleine, Québec, Canada` — the
+municipality is inside the row's own address hierarchy, not beside it. Six of
+the ten replies are single-row for the same reason. The hand-composed
+two-row test that pinned that floor is kept and relabelled: it no longer
+claims to imitate a reply, it pins a deliberate margin that no capture
+supports.
+
+**The regression was real anyway, through a shape nobody predicted.**
+`Gaspé, Québec` returns two rows — the town `Gaspé, La Côte-de-Gaspé, …` and
+the peninsula `Gaspésie, Québec, Canada` — **118.6 km** apart. Both mention
+Québec, so both survive `bestMatches`; 118.6 km exceeds the threshold, so
+round 1's rule declined an ordinary lookup. Measured across the ten: nine
+locate, one (bare `Percé`) declines correctly, and before this commit `Gaspé`
+made it eight. The mechanism is a town beside a **larger geographic feature
+sharing its name**, not a town beside its own municipality.
+
+**The fix: `addresstype`, scoped.** When the locality has already narrowed the
+reply and the survivors still disagree, prefer `SETTLEMENT_ADDRESS_TYPES` —
+`city`, `town`, `village`, `municipality`, every one a value a checked-in
+capture carries — and require agreement again.
+
+**The scope boundary is the part worth reading, and it is load-bearing rather
+than cautious.** The tiebreak fires only when a locality hint did the
+narrowing. The two fields answer different questions: the locality answers
+_where_, `addresstype` answers _what kind_. Turning "what kind" loose on a set
+nothing has narrowed promotes it to answering "where", which is this ticket's
+own defect in a new hat. The captured proof is a bare `Percé`: the town in
+Québec and Nez Perce County, Idaho, 3 882 km apart, exactly one of them a
+settlement. An unscoped tiebreak answers Québec with real confidence and
+nothing behind it — nothing in that request ever said Canada. It declines
+instead, and three tests fail if that boundary moves.
+
+**It is an allowlist, and that is the safety argument.** A type not on the
+list is not rejected, it merely fails to be preferred — so an incomplete list
+produces a place that is _not located_, never a place located _wrongly_. A
+denylist of large-area features would invert that: an unrecognised type would
+beat a `peninsula` on the strength of nobody having heard of it. Agreement is
+also tested **before** the tiebreak, so a lone row of an unfamiliar type still
+answers: captured `Saint-Jean, Québec` is `addresstype: political` and
+`Charlevoix, Québec` is `county`, and both locate because there was no tie.
+
+**`SAME_PLACE_METRES` now has a measured ceiling and a test.** The gate found
+that every value from ~1.6 km to 403 km passed all 56 tests identically — the
+constant was pinned by a comment and nothing else. It is now bounded from
+above at **118.6 km**, because the `Gaspé` pair must read as a disagreement
+for the tiebreak to run at all; a larger threshold would call them one place
+and answer whichever row Nominatim sent first, which is correct today and
+luck tomorrow. The test feeds the same two captured rows **reversed** and
+requires the town either way — one test that bounds the constant and proves
+the answer comes from the type rather than the ordering. Verified: passes at
+118 km, fails at 200 km. The _floor_ is now the unsupported side, and the
+comment on the constant says so.
+
+**Mutation results, round 2 — counted at
+`npx vitest run tools/planner/api/test/grounding-valhalla.test.ts`, whose
+denominator is 71 tests.** Stating the scope is the point: an earlier version
+of this paragraph gave three of these four numbers too low, because they were
+read off a `| head`-truncated FAIL list rather than off vitest's own count, and
+a bare "fails 3" gives a reader nothing to catch that with.
+
+| Mutation                                               | Failed  | What it proves                          |
+| ------------------------------------------------------ | ------- | --------------------------------------- |
+| Tiebreak removed entirely                              | 4 of 71 | the regression, reproduced              |
+| Tiebreak unscoped to locality-free queries             | 4 of 71 | bare `Percé` stops declining            |
+| `town` dropped from the allowlist                      | 4 of 71 | the allowlist is read                   |
+| Settlements filtered always, not only after a conflict | 7 of 71 | order matters; 3 ordinary lookups break |
+
+**These counts are per-scenario and they include collateral, which is the
+honest reading of them.** Most of these mutations trip aggregate tests — the
+ten-capture block's own "nine locate, one declines" summary, and a duplicate
+assertion of the same case in the tiebreak block — so a count is evidence that
+a rule is _load-bearing_, never a measure of how narrowly it is pinned. Gate 2
+reproduced 4 and 7 for the last two and inspected every extra failure by hand;
+none revealed a hidden defect. Its phrase is the right one to keep: misleading
+as evidence of precision, not as evidence of correctness. This is the same
+defect dl-27's builder named in its own table hours earlier — "N failed" with
+no denominator — and the fix is the same one it took: say what the count was
+taken over rather than move to someone else's number.
+
+**One mutant survives and is recorded rather than papered over:** filtering to settlements _before_ the agreement test but
+only when a settlement exists is behaviourally identical on all ten captures.
+It differs only for a reply mixing a large-area row and a settlement row
+_within_ the threshold, where mine answers by reply order and it answers the
+settlement. No capture shows that case; it is a defensible refactor rather
+than a defect, and it is left alone.
+
+**A wrong answer this ticket does not fix, named rather than absorbed.**
+`Sainte-Anne, Québec` resolves to a **bus stop** in Québec City
+(`addresstype: highway`, `importance` 7.2e-05), not to any town called
+Sainte-Anne-something. It is a single-row reply, so there is no tie and
+nothing here fires; it is the same _class_ of failure as this ticket's —
+confident, sourced, wrong — reached by a different route, and closing it needs
+a different instrument (a floor on `place_rank`/`importance`, or the trip
+context pl-37 adds). Counted among the "nine that locate" because it returns a
+point, which is exactly the sense in which that count is weaker than it reads.
+
+**Round 1's `Percé, Québec` gap is closed.** Round 1 said no successful
+lookup had been captured at `limit=10` and that the ordinary case was inferred
+rather than observed. Ten now are, driven through `locate` as a block in
+`grounding-valhalla.test.ts` so the next change to `chooseResult` is measured
+against all of them at once.
+
+**Follow-up filed: pl-37**, `locate cannot see the trip it is grounding` —
+the user's choice from round 1's open decision. It puts the brief's
+destination into `LocateRequest`, and carries the trap this round worked out:
+`cache.ts`'s `locateKey` is keyed on the `Place` alone, so a seam that answers
+per-trip with a key that ignores the trip serves one trip's Saint-Jean to
+another's. It would also have dissolved the `Gaspé` case without an allowlist.
+Id verified against `origin/main`'s work directory, every open pull request
+and every ref on `origin`: `pl-36` was the highest, `pl-33` is held by another
+session, so `pl-37`.
+
+**Still not settled, and still contract-adjacent:** whether an ambiguous
+`locate` deserves its own word in the seam and in `UncheckedConstraint`. Round
+2 widened what `null` covers again — a declined tiebreak is a third way to get
+one — without widening the vocabulary. Unfiled on purpose; it is the
+alternative the user did not pick, and it belongs to whoever picks it up.

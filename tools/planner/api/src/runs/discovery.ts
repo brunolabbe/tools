@@ -33,8 +33,9 @@
  * route's geometry, only a matrix of distances (`travel`) and a point
  * (`locate`). Building one would mean a new seam method — a genuinely bigger
  * decision than this ticket's scope, and one with a fixture wall of its own
- * (Valhalla's own `/route`, uncaptured, exactly `firstCoordinates`'s problem
- * one endpoint over). A straight line is honest about what it is and correct
+ * (Valhalla's own `/route`, uncaptured, exactly the problem `geocoderResults`
+ * had one endpoint over — `firstCoordinates` when this was written, renamed by
+ * pl-34). A straight line is honest about what it is and correct
  * for the purpose it serves here: `radiusMetres` already has to be generous
  * enough to admit a real road's curve away from the straight line between its
  * ends, and widening it a little further to admit the whole corridor's gentle
