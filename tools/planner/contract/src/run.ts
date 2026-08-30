@@ -99,11 +99,29 @@ export type RunStatus = (typeof RUN_STATUSES)[number];
  * the same reason `reviewing` is — grounding has its own cost and its own count,
  * and this tool will want to show both — and the edge past it is legal so that
  * nothing has to lie in the meantime.
+ *
+ * **`grounding` is entered twice, and it is one state rather than two** (pl-29,
+ * `00-ANALYSIS.md` §5's amendment). Discovery — a corridor query proposing
+ * what might be worth stopping for — has to run *before* the fan-out, because
+ * its finds are material a specialist reads while it proposes, not a check on
+ * what it already proposed; the measuring pass above still runs *after*, for
+ * the opposite reason. Both are "we are looking something up outside the
+ * process", which is the honest description of both, and inventing a second
+ * name for the same activity would be a distinction the UI has to explain
+ * without there being anything for it to explain. So the pipeline is
+ * `queued → grounding → fanning-out → grounding → composing`, and it needs two
+ * edges beyond the ones the measuring pass already added: `queued → grounding`
+ * and `grounding → fanning-out`.
+ *
+ * **`queued → fanning-out` stays legal**, for exactly pl-24's reason one state
+ * earlier: a brief with no origin, no destination, or a grounding provider that
+ * cannot discover anything skips the corridor query entirely, and a run that
+ * discovered nothing must not pass through a state it spent no time in.
  */
 export const RUN_TRANSITIONS: TransitionTable<RunStatus> = {
-  queued: ["fanning-out", "failed", "canceled"],
+  queued: ["grounding", "fanning-out", "failed", "canceled"],
   "fanning-out": ["grounding", "composing", "failed", "canceled"],
-  grounding: ["composing", "failed", "canceled"],
+  grounding: ["fanning-out", "composing", "failed", "canceled"],
   composing: ["reviewing", "done", "failed", "canceled"],
   reviewing: ["done", "failed", "canceled"],
   done: [],

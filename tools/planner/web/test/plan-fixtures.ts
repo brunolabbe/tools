@@ -79,7 +79,11 @@ export function day(dayIndex: number, items: PlanItem[], date: string | null = n
   return { id: `day-${String(dayIndex)}`, dayIndex, date, items };
 }
 
-export function revision(days: PlanDay[], gaps: PlanGap[] = []): PlanRevision {
+export function revision(
+  days: PlanDay[],
+  gaps: PlanGap[] = [],
+  coverage: UncheckedConstraint[] = [],
+): PlanRevision {
   return {
     id: "rev-1",
     planId: "plan-1",
@@ -89,6 +93,7 @@ export function revision(days: PlanDay[], gaps: PlanGap[] = []): PlanRevision {
     createdAt: CREATED,
     days,
     gaps,
+    coverage,
   };
 }
 

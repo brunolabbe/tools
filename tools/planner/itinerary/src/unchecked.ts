@@ -391,6 +391,14 @@ export function uncheckedFor(input: {
  *
  * It takes the revision rather than a plan so a caller can ask about any of
  * them, which is what the revision picker needs.
+ *
+ * **`revision.coverage` is appended, not derived.** pl-29: a thin corridor is
+ * evidence a live backend produced once, at compose time, not a function of
+ * the days this revision holds — `uncheckedFor` cannot rebuild it, the way it
+ * cannot rebuild a measured leg from nothing but the days it packed. It rides
+ * through exactly as `compose` first attached it, which is what makes this
+ * function and `compose`'s own returned `unchecked` agree on the plan the run
+ * just built as well as on one read back a week later.
  */
 export function uncheckedForRevision(input: {
   brief: TripBrief;
@@ -406,5 +414,8 @@ export function uncheckedForRevision(input: {
     throw new AppError("BRIEF_INCOMPLETE", undefined, { details: { missing: ["dates"] } });
   }
 
-  return uncheckedFor({ brief, dates: brief.dates.value, candidates, days: revision.days });
+  return [
+    ...uncheckedFor({ brief, dates: brief.dates.value, candidates, days: revision.days }),
+    ...revision.coverage,
+  ];
 }

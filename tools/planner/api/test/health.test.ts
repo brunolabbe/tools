@@ -63,6 +63,9 @@ describe("GET /api/health", () => {
         groundingEndpoints: {
           routing: "http://valhalla.internal:8002",
           geocoder: "http://nominatim.internal:8080",
+          // pl-29's third endpoint, optional though it is — asserted absent
+          // from the body below on exactly the same footing as the other two.
+          discovery: "http://overpass.internal:8090",
         },
       },
     });
@@ -79,7 +82,33 @@ describe("GET /api/health", () => {
     expect(Object.keys(body.grounding)).toEqual(["provider"]);
     expect(JSON.stringify(body)).not.toContain("valhalla.internal");
     expect(JSON.stringify(body)).not.toContain("nominatim.internal");
+    expect(JSON.stringify(body)).not.toContain("overpass.internal");
     expect(JSON.stringify(body)).not.toContain("8002");
+    expect(JSON.stringify(body)).not.toContain("8090");
+  });
+
+  test("boots on valhalla with no OVERPASS_URL at all — discovery is the optional third endpoint", async () => {
+    // Unlike VALHALLA_URL and GEOCODER_URL, an unset discovery endpoint is not
+    // a boot-time refusal (pl-29): a deployment can measure distances and
+    // geocode without discovering anything nearby, so `nearby` degrades to an
+    // empty list rather than the run never starting at all.
+    app = await createApp({
+      config: {
+        databasePath: ":memory:",
+        logLevel: "silent",
+        groundingProvider: "valhalla",
+        groundingEndpoints: {
+          routing: "http://valhalla.internal:8002",
+          geocoder: "http://nominatim.internal:8080",
+          discovery: undefined,
+        },
+      },
+    });
+
+    const body = (
+      await app.server.inject({ method: "GET", url: ROUTES.health })
+    ).json<HealthResponse>();
+    expect(body.grounding).toEqual({ provider: "valhalla" });
   });
 
   test("refuses to boot when a real backend was named and no endpoint was", async () => {
@@ -92,7 +121,11 @@ describe("GET /api/health", () => {
         databasePath: ":memory:",
         logLevel: "silent",
         groundingProvider: "valhalla",
-        groundingEndpoints: { routing: undefined, geocoder: "http://nominatim.internal:8080" },
+        groundingEndpoints: {
+          routing: undefined,
+          geocoder: "http://nominatim.internal:8080",
+          discovery: undefined,
+        },
       },
     });
 
@@ -105,7 +138,11 @@ describe("GET /api/health", () => {
         databasePath: ":memory:",
         logLevel: "silent",
         groundingProvider: "valhalla",
-        groundingEndpoints: { routing: "valhalla:8002", geocoder: "http://nominatim:8080" },
+        groundingEndpoints: {
+          routing: "valhalla:8002",
+          geocoder: "http://nominatim:8080",
+          discovery: undefined,
+        },
       },
     });
 

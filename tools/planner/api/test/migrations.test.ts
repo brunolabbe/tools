@@ -34,7 +34,7 @@ describe("migrations", () => {
       "plan_runs",
       "plans",
     ]);
-    expect(userVersion(db)).toBe(6);
+    expect(userVersion(db)).toBe(7);
     db.close();
   });
 
@@ -56,26 +56,28 @@ describe("migrations", () => {
 
     expect(tables(db)).toContain("intakes");
     expect(tables(db)).not.toContain("conversations");
-    expect(userVersion(db)).toBe(6);
+    expect(userVersion(db)).toBe(7);
     db.close();
   });
 
-  test("migrations 5 and 6 apply to a database at user_version = 4", () => {
-    // The case that actually happens for pl-25 and pl-27: a deployment already
-    // carrying the run tables gets the grounding cache and the measured
-    // transition added under it, with everything in the database left where it
-    // was.
+  test("migrations 5, 6 and 7 apply to a database at user_version = 4", () => {
+    // The case that actually happens for pl-25, pl-27 and pl-29: a deployment
+    // already carrying the run tables gets the grounding cache, the measured
+    // transition and the discovery coverage column added under it, with
+    // everything in the database left where it was.
     //
     // Wound back rather than hand-written, unlike `atVersionOne` in
     // `schema.test.ts`. Migration 4 is `ALTER TABLE` on top of three earlier
     // ones, so a hand-written version-4 database would be a fourth copy of the
-    // whole schema, and the first thing to rot. What matters here is that both
-    // are *appended* — that a database which has already applied 1 through 4
-    // receives them and nothing else.
+    // whole schema, and the first thing to rot. What matters here is that all
+    // three are *appended* — that a database which has already applied 1
+    // through 4 receives them and nothing else.
     //
     // Undoing 6 is three statements rather than one because the append-only
     // trigger names its frozen columns: SQLite refuses to drop a column a
     // trigger mentions, so the trigger goes back to its migration-2 form first.
+    // Undoing 7 is the one plain `DROP COLUMN`, because nothing references
+    // `coverage_json` from a trigger.
     const db = new Database(":memory:");
     migrate(db);
     db.exec(`
@@ -87,6 +89,7 @@ describe("migrations", () => {
       BEGIN
         SELECT RAISE(ABORT, 'only pinned may change on a placed item');
       END;
+      ALTER TABLE plan_revisions DROP COLUMN coverage_json;
       PRAGMA user_version = 4;
     `);
     db.prepare(
@@ -95,9 +98,10 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(6);
+    expect(userVersion(db)).toBe(7);
     expect(tables(db)).toContain("grounding_cache");
     expect(columns(db, "plan_items")).toContain("travel_json");
+    expect(columns(db, "plan_revisions")).toContain("coverage_json");
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -125,8 +129,46 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(6);
+    expect(userVersion(db)).toBe(7);
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
+    db.close();
+  });
+
+  test("a fresh database's revisions carry a coverage column", () => {
+    const db = new Database(":memory:");
+    migrate(db);
+    expect(columns(db, "plan_revisions")).toContain("coverage_json");
+    db.close();
+  });
+
+  test("migration 7 backfills existing revisions with an empty coverage list", () => {
+    // The case that actually happens for pl-29: a deployment already carrying
+    // plan revisions from before this ticket gets the column added under it,
+    // and every row that predates the discovery pass has to read back as
+    // "nothing was ever queried" rather than as a NULL a reader has to guess
+    // about.
+    const db = new Database(":memory:");
+    migrate(db);
+    db.exec(`
+      ALTER TABLE plan_revisions DROP COLUMN coverage_json;
+      PRAGMA user_version = 6;
+    `);
+    db.prepare(
+      "INSERT INTO plans (id, title, brief_json, created_at, updated_at) VALUES (?,?,?,?,?)",
+    ).run("p", "A trip", "{}", "then", "then");
+    db.prepare(
+      `INSERT INTO plan_revisions
+         (id, plan_id, revision, parent_revision_id, reason, gaps_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run("r", "p", 1, null, "The first draft.", "[]", "then");
+
+    migrate(db);
+
+    expect(userVersion(db)).toBe(7);
+    const row = db.prepare("SELECT coverage_json FROM plan_revisions WHERE id = ?").get("r") as {
+      coverage_json: string;
+    };
+    expect(row.coverage_json).toBe("[]");
     db.close();
   });
 });

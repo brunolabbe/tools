@@ -100,6 +100,11 @@ function createGroundingProvider(
       return new ValhallaGroundingProvider({
         routingUrl: requiredEndpoint(config.groundingEndpoints.routing, "VALHALLA_URL"),
         geocoderUrl: requiredEndpoint(config.groundingEndpoints.geocoder, "GEOCODER_URL"),
+        // Not `requiredEndpoint`: unlike the two above, discovery is optional
+        // (pl-29) — a deployment can measure and geocode with no Overpass
+        // instance at all, and `nearby` answers an empty list when this is
+        // `undefined` rather than refusing to boot.
+        overpassUrl: config.groundingEndpoints.discovery,
         timeoutMs: config.groundingTimeoutMs,
         now,
         logger,

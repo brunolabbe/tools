@@ -52,6 +52,14 @@ export interface GroundingEndpoints {
   routing: string | undefined;
   /** Nominatim's base URL. `/search` hangs off it. */
   geocoder: string | undefined;
+  /**
+   * An Overpass API instance's base URL, for `nearby` (pl-29). `/interpreter`
+   * hangs off it. **Optional, unlike the two above**: a deployment can measure
+   * distances and geocode without discovering anything nearby, and a run with
+   * this unset simply discovers nothing rather than refusing to boot — see
+   * `ValhallaProviderOptions.overpassUrl`.
+   */
+  discovery: string | undefined;
 }
 
 /**
@@ -310,6 +318,7 @@ export function loadApiConfig(
     groundingEndpoints: overrides.groundingEndpoints ?? {
       routing: optionalText(env["VALHALLA_URL"]),
       geocoder: optionalText(env["GEOCODER_URL"]),
+      discovery: optionalText(env["OVERPASS_URL"]),
     },
     groundingTimeoutMs:
       overrides.groundingTimeoutMs ??

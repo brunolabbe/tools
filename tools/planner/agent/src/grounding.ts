@@ -52,6 +52,131 @@
 import type { Coordinates, Place, Source } from "@planner/contract";
 
 // ---------------------------------------------------------------------------
+// Discovering what is nearby — pl-29, §5's 2026-08-22 amendment
+// ---------------------------------------------------------------------------
+//
+// Everything above this point in the file is a *check*: a specialist proposes
+// and grounding measures, locates or confirms what it named. This section is
+// the one place the arrow runs the other way. A corridor query over map data
+// *proposes*, and a specialist — `activities`, `food` or `conditions-and-gear`
+// — judges what came back and writes the prose. §5's amendment argues this at
+// length under "failure 6: omission", and it is not repeated here.
+//
+// Discovery is not a new specialist and does not go on the roster (§4's "a
+// specialist that has nothing to say should not have been run" is undisturbed
+// — discovery always has something to say, even if it is "nothing here").
+// It runs *before* the fan-out rather than after, which is why
+// `RUN_TRANSITIONS` enters `grounding` twice: the finds are material a
+// specialist reads while it proposes, not a check on what it already
+// proposed, so composing cannot be where this happens the way pl-27's pass is.
+
+/**
+ * The kinds of thing worth asking a corridor query for.
+ *
+ * A short, fixed list rather than an open string: each kind is a specific OSM
+ * tag filter an adapter builds a query from (see the header of
+ * `api/src/grounding/valhalla.ts`), and a caller that could ask for anything
+ * would be asking the map for a tag it has never heard of. Extending this list
+ * costs a query clause, not a signature change — the same shape `TRAVEL_MODES`
+ * takes above.
+ */
+export const DISCOVERY_KINDS = [
+  /** `tourism=viewpoint`. A lookout, unremarkable to a search engine and real. */
+  "viewpoint",
+  /** `natural=waterfall`. The case pl-29 is named for. */
+  "waterfall",
+  /** `tourism=attraction`. Whatever a mapper thought was worth the tag. */
+  "attraction",
+  /** Anything carrying a `historic` tag, whatever its value. */
+  "historic-site",
+] as const;
+
+export type DiscoveryKind = (typeof DISCOVERY_KINDS)[number];
+
+/** A name no adapter should keep past this length — see `Find.name`. */
+export const MAX_FIND_NAME_CHARS = 200;
+/** Tags on one find. Past this a node is a data dump, not a place. */
+export const MAX_FIND_TAGS = 40;
+/** One tag's key or value. OSM's own practical ceiling is close to this. */
+export const MAX_FIND_TAG_CHARS = 255;
+
+/**
+ * The line a corridor query draws, to measure distance against.
+ *
+ * A sequence of points rather than a route object: nothing here needs to know
+ * how it was built. `api/src/runs/discovery.ts` draws it from the brief's
+ * origin and destination — pl-29's Log says why it is a straight line between
+ * them rather than a road-following route, and that decision is entirely the
+ * caller's; this seam only asks that there be at least two points, because a
+ * single one is not a corridor and every distance-to-corridor calculation
+ * below assumes a segment exists to measure against.
+ */
+export type Corridor = readonly Coordinates[];
+
+/**
+ * What a database knows about one thing near the corridor — and, pointedly,
+ * not a `Candidate`.
+ *
+ * §4's rule survives contact with this ticket exactly because of what this
+ * type leaves out: no author, no prose summary, no cost band, nothing about
+ * which day it falls on. Those are judgements, and a specialist makes them —
+ * this is the material it makes them from. "Data proposes to the specialist,
+ * the specialist proposes to the composer."
+ *
+ * **`tags` is a `Map`, never a plain object.** `name` and every tag key and
+ * value are strings a stranger typed into OpenStreetMap, and a plain object
+ * answers for `constructor`, `__proto__` and `toString` — pl-24's gazetteer and
+ * pl-28's cell index both learned this the same way. A `name` of
+ * `"__proto__"` is a real, if unhelpful, thing to call a place.
+ *
+ * **Every field here is hostile text**, exactly as §5's last bullet already
+ * says of a search result: a stranger wrote `name`, and every tag value with
+ * it. Nothing about coming from a database makes it safer than a web page —
+ * §5's amendment says so in as many words. It is passed to a specialist as
+ * inert reference material, never interpolated into an instruction, and if a
+ * specialist echoes it into a `Candidate` that candidate still goes through
+ * `candidateSchema` like anything else a model writes.
+ */
+export interface Find {
+  name: string;
+  coordinates: Coordinates;
+  kind: DiscoveryKind;
+  tags: ReadonlyMap<string, string>;
+  /**
+   * Where this find came from — the map data itself. At least one, the same
+   * rule `Provenance` already carries: a grounded fact with nothing behind it
+   * is worse than admitting nobody checked.
+   */
+  sources: Source[];
+  /**
+   * Independent editorial backing — a nearby Wikipedia article, a Wikivoyage
+   * entry — as its own `Source[]`, never fused into a score with the rest.
+   * §5's amendment: "OSM says a viewpoint exists; it does not say anyone
+   * should go", and a single number here would be arithmetic pretending to be
+   * taste. Empty means exactly one thing: **nothing checked**, not "nothing
+   * found" — see the note on `nearby` below about what this adapter actually
+   * populates it with today.
+   */
+  notability: Source[];
+  /**
+   * Extra driving minutes to visit this on the way from one end of the
+   * corridor to the other, or `null` where nothing measured it — the budget
+   * ran out, or the backend could not route to it. Measured only for finds
+   * that survive the geometric filter (Build step 4); everything else would be
+   * spending `MAX_GROUNDING_CALLS` on POIs nobody is going to hear about.
+   */
+  detourMinutes: number | null;
+}
+
+export interface NearbyRequest {
+  corridor: Corridor;
+  /** How far off the corridor is still "on the way". Metres, always. */
+  radiusMetres: number;
+  kinds: readonly DiscoveryKind[];
+  signal?: AbortSignal | undefined;
+}
+
+// ---------------------------------------------------------------------------
 // How you are travelling
 // ---------------------------------------------------------------------------
 
@@ -158,6 +283,17 @@ export interface GroundingProvider {
   locate(request: LocateRequest): Promise<LocatedPlace | null>;
   /** A matrix over the two lists. One call, however many pairs. */
   travel(request: TravelRequest): Promise<TravelMatrix>;
+  /**
+   * What a database knows near this corridor — pl-29, the one method on this
+   * interface that *proposes* rather than checks. See the section above.
+   *
+   * An empty array is a real and honest answer: the corridor was asked about
+   * and the ground was thin, which is what lets `api/src/runs/discovery.ts`
+   * turn it into the `coverage` unchecked constraint rather than treating a
+   * quiet backend as a failure. It is never `null` — unlike `locate`, there is
+   * no single fact to have an opinion about, only a list that may be short.
+   */
+  nearby(request: NearbyRequest): Promise<Find[]>;
 }
 
 // ---------------------------------------------------------------------------

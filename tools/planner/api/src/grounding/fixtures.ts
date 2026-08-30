@@ -27,9 +27,11 @@
 
 import { AppError } from "@planner/contract";
 import type {
+  Find,
   GroundingProvider,
   LocatedPlace,
   LocateRequest,
+  NearbyRequest,
   TravelEstimate,
   TravelMatrix,
   TravelRequest,
@@ -106,6 +108,24 @@ export class FixtureGroundingProvider implements GroundingProvider {
       throwIfAborted(request.signal);
       return destinations.map((to) => estimate(from, to, at));
     });
+  }
+
+  /**
+   * There is no checked-in corridor to answer from, so this returns nothing —
+   * the same discipline the header argues for `travel` and `locate`: a fixture
+   * that invented finds along a corridor it has never seen would make pl-29's
+   * tests pass against arithmetic instead of against a real Overpass payload,
+   * which is the one thing this file must never do (pl-29 also could not reach
+   * Overpass to capture one; see `docs/work/pl-29-detours-along-a-leg.md`).
+   *
+   * An empty list is the honest and correct answer either way: `nearby`'s own
+   * contract says a quiet corridor is a real result, not a failure, so this is
+   * not a corner case dressed up as "not implemented" — it is what a fixture
+   * default with no map data behind it should say.
+   */
+  async nearby(request: NearbyRequest): Promise<Find[]> {
+    throwIfAborted(request.signal);
+    return [];
   }
 }
 

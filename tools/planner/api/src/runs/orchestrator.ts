@@ -86,6 +86,7 @@ import {
 import { evictExpiredGrounding, groundingForRun } from "../grounding/cache.ts";
 import { intakeTitle } from "../intakes/title.ts";
 import { readIntake } from "../intakes/state.ts";
+import { discoverAlongCorridor, hasCorridor } from "./discovery.ts";
 import { measureTravel, runPlaces } from "./travel.ts";
 
 /**
@@ -289,13 +290,46 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
   const { runId, planId, brief } = input;
 
   try {
-    if (!moveTo(context, runId, "fanning-out")) return;
+    // One budget for the whole run's grounding, discovery and measuring alike
+    // (pl-29) — `MAX_GROUNDING_CALLS` is a run-level ceiling (§9), and a
+    // discovery pass with its own separate allowance would let one run spend
+    // twice what an operator configured. `groundingForRun` is called once and
+    // the same `RunGrounding` is handed to both passes below, so `refused`
+    // tallies across both rather than resetting between them.
+    const grounding = groundingForRun(
+      context.grounding,
+      groundingBudget(context.config.maxGroundingCalls),
+    );
+    const logger = context.logger.child({ run: runId });
+
+    // --- Discovery, before the fan-out (pl-29, §5's 2026-08-22 amendment).
+    //
+    // Entered only when the brief actually names both ends of a corridor —
+    // the same _never fake progress_ argument `RUN_TRANSITIONS`'s note makes
+    // about the fan-out's own `grounding` edge, applied one state earlier.
+    const discovering = hasCorridor(brief);
+    if (!moveTo(context, runId, discovering ? "grounding" : "fanning-out")) return;
+
+    const discovered = discovering
+      ? await discoverAlongCorridor({
+          brief,
+          provider: grounding,
+          logger,
+          signal,
+          onProgress: (event) => {
+            record(context, runId, event);
+          },
+        })
+      : { finds: [], coverage: [] };
+
+    if (discovering && !moveTo(context, runId, "fanning-out")) return;
 
     const result = await runFanOut({
       brief,
       capacity: capacityFor(brief),
       provider: context.model,
       budget: runBudgetFor(context.config),
+      finds: discovered.finds,
       runId,
       signal,
       onProgress: (event) => {
@@ -318,15 +352,11 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
         : await measureTravel({
             candidates: result.candidates,
             places,
-            // The cache with this run's budget inside it (pl-25): a hit costs
-            // nothing, a miss claims a call, and a refusal makes none. The
-            // budget is not held here because holding it here is what would
-            // charge for hits.
-            provider: groundingForRun(
-              context.grounding,
-              groundingBudget(context.config.maxGroundingCalls),
-            ),
-            logger: context.logger.child({ run: runId }),
+            // The same shared `RunGrounding` discovery used above: a hit costs
+            // nothing, a miss claims a call against the one budget the whole
+            // run carries, and a refusal makes none.
+            provider: grounding,
+            logger,
             signal,
             onProgress: (event) => {
               record(context, runId, event);
@@ -353,6 +383,10 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
       candidates: measured.candidates,
       travel: measured.travel,
       gaps: result.gaps,
+      // What the discovery pass already decided, before this composer ever
+      // saw a candidate — see `ComposeInput.coverage`'s own note on why this
+      // rides through rather than being derived.
+      coverage: discovered.coverage,
       revision: { id: `${runId}-1`, reason: FIRST_DRAFT_REASON, createdAt: timestamp },
       now: composedAt,
     });

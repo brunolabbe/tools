@@ -126,10 +126,43 @@ follow is not a rule (§2). pl-9 found the failure by composing pl-4's fixtures:
 ignore the appetite and every route candidate is dropped, and a road trip comes
 out with no drives in it.
 
-**A specialist reads the brief, and only the brief.** Not the raw answers, not
-the tree, not another specialist's output. The `TripBrief` indirection is what
-makes the fan-out testable from a fixture, and it is what made swapping the
-interview for a question tree cost nothing downstream.
+**A specialist reads the brief, and only the brief** — plus, since pl-29,
+what a corridor discovery pass found nearby. That is the one addition to this
+rule and it is deliberately narrow: `activities`, `food` and
+`conditions-and-gear` are handed `Find[]` — a name, a location, its tags, its
+sources, never a `Candidate` — because §4's "a specialist proposes; data does
+not" still holds. Not the raw answers, not the tree, not another specialist's
+output. The `TripBrief` indirection is what makes the fan-out testable from a
+fixture, and it is what made swapping the interview for a question tree cost
+nothing downstream.
+
+**Grounding may propose and not only check** (pl-29, analysis §5's amendment of
+2026-08-22). Every use of grounding before this ticket is a check: a specialist
+proposes and a pass verifies. A corridor query is the opposite direction — it
+runs _before_ the fan-out and proposes what a specialist gets to judge, because
+a model asked for stops between two towns returns the famous ones and nothing
+in the fan-out as built would ever surface the one a local would name. It is
+not a new specialist and does not go on the roster; it hands its finds to the
+three specialists above and stops there. `RUN_TRANSITIONS` enters `grounding`
+twice for this — once before the fan-out for discovery, once after for pl-27's
+measuring pass — because both are honestly "we are looking something up outside
+the process" and two names for one activity is a distinction the UI would have
+to explain for nothing. `queued → grounding → fanning-out` is the discovery
+half; `fanning-out → grounding → composing` is pl-27's.
+
+**`coverage` names a corridor the ground was thin along**, and it is the one
+`UncheckedConstraintKind` that is stored rather than derived. Every other entry
+`uncheckedFor` computes is a pure function of the brief, the candidates and the
+days a stored revision holds; a thin corridor is not — it is a live backend's
+answer to a query that ran once, upstream of any candidate, so it rides on
+`PlanRevision.coverage` the same way a measured leg rides on
+`PlanItem.travelFromPrevious` (pl-27), and for the same reason: a plan has to
+keep saying what it found even after the row that answered the question has
+aged out of the cache. It is plan-wide — discovery runs before route-and-logistics
+exists, so there is no candidate yet for the entry to name — and `candidateIds`
+is always empty. Neither `PlanGap` nor an existing `UncheckedConstraintKind` fits:
+every specialist on a thin-corridor plan worked fine, and "nothing measured a
+distance" is a different sentence from "nothing was ever found to propose".
 
 **No model in the intake.** The tree, reachability and invalidation are pure
 functions over authored data — no provider, no network, no clock. The moment a

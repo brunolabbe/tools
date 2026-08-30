@@ -74,6 +74,21 @@ export interface ComposeInput {
    */
   gaps?: readonly PlanGap[];
   /**
+   * What a corridor discovery pass already decided was too thin to say much
+   * about, before this composer ever saw a candidate (pl-29).
+   *
+   * Unlike `gaps`, this is not folded through a function of *this call's*
+   * inputs — `uncheckedFor` cannot derive it, because it is not a statement
+   * about the brief, the candidates or the days; it is a statement about a
+   * live backend's answer to a corridor query that ran once, upstream. So it
+   * is carried straight onto the revision (`NewRevision.coverage`) and appended
+   * to the returned `unchecked` list untouched, the same way `gaps` rides
+   * through unexamined. Defaults to empty, which is the correct answer for
+   * every trip with no corridor to discover along and for the fixture default,
+   * which discovers nothing.
+   */
+  coverage?: readonly UncheckedConstraint[];
+  /**
    * What the grounding pass measured between these candidates (pl-27).
    *
    * **Required**, the way `TripCapacity` is required by `runFanOut` and for the
@@ -222,6 +237,7 @@ export function compose(input: ComposeInput): ComposeResult {
   // the two agree by construction rather than by two implementations being
   // careful — including about which transitions were measured.
   const days = toPlanDays(packed, input.revision.id);
+  const coverage = [...(input.coverage ?? [])];
 
   return {
     revision: {
@@ -230,11 +246,13 @@ export function compose(input: ComposeInput): ComposeResult {
       createdAt: input.revision.createdAt,
       days,
       gaps: [...(input.gaps ?? []), ...gapsFor(input.candidates, packed)],
+      coverage,
     },
     // Derived from what was placed, not from the pack — so a reader of the
     // stored revision gets the identical list without re-composing. See
-    // `unchecked.ts`.
-    unchecked: uncheckedFor({ brief, dates, candidates: input.candidates, days }),
+    // `unchecked.ts`. `coverage` rides on top rather than through it, because
+    // it is not derivable from days at all — see the note on `ComposeInput`.
+    unchecked: [...uncheckedFor({ brief, dates, candidates: input.candidates, days }), ...coverage],
     findings: findings.filter((finding) => !isHard(finding)),
     excluded,
   };

@@ -1,5 +1,5 @@
 /**
- * Marking which lines were verified and which are the model talking.
+ * Marking which lines came from somewhere and which are the model talking.
  *
  * Analysis §5 calls this "the honest answer to the prices being wrong", and it
  * is the reason `Provenance` is structured data rather than prose. Until
@@ -14,6 +14,19 @@
  * yet, so every candidate a scripted provider produces is the model talking.
  * That is not a placeholder to be tidied away: a plan built with no grounding
  * configured must still say so on every line.
+ *
+ * **`grounded` no longer means "worth doing"**, and the copy below is worded
+ * for that (pl-29, `00-ANALYSIS.md` §5's 2026-08-22 amendment). Discovery
+ * turns a database row into a `Candidate` a specialist judged worth writing
+ * about, and that candidate's `provenance` is `grounded` — it genuinely was
+ * read somewhere — but nobody vouched for it the way a measured distance is
+ * "yes, this road is this long". `Provenance` gains no member for the
+ * difference on purpose (see the ticket's Build step 6): the type cannot
+ * distinguish a routing engine's answer from an OSM node nobody reviewed, so
+ * the one sentence every `grounded` line renders has to be true of both. It
+ * used to read "was read from", which a badge reading "Checked" sits over —
+ * and a checkmark next to a nobody-vouched-for POI is the exact
+ * "recommended" a reader is not supposed to take from it.
  */
 
 import type { Provenance, Source } from "@planner/contract";
@@ -62,7 +75,8 @@ export function ProvenanceNote({
 
   return (
     <p className="provenance grounded">
-      <span className="mark">Checked</span> {what} was read from{" "}
+      <span className="mark">Sourced</span> {what} is something we read at a source — reading it is
+      not recommending it:{" "}
       {provenance.sources.map((source, index) => (
         <span key={source.url}>
           {index > 0 && ", "}

@@ -55,6 +55,7 @@ import type {
 } from "@planner/contract";
 import { askSpecialist, type CandidateProposal } from "./ask.ts";
 import { applyBudget, rosterGaps, type RunBudget } from "./budget.ts";
+import type { Find } from "./grounding.ts";
 import type { ModelProvider } from "./provider.ts";
 import { rosterFor, type RosterEntry } from "./roster.ts";
 import { candidateCeiling, SPECIALIST_DEFINITIONS, type TripCapacity } from "./specialists.ts";
@@ -74,6 +75,14 @@ export interface FanOutInput {
   provider: ModelProvider;
   /** A run carries a budget, and it is enforced here before anything is sent. */
   budget: RunBudget;
+  /**
+   * What a corridor discovery pass found before this fan-out started, handed
+   * to the specialists that read map data — `activities`, `food` and
+   * `conditions-and-gear` (pl-29). Defaults to empty, which is every trip
+   * before this ticket and every trip whose brief had no corridor to discover
+   * along.
+   */
+  finds?: readonly Find[] | undefined;
   /**
    * Prefix for the candidate ids this run mints. Unique per run and supplied by
    * the caller — this package has no clock and no randomness, for the reason
@@ -151,6 +160,7 @@ export async function runFanOut(input: FanOutInput): Promise<FanOutResult> {
           brief: input.brief,
           capacity: input.capacity,
           budget: input.budget,
+          finds: input.finds,
           signal: input.signal,
         });
         done += 1;

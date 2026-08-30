@@ -61,7 +61,7 @@ function emptyPlan(): PlanDetail {
 }
 
 function draft(id: string, createdAt: string, days: PlanDay[] = []): NewRevision {
-  return { id, reason: "First draft", createdAt, days, gaps: [] };
+  return { id, reason: "First draft", createdAt, days, gaps: [], coverage: [] };
 }
 
 describe("appendRevision", () => {
@@ -175,6 +175,7 @@ describe("the revision schema", () => {
     createdAt: "2026-08-15T10:05:00.000Z",
     days: [],
     gaps: [],
+    coverage: [],
   };
 
   test("only the first revision may have no parent", () => {
@@ -213,6 +214,23 @@ describe("the revision schema", () => {
       ],
     };
     expect(planRevisionSchema.parse(withGap).gaps).toHaveLength(1);
+  });
+
+  test("coverage carries an UncheckedConstraint, plan-wide and empty of candidates", () => {
+    // pl-29: a thin corridor is discovered before there is a candidate for it
+    // to name, so `candidateIds` is always empty here — unlike a gap, which
+    // always names a specialist.
+    const thin = {
+      ...base,
+      coverage: [
+        {
+          kind: "coverage" as const,
+          detail: "There is very little on the map along this route.",
+          candidateIds: [],
+        },
+      ],
+    };
+    expect(planRevisionSchema.parse(thin).coverage).toHaveLength(1);
   });
 
   test("a day may have no date, because a brief may have no calendar", () => {

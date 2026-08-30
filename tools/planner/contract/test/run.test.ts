@@ -65,11 +65,9 @@ describe("the transition table", () => {
     expect(canRunTransition("grounding", "composing")).toBe(true);
 
     // Grounding measures what the fan-out proposed and hands it to the packer.
-    // It cannot finish a run on its own, and it cannot go back for more
-    // specialists.
+    // It cannot finish a run on its own.
     expect(canRunTransition("grounding", "done")).toBe(false);
     expect(canRunTransition("grounding", "reviewing")).toBe(false);
-    expect(canRunTransition("grounding", "fanning-out")).toBe(false);
   });
 
   test("lets `fanning-out` reach `composing` without passing through `grounding`", () => {
@@ -78,6 +76,22 @@ describe("the transition table", () => {
     // — and emitting a state it spent no time in, to make the diagram come
     // true, is _never fake progress_ broken for decoration.
     expect(canRunTransition("fanning-out", "composing")).toBe(true);
+  });
+
+  test("lets a run discover before it fans out, and reach the fan-out from grounding", () => {
+    // pl-29: discovery is a corridor query that proposes what a specialist
+    // might read, so it has to run *before* the fan-out — the opposite side of
+    // the same `grounding` status the measuring pass already uses *after* it.
+    // One state, entered twice, is the whole point: two names for "we are
+    // looking something up outside the process" would be a distinction the UI
+    // has to explain for nothing.
+    expect(canRunTransition("queued", "grounding")).toBe(true);
+    expect(canRunTransition("grounding", "fanning-out")).toBe(true);
+
+    // And the skip: a brief with nothing to discover along, or a provider that
+    // cannot discover anything, must not pass through a state it spent no time
+    // in — the same argument `fanning-out → composing` already won.
+    expect(canRunTransition("queued", "fanning-out")).toBe(true);
   });
 
   test("every non-terminal status can fail and can be canceled", () => {
