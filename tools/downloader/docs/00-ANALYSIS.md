@@ -65,6 +65,35 @@ credentials as everything else. There is no device binding and no licence
 protocol. **ffmpeg handles this natively** — point it at the playlist with the
 right headers and it just works. Treat it as ordinary transport, because it is.
 
+> **Amendment (`dl-27`): the decryption is ordinary; the transport is not, and
+> the service ended up holding it.** "Point ffmpeg at the playlist and it just
+> works" is true of AES-128 and false of the thing underneath it. libavformat
+> copies a **compile-time** list of seven options onto the connections a demuxer
+> opens for segments — `headers`, `user_agent`, `cookies`, `http_proxy`,
+> `referer`, `rw_timeout`, `icy` — and `tls_verify` and `ca_file` are not among
+> them, so `-tls_verify 1` reaches the manifest and nothing else.
+> [`dl-21`](./work/dl-21-verified-hls-segments.md) measured sixteen candidate
+> arguments and read the array out of the binary: **the entire video arrived
+> over a certificate nobody checked, exit 0, and there is no argument that
+> changes it.**
+>
+> The way out was not to stop using ffmpeg. It was to notice that `http_proxy`
+> _is_ one of the seven, that this service already puts a guarded loopback proxy
+> in front of every ffmpeg egress, and to make that proxy **terminate** the
+> connections it was tunnelling — verifying the real origin itself and
+> re-encrypting to ffmpeg under a leaf it issues.
+> [`dl-27`](./work/dl-27-verify-segment-origins.md) did that.
+>
+> **It reverses [`dl-14`](./work/dl-14-proxied-https-coverage.md) and the price
+> is worth stating where the scope is decided**: ffmpeg never sees an origin
+> certificate again, and every media byte now crosses this process in plaintext.
+> That is a larger claim on the tool than "treat it as ordinary transport"
+> implies — §6's single-invocation stream copy is untouched, and native AES-128
+> is exactly as in scope as it was, but the tool is now the party responsible for
+> authenticating the connection rather than a client of one. Only ffmpeg's proxy
+> intercepts; the browser and yt-dlp tiers verify their own connections and keep
+> the tunnel.
+
 ### DRM — **out of scope, permanently**
 
 Widevine, PlayReady, FairPlay. The player uses Encrypted Media Extensions to

@@ -3,7 +3,7 @@ id: dl-27
 tool: downloader
 title: Verify the certificates on HLS and DASH segment connections
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-21]
 ---
@@ -169,3 +169,291 @@ work.
   MPEG-TS demuxer. dl-21 measured it anyway by generating **fMP4** segments,
   which avoid that demuxer entirely — the technique is worth reusing, and the
   answer was that 7.0.2 behaves exactly as 6.1.1 does.
+
+## Log
+
+**2026-08-30 — Built, with step 1 answered yes and the mechanism measured both
+ways.** The proxy terminates ffmpeg's TLS, verifies each origin itself, and
+re-encrypts under a leaf it issues. The middle test in `two-origin-tls.test.ts`
+is turned around and the download that used to arrive from an untrusted origin
+with exit 0 now fails with `TLS_VERIFICATION_FAILED`.
+
+### Step 1, decided and why
+
+**Yes, and the deciding fact is not in the brief: `dl-14`'s tunnel is not
+uniform, so reversing it does not have to be either.** This proxy serves three
+subprocesses — ffmpeg, Chromium and yt-dlp — and only one of them cannot verify
+its own connections. Chromium and yt-dlp verify natively, and a terminating
+proxy in front of Chromium would refuse every HTTPS page it loads, because the
+generated root is in no browser trust store and the only ways round that are
+`--ignore-certificate-errors` or an NSS database. So `server.ts` starts **two**
+proxies: the tiers keep the tunnel `dl-14` chose, with the origin's own
+certificate reaching them, and ffmpeg gets the terminating one. That makes the
+trade narrow rather than wholesale — the plaintext hop is the media bytes only,
+which is where they were going anyway — and it turns "we gave up end-to-end
+certificates" into "we gave them up for the one client that could not use them".
+
+The alternative in the brief — take fetching away from ffmpeg — is still
+unmeasured and is now further away rather than nearer: it costs native
+`EXT-X-KEY:METHOD=AES-128`, which `00-ANALYSIS.md` §3 puts explicitly in scope,
+plus discontinuity handling and timestamp rebasing, and the API would have to
+feed the engine segment URLs from the `dl-1` parsers.
+
+The decision is recorded as an amendment in `00-ANALYSIS.md` §3, under the
+sentence it overrules ("treat it as ordinary transport, because it is"), and the
+consequences are on `01-ARCHITECTURE.md`'s TLS bullet. Neither is a copy of the
+other: the analysis says what changed about the scope, the architecture says what
+an operator now has.
+
+### What the brief had wrong
+
+**1. "A stderr matcher cannot do this one" is wrong, and the reason is a
+`-loglevel` this repo sets to `error`.** The brief reads dl-21's prototype
+correctly — a dropped tunnel is exit 183 `Invalid data found`, a `502` is exit 8
+`Server returned 5XX`, and neither says anything about a certificate — but
+neither prototype chose the reason phrase, and nobody raised the log level.
+Measured here, on ffmpeg 6.1.1-3ubuntu5, against a proxy answering
+`502 TLS certificate verification failed (DEPTH_ZERO_SELF_SIGNED_CERT)`:
+
+| `-loglevel` | what reaches stderr                                                         |
+| ----------- | --------------------------------------------------------------------------- |
+| `error`     | `Error opening input: Invalid data found when processing input` — no reason |
+| `warning`   | `[httpproxy @ …] HTTP error 502 TLS certificate verification failed (…)`    |
+| `verbose`   | the same, plus the connection trace                                         |
+
+**ffmpeg logs a proxy's status line verbatim, at `AV_LOG_WARNING`**, and it does
+it on the _segment_ connections as well as the manifest — which is the case the
+brief was right to say has no other channel. So `GLOBAL_ARGS` now asks for
+`-loglevel warning`, one word, and `isTlsVerificationFailure` reads the phrase
+without being taught anything new: it already matches "certificate" and
+"verif". The cost was measured rather than assumed — **a clean HLS download
+through the terminating proxy emits zero bytes of stderr at `warning`**.
+
+That is a strictly better answer than the out-of-band channel the brief asks
+for, and the difference is attribution. A record on the proxy would have to be
+matched to a job by time window, and one proxy serves every download; the status
+line arrives on the failing run's own stderr, so there is no attribution problem
+to get wrong.
+
+**2. It needed a second half, which the fixture could not have shown.** The
+reason phrase is three lines per refused segment. `runFfmpeg` classified off a
+4 KB stderr **tail**, so on any playlist longer than ~25 segments the sentence
+naming the reason has scrolled out before ffmpeg exits, and the job is
+`DOWNLOAD_FAILED` again — in production, while the two-segment fixture stays
+green. `runner.ts` now sets a sticky flag per stderr line over the whole stream,
+keeping dl-19's tail check beside it because that one can still match across two
+lines. A mutation removing the sticky flag **survived** `two-origin-tls.test.ts`;
+`engine/test/ffmpeg-runner.test.ts` exists to kill it, and does.
+
+**3. `packages/core/test/image-closure.test.ts` does not fail, and expecting it
+to is the wrong model of that scan.** It walks _workspace_ dependencies —
+`@downloader/*`, `@webtools/*` — because those are what the Dockerfile lists by
+hand. `node-forge` is an ordinary npm package inside `node_modules`, which the
+runtime stage copies wholesale after `npm prune --omit=dev`, so promoting it to
+`dependencies` in `tools/downloader/api/package.json` (and clearing `"dev": true`
+in `package-lock.json`, which is what `prune` actually reads) is the entire
+change. **No Dockerfile line moves, and no scan in this repo would have caught
+it if I had forgotten** — the failure mode is `ERR_MODULE_NOT_FOUND` at boot, in
+the image only. That gap is worth a ticket and is named in the report rather than
+filed here.
+
+**4. The `Traps` section is right about IP SANs and understates one thing.** A
+CA bundle is indexed by subject, as it says; what bit here instead was
+`authorityKeyIdentifier`. forge resolves `keyIdentifier: true` against **the
+certificate being signed**, so a leaf gets its own key's identifier where the
+issuer's belongs, and OpenSSL then reports `UNABLE_TO_VERIFY_LEAF_SIGNATURE` —
+"unable to verify the first certificate" — on a signature that is perfectly
+good and an issuer that is in the store. It cost the first end-to-end run, which
+is written up below because of _how_ it failed.
+
+**5. `Node`'s TLS error does not carry the certificate.** The obvious test for
+"did we refuse the certificate" is `"cert" in error`; measured, a rejected chain
+gives `{ message: "self-signed certificate", code: "DEPTH_ZERO_SELF_SIGNED_CERT" }`
+with `code` as its **only** own key — the same shape an `ECONNREFUSED` has. Only
+`ERR_TLS_CERT_ALTNAME_INVALID` attaches one. What does say so is the socket:
+`TLSSocket.authorizationError`, set before the socket is destroyed, for the chain
+check and the name check alike. So the site holding the socket wraps it in an
+`OriginCertificateError` and `connectFailed` splits on the type, which is the
+move dl-26 made with `AppError`.
+
+### The positive control, and the run that had none
+
+**The first end-to-end run failed identically in both directions**, and that is
+the finding worth recording, not the bug behind it. NEG (proxy trusts origin A
+only) and POS (proxy trusts both) both produced `TLS_VERIFICATION_FAILED`, zero
+bytes, and the same five lines of `Peer certificate failed verification`. A
+sweep read only for "the untrusted case fails" would have called that a pass. It
+was the `authorityKeyIdentifier` defect above: **ffmpeg was rejecting our own
+leaf**, so nothing in the run had anything to do with origin B at all.
+
+What separated them was a control that asks the opposite question — can this
+harness _succeed_? Once the AKID was right:
+
+```
+### NEG  proxy trusts A only
+    code=TLS_VERIFICATION_FAILED  bytes=0  B-served=0
+    [httpproxy @ …] HTTP error 502 TLS certificate verification failed (DEPTH_ZERO_SELF_SIGNED_CERT)
+    [hls @ …] Failed to open segment 0 of playlist 0
+### POS  proxy trusts A and B
+    code=null  bytes=104610  stderr=0 bytes
+```
+
+**104,610 bytes is dl-21's own figure for this fixture, to the byte.** So the
+refusal is about trust and the fixture is a working HLS download, not a broken
+one — and both are asserted in the suite rather than only measured here.
+
+The same shape is kept inside the suite. `two-origin-tls.test.ts` runs the
+positive control **first** ("an untrusted manifest origin is refused before a
+byte is served"), and keeps dl-21's characterization test as its last case,
+against a _tunnelling_ proxy, where the whole video still arrives from the
+untrusted origin with exit 0. That is what says the three tests above it measure
+the interception rather than a fixture that quietly lost its second origin.
+
+### The mutation run
+
+Twelve mutations. Every one is now killed; three of the first sweep's results
+were wrong and the reasons matter more than the table.
+
+| Mutation                                                        | Result                                                     |
+| --------------------------------------------------------------- | ---------------------------------------------------------- |
+| `connectFailed` collapsed to one `refused` (dl-26's tripwire)   | **killed** — 3 fail, 17 pass in `egress-proxy.test.ts`     |
+| the certificate leg folded into `unreachable`                   | **killed** — 2 fail                                        |
+| `server.ts` hands ffmpeg the tunnelling proxy                   | **killed** — by the wiring test, added because it survived |
+| the CA swap reverted (engine gets `FFMPEG_CA_FILE`)             | **killed** — by the same test                              |
+| the proxy loses the operator root entirely                      | **killed** — 3 fail                                        |
+| the proxy **replaces** the system store instead of merging      | **killed** — by `tls-interception.test.ts`, added for it   |
+| the proxy stops verifying origins (`rejectUnauthorized: false`) | **killed** — 4 fail                                        |
+| `-loglevel warning` back to `error`                             | **killed** — 4 fail                                        |
+| the sticky stderr classifier removed                            | **killed** — by `ffmpeg-runner.test.ts`, added for it      |
+| the leaf's AKID back to `keyIdentifier: true`                   | **killed** — 2 fail                                        |
+| every leaf SAN forced to `DNS:` (the IP-has-no-SNI trap)        | **killed** — 4 fail                                        |
+| the root's private key written beside its certificate           | **killed** — 1 fail                                        |
+
+**dl-26's tripwire now fails three tests where the brief measured one, and that
+is the correct evolution rather than a loss of precision**: the collapse takes
+out its own test (_"an allowed host we cannot reach is not reported as a
+refusal"_) plus the two dl-27 added for the third leg. The split is still the
+only thing holding them apart.
+
+**Three mutations in the first sweep were invalid and reported green.** `-loglevel`
+and the sticky classifier live in `engine/src`, and the API suites import
+`@downloader/engine` — which resolves to its **`dist`**. An engine mutation that
+is not rebuilt is a mutation the suite never sees. Re-run with
+`tsc --build` in the loop, both die. Anyone re-measuring these on this branch
+has to rebuild the engine between mutation and run; that is the single most
+likely way to conclude, wrongly, that this branch's engine changes are
+unnecessary.
+
+The third was `server.ts` handing ffmpeg the wrong proxy. It survived
+**legitimately**: every test built its own proxy, so nothing looked at the
+production wiring, and `logging.test.ts`'s check read `ffmpegProxy.tls` — the
+object, not what the engine was given. The answer is the last test in
+`two-origin-tls.test.ts`, which boots a real `createApp` with
+`FFMPEG_CA_FILE` set to origin A's certificate and drives a download through
+`app.context.engine`. It is also the only thing that pins the CA swap.
+
+### What is in this branch
+
+- **`api/src/tls-interception.ts`** (new). A root generated per process — **its
+  private key is never written anywhere**, only the certificate, which is what
+  `-ca_file` needs a path for — and a leaf per CONNECT host, all sharing one key
+  so issuing one is a signature rather than an RSA keygen in front of a download.
+  Node's `generateKeyPairSync` makes the keys (native, milliseconds) and forge
+  only signs, which is the narrowest use of the dependency that does the job.
+  `originCa` is `[...tls.rootCertificates, operatorRoot]`: the merge is the thing
+  the brief's step 3 is about.
+- **`api/src/egress-proxy.ts`**. `interceptTls` and `EgressProxy.tls`, a
+  `terminateTls` that completes the origin handshake **before** the client is
+  told `200` — which is what lets a refusal be a refused `CONNECT` carrying a
+  reason rather than a tunnel that opens and dies — and the third leg of
+  `connectFailed`.
+- **`api/src/server.ts`**. Two proxies, the CA swap, the boot warning rewritten,
+  and `FFMPEG_CA_FILE` now validated at boot: the proxy needs it as a trust
+  anchor before it can verify anything, and carrying on with the system store
+  would refuse the operator's own origins in a way that reads like a compromised
+  CDN. dl-19 recorded that gap; it closes here because the design forces it, not
+  as a side quest.
+- **`engine/src/ffmpeg/args.ts`**, `-loglevel warning`, and
+  **`engine/src/ffmpeg/runner.ts`**, the sticky per-line classifier.
+- **`api/package.json` + `package-lock.json`**: `node-forge` to `dependencies`.
+- Tests: `tls-interception.test.ts` (10) and `engine/test/ffmpeg-runner.test.ts`
+  (4) are new; `two-origin-tls` 6 → 8, `proxied-https` 14 → 18, `egress-proxy`
+  18 → 20, `logging` 14 → 15.
+
+### The boot warning, which is still a warning
+
+`dl-21`'s line said the segments were **not** covered. It is gone, and what
+replaced it is still a `warn` rather than an `info`, for the opposite reason it
+was one: the surprising fact is no longer a hole but the shape of the fix.
+`dl-14` chose a tunnel so ffmpeg would see the origin's own certificate, and an
+operator who deployed this tool for that property is entitled to one line per
+boot saying it changed and that media now crosses the process in plaintext.
+`logging.test.ts`'s real invariant — **exactly one** of these lines, always, so a
+deployment is never left inferring a guarantee from silence — is untouched.
+
+**The alternative was to make it an `info`,** on the grounds that warning about
+correct behaviour trains people to ignore warnings. It is a real argument and it
+loses to this one: the noise is unchanged from what dl-21 already shipped, and
+the fact is a security posture rather than a status.
+
+### Deliberately not done
+
+- **No new environment variable for the interception.** `FFMPEG_ALLOW_UNVERIFIED_TLS`
+  now means "the proxy does not verify origins" and stays the single escape
+  hatch; a second knob would multiply the states an operator can be in and each
+  one needs its own boot line. The consequence is real and worth stating: **an
+  operator whom interception breaks for some other reason has no way back to a
+  tunnel**, and would have to set the escape hatch, which turns off more than
+  they want. If that turns up, it is a ticket.
+- **`proxied-https.test.ts`'s tunnel assertions are kept, not repointed.** The
+  origin-certificate-reaches-the-client test is still true — of the tiers, which
+  is now says — and deleting it would delete the coverage Chromium and yt-dlp
+  depend on. Its ffmpeg-facing counterpart is a new test asserting the opposite,
+  because the opposite is what is true there.
+- **A mid-stream socket error after a tunnel opens is no longer logged as a
+  connect failure.** `settled` is needed anyway, so the pre-existing wart —
+  where such an error wrote a `502` status line into a live tunnel — is fixed by
+  construction. It could have gained its own log line and did not; `joinSockets`
+  tears the pair down and nothing about it is a _connect_ failure.
+- **No scan for a runtime import of a devDependency.** Point 3 above found that
+  nothing in this repo catches one, and this branch is exactly the case that
+  needed it. Writing that scan is a repo-wide gate with its own allowlist
+  problem, not dl-27, and it is named in the report as a ticket to file.
+
+### Gates
+
+Measured on this branch at `26d6b86`, based on `origin/main` at `1d420b7`.
+`origin/main` moved to `6b6c785` during the work and this branch is **not**
+rebased onto it.
+
+| Command                            | Result                      |
+| ---------------------------------- | --------------------------- |
+| `npm run build`                    | exit 0                      |
+| `npm run check`                    | exit 0                      |
+| `npm test -- --project downloader` | **52 files / 771 tests**    |
+| `npm test`                         | **110 files / 1,638 tests** |
+| `npm run e2e:downloader`           | 3 passed                    |
+
+**The baseline was re-measured rather than derived**, by checking `1d420b7` out
+in this worktree and running both: **108 files / 1,615 tests** and **50 files /
+748 tests**. So the branch is **+2 files and +23 tests, all of it this
+branch's**, and the arithmetic matches the per-file counts above.
+
+The e2e run is the only place the new boot line was seen firing in a real boot:
+
+```
+{"level":"warn", … ,"msg":"ffmpeg's egress proxy terminates TLS: this process verifies
+ every manifest and segment origin, and ffmpeg sees a certificate issued here"}
+```
+
+Its fixture origin is plain **HTTP**, so it exercises the absolute-form path and
+not the `CONNECT` path this ticket changed — which is why it is unchanged, and
+why it is not evidence about the interception.
+
+**The container gate is unrun here and this is the branch that most needs it.**
+`node-forge` moving into `dependencies` is precisely a change whose failure mode
+is an image that builds, boots, and throws `ERR_MODULE_NOT_FOUND` — and nothing
+in `npm test` can see it. `npm ls node-forge` resolving through
+`@downloader/api` and the lockfile no longer marking it `dev` are the two things
+checked here; whether `npm ci && npm prune --omit=dev` keeps it in the image is
+**not measured on this machine**.

@@ -204,11 +204,16 @@ describe("correlation, end to end", () => {
 });
 
 /**
- * dl-21. The gap it could not close had to land somewhere an operator meets it,
- * and a documentation page is not that place. These pin the two lines and, more
- * to the point, pin that there is always exactly one of them: a deployment is
- * either told that nothing is verified or told how far the verification reaches,
- * and never left to infer a guarantee from silence.
+ * dl-21, rewritten by dl-27. The property is unchanged and it is the reason
+ * these exist: **there is always exactly one of these lines**, so a deployment
+ * is either told that nothing is verified or told how the verification is
+ * achieved, and is never left to infer a guarantee from silence.
+ *
+ * What changed is which fact is surprising. Until dl-27 the line said the
+ * segments were not covered, because they were not. They are now — the egress
+ * proxy terminates ffmpeg's TLS and verifies each origin itself — and the fact
+ * an operator will not otherwise have is the shape of that: dl-14 chose a
+ * tunnel so ffmpeg would see the origin's own certificate, and this reverses it.
  */
 describe("what boot says about how far TLS verification reaches", () => {
   let harness: Harness | undefined;
@@ -218,20 +223,32 @@ describe("what boot says about how far TLS verification reaches", () => {
     harness = undefined;
   });
 
-  test("a verifying deployment is told the segments are not covered", async () => {
+  test("a verifying deployment is told the proxy is what verifies, and what that costs", async () => {
     const { logger, lines } = capturing("info");
     harness = await createHarness({ logger });
 
     const warnings = lines.filter((line) => line.level === "warn");
-    const segments = warnings.filter((line) =>
-      /segment certificates are not checked/u.test(line.msg),
-    );
-    expect(segments).toHaveLength(1);
-    // The consequence, not just the fact: an operator skimming a startup log
-    // needs to know what it costs them.
-    expect(String(segments[0]?.["hint"])).toMatch(/substitute/u);
+    const terminating = warnings.filter((line) => /terminates TLS/u.test(line.msg));
+    expect(terminating).toHaveLength(1);
+    // Both halves of it. An operator who reads only "we verify the segments"
+    // has not been told that every media byte now crosses this process in the
+    // clear, which is the half dl-14 chose the other way round.
+    expect(terminating[0]?.msg).toMatch(/segment origin/u);
+    expect(String(terminating[0]?.["hint"])).toMatch(/plaintext/u);
     // And not both lines at once, which would say two contradictory things.
     expect(warnings.some((line) => /FFMPEG_ALLOW_UNVERIFIED_TLS/u.test(line.msg))).toBe(false);
+  });
+
+  test("the proxy that ffmpeg gets is the terminating one, and the tiers' is not", async () => {
+    // The two are told apart nowhere else: pointing Chromium at the terminating
+    // proxy would break every HTTPS page it loads, and pointing ffmpeg at the
+    // tunnelling one silently restores dl-21's hole with every test still green.
+    const { logger, lines } = capturing("info");
+    harness = await createHarness({ logger });
+
+    const configured = lines.filter((line) => line.msg === "egress configured");
+    expect(configured).toHaveLength(1);
+    expect(configured[0]?.["ffmpegProxyTls"]).toBe("terminate");
   });
 
   test("a deployment with verification off gets dl-19's louder line instead", async () => {
@@ -242,10 +259,8 @@ describe("what boot says about how far TLS verification reaches", () => {
     expect(warnings.filter((line) => /FFMPEG_ALLOW_UNVERIFIED_TLS/u.test(line.msg))).toHaveLength(
       1,
     );
-    // Saying "the segments are not verified" to a deployment that verifies
-    // nothing at all would read as a narrower problem than it has.
-    expect(warnings.some((line) => /segment certificates are not checked/u.test(line.msg))).toBe(
-      false,
-    );
+    // Telling a deployment that verifies nothing at all how its verification
+    // works would read as a guarantee it does not have.
+    expect(warnings.some((line) => /terminates TLS/u.test(line.msg))).toBe(false);
   });
 });

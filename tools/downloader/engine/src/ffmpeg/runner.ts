@@ -86,6 +86,14 @@ function tail(text: string, maxBytes: number): string {
  * `ffmpeg-static` — and the second half covers the wordings OpenSSL, SChannel
  * and SecureTransport use for the same conditions, which were not measured. A
  * build nobody measured must not fall through to "the download failed".
+ *
+ * Since dl-27 it also has to catch a sentence ffmpeg did not write: the egress
+ * proxy verifies each origin itself and refuses a bad one with
+ * `502 TLS certificate verification failed (<code>)`, which ffmpeg echoes as
+ * `[httpproxy] HTTP error 502 …`. That is the **only** channel for a refused
+ * *segment* origin — dl-21 measured that nothing else about the certificate
+ * reaches ffmpeg — and it is why `GLOBAL_ARGS` asks for `-loglevel warning`.
+ * Both halves match it as written, which is not an accident.
  */
 const CERTIFICATE_MENTIONED = /certificate/iu;
 const VERIFICATION_FAILED =
@@ -101,7 +109,7 @@ export function isTlsVerificationFailure(stderr: string): boolean {
  *
  * Rejects with `AppError`: `JOB_CANCELED` on abort, `TIMEOUT` past
  * `timeoutMs`, `SIZE_LIMIT_EXCEEDED` past `maxOutputBytes`, `INTERNAL` when the
- * binary is missing, `TLS_VERIFICATION_FAILED` when the stderr tail says a
+ * binary is missing, `TLS_VERIFICATION_FAILED` when any stderr line says a
  * certificate was rejected, and `failureCode` (default `MUX_FAILED`) on any
  * other non-zero exit.
  */
@@ -135,6 +143,7 @@ export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
     const parser = new FfmpegProgressParser();
     let stderrBuffer = "";
     let stderrLineBuffer = "";
+    let sawCertificateRejection = false;
     let lastSnapshot: FfmpegProgressSnapshot | null = null;
     let settled = false;
     let terminationError: AppError | null = null;
@@ -208,14 +217,21 @@ export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
     child.stderr?.setEncoding("utf8");
     child.stderr?.on("data", (chunk: string) => {
       stderrBuffer = tail(stderrBuffer + chunk, stderrTailBytes);
-      if (options.onStderrLine === undefined) return;
       stderrLineBuffer += chunk;
       let newlineAt = stderrLineBuffer.indexOf("\n");
       while (newlineAt !== -1) {
         const line = stderrLineBuffer.slice(0, newlineAt).trimEnd();
         stderrLineBuffer = stderrLineBuffer.slice(newlineAt + 1);
         newlineAt = stderrLineBuffer.indexOf("\n");
-        if (line.length > 0) options.onStderrLine(redactUrlsInText(line));
+        if (line.length === 0) continue;
+        // Sticky, and read off the whole stream rather than off the tail: a
+        // playlist whose every segment is refused logs three lines per segment,
+        // so on a stream of any length the certificate lines scroll out of the
+        // 4 KB tail long before ffmpeg exits and the run is filed as a plain
+        // download failure. dl-19's tail check stays below as well — it can
+        // still match across two lines, which this cannot.
+        if (!sawCertificateRejection) sawCertificateRejection = isTlsVerificationFailure(line);
+        options.onStderrLine?.(redactUrlsInText(line));
       }
     });
 
@@ -244,7 +260,10 @@ export function runFfmpeg(options: FfmpegRunOptions): Promise<FfmpegRunResult> {
           resolve({ exitCode: 0, stderrTail, lastSnapshot });
           return;
         }
-        const code = isTlsVerificationFailure(stderrTail) ? "TLS_VERIFICATION_FAILED" : failureCode;
+        const code =
+          sawCertificateRejection || isTlsVerificationFailure(stderrTail)
+            ? "TLS_VERIFICATION_FAILED"
+            : failureCode;
         reject(
           new AppError(code, undefined, {
             details: {

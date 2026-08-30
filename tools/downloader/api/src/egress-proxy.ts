@@ -35,9 +35,15 @@
  * vetted with the same `SsrfGuard` the rest of the service uses and connected
  * through the same pinning `lookup` as `dispatcher.ts`.
  *
- * **No TLS interception.** A `CONNECT` is tunnelled byte-for-byte, so
- * certificates stay end-to-end and no client needs a trust-store change. Not
- * seeing the request path costs nothing: the guard is host- and address-based.
+ * **Tunnelled by default, and terminating for ffmpeg only.** Without
+ * `interceptTls` a `CONNECT` is piped byte-for-byte, certificates stay end to end
+ * and no client needs a trust-store change — which is what dl-14 chose and what
+ * Chromium and yt-dlp still get, because both verify their own connections
+ * without help. With it the proxy verifies the origin itself and re-encrypts to
+ * the client under a locally issued leaf, because **ffmpeg cannot verify its own
+ * segment connections and no argument makes it** (dl-21 measured sixteen; the
+ * propagation list is a compile-time array). See `tls-interception.ts` for the
+ * mechanism and what it costs; dl-27 for the decision.
  *
  * **In proxy mode the client resolves nothing.** It connects to us and names a
  * host; we do the resolving. That is what closes hole 3 — there is no second
@@ -70,12 +76,19 @@
 import http from "node:http";
 import net from "node:net";
 import type { AddressInfo } from "node:net";
+import tls from "node:tls";
 import { AppError } from "@downloader/contract";
 import type { ProbeResult } from "@downloader/contract";
 import { createPinningLookup, systemResolve } from "./dispatcher.ts";
 import type { AddressResolver } from "./dispatcher.ts";
 import type { AppLogger } from "./logger.ts";
 import type { SsrfGuard } from "./ssrf.ts";
+import {
+  certificateRejectionCode,
+  isCertificateRejection,
+  OriginCertificateError,
+} from "./tls-interception.ts";
+import type { TlsInterception } from "./tls-interception.ts";
 
 export interface EgressProxyOptions {
   guard: SsrfGuard;
@@ -87,6 +100,13 @@ export interface EgressProxyOptions {
   upstreamProxyUrl?: string | undefined;
   /** Injected in tests, for the same reason `dispatcher.ts` injects one. */
   resolve?: AddressResolver | undefined;
+  /**
+   * Terminate every `CONNECT` instead of tunnelling it, verifying the origin
+   * here and re-encrypting to the client under a leaf this issues.
+   *
+   * Set for ffmpeg's proxy and for nothing else. See `tls-interception.ts`.
+   */
+  interceptTls?: TlsInterception | undefined;
 }
 
 export interface EgressProxy {
@@ -103,6 +123,14 @@ export interface EgressProxy {
    * for exactly the reason `EgressDispatcher.mode` is.
    */
   mode: "pinned" | "chained";
+  /**
+   * `tunnel` — a `CONNECT` is piped and the origin's own certificate reaches the
+   * client. `terminate` — this proxy verified the origin and the client is
+   * talking to a leaf issued here. Worth logging at boot for the same reason
+   * `mode` is: it is the difference between "ffmpeg checked the certificate" and
+   * "we did", and only one of the two covers the segments.
+   */
+  tls: "tunnel" | "terminate";
   close(): Promise<void>;
 }
 
@@ -203,6 +231,8 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
       ? null
       : new URL(options.upstreamProxyUrl);
 
+  const intercept = options.interceptTls ?? null;
+
   const lookup = createPinningLookup(guard, options.resolve ?? systemResolve);
   // In chained mode the upstream resolves the target, so there is no local
   // resolution to pin — the same trade dl-8 documents for `PROXY_URL`.
@@ -245,17 +275,38 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
   }
 
   /**
-   * A socket that failed, which is **two** different events wearing one shape.
+   * The origin's certificate did not verify, in `terminate` mode.
+   *
+   * The third thing that has to be told apart below, and the one whose evidence
+   * is thinnest: dl-21 measured that **no certificate semantics survive to
+   * ffmpeg** from a refused segment connection — a dropped tunnel is exit 183
+   * `Invalid data found`, a 502 is exit 8 `Server returned 5XX` — so this line
+   * and the reason phrase in `refuse` are the whole of what anyone gets. Filing
+   * it as `unreachable` would report an intercepted CDN as a flaky network.
+   */
+  function certificateRejected(host: string, error: unknown): void {
+    logger.warn("refused a subprocess fetch: the origin's certificate did not verify", {
+      host,
+      code: certificateRejectionCode(error),
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  /**
+   * A socket that failed, which is **three** different events wearing one shape.
    *
    * `createPinningLookup` delivers its verdict to `callback(error)`, and node
    * surfaces that as the socket's `error` event — so a name that rebinds to a
    * blocked address between the pre-flight check and the connect arrives here
    * as a `BLOCKED_TARGET` `AppError`, indistinguishable by call site from an
    * `ETIMEDOUT`. Splitting on the type is what keeps the refusal that matters
-   * most from being filed as a network hiccup.
+   * most from being filed as a network hiccup (dl-26), and dl-27's terminating
+   * mode adds a third outcome to the same socket: a certificate this proxy
+   * refused, which is neither our policy nor a dead network.
    */
   function connectFailed(host: string, error: unknown): void {
     if (error instanceof AppError) refused(host, error);
+    else if (isCertificateRejection(error)) certificateRejected(host, error);
     else unreachable(host, error);
   }
 
@@ -356,26 +407,77 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           ? net.connect({ host, port, ...connectOptions })
           : net.connect({ host: upstream.hostname, port: upstreamPort(upstream) });
 
-      serverSocket.once("error", (error: unknown) => {
+      // One outcome per CONNECT. Without this the origin-side TLS failure below
+      // is logged twice — once as the certificate refusal it is and once as the
+      // `ECONNRESET` node raises on the socket underneath it — and the second
+      // one writes a 502 status line into a tunnel that may already be carrying
+      // bytes. It also bounds the pre-dl-27 wart where a mid-stream server
+      // error re-entered this handler after `establish`.
+      let settled = false;
+      const fail = (error: unknown, status: number, reason: string): void => {
+        if (settled) return;
+        settled = true;
         connectFailed(target, error);
-        refuse(clientSocket, 502, "Upstream connect failed");
+        refuse(clientSocket, status, reason);
+        serverSocket.destroy();
+      };
+
+      serverSocket.once("error", (error: unknown) => {
+        fail(error, 502, "Upstream connect failed");
       });
+
+      const open = (): void => {
+        if (settled) return;
+        if (intercept === null) {
+          settled = true;
+          establish(clientSocket, serverSocket, head);
+          return;
+        }
+        terminateTls({
+          clientSocket,
+          serverSocket,
+          head,
+          host,
+          intercept,
+          onEstablished: () => {
+            settled = true;
+          },
+          // The reason phrase is not decoration. ffmpeg logs a proxy's status
+          // line verbatim — `[httpproxy] HTTP error 502 <phrase>` — so this is
+          // the one channel that carries *why* into the failing run's own
+          // stderr, where `isTlsVerificationFailure` reads it and the job fails
+          // as `TLS_VERIFICATION_FAILED` rather than as a dead link. Measured
+          // in dl-27; it needs `-loglevel warning`, which is why `GLOBAL_ARGS`
+          // now asks for one.
+          onRejected: (error) =>
+            fail(
+              error,
+              502,
+              `TLS certificate verification failed (${certificateRejectionCode(error)})`,
+            ),
+          onFailed: (error) => {
+            fail(error, 502, "Upstream connect failed");
+          },
+        });
+      };
 
       serverSocket.once("connect", () => {
         if (upstream === null) {
-          establish(clientSocket, serverSocket, head);
+          open();
           return;
         }
         // Chained: ask the operator's proxy for the same tunnel, and only
         // report success once it has agreed to it.
         chainConnect(serverSocket, target, upstream, (error) => {
           if (error !== null) {
+            if (settled) return;
+            settled = true;
             upstreamRefused(target, error);
             refuse(clientSocket, 502, "Upstream proxy refused");
             serverSocket.destroy();
             return;
           }
-          establish(clientSocket, serverSocket, head);
+          open();
         });
       });
     })();
@@ -395,6 +497,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
   return {
     url: `http://127.0.0.1:${port}`,
     mode: upstream === null ? "pinned" : "chained",
+    tls: intercept === null ? "tunnel" : "terminate",
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();
@@ -434,6 +537,85 @@ function establish(clientSocket: net.Socket, serverSocket: net.Socket, head: Buf
   clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
   if (head.length > 0) serverSocket.write(head);
   joinSockets(clientSocket, serverSocket);
+}
+
+interface TerminateOptions {
+  clientSocket: net.Socket;
+  /** Connected, and either the origin or a chained proxy's open tunnel to it. */
+  serverSocket: net.Socket;
+  head: Buffer;
+  host: string;
+  intercept: TlsInterception;
+  onEstablished: () => void;
+  onRejected: (error: unknown) => void;
+  onFailed: (error: unknown) => void;
+}
+
+/**
+ * Verifies the origin here, then re-encrypts to the client under a leaf we
+ * issued: the half of dl-27 that ffmpeg's argv could not reach.
+ *
+ * The order is the point. The origin handshake completes **before** the client
+ * is told `200`, so a refused certificate is a refused `CONNECT` rather than a
+ * tunnel that opens and then dies — which is what lets the reason travel as a
+ * status line at all.
+ */
+function terminateTls(options: TerminateOptions): void {
+  const { clientSocket, serverSocket, head, host, intercept } = options;
+  let done = false;
+
+  const secure = tls.connect({
+    socket: serverSocket,
+    // What the certificate is checked against. Node falls back to `localhost`
+    // when neither this nor `servername` is given on a wrapped socket, which
+    // would verify a chain and then match it against the wrong name.
+    host,
+    // **An IP has no SNI** — RFC 6066 forbids it, and a numeric `servername`
+    // makes some origins abort the handshake. The leaf is matched on the
+    // address in `subjectAltName` instead; see `tls-interception.ts`.
+    ...(net.isIP(host) === 0 ? { servername: host } : {}),
+    rejectUnauthorized: intercept.verifyOrigins,
+    ...(intercept.originCa === undefined ? {} : { ca: [...intercept.originCa] }),
+  });
+
+  secure.once("error", (error: unknown) => {
+    if (done) return;
+    done = true;
+    // The socket, not the error, is what says a certificate was refused — see
+    // `OriginCertificateError`. Read before `destroy`, which clears nothing but
+    // is not worth racing.
+    const authorizationError = secure.authorizationError;
+    secure.destroy();
+    if (authorizationError === null || authorizationError === undefined) {
+      options.onFailed(error);
+      return;
+    }
+    options.onRejected(
+      new OriginCertificateError(
+        String(authorizationError),
+        error instanceof Error ? error.message : String(error),
+        error,
+      ),
+    );
+  });
+
+  secure.once("secureConnect", () => {
+    if (done) return;
+    done = true;
+    options.onEstablished();
+    clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+    // Bytes the client sent before it was told to go ahead are the start of its
+    // ClientHello, and belong to the TLS socket about to wrap this one.
+    if (head.length > 0) clientSocket.unshift(head);
+
+    const leaf = intercept.leafFor(host);
+    const clientTls = new tls.TLSSocket(clientSocket, {
+      isServer: true,
+      key: leaf.key,
+      cert: leaf.cert,
+    });
+    joinSockets(clientTls, secure);
+  });
 }
 
 /**

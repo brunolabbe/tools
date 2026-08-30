@@ -53,18 +53,31 @@ export interface ApiConfig {
   ytdlpPath: string | undefined;
 
   /**
-   * Lets ffmpeg fetch over TLS without checking the certificate, which is what
-   * it did everywhere until dl-19.
+   * Lets video be fetched over TLS without checking the certificate, which is
+   * what happened everywhere until dl-19.
    *
    * It exists for one real case — an operator behind a TLS-intercepting
-   * corporate proxy, whose certificates are re-issued by a root this process
-   * has never heard of. `ffmpegCaFile` is the better answer for that operator
-   * and should be tried first; this one is the answer when even that is not
+   * corporate proxy, whose certificates are re-issued by a root this process has
+   * never heard of. `ffmpegCaFile` is the better answer for that operator and
+   * should be tried first; this one is the answer when even that is not
    * available. `createApp` warns at boot whenever it is on, because a security
    * check that can be turned off silently is one that gets turned off and left.
+   *
+   * Since dl-27 the party doing the checking is the egress proxy rather than
+   * ffmpeg, so this now turns it off for the segment connections as well as the
+   * manifest — which is what it always read as and never was.
    */
   ffmpegAllowUnverifiedTls: boolean;
-  /** A CA bundle for ffmpeg to trust instead of the system store. */
+  /**
+   * An extra CA bundle for the **egress proxy** to trust, merged with the system
+   * store.
+   *
+   * Read the noun carefully, because dl-27 moved it: ffmpeg's own trust store is
+   * the root that proxy generates, and this is the file the proxy uses when it
+   * verifies the real origin. It is merged rather than substituted — `-ca_file`
+   * and Node's `ca` option both *replace* a store, and a deployment given only
+   * its operator's root would refuse every public origin.
+   */
   ffmpegCaFile: string | undefined;
 
   /**
