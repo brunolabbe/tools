@@ -145,20 +145,35 @@ it, by deliberately breaking dedup and watching the original test stay green.
 Rewritten to use two items sharing one `measured` object before either
 mutation check above was run for real.
 
-**Merge-clean recheck against `origin/pl-30-geocoder-fixtures`**, as asked,
-since this file also exists there with `status: ready`:
+**Merge-clean recheck against `origin/pl-30-geocoder-fixtures`, run for
+real, not assumed** — and it changed the answer the coordinator had verified
+before this commit existed:
 
 ```
 $ git fetch origin pl-30-geocoder-fixtures
-$ git merge-tree $(git merge-base HEAD origin/pl-30-geocoder-fixtures) HEAD origin/pl-30-geocoder-fixtures
+$ git merge-tree --write-tree HEAD origin/pl-30-geocoder-fixtures
+f688cf78e8888e7001054606e61f9f7581d010ad
+100644 82a103a369f351983361aab1ee879ae49b801e84 2	tools/planner/docs/work/pl-35-travel-source-unattributed.md
+100644 ed255c9895c38316baf5f2b2d6a0f895e419656f 3	tools/planner/docs/work/pl-35-travel-source-unattributed.md
+
+Auto-merging tools/planner/api/test/grounding-valhalla.test.ts
+Auto-merging tools/planner/docs/work/pl-35-travel-source-unattributed.md
+CONFLICT (add/add): Merge conflict in tools/planner/docs/work/pl-35-travel-source-unattributed.md
 ```
 
-See this ticket's own commit for the exact output; recorded in the pl-29
-report rather than duplicated here twice. The one file both branches touch
-is this one, and the conflict is exactly the two `status` lines and the two
-different `## Log` tails — an ordinary merge conflict a person resolves by
-keeping both Logs and this ticket's `done`, not a sign either branch did
-anything wrong.
+**No longer merges cleanly — one conflict, and it is the expected and
+unavoidable one.** Both branches now independently _add_ this exact file
+(add/add), which is precisely what following the coordinator's own
+instruction — "you will need to add your own copy of the edit" — produces:
+there was no version of this fold-in that could avoid it once both branches
+carry a file at the same path with no shared history to diff against.
+Everything else merges without a hand: `grounding-valhalla.test.ts`, which
+both branches also touch, auto-merges cleanly with no conflict marker. The
+one conflict is exactly the two `status` lines (`ready` on pl-30's side,
+`done` here) and the two different `## Log` tails — an ordinary conflict a
+person resolves by keeping both Logs and this ticket's `done`, not a sign
+either branch did anything wrong. Told to the coordinator directly, since
+"tell me if it stops being true" is what this recheck was for.
 
 **Not done here**: nothing about `pl-34` (the geocoder query issue) or any
 other open pl-30-branch ticket. This entry closes pl-35 alone.
