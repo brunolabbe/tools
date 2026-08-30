@@ -11,7 +11,14 @@
 import { describe, expect, test } from "vitest";
 import { emptyBrief, slot } from "@planner/contract";
 import type { RunProgress, TripBrief } from "@planner/contract";
-import type { Find, LocateRequest, NearbyRequest, TravelRequest } from "@planner/agent";
+import type {
+  Find,
+  LocateRequest,
+  NearbyArticle,
+  NearbyRequest,
+  NotabilityRequest,
+  TravelRequest,
+} from "@planner/agent";
 import {
   answered,
   REFUSED,
@@ -62,6 +69,7 @@ function provider(overrides: {
     }>
   >;
   nearby?: (request: NearbyRequest) => Promise<GroundingOutcome<Find[]>>;
+  articlesNear?: (request: NotabilityRequest) => Promise<GroundingOutcome<NearbyArticle[]>>;
   travel?: (
     request: TravelRequest,
   ) => Promise<ReturnType<RunGrounding["travel"]> extends Promise<infer T> ? T : never>;
@@ -81,6 +89,10 @@ function provider(overrides: {
           },
         })),
     nearby: overrides.nearby ?? (async () => answered([])),
+    // pl-33: the notability pass asks only when the finds name a language, so
+    // a double that answers nothing here changes nothing for tests about
+    // locate, travel and coverage.
+    articlesNear: overrides.articlesNear ?? (async () => answered([])),
     travel:
       overrides.travel ??
       (async (request) => request.origins.map(() => request.destinations.map(() => UNKNOWN))),
@@ -126,7 +138,7 @@ describe("discoverAlongCorridor", () => {
       onProgress,
     });
 
-    expect(result).toEqual({ finds: [], coverage: [] });
+    expect(result).toEqual({ finds: [], coverage: [], reading: [] });
     expect(called).toBe(false);
     expect(events).toEqual([]);
   });
@@ -340,5 +352,260 @@ describe("discoverAlongCorridor", () => {
         onProgress: () => {},
       }),
     ).rejects.toThrow(/aborted/i);
+  });
+});
+
+/**
+ * The notability pass — pl-33 Build step 2.
+ *
+ * It lives here and not in `nearby` because a geosearch costs one call *per
+ * point* and `nearby` promises to cost one however many finds it returns. What
+ * these tests pin is the accounting that follows: the language comes from the
+ * corridor's own tags, the tile count is bounded before the budget is
+ * consulted, and a refusal stops the pass rather than half-filling it.
+ */
+describe("discoverAlongCorridor, attaching notability", () => {
+  const AT = "2027-01-01T00:00:00.000Z";
+  function findAt(
+    name: string,
+    coordinates: typeof MONTREAL,
+    notability: { url: string; title: string | null; fetchedAt: string }[] = [],
+  ): Find {
+    return {
+      name,
+      coordinates,
+      kind: "viewpoint",
+      tags: new Map(),
+      sources: [
+        { url: "https://www.openstreetmap.org/node/1", title: "OpenStreetMap", fetchedAt: AT },
+      ],
+      notability,
+      detourMinutes: null,
+    };
+  }
+
+  const TAGGED_FR = {
+    url: "https://fr.wikipedia.org/wiki/Quelque_chose",
+    title: "Quelque chose",
+    fetchedAt: AT,
+  };
+
+  test("asks the language the corridor's own finds already name", async () => {
+    const asked: string[] = [];
+    await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Percé"),
+      provider: provider({
+        nearby: async () =>
+          answered([
+            findAt("Belvédère", MONTREAL, [TAGGED_FR]),
+            findAt("Autre", MONTREAL, [TAGGED_FR]),
+            findAt("Cenotaph", MONTREAL, [
+              { url: "https://en.wikipedia.org/wiki/Cenotaph", title: "Cenotaph", fetchedAt: AT },
+            ]),
+          ]),
+        articlesNear: async (request) => {
+          asked.push(request.language);
+          return answered([]);
+        },
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: progressOf().onProgress,
+    });
+
+    // Two `fr:` tags against one `en:`, so French — counted from what the
+    // mappers wrote, not configured and not derived from a country. Every tile
+    // asks the same edition.
+    expect(new Set(asked)).toEqual(new Set(["fr"]));
+    expect(asked.length).toBeGreaterThan(0);
+  });
+
+  test("a find with no language named anywhere is never asked about", async () => {
+    let called = 0;
+    const result = await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Percé"),
+      provider: provider({
+        nearby: async () => answered([findAt("Unnamed viewpoint", MONTREAL)]),
+        articlesNear: async () => {
+          called += 1;
+          return answered([]);
+        },
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: progressOf().onProgress,
+    });
+
+    // Nothing states a language, so nothing is guessed and no call is spent.
+    expect(called).toBe(0);
+    expect(result.finds[0]?.notability).toEqual([]);
+  });
+
+  test("stops the moment the budget refuses, rather than half-filling", async () => {
+    let calls = 0;
+    await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Percé"),
+      provider: provider({
+        nearby: async () => answered([findAt("Belvédère", MONTREAL, [TAGGED_FR])]),
+        articlesNear: async () => {
+          calls += 1;
+          return REFUSED;
+        },
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: progressOf().onProgress,
+    });
+
+    // Two, and the number is the point: each pass stops at its *own* first
+    // refusal rather than carrying on through its remaining tiles. The
+    // notability tiling gives up after one, and the corridor-reading pass then
+    // asks once and gives up too. A refused call is not a spent one, so this
+    // costs the budget nothing — what it proves is that neither pass grinds
+    // through a list it has already been told it cannot afford.
+    expect(calls).toBe(2);
+  });
+
+  test("a wikivoyage entry rides on the plan, never on a find", async () => {
+    // pl-33's measurement: Wikivoyage returns 2 English and 7 French articles
+    // for an entire city, all of them *about the city*. Attaching one to a
+    // viewpoint inside it would assert a relationship the source does not
+    // have, so it lands on the revision instead — even though this one sits
+    // exactly on top of the find.
+    const result = await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Percé"),
+      provider: provider({
+        nearby: async () => answered([findAt("Belvédère", MONTREAL, [TAGGED_FR])]),
+        articlesNear: async (request) =>
+          answered(
+            request.site === "wikivoyage"
+              ? [
+                  {
+                    source: {
+                      url: "https://fr.wikivoyage.org/wiki/Montr%C3%A9al",
+                      title: "Montréal",
+                      fetchedAt: AT,
+                    },
+                    coordinates: MONTREAL,
+                  },
+                ]
+              : [],
+          ),
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: progressOf().onProgress,
+    });
+
+    expect(result.reading.map((source) => source.url)).toEqual([
+      "https://fr.wikivoyage.org/wiki/Montr%C3%A9al",
+    ]);
+    // Same coordinates as the find, and still not attached to it.
+    expect(result.finds[0]?.notability.map((source) => source.url)).toEqual([TAGGED_FR.url]);
+  });
+
+  test("asks wikivoyage in the same language the corridor named", async () => {
+    const sites: string[] = [];
+    await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Percé"),
+      provider: provider({
+        nearby: async () => answered([findAt("Belvédère", MONTREAL, [TAGGED_FR])]),
+        articlesNear: async (request) => {
+          sites.push(`${request.site ?? "wikipedia"}:${request.language}`);
+          return answered([]);
+        },
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: progressOf().onProgress,
+    });
+
+    // Both projects, one language, counted from the corridor's own tags.
+    expect(sites).toContain("wikivoyage:fr");
+    expect(sites).toContain("wikipedia:fr");
+    expect(sites.every((entry) => entry.endsWith(":fr"))).toBe(true);
+  });
+
+  test("notability spends first, so a tight budget costs the detour and not the find", async () => {
+    // pl-33's gate raised this as an ordering nobody had written down: the two
+    // notability passes now run *before* `detourCosts`, where `detourCosts`
+    // used to be the only consumer after `nearby`. Up to 8 calls (6 tiles plus
+    // 2 corridor ends) can go first, so on a corridor whose budget is tight
+    // the thing that loses is detour costing.
+    //
+    // That is the right way round and this pins it rather than leaving it to
+    // be rediscovered: a find with no detour measured is still a find, and
+    // says so with `detourMinutes: null` — the same "nobody measured this"
+    // §5 asks for everywhere else. A find with no notability that was never
+    // asked about is indistinguishable from one nobody wrote about, which is
+    // the weaker outcome of the two.
+    const result = await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Percé"),
+      provider: provider({
+        nearby: async () => answered([findAt("Belvédère", MONTREAL, [TAGGED_FR])]),
+        articlesNear: async () =>
+          answered([
+            {
+              source: {
+                url: "https://fr.wikipedia.org/wiki/Proche",
+                title: "Proche",
+                fetchedAt: AT,
+              },
+              coordinates: MONTREAL,
+            },
+          ]),
+        // The budget is gone by the time the matrix is asked for.
+        travel: async (request) =>
+          request.origins.map(() => request.destinations.map(() => REFUSED)),
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: progressOf().onProgress,
+    });
+
+    expect(result.finds).toHaveLength(1);
+    // Never faked, and never dropped: the find survives with its backing.
+    expect(result.finds[0]?.detourMinutes).toBeNull();
+    expect(result.finds[0]?.notability.map((source) => source.url)).toContain(
+      "https://fr.wikipedia.org/wiki/Proche",
+    );
+  });
+
+  test("attaches an article near a find, and leaves a distant one alone", async () => {
+    const near = { latitude: MONTREAL.latitude + 0.001, longitude: MONTREAL.longitude };
+    const far = { latitude: MONTREAL.latitude + 0.05, longitude: MONTREAL.longitude };
+
+    const result = await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Percé"),
+      provider: provider({
+        nearby: async () => answered([findAt("Belvédère", MONTREAL, [TAGGED_FR])]),
+        articlesNear: async () =>
+          answered([
+            {
+              source: {
+                url: "https://fr.wikipedia.org/wiki/Proche",
+                title: "Proche",
+                fetchedAt: AT,
+              },
+              coordinates: near,
+            },
+            {
+              source: { url: "https://fr.wikipedia.org/wiki/Loin", title: "Loin", fetchedAt: AT },
+              coordinates: far,
+            },
+          ]),
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: progressOf().onProgress,
+    });
+
+    const urls = result.finds[0]?.notability.map((source) => source.url) ?? [];
+    // ~111 m away: the same thing. ~5.5 km away: a different thing entirely,
+    // and attaching it would be the fusion §5's amendment refuses.
+    expect(urls).toContain("https://fr.wikipedia.org/wiki/Proche");
+    expect(urls).not.toContain("https://fr.wikipedia.org/wiki/Loin");
+    // The tag the map already carried is still first and is not duplicated.
+    expect(urls[0]).toBe(TAGGED_FR.url);
   });
 });

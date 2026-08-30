@@ -79,6 +79,7 @@ function supersedeDraft(harness: RunHarness, planId: string): PlanRevision {
     createdAt: NOW.toISOString(),
     gaps: previous.gaps,
     coverage: previous.coverage,
+    reading: previous.reading,
     days: previous.days.map((day) => ({
       ...day,
       id: randomUUID(),

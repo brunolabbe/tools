@@ -1,0 +1,6929 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-08-30T21:24:21Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "node",
+  "id": 165059867,
+  "lat": 46.8127512,
+  "lon": -71.2130485,
+  "tags": {
+    "barrier": "entrance",
+    "name": "Porte Saint-Jean",
+    "name:ko": "생장 문",
+    "tourism": "attraction",
+    "wikimedia_commons": "Category:Saint-Jean gate"
+  }
+},
+{
+  "type": "node",
+  "id": 279337750,
+  "lat": 45.4747846,
+  "lon": -73.5002716,
+  "tags": {
+    "created_by": "Potlatch 0.10",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 291483301,
+  "lat": 45.5232225,
+  "lon": -73.5687441,
+  "tags": {
+    "name": "Belvédère Léo-Ayotte",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 296742671,
+  "lat": 46.8393773,
+  "lon": -71.2101649,
+  "tags": {
+    "attraction": "maze",
+    "name": "Labyrinthe de cèdres",
+    "source": "Bing Maps",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 343473014,
+  "lat": 46.7959309,
+  "lon": -71.2273890,
+  "tags": {
+    "historic": "monument",
+    "name": "Earl Grey Terrace",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 377497852,
+  "lat": 46.8119092,
+  "lon": -71.2125626,
+  "tags": {
+    "barrier": "entrance",
+    "historic": "city_gate",
+    "name": "Porte Kent",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 401881503,
+  "lat": 46.8090922,
+  "lon": -71.2040241,
+  "tags": {
+    "name": "Plessis",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 401881514,
+  "lat": 46.8099828,
+  "lon": -71.2040173,
+  "tags": {
+    "name": "Dufferin",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 401881582,
+  "lat": 46.8110221,
+  "lon": -71.2041592,
+  "tags": {
+    "image": "File:Quebec - Terrasse Dufferin 05.jpg",
+    "name": "Victoria",
+    "name:ko": "빅토리아",
+    "tourism": "viewpoint",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 401881640,
+  "lat": 46.8119233,
+  "lon": -71.2042604,
+  "tags": {
+    "name": "Lorne",
+    "name:ko": "론",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 401949694,
+  "lat": 46.8135246,
+  "lon": -71.2049643,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "François de Laval de Montmorency",
+    "subject:wikidata": "Q607145",
+    "wikimedia_commons": "File:Statue François de Laval.jpg"
+  }
+},
+{
+  "type": "node",
+  "id": 416180746,
+  "lat": 45.6070005,
+  "lon": -73.4811345,
+  "tags": {
+    "height": "5",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 427850300,
+  "lat": 45.5234727,
+  "lon": -73.5366891,
+  "tags": {
+    "man_made": "tower",
+    "name": "Orbite",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 427850301,
+  "lat": 45.5254684,
+  "lon": -73.5346985,
+  "tags": {
+    "demolished:building": "yes",
+    "man_made": "tower",
+    "name": "Spirale",
+    "operational_status": "closed",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 427850307,
+  "lat": 45.5241891,
+  "lon": -73.5345606,
+  "tags": {
+    "man_made": "tower",
+    "name": "Condor",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 459929682,
+  "lat": 45.5173921,
+  "lon": -73.5695748,
+  "tags": {
+    "access": "yes",
+    "historic": "monument",
+    "image": "https://web.archive.org/web/20220925145025/https://westnordost.de/p/113669.jpg",
+    "name": "Crémazie",
+    "wikidata": "Q114211525"
+  }
+},
+{
+  "type": "node",
+  "id": 459929786,
+  "lat": 45.5162998,
+  "lon": -73.5702504,
+  "tags": {
+    "historic": "monument",
+    "name": "Monument Émile Nelligan",
+    "wikidata": "Q114217227"
+  }
+},
+{
+  "type": "node",
+  "id": 462248844,
+  "lat": 45.5010492,
+  "lon": -73.5614497,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque",
+    "name": "Joseph Xavier Perreault"
+  }
+},
+{
+  "type": "node",
+  "id": 463014733,
+  "lat": 46.8094565,
+  "lon": -71.2112775,
+  "tags": {
+    "area": "yes",
+    "barrier": "entrance",
+    "historic": "city_gate",
+    "name": "Porte Saint-Louis",
+    "name:ko": "생루이 문",
+    "tourism": "attraction",
+    "wikidata": "Q97367516"
+  }
+},
+{
+  "type": "node",
+  "id": 465633306,
+  "lat": 45.5047970,
+  "lon": -73.5572556,
+  "tags": {
+    "artwork_type": "statue",
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "Monument à Maisonneuve",
+    "name:ko": "다름광장",
+    "tourism": "artwork",
+    "wikidata": "Q924951",
+    "wikipedia": "fr:Monument à Maisonneuve"
+  }
+},
+{
+  "type": "node",
+  "id": 523521306,
+  "lat": 46.8533068,
+  "lon": -71.2059783,
+  "tags": {
+    "historic": "monument"
+  }
+},
+{
+  "type": "node",
+  "id": 527275833,
+  "lat": 46.6932577,
+  "lon": -71.4548608,
+  "tags": {
+    "addr:city": "Lévis (Saint-Nicolas)",
+    "addr:housenumber": "2068",
+    "addr:postcode": "G7A 4H5",
+    "addr:street": "route Marie-Victoriin",
+    "contact:facebook": "https://fr-ca.facebook.com/pages/Cidrerie-et-Vergers-St-Nicolas/116655605019516",
+    "contact:fax": "+1-418-836-8066",
+    "contact:phone": "+1-418-836-5505",
+    "name": "Cidrerie et Vergers Saint-Nicolas",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 527284221,
+  "lat": 46.6852483,
+  "lon": -71.3832868,
+  "tags": {
+    "addr:city": "Lévis (Saint-Nicolas)",
+    "addr:housenumber": "1344",
+    "addr:postcode": "G7A 2N3",
+    "addr:street": "Chemin Vire-Crêpes",
+    "contact:phone": "+1-418-831-1989",
+    "name": "Ferme Gosselin Clément et Mireille",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 538358648,
+  "lat": 46.6919639,
+  "lon": -71.4560658,
+  "tags": {
+    "addr:city": "Lévis (Saint-Nicolas)",
+    "addr:housenumber": "2091",
+    "addr:postcode": "G7A 4H4",
+    "addr:street": "route Marie-Victorin",
+    "contact:fax": "+1-418-831-5389",
+    "contact:phone": "+1-418-831-9967",
+    "contact:website": "http://www.fermegenest.com/",
+    "name": "Ferme Genest",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 687147504,
+  "lat": 45.6041199,
+  "lon": -73.4498581,
+  "tags": {
+    "historic": "memorial",
+    "name": "Souvenir"
+  }
+},
+{
+  "type": "node",
+  "id": 842334826,
+  "lat": 46.8019446,
+  "lon": -71.2237383,
+  "tags": {
+    "building": "yes",
+    "historic": "monument",
+    "name": "Maison Krieghoff",
+    "wikidata": "Q23891377",
+    "wikimedia_commons": "Category:Krieghoff_House",
+    "wikipedia": "fr:Maison Cornelius-Krieghoff"
+  }
+},
+{
+  "type": "node",
+  "id": 859080850,
+  "lat": 45.6141801,
+  "lon": -73.4805128,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 859081660,
+  "lat": 45.6130279,
+  "lon": -73.4804332,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 864716944,
+  "lat": 45.5084317,
+  "lon": -73.5535232,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "Jérôme Le Royer de La Dauversière",
+    "tourism": "artwork"
+  }
+},
+{
+  "type": "node",
+  "id": 864716955,
+  "lat": 45.5085122,
+  "lon": -73.5533630,
+  "tags": {
+    "historic": "memorial",
+    "mapillary": "518133389569188",
+    "memorial": "statue",
+    "name": "Jean Drapeau"
+  }
+},
+{
+  "type": "node",
+  "id": 895798422,
+  "lat": 45.5037463,
+  "lon": -73.5880096,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque",
+    "name": "King George VI"
+  }
+},
+{
+  "type": "node",
+  "id": 917527959,
+  "lat": 45.6134245,
+  "lon": -73.4565965,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "stone"
+  }
+},
+{
+  "type": "node",
+  "id": 921087902,
+  "lat": 45.6889591,
+  "lon": -73.1859303,
+  "tags": {
+    "historic": "memorial",
+    "source": "CanVec 6.0 - NRCan"
+  }
+},
+{
+  "type": "node",
+  "id": 947390817,
+  "lat": 46.8126308,
+  "lon": -71.2045736,
+  "tags": {
+    "artwork_type": "sculpture",
+    "historic": "monument",
+    "name": "Samuel De Champlain",
+    "name:ko": "사뮈엘 드 샹플랭",
+    "tourism": "artwork",
+    "wikidata": "Q16665231",
+    "wikipedia:fr": "Monument de Samuel de Champlain"
+  }
+},
+{
+  "type": "node",
+  "id": 948560661,
+  "lat": 46.8137946,
+  "lon": -71.2071478,
+  "tags": {
+    "historic": "monument",
+    "name": "Taschereau",
+    "name:ko": "타셰로 동상"
+  }
+},
+{
+  "type": "node",
+  "id": 958231082,
+  "lat": 45.5163880,
+  "lon": -73.5321383,
+  "tags": {
+    "historic": "memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 989707916,
+  "lat": 45.4588304,
+  "lon": -73.5722996,
+  "tags": {
+    "historic": "memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 1019193938,
+  "lat": 46.8142725,
+  "lon": -71.2074214,
+  "tags": {
+    "addr:city": "Québec",
+    "addr:housenumber": "24",
+    "addr:postcode": "G1R 3V9",
+    "addr:province": "Québec",
+    "addr:street": "Côte de la Fabrique",
+    "historic": "building",
+    "name": "Édifice de l'ancien cinéma Empire",
+    "source": "NRCan-CanVec-7.0",
+    "wikidata": "Q38601918"
+  }
+},
+{
+  "type": "node",
+  "id": 1028949540,
+  "lat": 45.5037245,
+  "lon": -73.5685247,
+  "tags": {
+    "artist_name": "Louis-Philippe Hébert",
+    "historic": "memorial",
+    "inscription": "King Edouard VII\nIn memory of a much loved sovereigh the citizens of Montréal erected this monument\n1914",
+    "memorial": "statue",
+    "name": "King Edward VII",
+    "support": "pedestal"
+  }
+},
+{
+  "type": "node",
+  "id": 1104523796,
+  "lat": 45.5233948,
+  "lon": -73.5461658,
+  "tags": {
+    "historic": "monument",
+    "name": "Monument aux Patriotes"
+  }
+},
+{
+  "type": "node",
+  "id": 1149995410,
+  "lat": 45.9136349,
+  "lon": -72.9543808,
+  "tags": {
+    "historic": "wayside_shrine",
+    "source": "NRCan-CanVec-7.0"
+  }
+},
+{
+  "type": "node",
+  "id": 1176302802,
+  "lat": 46.7483796,
+  "lon": -71.2526939,
+  "tags": {
+    "content": "water",
+    "historic": "ruins",
+    "ruins": "storage_tank",
+    "source": "NRCan-CanVec-7.0"
+  }
+},
+{
+  "type": "node",
+  "id": 1176343074,
+  "lat": 46.7480409,
+  "lon": -71.3417459,
+  "tags": {
+    "historic": "yes",
+    "source": "NRCan-CanVec-7.0",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 1178621021,
+  "lat": 45.5283437,
+  "lon": -73.5574049,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Jackie Robinson\n1919–1972",
+    "memorial": "plaque",
+    "name": "Place des Royaux",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1198695497,
+  "lat": 46.8145280,
+  "lon": -71.1580588,
+  "tags": {
+    "historic": "monument",
+    "leisure": "nature_reserve",
+    "source": "NRCan-CanVec-7.0"
+  }
+},
+{
+  "type": "node",
+  "id": 1198841103,
+  "lat": 46.8016926,
+  "lon": -71.2413775,
+  "tags": {
+    "historic": "battlefield"
+  }
+},
+{
+  "type": "node",
+  "id": 1201135111,
+  "lat": 46.7678457,
+  "lon": -71.2592608,
+  "tags": {
+    "historic": "yes",
+    "source": "NRCan-CanVec-7.0",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 1219685494,
+  "lat": 46.8091245,
+  "lon": -71.2047210,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1244402155,
+  "lat": 45.5014991,
+  "lon": -73.5700286,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1244748261,
+  "lat": 45.5583923,
+  "lon": -73.5518043,
+  "tags": {
+    "construction": "yes",
+    "name": "Observatoire de la Tour de Montréal",
+    "name:en": "Montreal Tower Observatory",
+    "name:fr": "Observatoire de la Tour de Montréal",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1259419665,
+  "lat": 45.4996058,
+  "lon": -73.5709586,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "Guerre des Boers",
+    "wheelchair": "yes",
+    "wikidata": "Q4937191"
+  }
+},
+{
+  "type": "node",
+  "id": 1259419827,
+  "lat": 45.4995268,
+  "lon": -73.5713312,
+  "tags": {
+    "alt_name": "Robert Burns",
+    "historic": "monument",
+    "inscription": "Robert Burns 1759 - 1796. \"It's comin' yet for a that that man to man the world oer shall brithers be for a that.\" Erected by admirers of Burns.",
+    "name": "Robbie Burns",
+    "subject:wikidata": "Q81960"
+  }
+},
+{
+  "type": "node",
+  "id": 1259419963,
+  "lat": 45.4993689,
+  "lon": -73.5704839,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "memorial:subject": "Sir Wilfred Laurier",
+    "wikidata": "Q8001958"
+  }
+},
+{
+  "type": "node",
+  "id": 1259419992,
+  "lat": 45.4987969,
+  "lon": -73.5713376,
+  "tags": {
+    "historic": "monument",
+    "name": "Lion de Belfort"
+  }
+},
+{
+  "type": "node",
+  "id": 1290834958,
+  "lat": 45.4993563,
+  "lon": -73.5693776,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20230504115032/https://westnordost.de/p/97327.jpg",
+    "memorial": "statue",
+    "name": "Monseigneur Ignace Bourget",
+    "wheelchair": "yes",
+    "wikidata": "Q3323335"
+  }
+},
+{
+  "type": "node",
+  "id": 1290835135,
+  "lat": 45.4987528,
+  "lon": -73.5696365,
+  "tags": {
+    "historic": "memorial",
+    "internet_access": "wlan",
+    "memorial": "statue",
+    "name": "Sir John A. Macdonald",
+    "wheelchair": "yes",
+    "wikidata": "Q28806250"
+  }
+},
+{
+  "type": "node",
+  "id": 1290835360,
+  "lat": 45.4986182,
+  "lon": -73.5688316,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "war_memorial",
+    "name": "Cénotaphe",
+    "name:en": "Cenotaph",
+    "name:es": "Cenotafio",
+    "wheelchair": "yes",
+    "wikidata": "Q5058884",
+    "wikipedia": "es:Cenotafio de Montreal"
+  }
+},
+{
+  "type": "node",
+  "id": 1306297104,
+  "lat": 45.7664502,
+  "lon": -73.1853949,
+  "tags": {
+    "historic": "yes",
+    "source": "NRCan-CanVec-7.0",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 1307395510,
+  "lat": 45.5078602,
+  "lon": -73.5430814,
+  "tags": {
+    "source": "NRCan-CanVec-7.0",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1307395642,
+  "lat": 45.5029227,
+  "lon": -73.5540542,
+  "tags": {
+    "historic": "yes",
+    "name": "Entre Nous",
+    "name:fr": "Entre Nous",
+    "source": "NRCan-CanVec-7.0",
+    "tourism": "attraction",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1307396249,
+  "lat": 45.5226397,
+  "lon": -73.5342202,
+  "tags": {
+    "historic": "yes",
+    "name": "Le Grand Carrousel",
+    "source": "NRCan-CanVec-7.0",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 1307396845,
+  "lat": 45.5104652,
+  "lon": -73.5371174,
+  "tags": {
+    "source": "NRCan-CanVec-7.0",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1307398433,
+  "lat": 45.5028631,
+  "lon": -73.5169420,
+  "tags": {
+    "historic": "memorial",
+    "source": "NRCan-CanVec-7.0"
+  }
+},
+{
+  "type": "node",
+  "id": 1330276671,
+  "lat": 45.5603990,
+  "lon": -73.5601941,
+  "tags": {
+    "name": "La cloche de la paix",
+    "name:en": "The Peace Bell",
+    "name:fr": "La cloche de la paix",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 1330276952,
+  "lat": 45.5088387,
+  "lon": -73.5879016,
+  "tags": {
+    "height": "31.4",
+    "man_made": "cross",
+    "material": "steel",
+    "name": "Croix du Mont-Royal",
+    "name:en": "Mount Royal Cross",
+    "name:fr": "Croix du Mont-Royal",
+    "religion": "christian",
+    "start_date": "1924",
+    "tourism": "attraction",
+    "website": "https://ville.montreal.qc.ca/siteofficieldumontroyal/patrimoine-artistique-commemoratif/croix-mont-royal",
+    "wheelchair": "limited",
+    "wikidata": "Q1579157",
+    "wikipedia": "fr:Croix du mont Royal"
+  }
+},
+{
+  "type": "node",
+  "id": 1332961765,
+  "lat": 46.8110311,
+  "lon": -71.2128584,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1332962240,
+  "lat": 46.8104981,
+  "lon": -71.2123648,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1407270871,
+  "lat": 46.8398202,
+  "lon": -71.2105806,
+  "tags": {
+    "name": "Arboretum",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 1407270874,
+  "lat": 46.8395606,
+  "lon": -71.2092570,
+  "tags": {
+    "name": "Tour d'observation",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1455400477,
+  "lat": 45.5374627,
+  "lon": -73.5893110,
+  "tags": {
+    "historic": "monument",
+    "name": "Anciennes Écuries"
+  }
+},
+{
+  "type": "node",
+  "id": 1455400507,
+  "lat": 45.5356063,
+  "lon": -73.5911558,
+  "tags": {
+    "historic": "memorial",
+    "name": "Incinérateur des carrières"
+  }
+},
+{
+  "type": "node",
+  "id": 1467657014,
+  "lat": 45.5051143,
+  "lon": -73.5773643,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "stone",
+    "name": "McGill",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1566771159,
+  "lat": 45.5137639,
+  "lon": -73.5766478,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Jeanne Mance 1606-1673 Avec l'aide généreuse de Mme de Bullion, elle fonda cet Hôtel-Dieu, asile des pauvres malades, et lui donna sa tendre charité, son inlassable dévouement, toute l'énergie de son âme d'élite.",
+    "memorial": "statue",
+    "name": "Jeanne Mance",
+    "start_date": "1909",
+    "wikidata": "Q6172148"
+  }
+},
+{
+  "type": "node",
+  "id": 1596511957,
+  "lat": 46.8070904,
+  "lon": -71.2141063,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "sculpture",
+    "name": "« Je me souviens »"
+  }
+},
+{
+  "type": "node",
+  "id": 1597493698,
+  "lat": 46.8133778,
+  "lon": -71.2037357,
+  "tags": {
+    "direction": "90",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1597526498,
+  "lat": 46.7999531,
+  "lon": -71.2249265,
+  "tags": {
+    "historic": "monument",
+    "name": "Monument Wolfe",
+    "name:en": "Wolfe Monument",
+    "name:fr": "Monument Wolfe",
+    "wikidata": "Q115743559"
+  }
+},
+{
+  "type": "node",
+  "id": 1597536434,
+  "lat": 46.7737080,
+  "lon": -71.2441350,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1606709286,
+  "lat": 46.8040499,
+  "lon": -71.2177914,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "Jeanne-D'Arc",
+    "name:en": "Joan of Arc",
+    "name:es": "Juana de Arco",
+    "wikidata": "Q20798625"
+  }
+},
+{
+  "type": "node",
+  "id": 1606715659,
+  "lat": 46.8074637,
+  "lon": -71.2140629,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "Confucius"
+  }
+},
+{
+  "type": "node",
+  "id": 1614669393,
+  "lat": 46.8091348,
+  "lon": -71.2126669,
+  "tags": {
+    "historic": "monument",
+    "name": "Monument Honoré-Mercier"
+  }
+},
+{
+  "type": "node",
+  "id": 1615848243,
+  "lat": 46.8074706,
+  "lon": -71.2211952,
+  "tags": {
+    "historic": "monument",
+    "name": "Le monument aux Acadiens"
+  }
+},
+{
+  "type": "node",
+  "id": 1615868119,
+  "lat": 46.8141710,
+  "lon": -71.2041930,
+  "tags": {
+    "historic": "monument",
+    "name": "Louis-Hébert",
+    "wikidata": "Q3262218",
+    "wikipedia": "fr:Louis Hébert (pionnier)"
+  }
+},
+{
+  "type": "node",
+  "id": 1616631060,
+  "lat": 46.8101954,
+  "lon": -71.2153119,
+  "tags": {
+    "historic": "monument",
+    "name": "monument Alphonse-et-Dorimène-Desjardins"
+  }
+},
+{
+  "type": "node",
+  "id": 1659676964,
+  "lat": 46.7976555,
+  "lon": -71.2288299,
+  "tags": {
+    "historic": "battlefield",
+    "name": "Plaines d'Abraham",
+    "name:de": "Abraham-Ebene",
+    "name:en": "Plains of Abraham",
+    "name:es": "Llanuras de Abraham",
+    "name:fr": "Plaines d'Abraham",
+    "place": "locality",
+    "wikidata": "Q2726825",
+    "wikipedia": "fr:Plaines d'Abraham",
+    "wikipedia:en": "en:Plains of Abraham"
+  }
+},
+{
+  "type": "node",
+  "id": 1690351906,
+  "lat": 46.8044479,
+  "lon": -71.2087110,
+  "tags": {
+    "source": "NRCan-CanVec-8.0",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1690351961,
+  "lat": 46.8089441,
+  "lon": -71.2041419,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1737938946,
+  "lat": 46.7148007,
+  "lon": -71.2805724,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1737939050,
+  "lat": 46.7151556,
+  "lon": -71.2808486,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1737939097,
+  "lat": 46.7153313,
+  "lon": -71.2810999,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1737939167,
+  "lat": 46.7160222,
+  "lon": -71.2820072,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1737939226,
+  "lat": 46.7174292,
+  "lon": -71.2827469,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977343,
+  "lat": 46.7952984,
+  "lon": -71.2292637,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977356,
+  "lat": 46.7958821,
+  "lon": -71.2291038,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977358,
+  "lat": 46.7958854,
+  "lon": -71.2289856,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977361,
+  "lat": 46.7958899,
+  "lon": -71.2288572,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977365,
+  "lat": 46.7959271,
+  "lon": -71.2299306,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977369,
+  "lat": 46.7959451,
+  "lon": -71.2300297,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977371,
+  "lat": 46.7959553,
+  "lon": -71.2301142,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977376,
+  "lat": 46.7959857,
+  "lon": -71.2281397,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977378,
+  "lat": 46.7960048,
+  "lon": -71.2279887,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977382,
+  "lat": 46.7960375,
+  "lon": -71.2278558,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977390,
+  "lat": 46.7960637,
+  "lon": -71.2277558,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977394,
+  "lat": 46.7961107,
+  "lon": -71.2276136,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977395,
+  "lat": 46.7961321,
+  "lon": -71.2275483,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977396,
+  "lat": 46.7961411,
+  "lon": -71.2308475,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977399,
+  "lat": 46.7961569,
+  "lon": -71.2274988,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977401,
+  "lat": 46.7961805,
+  "lon": -71.2274357,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977402,
+  "lat": 46.7961884,
+  "lon": -71.2309691,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977408,
+  "lat": 46.7962245,
+  "lon": -71.2310513,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977409,
+  "lat": 46.7962414,
+  "lon": -71.2272994,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977413,
+  "lat": 46.7962943,
+  "lon": -71.2271766,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977419,
+  "lat": 46.7963664,
+  "lon": -71.2270414,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977425,
+  "lat": 46.7964554,
+  "lon": -71.2315616,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977430,
+  "lat": 46.7965016,
+  "lon": -71.2316190,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977435,
+  "lat": 46.7966007,
+  "lon": -71.2317891,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977446,
+  "lat": 46.7966930,
+  "lon": -71.2264985,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977450,
+  "lat": 46.7967482,
+  "lon": -71.2264039,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977459,
+  "lat": 46.7968631,
+  "lon": -71.2262699,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977496,
+  "lat": 46.7977541,
+  "lon": -71.2255085,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977502,
+  "lat": 46.7978746,
+  "lon": -71.2254589,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977509,
+  "lat": 46.7979591,
+  "lon": -71.2254274,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977514,
+  "lat": 46.7980526,
+  "lon": -71.2254060,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977537,
+  "lat": 46.7985437,
+  "lon": -71.2253586,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977538,
+  "lat": 46.7986248,
+  "lon": -71.2253632,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977546,
+  "lat": 46.7988264,
+  "lon": -71.2253936,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977550,
+  "lat": 46.7989266,
+  "lon": -71.2254240,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977585,
+  "lat": 46.7996791,
+  "lon": -71.2253722,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977591,
+  "lat": 46.7997410,
+  "lon": -71.2253237,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1740977692,
+  "lat": 46.8018195,
+  "lon": -71.2169152,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 1932256608,
+  "lat": 45.5049923,
+  "lon": -73.5927609,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 2007477205,
+  "lat": 45.4862372,
+  "lon": -73.5954271,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "war_memorial",
+    "name": "Monument aux soldats disparus"
+  }
+},
+{
+  "type": "node",
+  "id": 2291673559,
+  "lat": 46.7597804,
+  "lon": -71.2674772,
+  "tags": {
+    "name": "Belvédère de Tequenonday",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 2296591420,
+  "lat": 46.8006558,
+  "lon": -71.2406726,
+  "tags": {
+    "historic": "monument",
+    "name": "Monument Des Braves"
+  }
+},
+{
+  "type": "node",
+  "id": 2359176962,
+  "lat": 46.8127355,
+  "lon": -71.2314023,
+  "tags": {
+    "historic": "monument"
+  }
+},
+{
+  "type": "node",
+  "id": 2359283350,
+  "lat": 46.8075392,
+  "lon": -71.2302076,
+  "tags": {
+    "abandoned": "yes",
+    "historic": "wayside_shrine",
+    "religion": "christian",
+    "source": "GPS"
+  }
+},
+{
+  "type": "node",
+  "id": 2359283352,
+  "lat": 46.8075531,
+  "lon": -71.2296437,
+  "tags": {
+    "historic": "wayside_cross",
+    "source": "GPS"
+  }
+},
+{
+  "type": "node",
+  "id": 2359283365,
+  "lat": 46.8076874,
+  "lon": -71.2297617,
+  "tags": {
+    "abandoned": "yes",
+    "historic": "wayside_shrine",
+    "religion": "christian",
+    "source": "GPS"
+  }
+},
+{
+  "type": "node",
+  "id": 2360989306,
+  "lat": 46.8244939,
+  "lon": -71.2365876,
+  "tags": {
+    "historic": "monument"
+  }
+},
+{
+  "type": "node",
+  "id": 2360989313,
+  "lat": 46.8245929,
+  "lon": -71.2359724,
+  "tags": {
+    "historic": "monument"
+  }
+},
+{
+  "type": "node",
+  "id": 2361986536,
+  "lat": 46.7535782,
+  "lon": -71.3855027,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 2396801717,
+  "lat": 46.8096299,
+  "lon": -71.2111615,
+  "tags": {
+    "historic": "monument",
+    "name": "Bustes de Roosevelt et de Churchill",
+    "name:en": "Roosevelt and Churchill busts",
+    "name:fr": "Bustes de Roosevelt et de Churchill",
+    "website": "https://www.cbc.ca/archives/categories/war-conflict/second-world-war/general-22/churchill-roosevelt-and-king-meet-in-quebec.html"
+  }
+},
+{
+  "type": "node",
+  "id": 2396807682,
+  "lat": 46.8090414,
+  "lon": -71.2109995,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque",
+    "name": "Mémorial à des soldats américains",
+    "name:en": "Memorial to fallen American soldiers",
+    "subject:wikidata": "Q444947",
+    "subject:wikipedia": "en:Richard Montgomery"
+  }
+},
+{
+  "type": "node",
+  "id": 2396812776,
+  "lat": 46.8144791,
+  "lon": -71.2123244,
+  "tags": {
+    "historic": "monument",
+    "name": "Croix celtique",
+    "name:en": "Celtic cross",
+    "website": "https://www.pc.gc.ca/eng/lhn-nhs/qc/fortifications/natcul/natcul2/natcul2c.aspx"
+  }
+},
+{
+  "type": "node",
+  "id": 2418417029,
+  "lat": 46.7469069,
+  "lon": -71.4599060,
+  "tags": {
+    "historic": "memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 2433765868,
+  "lat": 45.4934811,
+  "lon": -73.6197604,
+  "tags": {
+    "historic": "monument",
+    "name": "Saint-Joseph"
+  }
+},
+{
+  "type": "node",
+  "id": 2500204824,
+  "lat": 45.4755463,
+  "lon": -73.5601164,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Division Sainte-Anne - Monument aux morts des guerres - 1914-1918 - 1939-1945",
+    "memorial": "war_memorial",
+    "name": "Division Sainte-Anne - Monument aux morts des guerres"
+  }
+},
+{
+  "type": "node",
+  "id": 2523411398,
+  "lat": 46.8073193,
+  "lon": -71.2143734,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "war_memorial",
+    "name": "Charles John Short & George Wallick"
+  }
+},
+{
+  "type": "node",
+  "id": 2523411402,
+  "lat": 46.8069737,
+  "lon": -71.2139358,
+  "tags": {
+    "historic": "memorial",
+    "name": "Les Voltigeurs de Québec",
+    "wikidata": "Q963911",
+    "wikipedia:fr": "Manège militaire de Québec"
+  }
+},
+{
+  "type": "node",
+  "id": 2524933266,
+  "lat": 46.8115100,
+  "lon": -71.2307332,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "Sir Wilfried Laurier"
+  }
+},
+{
+  "type": "node",
+  "id": 2547846477,
+  "lat": 46.8198174,
+  "lon": -71.2160093,
+  "tags": {
+    "historic": "memorial",
+    "name": "Statue équestre du Libertador Simon-Bolivar",
+    "source": "Bing Maps"
+  }
+},
+{
+  "type": "node",
+  "id": 2547846481,
+  "lat": 46.8199316,
+  "lon": -71.2165105,
+  "tags": {
+    "historic": "memorial",
+    "name": "Statue équestre de Bernardo O'Higgins",
+    "name:es": "Estatua Ecuestre de Bernardo O'Higgins",
+    "source": "Bing Maps"
+  }
+},
+{
+  "type": "node",
+  "id": 2547846487,
+  "lat": 46.8200104,
+  "lon": -71.2169297,
+  "tags": {
+    "historic": "memorial",
+    "name": "Monument Toussaint-Louverture",
+    "source": "Bing Maps",
+    "start_date": "2010"
+  }
+},
+{
+  "type": "node",
+  "id": 2561350316,
+  "lat": 46.8146832,
+  "lon": -71.2046763,
+  "tags": {
+    "historic": "monument",
+    "source": "Bing Maps"
+  }
+},
+{
+  "type": "node",
+  "id": 2561350317,
+  "lat": 46.8149527,
+  "lon": -71.2047595,
+  "tags": {
+    "historic": "monument",
+    "source": "Bing Maps"
+  }
+},
+{
+  "type": "node",
+  "id": 2649668666,
+  "lat": 46.7494178,
+  "lon": -71.3452201,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 2794876022,
+  "lat": 46.8089086,
+  "lon": -71.2210154,
+  "tags": {
+    "direction": "65",
+    "historic": "memorial",
+    "inscription": "Ici vécut, au début de sa carrière, Gérard Morisset (1898-1970), notaire, historien de l’art et pionnier de la sauvegarde du patrimoine québécois.",
+    "material": "metal",
+    "memorial": "plaque",
+    "name": "Maison Gérard Morrissette",
+    "subject:wikidata": "Q3124190"
+  }
+},
+{
+  "type": "node",
+  "id": 2800890585,
+  "lat": 46.7498609,
+  "lon": -71.2997447,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 2805204547,
+  "lat": 46.7112149,
+  "lon": -71.2844500,
+  "tags": {
+    "direction": "110",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 2844368447,
+  "lat": 45.4868014,
+  "lon": -73.5463603,
+  "tags": {
+    "historic": "monument",
+    "name": "Monument commémoratif irlandais",
+    "name:en": "Black Rock",
+    "name:fr": "Monument commémoratif irlandais",
+    "wikidata": "Q6070635",
+    "wikipedia": "fr:Monument commémoratif irlandais",
+    "wikipedia:en": "en:Irish Commemorative Stone"
+  }
+},
+{
+  "type": "node",
+  "id": 2914320229,
+  "lat": 46.8160728,
+  "lon": -71.2608979,
+  "tags": {
+    "addr:housenumber": "222",
+    "addr:street": "Rue Beaucage",
+    "historic": "memorial",
+    "name": "Maison Fernand Dufour"
+  }
+},
+{
+  "type": "node",
+  "id": 2924093722,
+  "lat": 46.7909386,
+  "lon": -71.2319274,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 2924093723,
+  "lat": 46.7922291,
+  "lon": -71.2302832,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 2924093727,
+  "lat": 46.7976090,
+  "lon": -71.2186458,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 2924093729,
+  "lat": 46.7983313,
+  "lon": -71.2180151,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 2924093731,
+  "lat": 46.7996991,
+  "lon": -71.2145928,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 3089683130,
+  "lat": 46.7552847,
+  "lon": -71.2717004,
+  "tags": {
+    "name": "Quai des Cageux",
+    "tourism": "viewpoint",
+    "website": "https://www.capitale.gouv.qc.ca/parcs-et-places-publiques/parcs/promenade-samuel-de-champlain",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3152544263,
+  "lat": 45.5250692,
+  "lon": -73.5336415,
+  "tags": {
+    "name": "Le Monstre",
+    "tourism": "attraction",
+    "wikidata": "Q1136801",
+    "wikipedia": "fr:Le Monstre (La Ronde)"
+  }
+},
+{
+  "type": "node",
+  "id": 3152544890,
+  "lat": 45.5229684,
+  "lon": -73.5325357,
+  "tags": {
+    "name": "Le Boomerang",
+    "source": "http://fr.wikipedia.org/wiki/Le_Boomerang_(La_Ronde)",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 3165524080,
+  "lat": 45.5261010,
+  "lon": -73.5647732,
+  "tags": {
+    "artist:wikipedia": "fr:Olivier Debré",
+    "artist_name": "Olivier Debré",
+    "historic": "memorial",
+    "material": "stone",
+    "memorial": "sculpture",
+    "name": "Obélisque en hommage à Charles de Gaulle",
+    "start_date": "1992"
+  }
+},
+{
+  "type": "node",
+  "id": 3165552687,
+  "lat": 45.5267754,
+  "lon": -73.5708808,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "Debout (monument à Félix Leclerc)"
+  }
+},
+{
+  "type": "node",
+  "id": 3224246931,
+  "lat": 46.8105225,
+  "lon": -71.2075563,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 3255402805,
+  "lat": 46.8151412,
+  "lon": -71.2140453,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 3401005792,
+  "lat": 46.8121870,
+  "lon": -71.2127037,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3401006698,
+  "lat": 46.8123679,
+  "lon": -71.2128017,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3401006703,
+  "lat": 46.8125544,
+  "lon": -71.2128984,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3401006707,
+  "lat": 46.8128677,
+  "lon": -71.2135078,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3401006708,
+  "lat": 46.8128751,
+  "lon": -71.2134098,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3401006709,
+  "lat": 46.8128815,
+  "lon": -71.2133024,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3401006757,
+  "lat": 46.8137507,
+  "lon": -71.2137078,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3401006759,
+  "lat": 46.8137791,
+  "lon": -71.2136327,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3401006760,
+  "lat": 46.8137986,
+  "lon": -71.2135701,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3401006804,
+  "lat": 46.8146349,
+  "lon": -71.2138202,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3401006807,
+  "lat": 46.8146453,
+  "lon": -71.2139873,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3500168695,
+  "lat": 46.7691087,
+  "lon": -71.2600376,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 3548854800,
+  "lat": 46.7588028,
+  "lon": -71.2705699,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 3651931528,
+  "lat": 45.5026494,
+  "lon": -73.5108881,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "war_memorial",
+    "name": "The Men of St-Lambert",
+    "note": "World wars memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 3700395146,
+  "lat": 45.5285164,
+  "lon": -73.5951382,
+  "tags": {
+    "historic": "wayside_cross"
+  }
+},
+{
+  "type": "node",
+  "id": 3708656451,
+  "lat": 46.7684936,
+  "lon": -71.2580290,
+  "tags": {
+    "addr:city": "Québec",
+    "addr:housenumber": "2320",
+    "addr:province": "Québec",
+    "addr:street": "Chemin du Foulon",
+    "name": "Maison des Jésuites de Sillery",
+    "operator": "Ville de Québec",
+    "tourism": "attraction",
+    "wikidata": "Q3279866",
+    "wikipedia:fr": "Maison des Jésuites de Sillery"
+  }
+},
+{
+  "type": "node",
+  "id": 3954210842,
+  "lat": 46.8095637,
+  "lon": -71.2049846,
+  "tags": {
+    "historic": "monument",
+    "name": "Pierre Dugua de Mons",
+    "subject:wikidata": "Q1534846"
+  }
+},
+{
+  "type": "node",
+  "id": 3954210856,
+  "lat": 46.8056936,
+  "lon": -71.2074476,
+  "tags": {
+    "direction": "SW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211467,
+  "lat": 46.8058742,
+  "lon": -71.2071006,
+  "tags": {
+    "direction": "NE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211472,
+  "lat": 46.8059075,
+  "lon": -71.2071291,
+  "tags": {
+    "direction": "NE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211480,
+  "lat": 46.8059360,
+  "lon": -71.2076650,
+  "tags": {
+    "direction": "W",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211498,
+  "lat": 46.8059942,
+  "lon": -71.2075509,
+  "tags": {
+    "direction": "SSW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211515,
+  "lat": 46.8060750,
+  "lon": -71.2085228,
+  "tags": {
+    "direction": "SSE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211522,
+  "lat": 46.8061701,
+  "lon": -71.2076377,
+  "tags": {
+    "direction": "NW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211525,
+  "lat": 46.8062128,
+  "lon": -71.2075782,
+  "tags": {
+    "direction": "NW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211528,
+  "lat": 46.8062639,
+  "lon": -71.2075319,
+  "tags": {
+    "direction": "NW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211532,
+  "lat": 46.8063247,
+  "lon": -71.2062971,
+  "tags": {
+    "direction": "SW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211534,
+  "lat": 46.8063233,
+  "lon": -71.2088983,
+  "tags": {
+    "direction": "WNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211538,
+  "lat": 46.8063519,
+  "lon": -71.2063628,
+  "tags": {
+    "direction": "SW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211541,
+  "lat": 46.8063715,
+  "lon": -71.2064104,
+  "tags": {
+    "direction": "SW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211542,
+  "lat": 46.8063851,
+  "lon": -71.2088697,
+  "tags": {
+    "direction": "WNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211664,
+  "lat": 46.8070968,
+  "lon": -71.2099193,
+  "tags": {
+    "direction": "NW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211667,
+  "lat": 46.8071075,
+  "lon": -71.2093450,
+  "tags": {
+    "direction": "NW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211672,
+  "lat": 46.8071397,
+  "lon": -71.2098597,
+  "tags": {
+    "direction": "NW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211679,
+  "lat": 46.8071834,
+  "lon": -71.2098068,
+  "tags": {
+    "direction": "NW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211693,
+  "lat": 46.8073237,
+  "lon": -71.2091276,
+  "tags": {
+    "direction": "NNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211695,
+  "lat": 46.8073332,
+  "lon": -71.2088579,
+  "tags": {
+    "direction": "N",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211700,
+  "lat": 46.8073534,
+  "lon": -71.2089303,
+  "tags": {
+    "direction": "N",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211704,
+  "lat": 46.8073725,
+  "lon": -71.2090016,
+  "tags": {
+    "direction": "N",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211722,
+  "lat": 46.8075340,
+  "lon": -71.2093985,
+  "tags": {
+    "direction": "NNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211782,
+  "lat": 46.8079154,
+  "lon": -71.2091228,
+  "tags": {
+    "direction": "SW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211793,
+  "lat": 46.8079903,
+  "lon": -71.2091442,
+  "tags": {
+    "direction": "SW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211800,
+  "lat": 46.8080843,
+  "lon": -71.2066762,
+  "tags": {
+    "historic": "memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211808,
+  "lat": 46.8081828,
+  "lon": -71.2081082,
+  "tags": {
+    "direction": "SW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211810,
+  "lat": 46.8082220,
+  "lon": -71.2081604,
+  "tags": {
+    "direction": "SW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211817,
+  "lat": 46.8082600,
+  "lon": -71.2082127,
+  "tags": {
+    "direction": "SW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211833,
+  "lat": 46.8083420,
+  "lon": -71.2082400,
+  "tags": {
+    "direction": "WSW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211836,
+  "lat": 46.8083669,
+  "lon": -71.2072979,
+  "tags": {
+    "direction": "NE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211848,
+  "lat": 46.8084263,
+  "lon": -71.2073347,
+  "tags": {
+    "direction": "ENE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211852,
+  "lat": 46.8084299,
+  "lon": -71.2058947,
+  "tags": {
+    "direction": "NW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211855,
+  "lat": 46.8084242,
+  "lon": -71.2045318,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211958,
+  "lat": 46.8084727,
+  "lon": -71.2073549,
+  "tags": {
+    "direction": "ENE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211961,
+  "lat": 46.8084893,
+  "lon": -71.2058650,
+  "tags": {
+    "direction": "WNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211967,
+  "lat": 46.8085226,
+  "lon": -71.2073858,
+  "tags": {
+    "direction": "ENE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211968,
+  "lat": 46.8085362,
+  "lon": -71.2048511,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211969,
+  "lat": 46.8085380,
+  "lon": -71.2058495,
+  "tags": {
+    "direction": "WNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211973,
+  "lat": 46.8085677,
+  "lon": -71.2074844,
+  "tags": {
+    "direction": "NNE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211977,
+  "lat": 46.8085840,
+  "lon": -71.2048267,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211978,
+  "lat": 46.8086200,
+  "lon": -71.2080547,
+  "tags": {
+    "direction": "NNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211980,
+  "lat": 46.8086294,
+  "lon": -71.2048015,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211983,
+  "lat": 46.8086616,
+  "lon": -71.2057260,
+  "tags": {
+    "direction": "WNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211985,
+  "lat": 46.8086765,
+  "lon": -71.2047755,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211989,
+  "lat": 46.8087210,
+  "lon": -71.2047545,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954211999,
+  "lat": 46.8087664,
+  "lon": -71.2047267,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954212009,
+  "lat": 46.8088109,
+  "lon": -71.2047032,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954212025,
+  "lat": 46.8089230,
+  "lon": -71.2046472,
+  "tags": {
+    "direction": "NE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954212204,
+  "lat": 46.8110124,
+  "lon": -71.2044729,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954212205,
+  "lat": 46.8110684,
+  "lon": -71.2044803,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954212206,
+  "lat": 46.8111255,
+  "lon": -71.2044865,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954212207,
+  "lat": 46.8111820,
+  "lon": -71.2044940,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954212208,
+  "lat": 46.8112467,
+  "lon": -71.2045095,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3954212209,
+  "lat": 46.8113119,
+  "lon": -71.2045151,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3955223414,
+  "lat": 46.8087240,
+  "lon": -71.2042721,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 3955223477,
+  "lat": 46.8110888,
+  "lon": -71.2051538,
+  "tags": {
+    "historic": "monument",
+    "name": "Monument Wolfe-Montcalm",
+    "name:en": "Wolfe-Montcalm monument"
+  }
+},
+{
+  "type": "node",
+  "id": 3955292916,
+  "lat": 46.8055333,
+  "lon": -71.2069396,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 3955542712,
+  "lat": 46.8132338,
+  "lon": -71.2043170,
+  "tags": {
+    "barrier": "entrance",
+    "historic": "city_gate",
+    "name": "Porte Prescott",
+    "name:ko": "프레스콧 문",
+    "wikidata": "Q133857585"
+  }
+},
+{
+  "type": "node",
+  "id": 3955672114,
+  "lat": 46.8125928,
+  "lon": -71.2020509,
+  "tags": {
+    "direction": "S",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3955672115,
+  "lat": 46.8126031,
+  "lon": -71.2019688,
+  "tags": {
+    "direction": "SSE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3955672116,
+  "lat": 46.8126570,
+  "lon": -71.2019296,
+  "tags": {
+    "direction": "SE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3955672117,
+  "lat": 46.8127122,
+  "lon": -71.2018885,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3955672118,
+  "lat": 46.8127707,
+  "lon": -71.2018628,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3955672120,
+  "lat": 46.8128188,
+  "lon": -71.2018776,
+  "tags": {
+    "direction": "ENE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3955672121,
+  "lat": 46.8128734,
+  "lon": -71.2019020,
+  "tags": {
+    "direction": "ENE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3955672122,
+  "lat": 46.8129190,
+  "lon": -71.2019289,
+  "tags": {
+    "direction": "NNE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 3956598677,
+  "lat": 46.8121802,
+  "lon": -71.2075620,
+  "tags": {
+    "historic": "monument",
+    "name": "Monument to Religious Teaching Communities"
+  }
+},
+{
+  "type": "node",
+  "id": 4001331294,
+  "lat": 46.8065151,
+  "lon": -71.2073905,
+  "tags": {
+    "historic": "monument",
+    "name": "Char d'assaut"
+  }
+},
+{
+  "type": "node",
+  "id": 4002975486,
+  "lat": 45.4937127,
+  "lon": -73.5847409,
+  "tags": {
+    "historic": "fort",
+    "name": "Fort La Montagne",
+    "wikidata": "Q3078306",
+    "wikipedia": "fr:Fort de la Montagne"
+  }
+},
+{
+  "type": "node",
+  "id": 4002992032,
+  "lat": 46.8077616,
+  "lon": -71.2082695,
+  "tags": {
+    "historic": "yes",
+    "name": "Bâtiment 3 - Casemate"
+  }
+},
+{
+  "type": "node",
+  "id": 4003963060,
+  "lat": 46.8080428,
+  "lon": -71.2077206,
+  "tags": {
+    "direction": "SW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 4003963061,
+  "lat": 46.8080186,
+  "lon": -71.2076138,
+  "tags": {
+    "direction": "SE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 4009132921,
+  "lat": 46.8080416,
+  "lon": -71.2178020,
+  "tags": {
+    "addr:city": "Québec",
+    "addr:housenumber": "1037",
+    "addr:postcode": "G1R 3J4",
+    "addr:province": "QC",
+    "addr:street": "Rue de la Chevrotière",
+    "alt_name": "l’Observatoire de la Capitale",
+    "level": "31",
+    "name": "Observatoire de la Capitale",
+    "opening_hours": "Mo-Su 10:00-17:40",
+    "tourism": "attraction",
+    "website": "https://www.observatoire-capitale.com/",
+    "wikidata": "Q3348388",
+    "wikipedia": "fr:Observatoire de la capitale"
+  }
+},
+{
+  "type": "node",
+  "id": 4062527877,
+  "lat": 45.4959346,
+  "lon": -73.5794306,
+  "tags": {
+    "historic": "monument",
+    "name": "Norman Bethune"
+  }
+},
+{
+  "type": "node",
+  "id": 4096147614,
+  "lat": 45.5111427,
+  "lon": -73.5551439,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "Chénier"
+  }
+},
+{
+  "type": "node",
+  "id": 4105551098,
+  "lat": 45.5085067,
+  "lon": -73.5546623,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Vaseline / Lieutenant de Vaisseau / 1728 - 1772 / Louisbourg- Québec",
+    "material": "stone",
+    "memorial": "statue",
+    "name": "Monument à Jean Vauquelin",
+    "start_date": "1930"
+  }
+},
+{
+  "type": "node",
+  "id": 4111655178,
+  "lat": 45.5073203,
+  "lon": -73.5911750,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 4211220265,
+  "lat": 45.4724619,
+  "lon": -73.6137331,
+  "tags": {
+    "historic": "monument",
+    "name": "Monument des braves"
+  }
+},
+{
+  "type": "node",
+  "id": 4291481690,
+  "lat": 45.5043091,
+  "lon": -73.5700876,
+  "tags": {
+    "historic": "memorial",
+    "name": "Plaque en mémoire de Jefferson Davis"
+  }
+},
+{
+  "type": "node",
+  "id": 4320043689,
+  "lat": 45.4756056,
+  "lon": -73.5602708,
+  "tags": {
+    "historic": "memorial",
+    "name": "Parc Marguerite-Bourgeoys",
+    "name:en": "Marguerite Bourgeoys Park"
+  }
+},
+{
+  "type": "node",
+  "id": 4321273587,
+  "lat": 45.5234147,
+  "lon": -73.5325436,
+  "tags": {
+    "name": "Manitou",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4321273665,
+  "lat": 45.5254032,
+  "lon": -73.5379291,
+  "tags": {
+    "name": "La Grande Roue",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4321279494,
+  "lat": 45.5265593,
+  "lon": -73.5358544,
+  "tags": {
+    "name": "Goliath",
+    "tourism": "attraction",
+    "wikidata": "Q688778",
+    "wikipedia": "fr:Le Goliath (La Ronde)"
+  }
+},
+{
+  "type": "node",
+  "id": 4321279551,
+  "lat": 45.5259996,
+  "lon": -73.5363155,
+  "tags": {
+    "name": "Ednör",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4325187646,
+  "lat": 45.5064346,
+  "lon": -73.5851994,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 4325187647,
+  "lat": 45.5088962,
+  "lon": -73.5860330,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 4325262956,
+  "lat": 45.5097556,
+  "lon": -73.5873152,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 4353179114,
+  "lat": 45.4894568,
+  "lon": -73.5836041,
+  "tags": {
+    "historic": "monument"
+  }
+},
+{
+  "type": "node",
+  "id": 4361646665,
+  "lat": 45.5227179,
+  "lon": -73.5385008,
+  "tags": {
+    "name": "Vampire",
+    "tourism": "attraction",
+    "wikidata": "Q3554352"
+  }
+},
+{
+  "type": "node",
+  "id": 4361646678,
+  "lat": 45.5236503,
+  "lon": -73.5380709,
+  "tags": {
+    "name": "Titan",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4361648747,
+  "lat": 45.5229825,
+  "lon": -73.5373283,
+  "tags": {
+    "name": "Disco Ronde",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4361648757,
+  "lat": 45.5227096,
+  "lon": -73.5370851,
+  "tags": {
+    "name": "Vol Ultime",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4361648833,
+  "lat": 45.5238198,
+  "lon": -73.5339933,
+  "tags": {
+    "name": "Aqua Twist",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4361648834,
+  "lat": 45.5235269,
+  "lon": -73.5342597,
+  "tags": {
+    "name": "Globe Chaussures",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4361648835,
+  "lat": 45.5244176,
+  "lon": -73.5343863,
+  "tags": {
+    "name": "Bateau Pirate",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4361699567,
+  "lat": 45.5225679,
+  "lon": -73.5336576,
+  "tags": {
+    "name": "Monsieur l'Arbre",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4361699569,
+  "lat": 45.5226158,
+  "lon": -73.5339242,
+  "tags": {
+    "name": "La Danse des Bestioles",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4361699615,
+  "lat": 45.5229222,
+  "lon": -73.5344766,
+  "tags": {
+    "name": "Pommes d'Api",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4361699630,
+  "lat": 45.5230167,
+  "lon": -73.5333857,
+  "tags": {
+    "name": "Tchou-tchou",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4361699662,
+  "lat": 45.5232912,
+  "lon": -73.5334526,
+  "tags": {
+    "name": "La Grande Envolée",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4361699838,
+  "lat": 45.5256148,
+  "lon": -73.5374699,
+  "tags": {
+    "name": "Catapulte",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4363538172,
+  "lat": 45.5265303,
+  "lon": -73.5350671,
+  "tags": {
+    "name": "Agora",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4375823671,
+  "lat": 45.4735668,
+  "lon": -73.5373548,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 4379750818,
+  "lat": 45.4729364,
+  "lon": -73.5793774,
+  "tags": {
+    "historic": "ruins",
+    "name": "Ancienne cour de triage du Canadien National - Laboratoire de décontamination (phytorémédiation)",
+    "source": "survey",
+    "source:date": "2022-07-16"
+  }
+},
+{
+  "type": "node",
+  "id": 4379835736,
+  "lat": 45.4789210,
+  "lon": -73.5752887,
+  "tags": {
+    "historic": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4382759494,
+  "lat": 45.4894782,
+  "lon": -73.5808874,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "bust",
+    "memorial:subject": "Simon Bolivar"
+  }
+},
+{
+  "type": "node",
+  "id": 4394384765,
+  "lat": 46.8473704,
+  "lon": -71.2230402,
+  "tags": {
+    "historic": "monument"
+  }
+},
+{
+  "type": "node",
+  "id": 4410813391,
+  "lat": 45.5078196,
+  "lon": -73.5293679,
+  "tags": {
+    "name": "autodromo",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4424201645,
+  "lat": 45.5247483,
+  "lon": -73.5802433,
+  "tags": {
+    "historic": "milestone",
+    "name": "Plaque historique Pôle historique Saint - Sacrement"
+  }
+},
+{
+  "type": "node",
+  "id": 4458449516,
+  "lat": 45.5003250,
+  "lon": -73.6041749,
+  "tags": {
+    "historic": "memorial",
+    "name": "Thomas D'Arcy McGee",
+    "name:en": "Thomas D'Arcy McGee"
+  }
+},
+{
+  "type": "node",
+  "id": 4458449897,
+  "lat": 45.5065752,
+  "lon": -73.6061513,
+  "tags": {
+    "historic": "memorial",
+    "name": "Sir George-Etienne Cartier",
+    "name:en": "Grave of Sir George-Etienne Cartier"
+  }
+},
+{
+  "type": "node",
+  "id": 4458449898,
+  "lat": 45.4996616,
+  "lon": -73.6120107,
+  "tags": {
+    "historic": "memorial",
+    "name": "Calixa Lavallée",
+    "name:en": "Calixa Lavallée"
+  }
+},
+{
+  "type": "node",
+  "id": 4459862592,
+  "lat": 46.8116167,
+  "lon": -71.1878956,
+  "tags": {
+    "artwork_type": "statue",
+    "historic": "monument",
+    "name": "Capt. Bernier",
+    "name:fr": "Capitaine Bernier",
+    "tourism": "artwork",
+    "wikidata": "Q122979781"
+  }
+},
+{
+  "type": "node",
+  "id": 4510949179,
+  "lat": 45.5100893,
+  "lon": -73.5961710,
+  "tags": {
+    "historic": "tomb",
+    "name": "Thomas Molson",
+    "tomb": "vault"
+  }
+},
+{
+  "type": "node",
+  "id": 4511122059,
+  "lat": 45.5075199,
+  "lon": -73.5952933,
+  "tags": {
+    "historic": "tomb",
+    "name": "William Notman",
+    "subject:wikidata": "Q3495973",
+    "subject:wikipedia": "en:William Notman"
+  }
+},
+{
+  "type": "node",
+  "id": 4511122207,
+  "lat": 45.5078762,
+  "lon": -73.5961057,
+  "tags": {
+    "historic": "tomb",
+    "name": "William George Beers"
+  }
+},
+{
+  "type": "node",
+  "id": 4511122208,
+  "lat": 45.5089702,
+  "lon": -73.5963173,
+  "tags": {
+    "historic": "tomb",
+    "name": "Charles McKiernan (alias Joe Beef)"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126733,
+  "lat": 45.5091812,
+  "lon": -73.5998799,
+  "tags": {
+    "historic": "tomb",
+    "name": "Alexander MacDougall"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126735,
+  "lat": 45.5091812,
+  "lon": -73.5998799,
+  "tags": {
+    "historic": "tomb",
+    "name": "Memory of 52 German emigrants"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126736,
+  "lat": 45.5091730,
+  "lon": -73.5997708,
+  "tags": {
+    "historic": "tomb",
+    "name": "Elsie Reford"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126737,
+  "lat": 45.5091812,
+  "lon": -73.5998799,
+  "tags": {
+    "historic": "tomb",
+    "name": "Jonathan Hodgson"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126738,
+  "lat": 45.5092005,
+  "lon": -73.5999160,
+  "tags": {
+    "historic": "tomb",
+    "name": "John Joseph Caldwell Abbott"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126739,
+  "lat": 45.5091531,
+  "lon": -73.5999403,
+  "tags": {
+    "historic": "tomb",
+    "name": "Drummond"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126740,
+  "lat": 45.5092255,
+  "lon": -73.5997380,
+  "tags": {
+    "historic": "tomb",
+    "name": "Stanley Bagg"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126742,
+  "lat": 45.5092041,
+  "lon": -73.5997295,
+  "tags": {
+    "historic": "tomb",
+    "name": "Michael McCulloch"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126743,
+  "lat": 45.5092199,
+  "lon": -73.5998558,
+  "tags": {
+    "historic": "tomb",
+    "name": "Charles Melville Hays"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126744,
+  "lat": 45.5091983,
+  "lon": -73.5996628,
+  "tags": {
+    "historic": "tomb",
+    "name": "John Molson"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126745,
+  "lat": 45.5091812,
+  "lon": -73.5998799,
+  "tags": {
+    "historic": "tomb",
+    "name": "Hugh Paton"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126746,
+  "lat": 45.5092041,
+  "lon": -73.5997295,
+  "tags": {
+    "historic": "tomb",
+    "name": "Marcelle Ferron"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126747,
+  "lat": 45.5091398,
+  "lon": -73.5998675,
+  "tags": {
+    "historic": "tomb",
+    "name": "Richard Bladworth Angus"
+  }
+},
+{
+  "type": "node",
+  "id": 4511126748,
+  "lat": 45.5091812,
+  "lon": -73.5998799,
+  "tags": {
+    "historic": "tomb",
+    "name": "Sir Herbert Holt"
+  }
+},
+{
+  "type": "node",
+  "id": 4511129734,
+  "lat": 45.5119240,
+  "lon": -73.5997428,
+  "tags": {
+    "buried:wikidata": "Q1276",
+    "historic": "tomb",
+    "name": "Leonard Cohen"
+  }
+},
+{
+  "type": "node",
+  "id": 4511129735,
+  "lat": 45.5081209,
+  "lon": -73.5928567,
+  "tags": {
+    "historic": "tomb",
+    "name": "Frank Harris Anson"
+  }
+},
+{
+  "type": "node",
+  "id": 4511129736,
+  "lat": 45.5075668,
+  "lon": -73.5935283,
+  "tags": {
+    "historic": "tomb",
+    "name": "William Workman"
+  }
+},
+{
+  "type": "node",
+  "id": 4511129737,
+  "lat": 45.5073616,
+  "lon": -73.5943490,
+  "tags": {
+    "historic": "tomb",
+    "name": "Henry Birks"
+  }
+},
+{
+  "type": "node",
+  "id": 4511129739,
+  "lat": 45.5070250,
+  "lon": -73.5932492,
+  "tags": {
+    "historic": "tomb",
+    "name": "Colonel Jacob Schick"
+  }
+},
+{
+  "type": "node",
+  "id": 4511129740,
+  "lat": 45.5078520,
+  "lon": -73.5935517,
+  "tags": {
+    "historic": "tomb",
+    "name": "Sir Alexander Tilloch Galt"
+  }
+},
+{
+  "type": "node",
+  "id": 4511129745,
+  "lat": 45.5081054,
+  "lon": -73.5955101,
+  "tags": {
+    "historic": "tomb",
+    "inscription": "David Thompson (1770–1857), fur trader, surveyor & cartographer, explored and accurately mapped more than 90,000 kilometres of North America.  With Charlotte Small (1785-1857), his Metis wife & partner of nearly 60 years, he helped shape modern Canada.",
+    "name": "David Thompson & wife Charlotte Small"
+  }
+},
+{
+  "type": "node",
+  "id": 4511129747,
+  "lat": 45.5070433,
+  "lon": -73.5927569,
+  "tags": {
+    "historic": "tomb",
+    "name": "William Ormiston Roy"
+  }
+},
+{
+  "type": "node",
+  "id": 4511129748,
+  "lat": 45.5069335,
+  "lon": -73.5929109,
+  "tags": {
+    "historic": "tomb",
+    "name": "Charles Avery Dunning"
+  }
+},
+{
+  "type": "node",
+  "id": 4511129750,
+  "lat": 45.5073145,
+  "lon": -73.5942716,
+  "tags": {
+    "historic": "tomb",
+    "name": "John Redpath"
+  }
+},
+{
+  "type": "node",
+  "id": 4511129753,
+  "lat": 45.5099106,
+  "lon": -73.5987843,
+  "tags": {
+    "historic": "tomb",
+    "name": "Thomas Lett Hackett"
+  }
+},
+{
+  "type": "node",
+  "id": 4511147725,
+  "lat": 45.5101795,
+  "lon": -73.5943360,
+  "tags": {
+    "historic": "tomb",
+    "name": "Sir William Dawson"
+  }
+},
+{
+  "type": "node",
+  "id": 4602260251,
+  "lat": 46.8135351,
+  "lon": -71.2042043,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "George-Étienne Cartier",
+    "subject:wikidata": "Q669955",
+    "subject:wikipedia": "fr:George-Étienne Cartier"
+  }
+},
+{
+  "type": "node",
+  "id": 4689498989,
+  "lat": 46.7507952,
+  "lon": -71.2883867,
+  "tags": {
+    "addr:city": "Québec",
+    "addr:housenumber": "1675",
+    "addr:postcode": "G1W 4S3",
+    "addr:province": "Qc",
+    "addr:street": "Avenue des Hôtels",
+    "name": "Pavillon des eaux douces et salées",
+    "name:en": "Fresh and Salt Water Pavilion",
+    "name:fr": "Aquarium du Québec",
+    "operator": "Sépaq",
+    "tourism": "attraction",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4746049042,
+  "lat": 45.9103931,
+  "lon": -72.9297941,
+  "tags": {
+    "historic": "monument"
+  }
+},
+{
+  "type": "node",
+  "id": 4750836651,
+  "lat": 45.6191514,
+  "lon": -73.4624809,
+  "tags": {
+    "name": "Site Iroquoien",
+    "tourism": "attraction",
+    "wheelchair": "limited"
+  }
+},
+{
+  "type": "node",
+  "id": 4758347325,
+  "lat": 45.5229937,
+  "lon": -73.5335758,
+  "tags": {
+    "name": "Air Papillon",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4758347326,
+  "lat": 45.5262414,
+  "lon": -73.5359333,
+  "tags": {
+    "name": "Tour de Ville",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4758347327,
+  "lat": 45.5233625,
+  "lon": -73.5372744,
+  "tags": {
+    "name": "Slingshot",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4758347328,
+  "lat": 45.5226580,
+  "lon": -73.5374719,
+  "tags": {
+    "name": "Vertigo",
+    "operator": "La Ronde - Parc Six Flags",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4758347329,
+  "lat": 45.5249799,
+  "lon": -73.5346309,
+  "tags": {
+    "name": "Démon",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4758347330,
+  "lat": 45.5244351,
+  "lon": -73.5337910,
+  "tags": {
+    "name": "Gravitor",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4758347331,
+  "lat": 45.5240864,
+  "lon": -73.5333679,
+  "tags": {
+    "name": "Splash",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4758347332,
+  "lat": 45.5259567,
+  "lon": -73.5376478,
+  "tags": {
+    "name": "Dragon",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4758381402,
+  "lat": 45.5247297,
+  "lon": -73.5345780,
+  "tags": {
+    "name": "Phoenix",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4798675523,
+  "lat": 46.8065895,
+  "lon": -71.2402419,
+  "tags": {
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4826337823,
+  "lat": 46.8126580,
+  "lon": -71.2180386,
+  "tags": {
+    "historic": "memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 4859545621,
+  "lat": 45.5214445,
+  "lon": -73.5405559,
+  "tags": {
+    "direction": "220",
+    "name": "Pont Jacques Cartier",
+    "name:en": "Jacques Cartier bridge",
+    "name:fr": "Pont Jacques Cartier",
+    "tourism": "viewpoint",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4965022124,
+  "lat": 46.8062248,
+  "lon": -71.2114782,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 4971382123,
+  "lat": 45.5256486,
+  "lon": -73.5351492,
+  "tags": {
+    "name": "Caroussel",
+    "name:fr": "Caroussel",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 4972382821,
+  "lat": 45.5224532,
+  "lon": -73.5330345,
+  "tags": {
+    "name": "Ancien Téléphérique",
+    "name:fr": "Ancien Téléphérique",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 5008138408,
+  "lat": 46.7476337,
+  "lon": -71.3432987,
+  "tags": {
+    "historic": "monument",
+    "name": "Jacques Cartier 1491-1557"
+  }
+},
+{
+  "type": "node",
+  "id": 5013108028,
+  "lat": 45.5065172,
+  "lon": -73.5276803,
+  "tags": {
+    "addr:housenumber": "500",
+    "addr:street": "Chemin des Floralies",
+    "name": "Jardins des Floralies",
+    "name:fr": "Jardins des Floralies",
+    "opening_hours": "Mo-Fr 09:00-18:00",
+    "operator": "Société du Parc Jean-Drapeau",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 5013108029,
+  "lat": 45.5440869,
+  "lon": -73.5618043,
+  "tags": {
+    "addr:housenumber": "2925",
+    "addr:street": "Rue Rachel Est",
+    "name": "Anciens ateliers Angus",
+    "name:fr": "Anciens ateliers Angus",
+    "opening_hours": "Mo-Su 08:00-21:00",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 5013134222,
+  "lat": 45.5130091,
+  "lon": -73.5487517,
+  "tags": {
+    "name": "Du chemin qui marche",
+    "name:fr": "Du chemin qui marche",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 5027149925,
+  "lat": 45.5031279,
+  "lon": -73.5660625,
+  "tags": {
+    "historic": "monument",
+    "name": "Olympic Torch"
+  }
+},
+{
+  "type": "node",
+  "id": 5037847831,
+  "lat": 45.5079725,
+  "lon": -73.5533223,
+  "tags": {
+    "amenity": "watering_place",
+    "historic": "yes",
+    "source": "survey;Bing"
+  }
+},
+{
+  "type": "node",
+  "id": 5037847920,
+  "lat": 45.5122848,
+  "lon": -73.5458171,
+  "tags": {
+    "historic": "cannon",
+    "source": "survey;Bing"
+  }
+},
+{
+  "type": "node",
+  "id": 5037857621,
+  "lat": 45.5122942,
+  "lon": -73.5458922,
+  "tags": {
+    "historic": "cannon",
+    "source": "survey;Bing"
+  }
+},
+{
+  "type": "node",
+  "id": 5037858547,
+  "lat": 45.5122613,
+  "lon": -73.5456868,
+  "tags": {
+    "historic": "memorial",
+    "material": "bronze",
+    "memorial": "plaque",
+    "name": "Tribute to the devotion of our Sailors - WW I"
+  }
+},
+{
+  "type": "node",
+  "id": 5052258958,
+  "lat": 45.5068662,
+  "lon": -73.6025486,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "war_memorial",
+    "name": "Canon"
+  }
+},
+{
+  "type": "node",
+  "id": 5112269277,
+  "lat": 45.5105636,
+  "lon": -73.5942671,
+  "tags": {
+    "historic": "tomb",
+    "inscription": "Norm Davis 1950-2017, psychotherapiste, activiste social et mécène.",
+    "name": "Norm Davis",
+    "tomb": "tombstone"
+  }
+},
+{
+  "type": "node",
+  "id": 5147762360,
+  "lat": 45.5802101,
+  "lon": -73.4747829,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 5194500930,
+  "lat": 45.4969376,
+  "lon": -73.6085444,
+  "tags": {
+    "historic": "monument"
+  }
+},
+{
+  "type": "node",
+  "id": 5200012699,
+  "lat": 45.5000060,
+  "lon": -73.6083263,
+  "tags": {
+    "historic": "monument"
+  }
+},
+{
+  "type": "node",
+  "id": 5366654582,
+  "lat": 46.8198009,
+  "lon": -71.1607703,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Plane",
+    "memorial": "war_memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 5366654842,
+  "lat": 46.8188172,
+  "lon": -71.1604864,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Regiment de la Chaudière",
+    "memorial": "war_memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 5596518021,
+  "lat": 45.4919666,
+  "lon": -73.5506750,
+  "tags": {
+    "name": "Farine Five Roses",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 5602922566,
+  "lat": 45.7782011,
+  "lon": -73.1722910,
+  "tags": {
+    "historic": "monument"
+  }
+},
+{
+  "type": "node",
+  "id": 5696414419,
+  "lat": 45.5448924,
+  "lon": -73.5079753,
+  "tags": {
+    "layer": "3",
+    "name": "Belvédère de Longueuil",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 5696500262,
+  "lat": 45.5374246,
+  "lon": -73.5107545,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "war_memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 5696678125,
+  "lat": 45.5096027,
+  "lon": -73.5965987,
+  "tags": {
+    "historic": "tomb",
+    "name": "William Currie",
+    "subject:wikipedia": "en:Arthur Currie"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068936,
+  "lat": 45.5093230,
+  "lon": -73.5951192,
+  "tags": {
+    "historic": "tomb",
+    "name": "John Joseph Caldwell Abbott"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068937,
+  "lat": 45.5084485,
+  "lon": -73.5939734,
+  "tags": {
+    "historic": "tomb",
+    "name": "Anna Harriet Leonowens"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068938,
+  "lat": 45.5092547,
+  "lon": -73.5968426,
+  "tags": {
+    "historic": "tomb",
+    "name": "Edgar Andrew Collard"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068939,
+  "lat": 45.5087755,
+  "lon": -73.5942246,
+  "tags": {
+    "historic": "tomb",
+    "name": "George Ritchie Hodgson"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068940,
+  "lat": 45.5090098,
+  "lon": -73.5940077,
+  "tags": {
+    "historic": "tomb",
+    "name": "Edward Maxwell"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068941,
+  "lat": 45.5063962,
+  "lon": -73.5950501,
+  "tags": {
+    "historic": "tomb",
+    "name": "Edith Eaton"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068942,
+  "lat": 45.5061358,
+  "lon": -73.5961956,
+  "tags": {
+    "historic": "tomb",
+    "name": "Hugh Graham"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068943,
+  "lat": 45.5097858,
+  "lon": -73.5956049,
+  "tags": {
+    "historic": "tomb",
+    "name": "Stanley Clark Bagg"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068944,
+  "lat": 45.5093987,
+  "lon": -73.5990910,
+  "tags": {
+    "historic": "tomb",
+    "name": "Richard Sprigings"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068945,
+  "lat": 45.5094576,
+  "lon": -73.5951814,
+  "tags": {
+    "historic": "tomb",
+    "name": "Michael McCulloch"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068946,
+  "lat": 45.5080282,
+  "lon": -73.5931886,
+  "tags": {
+    "historic": "tomb",
+    "name": "James Ross"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068947,
+  "lat": 45.5074299,
+  "lon": -73.5945875,
+  "tags": {
+    "historic": "tomb",
+    "name": "Mathew Hamilton Gault"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068948,
+  "lat": 45.5093776,
+  "lon": -73.5944770,
+  "tags": {
+    "historic": "tomb",
+    "name": "Margaret Louisa Kempe Howell"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068949,
+  "lat": 45.5086309,
+  "lon": -73.5940036,
+  "tags": {
+    "historic": "tomb",
+    "name": "Charles Fleetford Sise"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068950,
+  "lat": 45.5095684,
+  "lon": -73.5962475,
+  "tags": {
+    "historic": "tomb",
+    "name": "George Moffatt"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068951,
+  "lat": 45.5093835,
+  "lon": -73.5951575,
+  "tags": {
+    "historic": "tomb",
+    "name": "Francis Reginald Scott"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068952,
+  "lat": 45.5092564,
+  "lon": -73.5946970,
+  "tags": {
+    "historic": "tomb",
+    "name": "Richard Wilson Smith"
+  }
+},
+{
+  "type": "node",
+  "id": 5718068953,
+  "lat": 45.5100336,
+  "lon": -73.5962574,
+  "tags": {
+    "historic": "tomb",
+    "name": "Alexander Walker Ogilvie"
+  }
+},
+{
+  "type": "node",
+  "id": 5750227900,
+  "lat": 45.5102335,
+  "lon": -73.5935956,
+  "tags": {
+    "description": "Écrivain - Writer",
+    "historic": "tomb",
+    "inscription": "Richler  Florence (pas de dates, croix chrétienne)  Mordecai 1931 - 2001 (étoile de David)",
+    "name": "Mordecai Richler",
+    "subject:wikidata": "Q452282",
+    "subject:wikipedia": "fr:Mordecai Richler",
+    "tomb": "tombstone"
+  }
+},
+{
+  "type": "node",
+  "id": 5759197790,
+  "lat": 45.5048769,
+  "lon": -73.5194093,
+  "tags": {
+    "name": "Belvédère",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 5775641515,
+  "lat": 45.5000820,
+  "lon": -73.5227086,
+  "tags": {
+    "name": "Salut Gilles",
+    "name:en": "Salut Gilles (starting line)",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 5788508253,
+  "lat": 46.8162805,
+  "lon": -71.2065578,
+  "tags": {
+    "name": "Rempart",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 5819002526,
+  "lat": 46.8104114,
+  "lon": -71.2352054,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque",
+    "name": "Alys-Robi"
+  }
+},
+{
+  "type": "node",
+  "id": 5862267072,
+  "lat": 45.5086991,
+  "lon": -73.5906372,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 5864663625,
+  "lat": 46.8034585,
+  "lon": -71.2189696,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 5864663626,
+  "lat": 46.8033404,
+  "lon": -71.2188280,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 5887734886,
+  "lat": 46.8096545,
+  "lon": -71.1855839,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 5893075861,
+  "lat": 46.8035961,
+  "lon": -71.2110304,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 5893092066,
+  "lat": 46.8127404,
+  "lon": -71.2050103,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "memorial",
+    "name": "Monument de l'UNESCO",
+    "name:en": "UNSECO Monument",
+    "name:es": "Monumento de la UNESCO"
+  }
+},
+{
+  "type": "node",
+  "id": 5895143994,
+  "lat": 46.8125974,
+  "lon": -71.2229458,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 5895143996,
+  "lat": 46.8124783,
+  "lon": -71.2228688,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 5958201187,
+  "lat": 46.8128464,
+  "lon": -71.2202307,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 5958217528,
+  "lat": 46.8118864,
+  "lon": -71.2229515,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 6022681412,
+  "lat": 45.5055406,
+  "lon": -73.5839013,
+  "tags": {
+    "historic": "monument",
+    "name": "Monument à Simon McTavish",
+    "name:en": "McTavish Monument",
+    "name:fr": "Monument à Simon McTavish",
+    "start_date": "1943",
+    "website": "https://ville.montreal.qc.ca/siteofficieldumontroyal/patrimoine-artistique-commemoratif/monument-a-simon-mctavish-1804"
+  }
+},
+{
+  "type": "node",
+  "id": 6022835127,
+  "lat": 45.4956279,
+  "lon": -73.6020105,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "tank",
+    "name": "Char"
+  }
+},
+{
+  "type": "node",
+  "id": 6022835128,
+  "lat": 45.4954103,
+  "lon": -73.6026996,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "cannon",
+    "name": "Canon"
+  }
+},
+{
+  "type": "node",
+  "id": 6052828425,
+  "lat": 45.5079478,
+  "lon": -73.6079576,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 6204317659,
+  "lat": 46.7082995,
+  "lon": -71.2843341,
+  "tags": {
+    "direction": "55",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 6227437985,
+  "lat": 45.5023310,
+  "lon": -73.5603368,
+  "tags": {
+    "check_date": "2026-06-16",
+    "description": "A voir un morceau du mur de Berlin",
+    "name": "Élément du mur de Berlin",
+    "name:en": "Berlin Wall Segment",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 6228124385,
+  "lat": 45.5218629,
+  "lon": -73.5905819,
+  "tags": {
+    "name": "Murale noire et blanche",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 6231362430,
+  "lat": 46.8097863,
+  "lon": -71.1824292,
+  "tags": {
+    "historic": "memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 6231362433,
+  "lat": 46.8111198,
+  "lon": -71.1851554,
+  "tags": {
+    "historic": "wayside_cross",
+    "name": "Croix de la tempérance"
+  }
+},
+{
+  "type": "node",
+  "id": 6231499101,
+  "lat": 46.8064259,
+  "lon": -71.1864438,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 6231499106,
+  "lat": 46.8057139,
+  "lon": -71.1857658,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Pour commémorer la visite de leurs Majestés, le Roi Georges VI et la Reine Elizabeth à Lévis le 12 Juin 1939.",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 6231554632,
+  "lat": 46.8004238,
+  "lon": -71.2119936,
+  "tags": {
+    "historic": "memorial",
+    "name": "Monument Etienne Paschal Taché"
+  }
+},
+{
+  "type": "node",
+  "id": 6297941185,
+  "lat": 45.5033869,
+  "lon": -73.5868298,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 6336671689,
+  "lat": 46.8029465,
+  "lon": -71.2110089,
+  "tags": {
+    "tourism": "viewpoint",
+    "wikidata": "Q134113217"
+  }
+},
+{
+  "type": "node",
+  "id": 6341436246,
+  "lat": 45.5096403,
+  "lon": -73.5467334,
+  "tags": {
+    "name": "Quai de l'Horloge",
+    "tourism": "attraction",
+    "wikidata": "Q114732902"
+  }
+},
+{
+  "type": "node",
+  "id": 6493235330,
+  "lat": 46.8184656,
+  "lon": -71.1990962,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 6530478839,
+  "lat": 46.7641507,
+  "lon": -71.2655970,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 6530585055,
+  "lat": 46.7957270,
+  "lon": -71.2272673,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "stone",
+    "name": "Monument en l'Honneur d'Albert Henry George Grey",
+    "name:en": "Albert Henry George Grey Memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 6530718034,
+  "lat": 46.7957754,
+  "lon": -71.2272094,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 6550269143,
+  "lat": 45.5050802,
+  "lon": -73.5923306,
+  "tags": {
+    "historic": "stone",
+    "inscription": "Tonnerre On va passer par le chemin de la dame, je vais te montrer quelque chose. C’est beau non? Quand je veux lire les dernières pages d’un bon livre. Je m’installe ici. De temps en temps je lève les yeux, il y a le paysage. ...",
+    "name": "Pierre ronde",
+    "name:en": "Circle Stone"
+  }
+},
+{
+  "type": "node",
+  "id": 6553994267,
+  "lat": 45.5189082,
+  "lon": -73.5364743,
+  "tags": {
+    "historic": "monument",
+    "material": "steel",
+    "memorial": "war_memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 6554061185,
+  "lat": 46.8111132,
+  "lon": -71.2083792,
+  "tags": {
+    "name": "Cannonball Tree",
+    "tourism": "attraction",
+    "wheelchair": "limited"
+  }
+},
+{
+  "type": "node",
+  "id": 6563434528,
+  "lat": 45.6125338,
+  "lon": -73.4565642,
+  "tags": {
+    "historic": "memorial",
+    "name": "Pierre Boucher"
+  }
+},
+{
+  "type": "node",
+  "id": 6656093989,
+  "lat": 46.8096387,
+  "lon": -71.2049208,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 6698037449,
+  "lat": 45.5342780,
+  "lon": -73.6050021,
+  "tags": {
+    "historic": "monument",
+    "inscription": "SACRÉ-COEUR DE JÉSUS BÉNISSEZ-NOUS 1919",
+    "monument": "statue",
+    "name": "Statue du Sacré-Cœur",
+    "start_date": "1919"
+  }
+},
+{
+  "type": "node",
+  "id": 6715524712,
+  "lat": 46.8127850,
+  "lon": -71.2035506,
+  "tags": {
+    "name": "L'Escalier Casse-Cou",
+    "name:en": "Breakneck Steps",
+    "name:fr": "L'Escalier Casse-Cou",
+    "tourism": "attraction",
+    "wheelchair": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 7450242812,
+  "lat": 46.8086637,
+  "lon": -71.2120374,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "war_memorial",
+    "name": "Croix du sacrifice"
+  }
+},
+{
+  "type": "node",
+  "id": 7541678559,
+  "lat": 45.9901863,
+  "lon": -72.6120852,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 7644965603,
+  "lat": 46.7495531,
+  "lon": -71.3005543,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 7644965634,
+  "lat": 46.7498376,
+  "lon": -71.3088345,
+  "tags": {
+    "name": "Naufrage de la drague manseau 101",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 7644965646,
+  "lat": 46.7493130,
+  "lon": -71.3104937,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 8008004369,
+  "lat": 46.7511583,
+  "lon": -71.2178688,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 8070017935,
+  "lat": 46.8162592,
+  "lon": -71.2063049,
+  "tags": {
+    "direction": "20",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 8070017936,
+  "lat": 46.8159229,
+  "lon": -71.2042536,
+  "tags": {
+    "direction": "45",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 8174649941,
+  "lat": 45.4825858,
+  "lon": -73.5976570,
+  "tags": {
+    "historic": "memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 8231632797,
+  "lat": 46.8056944,
+  "lon": -71.2133339,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "war_memorial",
+    "name": "Site commémoratif de la Première Guerre mondiale",
+    "name:en": "First World War Memorial Site"
+  }
+},
+{
+  "type": "node",
+  "id": 8231632798,
+  "lat": 46.8055771,
+  "lon": -71.2136320,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 8231632799,
+  "lat": 46.8056405,
+  "lon": -71.2135652,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 8231632800,
+  "lat": 46.8056891,
+  "lon": -71.2134828,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 8231632801,
+  "lat": 46.8057263,
+  "lon": -71.2134004,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 8231632802,
+  "lat": 46.8057611,
+  "lon": -71.2133110,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 8231632803,
+  "lat": 46.8057815,
+  "lon": -71.2132085,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 8231632804,
+  "lat": 46.8057929,
+  "lon": -71.2131006,
+  "tags": {
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 8433634775,
+  "lat": 46.7480283,
+  "lon": -71.3404330,
+  "tags": {
+    "historic": "archaeological_site"
+  }
+},
+{
+  "type": "node",
+  "id": 8440694206,
+  "lat": 45.5924036,
+  "lon": -73.3388699,
+  "tags": {
+    "historic": "memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 8564115050,
+  "lat": 45.6400584,
+  "lon": -73.3360885,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 8595612918,
+  "lat": 46.7154684,
+  "lon": -71.2838344,
+  "tags": {
+    "name": "Belvédère 15m face aux chutes",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 8595641317,
+  "lat": 46.7077373,
+  "lon": -71.2834897,
+  "tags": {
+    "direction": "0",
+    "name": "Baie St-Nicolas",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 8595669517,
+  "lat": 46.7151594,
+  "lon": -71.2837633,
+  "tags": {
+    "name": "Belvédère 23m face aux chutes",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 8597500017,
+  "lat": 46.7365185,
+  "lon": -71.4661714,
+  "tags": {
+    "name": "Butte Portneuf",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 8604392719,
+  "lat": 45.4702003,
+  "lon": -73.5240632,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 8604392720,
+  "lat": 45.4694556,
+  "lon": -73.5138504,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 8604392721,
+  "lat": 45.4685754,
+  "lon": -73.5052261,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 8785518282,
+  "lat": 45.4919611,
+  "lon": -73.4870614,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "war_memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 8807949117,
+  "lat": 46.8393715,
+  "lon": -71.2101582,
+  "tags": {
+    "historic": "milestone"
+  }
+},
+{
+  "type": "node",
+  "id": 8861186238,
+  "lat": 45.5401093,
+  "lon": -73.5069322,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Hommages a Charles-Le Moynr",
+    "memorial": "bust",
+    "name": "Charles-Le Moynr"
+  }
+},
+{
+  "type": "node",
+  "id": 8889954593,
+  "lat": 45.5772964,
+  "lon": -73.4915372,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9158364128,
+  "lat": 45.4853558,
+  "lon": -73.6131503,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9194669578,
+  "lat": 45.5167145,
+  "lon": -73.5895565,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Un cycliste est décédé ici ANDREA ROVERE 27 septembre 2021 Qui è morto un ciclista Vélos fantômes Mtl",
+    "memorial": "ghost_bike",
+    "source": "https://www.cbc.ca/news/canada/montreal/ghost-bike-31-year-old-cyclist-andrea-rovere-1.6198276",
+    "start_date": "2021-10-03"
+  }
+},
+{
+  "type": "node",
+  "id": 9251243688,
+  "lat": 45.4753256,
+  "lon": -73.5965392,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9273423232,
+  "lat": 45.4833798,
+  "lon": -73.6340516,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "A LA REINE D'ESPAGNE ISABELLA LES CONSULS HISPANO-AMERICAINS ET LUSO-BRESILIENS A MONTREAL DEDIENT CE MONUMENT LE 12 OCTOBRE 1958 ANNIVERSAIRE DE LA DECOUVERTE DE L'AMERIQUE EN HOMMAGEA LA VILLE DE MONTREAL",
+    "material": "stone",
+    "memorial": "stele",
+    "start_date": "1958-11-12"
+  }
+},
+{
+  "type": "node",
+  "id": 9279062309,
+  "lat": 45.4560838,
+  "lon": -73.5539137,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9340855053,
+  "lat": 45.5464978,
+  "lon": -73.5860331,
+  "tags": {
+    "description": "Ghost bike in memory of Justine Charland St-Amour, 24, struck on Aug 22, 2016",
+    "historic": "memorial",
+    "inscription": "Ici est décédée une cycliste le 22 août 2016 Charlotte Charland St-Amour 24 ans Repose en paix",
+    "memorial": "ghost_bike",
+    "source": "https://www.cbc.ca/news/canada/montreal/ghost-bike-charland-st-amour-1.3745550",
+    "start_date": "2016-09-02"
+  }
+},
+{
+  "type": "node",
+  "id": 9343859429,
+  "lat": 45.5110282,
+  "lon": -73.4697292,
+  "tags": {
+    "description": "Ghost bike in memory of René Tremblay, 23 juillet 2020",
+    "historic": "memorial",
+    "memorial": "ghost_bike",
+    "source": "https://www.velofantome.org/velos-fantome/"
+  }
+},
+{
+  "type": "node",
+  "id": 9343999005,
+  "lat": 45.5347743,
+  "lon": -73.5787708,
+  "tags": {
+    "description": "Ghost bike in memory of Maxime Levesque, 33, killed on April 8, 2021.",
+    "historic": "memorial",
+    "memorial": "ghost_bike",
+    "source": "https://www.lapresse.ca/actualites/grand-montreal/2021-06-12/mort-de-maxime-levesque/un-velo-fantome-installe-sur-l-avenue-papineau.php;https://www.velofantome.org/velos-fantome/",
+    "start_date": "2021-06-19"
+  }
+},
+{
+  "type": "node",
+  "id": 9538746709,
+  "lat": 45.5547641,
+  "lon": -73.5541347,
+  "tags": {
+    "direction": "265",
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20220416203219/https://westnordost.de/p/88969.jpg",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 9559378466,
+  "lat": 45.5472454,
+  "lon": -73.5509545,
+  "tags": {
+    "direction": "295",
+    "historic": "memorial",
+    "inscription": "CASERNE 48\nNOUS, POMPIERS DE MONTRÉAL,\nDÉSIRONS GRAVER À JAMAIS\nLES NOM DE NOS CONFRÈRES QUI,\nAU COURS DE L'HISTOIRE DE LA CASERNE 48,\nONT PERDU LA VIE DANS\nL'EXERCICE DE LEURS FONCTIONS.\n\nPompier André Grenier, 23 février 1988\nPompier Denis Lachance, 12",
+    "memorial": "plaque",
+    "name": "CASERNE 48"
+  }
+},
+{
+  "type": "node",
+  "id": 9573069205,
+  "lat": 45.5096187,
+  "lon": -73.5510809,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 9573069206,
+  "lat": 45.5096644,
+  "lon": -73.5512781,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 9631411671,
+  "lat": 45.5609460,
+  "lon": -73.5534293,
+  "tags": {
+    "amenity": "bench",
+    "backrest": "yes",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9654221235,
+  "lat": 45.5043248,
+  "lon": -73.5569545,
+  "tags": {
+    "direction": "305",
+    "historic": "memorial",
+    "inscription": "LE SÉMINAIRE DE ST SULPICE\nFONDÉ À PARIS PAR MR JEAN JACQUES OLIER\n1641\nÉTABLI À VILLE MARIE 1657\nMR GABRIEL DE QUEYLUS SUPÉRIEUR\nSEIGNEURS DE L'ÎLE DE MONTRÉAL 1663",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 9654265602,
+  "lat": 45.5005883,
+  "lon": -73.5554611,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20220409171544/https://westnordost.de/p/87828.jpg",
+    "memorial": "plaque",
+    "name": "MÈRE MARIE-MARGUERITE D'YOUVILLE (1701-1771)"
+  }
+},
+{
+  "type": "node",
+  "id": 9654275450,
+  "lat": 45.5002133,
+  "lon": -73.5549068,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20220409171220/https://westnordost.de/p/87825.jpg",
+    "memorial": "plaque",
+    "name": "L'ANCIEN HÔPITAL GÉNÉRAL DES SOEURS GRISES"
+  }
+},
+{
+  "type": "node",
+  "id": 9714002850,
+  "lat": 46.7868889,
+  "lon": -71.2365462,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9836698484,
+  "lat": 45.5232528,
+  "lon": -73.5322207,
+  "tags": {
+    "name": "Chaos",
+    "operator": "La Ronde - Parc Six Flags",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 9838679222,
+  "lat": 46.8126423,
+  "lon": -71.1849514,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9838693450,
+  "lat": 46.8111416,
+  "lon": -71.1852473,
+  "tags": {
+    "direction": "200-20",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9844351981,
+  "lat": 45.4907804,
+  "lon": -73.5782154,
+  "tags": {
+    "direction": "125",
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20220624143642/https://westnordost.de/p/98394.jpg",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 9921186851,
+  "lat": 46.7501465,
+  "lon": -71.2901891,
+  "tags": {
+    "description": "1997",
+    "historic": "memorial",
+    "memorial": "plaque",
+    "name": "Plaque du pont de Québec",
+    "wikimedia_commons": "File:Pont_de_Québec_-_Lieu_historique_national_du_Canada.jpg",
+    "wikimedia_commons:1": "File:Pont_de_Québec_-_Monument_historique_du_génie_civil.jpg"
+  }
+},
+{
+  "type": "node",
+  "id": 9921213915,
+  "lat": 46.7501254,
+  "lon": -71.2903314,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9932477123,
+  "lat": 46.8083519,
+  "lon": -71.1866412,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9932477131,
+  "lat": 46.8090337,
+  "lon": -71.1860712,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9975571903,
+  "lat": 46.7734612,
+  "lon": -71.2489329,
+  "tags": {
+    "direction": "135-225",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9975571910,
+  "lat": 46.7735006,
+  "lon": -71.2464137,
+  "tags": {
+    "direction": "135-225",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9975610629,
+  "lat": 46.7740038,
+  "lon": -71.2436292,
+  "tags": {
+    "direction": "45-225",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 9977354914,
+  "lat": 46.7734892,
+  "lon": -71.2433291,
+  "tags": {
+    "direction": "45-225",
+    "name": "Belvédère de la côte de Sillery",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 10025958242,
+  "lat": 46.7472736,
+  "lon": -71.3405918,
+  "tags": {
+    "direction": "180",
+    "name": "L",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 10093607028,
+  "lat": 45.5572938,
+  "lon": -73.5558288,
+  "tags": {
+    "direction": "185",
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 10128626126,
+  "lat": 45.5777581,
+  "lon": -73.5317754,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 10128626127,
+  "lat": 45.5777436,
+  "lon": -73.5317838,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 10202793552,
+  "lat": 45.4951452,
+  "lon": -73.5978926,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 10280480851,
+  "lat": 45.5009488,
+  "lon": -73.5597832,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20221222144717/https://westnordost.de/p/102344.jpg",
+    "memorial": "plaque",
+    "name": "ÉDIFICE WILSON CHAMBERS",
+    "name:en": "WILSON CHAMBERS"
+  }
+},
+{
+  "type": "node",
+  "id": 10570768922,
+  "lat": 45.5256126,
+  "lon": -73.5727933,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 10570768923,
+  "lat": 45.5263687,
+  "lon": -73.5718751,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 10743756137,
+  "lat": 45.5049345,
+  "lon": -73.5549339,
+  "tags": {
+    "historic": "yes",
+    "name": "Cours Le Royer"
+  }
+},
+{
+  "type": "node",
+  "id": 10753046183,
+  "lat": 45.5108260,
+  "lon": -73.5703918,
+  "tags": {
+    "amenity": "school",
+    "attribution": "Natural Resources Canada",
+    "building": "public",
+    "canvec:CODE": "2010422",
+    "canvec:UUID": "11CF452AC96EE5F4E0409C8467120387",
+    "historic": "school",
+    "name": "Office québécois de la langue française",
+    "old_name": "École des beaux-arts de Montréal",
+    "source": "CanVec_Import_2009",
+    "wheelchair": "limited",
+    "wikidata": "Q3577923",
+    "wikipedia": "fr:École des beaux-arts de Montréal"
+  }
+},
+{
+  "type": "node",
+  "id": 10785319811,
+  "lat": 45.4986107,
+  "lon": -73.5687399,
+  "tags": {
+    "historic": "cannon",
+    "inscription": "Ce canon de campagne de 23 a été présenté à la cité par les unités de Montréal du régiment royal d'artillerie canadienne pour commémorer le service du régiment en temps de guerre\nLe 13 October 1962"
+  }
+},
+{
+  "type": "node",
+  "id": 10801843022,
+  "lat": 45.4730962,
+  "lon": -73.6105901,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 10834014768,
+  "lat": 45.4760342,
+  "lon": -73.5561546,
+  "tags": {
+    "historic": "wayside_cross"
+  }
+},
+{
+  "type": "node",
+  "id": 10867283013,
+  "lat": 45.4976134,
+  "lon": -73.5686682,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque",
+    "name": "JE ME SOUVIENS"
+  }
+},
+{
+  "type": "node",
+  "id": 10887398416,
+  "lat": 45.5587696,
+  "lon": -73.5792817,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 10902089802,
+  "lat": 45.5596257,
+  "lon": -73.5382192,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20230516122840/https://westnordost.de/p/89466.jpg",
+    "memorial": "plaque",
+    "name": "Hommage à Robert Burns"
+  }
+},
+{
+  "type": "node",
+  "id": 10937243143,
+  "lat": 45.5061923,
+  "lon": -73.5558927,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 10937271650,
+  "lat": 45.5036238,
+  "lon": -73.5551400,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20230529164615/https://westnordost.de/p/132590.jpg",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 10937275809,
+  "lat": 45.5047123,
+  "lon": -73.5556058,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20230529164417/https://westnordost.de/p/93950.jpg",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11004050696,
+  "lat": 45.5183529,
+  "lon": -73.5561069,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11006137947,
+  "lat": 46.7423687,
+  "lon": -71.2766399,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11059814006,
+  "lat": 46.8263437,
+  "lon": -71.1641093,
+  "tags": {
+    "artist_name": "J.-George Trudelle",
+    "artwork_type": "statue",
+    "historic": "memorial",
+    "material": "metal",
+    "memorial": "statue",
+    "name": "Monument Guillaume-Couture",
+    "tourism": "artwork",
+    "website": "https://www.capitale.gouv.qc.ca/histoire-et-patrimoine/commemorations/monument-guillaume-couture/"
+  }
+},
+{
+  "type": "node",
+  "id": 11060665705,
+  "lat": 45.4950934,
+  "lon": -73.5759884,
+  "tags": {
+    "addr:housenumber": "1226",
+    "addr:postcode": "H3G2H4",
+    "addr:street": "Rue Mackay",
+    "name": "Pang Pang Karaoke",
+    "opening_hours": "Mo-Su 15:00-01:00",
+    "tourism": "attraction",
+    "wheelchair": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 11060712801,
+  "lat": 45.4938047,
+  "lon": -73.5753323,
+  "tags": {
+    "historic": "wayside_cross"
+  }
+},
+{
+  "type": "node",
+  "id": 11100048972,
+  "lat": 45.4929940,
+  "lon": -73.5627384,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "ghost_bike"
+  }
+},
+{
+  "type": "node",
+  "id": 11115430405,
+  "lat": 46.8133295,
+  "lon": -71.2079854,
+  "tags": {
+    "historic": "monument",
+    "name": "Horloge du Jura"
+  }
+},
+{
+  "type": "node",
+  "id": 11115432405,
+  "lat": 46.8132268,
+  "lon": -71.2028699,
+  "tags": {
+    "historic": "monument",
+    "name": "Louis XIV"
+  }
+},
+{
+  "type": "node",
+  "id": 11136770505,
+  "lat": 45.6078073,
+  "lon": -73.4627798,
+  "tags": {
+    "name": "La grange",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11143333259,
+  "lat": 45.5617747,
+  "lon": -73.4948418,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11143333284,
+  "lat": 45.5530965,
+  "lon": -73.5005513,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11147323468,
+  "lat": 45.5686053,
+  "lon": -73.5530548,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20230827013701/https://westnordost.de/p/168131.jpg",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11148997303,
+  "lat": 45.5640095,
+  "lon": -73.5686292,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11150514855,
+  "lat": 45.5591306,
+  "lon": -73.5653996,
+  "tags": {
+    "name": "Jardins-jeune",
+    "name:en": "Youth Gardens",
+    "name:fr": "Jardins-jeune",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 11150527117,
+  "lat": 45.5579139,
+  "lon": -73.5638345,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11178077808,
+  "lat": 45.5092080,
+  "lon": -73.5501209,
+  "tags": {
+    "name": "Tyrolienne MTL",
+    "name:en": "MTL Zipline",
+    "price": "Enfant/Child - 19.99;Adult(e) - 24.99;+tax",
+    "tourism": "attraction"
+  }
+},
+{
+  "type": "node",
+  "id": 11194090038,
+  "lat": 45.5310837,
+  "lon": -73.5861043,
+  "tags": {
+    "historic": "monument",
+    "name": "Isabella the Catholic"
+  }
+},
+{
+  "type": "node",
+  "id": 11194599137,
+  "lat": 45.5098388,
+  "lon": -73.5876209,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11208389073,
+  "lat": 45.5126746,
+  "lon": -73.5961246,
+  "tags": {
+    "date": "2017-10-04",
+    "historic": "memorial",
+    "memorial": "ghost_bike",
+    "name": "Clément Ouimet",
+    "start_date": "2017-10-25"
+  }
+},
+{
+  "type": "node",
+  "id": 11218940805,
+  "lat": 45.5408782,
+  "lon": -73.5123573,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11242175137,
+  "lat": 45.5099885,
+  "lon": -73.5902539,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11252665550,
+  "lat": 45.4675246,
+  "lon": -73.5064851,
+  "tags": {
+    "historic": "memorial",
+    "material": "concrete",
+    "memorial": "column",
+    "name": "Pont Champlain",
+    "wikidata": "Q3396490",
+    "wikipedia": "fr:Pont_Champlain_(Montréal)",
+    "wikipedia:en": "en:Champlain Bridge (Montreal, 1962–2019)"
+  }
+},
+{
+  "type": "node",
+  "id": 11374180091,
+  "lat": 45.4535197,
+  "lon": -73.5536292,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11378193850,
+  "lat": 45.4882738,
+  "lon": -73.4925245,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11445103474,
+  "lat": 46.8063711,
+  "lon": -71.1862215,
+  "tags": {
+    "artist_name": "Charles-Olivier Roy",
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "François-Gaston de Lévis",
+    "start_date": "2011-06-21"
+  }
+},
+{
+  "type": "node",
+  "id": 11470491538,
+  "lat": 45.5642959,
+  "lon": -73.5691586,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20231230191142/https://westnordost.de/p/190184.jpg",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11473946269,
+  "lat": 45.5011079,
+  "lon": -73.5600300,
+  "tags": {
+    "historic": "monument",
+    "name": "Les fortifications de Montréal - escarpe 1717 à 1806"
+  }
+},
+{
+  "type": "node",
+  "id": 11476987070,
+  "lat": 45.5022259,
+  "lon": -73.5547861,
+  "tags": {
+    "historic": "monument",
+    "name": "Monument aux pionniers"
+  }
+},
+{
+  "type": "node",
+  "id": 11476996969,
+  "lat": 45.5032301,
+  "lon": -73.5536985,
+  "tags": {
+    "historic": "monument"
+  }
+},
+{
+  "type": "node",
+  "id": 11480702509,
+  "lat": 45.5607807,
+  "lon": -73.5537216,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11494794784,
+  "lat": 45.4923344,
+  "lon": -73.4885859,
+  "tags": {
+    "direction": "55",
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11527978642,
+  "lat": 45.4912451,
+  "lon": -73.4881082,
+  "tags": {
+    "direction": "143",
+    "historic": "memorial",
+    "inscription": "In memory of / Brian (Moe) Morley / 1964 - 1992 / Robert (Bob) Morley / 1940 - 2010 / Life time residents of GPK",
+    "material": "metal",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11550619172,
+  "lat": 45.5065039,
+  "lon": -73.5333675,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11577707080,
+  "lat": 45.4893159,
+  "lon": -73.5808759,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "bust"
+  }
+},
+{
+  "type": "node",
+  "id": 11608820394,
+  "lat": 45.4996512,
+  "lon": -73.5697709,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20240210233028/https://westnordost.de/p/105838.jpg",
+    "material": "stone",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11628249333,
+  "lat": 45.5021307,
+  "lon": -73.5674305,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20240216124023/https://westnordost.de/p/94084.jpg",
+    "material": "metal",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11784772973,
+  "lat": 45.5952765,
+  "lon": -73.4816917,
+  "tags": {
+    "name": "L’Épuisette",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11807678272,
+  "lat": 45.4869209,
+  "lon": -73.5625899,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 11822482076,
+  "lat": 45.5076434,
+  "lon": -73.5511911,
+  "tags": {
+    "fixme": "Présence de vestige mis au jour en 1990, location à valider sur place : https://vieux.montreal.qc.ca/inventaire/fiches/fiche_bat.php?id=0040-85-7973-09",
+    "historic": "archaeological_site",
+    "name": "Place des Vestiges",
+    "wikidata": "Q125494421"
+  }
+},
+{
+  "type": "node",
+  "id": 11833657230,
+  "lat": 45.5599164,
+  "lon": -73.5506591,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20240420193826/https://westnordost.de/p/97823.jpg",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11833657239,
+  "lat": 45.5599434,
+  "lon": -73.5507089,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20240420193902/https://westnordost.de/p/97824.jpg",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11923945548,
+  "lat": 45.5026338,
+  "lon": -73.5108539,
+  "tags": {
+    "direction": "120",
+    "historic": "memorial",
+    "material": "metal",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11933393240,
+  "lat": 45.5008530,
+  "lon": -73.5102792,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11963057506,
+  "lat": 45.5006858,
+  "lon": -73.5159988,
+  "tags": {
+    "description": "Stone pillar engraved with the dates of Saint-Lambert's incorporations and the names & dates of office of its mayors",
+    "historic": "memorial",
+    "material": "stone",
+    "memorial": "sculpture"
+  }
+},
+{
+  "type": "node",
+  "id": 11966300828,
+  "lat": 45.4994232,
+  "lon": -73.5069666,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "stone"
+  }
+},
+{
+  "type": "node",
+  "id": 11966300841,
+  "lat": 45.4994891,
+  "lon": -73.5072316,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 11969405156,
+  "lat": 46.8190303,
+  "lon": -71.1601867,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "war_memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 11990997518,
+  "lat": 45.7850935,
+  "lon": -73.1594075,
+  "tags": {
+    "historic": "memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 11999243538,
+  "lat": 45.5020281,
+  "lon": -73.5133902,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "stone"
+  }
+},
+{
+  "type": "node",
+  "id": 12001321380,
+  "lat": 45.6890860,
+  "lon": -73.1864547,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20240618225357/https://westnordost.de/p/101486.jpg"
+  }
+},
+{
+  "type": "node",
+  "id": 12012749076,
+  "lat": 45.5056066,
+  "lon": -73.5148514,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12018803045,
+  "lat": 45.5143842,
+  "lon": -73.5855822,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12018816335,
+  "lat": 45.5140601,
+  "lon": -73.5848657,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12030066839,
+  "lat": 45.5454962,
+  "lon": -73.5616603,
+  "tags": {
+    "historic": "memorial",
+    "image": "https://web.archive.org/web/20240702225947/https://westnordost.de/p/174027.jpg",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12032302190,
+  "lat": 45.5259889,
+  "lon": -73.5647536,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12032302191,
+  "lat": 45.5262143,
+  "lon": -73.5646816,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12044845880,
+  "lat": 45.4918053,
+  "lon": -73.5178724,
+  "tags": {
+    "historic": "memorial",
+    "material": "metal",
+    "memorial": "plaque",
+    "name": "Le Pont Tubulaire Victoria",
+    "name:en": "Victoria Tubular Bridge"
+  }
+},
+{
+  "type": "node",
+  "id": 12058151285,
+  "lat": 45.5517301,
+  "lon": -73.5672528,
+  "tags": {
+    "artist_name": "Steffie Bélanger",
+    "historic": "memorial",
+    "inscription": "Cet espace de recueillement est pour célébrer la mémoire des gens décédés pendant la COVID-19. Vous êtes à tout jamais présents dans nos cœurs.\n\nEt pour vous, ceux qui restent, nous saluons votre résilience et votre courage.",
+    "material": "wood",
+    "memorial": "sculpture",
+    "name": "La Forêt des Mémoires"
+  }
+},
+{
+  "type": "node",
+  "id": 12064595685,
+  "lat": 45.5021148,
+  "lon": -73.5132703,
+  "tags": {
+    "direction": "30",
+    "historic": "memorial",
+    "material": "metal",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12076885329,
+  "lat": 45.5061505,
+  "lon": -73.5163777,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12076905478,
+  "lat": 45.5060196,
+  "lon": -73.5160081,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12077759906,
+  "lat": 45.5595173,
+  "lon": -73.5585392,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "DON DE LA FAMILLE DE RAYMOND WONG",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12077812919,
+  "lat": 45.5615192,
+  "lon": -73.5612404,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "JARDIN BOTANIQUE DE MONTREAL\nSOUS-BOIS\n\nA National Display Garden\nof the\nAmerican Hosta Society\n\nDesignated 2004",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12079144613,
+  "lat": 45.5592000,
+  "lon": -73.5560390,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Prix d'excellence\nAward of Garden Excellence\n2004",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12097105827,
+  "lat": 45.5616295,
+  "lon": -73.5851508,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "ghost_bike",
+    "start_date": "2018"
+  }
+},
+{
+  "type": "node",
+  "id": 12112530432,
+  "lat": 45.5006914,
+  "lon": -73.5159694,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12121164149,
+  "lat": 45.5208212,
+  "lon": -73.5638237,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Lumière sur l'arbre aux galets. Commémoration des pertes et deuils de la pandémie.",
+    "memorial": "sculpture"
+  }
+},
+{
+  "type": "node",
+  "id": 12145296495,
+  "lat": 45.5363044,
+  "lon": -73.5583723,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "Jean Paul II",
+    "subject:wikidata": "Q989",
+    "subject:wikipedia": "en:Pope John Paul II"
+  }
+},
+{
+  "type": "node",
+  "id": 12161927676,
+  "lat": 45.5010330,
+  "lon": -73.5614663,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "bust",
+    "name": "Joseph Xavier Perreault"
+  }
+},
+{
+  "type": "node",
+  "id": 12207511426,
+  "lat": 45.5545785,
+  "lon": -73.5961897,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "ghost_bike",
+    "panoramax": "5edc3028-68c9-4057-a3c5-3708610a026a",
+    "source": "https://www.velofantome.org/memoriaux/",
+    "start_date": "2017-07-13",
+    "subject": "Meryem Ânoun (مريم اعنون)"
+  }
+},
+{
+  "type": "node",
+  "id": 12238946967,
+  "lat": 45.4954736,
+  "lon": -73.5555705,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Un cycliste est décédé ici\nSalim Aoudia\n27 Novembre 2014\n-Vélo fantôme Montréal ghost bike-",
+    "material": "bicycle",
+    "memorial": "ghost_bike",
+    "name": "Salim Aoudia",
+    "start_date": "2014"
+  }
+},
+{
+  "type": "node",
+  "id": 12239523257,
+  "lat": 45.4965122,
+  "lon": -73.5687312,
+  "tags": {
+    "historic": "monument",
+    "name": "#GoHabsGo"
+  }
+},
+{
+  "type": "node",
+  "id": 12246562005,
+  "lat": 45.5070768,
+  "lon": -73.6023988,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "war_memorial",
+    "name": "Canon"
+  }
+},
+{
+  "type": "node",
+  "id": 12255856912,
+  "lat": 45.5223976,
+  "lon": -73.6024141,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "ghost_bike"
+  }
+},
+{
+  "type": "node",
+  "id": 12259741294,
+  "lat": 45.4850816,
+  "lon": -73.5770742,
+  "tags": {
+    "historic": "memorial"
+  }
+},
+{
+  "type": "node",
+  "id": 12290454633,
+  "lat": 46.7964156,
+  "lon": -71.2234077,
+  "tags": {
+    "direction": "120",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 12297371994,
+  "lat": 45.6196420,
+  "lon": -73.4730963,
+  "tags": {
+    "name": "Les Chenaux",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 12297410546,
+  "lat": 45.6044387,
+  "lon": -73.4622437,
+  "tags": {
+    "name": "La Proue",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 12307831452,
+  "lat": 46.8048863,
+  "lon": -71.2172284,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "statue",
+    "name": "Charles de Gaulle",
+    "wikidata": "Q130313510"
+  }
+},
+{
+  "type": "node",
+  "id": 12310238169,
+  "lat": 45.5608870,
+  "lon": -73.5616474,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 12449826854,
+  "lat": 45.5027473,
+  "lon": -73.5823361,
+  "tags": {
+    "historic": "monument",
+    "name": "Sir William Osler"
+  }
+},
+{
+  "type": "node",
+  "id": 12487313114,
+  "lat": 46.8261317,
+  "lon": -71.1717266,
+  "tags": {
+    "name": "Belvédère Mercier",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 12487450542,
+  "lat": 45.4721696,
+  "lon": -73.5726812,
+  "tags": {
+    "historic": "site_patrimonial_de_l'usine-de-filtration-atwater"
+  }
+},
+{
+  "type": "node",
+  "id": 12518173676,
+  "lat": 45.5055101,
+  "lon": -73.5258278,
+  "tags": {
+    "addr:city": "Montréal",
+    "addr:housenumber": "1",
+    "addr:postcode": "H3C 4W7",
+    "addr:province": "QC",
+    "addr:street": "Avenue du Casino",
+    "amenity": "casino",
+    "gambling": "slot_machines;lottery;betting;yes",
+    "name": "Casino de Montréal",
+    "operator": "Loto-Québec",
+    "phone": "+1-800-665-2274",
+    "smoking": "outside",
+    "tourism": "attraction",
+    "website": "https://casinos.lotoquebec.com/fr/montreal/accueil",
+    "wikidata": "Q1047642",
+    "wikipedia": "fr:Casino de Montréal"
+  }
+},
+{
+  "type": "node",
+  "id": 12676972258,
+  "lat": 45.5141571,
+  "lon": -73.6113932,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 12779820231,
+  "lat": 46.8030298,
+  "lon": -71.2110011,
+  "tags": {
+    "historic": "cannon",
+    "inscription": "« Ce canon a tiré le premier coup d'un salut de cent coups par le 5e régiment d'artillerie légère du Canada, le 30 octobre 1971, à l'occasion du centenaire de la formation, le 20 octobre 1871, des batteries A et B à Kingston et Québec respectivement, comm",
+    "wikidata": "Q134078174",
+    "wikimedia_commons": "File:Cannon_@_Plains_of_Abraham_@_Québec_(30423689351).jpg"
+  }
+},
+{
+  "type": "node",
+  "id": 12806462230,
+  "lat": 45.4986195,
+  "lon": -73.5522303,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "1920-1995 \nHommage à tous ceux et à toutes celles qui, de près ou de loin, ont contribué à donner à la profession d'ingénieur ses lettres de noblesse.",
+    "memorial": "plaque",
+    "name": "Place du Génie"
+  }
+},
+{
+  "type": "node",
+  "id": 12847991558,
+  "lat": 45.4906864,
+  "lon": -73.6168968,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Frère André",
+    "memorial": "statue",
+    "start_date": "1955",
+    "subject:wikidata": "Q517066"
+  }
+},
+{
+  "type": "node",
+  "id": 12852462303,
+  "lat": 46.8179727,
+  "lon": -71.2024530,
+  "tags": {
+    "artist_name": "Germán Miño",
+    "artwork_type": "bust",
+    "description": "El busto de 1.4 metros de altura quedó instalado en una base de granito de 2 metros de altura y 9 toneladas de peso.",
+    "height": "3.4",
+    "historic": "memorial",
+    "material": "bronze",
+    "memorial": "bust",
+    "name": "Arturo Prat",
+    "object:city": "Quebec",
+    "object:street": "Rue Dalhousie",
+    "start_date": "2005-10-12",
+    "subject:wikidata": "Q715410",
+    "tourism": "artwork",
+    "website": "https://www.armada.cl/noticias-navales/inauguracion-busto-arturo-prat-en-ciudad-de-quebec",
+    "wikimedia_commons": "File:Arturo_Prat_-_01.jpg",
+    "wikipedia": "es:Arturo Prat"
+  }
+},
+{
+  "type": "node",
+  "id": 12919794925,
+  "lat": 46.7547696,
+  "lon": -71.2134326,
+  "tags": {
+    "direction": "45-225",
+    "name": "Belvédère",
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 12987832689,
+  "lat": 46.8124561,
+  "lon": -71.2037054,
+  "tags": {
+    "historic": "monument",
+    "name": "Louis Jolliet"
+  }
+},
+{
+  "type": "node",
+  "id": 12987832690,
+  "lat": 46.8125536,
+  "lon": -71.2036865,
+  "tags": {
+    "addr:housename": "Maison Louis Jolliet",
+    "addr:street": "Rue du Petit-Champlain",
+    "charge": "6 CAD",
+    "fee": "yes",
+    "name": "Funiculaire",
+    "name:en": "Funicular",
+    "tourism": "attraction",
+    "website": "https://www.funiculaire.ca/",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 12996669210,
+  "lat": 45.4751205,
+  "lon": -73.5968628,
+  "tags": {
+    "historic": "monument",
+    "name": "Dragon de Terre",
+    "website": "https://www.instagram.com/junko.playtime/"
+  }
+},
+{
+  "type": "node",
+  "id": 13156946158,
+  "lat": 45.5425968,
+  "lon": -73.4379495,
+  "tags": {
+    "description": "Memorial thanking the organizations that contributed financially to the preservation of the Réserve naturelle du Boisé-Du Tremblay ",
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 13158465895,
+  "lat": 46.8069166,
+  "lon": -71.2138349,
+  "tags": {
+    "historic": "memorial",
+    "name": "monument de la Bravoure"
+  }
+},
+{
+  "type": "node",
+  "id": 13274453275,
+  "lat": 46.8129754,
+  "lon": -71.2055493,
+  "tags": {
+    "historic": "memorial",
+    "memorial": "plaque"
+  }
+},
+{
+  "type": "node",
+  "id": 13306121011,
+  "lat": 45.5606910,
+  "lon": -73.5663580,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 13327001101,
+  "lat": 45.5069542,
+  "lon": -73.6022955,
+  "tags": {
+    "historic": "memorial",
+    "inscription": "Champ d'honneur - Je me Souviens",
+    "material": "stone",
+    "memorial": "plaque",
+    "name": "Champ d'honneur"
+  }
+},
+{
+  "type": "node",
+  "id": 13507286784,
+  "lat": 45.6777093,
+  "lon": -73.1934555,
+  "tags": {
+    "historic": "memorial",
+    "lit": "yes",
+    "man_made": "flagpole"
+  }
+},
+{
+  "type": "node",
+  "id": 13532534747,
+  "lat": 45.5762117,
+  "lon": -73.5478027,
+  "tags": {
+    "historic": "memorial",
+    "material": "bronze",
+    "memorial": "statue",
+    "name": "St-Louis Marie de Montfort",
+    "subject:wikidata": "Q88927"
+  }
+},
+{
+  "type": "node",
+  "id": 13748977560,
+  "lat": 45.4953286,
+  "lon": -73.5515383,
+  "tags": {
+    "historic": "memorial",
+    "name": "Roue"
+  }
+},
+{
+  "type": "node",
+  "id": 13801466927,
+  "lat": 45.5099437,
+  "lon": -73.5495615,
+  "tags": {
+    "historic": "memorial",
+    "material": "metal",
+    "memorial": "plaque",
+    "name": "Quai Victoria",
+    "name:en": "Victoria Pier"
+  }
+},
+{
+  "type": "node",
+  "id": 13863515989,
+  "lat": 45.4868856,
+  "lon": -73.5659230,
+  "tags": {
+    "historic": "ruins",
+    "name": "Ancienne écurie des chevaux du Vieux-Montréal"
+  }
+},
+{
+  "type": "node",
+  "id": 13885582847,
+  "lat": 45.4692270,
+  "lon": -73.5463916,
+  "tags": {
+    "historic": "wayside_cross",
+    "inscription": "INRI",
+    "material": "wood"
+  }
+},
+{
+  "type": "node",
+  "id": 13889884512,
+  "lat": 46.8154342,
+  "lon": -71.2476274,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 13961249801,
+  "lat": 45.4909074,
+  "lon": -73.5532276,
+  "tags": {
+    "tourism": "viewpoint"
+  }
+},
+{
+  "type": "node",
+  "id": 13961249901,
+  "lat": 45.4971053,
+  "lon": -73.5501887,
+  "tags": {
+    "historic": "ruins",
+    "name": "Harbour processing and storage building"
+  }
+},
+{
+  "type": "node",
+  "id": 14013585951,
+  "lat": 46.8137477,
+  "lon": -71.2326444,
+  "tags": {
+    "historic": "city_gate"
+  }
+},
+{
+  "type": "node",
+  "id": 14134945338,
+  "lat": 46.8164753,
+  "lon": -71.2095978,
+  "tags": {
+    "direction": "WNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14134945339,
+  "lat": 46.8164564,
+  "lon": -71.2096058,
+  "tags": {
+    "direction": "WNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14134945340,
+  "lat": 46.8164606,
+  "lon": -71.2094271,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14134945341,
+  "lat": 46.8164400,
+  "lon": -71.2094283,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14134945347,
+  "lat": 46.8163426,
+  "lon": -71.2082044,
+  "tags": {
+    "direction": "NNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14134945348,
+  "lat": 46.8163278,
+  "lon": -71.2082221,
+  "tags": {
+    "direction": "NW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14134945349,
+  "lat": 46.8162946,
+  "lon": -71.2075989,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14134945350,
+  "lat": 46.8162801,
+  "lon": -71.2075978,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135150895,
+  "lat": 46.8162625,
+  "lon": -71.2063797,
+  "tags": {
+    "direction": "WNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135150896,
+  "lat": 46.8162502,
+  "lon": -71.2062561,
+  "tags": {
+    "direction": "NE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206116,
+  "lat": 46.8159374,
+  "lon": -71.2042883,
+  "tags": {
+    "direction": "NNW",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206117,
+  "lat": 46.8159076,
+  "lon": -71.2041899,
+  "tags": {
+    "direction": "NE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206118,
+  "lat": 46.8157788,
+  "lon": -71.2041226,
+  "tags": {
+    "direction": "ENE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206119,
+  "lat": 46.8156732,
+  "lon": -71.2040664,
+  "tags": {
+    "direction": "ENE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206120,
+  "lat": 46.8155908,
+  "lon": -71.2040193,
+  "tags": {
+    "direction": "ENE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206121,
+  "lat": 46.8155085,
+  "lon": -71.2039825,
+  "tags": {
+    "direction": "ENE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206122,
+  "lat": 46.8153774,
+  "lon": -71.2039032,
+  "tags": {
+    "direction": "NE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206123,
+  "lat": 46.8153210,
+  "lon": -71.2038891,
+  "tags": {
+    "direction": "NE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206124,
+  "lat": 46.8152672,
+  "lon": -71.2038806,
+  "tags": {
+    "direction": "NE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206125,
+  "lat": 46.8151603,
+  "lon": -71.2038956,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206126,
+  "lat": 46.8151082,
+  "lon": -71.2038816,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206127,
+  "lat": 46.8150593,
+  "lon": -71.2038746,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206128,
+  "lat": 46.8150085,
+  "lon": -71.2038661,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206129,
+  "lat": 46.8149554,
+  "lon": -71.2038269,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206130,
+  "lat": 46.8148966,
+  "lon": -71.2039040,
+  "tags": {
+    "direction": "SE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206131,
+  "lat": 46.8148413,
+  "lon": -71.2039152,
+  "tags": {
+    "direction": "SE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206145,
+  "lat": 46.8139376,
+  "lon": -71.2039273,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206146,
+  "lat": 46.8139875,
+  "lon": -71.2039600,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206147,
+  "lat": 46.8140329,
+  "lon": -71.2039833,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206148,
+  "lat": 46.8140888,
+  "lon": -71.2040076,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206149,
+  "lat": 46.8141556,
+  "lon": -71.2040333,
+  "tags": {
+    "direction": "ESE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206150,
+  "lat": 46.8142058,
+  "lon": -71.2040496,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206151,
+  "lat": 46.8143106,
+  "lon": -71.2040613,
+  "tags": {
+    "direction": "E",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206152,
+  "lat": 46.8143895,
+  "lon": -71.2040272,
+  "tags": {
+    "direction": "ENE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206153,
+  "lat": 46.8144496,
+  "lon": -71.2040099,
+  "tags": {
+    "direction": "ENE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206186,
+  "lat": 46.8125878,
+  "lon": -71.2021341,
+  "tags": {
+    "direction": "S",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135206187,
+  "lat": 46.8129211,
+  "lon": -71.2020093,
+  "tags": {
+    "direction": "NNE",
+    "historic": "cannon"
+  }
+},
+{
+  "type": "node",
+  "id": 14135283346,
+  "lat": 46.8145636,
+  "lon": -71.1572869,
+  "tags": {
+    "direction": "105",
+    "historic": "cannon"
+  }
+}
+
+  ]
+}

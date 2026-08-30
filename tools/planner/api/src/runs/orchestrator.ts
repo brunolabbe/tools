@@ -320,7 +320,7 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
             record(context, runId, event);
           },
         })
-      : { finds: [], coverage: [] };
+      : { finds: [], coverage: [], reading: [] };
 
     if (discovering && !moveTo(context, runId, "fanning-out")) return;
 
@@ -387,6 +387,10 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
       // saw a candidate — see `ComposeInput.coverage`'s own note on why this
       // rides through rather than being derived.
       coverage: discovered.coverage,
+      // Same rule, different kind of evidence: `coverage` is what could not be
+      // checked, `reading` is what was found and is worth reading. Neither is
+      // derivable from a stored revision, so both ride through.
+      reading: discovered.reading,
       revision: { id: `${runId}-1`, reason: FIRST_DRAFT_REASON, createdAt: timestamp },
       now: composedAt,
     });

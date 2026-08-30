@@ -74,7 +74,9 @@ import type {
   GroundingProvider,
   LocatedPlace,
   LocateRequest,
+  NearbyArticle,
   NearbyRequest,
+  NotabilityRequest,
   TravelEstimate,
   TravelMatrix,
   TravelMode,
@@ -269,6 +271,16 @@ export interface RunGrounding {
    */
   nearby(request: NearbyRequest): Promise<GroundingOutcome<Find[]>>;
   /**
+   * One geosearch, one call — pl-33.
+   *
+   * Uncached for the same reason `nearby` is, and more so: a corridor is tiled
+   * into several of these, each keyed on a point, a radius and a language, and
+   * a run asks each one once. What makes it worth spending budget on at all is
+   * that the caller stops when `refused` comes back, so a corridor that runs
+   * out of budget half-tiled says so rather than quietly returning less.
+   */
+  articlesNear(request: NotabilityRequest): Promise<GroundingOutcome<NearbyArticle[]>>;
+  /**
    * Calls this run wanted, could not afford and never made.
    *
    * The per-lookup `refused` outcome is the authority and is what a caller
@@ -369,6 +381,11 @@ export class CachingGroundingProvider implements GroundingProvider, RunGrounding
   /** Same, for discovery. An empty list either way is not distinguishable here. */
   async nearby(request: NearbyRequest): Promise<Find[]> {
     const outcome = await this.#nearby(request, null);
+    return outcome.kind === "answered" ? outcome.value : [];
+  }
+
+  async articlesNear(request: NotabilityRequest): Promise<NearbyArticle[]> {
+    const outcome = await this.#articlesNear(request, null);
     return outcome.kind === "answered" ? outcome.value : [];
   }
 
@@ -522,6 +539,23 @@ export class CachingGroundingProvider implements GroundingProvider, RunGrounding
   }
 
   /**
+   * One geosearch, spent as one call whatever it finds. Never cached — see
+   * `RunGrounding.articlesNear`.
+   */
+  async #articlesNear(
+    request: NotabilityRequest,
+    spend: RunSpend | null,
+  ): Promise<GroundingOutcome<NearbyArticle[]>> {
+    if (spend !== null && !spend.budget.claim()) {
+      spend.refuse();
+      return REFUSED;
+    }
+
+    const found = await this.#options.inner.articlesNear(request);
+    return answered(found);
+  }
+
+  /**
    * A per-run view that spends that run's budget on **misses only**, and that
    * says which of the three things happened to each lookup.
    *
@@ -546,6 +580,7 @@ export class CachingGroundingProvider implements GroundingProvider, RunGrounding
       locate: (request) => this.#locate(request, spend),
       travel: (request) => this.#travel(request, spend),
       nearby: (request) => this.#nearby(request, spend),
+      articlesNear: (request) => this.#articlesNear(request, spend),
     };
   }
 

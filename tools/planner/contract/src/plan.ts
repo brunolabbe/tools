@@ -30,8 +30,8 @@
  */
 
 import { z } from "zod";
-import { candidateSchema, SPECIALISTS } from "./candidate.ts";
-import type { Candidate, Specialist } from "./candidate.ts";
+import { candidateSchema, sourceSchema, SPECIALISTS } from "./candidate.ts";
+import type { Candidate, Source, Specialist } from "./candidate.ts";
 import { tripBriefSchema } from "./brief.ts";
 import type { TripBrief } from "./brief.ts";
 import { itemTravelSchema } from "./travel.ts";
@@ -52,6 +52,15 @@ export const MAX_ITEMS_PER_DAY = 12;
 export const MAX_PLAN_TITLE_CHARS = 200;
 export const MAX_ITEM_NOTE_CHARS = 500;
 export const MAX_REVISION_REASON_CHARS = 500;
+
+/**
+ * How many `reading` sources one revision may carry.
+ *
+ * One lookup per corridor endpoint is the shape the discovery pass has, so two
+ * is the expected count and this is headroom rather than a target. A bound at
+ * all because this is stored: an unbounded list is a row that can stop fitting.
+ */
+export const MAX_REVISION_READING = 8;
 export const MAX_GAP_DETAIL_CHARS = 500;
 
 // ---------------------------------------------------------------------------
@@ -270,6 +279,25 @@ export interface PlanRevision {
    * something on the map.
    */
   coverage: UncheckedConstraint[];
+  /**
+   * Editorial context about the route itself, rather than about any one place
+   * on it — a Wikivoyage entry for a region the corridor crosses (pl-33).
+   *
+   * **Plan-level because the data is.** `Find.notability` is per-find and
+   * Wikipedia's geosearch fills it; Wikivoyage does not work that way.
+   * Measured: 2 articles in English and 7 in French for an entire city, all of
+   * them about the city rather than about anything in it. Attaching one to a
+   * viewpoint would claim a relationship the source does not have, so it hangs
+   * off the revision, where "about this trip" is the honest scope.
+   *
+   * Stored rather than derived, for `coverage`'s reason exactly: it is what a
+   * live backend answered once at compose time, and a later read cannot ask
+   * again.
+   *
+   * Never fused with `notability` into a score — §5's amendment holds here as
+   * well. Empty means nothing was checked, or nothing was written.
+   */
+  reading: Source[];
 }
 
 export const planRevisionSchema = z
@@ -287,6 +315,9 @@ export const planRevisionSchema = z
     // the discovery pass builds the list and this schema just says what one
     // entry looks like.
     coverage: z.array(uncheckedConstraintSchema),
+    // Bounded: one lookup per corridor endpoint is the shape, and a stored
+    // list that can grow without limit is a row that can stop fitting.
+    reading: z.array(sourceSchema).max(MAX_REVISION_READING),
   })
   // The two ways the chain can be malformed, and both are only ever produced by
   // something assembling a revision by hand — `appendRevision` cannot make
@@ -402,7 +433,7 @@ export function pinnedCandidateIds(revision: PlanRevision): string[] {
 /** What `appendRevision` needs told; everything else it derives from the plan. */
 export type NewRevision = Pick<
   PlanRevision,
-  "id" | "reason" | "createdAt" | "days" | "gaps" | "coverage"
+  "id" | "reason" | "createdAt" | "days" | "gaps" | "coverage" | "reading"
 >;
 
 /**

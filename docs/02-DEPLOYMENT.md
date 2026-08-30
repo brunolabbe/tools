@@ -291,7 +291,7 @@ of their own for the reasons in
 [adr/004](./adr/004-one-compose-fragment-per-tool.md). A downloader-only host
 never merges it and never pulls either image.
 
-### It is two services, and that surprises everyone once
+### It is three services, and the first two surprise everyone once
 
 **Valhalla routes; it does not geocode.** It answers "how long from this point
 to that point" and has no opinion about where Sainte-Anne-des-Monts is. So the
@@ -300,6 +300,18 @@ planner needs a geocoder as well, and
 the same regional extract: same data, same box, one more container. The API sees
 one seam and one provider name — `VALHALLA_URL` and `GEOCODER_URL` are two
 addresses behind it.
+
+**And Overpass discovers**, which is the third
+([pl-33](../tools/planner/docs/work/pl-33-overpass-payload-and-notability.md)).
+Routing and geocoding answer questions about places you already named; discovery
+is the one that proposes — what is worth stopping for along this corridor. It
+reads the same extract into a third form, because a graph, a geocoding database
+and a queryable tag index share no artifact between them.
+
+`OVERPASS_URL` is the one address here that may be left unset, and the planner
+starts without it: a deployment can measure and geocode without discovering, and
+`nearby` says so once in the log and returns nothing. That is the only optional
+one of the three.
 
 Neither URL has a default, anywhere. Naming `valhalla` with an endpoint missing
 **refuses the boot**, with a message saying which variable. That is deliberate:
@@ -369,13 +381,28 @@ touched rather than the size of the extract — which is the whole reason it and
 not OSRM on a 16 GB host. Nominatim imports the same `.pbf` into PostgreSQL the
 first time it starts, which is its own long wait and happens once.
 
-The planner then takes three settings:
+The planner then takes these settings:
 
-| Variable             | Value                   |
-| -------------------- | ----------------------- |
-| `GROUNDING_PROVIDER` | `valhalla`              |
-| `VALHALLA_URL`       | `http://valhalla:8002`  |
-| `GEOCODER_URL`       | `http://nominatim:8080` |
+| Variable                         | Value                   | Required                    |
+| -------------------------------- | ----------------------- | --------------------------- |
+| `GROUNDING_PROVIDER`             | `valhalla`              | yes                         |
+| `VALHALLA_URL`                   | `http://valhalla:8002`  | yes                         |
+| `GEOCODER_URL`                   | `http://nominatim:8080` | yes                         |
+| `OVERPASS_URL`                   | `http://overpass`       | no — discovery is off unset |
+| `GROUNDING_DISCOVERY_TIMEOUT_MS` | `30000` (the default)   | no                          |
+
+**Point `OVERPASS_URL` at your own instance, not at `overpass-api.de`.** pl-33
+measured the public one with the query this adapter actually sends: 28.7 s for
+Montréal→Québec City and **149 s** for Montréal→Percé, the example the corridor
+feature exists for. It is a shared free service being asked for a 950 km
+polyline query, and no client-side timeout fixes that — which is the same
+objection that ruled out a metered router and a public geocoder above.
+
+`GROUNDING_DISCOVERY_TIMEOUT_MS` is separate from `GROUNDING_TIMEOUT_MS` for
+that reason: 5 s is right for a routing matrix and was never right for a
+corridor search, and one number for both meant discovery could not have
+succeeded once. Raise it only if your own instance is slower than the 30 s
+default; if it is, the extract is probably larger than the region you plan in.
 
 Those are compose service names on the fragment's private network. Neither
 service is published to a host port, and neither URL goes through the SSRF

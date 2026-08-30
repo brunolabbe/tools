@@ -34,7 +34,7 @@ describe("migrations", () => {
       "plan_runs",
       "plans",
     ]);
-    expect(userVersion(db)).toBe(7);
+    expect(userVersion(db)).toBe(8);
     db.close();
   });
 
@@ -56,11 +56,11 @@ describe("migrations", () => {
 
     expect(tables(db)).toContain("intakes");
     expect(tables(db)).not.toContain("conversations");
-    expect(userVersion(db)).toBe(7);
+    expect(userVersion(db)).toBe(8);
     db.close();
   });
 
-  test("migrations 5, 6 and 7 apply to a database at user_version = 4", () => {
+  test("migrations 5 through 8 apply to a database at user_version = 4", () => {
     // The case that actually happens for pl-25, pl-27 and pl-29: a deployment
     // already carrying the run tables gets the grounding cache, the measured
     // transition and the discovery coverage column added under it, with
@@ -76,8 +76,8 @@ describe("migrations", () => {
     // Undoing 6 is three statements rather than one because the append-only
     // trigger names its frozen columns: SQLite refuses to drop a column a
     // trigger mentions, so the trigger goes back to its migration-2 form first.
-    // Undoing 7 is the one plain `DROP COLUMN`, because nothing references
-    // `coverage_json` from a trigger.
+    // Undoing 7 and 8 is a plain `DROP COLUMN` each, because nothing
+    // references `coverage_json` or `reading_json` from a trigger.
     const db = new Database(":memory:");
     migrate(db);
     db.exec(`
@@ -90,6 +90,7 @@ describe("migrations", () => {
         SELECT RAISE(ABORT, 'only pinned may change on a placed item');
       END;
       ALTER TABLE plan_revisions DROP COLUMN coverage_json;
+      ALTER TABLE plan_revisions DROP COLUMN reading_json;
       PRAGMA user_version = 4;
     `);
     db.prepare(
@@ -98,10 +99,11 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(7);
+    expect(userVersion(db)).toBe(8);
     expect(tables(db)).toContain("grounding_cache");
     expect(columns(db, "plan_items")).toContain("travel_json");
     expect(columns(db, "plan_revisions")).toContain("coverage_json");
+    expect(columns(db, "plan_revisions")).toContain("reading_json");
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -129,7 +131,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(7);
+    expect(userVersion(db)).toBe(8);
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -138,10 +140,11 @@ describe("migrations", () => {
     const db = new Database(":memory:");
     migrate(db);
     expect(columns(db, "plan_revisions")).toContain("coverage_json");
+    expect(columns(db, "plan_revisions")).toContain("reading_json");
     db.close();
   });
 
-  test("migration 7 backfills existing revisions with an empty coverage list", () => {
+  test("migrations 7 and 8 backfill existing revisions with empty lists", () => {
     // The case that actually happens for pl-29: a deployment already carrying
     // plan revisions from before this ticket gets the column added under it,
     // and every row that predates the discovery pass has to read back as
@@ -151,6 +154,7 @@ describe("migrations", () => {
     migrate(db);
     db.exec(`
       ALTER TABLE plan_revisions DROP COLUMN coverage_json;
+      ALTER TABLE plan_revisions DROP COLUMN reading_json;
       PRAGMA user_version = 6;
     `);
     db.prepare(
@@ -164,11 +168,15 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(7);
-    const row = db.prepare("SELECT coverage_json FROM plan_revisions WHERE id = ?").get("r") as {
-      coverage_json: string;
-    };
+    expect(userVersion(db)).toBe(8);
+    const row = db
+      .prepare("SELECT coverage_json, reading_json FROM plan_revisions WHERE id = ?")
+      .get("r") as { coverage_json: string; reading_json: string };
     expect(row.coverage_json).toBe("[]");
+    // pl-33's migration 8, on the same rule: a revision written before the
+    // column existed reads back as "nothing checked", not as a NULL a reader
+    // has to have an opinion about.
+    expect(row.reading_json).toBe("[]");
     db.close();
   });
 });

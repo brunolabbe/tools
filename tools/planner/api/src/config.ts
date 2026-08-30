@@ -106,6 +106,23 @@ export interface ApiConfig {
    */
   groundingTimeoutMs: number;
   /**
+   * The same ceiling for discovery, which is a different backend entirely.
+   *
+   * Split from `groundingTimeoutMs` by pl-33. The paragraph above is right
+   * about a routing matrix and was simply never true of an Overpass corridor
+   * search: measured against the public instance with the query the adapter
+   * really sends, Montréal→Québec City is 28.7 s and Montréal→Percé — this
+   * tool's own motivating example — is **149 s**. One 5 s ceiling for both
+   * meant discovery could not have succeeded once.
+   *
+   * Being impatient here costs a queue slot, exactly as above, which is why
+   * this is not simply large. It is sized for a **self-hosted** Overpass over
+   * a regional extract, which is what `compose.yaml` now brings up and what
+   * `OVERPASS_URL` should point at; the public instance is a shared service
+   * whose long-corridor latency no client-side number can fix.
+   */
+  groundingDiscoveryTimeoutMs: number;
+  /**
    * How many grounding calls one run may make (§9).
    *
    * **Calls, not lookups.** A matrix over eight places is one call and
@@ -203,6 +220,12 @@ export const API_DEFAULTS = {
   // milliseconds; anything approaching this is an instance in trouble, and
   // waiting longer for it costs a queue slot rather than buying an answer.
   groundingTimeoutMs: 5_000,
+  // Thirty seconds, for a self-hosted Overpass over a regional extract. Not
+  // enough for the public instance on a long corridor (149 s, measured) — that
+  // is deliberate: the fix for a shared service being slow is not to wait
+  // longer for it, and a corridor that overruns now says so as a `TIMEOUT`
+  // rather than returning an empty list. See pl-33.
+  groundingDiscoveryTimeoutMs: 30_000,
   maxSpecialists: 5,
   maxConcurrentRuns: 2,
   rateLimitRunsPerMinute: 5,
@@ -323,6 +346,11 @@ export function loadApiConfig(
     groundingTimeoutMs:
       overrides.groundingTimeoutMs ??
       int(env["GROUNDING_TIMEOUT_MS"], API_DEFAULTS.groundingTimeoutMs, { max: 120_000 }),
+    groundingDiscoveryTimeoutMs:
+      overrides.groundingDiscoveryTimeoutMs ??
+      int(env["GROUNDING_DISCOVERY_TIMEOUT_MS"], API_DEFAULTS.groundingDiscoveryTimeoutMs, {
+        max: 300_000,
+      }),
     maxOutputTokens:
       overrides.maxOutputTokens ??
       int(env["MAX_OUTPUT_TOKENS"], API_DEFAULTS.maxOutputTokens, { max: 32_000 }),

@@ -106,6 +106,7 @@ function createGroundingProvider(
         // `undefined` rather than refusing to boot.
         overpassUrl: config.groundingEndpoints.discovery,
         timeoutMs: config.groundingTimeoutMs,
+        discoveryTimeoutMs: config.groundingDiscoveryTimeoutMs,
         now,
         logger,
       });

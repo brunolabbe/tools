@@ -23,6 +23,7 @@ import {
   candidateSchema,
   itemTravelSchema,
   planGapSchema,
+  sourceSchema,
   tripBriefSchema,
   uncheckedConstraintSchema,
   type Candidate,
@@ -32,6 +33,7 @@ import {
   type PlanGap,
   type PlanItem,
   type PlanRevision,
+  type Source,
   type TripBrief,
   type UncheckedConstraint,
 } from "@planner/contract";
@@ -67,6 +69,7 @@ interface RevisionRow {
   reason: string;
   gaps_json: string;
   coverage_json: string;
+  reading_json: string;
   created_at: string;
 }
 
@@ -187,8 +190,9 @@ export function insertCandidates(
 export function insertRevision(db: Database, revision: PlanRevision): void {
   db.prepare(
     `INSERT INTO plan_revisions
-       (id, plan_id, revision, parent_revision_id, reason, gaps_json, coverage_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, plan_id, revision, parent_revision_id, reason, gaps_json, coverage_json,
+        reading_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     revision.id,
     revision.planId,
@@ -197,6 +201,7 @@ export function insertRevision(db: Database, revision: PlanRevision): void {
     revision.reason,
     JSON.stringify(revision.gaps),
     JSON.stringify(revision.coverage),
+    JSON.stringify(revision.reading),
     revision.createdAt,
   );
 
@@ -372,6 +377,7 @@ export function selectPlan(db: Database, id: string): PlanDetail | undefined {
 
 const gapsSchema = z.array(planGapSchema);
 const coverageSchema = z.array(uncheckedConstraintSchema);
+const readingSchema = z.array(sourceSchema);
 
 function toRevision(db: Database, row: RevisionRow): PlanRevision {
   const gaps: PlanGap[] = parseOr(gapsSchema, row.gaps_json, "revision", row.id);
@@ -381,6 +387,8 @@ function toRevision(db: Database, row: RevisionRow): PlanRevision {
     "revision",
     row.id,
   );
+
+  const reading: Source[] = parseOr(readingSchema, row.reading_json, "revision", row.id);
 
   const dayRows = db
     .prepare("SELECT * FROM plan_days WHERE revision_id = ? ORDER BY day_index")
@@ -403,6 +411,7 @@ function toRevision(db: Database, row: RevisionRow): PlanRevision {
     days,
     gaps,
     coverage,
+    reading,
   };
 }
 

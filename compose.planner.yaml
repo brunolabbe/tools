@@ -155,6 +155,56 @@ services:
         limits:
           memory: 4g
 
+  # --- Discovery -----------------------------------------------------------
+  #
+  # **Overpass, on the same extract, because the public instance cannot serve
+  # this tool's own headline query.** pl-33 measured it, with the query
+  # `overpassQuery` really sends: Montréal→Québec City is 28.7 s and
+  # Montréal→Percé — the example the whole corridor feature exists for — is
+  # **149 s**. No client-side timeout fixes that; it is a shared free service
+  # answering a 950 km polyline query, and asking it to is the objection that
+  # already ruled out a metered router and a public geocoder here.
+  #
+  # A regional extract is a different proposition entirely: the same data, on
+  # this box, with nobody else's queue in front of it.
+  #
+  # The import is hours and tens of gigabytes of scratch, like Valhalla's
+  # tiles — but unlike them it is this image's own startup behaviour rather
+  # than a separate profile, so the **first** `up -d` is long and every one
+  # after it is not. `OVERPASS_MODE=clone` against a public dump is the other
+  # way in and is far heavier; `init` over the region is what this wants.
+  overpass:
+    image: "wiktorn/overpass-api:${OVERPASS_IMAGE_TAG:-latest}"
+    restart: unless-stopped
+    networks: [planner]
+    volumes:
+      - overpass_db:/db
+    environment:
+      # The same file Valhalla and Nominatim import. Three readings of one
+      # extract: a graph, a geocoding database and a queryable tag index, and
+      # no artifact any two of them can share.
+      OVERPASS_PLANET_URL: "${OSM_EXTRACT_URL:?set OSM_EXTRACT_URL in .env - see docs/02-DEPLOYMENT.md}"
+      OVERPASS_MODE: "init"
+      # Minutely diffs are for an instance that must be current. A corridor's
+      # viewpoints and monuments do not move, and pl-25's cache holds answers
+      # for hours anyway, so this trades freshness nobody asked for against a
+      # replication job running forever.
+      OVERPASS_META: "no"
+      OVERPASS_RULES_LOAD: "10"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/api/status || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      # The first start imports the extract. This is not a slow service, it is
+      # a service doing hours of one-time work, and a short start_period would
+      # restart it partway through that work, forever.
+      start_period: 240s
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
 # --- What the planner will set, when pl-2 puts it here -----------------------
 #
 # The service does not exist yet. When it does, on this network:
@@ -163,9 +213,17 @@ services:
 #     GROUNDING_PROVIDER: "valhalla"
 #     VALHALLA_URL: "http://valhalla:8002"
 #     GEOCODER_URL: "http://nominatim:8080"
+#     OVERPASS_URL: "http://overpass"
 #   depends_on:
 #     valhalla:
 #       condition: service_healthy
+#
+# `OVERPASS_URL` is the one that may be left unset, and `nearby` says so in the
+# log and discovers nothing — a deployment can measure and geocode without
+# discovering. If it *is* set, point it here rather than at
+# overpass-api.de: pl-33's 149 s measurement is what that costs, and
+# `GROUNDING_DISCOVERY_TIMEOUT_MS` defaults to 30 s precisely because it is
+# sized for this service and not for a shared one.
 #
 # Neither URL has a default anywhere in the API, on purpose: a routing URL that
 # quietly falls back to somebody's public instance is a surprise bill or a
@@ -189,3 +247,4 @@ volumes:
   # Hours of CPU. Named, so `down` without `-v` leaves them alone.
   valhalla_tiles:
   nominatim_data:
+  overpass_db:

@@ -94,6 +94,7 @@ export function revision(
     days,
     gaps,
     coverage,
+    reading: [],
   };
 }
 

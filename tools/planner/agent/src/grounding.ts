@@ -176,6 +176,55 @@ export interface NearbyRequest {
   signal?: AbortSignal | undefined;
 }
 
+/**
+ * One geosearch: what an encyclopedia has written about a single place.
+ *
+ * **Deliberately one point, not a corridor.** A geosearch bounding box the
+ * size of a corridor is refused outright by Wikipedia's API (`toobig`,
+ * measured in pl-33), and more importantly the run budget is denominated in
+ * *calls* — so a seam method that quietly made six of them would make
+ * `MAX_GROUNDING_CALLS` stop describing what a run spends. One request here is
+ * one call there, the same rule `locate` follows and for the same reason.
+ * Tiling a corridor into several of these, and stopping when the budget says
+ * so, is `api/src/runs/discovery.ts`'s job and is visible in its accounting.
+ */
+export interface NotabilityRequest {
+  coordinates: Coordinates;
+  /** Metres. Wikipedia's geosearch caps this at 10 000. */
+  radiusMetres: number;
+  /**
+   * Which language edition to ask, as a wiki language code.
+   *
+   * There is no sensible default and this is not configuration: pl-33 measured
+   * 426 French articles against 189 English ones over one 10 km radius in
+   * Québec, and OSM's own mappers tagged that corridor 16 `fr:` to 3 `en:`.
+   * The caller decides from the corridor it actually has, which is the only
+   * place that knows.
+   */
+  language: string;
+  /**
+   * Which project to ask. Same API, same geosearch, different corpus.
+   *
+   * `wikipedia` is per-place and fills `Find.notability`. `wikivoyage` is not:
+   * pl-33 measured 2 English and 7 French articles for an entire city, all of
+   * them *about the city* rather than about anything in it, which is why its
+   * answers hang off the revision as `PlanRevision.reading` instead of being
+   * attached to a viewpoint that the article never mentions.
+   *
+   * One parameter rather than a second method because the request, the reply
+   * shape and the parsing are identical — only the host and what the caller
+   * does with the answer differ.
+   */
+  site?: "wikipedia" | "wikivoyage" | undefined;
+  signal?: AbortSignal | undefined;
+}
+
+/** One article a geosearch returned, with where it is. */
+export interface NearbyArticle {
+  source: Source;
+  coordinates: Coordinates;
+}
+
 // ---------------------------------------------------------------------------
 // How you are travelling
 // ---------------------------------------------------------------------------
@@ -294,6 +343,14 @@ export interface GroundingProvider {
    * no single fact to have an opinion about, only a list that may be short.
    */
   nearby(request: NearbyRequest): Promise<Find[]>;
+  /**
+   * Articles an encyclopedia has near one point — pl-33, the editorial half of
+   * a `Find`'s backing that the map itself does not carry.
+   *
+   * One call, one point. An empty array is an honest answer, exactly as
+   * `nearby`'s is: asked, and nothing written about anywhere near there.
+   */
+  articlesNear(request: NotabilityRequest): Promise<NearbyArticle[]>;
 }
 
 // ---------------------------------------------------------------------------
