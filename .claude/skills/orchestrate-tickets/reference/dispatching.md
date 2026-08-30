@@ -2,44 +2,39 @@
 
 ## Dispatching a builder
 
-Every builder prompt carries:
+`.claude/agents/builder.md` is loaded into every builder before your prompt is,
+and it carries the setup order, the scope rule, the gate commands, the
+bookkeeping, "do not spawn subagents", "say what you could not do" and "push back
+rather than transcribe". **Do not restate any of that** — it is inherited, and a
+prompt that repeats it is paying twice for the same instruction while making the
+part that is genuinely yours harder to find.
 
-- **Setup**: say the base explicitly, especially for a stacked branch — the rest
-  of the setup order is in `.claude/agents/builder.md` and you do not need to
-  repeat it. It is `git checkout -B <branch> origin/<base>`, then
-  `bash .claude/scripts/worktree-farm.sh` (**not** `npm install` — the farm is
-  half a second against minutes, and `npm install` can fail outright here), then
-  `npm run build`.
-- **Read first**: root `CLAUDE.md`, the tool's `CLAUDE.md`, `docs/01-TICKETS.md`, the
-  ticket in full, and any sibling ticket whose Log carries the handover.
-- **Scope**: implement the Build section, do not widen or narrow. If the brief is
-  wrong, do the right thing and record what it had wrong in the Log. **One
-  exception, and say it out loud in the prompt:** if the work in front of you makes
-  some *other* small, already-specified piece of work free, fold it in rather than
-  leaving it — and if you decide not to, write down in the Log that you could have
-  and why you did not. That note is what lets the orchestrator catch the call; a
-  silent deferral is invisible.
-- **Gates**: `npm run check`, the tool's project suite, full `npm test` if shared
-  config moved, `npm run format` after any `.md`.
-- **Bookkeeping**: append a dated Log entry, set `status: done`. There is no status
-  page to update — `npm run status` is the view, computed from the frontmatter.
-- **Stop before the PR.** A reviewer runs first. (On the *last* relay, replace this
-  with conditional ship authority — see [sizing.md](sizing.md).)
-- **Do not spawn subagents.** Orchestration is yours — and the `builder` agent's
-  tool list already omits `Agent`, so this is belt and braces.
-- **Report**: branch, files, what the brief had wrong, exact gate commands and
-  results, anything deliberately left out.
-- **Say what you could not do, rather than inferring it.** Name the unmeasured
-  thing as unmeasured: a container that was never built, an image whose trust
-  store was never checked, a suite that could not run here. The best builder
-  reports in the second session were the ones that refused to fill a gap with
-  reasoning — one declined to hand-write a routing fixture the ticket forbade and
-  instead found a way to capture a real one; another left a code path untested,
-  said so at full strength, and filed the follow-up rather than claiming the
-  ticket done.
-- **Push back rather than transcribe.** If a relay's framing does not survive
-  contact with the code, say so and record your own reasoning. See
-  _Do not launder subagent claims_ in [SKILL.md](../SKILL.md).
+What only you can supply, and what every builder prompt therefore carries:
+
+- **The ticket, and the base.** Say the base explicitly — `origin/<base>` —
+  especially for a stacked branch. The agent knows *how* to set up; only you know
+  what it is building and what it is building on.
+- **The sibling that carries the handover.** The agent definition cannot know
+  which sibling ticket's Log holds the context for this one. You do, from intake.
+- **What is already settled**, if this is a resume: which findings are addressed,
+  what must not be re-done, what a previous round measured.
+- **Ship authority, or not.** The default is stop before the PR. On the *last*
+  relay, replace it with conditional ship authority — see [sizing.md](sizing.md).
+  This is per-dispatch by definition and is the single highest-value line in the
+  prompt, because it removes an entire round.
+- **The fold-in exception, out loud.** The agent is told to implement the Build
+  section and not widen it. Say in the prompt that if the work in front of it
+  makes some *other* small, already-specified piece of work free, it should fold
+  it in rather than leave it — and if it decides not to, write in the Log that it
+  could have and why it did not. That note is what lets you catch the call; a
+  silent deferral is invisible. See _Fold it in, or file it_ in
+  [sizing.md](sizing.md).
+- **Where to write scratch files**, namespaced by ticket — see
+  [concurrency.md](concurrency.md) on the pull request that briefly carried
+  another ticket's body.
+- **The narrowest thing that can fail**, for verification runs. Agents reach for
+  the whole directory by default; say the spec file. See [sizing.md](sizing.md)
+  for the 20x this costs.
 
 ## Dispatching a gate — the highest-leverage thing you write
 
@@ -185,3 +180,16 @@ finished. Before concluding an agent is stalled, remember that ffmpeg, Playwrigh
 and a full rebuild all write nothing for minutes at a time. The non-destructive
 probe is a message asking it to report what it has and drop the expensive
 remainder; it costs almost nothing and is safe if the agent is healthy.
+
+**Do not reach for the agent's output file instead.** It is the obvious move and
+it is a trap: `TaskOutput` is deprecated for local agents, and the file it names
+is a symlink to that agent's **full conversation transcript**. Reading it would
+spend the orchestrator's context — the one thing that has to survive the batch —
+on the transcript of one agent. `ListAgents` says what is running; a message says
+how it is doing; **`TaskStop` ends one that has genuinely run away**, which is the
+tool the 70-minute gate above needed and nobody had.
+
+Prefer `TaskStop` to a `maxTurns` cap in the agent definition. A capped gate stops
+mid-review and still returns something shaped like a finished one — the same
+failure as a reviewer that read the wrong tree and marked every acceptance line
+`unproven`. Bound the gate by scoping it, watch it, and stop it deliberately.

@@ -123,6 +123,13 @@ is reliable:
 holds.** A message costs almost nothing (see below) and a collision costs a
 rename across a file, a branch and every commit that mentions it.
 
+**The mechanism is `ListAgents`, then `SendMessage`.** `ListAgents` enumerates the
+other Claude sessions reachable on this machine and prints the name each one is
+addressed by; `SendMessage` with that name reaches it. This page told you to
+coordinate for five sessions without naming either, which is most of why it did
+not happen — `git worktree list` shows you that a peer *exists*, and only these
+two let you ask it anything.
+
 **And do it early, because the file-list rule cannot see a peer's unmerged work.**
 The union-of-files command above is still the right way to pick an id, and it is
 still blind to a branch that exists only in another session's worktree: in the

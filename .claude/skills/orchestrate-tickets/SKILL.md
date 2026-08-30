@@ -49,8 +49,14 @@ you are there.
 3. **Dispatch builders** — `subagent_type: "builder"`, one per ticket. The agent
    definition carries the worktree, the setup order and the scope rules; your
    prompt carries the ticket. See [reference/dispatching.md](reference/dispatching.md).
-4. **Gate** each finished branch — `subagent_type: "ticket-reviewer"`, on a
-   different model from whatever built it. Builders never open a PR before a gate.
+4. **Gate** each finished branch — `subagent_type: "ticket-reviewer"`. Builders
+   never open a PR before a gate. **Check the model rather than assuming it**: the
+   builder's Agent result carries `resolvedModel`, and the agent definition
+   defaults the gate to Sonnet, which is right when the builder ran Opus. If the
+   builder ran Sonnet, pass `model: "opus"` on the gate. Never `haiku`, never
+   `fable`. Say which model gated in the record — that is what makes the next
+   audit one command instead of an assumption. Measured before this line existed:
+   **11 tickets, 22 gates, none gated by a different model than built it.**
 5. **Relay findings** to the builder as one batched message.
 6. **Repeat 4–5** until the gate passes or the findings are cosmetic.
 7. **Builder opens the PR**, commits the gate record, posts the reviewer's report to

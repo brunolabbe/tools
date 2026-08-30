@@ -88,9 +88,20 @@ the reviewer to its own reading of what the ticket asked, which is a quieter
 version of the thing this whole split exists to prevent. The reviewer opens the
 ticket itself; that is step 1.
 
-**Dispatch in the foreground** — `run_in_background: false`. There is nothing
-useful for the caller to do until the gate comes back, and a backgrounded review
-turns the wait into polling.
+**Background is the default, and it is correct.** An earlier version of this page
+said to dispatch in the foreground, on the grounds that backgrounding "turns the
+wait into polling". Neither half held: every one of the 34 dispatches in the
+recorded window ran async regardless, and the harness now notifies you when an
+agent returns, so there is nothing to poll. Pass `run_in_background: false` only
+when your very next action genuinely depends on the gate and nothing else could
+usefully happen meanwhile.
+
+**Do not read a running agent's output file to check on it.** `TaskOutput` is
+deprecated for local agents and that file is a symlink to the agent's *full
+conversation transcript* — reading it overflows the context this whole split
+exists to protect. To see what is running, `ListAgents`. To probe one that looks
+stalled, send it a message (see `orchestrate-tickets`, which explains why a quiet
+worktree is not a liveness signal). To end a runaway, `TaskStop`.
 
 **The subagent returns the `## Review` section as text; the caller commits it to
 the ticket, on the branch under review, verbatim.** It returns it rather than
