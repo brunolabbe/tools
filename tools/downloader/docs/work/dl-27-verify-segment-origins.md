@@ -172,6 +172,15 @@ work.
 
 ## Gates
 
+**A settled record can gain context but must never gain it silently.** These
+sections are amended when a later round resolves something they left open, and
+every such amendment is marked inline where it sits — because a reader cannot
+otherwise tell what a gate said from what a subsequent round added, and a record
+that quietly absorbs the outcome it was uncertain about stops being evidence of
+anything. Verdicts are never edited. Gate 3 found this practice applied to one
+amendment and not another in the same commit, which is how it comes to be written
+down here rather than assumed.
+
 ### Gate 1 — 2026-08-30 — PASS
 
 Reviewed at `ff12315`. The reviewer's report is posted to the pull request
@@ -232,13 +241,13 @@ mode is an image that builds, boots, and throws `ERR_MODULE_NOT_FOUND`. The
 branch's Log already said so; this gate's contribution is to split that into the
 half that can be settled here and the half that cannot.
 
-| #   | Question                                                                 | Verdict                        | Proof                                                                                                                                                                                                                                                                                      |
-| --- | ------------------------------------------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | Does `npm prune --omit=dev` keep `node-forge` after the manifest change? | proven                         | Scratch copy outside the repo mirroring the Dockerfile's build-stage manifest list: `npm ci` → 324 packages; prune → **160 packages, 342M → 152M**, node-forge surviving while `@types/node-forge` and `typescript` are dropped. Run twice from clean copies                               |
-| 2   | Does the image itself boot and answer `/api/health`?                     | unproven (gate)                | Docker cannot run in this environment. This is the actual gate and it is the pull request's `docker` job                                                                                                                                                                                   |
-| 3   | Does that job run on a pull request from this branch?                    | proven                         | `.github/workflows/downloader.yml:29` is the `pull_request` trigger, path-filtered to a set matching every non-`.md` file this branch touches                                                                                                                                              |
-| 4   | Does it do real work rather than skip?                                   | proven                         | `docker` and `e2e` executed 2m9s and 1m19s on `main` at `790c4a2`                                                                                                                                                                                                                          |
-| 5   | Is `FFMPEG_ALLOW_UNVERIFIED_TLS` genuinely the only knob?                | proven, **and since acted on** | Confirmed at `ff12315`, and recorded **only** in this ticket's Log — not in `01-ARCHITECTURE.md`'s env table and not in either boot hint. That gap is what the user weighed in deciding to add `FFMPEG_TLS_INTERCEPT`; the table now carries both rows. See the Log entry of the same date |
+| #   | Question                                                                 | Verdict         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --- | ------------------------------------------------------------------------ | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Does `npm prune --omit=dev` keep `node-forge` after the manifest change? | proven          | Scratch copy outside the repo mirroring the Dockerfile's build-stage manifest list: `npm ci` → 324 packages; prune → **160 packages, 342M → 152M**, node-forge surviving while `@types/node-forge` and `typescript` are dropped. Run twice from clean copies                                                                                                                                                                                                                                                                            |
+| 2   | Does the image itself boot and answer `/api/health`?                     | unproven (gate) | Docker cannot run in this environment. This is the actual gate and it is the pull request's `docker` job                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 3   | Does that job run on a pull request from this branch?                    | proven          | `.github/workflows/downloader.yml:29` is the `pull_request` trigger, path-filtered to a set matching every non-`.md` file this branch touches                                                                                                                                                                                                                                                                                                                                                                                           |
+| 4   | Does it do real work rather than skip?                                   | proven          | `docker` and `e2e` executed 2m9s and 1m19s on `main` at `790c4a2`                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 5   | Is `FFMPEG_ALLOW_UNVERIFIED_TLS` genuinely the only knob?                | proven          | Confirmed; and recorded **only** in this ticket's Log, not in `01-ARCHITECTURE.md`'s env table and not in the boot warning's hint. **— Added at `0fc4353`, after this gate:** that gap is what the user weighed in deciding to add `FFMPEG_TLS_INTERCEPT`, and the env table now carries both rows. The verdict cell is gate 2's own word, restored: an earlier edit had made it read `proven, and since acted on`, which put a later round's outcome in the column reserved for what the gate said. See the Log entry of the same date |
 
 Points 3 and 4 were re-verified independently while writing this record, by
 reading the workflow rather than taking it on report: the `pull_request` trigger
@@ -281,6 +290,62 @@ has to be read, not glanced at.
 mutations and none of the `-loglevel` measurements — those were gate 1's, and
 this CONCERNS says nothing about them. It could not run Docker, which is the
 whole reason its central question is deferred rather than answered.
+
+### Gate 3 — 2026-08-30 — PASS
+
+Reviewed at `0fc4353`, the commit that added `FFMPEG_TLS_INTERCEPT`. Relayed
+rather than read first-hand, as above.
+
+**Scope: the knob, and specifically the two risks adding it created.** Neither
+reproduced. This gate did not re-review the mechanism gate 1 covered, and the
+relay carries no statement about the packaging, the image, or the documentation —
+so this PASS should be read as covering the flag and nothing else.
+
+| #   | Risk under test                                                                                   | Verdict   | Proof                                                                                                                                                                             |
+| --- | ------------------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Does the flag blind the suite to a **broken** wiring, now that a tunnelling ffmpeg is legitimate? | disproven | Gate 1's original mutation — split pair, tunnelling proxy with the generated root — **still dies**, killed by two tests. All six knob mutations run, all six killed               |
+| 2   | Does an unparseable value fail closed for the reason the Log claims?                              | proven    | By execution: `bool("flase", true) → true` and `bool("flase", false) → false`. The parser is **direction-agnostic**; the safety comes entirely from which default each flag chose |
+| 3   | With the flag off, is the terminating proxy really not started?                                   | proven    | `ffmpegProxyUrl === egressProxyUrl`, `ffmpegProxyTls === "tunnel"`, and `createTlsInterception` genuinely does not run                                                            |
+| 4   | Does the off state actually reopen the hole it warns about?                                       | proven    | Segments served from the untrusted origin at >10 KB — dl-21's hole reproduced deliberately, which is what makes the boot warning true rather than cautious                        |
+| 5   | Does the conditional second proxy leak a listener?                                                | proven    | No leaked listener and no port-reuse failure across the suite                                                                                                                     |
+
+Row 2 is the one worth keeping. The Log claimed the typo case fails closed
+_because of the default rather than the parser_, and that was reasoning; this
+gate turned it into two measurements pointing opposite ways from the same
+function.
+
+**Findings.**
+
+- **1 (low) — one settled record gained context with a marker and another gained
+  it without one, in the same commit. Fixed in this commit.** `0fc4353` left the
+  superseded "no second knob" bullet standing with an explicit inline
+  `— OVERRULED the same day` marker, which is right, and in the same breath
+  edited **gate 2's verdict table, row 5** from `proven` to
+  `proven, and since acted on` with an appended explanation and no marker at all.
+  The content was accurate and the verdict was not softened, so this is an
+  inconsistency rather than a fabrication — but it is the inconsistency that
+  matters, because a reader of that row could not tell what gate 2 said from what
+  a later round added. Addressed by applying the bullet's practice to the row
+  rather than by deleting the context: the addendum is now marked
+  `— Added at 0fc4353, after this gate:`, and the verdict cell is restored to
+  gate 2's own `proven`, since a later round's outcome does not belong in the
+  column reserved for what the gate concluded. The general rule is now stated
+  once at the top of this section.
+
+**An environment finding worth more than the gate's own verdict.** Gate 3's
+worktree had **no `node_modules` farm and no built `dist`**, so
+`@downloader/engine` resolved through Node's parent-directory lookup to the
+**shared checkout's stale `dist`, built from a different branch**. Three or four
+tests came back `DOWNLOAD_FAILED` where they should have said
+`TLS_VERIFICATION_FAILED` — which is **precisely the symptom of the `-loglevel`
+and sticky-classifier mutations succeeding**. It caught this and rebuilt before
+measuring anything; had it not, the sweep would have reported two of this
+branch's engine changes as unnecessary, with every number in the table looking
+plausible. This is the same defect class as the Log's own "three first-sweep
+results were invalid", arriving from the opposite direction: there, a mutation
+was not rebuilt into `dist`; here, `dist` was somebody else's entirely. Both are
+in the Log's re-measurement note, because anyone re-measuring this branch needs
+both.
 
 ## Log
 
@@ -564,6 +629,25 @@ likely way to conclude, wrongly, that this branch's engine changes are
 unnecessary. Gate 1 reproduced all twelve with a build between every one and got
 twelve kills.
 
+**Gate 3 hit the same defect from the opposite direction, and its version is
+worse because nothing about it looks wrong.** Its worktree had no `node_modules`
+farm and no built `dist`, so `@downloader/engine` did not fail to resolve — it
+resolved **through Node's parent-directory lookup to the shared checkout's
+`dist`, built from a different branch entirely**. Three or four tests returned
+`DOWNLOAD_FAILED` where they should have said `TLS_VERIFICATION_FAILED`, which is
+**exactly what a successful `-loglevel` or sticky-classifier mutation looks
+like**. It caught this and rebuilt before measuring anything; a sweep that had
+not would have reported two of this branch's engine changes as dead code, with
+every figure in the table looking entirely plausible.
+
+So the instruction for anyone re-measuring this branch has two halves, and
+missing either produces confident wrong numbers in the same direction:
+**run the `node_modules` farm and `npm run build` first**, so `dist` is this
+branch's rather than whatever the shared checkout last built, and **rebuild the
+engine between a mutation and its run**, so a mutation is one the suite can
+actually see. The first is invisible — there is no error, just a different
+branch's answers.
+
 The third was `server.ts` handing ffmpeg the wrong proxy. It survived
 **legitimately**: every test built its own proxy, so nothing looked at the
 production wiring, and `logging.test.ts`'s check read `ffmpegProxy.tls` — the
@@ -654,10 +738,14 @@ moved to `6b6c785` during the work and this branch is **not** rebased onto it.
 | ---------------------------------------- | --------------------------- |
 | `npm run build`                          | exit 0                      |
 | `npm run check`                          | exit 0                      |
-| `npm test -- --project downloader`       | **52 files / 771 tests**    |
-| `npm test`                               | **110 files / 1,638 tests** |
+| `npm test -- --project downloader`       | **52 files / 775 tests**    |
+| `npm test`                               | **110 files / 1,642 tests** |
 | `npm run e2e:downloader`                 | 3 passed                    |
 | `node scripts/citations.mjs <this file>` | **5/5 resolve**             |
+
+Counted at `0fc4353`. The four tests above the figures this table carried at
+`ff12315` — 771 and 1,638 — are `FFMPEG_TLS_INTERCEPT`'s: two boot-warning
+states, one config test and the tunnelling half of the wiring pair.
 
 The citations line is new and was **0/0 until the gate records above were
 written** — this ticket had no `file:line` in it at all, which is why nothing in
