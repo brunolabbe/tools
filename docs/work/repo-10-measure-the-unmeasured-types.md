@@ -101,11 +101,17 @@ copies cannot drift.
 Citations resolve against **`d2e21ad`**, the commit the gate reviewed. A record
 committed together with the fix it demanded cannot cite the SHA it lands in, and
 the fix rewrites the very line F1 names.
-`node scripts/citations.mjs <this file> --rev d2e21ad` → **4/4 resolve**, each
+`node scripts/citations.mjs <this file> --rev d2e21ad` → **5/5 resolve**, each
 `CLAUDE.md:195` landing on the sentence F1 quotes. Against the working tree all
 four still resolve, but that one lands on the _replacement_ — a change of content
 under a citation that still points somewhere, which the script says it cannot
 judge. This paragraph is the judgement.
+
+The count in it was wrong once, and instructively: writing the sentence that
+reports the count quotes the cited line, which the extractor counts, so the
+number went from four to five _because_ it had been written down. A record that
+measures itself changes what it measures. Re-resolve after the last edit to the
+record, not after the last edit to the code.
 
 ### Findings
 
@@ -128,8 +134,14 @@ _Disposition:_ **fixed in the commit carrying this record**, as a fold-in. The
 blocking reason for filing it separately was gone because this branch is what
 removed it. The replacement is written off the mechanism rather than off a list
 of type names — the same discipline that made this ticket's own page read the
-test off `hidden` — and is deliberately neutral on the open `SCOPE_REQUIRED`
-question below, since that decision is the user's.
+test off `hidden` — and was deliberately neutral on the then-open
+`SCOPE_REQUIRED` question, since that decision was the user's.
+
+_Superseded within the day._ The user ruled on `SCOPE_REQUIRED` — widen it,
+derived from the config — and that ruling falsified the neutral sentence, which
+had been built on the two sets staying independent. It was rewritten again to say
+only where the requirement is computed. The last Log entry has the reasoning; it
+is the more useful half of this finding.
 
 ### Verified correct — no change needed
 
@@ -451,7 +463,8 @@ commit rendered to nothing, i.e. every type in scope is `hidden`.
   noise the scope requirement exists to prevent. Changing the set is a
   behaviour change to an enforced rule and belongs to whoever owns that
   decision; it is stated as a fact on the page and raised in the build report
-  as an open decision.
+  as an open decision. — _Superseded the same day: the user ruled, and it was
+  widened on this branch. See the entry below._
 - **`CLAUDE.md` unchanged**, per step 4. Its rule reads off the config's
   `hidden` flags rather than off a list of types, and the measurement confirms
   the sentence it ends on — "a type added there without `hidden` is releasing
@@ -520,3 +533,108 @@ Two smaller things this pass produced:
   "the requirement is narrower than the set that reaches a changelog" would have
   been true today and false the day someone widens it, which is the same failure
   mode as the sentence it replaces.
+
+### 2026-08-30 — the scope requirement is computed now, and the citation trap has a name
+
+The user overrode the recommendation and ruled: **widen `SCOPE_REQUIRED`,
+derived from the config.** Done on this branch rather than filed, so the
+measurement and the enforcement it implies land together.
+
+**The ruling contradicted the sentence written two hours earlier.** `CLAUDE.md`
+had just been given _"neither set is derivable from the other, so read each off
+its own file"_ — wording chosen specifically to survive either outcome of the
+open decision. It does not survive this one: the ruling makes the scope
+requirement _derived from_ the `hidden` flags, so the clause was false the
+moment it was implemented. The instinct to avoid a sentence that goes stale was
+right and the execution still failed, for an interesting reason — **a sentence
+written to be robust across an open decision is itself a prediction, and
+predicting "these stay independent" is a claim, not a hedge.** The version that
+would have survived says only where the answer is computed, never how the two
+relate. That is what it says now.
+
+#### The change
+
+`releasingTypes()` reads `changelog-sections` from
+`release-please-config.json` and returns every type without `hidden: true`.
+`validate` requires a scope when the type is in that set **or** the message is
+breaking. Nothing enumerates a type name.
+
+**The breaking clause is not decoration.** Deriving from `hidden` alone leaves a
+hole this ticket had already measured: a `hidden` type carrying `!` is _not_
+skipped, because the `BREAKING CHANGES` heading makes the changelog entry
+non-empty on its own. So `chore!: something` would have cut an unattributed
+changelog line straight through the new rule. The hook now applies the same
+two-clause test the page states — not `hidden`, **and** not breaking — which is
+the point of deriving both from one measurement.
+
+**The transition, which is the deliverable.** Before:
+
+```
+$ node scripts/commit-message.mjs --text "revert: something"
+revert unscoped exit=0
+$ node scripts/commit-message.mjs --text "perf: something"
+perf unscoped exit=0
+```
+
+After:
+
+```
+$ node scripts/commit-message.mjs --text "revert: something"
+commit message rejected:
+
+    revert: something
+
+  · "revert" needs a scope — it is not "hidden" in release-please-config.json, so it
+    reaches a changelog, and a changelog line is the only thing telling a reader which
+    tool it belongs to. Use one of: downloader, planner, core, repo, ci, deps
+
+revert unscoped exit=1
+```
+
+`chore!: something` is rejected too, with the breaking reason rather than the
+`hidden` one. `docs:`, `chore:`, `perf(planner):` and `revert(downloader):` all
+still pass, and so does git's own `Revert "…"` subject, which is a different
+thing from the `revert:` type and still bypasses.
+
+**Proved by failing first, at the test level and not only at the CLI.** With the
+new tests in place and `scripts/commit-message.mjs` reverted to its committed
+version, `npx vitest run scripts/test/commit-message.test.ts` gives
+`6 failed | 18 passed` — every new or widened test red, every pre-existing one
+green. Restored: `24 passed`. A test that only ever ran green after the change
+would not have distinguished the derivation from a hardcoded list.
+
+The test that carries the weight is **"un-hiding a type in the config widens the
+requirement, with no edit here"**: it writes a synthetic config into a temp
+directory with `docs` stripped of its `hidden` flag, and asserts `docs:` — free
+unscoped against the real config two tests earlier — is then rejected. Checking
+today's four would have passed against the list it replaced.
+
+**Own commits checked, per the warning that a rule rejecting the commit that
+introduces it is a bad afternoon.** Every subject on this branch is
+`docs(repo): …`, scoped. Every open pull request title —
+`chore(planner): release 0.5.0`, `chore(downloader): release 0.2.1`, and this
+branch's own — passes unchanged; the two release titles are `chore`, hidden and
+scoped anyway. Nothing legitimate was rejected, so there was nothing to work
+around and nothing to stop for.
+
+#### The citation trap, which is a property of the tool
+
+Asked for a concise statement of why a record _about_ citations is unusually
+prone to creating one. It is this:
+
+**A citation checker cannot distinguish using a citation from mentioning one,
+and a record about broken citations is made almost entirely of mentions.** Prose
+quotes the broken form to explain it — that is what explaining is — and the
+extractor, which is a regex over the finished text, sees a citation. So the
+density of false positives scales with how carefully the record documents the
+problem, and the most thorough write-up is the one most likely to fail the
+check. Two builders hit it in one batch, an hour apart, which is the tell that it
+is structural rather than careless.
+
+There is no wording that quotes the broken form safely, so the working rule is:
+**describe a broken citation, never reproduce it.** Name the file and the symbol
+and say the line number was wrong; do not typeset `file.ext` followed by a colon
+and a number. Where the reproduction genuinely is the evidence — a finding whose
+whole content is "the text is at :94-95, not :93-94" — the checker already says
+that case must stay as written and be judged by a human, which is the same
+boundary seen from the other side.

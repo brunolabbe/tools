@@ -84,13 +84,16 @@ rather than off this table** — a type added to `changelog-sections` without
 
 **Scopes** are the tool directories — `downloader`, `planner` — plus `core`,
 `repo`, `ci` and `deps`. The list is read off `tools/` at runtime, so a new tool
-is a valid scope the moment its directory exists. `feat` and `fix` require one,
-because a changelog line that does not say which tool it belongs to is noise.
-That requirement is **narrower than the set that reaches a changelog**: `perf`
-and `revert` reach one too, and `SCOPE_REQUIRED` in
-[`scripts/commit-message.mjs`](../scripts/commit-message.mjs) does not ask them
-for a scope. No `perf` or `revert` commit exists here yet, so no unscoped
-changelog line has been cut.
+is a valid scope the moment its directory exists. **Whatever reaches a changelog
+requires one**, because a changelog line that does not say which tool it belongs
+to is noise. That set is not written down: `releasingTypes()` in
+[`scripts/commit-message.mjs`](../scripts/commit-message.mjs) computes it from
+the types that are **not** `hidden` in
+[`release-please-config.json`](../release-please-config.json), and a breaking
+change joins it whatever its type — the same two-clause test this page applies to
+the annotation rule below, for the same reason. It was a hand-written
+`{feat, fix}` until repo-10 measured `perf` and `revert` reaching a changelog
+while nothing asked either of them for a scope.
 
 **There is no `security` type**, although this repo's history has one. A
 security fix is a `fix` — it should bump the patch version and appear in the

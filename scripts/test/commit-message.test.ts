@@ -1,6 +1,8 @@
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { expect, test } from "vitest";
-import { validate } from "../commit-message.mjs";
+import { releasingTypes, TYPES, validate } from "../commit-message.mjs";
 
 // Fixed so the suite does not change meaning when a tool is added to the repo.
 const scopes = ["downloader", "planner", "core", "repo", "ci", "deps"];
@@ -17,12 +19,99 @@ test("accepts a scopeless commit for a type that does not reach a changelog", ()
   expect(check("docs: give every tool its own roadmap").ok).toBe(true);
 });
 
-test("requires a scope on the two types that move a version", () => {
-  for (const type of ["feat", "fix"]) {
+test("requires a scope on every type that reaches a changelog", () => {
+  // `perf` and `revert` are here because repo-10 measured them reaching one —
+  // they were not required to carry a scope while they did, which is the defect
+  // deriving this set from the config closes.
+  for (const type of ["feat", "fix", "perf", "revert"]) {
     const { ok, errors } = check(`${type}: add a thing`);
     expect(ok).toBe(false);
     expect(errors.join(" ")).toContain("needs a scope");
   }
+});
+
+test("the required set is exactly the types not hidden in the config", () => {
+  expect(releasingTypes()).toEqual(["feat", "fix", "perf", "revert"]);
+});
+
+test("a type the config releases is a type the hook accepts", () => {
+  // The two lists have different jobs — `TYPES` is the vocabulary, the config
+  // is the release behaviour — but a type the config releases and the hook
+  // rejects outright would be unusable, and nothing else would catch it.
+  for (const type of releasingTypes() ?? []) {
+    expect(TYPES).toContain(type);
+  }
+});
+
+test("un-hiding a type in the config widens the requirement, with no edit here", () => {
+  // The whole point of deriving the set. A test that only checked today's four
+  // would pass against a hardcoded list and prove nothing.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "commit-message-"));
+  try {
+    fs.writeFileSync(
+      path.join(dir, "release-please-config.json"),
+      JSON.stringify({
+        "changelog-sections": [
+          { type: "feat", section: "Features" },
+          // The one change: `docs` loses its `hidden` flag.
+          { type: "docs", section: "Documentation" },
+          { type: "chore", section: "Chores", hidden: true },
+        ],
+      }),
+    );
+
+    const widened = releasingTypes(dir);
+    expect(widened).toEqual(["feat", "docs"]);
+
+    // `docs:` is accepted unscoped against the real config, three tests up.
+    expect(check("docs: give every tool its own roadmap").ok).toBe(true);
+    const { ok, errors } = validate("docs: give every tool its own roadmap", {
+      scopes,
+      releasingTypes: widened ?? [],
+    });
+    expect(ok).toBe(false);
+    expect(errors.join(" ")).toContain("needs a scope");
+
+    // And one that stayed hidden is still free.
+    expect(validate("chore: pin the toolchain", { scopes, releasingTypes: widened ?? [] }).ok).toBe(
+      true,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a breaking change needs a scope even when its type is hidden", () => {
+  // A `hidden` type carrying `!` is not skipped — the BREAKING CHANGES heading
+  // makes the changelog entry non-empty by itself, measured for repo-10 — so
+  // deriving the rule from `hidden` alone would let this cut an unattributed
+  // changelog line. Both spellings of breaking, and the non-breaking control.
+  expect(check("chore: pin the toolchain").ok).toBe(true);
+
+  const bang = check("chore!: drop the scripted provider");
+  expect(bang.ok).toBe(false);
+  expect(bang.errors.join(" ")).toContain("breaking change reaches a changelog");
+
+  const footer = check(
+    ["chore: rework the taxonomy", "", "BREAKING CHANGE: codes moved"].join("\n"),
+  );
+  expect(footer.ok).toBe(false);
+  expect(footer.errors.join(" ")).toContain("breaking change reaches a changelog");
+});
+
+test("the scope requirement falls back rather than vanishing when the config is unreadable", () => {
+  // `releasingTypes()` returns null outside the repo. Failing open entirely
+  // would silently stop enforcing the rule; the fallback is the historical
+  // minimum, which is unambiguous whatever the config says.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "commit-message-"));
+  try {
+    expect(releasingTypes(dir)).toBe(null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  expect(validate("feat: add a thing", { scopes }).ok).toBe(false);
+  expect(validate("fix: repair a thing", { scopes }).ok).toBe(false);
 });
 
 test("rejects a type nobody has agreed on", () => {

@@ -51,8 +51,51 @@ export const TYPES = [
   "revert",
 ];
 
-/** Types whose changelog entry is ambiguous in a repo with more than one tool. */
-const SCOPE_REQUIRED = new Set(["feat", "fix"]);
+/**
+ * The set required to carry a scope when `release-please-config.json` cannot be
+ * read.
+ *
+ * Same reasoning as `toolScopes`' empty return: a hook that cannot find its
+ * config should not block every commit on a bad guess about where it is
+ * running. It should not silently stop enforcing either, so the fallback is the
+ * historical minimum rather than nothing — these two have been required since
+ * the rule existed and are unambiguous whatever the config says.
+ */
+const SCOPE_REQUIRED_FALLBACK = ["feat", "fix"];
+
+/**
+ * The types that reach a changelog, computed from `release-please-config.json`
+ * rather than listed here.
+ *
+ * **This is the rule read off the config, not off a list of type names.** A
+ * type is in a changelog exactly when it is not `hidden` in
+ * `changelog-sections` — measured for repo-10, with the runs in
+ * docs/03-RELEASING.md — so a type added to that file without `hidden` starts
+ * requiring a scope the day it is added, and nobody has to remember to edit
+ * this file. A hand-written set went stale here once already: it said `feat`
+ * and `fix` while `perf` and `revert` had been reaching a changelog all along.
+ *
+ * `null` rather than `[]` when the config cannot be read, so the caller can
+ * tell "unreadable" from "everything is hidden".
+ *
+ * @param {string} [repoRoot]
+ * @returns {string[] | null}
+ */
+export function releasingTypes(repoRoot = path.resolve(fileURLToPath(import.meta.url), "../..")) {
+  try {
+    const config = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, "release-please-config.json"), "utf8"),
+    );
+    const sections = config["changelog-sections"];
+    if (!Array.isArray(sections)) return null;
+    return sections
+      .filter((section) => section?.hidden !== true)
+      .map((section) => section?.type)
+      .filter((type) => typeof type === "string");
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Scopes that are not a tool.
@@ -100,11 +143,12 @@ export function toolScopes(repoRoot = path.resolve(fileURLToPath(import.meta.url
 
 /**
  * @param {string} message A full commit message, or a pull request title.
- * @param {{ scopes?: string[] }} [options]
+ * @param {{ scopes?: string[], releasingTypes?: string[] }} [options]
  * @returns {{ ok: boolean, errors: string[] }}
  */
 export function validate(message, options = {}) {
   const scopes = options.scopes ?? [...toolScopes(), ...EXTRA_SCOPES];
+  const releasing = new Set(options.releasingTypes ?? releasingTypes() ?? SCOPE_REQUIRED_FALLBACK);
 
   // Comments are what `git commit` appends to the buffer it opens; they are not
   // part of the message and must not be measured or parsed.
@@ -136,17 +180,29 @@ export function validate(message, options = {}) {
     return { ok: false, errors };
   }
 
-  const { type, scope, subject } = match.groups;
+  const { type, scope, subject, breaking } = match.groups;
+
+  // What reaches a changelog is "not `hidden`, **and** not breaking" — the same
+  // two-clause test docs/03-RELEASING.md states, because a `hidden` type
+  // carrying `!` is not skipped: the `BREAKING CHANGES` heading makes the
+  // changelog entry non-empty on its own. Measured for repo-10. Deriving the
+  // scope rule from `hidden` alone would let `chore!: …` cut an unattributed
+  // changelog line, which is the one thing the scope rule exists to stop.
+  const isBreaking =
+    breaking === "!" || lines.slice(1).some((line) => /^BREAKING[ -]CHANGE: /.test(line));
 
   if (!TYPES.includes(type)) {
     errors.push(`"${type}" is not a known type. Use one of: ${TYPES.join(", ")}`);
   }
 
   if (scope === undefined) {
-    if (SCOPE_REQUIRED.has(type)) {
+    if (releasing.has(type) || isBreaking) {
+      const reason = releasing.has(type)
+        ? `it is not "hidden" in release-please-config.json, so it reaches a changelog`
+        : "a breaking change reaches a changelog whatever its type";
       errors.push(
-        `"${type}" needs a scope — it is the only thing telling a reader which ` +
-          `tool's changelog this belongs in. Use one of: ${scopes.join(", ")}`,
+        `"${type}" needs a scope — ${reason}, and a changelog line is the only ` +
+          `thing telling a reader which tool it belongs to. Use one of: ${scopes.join(", ")}`,
       );
     }
   } else if (scopes.length > 0 && !scopes.includes(scope)) {
