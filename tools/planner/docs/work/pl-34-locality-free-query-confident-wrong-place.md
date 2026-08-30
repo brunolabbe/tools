@@ -143,6 +143,17 @@ this ticket's Build, not written here.
 (3) closes option 3 as a side effect: it comes out of the same scoring rule
 rather than being a second rule, so it is folded in rather than left filed.
 
+**Amended 2026-08-30, after the captures landed.** A fourth step, added
+because the first three declined an ordinary lookup:
+
+4. When the locality has narrowed the reply and the survivors _still_
+   disagree, break the tie on `addresstype` — prefer settlement types over
+   large-area features — and require agreement again. Only then: a reply that
+   nothing has narrowed is not eligible, or the tiebreak starts answering
+   "where" instead of "what kind". `Gaspé, Québec` (town vs peninsula, 118.6
+   km) is what it fixes; bare `Percé` (town in Québec vs county in Idaho, 3882
+   km) is what it must not touch. Both are captured.
+
 ## Done when
 
 - A decision is recorded for which of the options above (or a fourth) closes
@@ -289,3 +300,112 @@ Done-when. Deliberately left for the user because it is contract-adjacent —
 `@planner/agent`'s `LocateRequest`/`GroundingProvider` seam and
 `@planner/contract`'s `UNCHECKED_CONSTRAINTS`, whose sibling packages depend
 on both. The options are in this dispatch's report.
+
+**2026-08-30 (round 2) — the network opened, and the capture overturned the
+risk this ticket's first round named.** Ten `limit=10` queries were run
+against the public Nominatim instance by the coordinating session and are
+checked in under `api/test/fixtures/nominatim-search-*.json`, unedited. They
+are first-hand payloads; the capture _conditions_ (host, headers) are carried
+on that session's word, since this container still reaches no geocoder.
+
+**The stated open risk was false, and this is the correction the Log exists
+for.** Round 1 named its largest risk as "a town returned alongside its
+containing municipality as two rows more than 25 km apart", and built
+`SAME_PLACE_METRES`'s floor on it. **Nominatim does not produce that shape.**
+`Percé, Québec` returns **one** row whose `display_name` is already
+`Percé, Le Rocher-Percé, Gaspésie–Îles-de-la-Madeleine, Québec, Canada` — the
+municipality is inside the row's own address hierarchy, not beside it. Six of
+the ten replies are single-row for the same reason. The hand-composed
+two-row test that pinned that floor is kept and relabelled: it no longer
+claims to imitate a reply, it pins a deliberate margin that no capture
+supports.
+
+**The regression was real anyway, through a shape nobody predicted.**
+`Gaspé, Québec` returns two rows — the town `Gaspé, La Côte-de-Gaspé, …` and
+the peninsula `Gaspésie, Québec, Canada` — **118.6 km** apart. Both mention
+Québec, so both survive `bestMatches`; 118.6 km exceeds the threshold, so
+round 1's rule declined an ordinary lookup. Measured across the ten: nine
+locate, one (bare `Percé`) declines correctly, and before this commit `Gaspé`
+made it eight. The mechanism is a town beside a **larger geographic feature
+sharing its name**, not a town beside its own municipality.
+
+**The fix: `addresstype`, scoped.** When the locality has already narrowed the
+reply and the survivors still disagree, prefer `SETTLEMENT_ADDRESS_TYPES` —
+`city`, `town`, `village`, `municipality`, every one a value a checked-in
+capture carries — and require agreement again.
+
+**The scope boundary is the part worth reading, and it is load-bearing rather
+than cautious.** The tiebreak fires only when a locality hint did the
+narrowing. The two fields answer different questions: the locality answers
+_where_, `addresstype` answers _what kind_. Turning "what kind" loose on a set
+nothing has narrowed promotes it to answering "where", which is this ticket's
+own defect in a new hat. The captured proof is a bare `Percé`: the town in
+Québec and Nez Perce County, Idaho, 3 882 km apart, exactly one of them a
+settlement. An unscoped tiebreak answers Québec with real confidence and
+nothing behind it — nothing in that request ever said Canada. It declines
+instead, and three tests fail if that boundary moves.
+
+**It is an allowlist, and that is the safety argument.** A type not on the
+list is not rejected, it merely fails to be preferred — so an incomplete list
+produces a place that is _not located_, never a place located _wrongly_. A
+denylist of large-area features would invert that: an unrecognised type would
+beat a `peninsula` on the strength of nobody having heard of it. Agreement is
+also tested **before** the tiebreak, so a lone row of an unfamiliar type still
+answers: captured `Saint-Jean, Québec` is `addresstype: political` and
+`Charlevoix, Québec` is `county`, and both locate because there was no tie.
+
+**`SAME_PLACE_METRES` now has a measured ceiling and a test.** The gate found
+that every value from ~1.6 km to 403 km passed all 56 tests identically — the
+constant was pinned by a comment and nothing else. It is now bounded from
+above at **118.6 km**, because the `Gaspé` pair must read as a disagreement
+for the tiebreak to run at all; a larger threshold would call them one place
+and answer whichever row Nominatim sent first, which is correct today and
+luck tomorrow. The test feeds the same two captured rows **reversed** and
+requires the town either way — one test that bounds the constant and proves
+the answer comes from the type rather than the ordering. Verified: passes at
+118 km, fails at 200 km. The _floor_ is now the unsupported side, and the
+comment on the constant says so.
+
+**Mutation results, round 2.** Removing the tiebreak fails 4 tests (this is
+the regression, reproduced). Unscoping it to locality-free queries fails 3,
+including bare `Percé`. Dropping `town` from the allowlist fails 3. Filtering
+to settlements unconditionally instead of only after a disagreement fails 5,
+including three ordinary lookups. **One mutant survives and is recorded rather
+than papered over:** filtering to settlements _before_ the agreement test but
+only when a settlement exists is behaviourally identical on all ten captures.
+It differs only for a reply mixing a large-area row and a settlement row
+_within_ the threshold, where mine answers by reply order and it answers the
+settlement. No capture shows that case; it is a defensible refactor rather
+than a defect, and it is left alone.
+
+**A wrong answer this ticket does not fix, named rather than absorbed.**
+`Sainte-Anne, Québec` resolves to a **bus stop** in Québec City
+(`addresstype: highway`, `importance` 7.2e-05), not to any town called
+Sainte-Anne-something. It is a single-row reply, so there is no tie and
+nothing here fires; it is the same _class_ of failure as this ticket's —
+confident, sourced, wrong — reached by a different route, and closing it needs
+a different instrument (a floor on `place_rank`/`importance`, or the trip
+context pl-37 adds). Counted among the "nine that locate" because it returns a
+point, which is exactly the sense in which that count is weaker than it reads.
+
+**Round 1's `Percé, Québec` gap is closed.** Round 1 said no successful
+lookup had been captured at `limit=10` and that the ordinary case was inferred
+rather than observed. Ten now are, driven through `locate` as a block in
+`grounding-valhalla.test.ts` so the next change to `chooseResult` is measured
+against all of them at once.
+
+**Follow-up filed: pl-37**, `locate cannot see the trip it is grounding` —
+the user's choice from round 1's open decision. It puts the brief's
+destination into `LocateRequest`, and carries the trap this round worked out:
+`cache.ts`'s `locateKey` is keyed on the `Place` alone, so a seam that answers
+per-trip with a key that ignores the trip serves one trip's Saint-Jean to
+another's. It would also have dissolved the `Gaspé` case without an allowlist.
+Id verified against `origin/main`'s work directory, every open pull request
+and every ref on `origin`: `pl-36` was the highest, `pl-33` is held by another
+session, so `pl-37`.
+
+**Still not settled, and still contract-adjacent:** whether an ambiguous
+`locate` deserves its own word in the seam and in `UncheckedConstraint`. Round
+2 widened what `null` covers again — a declined tiebreak is a third way to get
+one — without widening the vocabulary. Unfiled on purpose; it is the
+alternative the user did not pick, and it belongs to whoever picks it up.

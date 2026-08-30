@@ -80,14 +80,65 @@
  *
  * ## What pl-34 changed about the table above
  *
- * `locate` now asks for **ten** results, not one, so the `limit=10` capture is
- * production's request shape and the two `limit=1` captures are the historical
- * one. `nominatim-search-match.json` is still a real reply to a real query and
- * still exercises the whole path; what it no longer is, is the reply this
- * deployment would receive for `Percé, Québec`. **Nobody has captured that
- * one** — this container reaches no geocoder, public or self-hosted — so what
- * a *successful* lookup looks like at `limit=10` is unmeasured here. It is
- * named in pl-34's Log rather than approximated with an authored body.
+ * `locate` now asks for **ten** results, not one, so the `limit=10` captures
+ * are production's request shape and the two `limit=1` ones are the
+ * historical shape. `nominatim-search-match.json` is still a real reply to a
+ * real query; what it is no longer is the reply this deployment would receive
+ * for `Percé, Québec`.
+ *
+ * ## The ten `limit=10` captures — pl-34 round 2, 2026-08-30
+ *
+ * The first round said outright that no successful lookup had been captured
+ * at `limit=10` and named the gap. It has since been closed: the egress
+ * allowlist was opened, and ten queries were run against the public Nominatim
+ * instance at `limit=10` and checked in unedited. Every row carries
+ * `"licence": "Data © OpenStreetMap contributors, ODbL 1.0…"`, which is the
+ * public instance's own string. They were captured by the coordinating
+ * session rather than by this one — this container still cannot reach a
+ * geocoder — so the queries and the payloads are first-hand and the
+ * *conditions* (headers, exact host) are carried on that session's word.
+ *
+ * | File                                          | `q=`                      | rows |
+ * | --------------------------------------------- | ------------------------- | ---- |
+ * | `nominatim-search-perce-quebec.json`           | `Percé, Québec`           | 1    |
+ * | `nominatim-search-tadoussac-quebec.json`       | `Tadoussac, Québec`       | 1    |
+ * | `nominatim-search-baie-saint-paul-quebec.json` | `Baie-Saint-Paul, Québec` | 1    |
+ * | `nominatim-search-perce-bare.json`             | `Percé`                   | 2    |
+ * | `nominatim-search-quebec-quebec.json`          | `Québec, Québec`          | 1    |
+ * | `nominatim-search-gaspe-quebec.json`           | `Gaspé, Québec`           | 2    |
+ * | `nominatim-search-charlevoix-quebec.json`      | `Charlevoix, Québec`      | 1    |
+ * | `nominatim-search-perce-le-rocher-perce.json`  | `Percé, Le Rocher-Percé`  | 1    |
+ * | `nominatim-search-sainte-anne-quebec.json`     | `Sainte-Anne, Québec`     | 1    |
+ * | `nominatim-search-saint-jean-quebec.json`      | `Saint-Jean, Québec`      | 1    |
+ *
+ * ## What round 2 settled, including against round 1
+ *
+ * **A hypothesis round 1 built a constant on is false.** `SAME_PLACE_METRES`
+ * was justified by a geocoder returning a town beside its own containing
+ * municipality as two rows. It does not: `Percé, Québec` is **one** row whose
+ * `display_name` already contains `Le Rocher-Percé`. Six of the ten replies
+ * are single-row for the same reason, and no capture in this repo shows two
+ * rows that are one place.
+ *
+ * **The regression round 1 could not see is real, through a shape nobody
+ * predicted** — a town beside a *larger geographic feature sharing its name*.
+ * `Gaspé, Québec` returns the town and the Gaspé peninsula, both correctly in
+ * Québec, **118.6 km** apart, and round 1's rule declined it. That is what
+ * `SETTLEMENT_ADDRESS_TYPES` exists for, and 118.6 km is what now bounds the
+ * threshold from above.
+ *
+ * **`addresstype` is a field worth reading and `importance` still is not.**
+ * The ten captures carry `addresstype` values `town`, `village`, `city`,
+ * `county`, `peninsula`, `highway` and `political`. `importance` remains
+ * unread: in the `Gaspé` reply the peninsula scores higher (0.4923) than the
+ * town (0.4690), so ranking on it would pick the peninsula.
+ *
+ * **One capture records a wrong answer this ticket does not fix.**
+ * `Sainte-Anne, Québec` resolves to a **bus stop** in Québec City
+ * (`addresstype: highway`, `importance` 7.2e-05) rather than to any of the
+ * towns called Sainte-Anne-something. It is a single-row reply, so there is
+ * no tie to break and nothing here fires; it is the same *class* of failure
+ * as this ticket's and needs a different instrument. Named in pl-34's Log.
  */
 
 import { readFileSync } from "node:fs";
@@ -683,13 +734,14 @@ describe("choosing among several results (pl-34)", () => {
   });
 
   test("results that agree about where they are are one place, not an ambiguity", async () => {
-    // **This body is composed, and it is not a claim about Nominatim.** No
-    // capture in this repo shows a reply whose rows are the same town twice —
-    // that shape is asserted by nobody here and pl-34's Log says so. What it
-    // pins is the rule's own boundary: rows a kilometre or two apart are one
-    // place, and the six real ambiguous results, whose closest pair is 402 km
-    // apart, are not. A rule with no near side would refuse a reply that
-    // merely listed a town and its own boundary.
+    // **This body is composed, and round 2 proved the shape it imagines does
+    // not occur.** It was written for "a town beside its own administrative
+    // boundary"; `nominatim-search-perce-quebec.json` shows Nominatim puts
+    // the municipality *inside the row's own `display_name`* and returns one
+    // row. So this is not a claim about Nominatim and no longer even a guess
+    // at one — it pins the deliberate floor under `SAME_PLACE_METRES`, which
+    // is the side of that constant no capture supports. The ceiling is
+    // captured and is pinned separately, by the reversed `Gaspé` reply.
     const { fetch } = answering([
       { lat: "48.5222989", lon: "-64.2136423", display_name: "Percé, Québec, Canada" },
       { lat: "48.5361", lon: "-64.2136", display_name: "Percé (municipalité), Québec, Canada" },
@@ -816,11 +868,11 @@ describe("every captured limit=10 reply, through locate (pl-34 round 2)", () => 
     },
   ];
 
-  for (const { place, expected, why } of cases) {
-    const where = place.locality === null ? " (no locality)" : `, ${place.locality}`;
-    test(`${place.name}${where} — ${why}`, async () => {
+  for (const { place: subject, expected, why } of cases) {
+    const where = subject.locality === null ? " (no locality)" : `, ${subject.locality}`;
+    test(`${subject.name}${where} — ${why}`, async () => {
       const { fetch, queries } = answeringCaptures();
-      const located = await provider(fetch).locate({ place });
+      const located = await provider(fetch).locate({ place: subject });
 
       // The capture is keyed by query, so a changed `placeQuery` throws rather
       // than quietly testing a reply to a different question.
@@ -833,9 +885,9 @@ describe("every captured limit=10 reply, through locate (pl-34 round 2)", () => 
     // The count itself, so a change that starts declining ordinary lookups
     // fails here with a number rather than only in whichever case it broke.
     const outcomes = await Promise.all(
-      cases.map(async ({ place }) => {
+      cases.map(async ({ place: subject }) => {
         const { fetch } = answeringCaptures();
-        return await provider(fetch).locate({ place });
+        return await provider(fetch).locate({ place: subject });
       }),
     );
 
@@ -869,7 +921,7 @@ describe("preferring a settlement over a larger feature (pl-34 round 2)", () => 
    * the answer comes from the *type* rather than from Nominatim's ordering.
    */
   test("reversing the two rows changes nothing, which is what bounds the threshold", async () => {
-    const reversed = [...(captured("Gaspé, Québec") as unknown[])].reverse();
+    const reversed = (captured("Gaspé, Québec") as unknown[]).toReversed();
     const { fetch } = answering(reversed);
     const gaspe: Place = { name: "Gaspé", locality: "Québec", coordinates: null };
 
