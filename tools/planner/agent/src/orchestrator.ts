@@ -44,7 +44,7 @@
  * nothing at all.
  */
 
-import { AppError, isAnswered, missingRequiredSlots } from "@planner/contract";
+import { AppError, isAnswered, missingRequiredSlots, MODEL_ASSERTED } from "@planner/contract";
 import type {
   Candidate,
   PlanGap,
@@ -301,6 +301,30 @@ function isCancellation(error: unknown, signal: AbortSignal | undefined): boolea
  * it, the packer charges it nothing and notes that it did, and refusing it here
  * would turn "unknown" into "too long" — which is the collapse `Candidate`'s
  * `null` exists to prevent one layer down.
+ *
+ * ## It is also the one place provenance is decided — pl-36
+ *
+ * `candidateProposalSchema` omits `provenance` so a specialist cannot state its
+ * own, for the reason `ask.ts`'s header gives, which leaves this function
+ * holding the only answer. It is `MODEL_ASSERTED` for every candidate, which is
+ * exactly what the plan said before pl-36 — nothing about a run's output
+ * changed, only who gets to say it.
+ *
+ * **A candidate a specialist wrote *from* a corridor `Find` is `model-asserted`
+ * too, and pl-36 settled that permanently.** Not for want of a `Source` — a
+ * `Find` carries its own — but because nothing can say *which* find a proposal
+ * was written from: the prompt hands a model a name and takes back prose, and no
+ * run in this repo has ever been captured with `finds` in it, so the name-match
+ * join it would take has never been scored against a single observation.
+ * Attributing OpenStreetMap to the wrong candidate is worse than attributing
+ * nothing. `Provenance` gains no third member for the same reason pl-29's Build
+ * step 6 gave. The argument, and what would have to be measured before reopening
+ * it is worth anything, is in pl-36's Log and is deliberately not restated here.
+ *
+ * `cost.provenance` is overwritten rather than omitted, for the schema reason
+ * `ask.ts` records. A price is §5's fastest-ageing fact and the one a reader is
+ * likeliest to act on, so a model marking its own guess **Sourced** is the
+ * version of this that would have done the most damage.
  */
 function accept(input: {
   specialist: Specialist;
@@ -338,11 +362,15 @@ function accept(input: {
 
     candidates.push({
       ...proposal,
+      // Whatever a model wrote here is discarded: a price the assistant guessed
+      // is `model-asserted` however the reply described it.
+      cost: proposal.cost === null ? null : { ...proposal.cost, provenance: MODEL_ASSERTED },
       // Derived rather than generated, the way the composer derives a day's id:
       // the run is already unique, so the same run composed twice produces the
       // same ids and a stored plan can be re-derived from its own inputs.
       id: `${input.runId}-${input.specialist}-${String(candidates.length + 1)}`,
       specialist: input.specialist,
+      provenance: MODEL_ASSERTED,
     });
   }
 

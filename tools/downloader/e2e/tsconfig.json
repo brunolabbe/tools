@@ -13,7 +13,11 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["node", "@playwright/test"]
   },
-  "include": ["**/*.ts"],
+  // The two Playwright configs sit a directory up and were in no project at
+  // all, so `defineConfig` was typechecked by nobody — the same hole `e2e/`
+  // itself had before dl-13. Named explicitly rather than by a `../**` glob,
+  // which would swallow every package under `tools/downloader`.
+  "include": ["**/*.ts", "../playwright.config.ts", "../playwright.sniffer.config.ts"],
   // Replaces the root's `exclude` rather than adding to it — `extends` inherits
   // the whole array, and the root's entry is about its own program, not this
   // one.

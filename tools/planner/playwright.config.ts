@@ -99,6 +99,23 @@ export default defineConfig({
     timeout: 120_000,
     stdout: "pipe",
     stderr: "pipe",
+    // **Every key below is authoritative over the shell, and that is not
+    // obvious from the outside.** Playwright builds the web server's
+    // environment as
+    // `{ ...DEFAULT_ENVIRONMENT_VARIABLES, ...process.env, ...options.env }`,
+    // so a config's `env` is spread **last** and wins. The consequence worth
+    // naming: `MODEL_PROVIDER=anthropic npm run e2e:planner` runs **scripted**
+    // and passes green, having changed nothing — measured 2026-08-31, 4 passed
+    // in 12.0 s, indistinguishable from a plain run. A variable reaches this
+    // server only if no config on the path names it — which is why `E2E_PORT`
+    // above works and `MODEL_PROVIDER` does not, with nothing at the call site
+    // to tell the two apart.
+    //
+    // The pinning stays. A provider an ambient variable could flip is a suite
+    // that can silently be testing something else, which is the same reason the
+    // downloader's sniffer suite pins its resolver tiers. To run this against a
+    // real model, change the value here and mean it. Found while building
+    // dl-16, whose own falsification instruction was defeated by exactly this.
     env: {
       HOST: "127.0.0.1",
       PORT: String(PORT),
