@@ -23,6 +23,7 @@ import {
   type PlanItem,
   type PlanRevision,
   type PlanView,
+  type Source,
   type TripBrief,
   type TripDates,
   type TripShape,
@@ -83,6 +84,8 @@ export function revision(
   days: PlanDay[],
   gaps: PlanGap[] = [],
   coverage: UncheckedConstraint[] = [],
+  /** pl-33's editorial context about the route. Rendered since pl-36. */
+  reading: Source[] = [],
 ): PlanRevision {
   return {
     id: "rev-1",
@@ -94,7 +97,7 @@ export function revision(
     days,
     gaps,
     coverage,
-    reading: [],
+    reading,
   };
 }
 

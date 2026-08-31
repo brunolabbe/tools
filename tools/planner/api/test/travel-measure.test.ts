@@ -331,8 +331,11 @@ describe("what a measured leg cites", () => {
     const result = await measure(
       [here, there],
       osm({
-        "rimouski québec, canada": { latitude: 48.45, longitude: -68.52 },
-        "percé québec, canada": { latitude: 48.52, longitude: -64.21 },
+        [placeIdentity(place("Rimouski", "Québec, Canada"))]: {
+          latitude: 48.45,
+          longitude: -68.52,
+        },
+        [placeIdentity(place("Percé", "Québec, Canada"))]: { latitude: 48.52, longitude: -64.21 },
       }),
     );
 
@@ -367,7 +370,12 @@ describe("what a measured leg cites", () => {
 
     const result = await measure(
       [here, there],
-      osm({ "causapscal québec, canada": { latitude: 48.36, longitude: -67.23 } }),
+      osm({
+        [placeIdentity(place("Causapscal", "Québec, Canada"))]: {
+          latitude: 48.36,
+          longitude: -67.23,
+        },
+      }),
     );
 
     const sources = legSources(result.travel.between(here, there));

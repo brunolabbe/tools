@@ -664,6 +664,63 @@ describe("travel sources", () => {
   });
 
   /**
+   * pl-33 stored `PlanRevision.reading` and nothing rendered it — the third
+   * instance of pl-35's "stored is not shown" shape, folded into pl-36 rather
+   * than filed, because the render mirrors `TravelSources` two functions above
+   * it and reuses the same `ProvenanceNote`.
+   *
+   * Positive first, and it is the half that proves something: it fails if
+   * `RouteReading` were deleted or never wired into `Document`, which is
+   * exactly the state this ticket found the field in.
+   */
+  test("shows what has been written about the route, without endorsing it", async () => {
+    const activity = candidate({ title: "A long walk" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [activity],
+        revisions: [
+          revision(
+            [day(0, [item({ candidateId: activity.id })])],
+            [],
+            [],
+            [
+              {
+                url: "https://en.wikivoyage.org/wiki/Gasp%C3%A9sie",
+                title: "Gaspésie — Wikivoyage",
+                fetchedAt: "2027-01-01T00:00:00.000Z",
+              },
+            ],
+          ),
+        ],
+      }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/background on this route/i)).toBeDefined();
+    expect(screen.getAllByRole("link", { name: "Gaspésie — Wikivoyage" })).toHaveLength(1);
+    // pl-29 Build step 6's copy rule, which matters more for this citation than
+    // for any other: editorial coverage of a region is the one a reader is
+    // likeliest to read as "the tool recommends going here".
+    expect(screen.getAllByText(/is not recommending it/i).length).toBeGreaterThan(0);
+  });
+
+  test("shows nothing about the route when nothing was read about it", async () => {
+    const activity = candidate({ title: "A long walk" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [activity],
+        revisions: [revision([day(0, [item({ candidateId: activity.id })])])],
+      }),
+    );
+
+    show();
+
+    await screen.findByText("A long walk");
+    expect(screen.queryByText(/background on this route/i)).toBeNull();
+  });
+
+  /**
    * pl-36. The two OSM services this tool talks to cite the **same** URL —
    * `openstreetmap.org/copyright` is the attribution page the ODbL asks for,
    * and deliberately not the deployment's own endpoint — and are told apart

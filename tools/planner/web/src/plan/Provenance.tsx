@@ -16,17 +16,38 @@
  * configured must still say so on every line.
  *
  * **`grounded` no longer means "worth doing"**, and the copy below is worded
- * for that (pl-29, `00-ANALYSIS.md` §5's 2026-08-22 amendment). Discovery
- * turns a database row into a `Candidate` a specialist judged worth writing
- * about, and that candidate's `provenance` is `grounded` — it genuinely was
- * read somewhere — but nobody vouched for it the way a measured distance is
- * "yes, this road is this long". `Provenance` gains no member for the
- * difference on purpose (see the ticket's Build step 6): the type cannot
- * distinguish a routing engine's answer from an OSM node nobody reviewed, so
- * the one sentence every `grounded` line renders has to be true of both. It
- * used to read "was read from", which a badge reading "Checked" sits over —
- * and a checkmark next to a nobody-vouched-for POI is the exact
- * "recommended" a reader is not supposed to take from it.
+ * for that (pl-29, `00-ANALYSIS.md` §5's 2026-08-22 amendment). A measured
+ * distance is "yes, this road is this long"; an OSM node is "a stranger tagged
+ * this and nobody reviewed it". `Provenance` gains no member for the difference
+ * on purpose (see pl-29's Build step 6): the type cannot tell a routing engine's
+ * answer from a database row, so the one sentence every `grounded` line renders
+ * has to be true of both. It used to read "was read from", which a badge reading
+ * "Checked" sits over — and a checkmark next to a nobody-vouched-for POI is the
+ * exact "recommended" a reader is not supposed to take from it.
+ *
+ * ## What this comment used to claim, and why that is worth recording
+ *
+ * It said, in the present tense, that "discovery turns a database row into a
+ * `Candidate` a specialist judged worth writing about, and that candidate's
+ * `provenance` is `grounded`". **No code path has ever made that true**, and
+ * under pl-36 none ever will: a candidate a specialist wrote from a `Find` is
+ * `model-asserted`, permanently, for the reasons in pl-36's Log. The sentence
+ * was not describing this file — it was describing a plumbing change one package
+ * away, in `agent`, that pl-29 did not make and no later ticket picked up.
+ *
+ * **Why it survived a review, since that is the part that will happen again.**
+ * It arrived inside a change that was entirely correct: pl-29 really did soften
+ * this component's copy so a `grounded` line cannot read as an endorsement, and
+ * the sentence reads as the *motivation* for that softening rather than as a
+ * claim about behaviour. A reviewer checking the diff finds the copy fix present
+ * and right, and the motivating clause is prose in a doc comment — there is
+ * nothing to run and nothing to fail. A statement about a *different package*,
+ * written in the present tense, in a comment justifying a change to *this* one,
+ * is invisible to every gate this repo has: the tests cover the file the comment
+ * is in. So the tell is grammatical, not technical — **a doc comment describing
+ * what some other package does is an assertion nothing here can check**, and it
+ * should be written as the intent it is, with the ticket that would deliver it,
+ * or not written at all.
  */
 
 import type { Provenance, Source } from "@planner/contract";

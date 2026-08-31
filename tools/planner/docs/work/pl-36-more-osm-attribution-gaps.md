@@ -4,9 +4,8 @@ tool: planner
 title: Two more OSM sources built and dropped before they can be attributed
 kind: fix
 milestone: P3
-status: in-flight
+status: done
 depends_on: []
-note: finding 1 built; finding 2's provenance taxonomy is an open decision
 ---
 
 # pl-36 — Two more OSM sources built and dropped before they can be attributed
@@ -117,6 +116,54 @@ two members already cover it the way pl-27 covers a measured leg.
   distance.
 - `npm run check` and `npm test -- --project planner` pass.
 
+## Review
+
+### Gate 1 — 2026-08-30, at `cc970dd`
+
+**Gate: FAIL** — on exactly one acceptance line, the taxonomy criterion, which
+the branch had deliberately left open and marked `status: in-flight` rather than
+claiming. The gate said so explicitly and confirmed the bookkeeping was right.
+
+**This record is the coordinator's relay, not the reviewer's own text.** The
+reviewer's report did not reach this session verbatim, so what follows is
+transcribed from the dispatching agent's summary and is marked as such rather
+than presented as a quotation. Whoever holds the original should replace this
+subsection with it.
+
+| Done when                                                                     | Proof                                                                             |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| A geocoded place's `Source` survives from `locate` to somewhere a reader sees | proven — confirmed by the gate                                                    |
+| A decision recorded for a discovery-derived candidate's provenance            | **unproven** — the one FAIL. Left open on purpose and answered in the round below |
+| Whatever is rendered follows pl-29 Build step 6's copy rule                   | proven — confirmed by the gate                                                    |
+| `npm run check` and `npm test -- --project planner` pass                      | verified — the gate re-ran them                                                   |
+
+- **high** · the taxonomy acceptance line is unanswered. Resolved in round 2:
+  `model-asserted`, permanently, with the argument in the Log.
+- **low** · `travel-measure.test.ts:334,335,370` carry literal NUL bytes, which
+  make plain `grep` return nothing on the file. Correct as `placeIdentity()`
+  output — the gate mutation-tested the fixtures twice and they are
+  load-bearing, not tautological — but rewritten as `placeIdentity(place(...))`
+  calls in round 2. **A relay that these were committed corruption was withdrawn
+  by the coordinator after checking with `od -c`; they were not.**
+- **low** · the Log cited `grep -rn reading tools/planner/web/src` as returning
+  three comments; it returns seven. Conclusion unaffected. Passage rewritten in
+  round 2 rather than the number patched, since rendering the field made it
+  stale.
+- **low** · `citations()`'s `.slice(0, MAX_SOURCES)` has no test above two
+  sources. Rated low by the gate because the code's own comment says why it
+  cannot bite. Left unpinned, with the reasoning recorded under
+  "Not done, and could have been".
+- **verified by the gate, end to end against the base** · the self-certification
+  closure — a model can no longer state its own `provenance`.
+- **findings** · 1 high (now closed), 3 low.
+
+### Gate 2 — pending
+
+The `PlanRevision.reading` render folded in on round 2 is code no gate has seen.
+A narrow gate scoped to that fold-in alone — not a re-review of the branch — is
+expected after the pull request opens, and its record belongs here as a third
+subsection rather than as an edit to either above.
+
 ## Log
 
 **2026-08-29 — filed per gate D's trace, during pl-29's review.** Not folded
@@ -195,7 +242,7 @@ credited one of the two backends it used and dropped the other silently.
 does not fail a test. Both now key on URL and title. Harmless before this ticket,
 because every measured leg carried the router and nothing else.
 
-### Finding 2 — the plumbing is built, the taxonomy is an open decision
+### Finding 2 — the plumbing is built; the taxonomy is answered below
 
 **Provenance is no longer the model's to state.** `candidateProposalSchema` in
 `agent/src/ask.ts` now omits `provenance` alongside `id` and `specialist`, and
@@ -211,8 +258,9 @@ invention as checked and hang a clickable link off a URL nobody had ever
 fetched. The one field whose job is to say whether the model is to be believed
 was a field the model filled in. This is the same rule this repo already wrote
 down for `id` and `specialist` and it is required under **every** answer to the
-taxonomy question below, including "stays `model-asserted` forever" — which is
-why it was built before the decision rather than after.
+taxonomy question below, including the "stays `model-asserted` forever" that was
+in fact chosen — which is why it was built before the decision rather than
+after.
 
 **Folded in: `CostEstimate.provenance` is overwritten in the same `accept()`.**
 One field over, the same self-certification, and the version that would have
@@ -222,41 +270,98 @@ omitted because `costEstimateSchema` is `.refine`d and a refined schema has no
 `.omit`; splitting it to omit the field would be a contract edit, which belongs
 with the taxonomy decision and not smuggled in beside it.
 
-**What is deliberately not built: which sources a candidate written off a `Find`
-should carry.** The ticket asked for a decision or a reasoned refusal, and this
-is a subagent's report rather than a decision — the options, their costs and a
-recommendation went to the dispatching agent as an open decision. Two facts
-found while sizing them belong here whatever is chosen:
+### The decision: a discovery-derived candidate stays `model-asserted`
 
-- **`Provenance.tsx`'s own doc comment already asserts the answer**, and no code
-  path makes it true: "Discovery turns a database row into a `Candidate` a
-  specialist judged worth writing about, and that candidate's `provenance` is
-  `grounded`". pl-29 shipped the copy fix that makes `grounded` safe to say —
-  "reading it is not recommending it" — for behaviour that does not exist. So
-  the taxonomy may be less open than this ticket's own Why section supposed;
-  what is genuinely open is whether that sentence was a decision or a
-  description of intent.
-- **The hard half is matching, not naming.** Under every option that attributes,
-  something has to know which find a proposal came from, and nothing carries
-  that: the prompt gives the model a find's name in quotes and takes back free
-  prose, so the only code-side join available today is on the place name.
-  Attaching an OSM citation to a candidate that is _not_ the find is worse than
-  attaching none, so that mechanism is a decision in its own right and was not
-  guessed at.
+**Permanently, and this is the reasoned refusal Done-when's second bullet asked
+for as its alternative.** Put as options with costs to the dispatching agent
+rather than settled here; the user chose this one. The recommendation that went
+up was the other one — `grounded`, matching what `Provenance.tsx` already
+claimed — and **the measurement the gate brought is what changed the answer**,
+so it is recorded here rather than the verdict alone.
 
-`accept()` is now the single place any of those answers lands, which is what
-this half of the ticket bought.
+**There is no data. Not a small sample — none.** `finds` never reaches
+`runFanOut` in any test in this repo; all six checked-in candidate fixtures
+carry only `{brief, candidates}`; nothing has ever run a `Find` through a
+specialist prompt and captured what name came back. So the join every
+attributing option depends on — deciding which find a proposal was written from
+— would be built against **zero** observations of what a specialist actually
+echoes. The prompt hands a model a find's name in quotes and takes back free
+prose, so the only code-side join available is on the place name, and its
+false-match rate is not estimated low, it is unmeasured. **Attributing
+OpenStreetMap to the wrong candidate is worse than attributing nothing**: it is
+a citation that says "we read this about this thing" where the second "this" is
+a different place. Attributing nothing merely says the assistant is talking,
+which is true.
+
+That is also pl-29 Build step 6's own precedent one layer out, and it now reads
+the same way at both layers: `Provenance` gains nothing from a third member,
+because the distinction that matters — a routing engine's answer versus a
+database row nobody reviewed — belongs in the copy, and the copy already says
+it.
+
+**What would have to exist before this is worth reopening**, so the next agent
+does not re-derive it: **a labelled corpus of real specialist replies generated
+with actual `finds` in the prompt** — enough runs, against a real model, with
+the finds recorded beside the candidates that came back, that the name-match
+join has a measured false-match rate rather than an assumed one. Until that
+exists there is nothing to evaluate a join against, and a join nobody can score
+is the thing this decision refuses. A `Find`'s own `sources` remain correct,
+populated and unused by the fan-out; nothing about them was deleted.
+
+**One consequence, fixed in this commit.** `Provenance.tsx`'s header asserted in
+the present tense that a discovery-derived candidate's `provenance` _is_
+`grounded`. No code path ever made that true and under this decision none will,
+so it was affirmatively wrong and is now corrected — with a note in the file
+about **why it survived review**, which is the part that will recur: it was a
+present-tense claim about a _different package_ (`agent`), inside a doc comment
+justifying a change to _this_ one, where it reads as motivation rather than as
+behaviour. Nothing in this repo can fail on that. The tell is grammatical, not
+technical.
+
+`accept()` in `agent/src/orchestrator.ts` is the single place that answer lands,
+which is what this half of the ticket bought.
+
+### Folded in on the second round — `PlanRevision.reading` now renders
+
+The first round left this as "not done, and could have been": pl-33 plumbed
+`reading` end to end — `runs/discovery.ts` to `runs/orchestrator.ts:393` to the
+`reading_json` column in `db/plans.ts:391` to `contract/src/plan.ts:300`, capped
+by `MAX_REVISION_READING` — and then rendered it nowhere, so a Wikivoyage entry
+the tool fetched and stored was visible only through `sqlite3`. A **third**
+instance of pl-35's "stored is not shown" shape, two functions above
+`TravelSources` in a file this branch already had open. The user asked for it
+here rather than as its own ticket.
+
+`RouteReading` in `web/src/plan/PlanView.tsx` mirrors `TravelSources` and reuses
+`ProvenanceNote` rather than adding a second renderer, so the non-endorsing
+sentence stays the one sentence this file has for a grounded fact.
+
+**The copy was the only open part, and it is `what="Background on this route"`**
+— proposed rather than escalated. It takes `TravelSources`'s cadence (a noun
+phrase naming the claim, as against the shipped per-item `"this"` and
+`"the cost"`), so the rendered sentence is "Background on this route is
+something we read at a source — reading it is not recommending it". That
+trailing clause earns more here than anywhere else it is used: editorial
+coverage of a whole region is the citation a reader is likeliest to read as an
+endorsement of the trip, and §5's amendment is explicit that "OSM says a
+viewpoint exists; it does not say anyone should go". Rejected: anything with
+"recommended", "highlights" or "worth reading" in it, all of which are the
+endorsement pl-29 Build step 6 removed.
+
+**Sizing, since the estimate was flagged as an estimate.** It came in at the
+13-line component plus a test, as the coordinator sized it, and **one mechanical
+extra that was not in the estimate**: `revision()` in
+`web/test/plan-fixtures.ts` hard-coded `reading: []`, so it needed a fourth
+optional parameter and a `type Source` import before any test could set the
+field. Two lines and an import — named rather than absorbed, because the whole
+point of flagging an estimate is that the difference gets reported.
+
+Deduplication is not repeated in the view: `runs/discovery.ts` already dedupes
+by URL as it builds the list, and a second answer to a settled question is how
+two dedup rules drift apart.
 
 ### Not done, and could have been
 
-- **`PlanRevision.reading` is stored and never rendered** — pl-33's Wikivoyage
-  sources, a third instance of pl-35's "stored is not shown" shape, in the file
-  this branch already had open two functions above `TravelSources`. Not folded
-  in: it is not specified anywhere, it needs its own copy decision ("about this
-  route" is not "we checked this"), and pl-36's scope is the two gaps traced
-  above. Worth a ticket; naming it here so the next agent does not have to find
-  it again. Confirmed by `grep -rn reading tools/planner/web/src`, which returns
-  only `App.tsx`'s unrelated `useState` and three comments.
 - **The corridor-endpoint `locate` in
   `tools/planner/api/src/runs/discovery.ts:484-502` still drops its
   `Source`**, and that is argued rather than overlooked. Nothing user-visible is
@@ -264,22 +369,34 @@ this half of the ticket bought.
   `Find` list, and each find carries its own OSM citation from Overpass. Citing
   the geocoder for a line nobody is shown would be attribution theatre. If a
   future ticket renders the corridor itself, this stops being true.
+- **`citations()`'s `.slice(0, MAX_SOURCES)` is left unpinned, deliberately.**
+  The gate rated it low and left the call here. It is unreachable through the
+  only caller: `measured()` is handed exactly one routing source and two ends,
+  so three, against a ceiling of five. Pinning it would mean exporting a private
+  helper from `runs/travel.ts` purely to assert a branch no caller can enter —
+  widening the module's surface to test unreachable code, which is a worse trade
+  than the guard costs. It stays because it is not decoration: a `Provenance`
+  over `MAX_SOURCES` is one `provenanceSchema` refuses on the way to the
+  database, and that loses the whole revision rather than one citation. The day
+  a seam returns more sources, that seam's own change makes this reachable and
+  the test belongs with it.
 
 ### Gates
 
 ```
 $ npm run build                            # 0
 $ npx vitest run tools/planner/api/test/travel-measure.test.ts   # 9 passed
-$ npx vitest run tools/planner/web/test/plan-view.test.tsx       # 22 passed
+$ npx vitest run tools/planner/web/test/plan-view.test.tsx       # 24 passed
 $ npx vitest run tools/planner/agent/test/fan-out.test.ts        # 18 passed
-$ npm test -- --project planner            # 53 files, 821 tests, all passing
+$ npm test -- --project planner            # 53 files, 823 tests, all passing
 $ npm run check                            # 0
+$ node scripts/citations.mjs <this file>   # every citation resolves
 ```
 
 Baseline for the planner project at `80bfc64` is **816**, measured by stashing
 this branch's diff and re-running rather than read back from a note; this branch
-adds five tests — three in `travel-measure`, one in `plan-view`, one in
-`fan-out`.
+adds seven tests — three in `travel-measure`, three in `plan-view` (one of them
+the `reading` render's negative half), one in `fan-out`.
 
 **Every new assertion was made to fail first**, because a test that only ever
 passed proves the fixture and not the code:
@@ -299,9 +416,41 @@ undefined to deeply equal { kind: 'model-asserted' }` — undefined, because the
   schema now strips what the model sent. Dropping the `cost` line instead:
   failed with `expected { kind: 'grounded', …(1) } to deeply equal { kind:
 'model-asserted' }`, which is the model's invented citation arriving intact.
+- Unwiring `<RouteReading reading={revision.reading} />` from `Document`: the
+  `reading` render's positive test failed. Its negative half — a revision that
+  read nothing shows no such section — stayed green, which is exactly why the
+  positive one is the half that proves anything.
 
-**`status` is `in-flight`, not `done`.** Done-when's second bullet asks for a
-recorded decision about a discovery-derived candidate's provenance, and this
-session was told to bring that as options rather than settle it. A ticket
-claiming `done` over an unanswered acceptance line would be the one thing
-`npm run status` cannot afford to be wrong about.
+### Second round, after the gate
+
+The gate returned **FAIL on one line only**, the taxonomy criterion this session
+deliberately left open and marked `in-flight` rather than claiming. That is now
+answered above and `status` is `done`.
+
+- **`travel-measure.test.ts` no longer contains a literal NUL.** Its three
+  gazetteer keys were `placeIdentity()` output written out by hand, which is
+  correct — `KEY_SEPARATOR` at `tools/planner/api/src/grounding/place-key.ts:79`
+  is a NUL (`U+0000`), and `cache.ts` and `valhalla.ts` build keys the same way — and it
+  was still worth changing: a literal NUL makes the file binary to `grep`, which
+  then returns nothing at all rather than no match, and the gate hit that itself
+  while resolving line numbers. They are now
+  `[placeIdentity(place("Rimouski", "Québec, Canada"))]` and so on, matching the
+  `two places that share a name` block above them. **This was briefly relayed to
+  me as committed file corruption; it was not, and I did not go looking for
+  more** — the coordinator withdrew that reading after checking with `od -c`, and
+  a scan of the three files this branch touches finds no NUL byte outside string
+  escapes.
+- **A miscount in this Log, fixed by rewriting the passage rather than the
+  number.** It claimed `grep -rn reading tools/planner/web/src` returns
+  "`App.tsx`'s unrelated `useState` and three comments"; it returned seven
+  matches, not four. The conclusion it supported was right — nothing rendered
+  `PlanRevision.reading` — but the passage is gone now that the field renders,
+  because a count that is about to be stale is worse than no count.
+
+**A note for whoever edits source here next, because it cost real time twice.**
+The Edit tool writes a **literal NUL byte** when the replacement text asks for a
+NUL escape, silently turning a `.ts` file binary — after which plain `grep -n`
+returns nothing for patterns that are plainly present, which reads as a failed
+edit rather than as a damaged file. Caught with `od -c`, repaired with `perl -i
+-pe 's/\x00/.../'`. Check with `perl -ne 'print if /\x00/'`, not with `grep`,
+which is the tool the problem disables.
