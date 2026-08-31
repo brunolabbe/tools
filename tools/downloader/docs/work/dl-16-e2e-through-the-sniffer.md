@@ -283,6 +283,96 @@ reads close to merge time. Gate 2 did not clear it and did not claim to. The
 other unverifiable leg is unchanged too: **the job has never run on a GitHub
 runner**, and PR #122's own run is the first.
 
+### Gate 3 — 2026-08-31, PASS (reviewed at `e8925ce`)
+
+Defect hunt run by the reviewer at `medium`, over `origin/main...e8925ce`.
+
+Reviewed tip `e8925ce` confirmed via `git log --oneline -1` after
+`git fetch origin && git checkout --detach e8925ce` — a merge commit bringing
+`origin/main` into the branch. The branch's own work is `461e9dd` then `eb0abec`
+then `2878890`. The range excludes the unrelated repo-5 content that reached
+`origin/main` independently and is only being caught up here: `git diff --stat
+eb0abec e8925ce` shows `docs/work/repo-5-*.md`,
+`packages/core/test/host-resolution.test.ts` and two `vite.config.ts` files, none
+of which appear in `origin/main...e8925ce`.
+
+**What this gate re-derives vs. inherits.** The ticket already carries two PASS
+gates. Their reasoning was not re-run from scratch, but neither was taken on
+faith — the load-bearing claims were independently reproduced from a clean
+worktree rather than read back out of the Log:
+
+- `npm run e2e:downloader`: 3 passed (8.4s); `download.spec.ts` untouched by this diff.
+- `npm run e2e:downloader:sniffer`: 1 passed (11.8s).
+- The false green reproduced: `ENABLE_BROWSER_RESOLVER=false npm run
+e2e:downloader:sniffer` still passes.
+- The genuine red reproduced: editing `ENABLE_BROWSER_RESOLVER` to `"false"` at
+  `playwright.sniffer.config.ts:71` fails at `mse-page.spec.ts:89` with
+  `expected 5, Received 0`. File restored, `git status --porcelain` clean.
+- The new configs are typechecked, not merely present: a planted type error in
+  `playwright.sniffer.config.ts` makes `npm run typecheck` fail at
+  `tools/downloader/e2e/tsconfig.json`. Reverted.
+- `npm run check` green. `npm test`: 1765 passed (115 files) — the +2 over the
+  Log's 1763 is repo-5's tests merged in from `origin/main`, not this branch's work.
+- Every hardcoded e2e port grepped: 8097 sniffer, 8098 planner, 8099 direct. No
+  collision, independently confirming gate 2's audit.
+- `oxlint` on the four touched TS files: clean.
+
+**New evidence beyond both prior gates: the CI leg has now actually run on this
+exact sha.** Both earlier gates disclosed "the job has never run on a GitHub
+runner" as an open risk. That is no longer true. Run `33445623826`, at headSha
+`e8925ce`, shows `e2e (direct)` SUCCESS (`3 passed (8.1s)`), `e2e (sniffer)`
+SUCCESS (`1 passed (12.7s)`, naming `mse-page.spec.ts:63`) and `docker` SUCCESS.
+This upgrades several rows below from `unproven (gate)` to `verified` — not
+because the local gates changed, but because the run log for the reviewed sha was
+read rather than the gate being reported as run without checking.
+
+| Done when                                                                                                                                                        | Proof                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| MSE-page journey passes in a real browser, `ENABLE_YTDLP_RESOLVER=false`, direct tier unable to help                                                             | verified — `e2e/sniffer/mse-page.spec.ts:63`, tiers at `playwright.sniffer.config.ts:71-76`; reran locally (1 passed) and confirmed on Actions run 33445623826, job `e2e (sniffer)`, at this exact sha, SUCCESS                                        |
+| Spec fails if the sniffer is disabled — via the config value, not an env var                                                                                     | verified — reproduced both ways: env var gives a false green (1 passed); editing the `tiers` literal gives a genuine red at `mse-page.spec.ts:89`, `expected 5, Received 0`                                                                            |
+| `npm run e2e:downloader` unchanged in scope and runtime                                                                                                          | verified — `download.spec.ts` untouched by the diff; reran, 3 passed (8.4s here vs 6.1s in the Log — different host, same count, same test names)                                                                                                      |
+| CI runs both suites on a downloader change, named separately                                                                                                     | verified — `downloader.yml` matrix (`e2e (direct)`, `e2e (sniffer)`), and the actual PR #122 run at `e8925ce` shows both checks by those exact names, both SUCCESS; path filters checked against every touched file via the `paths:` list, all covered |
+| "The e2e suite drives only the direct resolver" stops being true; frontmatter to `done`; container tier stays smoke-tested-only and that gap is said, not hidden | proven — `tools/downloader/CLAUDE.md` and dl-2's Log rewritten accordingly; `npm run status -- --show dl-16` reports `status: done`                                                                                                                    |
+
+**Unverifiable, disclosed, not attempted.** Whether any branch-protection ruleset
+on `main` requires the check name `e2e`, which this branch renames to
+`e2e (direct)` / `e2e (sniffer)`. `gh api` is denied in this environment and was
+not attempted, nor was another spelling sought. The safety claim rests on the
+ruleset read recorded in `ci.yml` (2026-08-23: no `required_status_checks` rule,
+no classic protection). That comment says what the ticket says it says, but it is
+now 8 days old and cannot be refreshed from here. Same status as both prior
+gates; not resolved by this one either.
+
+**Defect hunt.** Walked the new spec, the fixture player, both Playwright configs,
+the CI matrix and the two doc edits line by line. Traced the fixture player's
+event ordering (`sourceopen` listener registered before `video.src` assignment —
+no race), the `fetching` guard against double-invocation from both `sourceopen`
+and `play`, the beacon's unconditional `requests.push` ahead of any handler
+branching (so a beacon cannot shadow a failure in its own log), and the
+distinct-segment-name assertion against the fixture's re-probe behaviour. Checked
+the repo invariants plausibly reachable from this diff: no shell (the fixture
+spawns ffmpeg via an argument array, pre-existing and untouched), no new
+`AppError` or error-code surface, no new workspace dependency and so no
+Dockerfile-closure question, no contract touched, style clean. Nothing reachable
+was skipped.
+
+- **findings** · 0 returned, 0 carried, 0 dropped. No high, med or low from this
+  pass — everything either reproduced clean or matched what gates 1 and 2 already
+  fixed (both of gate 1's lows are in the reviewed diff: the beacon-based
+  `PLAYER_ERROR_PATH` replacing the blanket catch, and `afterEach` asserting
+  `playerErrors()` is empty).
+- NFR: security — n/a to new code (local-fixture-only server, no credentials, no
+  third-party egress) · performance — CI cost additive but bounded (~13s wall on a
+  second runner), a trade the ticket names · reliability ✓ — `fail-fast: false`
+  keeps one leg's failure from masking the other's; the sniffer suite ran four
+  times this session with no flake · maintainability ✓ — the `shared`/`serverEnv`/
+  `apiServer` exports keep the two configs from drifting, confirmed non-cosmetic by
+  the planted type error above.
+
+Every acceptance line proven or verified, nothing above low, zero new findings.
+One leg remains genuinely unverifiable from this environment and is carried
+forward unchanged: it needs `gh api` access close to merge time.
+
 ## Log
 
 **2026-08-30 — Built. Two config files, not two projects, and the brief's step 2
