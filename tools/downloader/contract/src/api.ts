@@ -19,7 +19,15 @@ import { z } from "zod";
 import { ERROR_CODES } from "./errors.ts";
 import type { AppErrorPayload } from "./errors.ts";
 import { CONTAINER_OPTIONS, JOB_STATUSES } from "./job.ts";
-import type { Job, JobEvent, JobOptions, JobProgress, JobResult } from "./job.ts";
+import type {
+  Job,
+  JobEvent,
+  JobListItem,
+  JobListResult,
+  JobOptions,
+  JobProgress,
+  JobResult,
+} from "./job.ts";
 import { DRM_SYSTEMS, STREAM_PROTOCOLS, SUBTITLE_FORMATS } from "./media.ts";
 import type { DrmInfo, MediaVariant, ProbeResult, RequestContext, SubtitleTrack } from "./media.ts";
 
@@ -247,7 +255,8 @@ export interface JobResponse {
 }
 
 export interface JobListResponse {
-  jobs: Job[];
+  /** `JobListItem`, not `Job`: the list does not carry `result.downloadUrl`. */
+  jobs: JobListItem[];
   total: number;
 }
 
@@ -262,8 +271,21 @@ export const probeResponseSchema = z.object({
 
 export const jobResponseSchema = z.object({ job: jobSchema }) satisfies z.ZodType<JobResponse>;
 
+/**
+ * Derived with `.omit`/`.extend` rather than written out, so a field added to
+ * `jobSchema` or `jobResultSchema` reaches the list shape automatically and only
+ * `downloadUrl` is ever the special case.
+ */
+export const jobListResultSchema = jobResultSchema.omit({
+  downloadUrl: true,
+}) satisfies z.ZodType<JobListResult>;
+
+export const jobListItemSchema = jobSchema.extend({
+  result: jobListResultSchema.nullable(),
+}) satisfies z.ZodType<JobListItem>;
+
 export const jobListResponseSchema = z.object({
-  jobs: z.array(jobSchema),
+  jobs: z.array(jobListItemSchema),
   total: z.number(),
 }) satisfies z.ZodType<JobListResponse>;
 

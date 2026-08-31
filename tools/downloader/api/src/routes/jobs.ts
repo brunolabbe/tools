@@ -9,7 +9,7 @@
 
 import { randomUUID } from "node:crypto";
 import { AppError, createJobRequestSchema, ROUTES } from "@downloader/contract";
-import type { Job, JobListResponse, JobResponse } from "@downloader/contract";
+import type { Job, JobListItem, JobListResponse, JobResponse } from "@downloader/contract";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
 import { createRateLimitHook } from "../rate-limit.ts";
@@ -69,12 +69,15 @@ export function registerJobRoutes(app: FastifyInstance, context: AppContext): vo
     return await reply.code(201).send(body);
   });
 
+  // Unauthenticated and unfiltered by caller, so it is stripped — see
+  // `toListItem`. `GET /api/jobs/:id` below is not, because reaching it costs
+  // an attacker a job id they do not have.
   app.get(ROUTES.jobs, async (request, reply) => {
     const query = request.query as Record<string, unknown>;
     const limit = intParam(query["limit"], 50, MAX_LIST_LIMIT) || 50;
     const offset = intParam(query["offset"], 0, Number.MAX_SAFE_INTEGER);
     const { jobs, total } = context.store.list({ limit, offset });
-    const body: JobListResponse = { jobs, total };
+    const body: JobListResponse = { jobs: jobs.map(toListItem), total };
     return await reply.send(body);
   });
 
@@ -113,6 +116,21 @@ export function registerJobRoutes(app: FastifyInstance, context: AppContext): vo
     const body: JobResponse = { job: context.store.get(id) };
     return await reply.send(body);
   });
+}
+
+/**
+ * Drops the capability from a job on its way into a list.
+ *
+ * The result is spelled out field by field rather than spread with
+ * `downloadUrl` destructured away, and that is the point: a field added to
+ * `JobResult` later will fail to compile here until someone decides whether the
+ * list may carry it. A rest spread would have forwarded it silently, which for
+ * a redaction boundary is the wrong default.
+ */
+function toListItem(job: Job): JobListItem {
+  if (job.result === null) return { ...job, result: null };
+  const { filename, sizeBytes, container, durationSec, expiresAt } = job.result;
+  return { ...job, result: { filename, sizeBytes, container, durationSec, expiresAt } };
 }
 
 function isTerminal(job: Job): boolean {

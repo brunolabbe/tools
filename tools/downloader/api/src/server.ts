@@ -30,7 +30,7 @@ import { ConcurrencyGate, RateLimiter } from "@webtools/core/rate-limit";
 import { InProcessJobQueue } from "./jobs/queue.ts";
 import type { AppLogger } from "./logger.ts";
 import { createLogger } from "./logger.ts";
-import { registerRequestLogging, requestIdFrom } from "./request-log.ts";
+import { redactLoggedUrl, registerRequestLogging, requestIdFrom } from "./request-log.ts";
 import { buildRegistry } from "./resolvers.ts";
 import { registerEventRoutes } from "./routes/events.ts";
 import { registerFileRoutes } from "./routes/files.ts";
@@ -317,6 +317,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
         perMinute: config.rateLimitJobsPerMinute,
         now: () => now().getTime(),
       }),
+      files: new RateLimiter({
+        perMinute: config.rateLimitFilesPerMinute,
+        now: () => now().getTime(),
+      }),
     },
     probeGate: new ConcurrencyGate(config.maxConcurrentProbes),
     now,
@@ -414,7 +418,9 @@ function registerErrorHandling(server: FastifyInstance, context: AppContext): vo
     // log useless for spotting real problems.
     const fields = {
       method: request.method,
-      url: request.url,
+      // The file route's token is a credential in the path, and this handler
+      // fires on its FILE_EXPIRED, JOB_NOT_FOUND and RATE_LIMITED alike.
+      url: redactLoggedUrl(request.url),
       code: appError.code,
       status,
       details: appError.details,
