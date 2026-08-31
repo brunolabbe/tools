@@ -43,15 +43,26 @@ npm run dev:downloader:api      # just the API
 npm run dev:downloader:web      # just the UI
 npm test -- --project downloader
 npm run e2e:downloader          # Playwright: whole stack in a real browser
+npm run e2e:downloader:sniffer  # the same, through the browser sniffer — slower
 npm run e2e:install             # once — fetches the browser the e2e run needs
 
 docker compose up --build       # the service on :8080, UI included
 ```
 
-`npm run e2e:downloader` builds the UI itself before starting the API, because
-the bundle bakes its transport in at build time — testing a stale `dist` is
-testing the mock. The suite runs the direct resolver only and talks to a local
-fixture origin it generates with ffmpeg; it never touches a third-party site.
+Both e2e scripts build the UI themselves before starting the API, because the
+bundle bakes its transport in at build time — testing a stale `dist` is testing
+the mock. Both talk to a local fixture origin they generate with ffmpeg and
+never touch a third-party site.
+
+**They are two configs, not two projects, and the split is by cost.**
+`e2e:downloader` runs the direct resolver only: that is the suite to run between
+edits. `e2e:downloader:sniffer` (dl-16) is the one journey the other cannot
+prove — an MSE page whose `<video>` carries a `blob:` URL, found at the network
+layer by a Chromium the API launches for itself — and it is slow, because a
+sniffer probe waits for network quiet. A second Playwright _project_ would not
+have separated them: `webServer` is config-level and Playwright starts every
+entry whatever `--project` selects, so the fast run would boot the sniffer's
+server too. CI runs both, on separate runners, named separately.
 
 `dev:downloader` runs the two through `concurrently`. It cannot be
 `npm run dev --workspaces`: npm runs workspace scripts **serially**, so the
