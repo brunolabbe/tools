@@ -42,10 +42,15 @@
  * neither. This scan is the one that fails for a tool it has never seen.
  *
  * It follows `spawn-safety`'s bar in shape: read the text, match plainly, name
- * the file and what was missing. It is a scan, not a parser — a config that
- * computed its host through a helper this cannot see would fail here, and the
- * answer to that is to spell the resolution out in the config, not to teach this
- * file to evaluate TypeScript.
+ * the file and what was missing. So what it checks is that the resolution is
+ * *present and spelled right*, never that it is *used*. Measured: change
+ * `host: HOST` to `host: "127.0.0.1"` and leave the `const` sitting unused above
+ * it, and both tests here pass — while pl-32's suite fails that same tree
+ * immediately, `expected '127.0.0.1' to be '0.0.0.0'`. That is the division of
+ * labour rather than a hole to plug. The per-tool tests evaluate the config and
+ * own what it resolves to; this owns whether a tool has the resolution at all,
+ * which is the half that goes missing when a tool nobody wrote a test for
+ * arrives.
  *
  * Nothing below throws while the module loads. A tree this could not read has
  * found something, and it deserves a named failing test rather than a collection

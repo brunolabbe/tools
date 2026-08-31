@@ -101,6 +101,48 @@ Traps:
 - If not lifted: the reason is written where the next person will meet it, which
   is a comment in both configs pointing at this ticket — not this file alone.
 
+## Gates
+
+### Gate 1 — 2026-08-31 · **PASS**
+
+Reviewed at `2b06404`. The gate reproduced the mutation sweep independently
+rather than reading it off the Log — the fixture tool, the vacuity guard and the
+`strictPort` flip — and got the same messages, including
+`expected 1 to be greater than or equal to 2`. Every citation in this file
+resolved. It confirmed off `release-please-config.json` that `chore` and `test`
+both carry `"hidden": true`, so the three-path spread costs no changelog line and
+one pull request is correct.
+
+It confirmed the near-miss the build flagged: `HOST_READ` and `HOST_FALLBACK` use
+`(?:process\.)?env\[…\]`, which accepts both spellings, and a regex written for
+`process.env` alone would have passed the API half in silence — the API configs
+take `env` as a parameter.
+
+**Two low findings, one taken.**
+
+1. **Taken.** The disclosed text-matching boundary was documented with a
+   contrived example (a host computed through a helper the scan cannot see). The
+   gate found a mundane one that needs no helper: change `host: HOST` to
+   `host: "127.0.0.1"` in a web config and leave the `const` sitting unused above
+   it, and this scan passes. Reproduced here before writing it up — the scan went
+   green, and `tools/planner/web/test/vite-config.test.ts` failed the same tree
+   on **two** assertions, `expected '127.0.0.1' to be '0.0.0.0'` and
+   `expected '127.0.0.1' to be false`. The docblock in
+   `packages/core/test/host-resolution.test.ts` now carries that example instead,
+   and states the boundary as what it is: the scan checks the resolution is
+   present and spelled right, never that it is wired into `server.host`. That is
+   the division of labour with the per-tool tests, not a hole — but it had to be
+   stated in the shape someone will actually hit.
+2. **Not taken, and nothing to fix.** The `two-origin-tls.test.ts` failure
+   reported from the first `--project downloader` run did not reproduce at either
+   commit across several run shapes. It is a pre-existing flake risk under load —
+   a 60 s hook timeout in a spec that takes 4.4 s alone, on a box running four
+   agents. Recorded rather than filed, since nothing here caused it and there is
+   no reproduction to hand a ticket.
+
+The docblock edit for finding 1 is the only change after `2b06404`; the diff is
+otherwise the tree the gate read.
+
 ## Log
 
 - Filed 2026-08-23 out of dl-22, which fixed the downloader's blank dev-server
@@ -199,8 +241,9 @@ tool could exist; it is now an assertion that fails. Where a trap cannot become 
 test, it should shrink to the fact that survives — which is what the rewritten
 `depends_on` trap is, one narrow rule left where a paragraph used to be.
 
-**What was left out.** The scan reads text; it does not evaluate a config, so a
-tool that resolved its host through a helper passes the read check and fails the
-fallback check with a confusing message. That is written into the file's docblock
-as a known boundary rather than fixed — teaching it to evaluate TypeScript is a
-parser, and the neighbouring scans deliberately are not one.
+**What was left out.** The scan reads text; it does not evaluate a config, so it
+proves the resolution is present and spelled right and never that it reaches
+`server.host`. Gate 1 supplied the concrete case and the docblock now carries it.
+That is the boundary rather than a defect — the per-tool tests evaluate the config
+and own what it resolves to — and teaching this file to evaluate TypeScript is a
+parser, which the neighbouring scans deliberately are not.
