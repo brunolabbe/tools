@@ -3,7 +3,7 @@ id: dl-31
 tool: downloader
 title: The operator's CA reaches ffmpeg and the proxy, but never the dispatcher
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-27]
 ---
@@ -107,6 +107,108 @@ verification. Two consequences, and both are the reason `depends_on` names it:
 5. `npm run check` and `npm test -- --project downloader` pass.
 
 ## Log
+
+- **2026-08-31** — Built. Branch `dl-31-egress-ca-file`, off `origin/main` at
+  `1d2647b`.
+
+  **The premise was unverified and it holds.** Reproduced twice before writing
+  any fix, against a fixture origin signed by a private root:
+
+  1. `createEgressDispatcher({ guard })` — what `server.ts` built — plus
+     `createGuardedFetch`, fetching that origin: `TypeError: fetch failed`,
+     `cause.code === "DEPTH_ZERO_SELF_SIGNED_CERT"`.
+  2. A real `createApp` with the CA file set, `POST /api/probe` at the same
+     origin: **`502 UNREACHABLE`, "The site could not be reached",
+     `retryable: true`.** `two-origin-tls.test.ts` on the same tip was green at
+     the same moment, so the ffmpeg half genuinely did work with the same file.
+
+  **The symptom is worse than the Why said, and this is the part worth
+  keeping.** "The probe fails on trust" understates it: nothing unwraps the
+  rejection. `guarded-fetch.ts`'s `unwrapCause` re-throws only an `AppError`, so
+  a refused chain surfaces as a bare `TypeError` and is mapped to a _transport_
+  code. The operator is told their CDN is unreachable, on a **retryable** code,
+  which is the one diagnosis that will never lead them to a trust setting.
+
+  **One route the ticket did not consider, measured rather than assumed.**
+  `NODE_EXTRA_CA_CERTS` _does_ reach the undici dispatcher — a child process with
+  it set fetched the fixture origin 200 where the same child without it got
+  `DEPTH_ZERO_SELF_SIGNED_CERT`. So a private-root deployment had a workaround,
+  but it is a second variable, documented nowhere here, that the operator would
+  have to know to reach for after setting the one this repo does document. It
+  does **not** rescue the interception proxy either: `originCa` is passed as an
+  explicit `ca`, and `tls.rootCertificates` is the compiled-in set, which
+  `NODE_EXTRA_CA_CERTS` is not merged into. Not a reason to leave the wiring
+  broken; a reason the failure was survivable in the field.
+
+  **Build 1: `EGRESS_CA_FILE`, with `FFMPEG_CA_FILE` as a warning alias.**
+  dl-27 is on `origin/main` (`ec1dd6b`) — confirmed by reading, not by relay:
+  `tls-interception.ts` takes the operator root and merges it as
+  `[...tls.rootCertificates, operatorCa]`. So the recommended branch applied.
+  The new name wins if both are set; the old one still works and `server.ts`
+  warns once at boot naming it. `ApiConfig.ffmpegCaFile` was renamed to
+  `egressCaFile` with it — leaving the field spelled for ffmpeg would have moved
+  the wrong name inside rather than fixing it.
+
+  **What the Build section had wrong.**
+
+  - **Step 2 would not have fixed the default deployment.** "Widen `requestTls`
+    to carry the merge" misses that `requestTls` is read **only in proxy mode**
+    — `createEgressDispatcher` returns a `ProxyAgent` there and a plain `Agent`
+    with `connect: { lookup }` otherwise. A deployment with no `PROXY_URL` is
+    the pinned branch, and it is the branch both reproductions above ran on. The
+    option is now `originTls` and is applied in _both_ modes: `requestTls` on the
+    `ProxyAgent`, `connect.ca` on the `Agent`. Had step 2 been followed
+    literally, every test in this ticket would still be red.
+  - **Step 3's premise about who reads the file.** `server.ts` did not read it;
+    `createTlsInterception` did, internally, _and only when `ffmpegTlsIntercept`
+    was on_. So dl-27's "validated at boot" was conditional, and
+    `FFMPEG_TLS_INTERCEPT=false` still discovered a typo'd path one download at
+    a time — dl-19's item 5, still open and believed closed. The read moved to
+    `operator-ca.ts`, called unconditionally from `server.ts`, and
+    `TlsInterceptionOptions.caFile` became `operatorCa` (PEM text) so there is
+    exactly one read and one merge. Two tests now pin the fatal boot, one per
+    value of `ffmpegTlsIntercept`; there were none before.
+  - `dispatcher.ts:94`'s "Unset in production, where the system trust store is
+    the right answer" is the sentence the defect was hiding behind. It is now
+    the opposite: set in production whenever the operator set the variable.
+
+  **Undici does take an array on `connect.ca`** — confirmed rather than assumed,
+  as step 2 asked. `buildConnector.BuildOptions` extends `tls.ConnectionOptions`
+  at undici 7.29.0, and a test reaches two origins with two different private
+  roots from one array, which a stack that honoured only the first or last entry
+  would fail.
+
+  **What is not measured, named as unmeasured.** Done-when 2 asks that a
+  **public** origin still verifies with the variable set. No test here touches
+  one — fixtures, not live network, and no public root's key is available to
+  sign a fixture with. The claim is split into two things that _are_ measured:
+  nothing is dropped from a multi-entry `ca` (the two-root test), and the array
+  handed over still contains the whole system store (`withSystemRoots` asserted
+  element-wise against `tls.rootCertificates`). An actual handshake against a
+  publicly-signed origin was never performed. Nor was a container built, nor any
+  real trust store consulted.
+
+  **Folded in rather than filed**, both in `.env.example` and both in the block
+  this ticket had to rewrite anyway. Its CA paragraph still said the file
+  _replaces_ the system store and that a typo'd path "is not refused at boot
+  today" — untrue since dl-27, and the second one now untrue on the
+  interception-off path too, which is this branch's doing. The paragraph above it
+  still said segment fetches "are NOT yet covered" and named dl-27 as the open
+  ticket, three commits after dl-27 merged; and `FFMPEG_TLS_INTERCEPT` was not
+  in that file at all, so the escape hatch dl-27 built specifically to keep
+  operators away from `FFMPEG_ALLOW_UNVERIFIED_TLS` was undiscoverable in the
+  one place an operator looks for settings. Both corrected here.
+
+  **Deliberately left out, so the omission is visible.** `ProxyAgent`'s
+  `proxyTls` — the hop to the operator's _own_ proxy — is untouched. An operator
+  behind a corporate middlebox plausibly has an `https://` `PROXY_URL` signed by
+  the same root, and it is a one-line change. It is out because nobody has
+  reported it, it is a different question from "which origins do we trust", and
+  there is no fixture here that would make it able to fail. `engine/src/config.ts`
+  still falls back to `env["FFMPEG_CA_FILE"]` for `tlsCaFile`; it is unreachable
+  from this service (`server.ts` always passes `tlsCaFile` explicitly on the path
+  where it matters) and the engine is a library with its own env contract, so
+  renaming it there would widen this ticket into the engine for no behaviour.
 
 - **2026-08-30** — Filed from dl-30, and the provenance matters because none of
   it is mine. **The asymmetry was found by dl-27's builder**, in the course of

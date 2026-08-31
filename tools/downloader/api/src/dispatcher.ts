@@ -83,15 +83,25 @@ export interface EgressDispatcherOptions {
   proxyUrl?: string | undefined;
   resolve?: AddressResolver;
   /**
-   * TLS options for the request made *through* the proxy — the origin end of
-   * the tunnel, not the hop to the proxy itself.
+   * Trust anchors for the **origin** end, whichever mode is in force: the
+   * pinning connector's own TLS when there is no proxy, and the request made
+   * *through* the tunnel when there is. Never the hop to the proxy itself.
    *
-   * Injected for the same reason `resolve` is: a fixture origin's certificate is
-   * in no trust store, and the alternative is `NODE_TLS_REJECT_UNAUTHORIZED=0`,
-   * which turns off the check the test exists to keep honest. Unset in
-   * production, where the system trust store is the right answer.
+   * Set in production whenever the operator set `EGRESS_CA_FILE`, and it must
+   * arrive **already merged with the system store** — `withSystemRoots` in
+   * `operator-ca.ts` is that merge. Passing `ca` at all replaces Node's store
+   * outright, so a bare operator root here fails every public origin.
+   *
+   * It is also how a test reaches a fixture origin whose certificate is in no
+   * trust store, for the same reason `resolve` is injectable: the alternative is
+   * `NODE_TLS_REJECT_UNAUTHORIZED=0`, which turns off the check the test exists
+   * to keep honest.
+   *
+   * **Both modes, and that is the point.** Until dl-31 this was proxy-only, so
+   * the default deployment — no `PROXY_URL`, hence the pinned `Agent` below —
+   * had no way to be told about an operator root at all.
    */
-  requestTls?: { ca: string } | undefined;
+  originTls?: { ca: string | string[] } | undefined;
 }
 
 export interface EgressDispatcher {
@@ -198,7 +208,11 @@ export function createEgressDispatcher(options: EgressDispatcherOptions): Egress
     // normal case rather than an attack.
     const agent = new ProxyAgent({
       uri: proxyUrl,
-      ...(options.requestTls === undefined ? {} : { requestTls: options.requestTls }),
+      // `requestTls` is the origin end of the tunnel. `proxyTls` — the hop to
+      // the proxy itself — is deliberately left alone: an operator root is a
+      // statement about the origins this service reaches, and a proxy speaking
+      // HTTPS from a private root is a separate question nobody has asked yet.
+      ...(options.originTls === undefined ? {} : { requestTls: options.originTls }),
     });
     return {
       dispatcher: agent as unknown as FetchDispatcher,
@@ -211,7 +225,14 @@ export function createEgressDispatcher(options: EgressDispatcherOptions): Egress
   // it must stay that way — `guarded-fetch.ts` follows them by hand precisely
   // so each hop can be re-checked before it is taken.
   const agent = new Agent({
-    connect: { lookup: createPinningLookup(options.guard, options.resolve ?? systemResolve) },
+    connect: {
+      lookup: createPinningLookup(options.guard, options.resolve ?? systemResolve),
+      // Spread rather than `ca: options.originTls?.ca`: an explicit `ca:
+      // undefined` is not the same as no `ca` to every option-merging layer
+      // between here and `tls.connect`, and "unset" has to stay byte-for-byte
+      // the system store.
+      ...(options.originTls === undefined ? {} : { ca: options.originTls.ca }),
+    },
   });
 
   return {

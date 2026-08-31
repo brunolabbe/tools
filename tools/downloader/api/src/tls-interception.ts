@@ -55,8 +55,8 @@ import fs from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import tls from "node:tls";
 import forge from "node-forge";
+import { withSystemRoots } from "./operator-ca.ts";
 
 /** `subjectAltName` type numbers, from RFC 5280 §4.2.1.6. */
 const SAN_DNS = 2;
@@ -75,17 +75,22 @@ const VALIDITY_YEARS = 10;
 
 export interface TlsInterceptionOptions {
   /**
-   * The operator's private root, **merged with** the system store rather than
-   * replacing it.
+   * The operator's private root as **PEM text**, merged with the system store
+   * rather than replacing it.
    *
-   * This is where `FFMPEG_CA_FILE` goes now, and the side it goes to is the
-   * change: ffmpeg's `-ca_file` replaces its store outright, so ffmpeg's bundle
-   * has to become the generated root below and nothing else. The proxy is the
-   * side that talks to real origins, so the proxy is the side that needs the
-   * operator's root **and** the public roots. Getting these two backwards fails
-   * closed on every public origin.
+   * This is where `EGRESS_CA_FILE` goes now, and the side it goes to is the
+   * change dl-27 made: ffmpeg's `-ca_file` replaces its store outright, so
+   * ffmpeg's bundle has to become the generated root below and nothing else. The
+   * proxy is the side that talks to real origins, so the proxy is the side that
+   * needs the operator's root **and** the public roots. Getting these two
+   * backwards fails closed on every public origin.
+   *
+   * Text rather than a path since dl-31: the undici dispatcher needs the same
+   * anchor and it is not created on this code path, so `server.ts` reads the
+   * file once and hands both the result. Two reads of one path is how two
+   * error behaviours grow.
    */
-  caFile?: string | undefined;
+  operatorCa?: string | undefined;
   /**
    * Off is `FFMPEG_ALLOW_UNVERIFIED_TLS`, and it now means what it says for the
    * first time: the party that checks origin certificates is this proxy, so
@@ -183,9 +188,7 @@ export async function createTlsInterception(
   await fs.writeFile(rootCaPath, rootCaPem, { encoding: "utf8", mode: 0o600 });
 
   const operatorCa =
-    options.caFile === undefined || options.caFile === ""
-      ? null
-      : await fs.readFile(options.caFile, "utf8");
+    options.operatorCa === undefined || options.operatorCa === "" ? null : options.operatorCa;
 
   const leaves = new Map<string, InterceptionLeaf>();
 
@@ -238,10 +241,10 @@ export async function createTlsInterception(
   return {
     rootCaPath,
     rootCaPem,
-    // `tls.rootCertificates` is the merge. Passing `ca` at all replaces the
-    // system store in Node exactly as `-ca_file` does in ffmpeg, so an operator
-    // root handed over on its own would fail every public origin.
-    originCa: operatorCa === null ? undefined : [...tls.rootCertificates, operatorCa],
+    // One merge, in `operator-ca.ts`, shared with the dispatcher — because
+    // "passing `ca` replaces the store" is a trap each client would otherwise
+    // have to be told about separately, and dl-31 added a second client.
+    originCa: operatorCa === null ? undefined : withSystemRoots(operatorCa),
     verifyOrigins: options.verifyOrigins !== false,
     leafFor,
     close: () => fs.rm(dir, { recursive: true, force: true }),

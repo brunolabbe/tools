@@ -338,14 +338,18 @@ export async function splitHlsClip(
  * rather than adding to it, so "trust both origins" is one file with both
  * certificates in it — never verification switched off, which is the trap dl-14,
  * dl-19 and dl-21 all carry.
+ *
+ * Both forms come back, for the same reason `FixtureCertificate` carries both:
+ * ffmpeg's `-ca_file` takes the path and Node's `ca` takes the text.
  */
 export async function createCaBundle(
   certificates: readonly FixtureCertificate[],
-): Promise<{ path: string; cleanup(): Promise<void> }> {
+): Promise<{ path: string; pem: string; cleanup(): Promise<void> }> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "downloader-tls-bundle-"));
   const bundlePath = path.join(dir, "bundle.pem");
-  await fs.writeFile(bundlePath, certificates.map((c) => c.ca.trim()).join("\n") + "\n", "utf8");
-  return { path: bundlePath, cleanup: () => fs.rm(dir, { recursive: true, force: true }) };
+  const pem = certificates.map((c) => c.ca.trim()).join("\n") + "\n";
+  await fs.writeFile(bundlePath, pem, "utf8");
+  return { path: bundlePath, pem, cleanup: () => fs.rm(dir, { recursive: true, force: true }) };
 }
 
 const CONTENT_TYPES: Record<string, string> = {

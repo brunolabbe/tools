@@ -104,7 +104,8 @@ describe("resolver composition (M2)", () => {
     // connections nobody authenticated. The whole suite stayed green under
     // exactly that mutation until this test.
     expect(loadApiConfig({}, {}).ffmpegAllowUnverifiedTls).toBe(false);
-    expect(loadApiConfig({}, {}).ffmpegCaFile).toBeUndefined();
+    expect(loadApiConfig({}, {}).egressCaFile).toBeUndefined();
+    expect(loadApiConfig({}, {}).egressCaFileVar).toBeUndefined();
 
     // Read from the environment...
     expect(
@@ -115,16 +116,32 @@ describe("resolver composition (M2)", () => {
     // back as `D:\etc\corp\root.pem`. What is being pinned is that the variable
     // is *read*, not the shape of the path — `path.resolve` of an absolute path
     // is the identity on POSIX and re-roots it on Windows, so both agree here.
-    expect(loadApiConfig({}, { FFMPEG_CA_FILE: "/etc/corp/root.pem" }).ffmpegCaFile).toBe(
+    expect(loadApiConfig({}, { EGRESS_CA_FILE: "/etc/corp/root.pem" }).egressCaFile).toBe(
       path.resolve("/etc/corp/root.pem"),
     );
+
+    // dl-31 renamed it and kept the old spelling working, because the failure
+    // of silently ignoring a deployed `FFMPEG_CA_FILE` is a service that
+    // refuses the operator's own origins. `egressCaFileVar` is what `server.ts`
+    // warns from, so the fallback and the warning cannot drift apart.
+    const legacy = loadApiConfig({}, { FFMPEG_CA_FILE: "/etc/corp/root.pem" });
+    expect(legacy.egressCaFile).toBe(path.resolve("/etc/corp/root.pem"));
+    expect(legacy.egressCaFileVar).toBe("FFMPEG_CA_FILE");
+
+    // The new name wins when both are set, rather than the last one parsed.
+    const both = loadApiConfig(
+      {},
+      { EGRESS_CA_FILE: "/etc/new.pem", FFMPEG_CA_FILE: "/etc/old.pem" },
+    );
+    expect(both.egressCaFile).toBe(path.resolve("/etc/new.pem"));
+    expect(both.egressCaFileVar).toBe("EGRESS_CA_FILE");
 
     // ...and from an explicit override, which is what `createApp` passes and
     // what every test that builds a config uses.
     expect(loadApiConfig({ ffmpegAllowUnverifiedTls: true }, {}).ffmpegAllowUnverifiedTls).toBe(
       true,
     );
-    expect(loadApiConfig({ ffmpegCaFile: "/tmp/fixture.pem" }, {}).ffmpegCaFile).toBe(
+    expect(loadApiConfig({ egressCaFile: "/tmp/fixture.pem" }, {}).egressCaFile).toBe(
       "/tmp/fixture.pem",
     );
 
