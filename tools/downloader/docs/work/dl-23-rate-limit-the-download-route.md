@@ -109,7 +109,7 @@ Traps worth knowing in advance:
    a test.
 5. `npm run check` and `npm test -- --project downloader` pass.
 
-## Gates
+## Review
 
 Four gates on 2026-08-31, all on Sonnet against an Opus build. **A** and **B**
 ran in parallel, split by setup: A on the measurement, with real browsers; B on
@@ -666,26 +666,30 @@ workspace-closure — no new workspace dependency, confirmed via `git diff --sta
   so a contrived UUID-shaped counter would pass it. The realistic regression, a
   plain sequential id, does not.
 
-### On gate E's heading finding — surfaced, not resolved here
+### On gate E's heading finding — fixed here, with what it does not fix
 
-Gate E's carried `low` is correct on its face: `docs/01-TICKETS.md` specifies
-`## Review` for a reviewed, non-filing ticket, and this ticket uses `## Gates`.
-The row stands as written.
+Gate E's carried `low` was correct: `docs/01-TICKETS.md` specifies `## Review` for a
+reviewed, non-filing ticket, and this ticket used `## Gates`. The heading is now
+`## Review`, with gates A–E kept as subsections. `dl-16` was renamed in the same
+round for the same reason.
 
-It is not being fixed on this branch, and the reason is a measurement gate E did
-not have. `## Gates` is not this ticket's invention: **six already-merged tickets
-use it** — `repo-3`, `repo-6`, `dl-20`, `dl-21`, `dl-24`, `dl-27` — alongside
-`dl-16`, which is in review now. So the divergence is between the documented
-format and an established practice across the repo, not a defect in this branch.
-Renaming the heading here would make this ticket consistent with the document and
-inconsistent with seven siblings, and would leave the underlying split untouched.
+Two things that rename does **not** fix, recorded so the next reader does not think
+it did.
 
-The consequence worth recording, because it is the part that could bite: the board
-check that `repo-12` added keys on `## Review` to catch a ticket that is `status:
-ready` yet already carries a gate record. A ticket that records its gates under
-`## Gates` is invisible to that check. Neither this ticket nor `dl-16` is exposed —
-both are `status: done` — but a future `ready` ticket recording under `## Gates`
-would slip past it silently. That is the real defect behind the cosmetic one, it is
-repo-wide, and it wants its own ticket rather than a rename here.
+`## Gates` was not this ticket's invention. **Six already-merged tickets still use
+it** — `repo-3`, `repo-6`, `dl-20`, `dl-21`, `dl-24`, `dl-27`. Renaming the two
+tickets in review makes them match the document and leaves those six divergent, so
+the split between the documented format and established practice is narrowed, not
+closed.
+
+And the consequence worth naming is not cosmetic. The board check `repo-12` added
+keys on `## Review` to catch a ticket that is `status: ready` yet already carries a
+gate record — work that merged without its status being flipped. A ticket recording
+its gates under `## Gates` is invisible to that check. Neither this ticket nor
+`dl-16` was ever exposed, since both are `status: done`, but the six merged ones
+above are permanently outside that check's reach, and any future ticket that
+records under `## Gates` slips past it silently. That is a repo-wide gap in a check
+that exists specifically to catch this class of mistake, and nothing in this branch
+addresses it.
 
 Recorded by the orchestrating agent, not by gate E.
