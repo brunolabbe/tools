@@ -74,6 +74,14 @@ export function serverEnv(options: {
   storageDir: string;
   tiers: Record<string, string>;
 }): Record<string, string> {
+  // Every key returned here is authoritative over the shell. Playwright builds
+  // the web server's environment as
+  // `{ ...DEFAULT_ENVIRONMENT_VARIABLES, ...process.env, ...options.env }`, so
+  // the config's `env` is spread **last** and wins. `FOO=bar npm run e2e:…`
+  // reaches this server only for a variable no config names — `FFMPEG_PATH`
+  // does, `ENABLE_BROWSER_RESOLVER` does not, and nothing at the call site
+  // distinguishes the two.
+
   return {
     HOST: "127.0.0.1",
     PORT: String(options.port),

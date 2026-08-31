@@ -26,8 +26,13 @@ import process from "node:process";
 import { defineConfig, devices } from "@playwright/test";
 import { apiServer, root, serverEnv, shared } from "./playwright.config.ts";
 
-/** Its own port: the two suites must be able to run back to back, or at once. */
-const PORT = Number(process.env["E2E_SNIFFER_PORT"] ?? 8098);
+/**
+ * Its own port: the suites must be able to run back to back, or at once. 8097
+ * and not 8098 — `tools/planner/playwright.config.ts` defaults to 8098, and
+ * both configs set `reuseExistingServer: false`, so an overlap is a loud
+ * `EADDRINUSE` rather than one suite quietly driving the other's server.
+ */
+const PORT = Number(process.env["E2E_SNIFFER_PORT"] ?? 8097);
 const BASE_URL = `http://127.0.0.1:${String(PORT)}`;
 
 export default defineConfig({
@@ -52,6 +57,15 @@ export default defineConfig({
     env: serverEnv({
       port: PORT,
       storageDir: path.join(root, "e2e/.artifacts/sniffer-storage"),
+      // **These are literals and an environment variable cannot override
+      // them.** Playwright's `WebServerPlugin` builds the child environment as
+      // `{ ...DEFAULT_ENVIRONMENT_VARIABLES, ...process.env, ...options.env }`
+      // — the config's `env` is spread last, so every key named here wins over
+      // the shell. `ENABLE_BROWSER_RESOLVER=false npm run e2e:downloader:sniffer`
+      // therefore **passes**, having changed nothing. To make this suite prove
+      // it still depends on the sniffer, edit the value below. That is
+      // deliberate: a tier list an ambient variable could flip is a suite that
+      // can silently be testing something else.
       tiers: {
         // The whole point of this config.
         ENABLE_BROWSER_RESOLVER: "true",

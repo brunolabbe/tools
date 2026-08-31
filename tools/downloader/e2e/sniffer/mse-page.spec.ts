@@ -22,7 +22,7 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { startHlsOrigin } from "../fixtures/hls-origin.ts";
+import { PLAYER_ERROR_PATH, startHlsOrigin } from "../fixtures/hls-origin.ts";
 import type { HlsOrigin } from "../fixtures/hls-origin.ts";
 
 /** A browser probe is 10-20 s of page load, provocation and network quiet. */
@@ -36,6 +36,28 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await hls.close();
+});
+
+/** Anything the fixture player could not fetch, in the order it gave up. */
+function playerErrors(): string[] {
+  return hls.requests.filter((url) => url.startsWith(PLAYER_ERROR_PATH));
+}
+
+// The page runs inside the API's Chromium, so a fixture-side fetch failure is
+// invisible from here: the probe simply finds nothing and the assertion below
+// times out with no cause. The beacon lands in the origin's request log, and
+// this puts it in the report next to the failure it explains.
+test.afterEach(async () => {
+  const failures = playerErrors();
+  if (failures.length > 0) {
+    // `test.info()` rather than the hook's second argument: Playwright rejects a
+    // first parameter that is not a destructuring pattern, and `{}` to get at
+    // the second is a worse sentence than this.
+    await test.info().attach("fixture-player-errors", {
+      body: failures.join("\n"),
+      contentType: "text/plain",
+    });
+  }
 });
 
 test("finds a blob-only stream through the sniffer and downloads it", async ({ page, request }) => {
@@ -129,6 +151,11 @@ test("finds a blob-only stream through the sniffer and downloads it", async ({ p
   // would be satisfied by the re-probe alone.
   const segments = hls.requests.slice(beforeDownload).filter((url) => url.endsWith(".ts"));
   expect(new Set(segments).size).toBeGreaterThan(1);
+
+  // The fixture player got everything it asked for. Without this a page that
+  // half-worked — master fetched, segment 404 — could still satisfy everything
+  // above and leave the suite passing over a broken fixture.
+  expect(playerErrors()).toEqual([]);
 
   // --- The other half of "this is a sniffer test" -------------------------
   // Without this the suite would still pass against a fixture that simply

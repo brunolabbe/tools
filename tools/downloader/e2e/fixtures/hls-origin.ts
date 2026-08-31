@@ -48,6 +48,8 @@ export interface HlsOrigin {
 const PLAYER_PATHS: readonly string[] = ["/master.m3u8", "/index.m3u8", "/seg000.ts"];
 
 const WATCH_PATH = "/watch";
+/** Where the player reports a fetch it could not make. See the `catch` in `watchPage`. */
+export const PLAYER_ERROR_PATH = "/player-error";
 
 /**
  * The MSE player page, and the reason the sniffer suite can claim anything.
@@ -89,9 +91,25 @@ function watchPage(): string {
         var fetching = false;
 
         function announceSource() {
+          // The "none" fallback is for the sourceopen path, which is a
+          // listener and so is not ordered against the assignment below by
+          // anything in this file. On the direct call it is dead, and kept.
           var scheme = String(video.src || "none").split(":")[0];
           document.title = "Fixture player [" + scheme + "]";
           status.textContent = "video.src scheme: " + scheme;
+        }
+
+        // A 404 does not reject a fetch, and a typo in a fixture path is far
+        // likelier than a socket error — so a bad status is turned into one
+        // here, or the beacon below would only ever fire for the case that
+        // almost never happens.
+        function get(url) {
+          return fetch(url).then(function (response) {
+            if (!response.ok) {
+              throw new Error("HTTP " + response.status + " for " + url);
+            }
+            return response;
+          });
         }
 
         function loadEverything() {
@@ -100,18 +118,18 @@ function watchPage(): string {
           // Strictly sequential: the master has to cross the network before the
           // media playlist it names, or the sniffer's "earlier wins" tiebreak
           // between two equally-scored playlists is being decided by a race.
-          fetch(PATHS[0])
+          get(PATHS[0])
             .then(function (response) {
               return response.text();
             })
             .then(function () {
-              return fetch(PATHS[1]);
+              return get(PATHS[1]);
             })
             .then(function (response) {
               return response.text();
             })
             .then(function () {
-              return fetch(PATHS[2]);
+              return get(PATHS[2]);
             })
             .then(function (response) {
               return response.arrayBuffer();
@@ -126,7 +144,20 @@ function watchPage(): string {
                 // requests crossing the network are.
               }
             })
-            .catch(function () {});
+            .catch(function (error) {
+              // Not swallowed. A fetch that fails here has no other way out:
+              // this page runs inside the API's Chromium, not Playwright's, so
+              // nothing it writes to its own DOM is ever on screen, and the only
+              // symptom is a probe that finds nothing and a spec that times out
+              // 120 s later with no cause attached. The beacon puts the cause
+              // where the test process can already see it — the origin's own
+              // request log — and the spec asserts on it and attaches it to the
+              // report.
+              status.textContent = "player failed: " + String(error);
+              fetch("/player-error?reason=" + encodeURIComponent(String(error))).catch(
+                function () {},
+              );
+            });
         }
 
         mediaSource.addEventListener("sourceopen", function () {
@@ -234,7 +265,16 @@ export async function startHlsOrigin(): Promise<HlsOrigin> {
     const url = request.url ?? "/";
     requests.push(url);
 
-    if (new URL(url, "http://x").pathname === WATCH_PATH) {
+    const { pathname } = new URL(url, "http://x");
+
+    // Answered rather than left to 404, so a beacon cannot itself look like a
+    // failed request in the log it is trying to explain.
+    if (pathname === PLAYER_ERROR_PATH) {
+      response.writeHead(204).end();
+      return;
+    }
+
+    if (pathname === WATCH_PATH) {
       const body = Buffer.from(html, "utf8");
       response.writeHead(200, {
         "content-type": "text/html; charset=utf-8",
@@ -248,7 +288,7 @@ export async function startHlsOrigin(): Promise<HlsOrigin> {
       // `path.basename` on the parsed pathname: the directory is a temp dir
       // full of nothing, but a fixture that could be walked out of would be a
       // bad habit to check in.
-      const name = path.basename(new URL(url, "http://x").pathname);
+      const name = path.basename(pathname);
       try {
         const body = await fs.readFile(path.join(dir, name));
         response.writeHead(200, {

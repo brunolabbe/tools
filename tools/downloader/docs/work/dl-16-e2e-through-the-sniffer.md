@@ -107,9 +107,13 @@ loopback fixture — currently exists only in unit tests that stub one of the fo
 - A user journey that starts at an MSE page and ends at a playable file passes
   in a real browser, with `ENABLE_YTDLP_RESOLVER=false` and the direct tier
   unable to help.
-- The spec fails if the sniffer is disabled — run it once with
-  `ENABLE_BROWSER_RESOLVER=false` and confirm it goes red rather than falling
-  through to a tier that happens to cope.
+- The spec fails if the sniffer is disabled — run it once with the sniffer off
+  and confirm it goes red rather than falling through to a tier that happens to
+  cope. **Not as an environment variable.** The brief originally said
+  `ENABLE_BROWSER_RESOLVER=false <the suite>`, which passes green having changed
+  nothing: Playwright spreads a config's `webServer.env` over `process.env`, so
+  the `tiers` literal in `playwright.sniffer.config.ts` wins. Edit that value.
+  Gate 1 found this; see the Log.
 - The existing `npm run e2e:downloader` is unchanged in scope and in runtime.
 - CI runs both suites on a downloader change and names them separately.
 - "The E2E suite drives only the direct resolver" stops being true, and this
@@ -118,6 +122,117 @@ loopback fixture — currently exists only in unit tests that stub one of the fo
   (repo-1, repo-2). **The container's
   browser tier stays smoke-tested only**: this ticket does not reach it, and
   should not claim to. Say so in the Log rather than leaving it unsaid.
+
+## Gates
+
+### Gate 1 — 2026-08-31, PASS (reviewed at `461e9dd`)
+
+Sonnet reviewer against an Opus build. Two `low` findings, no CONCERNS, nothing
+above `low`. Applied on top; the fixes are in the commit that carries this
+record.
+
+**Independently reproduced, and this is the load-bearing one.** The reviewer
+built its own throwaway two-project, two-`webServer` config on Playwright 1.62.1,
+ran it with `--project fast` and `DEBUG=pw:webserver`, and saw both servers start
+and both ports come up before any test ran. The two-config shape rests entirely
+on that fact and it is now measured twice, by two agents, independently. The
+reviewer also confirmed `npm run e2e:downloader` is **identical** at base and at
+tip — 3 passed, 6.2 s, same test names — rather than merely close.
+
+**Finding 1: the ticket's own falsification instruction produced a false green.**
+"Run it once with `ENABLE_BROWSER_RESOLVER=false`" reads as obviously runnable
+and does nothing. Reproduced here both ways before fixing: the environment
+variable in front of `npm run e2e:downloader:sniffer` gives **1 passed in 6.9 s**;
+editing the `tiers` value in `playwright.sniffer.config.ts` gives the red.
+
+_The mechanism, which is worth more than the corrected sentence._ Playwright's
+web-server plugin builds the child environment as
+`{ ...DEFAULT_ENVIRONMENT_VARIABLES, ...process.env, ...options.env }` — read
+out of the bundled `playwright/lib/runner/index.js`, not inferred. The config's
+`env` is spread **last**, so it wins over the shell. The instruction reads as
+runnable because **the same command line does work for a variable no config
+names**: every measurement on this ticket was taken with
+`FFMPEG_PATH=/usr/bin/ffmpeg` in front of it, and that one reaches the API
+because neither config sets it. One variable lands and the next is silently
+discarded, and nothing at the call site distinguishes them. That is the shape to
+recognise: **an environment variable is overridable only if no config on the path
+names it**, and the list of names is in a file you are not looking at.
+
+_Anything else in the repo with the same shape._ Audited, and yes:
+
+- `serverEnv()` in `playwright.config.ts` pins `SSRF_ALLOW_HOSTS`,
+  `RATE_LIMIT_PROBE_PER_MINUTE`, `RATE_LIMIT_JOBS_PER_MINUTE`, `LOG_LEVEL` and
+  the whole tier list for **both** downloader suites. All equally immune, all
+  pre-existing.
+- `tools/planner/playwright.config.ts` pins `MODEL_PROVIDER: "scripted"`, whose
+  own comment says it is named "so this suite says out loud that it talks to no
+  model". Someone reaching for `MODEL_PROVIDER=anthropic npm run e2e:planner` to
+  smoke-test a real provider gets a scripted run and a green. **Same shape,
+  another tool, not fixed here** — it is the planner's file, pl-36 is live in
+  that tool this batch, and it deserves its own ticket rather than a drive-by.
+- The `ENABLE_BROWSER_RESOLVER=false … npm run dev -w @downloader/api` recipe in
+  the tool's `CLAUDE.md` is **not** an instance: it invokes the API directly with
+  no Playwright in between, so those variables do reach it. Left alone.
+
+_Fixed rather than only documented._ `serverEnv` and the sniffer config's `tiers`
+literal both carry the override direction now, the ticket's "Done when" bullet
+says to edit the value, and the Log below says the same. The tiers stay literals:
+a tier list an ambient variable could flip is a suite that can silently be
+testing something else, which is this finding pointing the other way.
+
+**Finding 2 (`low`): the blanket `.catch(function () {})` in the fixture
+player.** Taken, not documented. The reviewer's reasoning holds — this page runs
+inside the **API's** Chromium, so nothing it writes to its own DOM is ever on a
+screen the test can see, and a swallowed failure surfaces only as a 120-second
+timeout with no cause. Three changes: the `catch` now beacons to
+`PLAYER_ERROR_PATH` on the fixture origin, which the test process can already
+see; a non-`ok` response is turned into a rejection by the new `get` helper,
+because a 404 does not reject a `fetch` and a typo'd fixture path is far likelier
+than a socket error; and `mse-page.spec.ts` asserts `playerErrors()` is empty and
+attaches them to the Playwright report from `afterEach`. **Made to fail first:**
+pointing one fixture path at a missing file produced
+`/player-error?reason=Error%3A%20HTTP%20404%20for%20%2Fseg999-does-not-exist.ts`
+in both the assertion diff and an attachment — and the download still succeeded,
+which is exactly the half-working fixture that used to pass silently.
+
+The other two branches the reviewer flagged are documented, not changed. The
+`try`/`catch` around `addSourceBuffer` is reachable and load-bearing (MPEG-TS is
+not an MSE format); the `"none"` fallback in `announceSource` is dead on the
+direct call and kept for the `sourceopen` listener, which nothing in the file
+orders against the assignment.
+
+**Recorded, not fixed: the falsification red is racy.** The reviewer got it at
+two different lines inside the analysing-panel block on two runs. Both are inside
+the block whose own comment already says it is where the suite goes red first
+without naming a line, so the comment is honest as written — but the next person
+should expect the line to move.
+
+**Two legs are not verifiable from this machine, and neither is claimed.**
+
+- **The job has never run on a GitHub runner.** Everything here ran against a
+  `webServer` on this host with the distribution's ffmpeg. "Green in CI" is a
+  claim only the first run can make, and the matrix rename lands with it.
+- **The ruleset read is inherited and now 8 days stale.** The safety of renaming
+  the check from `e2e` to `e2e (…)` rests on the note in `ci.yml` recording that
+  `main` carried no `required_status_checks` rule and no classic protection when
+  it was read on 2026-08-23. `gh api` is denied in this environment; the reviewer
+  correctly did not attempt it and neither did I. **Clearing this needs someone
+  with `gh api` access to re-run the rulesets and branch-protection reads close
+  to merge time**, since a ruleset can change between that read and the squash
+  that lands the rename. Until then it is a disclosed inherited risk, not a
+  checked one.
+
+**Fold-in requested and declined on measurement: the planner's Playwright config
+does not have the gap.** My own build report claimed
+`tools/planner/playwright.config.ts` shared the typecheck hole I closed for the
+downloader, and that claim was wrong — `tools/planner/e2e/tsconfig.json` has
+carried `"../playwright.config.ts"` in its `include` since pl-13, with a comment
+explaining why. Proved rather than read: planting a deliberate type error in that
+file makes `npm run typecheck` fail on it today, at base. There is nothing to
+fold in, no planner path is touched, and the commit stays `test(downloader)`
+rather than `test(repo)` — a `test(repo)` subject would validate but would be
+describing work that does not exist. The correction is mine to own; the reviewer
+relayed my error faithfully.
 
 ## Log
 
@@ -154,7 +269,9 @@ sniffer config's `testDir` is that directory.
   passed, 39 s. `npm run check` — green.
 
 **The falsification run was done twice, because the first one went red for a
-weak reason.** With `ENABLE_BROWSER_RESOLVER=false` the suite fails at the
+weak reason.** With the sniffer disabled — by editing `tiers` in
+`playwright.sniffer.config.ts`, not by an environment variable; see the gate
+record — the suite fails at the
 _analysing panel_ — "expected 5 list items, got 0" — because the direct tier
 refuses an HTML page in under a second and the panel is gone before the count
 resolves. Red, but not a red that names anything. Re-run with that block
@@ -235,3 +352,11 @@ leg is unchanged by this ticket and its behaviour is inherited, not re-measured.
 - The suite has never run on a GitHub runner. It has run on this machine with the
   distribution's ffmpeg, which is what CI uses, but "green in CI" is a claim only
   the first run can make.
+
+**2026-08-31 — gate 1 applied.** The falsification instruction in this ticket was
+wrong in a way that produced a false green, the fixture player's blanket `catch`
+is gone, and the sniffer suite's default port moved from 8098 to 8097 because
+`tools/planner/playwright.config.ts` already defaults to 8098 — a collision I
+introduced and neither the build nor the gate would have caught until someone ran
+the planner and the sniffer suites at once. All three are in the gate record
+above.
