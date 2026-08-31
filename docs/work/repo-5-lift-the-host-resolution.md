@@ -3,9 +3,9 @@ id: repo-5
 tool: repo
 title: Decide whether the dev server's HOST resolution lifts to packages/
 kind: chore
-status: ready
+status: done
 milestone: null
-depends_on: []
+depends_on: [dl-22]
 ---
 
 # repo-5 — Decide whether the dev server's HOST resolution lifts to `packages/`
@@ -68,24 +68,26 @@ Traps:
 - **A lift is a change to the planner as well**, which means a commit touching
   two tools — the root `CLAUDE.md` calls that the tell that it should have been
   two commits, and the changelog line lands under one tool's name. Decide how to
-  split it before writing it, not after.
+  split it before writing it, not after. **Answered below**: it landed as one
+  pull request, because the constraint is the type and not the paths.
 - Do not fold this into a `dl-` or `pl-` ticket. It is repo-wide by definition
   and would otherwise appear in one tool's changelog as if it belonged there.
-- **This really does depend on dl-22, and `depends_on` is empty anyway.** It was
-  written as `depends_on: [dl-22]` first, and that breaks the board. The status
-  script validates every id against the ticket files _on the current branch_,
-  and dl-22 is still in review, so it exits 1 and prints **nothing at all** — not
-  a warning beside a table, the whole view. A ticket merged before the one it
-  names would do that to everyone on main. So `depends_on` can only name tickets
-  that have already landed, and a forward reference belongs in prose, which is
-  what the first line of **Why** is. Worth its own ticket if anyone minds; the
-  fix is presumably to degrade to a warning rather than to exit.
-- `tools/planner/web/test/tsconfig.json` omits `../vite.config.ts`, so the
-  planner's config is in no tsconfig project and is not typechecked — the mirror
-  of what dl-22 fixed for the downloader. Related, but **not this ticket**; it is
-  being filed separately. If it is still open when this is built, a lift would
-  move code out of an unchecked file into a checked one, which is a reason to
-  sequence them rather than a reason to merge them.
+- **`depends_on: [dl-22]` is safe now, and was not when this was filed.** The
+  original trap here said naming dl-22 would break the board outright — the
+  status script validated every id against the ticket files on the current
+  branch, found dl-22 unmerged, exited 1 and printed **nothing at all**. That is
+  no longer true twice over: dl-22 merged, and repo-12 made the interactive
+  views warn beside the table and reserved the non-zero exit for `--json`
+  (`scripts/status.mjs`, `EXIT_ON_PROBLEMS = ["json"]`). The surviving rule is
+  the narrow one: `depends_on` may only name tickets that have already landed,
+  because `--json` is still the CI gate and it still exits 1 on a dangling id.
+  A forward reference belongs in prose.
+- **The planner's `vite.config.ts` is typechecked now.** The original trap said
+  `tools/planner/web/test/tsconfig.json` omitted `../vite.config.ts`, leaving
+  the config in no project. pl-31 added it and pl-32 gave it a behavioural test;
+  both are `done`. So both tools' configs are checked and both are pinned, which
+  is part of why the lift buys less than it looks like it would — the thing a
+  shared home would have protected is already protected, per tool.
 
 ## Done when
 
@@ -98,6 +100,48 @@ Traps:
   it rather than by hand.
 - If not lifted: the reason is written where the next person will meet it, which
   is a comment in both configs pointing at this ticket — not this file alone.
+
+## Gates
+
+### Gate 1 — 2026-08-31 · **PASS**
+
+Reviewed at `2b06404`. The gate reproduced the mutation sweep independently
+rather than reading it off the Log — the fixture tool, the vacuity guard and the
+`strictPort` flip — and got the same messages, including
+`expected 1 to be greater than or equal to 2`. Every citation in this file
+resolved. It confirmed off `release-please-config.json` that `chore` and `test`
+both carry `"hidden": true`, so the three-path spread costs no changelog line and
+one pull request is correct.
+
+It confirmed the near-miss the build flagged: `HOST_READ` and `HOST_FALLBACK` use
+`(?:process\.)?env\[…\]`, which accepts both spellings, and a regex written for
+`process.env` alone would have passed the API half in silence — the API configs
+take `env` as a parameter.
+
+**Two low findings, one taken.**
+
+1. **Taken.** The disclosed text-matching boundary was documented with a
+   contrived example (a host computed through a helper the scan cannot see). The
+   gate found a mundane one that needs no helper: change `host: HOST` to
+   `host: "127.0.0.1"` in a web config and leave the `const` sitting unused above
+   it, and this scan passes. Reproduced here before writing it up — the scan went
+   green, and `tools/planner/web/test/vite-config.test.ts` failed the same tree
+   on **two** assertions, `expected '127.0.0.1' to be '0.0.0.0'` and
+   `expected '127.0.0.1' to be false`. The docblock in
+   `packages/core/test/host-resolution.test.ts` now carries that example instead,
+   and states the boundary as what it is: the scan checks the resolution is
+   present and spelled right, never that it is wired into `server.host`. That is
+   the division of labour with the per-tool tests, not a hole — but it had to be
+   stated in the shape someone will actually hit.
+2. **Not taken, and nothing to fix.** The `two-origin-tls.test.ts` failure
+   reported from the first `--project downloader` run did not reproduce at either
+   commit across several run shapes. It is a pre-existing flake risk under load —
+   a 60 s hook timeout in a spec that takes 4.4 s alone, on a box running four
+   agents. Recorded rather than filed, since nothing here caused it and there is
+   no reproduction to hand a ticket.
+
+The docblock edit for finding 1 is the only change after `2b06404`; the diff is
+otherwise the tree the gate read.
 
 ## Log
 
@@ -112,3 +156,94 @@ Traps:
   ship. That is a position, not a verdict — this ticket is where it gets tested
   properly, with the cost of a new workspace weighed against the cost of the next
   tool repeating the bug.
+
+### 2026-08-30 — decided: it does not lift, and a scan replaces the copies
+
+**The decision.** The `HOST` resolution stays duplicated in both
+`tools/*/web/vite.config.ts`. Both configs now carry a paragraph saying so and
+naming this ticket, and `packages/core/test/host-resolution.test.ts` is what the
+copies were traded for. **Why** above says the block is 15 lines; it is 25 now,
+still byte-identical, because the decision was written into it — which makes the
+docblock-to-code ratio the decision turned on worse, not better, and says so.
+
+**What decided it, and it is not the line count.** The measurement that settled
+it: with a lifted `@webtools/*` dependency's `dist` missing, Vite refuses to
+start at all, behind an esbuild stack blaming a `package.json`. Today the same
+broken state starts the server and prints an error naming the exact source line.
+The file being argued over is the one whose whole failure mode is silence — a
+blank page and a terminal reporting ready — and putting it behind a build step
+that fails by pointing somewhere else makes the next dl-22 harder to diagnose,
+not easier. The workspace costs from the brief (a `tsconfig.json`, a root
+reference, a vitest project or a note, entry into the `image-closure` graph) are
+all real and all secondary to that.
+
+**The HOST asymmetry, recorded here rather than filed.** Chasing the lift turned
+up that there are **four** readers of `HOST`, not two, in **two incompatible
+shapes**. Both web configs resolve `string | false` — `false` is Vite's own
+"localhost only" sentinel and the right default off a container. Both
+`tools/*/api/src/config.ts` resolve `string`, defaulting to `127.0.0.1` via
+`API_DEFAULTS.host`, because `false` is not something you can hand to `listen`.
+So the thing that actually wanted sharing was never the four lines; it was the
+_question_ — does this half of the tool obey `HOST`, and does it say what it does
+when `HOST` is unset. A scan can ask that of both halves. An import cannot, since
+their answers legitimately differ. The two shapes are therefore asserted as two
+tests, not flattened into one rule; the cross-shape mutations below are what make
+that separation load-bearing rather than decorative.
+
+**Why a scan and not just the two existing tests.** dl-22 and pl-32 already pin
+each tool's dev-server behaviour by evaluating its config, which is stronger than
+a text match. But they only exist for tools somebody remembered to write them
+for. The scan is the one that fails for a tool it has never seen, which is the
+failure this ticket was actually about: the planner had diagnosed the `::1` bind
+in a comment and the knowledge never crossed to the tool that needed it next.
+
+**Mutations run, each reverted and re-confirmed green.** What went red, and with
+what message:
+
+- `strictPort: true` deleted from `tools/downloader/web/vite.config.ts` →
+  `tools/downloader/web/vite.config.ts: no strictPort: true`
+- `?? API_DEFAULTS.host` dropped from `tools/planner/api/src/config.ts` →
+  `reads env["HOST"] with no ?? default`
+- `?? false` dropped from `tools/planner/web/vite.config.ts` →
+  `HOST falls back to nothing, not Vite's false`
+- the two shapes swapped — web falling back to `"0.0.0.0"`, api falling back to
+  `false` → both tests red, each naming the other contract's fallback
+- **a fixture tool the scan had never seen**, `tools/zzprobe/`, with a
+  `vite.config.ts` that ignores `HOST` and an `api/src/config.ts` that ignores it
+  → `does not read env["HOST"]`, `no strictPort: true`, and
+  `tools/zzprobe/api: nothing under src reads env["HOST"]`. Then the same fixture
+  with its `vite.config.ts` removed entirely → `no such file`.
+- the vacuity guard, measured rather than assumed: `tools/planner` moved out of
+  `tools/` → `expected 1 to be greater than or equal to 2` on both tests.
+
+**One pull request, and the type is why.** This branch touches
+`tools/downloader`, `tools/planner` and `packages/core`, which the root
+`CLAUDE.md` names as the tell for two pull requests. Read off
+`release-please-config.json`'s `changelog-sections`: the non-`hidden` types are
+`feat`, `fix`, `perf` and `revert`; `chore` and `test` are both `hidden`. Nothing
+here changes behaviour, so the title is a `chore`, release-please renders an
+empty changelog and skips both tools, and the cross-tool paths cost nothing —
+`docs/03-RELEASING.md` measures exactly this. `node scripts/commit-message.mjs
+--text "chore(repo): …(repo-5)"` exits 0.
+
+**On the three stale claims in this file** — the status-script trap, the tsconfig
+trap, and `depends_on` being empty. None was stale when written; each was
+falsified by a later merge (repo-12, pl-31, pl-32, dl-22), and nothing links a
+merging ticket back to the tickets citing it. The general sweep-harder fix does
+not exist and is not worth inventing. But these were load-bearing prose making
+_falsifiable claims about code_, and this repo already owns the instrument for
+that: a claim about `status.mjs`'s exit behaviour belongs in a test on
+`status.mjs`, not in a ticket's prose. **Carry less prose about the world, rather
+than sweeping it more often.** The corollary this build adds: that is exactly what
+part C does for the claim this ticket was making. "Both web configs resolve `HOST`
+the same way" was a sentence in a ticket for a week and rotted the moment a third
+tool could exist; it is now an assertion that fails. Where a trap cannot become a
+test, it should shrink to the fact that survives — which is what the rewritten
+`depends_on` trap is, one narrow rule left where a paragraph used to be.
+
+**What was left out.** The scan reads text; it does not evaluate a config, so it
+proves the resolution is present and spelled right and never that it reaches
+`server.host`. Gate 1 supplied the concrete case and the docblock now carries it.
+That is the boundary rather than a defect — the per-tool tests evaluate the config
+and own what it resolves to — and teaching this file to evaluate TypeScript is a
+parser, which the neighbouring scans deliberately are not.
