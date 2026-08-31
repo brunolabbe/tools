@@ -234,6 +234,55 @@ rather than `test(repo)` — a `test(repo)` subject would validate but would be
 describing work that does not exist. The correction is mine to own; the reviewer
 relayed my error faithfully.
 
+### Gate 2 — 2026-08-31, PASS, zero findings (reviewed at `eb0abec`)
+
+Not one `low`. Every item from gate 1 reproduced independently, and none of it
+broke under a harder push than my own repro. What it did that gate 1 and I did
+not:
+
+- **Re-ran the superseded instruction.** `ENABLE_BROWSER_RESOLVER=false` in front
+  of the sniffer suite **still passes**, which is what makes the corrected
+  wording provable rather than asserted: the false green is still demonstrably a
+  false green, so the sentence that replaced it is describing something real.
+- **Enumerated every statically-bound port in the repository** rather than
+  sampling one — 8099 downloader fast, 8097 sniffer, 8098 planner, 5173/5183
+  vite, 8080/8090 containers, and every other `.listen()` in the repo binding
+  `0` and so collision-proof by construction. **8097 collides with nothing.**
+  That is the check my own fix deserved and did not get: I moved off 8098 having
+  noticed one conflict, not having looked for the rest.
+- **Traced the beacon's own `catch`** to confirm it is not the blanket-catch
+  pattern reapplied. It is not: `requests.push(url)` runs unconditionally at the
+  top of the fixture server's request handler, so the URL is recorded the moment
+  the request lands regardless of what the handler does next, and the beacon
+  route answers `204` rather than falling through to 404 — so a beacon cannot
+  look like a second failure in the log it exists to explain.
+
+**Folded in on the user's instruction: the planner's `MODEL_PROVIDER`.** The
+same-shape instance this ticket's gate-1 audit found is now documented where
+someone would hit it, at the `webServer.env` block in
+`tools/planner/playwright.config.ts`. **A comment only — nothing the config pins
+was changed**, for the reason the tiers stay literal here: a provider an ambient
+variable could flip is a suite that can silently be testing something else.
+Reproduced before writing it rather than relayed: `MODEL_PROVIDER=anthropic
+npm run e2e:planner` gives **4 passed in 12.0 s**, indistinguishable from a plain
+run. Checked against the two branches live in this batch before writing —
+`gh pr view` on pl-36 lists `agent/`, `api/`, `web/` and its own ticket, and on
+repo-5 lists the two `vite.config.ts` files, `packages/core` and its ticket.
+Neither touches this file.
+
+**The dispatching agent corrected itself on the planner tsconfig**, having
+relayed my earlier false premise as an instruction without checking it. The
+premise was mine; it was caught by planting a type error at base rather than by
+re-reading, which is the only reason it was caught at all.
+
+**The disclosed inherited risk stands unchanged.** Renaming the check from `e2e`
+to `e2e (…)` still rests on the ruleset read recorded in `ci.yml` on 2026-08-23,
+now stale, and still unrefreshable from here because `gh api` is denied. Clearing
+it needs someone with that access to re-run the rulesets and branch-protection
+reads close to merge time. Gate 2 did not clear it and did not claim to. The
+other unverifiable leg is unchanged too: **the job has never run on a GitHub
+runner**, and PR #122's own run is the first.
+
 ## Log
 
 **2026-08-30 — Built. Two config files, not two projects, and the brief's step 2
@@ -360,3 +409,10 @@ is gone, and the sniffer suite's default port moved from 8098 to 8097 because
 introduced and neither the build nor the gate would have caught until someone ran
 the planner and the sniffer suites at once. All three are in the gate record
 above.
+
+**2026-08-31 (later) — gate 2 applied.** Zero findings. The only change it
+carries is the one the user asked for rather than filed: the planner's
+`MODEL_PROVIDER` pin is now documented as un-overridable, a comment and nothing
+else. Gate 2 also enumerated every statically-bound port in the repo and
+confirmed 8097 collides with nothing, which is the check the port fix above
+deserved and had not had.
