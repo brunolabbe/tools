@@ -14,7 +14,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { ROUTES } from "@downloader/contract";
+import { REDACTED, ROUTES } from "@downloader/contract";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "./context.ts";
 import type { AppLogger } from "./logger.ts";
@@ -45,6 +45,46 @@ export function requestIdFrom(request: { headers: Record<string, unknown> }): st
 }
 
 /**
+ * Path prefixes whose next segment is a **credential rather than an identifier**.
+ *
+ * Exactly one qualifies. `jobs/tokens.ts` states the rule this reads off: the
+ * file token *is* the authorisation, there is no session and no owner check
+ * behind it, and a job id deliberately is not a secret because it already
+ * appears in URLs the client holds and in every orchestrator line. So a job id
+ * stays legible in the log and a file token does not.
+ *
+ * Taken from `ROUTES` rather than written out, so a route that moves takes its
+ * redaction with it.
+ */
+const CAPABILITY_PREFIXES: readonly string[] = [ROUTES.file("")];
+
+/**
+ * The form of a request URL that is safe to log.
+ *
+ * **Not `redactUrl`**, though that is the repo-wide instrument and the obvious
+ * reach. `redactUrl` answers a different question: it parses an *absolute* URL
+ * and drops its *query string*, because the credential it was written for is a
+ * signed URL's HMAC. Both halves are wrong here. A Fastify `request.url` is
+ * origin-relative, so `new URL` throws and every line would read
+ * `[unparsable-url]`; and this credential lives in the path, which `redactUrl`
+ * preserves verbatim. Reaching for it would have replaced a leak with a blind
+ * request log and still leaked.
+ *
+ * So: one segment, named by the contract, replaced. Everything else — query
+ * strings, job ids, the health path — is left exactly as it arrived, because
+ * that is the diagnostic value the request log exists for.
+ */
+export function redactLoggedUrl(url: string): string {
+  for (const prefix of CAPABILITY_PREFIXES) {
+    if (!url.startsWith(prefix)) continue;
+    const rest = url.slice(prefix.length);
+    const boundary = rest.search(/[/?#]/u);
+    return `${prefix}${REDACTED}${boundary === -1 ? "" : rest.slice(boundary)}`;
+  }
+  return url;
+}
+
+/**
  * Endpoints logged at `debug` rather than `info`.
  *
  * A container health check runs every few seconds forever. At `info` it is the
@@ -72,7 +112,7 @@ export function registerRequestLogging(app: FastifyInstance, context: AppContext
     // includes body parsing — which is the number a client actually waited.
     const fields = {
       method: request.method,
-      url: request.url,
+      url: redactLoggedUrl(request.url),
       status: reply.statusCode,
       durationMs: Math.round(reply.elapsedTime),
       ip: request.ip,

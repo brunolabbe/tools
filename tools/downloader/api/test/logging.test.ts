@@ -9,14 +9,14 @@
  * fails minutes later on a queue worker, so that line is asserted directly.
  */
 
-import { ROUTES } from "@downloader/contract";
+import { REDACTED, ROUTES } from "@downloader/contract";
 import type { Job, JobResponse, RequestContext } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
 import type { Harness } from "./helpers.ts";
 import { createLogger } from "../src/logger.ts";
 import type { AppLogger } from "../src/logger.ts";
-import { requestIdFrom } from "../src/request-log.ts";
+import { redactLoggedUrl, requestIdFrom } from "../src/request-log.ts";
 
 interface Line {
   level: string;
@@ -308,5 +308,136 @@ describe("what boot says about how far TLS verification reaches", () => {
     // Telling a deployment that verifies nothing at all how its verification
     // works would read as a guarantee it does not have.
     expect(warnings.some((line) => /terminates TLS/u.test(line.msg))).toBe(false);
+  });
+});
+
+/** Runs a job to completion and returns the link and its bare token. */
+async function issuedToken(current: Harness): Promise<{ url: string; token: string }> {
+  const created = (
+    await current.app.server.inject({
+      method: "POST",
+      url: ROUTES.jobs,
+      payload: { url: SOURCE_URL },
+    })
+  ).json() as JobResponse;
+  const finished = await waitFor(
+    () => current.app.context.store.get(created.job.id),
+    (job) => job.status === "completed" || job.status === "failed",
+    { label: "job to finish" },
+  );
+  const url = finished.result?.downloadUrl ?? "";
+  return { url, token: url.slice(url.lastIndexOf("/") + 1) };
+}
+
+/**
+ * A file token is a credential, and it travels in the *path*.
+ *
+ * `/api/files/:token` is the only URL in this service whose path segment is a
+ * secret rather than an identifier — `jobs/tokens.ts` says so outright: the
+ * token *is* the authorisation, and job ids deliberately are not. Two hooks log
+ * `request.url` for every route: the `onResponse` line in `request-log.ts` and
+ * the error handler in `server.ts`. Both wrote the token verbatim until dl-23.
+ *
+ * These tests exist to go red if either call site loses `redactLoggedUrl`, and
+ * the last one exists so the cure is not worse than the disease — a redactor
+ * that flattened every URL would take the diagnostic value of the request log
+ * with it.
+ */
+describe("a file token never reaches a log line", () => {
+  let harness: Harness | undefined;
+
+  afterEach(async () => {
+    await harness?.dispose();
+    harness = undefined;
+  });
+
+  test("not when the file is served, and not when the request is refused", async () => {
+    // One test covering both call sites: a 200 goes through the `onResponse`
+    // hook only, and the 429 behind it goes through the error handler as well.
+    const { logger, lines } = capturing();
+    harness = await createHarness({
+      logger,
+      resolver: new StubResolver(probeResult()),
+      config: { rateLimitFilesPerMinute: 1 },
+    });
+
+    const { url, token } = await issuedToken(harness);
+    expect(token).toHaveLength(43);
+
+    expect((await harness.app.server.inject({ method: "GET", url })).statusCode).toBe(200);
+    expect((await harness.app.server.inject({ method: "GET", url })).statusCode).toBe(429);
+
+    const serialised = lines.map((line) => JSON.stringify(line));
+    // The lines are genuinely there — otherwise this passes by logging nothing.
+    expect(serialised.filter((line) => line.includes("/api/files/")).length).toBeGreaterThanOrEqual(
+      3,
+    );
+    expect(serialised.filter((line) => line.includes(token))).toEqual([]);
+
+    const served = lines.find((line) => line.msg === "request" && line.status === 200);
+    expect(served?.url).toBe(`/api/files/${REDACTED}`);
+    const refused = lines.find((line) => line.msg === "request rejected");
+    expect(refused?.url).toBe(`/api/files/${REDACTED}`);
+  });
+
+  test("nor when the link has expired, which is the ordinary 410", async () => {
+    // The pre-existing error paths on this route, which leaked the token long
+    // before there was a rate limiter on it.
+    const { logger, lines } = capturing();
+    harness = await createHarness({ logger, resolver: new StubResolver(probeResult()) });
+
+    const { url, token } = await issuedToken(harness);
+    const record = harness.app.context.store.findToken(token);
+    harness.app.context.store.deleteToken(token);
+    harness.app.context.store.saveToken({ ...record!, expiresAt: "2020-01-01T00:00:00.000Z" });
+
+    expect((await harness.app.server.inject({ method: "GET", url })).statusCode).toBe(410);
+    expect(lines.map((line) => JSON.stringify(line)).filter((l) => l.includes(token))).toEqual([]);
+  });
+
+  test("but every other URL is logged exactly as it arrived", async () => {
+    // The failure mode of the cure. `redactUrl` from core would have produced
+    // `[unparsable-url]` for all of these, since it parses an absolute URL and
+    // redacts the query string — the wrong half of the wrong shape.
+    const { logger, lines } = capturing();
+    harness = await createHarness({ logger, resolver: new StubResolver(probeResult()) });
+
+    const created = (
+      await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.jobs,
+        payload: { url: SOURCE_URL },
+      })
+    ).json() as JobResponse;
+    await harness.app.server.inject({ method: "GET", url: `${ROUTES.jobs}?limit=5` });
+    await harness.app.server.inject({ method: "GET", url: ROUTES.job(created.job.id) });
+
+    const urls = lines.filter((line) => line.msg === "request").map((line) => line.url);
+    expect(urls).toContain(ROUTES.jobs);
+    // The query string is diagnostic here, not a credential, and it survives.
+    expect(urls).toContain(`${ROUTES.jobs}?limit=5`);
+    // A job id is an identifier the client already holds; it is not redacted,
+    // and the request log would be useless if it were.
+    expect(urls).toContain(ROUTES.job(created.job.id));
+  });
+});
+
+describe("redactLoggedUrl", () => {
+  test("replaces the capability segment and nothing else", () => {
+    expect(redactLoggedUrl(ROUTES.file("abc"))).toBe(`/api/files/${REDACTED}`);
+    expect(redactLoggedUrl(`${ROUTES.file("abc")}?x=1`)).toBe(`/api/files/${REDACTED}?x=1`);
+    expect(redactLoggedUrl(`${ROUTES.file("abc")}/extra`)).toBe(`/api/files/${REDACTED}/extra`);
+  });
+
+  test("leaves identifiers alone", () => {
+    expect(redactLoggedUrl(ROUTES.jobs)).toBe(ROUTES.jobs);
+    expect(redactLoggedUrl(ROUTES.job("job-1"))).toBe("/api/jobs/job-1");
+    expect(redactLoggedUrl(ROUTES.jobEvents("job-1"))).toBe("/api/jobs/job-1/events");
+    expect(redactLoggedUrl(ROUTES.health)).toBe(ROUTES.health);
+  });
+
+  test("a path that merely looks like the route is not treated as one", () => {
+    // `startsWith` on a prefix ending in `/` cannot match `/api/filesomething`.
+    expect(redactLoggedUrl("/api/filesomething")).toBe("/api/filesomething");
   });
 });

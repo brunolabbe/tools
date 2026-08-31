@@ -86,8 +86,13 @@ export function contentDisposition(filename: string): string {
  * is a stable bucket name that leaks nothing.
  *
  * A token that is not even well formed cannot name a file, so it falls back to
- * the address. That keeps a scanner sending junk from minting a bucket per
- * guess, and keeps its noise out of every real file's allowance.
+ * the address. Be precise about what that buys: `isWellFormedToken` checks
+ * length and charset, not existence, so a scanner guessing *well-formed* tokens
+ * — the realistic case — still mints a bucket per guess. What bounds that is
+ * `RateLimiter`'s `maxKeys` (10,000, evicted least-recently-seen), not this
+ * branch. The fallback buys the two things it can: obviously-malformed junk
+ * shares one allowance rather than getting a fresh one per request, and no
+ * amount of guessing lands in a real file's bucket.
  */
 function fileBucketKey(request: FastifyRequest): string {
   const token = (request.params as { token?: unknown }).token;

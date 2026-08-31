@@ -272,6 +272,63 @@ describe("the routes", () => {
     }
   });
 
+  test("two client addresses hold separate allowances through the wired hook", async () => {
+    // Pins `createRateLimitHook`'s *default* key, which nothing else does.
+    // Every other test here injects without `remoteAddress`, so all of them
+    // share one simulated client — mutating that default to a constant passed
+    // the entire 228-test api suite before this test existed. "Clients have
+    // separate buckets" was proven only against the bare `RateLimiter`, never
+    // through the hook that has to ask it the right question.
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { rateLimitJobsPerMinute: 1 },
+    });
+
+    try {
+      const create = async (remoteAddress: string) =>
+        harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.jobs,
+          payload: { url: SOURCE_URL },
+          remoteAddress,
+        });
+
+      expect((await create("203.0.113.7")).statusCode).toBe(201);
+      expect((await create("203.0.113.7")).statusCode).toBe(429);
+      // A different client, and the first one's exhausted bucket is not theirs.
+      expect((await create("198.51.100.4")).statusCode).toBe(201);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("and an IPv6 client shares one bucket across its own /64", async () => {
+    // The other half of the default key: `clientKey` collapses a /64 so a host
+    // holding one cannot rotate through 2^64 addresses. Asserted here through
+    // the hook, where a key that ignored the address would look identical.
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { rateLimitJobsPerMinute: 1 },
+    });
+
+    try {
+      const create = async (remoteAddress: string) =>
+        harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.jobs,
+          payload: { url: SOURCE_URL },
+          remoteAddress,
+        });
+
+      expect((await create("2001:db8:1:2::1")).statusCode).toBe(201);
+      // Same customer, different address in the same /64.
+      expect((await create("2001:db8:1:2:aaaa::9")).statusCode).toBe(429);
+      // A different /64 is a different customer.
+      expect((await create("2001:db8:1:3::1")).statusCode).toBe(201);
+    } finally {
+      await harness.dispose();
+    }
+  });
   test("the two endpoints hold separate allowances", async () => {
     const harness = await createHarness({
       resolver: new StubResolver(probeResult()),
@@ -531,9 +588,11 @@ describe("the download route", () => {
   });
 
   test("a token that is not even well formed cannot mint itself a bucket", async () => {
-    // Junk falls back to the address key, so a scanner shares one allowance
-    // rather than getting a fresh one per guess — and its noise never lands in
-    // a real file's bucket.
+    // Obviously-malformed junk falls back to the address key, so it shares one
+    // allowance rather than getting a fresh bucket per request. A *well-formed*
+    // guess still mints one — `maxKeys` is what bounds that, not this branch.
+    // What the fallback guarantees either way is the second assertion: no
+    // amount of guessing lands in a real file's bucket.
     const harness = await createHarness({
       resolver: new StubResolver(probeResult()),
       config: { rateLimitFilesPerMinute: 2 },

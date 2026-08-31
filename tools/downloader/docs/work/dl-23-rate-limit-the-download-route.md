@@ -94,13 +94,90 @@ Traps worth knowing in advance:
 
 1. `GET /api/files/:token` refuses with 429 and a `Retry-After` header once its
    limit is exhausted, proven by a test in `tools/downloader/api/test/`.
-2. A burst of `Range` requests of the size measured in Build step 1 completes
-   without a 429 at the shipped default, proven by a test.
+2. **The realistic scrub minute** measured in Build step 1 — 274 `Range`
+   requests, the worst of the _interrupted_ drag patterns and the one measured
+   with a 40 ms round trip in the way — completes without a 429 at the shipped
+   default, proven by a test. **Not every number step 1 measured.** An unbroken
+   60-second drag of the scrub bar is 965 requests (1211 when gate A reproduced
+   it), which is over the limit and is a deliberate exclusion, not an oversight:
+   see the tradeoff recorded in the Log. Amended on 2026-08-31 from "a burst of
+   `Range` requests of the size measured in Build step 1", which read as a claim
+   over all of step 1's numbers and was not one any test made.
 3. `RATE_LIMIT_FILES_PER_MINUTE=0` disables the limit, proven by a test.
 4. The limiter is keyed as Build step 2 decides, and a second token from the
    same client is unaffected by the first token's exhausted bucket — proven by
    a test.
 5. `npm run check` and `npm test -- --project downloader` pass.
+
+## Gates
+
+Two gates ran in parallel on 2026-08-31, split by setup: **A** on the
+measurement, with real browsers; **B** on the code and this repo's invariants.
+Both ran on Sonnet against an Opus build. Both returned **CONCERNS**.
+
+Both records below are **written from the coordinator's relay of the reviews, by
+the builder — they are not the reviewers' own text.** Symbol and path names are
+preferred over `file:line` spans so the record cannot drift as the code moves.
+
+### Gate A — the measurement (2026-08-31, Sonnet on an Opus build) — CONCERNS
+
+Reproduced the central claim independently with real browsers: **6 requests /
+121 MB** for a load plus five deliberate seeks, matching the builder's table. Read
+the `delivered`-bytes caveat out of the measurement rig and confirmed it accurate.
+
+Extended the measurement to the other engines, favourably: **Firefox issues 3
+requests for a full continuous drag** — it barely re-requests at all — and WebKit
+~883 raw, ~560 with the latency control. **No engine fans out per seek.** Chromium
+is the demanding one, so sizing to Chromium sizes to all three.
+
+- **med — Done-when 2 over-claimed.** It read "a burst of `Range` requests of the
+  size measured in Build step 1", but step 1 measured several numbers including
+  965, and gate A reproduced an unbroken 60-second drag at **1211 req/min** with
+  the builder's own 40 ms control — over the limit. The only number any test pins
+  is 274. **Resolved by the user: keep 600, tighten the wording.** Done-when 2 is
+  amended to name the interrupted-scrub scenario it actually covers, and the
+  continuous-drag exclusion is recorded as a deliberate tradeoff in the Log.
+- **low — a wording error in the Log.** The claim that the 120-default test
+  "fails at seek 120" was wrong: it fails at the guard that opens the test,
+  before the request loop runs. Corrected.
+- **Gap stated rather than papered over:** gate A could not capture a 429 on a
+  request the `<video>` element itself issued, as opposed to a direct Node fetch.
+  It showed the route refusing a real client and the player degrading immediately
+  afterwards. Nothing to fix; recorded so the evidence is not overstated.
+
+### Gate B — code and invariants (2026-08-31, Sonnet on an Opus build) — CONCERNS
+
+Confirmed, so it need not be re-checked: `RATE_LIMITED` is the shared
+`@webtools/core` code with no re-wording at the call site; the 429 travels the
+real Fastify stack via `.inject()` on `createApp()`; the hook is genuinely wired
+per route; every citation in `.env.example`, `docs/02-DEPLOYMENT.md`,
+`tools/downloader/CLAUDE.md` and the Log resolves; the dl-29 trap-note edit is
+accurate and leaves nothing dangling. It also confirmed by counting — not
+estimating — that leaving `RATE_LIMIT_FILES_PER_MINUTE` un-zeroed in
+`playwright.config.ts` was right: `download.spec.ts` makes exactly one
+`GET /api/files/:token` per run under `workers: 1`, `fullyParallel: false`,
+`retries: 0`.
+
+- **high — the file token reached unredacted log lines on every request to this
+  route.** Pre-existing, not introduced here; `redactUrl` and `redactHeaders`
+  were imported nowhere in the downloader API. The reviewer reproduced a line
+  containing a literal token on an ordinary 200. The user chose to **fold the fix
+  in here rather than file it**. Fixed: `redactLoggedUrl` in `request-log.ts`,
+  applied at both global sites. `redactUrl` was measured to be the wrong
+  instrument and was not used; the reasoning is on the function and in the Log.
+  `@webtools/core` is untouched.
+- **med — the shared seam was unpinned.** Mutating `createRateLimitHook`'s
+  default key to a constant produced zero failures. Reproduced, and found worse
+  than reported: the mutant survives **all 228 tests in the api suite**, not just
+  the 29 in `rate-limit.test.ts`. Two tests now inject distinct `remoteAddress`
+  values through the wired hook; both go red against the mutant.
+- **low — `fileBucketKey`'s comment overstated its fallback.** `isWellFormedToken`
+  checks length and charset, not existence, so well-formed guesses still mint a
+  bucket each; `maxKeys` is what bounds the map. Comment corrected to describe
+  what actually protects it.
+- **resolved, no action — key truncation.** 16 base64url characters is 96 bits;
+  forcing a collision needs a ~2^96 preimage, and the worst outcome is two files
+  sharing a bucket, never an authorisation bypass.
 
 ## Log
 
@@ -145,8 +222,11 @@ Traps worth knowing in advance:
   and 965 in a pathological one. **The brief's own suggested number, 120, breaks
   playback**, and I proved it rather than argued it: with
   `API_DEFAULTS.rateLimitFilesPerMinute` temporarily set to 120, the
-  "measured burst passes at the shipped default" test fails at seek 120. Set
-  back to 600 and it passes.
+  "measured burst passes at the shipped default" test goes red. It fails at the
+  guard `expect(MEASURED_SCRUB_BURST).toBeLessThan(API_DEFAULTS.…)` that opens
+  the test, before the request loop under it runs at all — corrected on
+  2026-08-31 from "fails at seek 120", which described a loop that never got the
+  chance. Set back to 600 and it passes.
 
   Two smaller corrections to the brief. `Content-Disposition: attachment` plus
   `Content-Type: application/octet-stream` — the headers this route actually
@@ -218,3 +298,81 @@ Traps worth knowing in advance:
   on means the e2e exercises the shipped default instead of a disabled limiter.
   Deliberately **not** touched CodeQL alert 3 — dismissing or closing it is not
   this branch's to do.
+
+- **2026-08-31** — Gate findings applied. Three code changes, two corrections to
+  the entry above, and one tradeoff that was implied and is now written down.
+
+  **The file token was reaching log lines on every request to this route, and
+  that is now fixed here rather than filed.** Pre-existing, not introduced by the
+  metering. Both hooks that log `request.url` for _every_ route wrote the token
+  verbatim: the `onResponse` line in `request-log.ts` and the error handler in
+  `server.ts`. `redactUrl` and `redactHeaders` were imported nowhere in the
+  downloader API. Reproduced by removing the redaction after writing it and
+  counting the leaked lines: **3** on a served-then-refused pair (the 200's
+  request line, the 429's rejection line, the 429's request line) and **2** on an
+  ordinary 410 expiry. So it leaked on success, on the pre-existing
+  `FILE_EXPIRED` and `JOB_NOT_FOUND` paths, and on the `RATE_LIMITED` this
+  ticket added.
+
+  **`redactUrl` is the wrong instrument, and reaching for it would have made
+  things worse in two directions at once.** It parses an _absolute_ URL and drops
+  its _query string_, because the credential it was built for is a signed URL's
+  HMAC. Here the credential is a **path segment**, and a Fastify `request.url` is
+  origin-relative — so `new URL` throws and its `catch` returns
+  `[unparsable-url]`, which would have blanked the URL on every log line in the
+  service while still not addressing a path-segment secret had it parsed. The fix
+  is `redactLoggedUrl` in `request-log.ts`: it replaces the segment after
+  `ROUTES.file("")` and leaves every other URL byte-identical. The prefix is read
+  off `ROUTES` rather than written out, so a route that moves takes its redaction
+  with it. **No `@webtools/core` change was needed** — the shared package is
+  untouched, which is why this did not have to come back as a question.
+
+  Job ids are deliberately _not_ redacted. `jobs/tokens.ts` already states the
+  distinction this reads off: the file token is the authorisation, and a job id
+  is not a secret precisely because it already appears in URLs the client holds
+  and on every orchestrator line. Redacting it would cost the request log its
+  reason to exist. There is a test asserting `/api/jobs`, `?limit=5` and
+  `/api/jobs/:id` survive untouched, so the cure cannot quietly become the
+  disease.
+
+  **The shared seam was unpinned, and worse than reported.** Mutating
+  `createRateLimitHook`'s default key to a constant passed not just the 29 tests
+  in `rate-limit.test.ts` but **all 228 tests in the api suite** — every
+  `inject()` in the repo shares one simulated loopback address, so "clients have
+  separate buckets" was only ever proven against the bare `RateLimiter`, never
+  through the hook that has to ask it the right question. Two tests now inject
+  distinct `remoteAddress` values through the wired `jobs` hook: one for two IPv4
+  clients, one asserting a /64 is a single customer. Both go red against the
+  mutant and green against the real default.
+
+  **`fileBucketKey`'s fallback comment overstated itself.** It claimed the
+  malformed-token branch stops a scanner minting a bucket per guess.
+  `isWellFormedToken` checks length and charset, not existence, so a _well-formed_
+  guess — the realistic case — still mints one. What bounds the map is
+  `RateLimiter`'s `maxKeys` (10,000, least-recently-seen eviction), not that
+  branch. The comment now says so, and says what the fallback does buy: junk
+  shares one allowance, and no guess of any shape lands in a real file's bucket.
+  Not exploitable either way; the claim was simply in the wrong place.
+
+  **The continuous-drag exclusion, stated rather than implied.** 600/min clears
+  every _interrupted_ scrub pattern measured — 274 at the top, with a 40 ms round
+  trip — and does **not** clear an unbroken 60-second drag, measured at 965 here
+  and 1211 on the gate's reproduction. Clearing that would need ~1500/min, at
+  which point the bucket is 6% of the 24,132/min an unmetered hammer achieved and
+  has stopped being a limit. The tradeoff taken: a user who drags the scrub bar
+  continuously for a full minute without pausing gets a 429 and their player
+  stops. That is a real cost, it is not hypothetical, and `RATE_LIMIT_FILES_PER_MINUTE`
+  is the operator's answer if their audience does it. Done-when 2 above is
+  amended to name the scenario the test actually covers.
+
+  **The truncation question was raised and closed with no change**: 16 base64url
+  characters is 96 bits, forcing a collision needs a ~2^96 preimage, and the worst
+  outcome of one is two files sharing a bucket — never an authorisation bypass.
+
+  Two claims in the entry above were checked by the gates and held: no engine
+  fans out per seek (Firefox issues **3** requests for a full continuous drag,
+  WebKit ~560 with the latency control — Chromium is the demanding one), and
+  leaving `RATE_LIMIT_FILES_PER_MINUTE` un-zeroed in `playwright.config.ts` was
+  right, confirmed by counting rather than estimating: `download.spec.ts` makes
+  exactly one `GET /api/files/:token` per run under `workers: 1`,
+  `fullyParallel: false`, `retries: 0`.
