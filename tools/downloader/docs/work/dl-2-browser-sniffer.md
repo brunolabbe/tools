@@ -85,3 +85,11 @@ drives only the direct resolver — dragging Chromium and a network extractor in
 a UI test would make it slow and flaky without proving anything new — so nothing
 exercises sniffer → engine → UI in one piece. That seam is covered by types and
 by the API's own tests.
+
+**2026-08-30 — half of that gap is closed; the other half is not.**
+[dl-16](./dl-16-e2e-through-the-sniffer.md) added a second e2e suite,
+`npm run e2e:downloader:sniffer`, which does exercise sniffer → engine → UI in
+one piece against a local MSE page. So the sentence above about the E2E suite is
+now true only of the fast suite. **The container half stands exactly as written**:
+that run is a `webServer` on the host, and no probe of a real MSE page has still
+ever happened inside the image.

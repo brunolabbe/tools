@@ -212,6 +212,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
       // them back on explicitly.
       rateLimitProbePerMinute: 0,
       rateLimitJobsPerMinute: 0,
+      rateLimitFilesPerMinute: 0,
       ...options.config,
     },
   });

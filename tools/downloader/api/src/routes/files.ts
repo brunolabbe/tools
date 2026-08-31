@@ -15,13 +15,16 @@
  *    nothing and turns a would-be traversal into a 500.
  */
 
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import { AppError, ROUTES } from "@downloader/contract";
 import { assertRealPathInside } from "@downloader/engine";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import { clientKey } from "@webtools/core/rate-limit";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.ts";
 import { isWellFormedToken } from "../jobs/tokens.ts";
+import { createRateLimitHook } from "../rate-limit.ts";
 
 interface ByteRange {
   start: number;
@@ -65,57 +68,106 @@ export function contentDisposition(filename: string): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
+/**
+ * The bucket key for one request to this route.
+ *
+ * **The token, not the address.** The other two limited routes protect the
+ * service and key on `clientKey(request.ip)`; here the thing being protected is
+ * one file, and the token is what both names it and bounds who may ask for it.
+ * Keying on the token means a leaked link cannot outrun its own bucket by being
+ * fetched from many addresses at once — the pair `(token, ip)` would hand each
+ * of those addresses a fresh allowance, which is precisely the case worth
+ * stopping. It also means the limit survives CGNAT and a reverse proxy, neither
+ * of which an address key does; `trustProxy` is off by default and cannot be
+ * turned on safely without knowing the deployment.
+ *
+ * The token is hashed because this key reaches a log line, and a file token is
+ * a live credential — the same reason `redactUrl` exists. A prefix of the digest
+ * is a stable bucket name that leaks nothing.
+ *
+ * A token that is not even well formed cannot name a file, so it falls back to
+ * the address. Be precise about what that buys: `isWellFormedToken` checks
+ * length and charset, not existence, so a scanner guessing *well-formed* tokens
+ * — the realistic case — still mints a bucket per guess. What bounds that is
+ * `RateLimiter`'s `maxKeys` (10,000, evicted least-recently-seen), not this
+ * branch. The fallback buys the two things it can: obviously-malformed junk
+ * shares one allowance rather than getting a fresh one per request, and no
+ * amount of guessing lands in a real file's bucket.
+ */
+function fileBucketKey(request: FastifyRequest): string {
+  const token = (request.params as { token?: unknown }).token;
+  if (typeof token !== "string" || !isWellFormedToken(token)) {
+    return `ip:${clientKey(request.ip)}`;
+  }
+  return `token:${createHash("sha256").update(token).digest("base64url").slice(0, 16)}`;
+}
+
 export function registerFileRoutes(app: FastifyInstance, context: AppContext): void {
-  app.get<{ Params: { token: string } }>(ROUTES.file(":token"), async (request, reply) => {
-    const { token } = request.params;
-    // Rejected on shape before a database round trip, so scanning for tokens
-    // costs an attacker the same as any other 404.
-    if (!isWellFormedToken(token)) {
-      throw new AppError("JOB_NOT_FOUND", "That download link is not valid.");
-    }
-
-    const record = context.store.findToken(token);
-    if (record === null) {
-      throw new AppError("JOB_NOT_FOUND", "That download link is not valid.");
-    }
-
-    if (Date.parse(record.expiresAt) <= context.now().getTime()) {
-      throw new AppError("FILE_EXPIRED", undefined, { details: { expiresAt: record.expiresAt } });
-    }
-
-    await assertRealPathInside(context.engine.storage.root, record.path);
-
-    let size: number;
-    try {
-      const stat = await fs.stat(record.path);
-      if (!stat.isFile()) throw new AppError("FILE_EXPIRED");
-      size = stat.size;
-    } catch {
-      // The row outlived the file — the retention sweep ran between the two.
-      // `FILE_EXPIRED` is the honest answer, not a 500.
-      throw new AppError("FILE_EXPIRED", undefined, { details: { expiresAt: record.expiresAt } });
-    }
-
-    reply.header("Content-Disposition", contentDisposition(record.filename));
-    reply.header("Content-Type", "application/octet-stream");
-    reply.header("Accept-Ranges", "bytes");
-    reply.header("Cache-Control", "private, no-store");
-
-    const range = parseRange(request.headers.range, size);
-    if (range === "unsatisfiable") {
-      reply.header("Content-Range", `bytes */${size}`);
-      return await reply.code(416).send();
-    }
-
-    if (range === null) {
-      reply.header("Content-Length", String(size));
-      return await sendStream(reply, record.path, 200);
-    }
-
-    reply.header("Content-Range", `bytes ${range.start}-${range.end}/${size}`);
-    reply.header("Content-Length", String(range.end - range.start + 1));
-    return await sendStream(reply, record.path, 206, range);
+  // Sized for a video player rather than a form: a `<video>` element issues one
+  // open-ended `Range` request per completed seek, so an ordinary scrub-bar
+  // drag is hundreds of requests a minute. See `rateLimitFilesPerMinute` and
+  // the dl-23 log for the measurement.
+  const rateLimit = createRateLimitHook({
+    limiter: context.rateLimits.files,
+    logger: context.logger,
+    scope: "files",
+    key: fileBucketKey,
   });
+
+  app.get<{ Params: { token: string } }>(
+    ROUTES.file(":token"),
+    { onRequest: rateLimit },
+    async (request, reply) => {
+      const { token } = request.params;
+      // Rejected on shape before a database round trip, so scanning for tokens
+      // costs an attacker the same as any other 404.
+      if (!isWellFormedToken(token)) {
+        throw new AppError("JOB_NOT_FOUND", "That download link is not valid.");
+      }
+
+      const record = context.store.findToken(token);
+      if (record === null) {
+        throw new AppError("JOB_NOT_FOUND", "That download link is not valid.");
+      }
+
+      if (Date.parse(record.expiresAt) <= context.now().getTime()) {
+        throw new AppError("FILE_EXPIRED", undefined, { details: { expiresAt: record.expiresAt } });
+      }
+
+      await assertRealPathInside(context.engine.storage.root, record.path);
+
+      let size: number;
+      try {
+        const stat = await fs.stat(record.path);
+        if (!stat.isFile()) throw new AppError("FILE_EXPIRED");
+        size = stat.size;
+      } catch {
+        // The row outlived the file — the retention sweep ran between the two.
+        // `FILE_EXPIRED` is the honest answer, not a 500.
+        throw new AppError("FILE_EXPIRED", undefined, { details: { expiresAt: record.expiresAt } });
+      }
+
+      reply.header("Content-Disposition", contentDisposition(record.filename));
+      reply.header("Content-Type", "application/octet-stream");
+      reply.header("Accept-Ranges", "bytes");
+      reply.header("Cache-Control", "private, no-store");
+
+      const range = parseRange(request.headers.range, size);
+      if (range === "unsatisfiable") {
+        reply.header("Content-Range", `bytes */${size}`);
+        return await reply.code(416).send();
+      }
+
+      if (range === null) {
+        reply.header("Content-Length", String(size));
+        return await sendStream(reply, record.path, 200);
+      }
+
+      reply.header("Content-Range", `bytes ${range.start}-${range.end}/${size}`);
+      reply.header("Content-Length", String(range.end - range.start + 1));
+      return await sendStream(reply, record.path, 206, range);
+    },
+  );
 }
 
 async function sendStream(

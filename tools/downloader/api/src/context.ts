@@ -52,8 +52,14 @@ export interface AppContext {
   events: JobEventHub;
   probeCache: ProbeCache;
   orchestrator: JobOrchestrator;
-  /** Per-IP token buckets, one per expensive endpoint. */
-  rateLimits: { probe: RateLimiter; jobs: RateLimiter };
+  /**
+   * Token buckets, one per expensive endpoint.
+   *
+   * `probe` and `jobs` are keyed per IP. `files` is not — it is keyed on the
+   * file's capability token, because what it protects is one file rather than
+   * the service. See `fileBucketKey` in `routes/files.ts`.
+   */
+  rateLimits: { probe: RateLimiter; jobs: RateLimiter; files: RateLimiter };
   /** Global cap on simultaneous probes, which no per-IP limit can provide. */
   probeGate: ConcurrencyGate;
   now: () => Date;

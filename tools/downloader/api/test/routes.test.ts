@@ -4,8 +4,14 @@
  */
 
 import path from "node:path";
-import { AppError, parseJobEvent, ROUTES } from "@downloader/contract";
-import type { JobResponse, ProbeResponse } from "@downloader/contract";
+import {
+  AppError,
+  jobListResponseSchema,
+  jobResponseSchema,
+  parseJobEvent,
+  ROUTES,
+} from "@downloader/contract";
+import type { JobListResponse, JobResponse, ProbeResponse } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { formatSseFrame } from "../src/routes/events.ts";
 import { contentDisposition, parseRange } from "../src/routes/files.ts";
@@ -131,6 +137,96 @@ describe("job routes", () => {
     const response = await harness.app.server.inject({ method: "GET", url: ROUTES.job("nope") });
     expect(response.statusCode).toBe(404);
     expect(response.json()).toMatchObject({ error: { code: "JOB_NOT_FOUND" } });
+  });
+});
+
+/** Runs a job to completion so there is a real token to leak. */
+async function completed(current: Harness): Promise<{ id: string; token: string }> {
+  const created = (
+    await current.app.server.inject({
+      method: "POST",
+      url: ROUTES.jobs,
+      payload: { url: SOURCE_URL },
+    })
+  ).json() as JobResponse;
+  const finished = await waitFor(
+    () => current.app.context.store.get(created.job.id),
+    (job) => job.status === "completed" || job.status === "failed",
+    { label: "job to finish" },
+  );
+  const url = finished.result?.downloadUrl ?? "";
+  return { id: created.job.id, token: url.slice(url.lastIndexOf("/") + 1) };
+}
+
+/**
+ * The job list is unauthenticated and unfiltered by caller, so anything it
+ * carries is world-readable to anyone who can reach the port.
+ *
+ * `contract/src/job.ts` calls `downloadUrl` *"opaque, unguessable... never a
+ * predictable id"*, and that is true — and beside the point once an endpoint
+ * hands the whole set out. Unguessable stops a search; it does not stop a
+ * listing. So the capability is stripped from the list and kept on the
+ * single-job read, where reaching it already requires knowing the job id.
+ *
+ * That trade only holds because a job id is `randomUUID()` — 122 bits from a
+ * CSPRNG (`routes/jobs.ts`, and the store never reassigns it). If job ids were
+ * ever made sequential or timestamped, this mitigation would move the hole
+ * rather than close it, and the list would need real authorisation instead.
+ */
+describe("a job list does not hand out capabilities", () => {
+  test("the list carries no download token, with nothing supplied", async () => {
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const { token } = await completed(harness);
+    expect(token).toHaveLength(43);
+
+    // No id, no token, no credential of any kind — the enumeration case.
+    const response = await harness.app.server.inject({ method: "GET", url: ROUTES.jobs });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain(token);
+    expect(response.body).not.toContain(ROUTES.file(""));
+
+    // The list is still worth having: everything else about the job survives,
+    // so this is a redaction and not an amputation.
+    const body = response.json() as JobListResponse;
+    expect(body.total).toBe(1);
+    expect(body.jobs[0]?.result).toMatchObject({ filename: "video.mp4", container: "mp4" });
+    expect(jobListResponseSchema.safeParse(body).success).toBe(true);
+  });
+
+  test("reading one job still carries it, because the app cannot work without it", async () => {
+    // The guard against this cure becoming a disease. `JobCard.tsx` renders the
+    // download button from `result.downloadUrl`, fed by `useJobs`'s `getJob`
+    // poll — strip it there and the product stops doing the thing it is for.
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const { id, token } = await completed(harness);
+
+    const response = await harness.app.server.inject({ method: "GET", url: ROUTES.job(id) });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as JobResponse;
+    expect(body.job.result?.downloadUrl).toBe(ROUTES.file(token));
+    expect(jobResponseSchema.safeParse(body).success).toBe(true);
+  });
+
+  test("a job id is not guessable, which is what makes the trade sound", async () => {
+    // If this ever fails, the list-only mitigation above stops being enough.
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const ids = new Set<string>();
+    for (let index = 0; index < 5; index++) {
+      // oxlint-disable-next-line no-await-in-loop
+      const created = (
+        await harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.jobs,
+          payload: { url: SOURCE_URL },
+        })
+      ).json() as JobResponse;
+      ids.add(created.job.id);
+      // RFC 4122 v4, variant 10xx: 122 bits from a CSPRNG.
+      expect(created.job.id).toMatch(
+        /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/u,
+      );
+    }
+    expect(ids.size).toBe(5);
   });
 });
 

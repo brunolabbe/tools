@@ -267,12 +267,15 @@ both surfaces with one code path.
   changes in one branch, the second of which can break the page silently. If it
   is worth doing — and it is — file it.
 - **The rate limiter.** `context.rateLimits` is
-  `{ probe: RateLimiter; jobs: RateLimiter }`
-  ([`context.ts`](../../api/src/context.ts)). The thumbnail route serves bytes
-  from memory by an unguessable token and costs nothing to answer, so it likely
-  needs no bucket of its own — but say so deliberately in the Log rather than
-  leaving it unconsidered, and note that dl-23 is open against the _download_
-  route for related reasons.
+  `{ probe: RateLimiter; jobs: RateLimiter; files: RateLimiter }` since dl-23
+  ([`context.ts`](../../api/src/context.ts)); the first two are keyed per IP and
+  `files` is keyed on the file token. The thumbnail route serves bytes from
+  memory by an unguessable token and costs nothing to answer, so it likely needs
+  no bucket of its own — but say so deliberately in the Log rather than leaving
+  it unconsidered. If you conclude otherwise, dl-23 left the seam ready:
+  `createRateLimitHook` takes an optional `key`, and `fileBucketKey` in
+  `routes/files.ts` is the worked example of keying on a capability rather than
+  an address.
 - **`withoutEgressProxy`.** The probe is rewritten before it goes out because the
   loopback proxy port _"is no client's business"_. Whatever you do in step 4 must
   compose with that, not bypass it.

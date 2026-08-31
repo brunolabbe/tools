@@ -250,6 +250,13 @@ function discoveryBlock(finds: readonly Find[]): string {
  * validated against `candidateSchema` rather than translated into it. `id` and
  * `specialist` are absent because neither is the model's to choose: the
  * orchestrator mints the id and knows perfectly well who it asked.
+ *
+ * **`provenance` is absent for the same reason, since pl-36** — asking for a
+ * field this tool discards is asking a model to spend tokens on a lie it might
+ * tell. `cost.provenance` is still shown, and is still overwritten by `accept`:
+ * `costEstimateSchema` requires the key, so a shape that omitted it would train
+ * the model to send a cost that fails validation. Its value here is the only
+ * one it can be, which is what makes it harmless to leave.
  */
 const REPLY_SHAPE = `{
   "candidates": [
@@ -260,8 +267,7 @@ const REPLY_SHAPE = `{
       "durationMinutes": 0,
       "cost": { "currency": "ISO-4217", "low": 0, "high": 0, "basis": "per-person | per-party", "provenance": { "kind": "model-asserted" } },
       "season": { "from": "MM-DD", "to": "MM-DD" },
-      "bookingLeadTimeDays": 0,
-      "provenance": { "kind": "model-asserted" }
+      "bookingLeadTimeDays": 0
     }
   ]
 }`;

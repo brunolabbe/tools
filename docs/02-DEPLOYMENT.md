@@ -248,6 +248,13 @@ Consider tightening these once it is reachable by more than you. The defaults in
 
 - `RATE_LIMIT_PROBE_PER_MINUTE` / `RATE_LIMIT_JOBS_PER_MINUTE` — per client, and
   meaningful now that `TRUST_PROXY` makes "client" mean the right thing.
+- `RATE_LIMIT_FILES_PER_MINUTE` — per **file token**, not per client, so it does
+  not depend on `TRUST_PROXY` and one leaked link cannot buy itself more
+  allowance by being fetched from more addresses. Its default is 600 because a
+  `<video>` element pointed at a download link issues one open-ended `Range`
+  request per seek: dl-23 measured 207–274 requests a minute from an ordinary
+  scrub-bar drag. Lower it only if you know nobody plays these links in a
+  browser; 0 turns it off.
 - `MAX_TOTAL_STORAGE_GB` and `FILE_RETENTION_HOURS` — the only things standing
   between a shared instance and a full disk.
 - A Cloudflare **WAF rate limiting rule** on `/api/` as a second layer, since it
