@@ -279,6 +279,83 @@ though the realistic regression, a plain sequential id, does fail it.
 - **Filed rather than fixed:** the list route is still unauthenticated.
   [dl-32](./dl-32-the-job-list-has-no-caller.md), at the user's request.
 
+### Gate E — 2026-08-31, PASS (reviewed at `1e6ff4d`)
+
+Defect hunt run by the reviewer at `medium`, over `origin/main...1e6ff4d`, on top of
+gates A–D.
+
+**What this gate re-derives vs. inherits.** The ticket's gates A–D and the Log were
+read in full first, then re-derived rather than trusted: this worktree was farmed
+and rebuilt, the downloader suite and the full monorepo suite re-run, the touched
+test files diffed for weakened assertions, every cited test body read rather than
+the Log's summary of it, and the `redactUrl`-vs-`redactLoggedUrl` reasoning
+independently confirmed by hand (`new URL('/api/files/abc')` does throw, so a
+Fastify `request.url` cannot be parsed by `redactUrl`). Gate A's real-browser
+measurements (274 / 965 / 1211 req-min) were **not** re-run — they need real
+Chromium, Firefox and WebKit instances, gate A already reproduced them
+independently with real browsers, and nothing in this diff changes the measurement
+code. They are treated as corroborated, not merely trusted.
+
+| Done when                                                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `GET /api/files/:token` refuses with 429 + `Retry-After` once exhausted                                                | proven — `rate-limit.test.ts:465` "refuses with a 429 and a Retry-After once the bucket is empty"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 2. The measured 274 req/min interrupted-scrub burst passes at the shipped default                                         | proven — `rate-limit.test.ts:518`, which asserts `MEASURED_SCRUB_BURST = 274 < API_DEFAULTS.rateLimitFilesPerMinute` and then drives 274 real `.inject()` calls, all 206                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 3. `RATE_LIMIT_FILES_PER_MINUTE=0` disables the limit                                                                     | proven — `rate-limit.test.ts:544` "zero disables it, for an operator serving large files to few people"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 4. Keyed as Build step 2 decided; a second token from the same client is unaffected by the first token's exhausted bucket | proven — `rate-limit.test.ts:565` "one exhausted link does not spend another link's allowance" (same simulated address, distinct tokens, second unaffected)                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 5. `npm run check` and `npm test -- --project downloader` pass                                                            | verified — re-ran both against `1e6ff4d` after rebuilding: `npm run check` exits 0; the downloader project is 845/845 (55 files), up from 824/824 at `origin/main` (`1d2647b`), a net +21 matching the new rate-limit, redaction and list-stripping coverage. Full monorepo `npm test`: 1786/1786. Every touched test file diffed for deletions and reworded assertions: only import-line churn plus one intentional strengthening (`jobSchema` to `jobListItemSchema` in `mock-api.test.ts`, reasoned in a comment — validating against the old schema would have passed for the wrong reason) |
+
+- **low** · the ticket records its gates under `## Gates`, not the `## Review`
+  heading `docs/01-TICKETS.md` specifies for a reviewed, non-filing ticket. This is
+  a real work-package, so the `## The gate on this filing` exception does not apply
+  either. Two ways to close it, and the reviewer did not pick one: (a) rename
+  `## Gates` to `## Review`, keeping A–E as subsections; or (b) leave `## Gates` as
+  historical and start a fresh `## Review` going forward. The heading mismatch means
+  tooling that greps `## Review` on this ticket finds nothing, for five gates' worth
+  of history.
+- **dropped** · `RATE_LIMIT_FILES_PER_MINUTE`'s env-var string is parsed by
+  `config.ts`'s private `int()` exactly as `RATE_LIMIT_JOBS_PER_MINUTE` and
+  `RATE_LIMIT_PROBE_PER_MINUTE` are, and none of the three is tested through an
+  actual `process.env` string — all are tested via the in-memory `config` override
+  in `createHarness`, which bypasses `int()`. Not a regression this diff introduces:
+  it is the pre-existing pattern of its two siblings, extended consistently rather
+  than fixed. Worth a ticket if anyone wants `int()` covered; not this one's to carry.
+- **dropped** · `egress-proxy.ts`'s `refused` / `upstreamRefused` / `unreachable`
+  log the full absolute proxied target URL — which can itself carry a signed
+  query-string credential per `contract/src/media.ts` — under the field name `host`.
+  Real, but out of scope: the file is untouched by this diff, it is a different
+  `IncomingMessage` than the one `redactLoggedUrl` covers, and the ticket's Log
+  already reasons this out for the identical file for the identical reason. Closer
+  kin to dl-32's `variant.url` observation than to dl-23.
+- **findings** · 3 identified at medium depth: 1 carried, 2 dropped with reasons
+  above. Gates A–D's own findings were independently re-checked rather than
+  re-summarised: the redaction fix (3 leaked lines served-then-refused, 2 on a 410,
+  now 0 — test bodies reread, not just the Log's count), the wire-level
+  list-stripping test (a `response.body` string check on the raw `.inject()`
+  payload, not a lenient `.safeParse`), the `?: never` compile-time barrier
+  (confirmed by reading the type), and the token-hash bucket key never reaching a
+  log line (`rate-limit.test.ts:617`).
+- NFR: **security** — this branch closes CodeQL alert 3 (missing rate limit) and,
+  folded in along the way, a real credential-in-logs leak (pre-existing, not
+  introduced here) that a scanner would plausibly also flag; nothing in the diff
+  looks newly flaggable (no shell, no eval, no weak crypto, no new unbounded regex,
+  no new unredacted secret sink). GHAS's own alert list could not be read — denied.
+  **performance** n/a beyond what is already measured. **reliability** n/a.
+  **maintainability** — the `toListItem` duplication between `routes/jobs.ts` and
+  `mock.ts` is real and deliberately deferred; the reviewer agrees with gate D that
+  the `downloadUrl?: never` barrier makes it safe against silent drift, and
+  re-confirmed the mechanism by reading the type.
+
+**Invariants walked.** No shell or spawn touched by this diff (n/a).
+`redactHeaders`/`redactUrl` — walked in full, and the branch's reason for _not_
+using `redactUrl` independently verified (`new URL()` throws on Fastify's
+origin-relative `request.url`). SSRF — n/a, no user-influenced URL introduced.
+Faked progress — n/a. Contract not edited unilaterally — the Log documents the user
+authorising the `JobListItem`/`JobListResult` addition, which satisfies this. Test
+registration — no new test files, nothing to register. Dockerfile and
+workspace-closure — no new workspace dependency, confirmed via `git diff --stat` on
+`package.json` and `Dockerfile` (empty). Style — no `any`, no `console`,
+`import type` used throughout, checked by grep.
+
 ## Log
 
 - **2026-08-23** — Filed from CodeQL alert 3 (`js/missing-rate-limiting`, high,
@@ -588,3 +665,27 @@ though the realistic regression, a plain sequential id, does fail it.
   wire-level assertion instead — and the v4-shape test pins format, not entropy,
   so a contrived UUID-shaped counter would pass it. The realistic regression, a
   plain sequential id, does not.
+
+### On gate E's heading finding — surfaced, not resolved here
+
+Gate E's carried `low` is correct on its face: `docs/01-TICKETS.md` specifies
+`## Review` for a reviewed, non-filing ticket, and this ticket uses `## Gates`.
+The row stands as written.
+
+It is not being fixed on this branch, and the reason is a measurement gate E did
+not have. `## Gates` is not this ticket's invention: **six already-merged tickets
+use it** — `repo-3`, `repo-6`, `dl-20`, `dl-21`, `dl-24`, `dl-27` — alongside
+`dl-16`, which is in review now. So the divergence is between the documented
+format and an established practice across the repo, not a defect in this branch.
+Renaming the heading here would make this ticket consistent with the document and
+inconsistent with seven siblings, and would leave the underlying split untouched.
+
+The consequence worth recording, because it is the part that could bite: the board
+check that `repo-12` added keys on `## Review` to catch a ticket that is `status:
+ready` yet already carries a gate record. A ticket that records its gates under
+`## Gates` is invisible to that check. Neither this ticket nor `dl-16` is exposed —
+both are `status: done` — but a future `ready` ticket recording under `## Gates`
+would slip past it silently. That is the real defect behind the cosmetic one, it is
+repo-wide, and it wants its own ticket rather than a rename here.
+
+Recorded by the orchestrating agent, not by gate E.
