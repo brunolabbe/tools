@@ -306,16 +306,20 @@ function isCancellation(error: unknown, signal: AbortSignal | undefined): boolea
  *
  * `candidateProposalSchema` omits `provenance` so a specialist cannot state its
  * own, for the reason `ask.ts`'s header gives, which leaves this function
- * holding the only answer. Today it is `MODEL_ASSERTED` for every candidate,
- * which is exactly what the plan said before pl-36 — nothing about a run's
- * output changed, only who gets to say it.
+ * holding the only answer. It is `MODEL_ASSERTED` for every candidate, which is
+ * exactly what the plan said before pl-36 — nothing about a run's output
+ * changed, only who gets to say it.
  *
- * **This is deliberately the narrow half of pl-36.** Whether a candidate a
- * specialist wrote *from* a corridor `Find` should instead carry that find's
- * `sources` as a `grounded` provenance is an open decision — `Provenance` has
- * two members and pl-29's Build step 6 argued against a third — and the answer
- * lands here, on this object literal, whatever it turns out to be. The
- * plumbing is what pl-36 built; the taxonomy is not this function's to invent.
+ * **A candidate a specialist wrote *from* a corridor `Find` is `model-asserted`
+ * too, and pl-36 settled that permanently.** Not for want of a `Source` — a
+ * `Find` carries its own — but because nothing can say *which* find a proposal
+ * was written from: the prompt hands a model a name and takes back prose, and no
+ * run in this repo has ever been captured with `finds` in it, so the name-match
+ * join it would take has never been scored against a single observation.
+ * Attributing OpenStreetMap to the wrong candidate is worse than attributing
+ * nothing. `Provenance` gains no third member for the same reason pl-29's Build
+ * step 6 gave. The argument, and what would have to be measured before reopening
+ * it is worth anything, is in pl-36's Log and is deliberately not restated here.
  *
  * `cost.provenance` is overwritten rather than omitted, for the schema reason
  * `ask.ts` records. A price is §5's fastest-ageing fact and the one a reader is

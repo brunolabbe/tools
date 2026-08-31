@@ -44,10 +44,22 @@
  * nothing to run and nothing to fail. A statement about a *different package*,
  * written in the present tense, in a comment justifying a change to *this* one,
  * is invisible to every gate this repo has: the tests cover the file the comment
- * is in. So the tell is grammatical, not technical — **a doc comment describing
- * what some other package does is an assertion nothing here can check**, and it
- * should be written as the intent it is, with the ticket that would deliver it,
- * or not written at all.
+ * is in.
+ *
+ * **The rule, stated wider than this file's case — because the narrow version of
+ * it did not survive its own commit.** The first draft of this note said the
+ * tell was cross-package: a comment describing what *another* package does is an
+ * assertion nothing here can check. True, and too small. Within the same ticket,
+ * two comments in `agent` that described this taxonomy as an *open decision*
+ * went stale the moment it was decided — same-package, and true when written.
+ * The mechanism both share is not scope, it is the falsifier: **ask whether the
+ * change that would make a sentence untrue must edit the file the sentence is
+ * in.** A claim about `agent`'s behaviour is falsified by a commit in `agent`. A
+ * claim that a question is open is falsified by a decision recorded in a
+ * ticket's Log, which touches no source file at all. Neither arrives in a diff a
+ * reviewer of this file will ever see. What belongs in a comment is what the
+ * code beside it does, and a pointer; what belongs in the ticket is the state of
+ * the argument, where it is dated and append-only.
  */
 
 import type { Provenance, Source } from "@planner/contract";

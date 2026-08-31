@@ -157,12 +157,34 @@ subsection with it.
   closure — a model can no longer state its own `provenance`.
 - **findings** · 1 high (now closed), 3 low.
 
-### Gate 2 — pending
+### Gate 2 — 2026-08-31, on the `reading` fold-in
 
-The `PlanRevision.reading` render folded in on round 2 is code no gate has seen.
-A narrow gate scoped to that fold-in alone — not a re-review of the branch — is
-expected after the pull request opens, and its record belongs here as a third
-subsection rather than as an edit to either above.
+**Gate: PASS**, one `low`. Scoped to the fold-in alone, as reserved above.
+**Written from the coordinator's relay, not the reviewer's own text** — the same
+caveat Gate 1 carries, and for the same reason.
+
+What it reproduced rather than took on trust:
+
+- **Both new tests mutation-tested in both directions.** Deleting
+  `<RouteReading …>` at `PlanView.tsx:235` reddened the positive test; deleting
+  the `reading.length === 0` guard reddened the negative. Neither is vacuous.
+- **`revision()`'s fourth parameter defaults such that every pre-existing caller
+  is unchanged** — the fixture-builder change this Log flagged as the one item
+  outside the coordinator's own sizing.
+- **The copy renders as intended** — "Background on this route is something we
+  read at a source — reading it is not recommending it" — with no endorsing
+  language, matching `TravelSources`'s already-shipped capitalised-noun cadence.
+- **Every caller of `citations()` read, and the reachability argument
+  confirmed**: `measured()` is called from exactly one site with a two-element
+  array, so at most three sources against a ceiling of five. The guard is dead
+  today and leaving it unpinned was right.
+
+- **low** · `agent/src/orchestrator.ts` and `agent/src/ask.ts` still described
+  the discovery-candidate taxonomy as an open question, after the commit that
+  settled it. Neither file was in that commit's diff, so the staleness was
+  _produced_ by the decision rather than inherited. **Fixed in this round**, with
+  the note below, which is the part worth more than the corrected sentences.
+- **findings** · 0 high, 0 med, 1 low (closed).
 
 ## Log
 
@@ -454,3 +476,74 @@ returns nothing for patterns that are plainly present, which reads as a failed
 edit rather than as a damaged file. Caught with `od -c`, repaired with `perl -i
 -pe 's/\x00/.../'`. Check with `perl -ne 'print if /\x00/'`, not with `grep`,
 which is the tool the problem disables.
+
+### Third round — the rule did not catch its own neighbours
+
+Gate 2 found `agent/src/orchestrator.ts` and `agent/src/ask.ts` still calling
+the discovery-candidate taxonomy an open question — "is an open decision… the
+answer lands here… whatever it turns out to be", "pl-36's remaining question" —
+after the commit that settled it. Reproduced by reading both against this Log's
+own decision section before touching either. Both corrected; the tense on the
+_code_ was already right, and it was the tense on the _process_ that was wrong.
+
+**The gate's own observation is the finding: this is the same defect this round
+diagnosed in `Provenance.tsx`, and it recurred immediately, in the two files
+that actually govern the decision.** So the question worth answering is not what
+the sentences should have said. It is why the rule written a few hours earlier
+did not cover the paragraph next door.
+
+**Because the rule was written about a symptom.** It said the tell was
+_grammatical_ — a comment describing what some **other package** does is an
+assertion nothing here can check. That is true, and it is one case of something
+wider. These two comments are the opposite shape on every axis it named: they
+describe **this** package, they were **true** when written, and they are about a
+_question_ rather than about behaviour. The narrow rule cannot see them, because
+scope was never the mechanism.
+
+**The mechanism is the falsifier, and the wider rule is one question: must the
+change that would make this sentence untrue edit the file the sentence is in?**
+
+| sentence                                                         | what would falsify it           | in this file's diff? |
+| ---------------------------------------------------------------- | ------------------------------- | -------------------- |
+| "a discovery-derived candidate's `provenance` is `grounded`"     | a commit in `agent`             | no — went stale      |
+| "whether it should be `grounded` is an open decision"            | a decision recorded in a ticket | no — went stale      |
+| "`cost.provenance` is overwritten because the schema is refined" | editing this object literal     | yes — safe           |
+| "it is `model-asserted`; the argument is in pl-36's Log"         | editing this object literal     | yes — safe           |
+
+The second row is the one the narrow rule missed and the one that is easiest to
+write, because **a decision recorded in a ticket's Log touches no source file at
+all** — there is no commit anywhere that a reviewer of `orchestrator.ts` would
+see. That is precisely what the gate meant by the staleness being _produced_ by
+the decision rather than inherited: this Log entry is the diff that falsified
+those two comments, and it is in another directory.
+
+`Provenance.tsx`'s note has been rewritten to teach the wider rule rather than
+the narrow one, in the file that teaches it — leaving a rule this branch has
+just shown to be too small, in the paragraph that states it, would have been the
+same mistake a third time.
+
+**This repo has now recorded the same mechanism three times in three media**, and
+that is the reason to write it down rather than to fix three sentences. pl-35's
+Log has it for citations: "a citation can go stale from a change on a branch that
+never touches the file carrying it… the edit-list and the re-derive-list are not
+the same list." This round has it for a cross-package doc comment, and now for an
+in-package one. Same shape every time: **the set of files an event edits is not
+the set of files it invalidates**, and nothing in this repo computes the second
+from the first. `scripts/citations.mjs` closes exactly one corner of it — a
+`file:line` a tool can re-resolve — and prose is the rest of it, unchecked.
+
+**Considered and rejected: leaving the two comments as a historical record of
+what was open at the time.** It is a legitimate answer and it is the wrong one
+here, for three reasons. A doc comment is read in the present tense by default —
+nobody opens `accept()` for archaeology, they open it to learn what the code does
+now. The history already has a home built for it, dated and append-only, which is
+this Log. And a stale "this is an open decision" is worse than a stale "why",
+because it is an _invitation_: the next agent reads it, reopens a question that
+was settled on a measurement, and pays for the round pl-36's decision section
+exists to prevent. History belongs where it is dated; a comment says what is
+true now, and points.
+
+**Scope note.** Three files changed this round — the two stale comments and
+`Provenance.tsx`'s rule — all already in this branch's diff. No source behaviour
+changed and no test was added or altered, so the suites below are the same
+assertions as round 2 over corrected prose.

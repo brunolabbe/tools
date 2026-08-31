@@ -33,9 +33,11 @@
  * clickable link off a URL it made up. The one field whose job is to say
  * whether the model is to be believed cannot be a field the model fills in. It
  * follows this file's own opening rule — *a model reply is untrusted input* —
- * and it is the reason pl-36's remaining question, which sources a candidate
- * written off a `Find` should carry, is answerable at all: there is now exactly
- * one place in this tool that decides, and it is `accept` in `orchestrator.ts`.
+ * and it is what made pl-36's other question — which sources a candidate written
+ * off a `Find` should carry — answerable at all: there is exactly one place in
+ * this tool that decides, `accept` in `orchestrator.ts`, and that is where
+ * pl-36's answer landed. It is `model-asserted`, and the reasoning is on that
+ * function rather than duplicated here.
  *
  * `CostEstimate.provenance` is **not** omitted, because `costEstimateSchema` is
  * refined and a refined schema has no `.omit`; splitting it would be a contract
