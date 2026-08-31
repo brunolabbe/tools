@@ -436,6 +436,41 @@ describe("redactLoggedUrl", () => {
     expect(redactLoggedUrl(ROUTES.health)).toBe(ROUTES.health);
   });
 
+  test("the awkward shapes a token can arrive in", () => {
+    // Verified by hand during gate C and pinned here, because for
+    // credential-handling code "someone checked once" is not a guarantee.
+    const prefix = ROUTES.file("");
+
+    // A trailing slash: the segment ends, the slash survives.
+    expect(redactLoggedUrl(`${ROUTES.file("abc")}/`)).toBe(`${prefix}${REDACTED}/`);
+    // Percent-encoded: still one segment, and still replaced whole.
+    expect(redactLoggedUrl(ROUTES.file("a%2Fb"))).toBe(`${prefix}${REDACTED}`);
+    // Empty token. Fastify will not route it, but the hooks log what arrived.
+    expect(redactLoggedUrl(prefix)).toBe(`${prefix}${REDACTED}`);
+    // A double slash — the token is empty and the rest is kept as it came.
+    expect(redactLoggedUrl(`${prefix}/abc`)).toBe(`${prefix}${REDACTED}/abc`);
+    // Regex metacharacters in the token. `startsWith` and `slice` are used
+    // rather than a constructed pattern precisely so this cannot matter.
+    expect(redactLoggedUrl(ROUTES.file(".*+^${}()|[]\\"))).toBe(`${prefix}${REDACTED}`);
+    // With a `?` among them the cut lands at the query delimiter, which is
+    // right: a real token is base64url, so `?` `#` and `/` are never part of
+    // one, and treating them as delimiters is what the router does too. The
+    // path segment is still replaced whole, which is the property that matters.
+    expect(redactLoggedUrl(ROUTES.file("ab?cd"))).toBe(`${prefix}${REDACTED}?cd`);
+    // A fragment, which a server never sees but a log line might be handed.
+    expect(redactLoggedUrl(`${ROUTES.file("abc")}#frag`)).toBe(`${prefix}${REDACTED}#frag`);
+  });
+
+  test("a traversal attempt is redacted, not resolved", () => {
+    // Whatever this means to the router, the segment after the prefix is
+    // replaced and nothing downstream sees a token. The route's own
+    // `assertRealPathInside` is what answers traversal; this only has to not
+    // leak while it happens.
+    expect(redactLoggedUrl(`${ROUTES.file("..")}/etc/passwd`)).toBe(
+      `${ROUTES.file("")}${REDACTED}/etc/passwd`,
+    );
+  });
+
   test("a path that merely looks like the route is not treated as one", () => {
     // `startsWith` on a prefix ending in `/` cannot match `/api/filesomething`.
     expect(redactLoggedUrl("/api/filesomething")).toBe("/api/filesomething");

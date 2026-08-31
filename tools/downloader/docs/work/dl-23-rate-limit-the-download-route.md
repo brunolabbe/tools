@@ -111,9 +111,10 @@ Traps worth knowing in advance:
 
 ## Gates
 
-Two gates ran in parallel on 2026-08-31, split by setup: **A** on the
-measurement, with real browsers; **B** on the code and this repo's invariants.
-Both ran on Sonnet against an Opus build. Both returned **CONCERNS**.
+Three gates on 2026-08-31, all on Sonnet against an Opus build, all **CONCERNS**.
+**A** and **B** ran in parallel, split by setup: A on the measurement, with real
+browsers; B on the code and this repo's invariants. **C** ran afterwards over the
+work those two produced.
 
 Both records below are **written from the coordinator's relay of the reviews, by
 the builder — they are not the reviewers' own text.** Symbol and path names are
@@ -178,6 +179,58 @@ estimating — that leaving `RATE_LIMIT_FILES_PER_MINUTE` un-zeroed in
 - **resolved, no action — key truncation.** 16 base64url characters is 96 bits;
   forcing a collision needs a ~2^96 preimage, and the worst outcome is two files
   sharing a bucket, never an authorisation bypass.
+
+### Gate C — 2026-08-31, Sonnet on an Opus build — CONCERNS
+
+Also written from the coordinator's relay, by the builder, not the reviewer's own
+text.
+
+Reproduced, so it need not be re-checked: the redaction control exactly — **3**
+leaked lines on the served-then-refused pair and **2** on the 410 — plus an
+edge-case matrix over trailing slash, query string, fragment, percent-encoding,
+empty token, double slash, `../` traversal, look-alike prefixes and a
+regex-special-character token, **with no leak in any of them**. It confirmed the
+job-id guard is load-bearing by widening `CAPABILITY_PREFIXES` to `/api/` and
+watching 6 of 23 tests go red, confirmed the /64 assertion matches `clientKey`'s
+actual first-four-hextets grouping rather than merely its intent, and reproduced
+the constant-key mutant at **234/236 — the only two failures being the two new
+tests**, both through `.inject()`.
+
+- **high — the job list handed out live capabilities.** `GET /api/jobs` is
+  unauthenticated and unfiltered by caller and returned full `Job` records
+  including `result.downloadUrl`, with no id and no token supplied. Reproduced
+  here through the real stack before changing anything: the list test went red on
+  the unmodified route. `contract/src/job.ts` calls that field _"opaque,
+  unguessable… never a predictable id"_, which is true and beside the point —
+  unguessable stops a search, not a listing.
+
+  **The user chose to fold the mitigation in here, and authorised the contract
+  edit.** It is **list-only**: `GET /api/jobs` strips the field,
+  `GET /api/jobs/:id` keeps it. Stripping both would break the product —
+  `JobCard.tsx` renders the download button from `result.downloadUrl`, fed by
+  `useJobs`'s `getJob` poll.
+
+  **The load-bearing precondition was established before building, not assumed.**
+  A job id is `randomUUID()` in `routes/jobs.ts` — 122 bits from a CSPRNG — and
+  `JobStore.create` inserts the caller's id without reassigning it. There is no
+  other id path. So requiring a job id is a real cost to an attacker, and there
+  is a shipped test asserting the v4 shape so a future move to a sequential id
+  fails loudly instead of quietly reopening this.
+
+  Measured while checking the trap: **nothing in the UI calls `listJobs` at all.**
+  It exists on the client interface and in the mock, and the job list is rebuilt
+  from local storage plus per-job `getJob` polling. So the mitigation costs the
+  client nothing today, which is more than the trap warning assumed.
+
+- **low — the redaction edge cases were checked by hand but not pinned.** Now
+  shipped as tests. One expectation was wrong on first write and the code was
+  right: a `?` inside a token is a query delimiter, so the redaction cuts there.
+  The path segment is still replaced whole, the expectation was corrected, and
+  the reason is written into the test.
+- **low — a partial enumeration read as exhaustive.** `request.url` is touched in
+  seven places, not the four worth changing. The Log now lists all seven and says
+  why three are safe and why the two in `egress-proxy.ts` — a different `request`
+  object, the outbound proxy's raw `IncomingMessage` — are out of scope.
 
 ## Log
 
@@ -335,6 +388,18 @@ estimating — that leaving `RATE_LIMIT_FILES_PER_MINUTE` un-zeroed in
   `/api/jobs/:id` survive untouched, so the cure cannot quietly become the
   disease.
 
+  **The full enumeration, since a partial one reads as exhaustive.** `request.url`
+  is touched in **seven** places in the API, not the four worth changing. Two are
+  the leak and are fixed. Three are safe and stay: `isNoisy` in `request-log.ts`
+  and `serveIndexForUnknownPath` in `routes/web.ts` both do a `startsWith` and
+  log nothing, and `setNotFoundHandler` puts the path in a _response body_ rather
+  than a log — echoed to the caller who sent it, and unreachable for a real
+  download link, which matches a route. The last two, in `egress-proxy.ts`, are a
+  **different `request` object entirely**: the outbound proxy's raw
+  `IncomingMessage`, whose `url` is a third-party origin's URL and never this
+  service's path. They are out of scope for that reason and not because nobody
+  looked.
+
   **The shared seam was unpinned, and worse than reported.** Mutating
   `createRateLimitHook`'s default key to a constant passed not just the 29 tests
   in `rate-limit.test.ts` but **all 228 tests in the api suite** — every
@@ -376,3 +441,55 @@ estimating — that leaving `RATE_LIMIT_FILES_PER_MINUTE` un-zeroed in
   right, confirmed by counting rather than estimating: `download.spec.ts` makes
   exactly one `GET /api/files/:token` per run under `workers: 1`,
   `fullyParallel: false`, `retries: 0`.
+
+- **2026-08-31** — Gate C applied. The job list was handing out live download
+  tokens; folded in on the user's decision, with the contract edit authorised
+  rather than taken unilaterally.
+
+  **The precondition, established before building.** The mitigation is list-only
+  — `GET /api/jobs` strips `result.downloadUrl`, `GET /api/jobs/:id` keeps it —
+  and that only closes the hole if a job id is hard to guess. It is:
+  `randomUUID()` in `routes/jobs.ts`, 122 bits from a CSPRNG, and `JobStore.create`
+  inserts the id it is given without reassigning it. No other id path exists. A
+  shipped test asserts the RFC 4122 v4 shape, so a future move to a sequential or
+  timestamped id fails loudly instead of silently reopening this.
+
+  **Why list-only rather than both.** `JobCard.tsx` renders the download button
+  from `result.downloadUrl`, fed by `useJobs`'s `getJob` poll. Stripping it there
+  removes the product's entire function. Measured while checking that: **nothing
+  in the UI calls `listJobs`** — it exists on the client interface and in the
+  mock, and the job list is rebuilt from local storage plus per-job polling. So
+  this costs the client nothing today.
+
+  **A distinct list shape, not an optional field.** The rejected reading was
+  `downloadUrl?: string` on `JobResult`. That describes one endpoint's behaviour
+  by weakening the type at every other use — the SSE `completed` frame,
+  `JobResponse`, the store, the download button — each of which would then carry
+  a guard for a case that cannot arise there. Instead `JobListResult` and
+  `JobListItem`, with `jobListItemSchema` derived by `.omit`/`.extend` so a field
+  added to `jobSchema` reaches the list automatically and only `downloadUrl` is
+  ever special-cased.
+
+  **The first version of that type documented the redaction without enforcing
+  it, and I only found out by trying.** With `JobListResult = Omit<JobResult,
+"downloadUrl">`, TypeScript's structural typing accepts a full `Job[]` as
+  `JobListItem[]` — I removed the `.map(toListItem)` and the API compiled clean.
+  Adding `downloadUrl?: never` makes it a real barrier: the unstripped route now
+  fails to compile, and so did `mock.ts`, which is the proof it catches a second
+  implementation rather than just the one I was looking at. `toListItem` spells
+  the result out field by field rather than spreading with `downloadUrl`
+  destructured away, so a field added to `JobResult` later must be consciously
+  admitted to the list instead of being forwarded silently.
+
+  **What this does not do.** It closes _enumeration_ — harvesting every live
+  token from one unauthenticated call. It does not authenticate the list, which
+  still reveals source URLs, titles and job ids to anyone who can reach the port.
+  That is a larger change than a gate finding should carry and belongs in its own
+  ticket.
+
+  Also this round: the five redaction edge cases gate C checked by hand are now
+  shipped tests. One of my expectations was wrong and the code was right — a `?`
+  inside a token is a query delimiter, so the redaction cuts there; the path
+  segment is still replaced whole, and the test now says why. And the
+  `request.url` enumeration above is corrected from four sites to all seven, with
+  the reason each of the other three is out of scope.
