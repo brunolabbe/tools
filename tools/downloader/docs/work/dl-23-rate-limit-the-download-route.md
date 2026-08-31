@@ -111,10 +111,11 @@ Traps worth knowing in advance:
 
 ## Gates
 
-Three gates on 2026-08-31, all on Sonnet against an Opus build, all **CONCERNS**.
-**A** and **B** ran in parallel, split by setup: A on the measurement, with real
-browsers; B on the code and this repo's invariants. **C** ran afterwards over the
-work those two produced.
+Four gates on 2026-08-31, all on Sonnet against an Opus build. **A** and **B**
+ran in parallel, split by setup: A on the measurement, with real browsers; B on
+the code and this repo's invariants. **C** then ran over the work those two
+produced, and **D** over C's. A, B and C returned **CONCERNS**; D returned
+**PASS**.
 
 Both records below are **written from the coordinator's relay of the reviews, by
 the builder — they are not the reviewers' own text.** Symbol and path names are
@@ -231,6 +232,52 @@ tests**, both through `.inject()`.
   seven places, not the four worth changing. The Log now lists all seven and says
   why three are safe and why the two in `egress-proxy.ts` — a different `request`
   object, the outbound proxy's raw `IncomingMessage` — are out of scope.
+
+### Gate D — 2026-08-31, Sonnet on an Opus build — PASS
+
+Written from the coordinator's relay, by the builder, not the reviewer's own
+text. Two `low` findings, neither blocking.
+
+Reproduced, so none of it needs re-checking: **both halves of the barrier
+claim** — removing `.map(toListItem)` fails to compile, and dropping
+`downloadUrl?: never` makes that same unmapped route compile clean, which is the
+difference between a type that documents a redaction and one that enforces it.
+It **added a field to `JobResult`** and confirmed `toListItem` fails to compile
+rather than silently forwarding or silently dropping it, so the comment's claim
+about the explicit destructure is exactly right. It **mutated the id generator to
+a sequential id** and watched the v4-shape test go red. It confirmed the SSE
+`completed` frame still carries a full `JobResult`, so the UI can still learn its
+link. And it verified the seven-site `request.url` enumeration and every stated
+reason for it.
+
+**The question worth asking was whether the list test proves the wire or merely
+the client**, since `jobListItemSchema` is non-strict and zod silently strips
+unknown keys — a client-side assertion would pass while the token still crossed
+the network. It patched the route with a cast to bypass the compiler and the test
+failed, because `expect(response.body).not.toContain(token)` reads the raw
+`.inject()` body. The claim is server-side.
+
+Two informational notes, neither actioned: the `?: never` barrier is defeatable
+by an explicit `as JobListItem[]` cast, which is inherent to TypeScript and is
+independently caught at runtime by that wire-level test; and the v4-shape test
+pins format rather than entropy, so a contrived UUID-shaped counter would pass —
+though the realistic regression, a plain sequential id, does fail it.
+
+- **low — the mock's stripping branch had no runtime cover.**
+  `mock-api.test.ts`'s existing `listJobs` test passes only because its jobs
+  never reach `completed`, so `downloadUrl` is never examined. Fixed: a test now
+  runs a job to completion and asserts the list entry has no `downloadUrl` while
+  `getJob` does, mirroring the API-side pair. Verified red by bypassing the
+  mock's stripping. The existing test was also switched from `jobSchema` to
+  `jobListItemSchema`, which is the shape it actually receives.
+- **low — `toListItem` is now duplicated byte-for-byte in `routes/jobs.ts` and
+  `mock.ts`.** Correctly identified as the second real consumer the repo's rule
+  names. **Deliberately not lifted** — the reasoning is in the Log, and the short
+  version is that this duplication cannot drift silently, because the
+  `downloadUrl?: never` barrier breaks both sites when `JobResult` changes, which
+  gate D itself proved by adding a field.
+- **Filed rather than fixed:** the list route is still unauthenticated.
+  [dl-32](./dl-32-the-job-list-has-no-caller.md), at the user's request.
 
 ## Log
 
@@ -493,3 +540,51 @@ tests**, both through `.inject()`.
   segment is still replaced whole, and the test now says why. And the
   `request.url` enumeration above is corrected from four sites to all seven, with
   the reason each of the other three is out of scope.
+
+- **2026-08-31** — Gate D (PASS) applied. Two lows and one deferral, and the
+  deferral is the part worth reading.
+
+  **`toListItem` is duplicated in `routes/jobs.ts` and `mock.ts`, and is
+  deliberately not being lifted.** The repo's rule says shared code moves to
+  `packages/` on the second real consumer, and gate D is right that this is the
+  second. It is deferred anyway, for a reason specific to this pair rather than
+  as a general excuse: **the duplication cannot drift silently.** `JobListResult`
+  declares `downloadUrl?: never`, so any change to `JobResult` breaks _both_
+  copies at compile time — gate D proved exactly that by adding a field and
+  watching `toListItem` fail rather than silently forward it. The usual danger of
+  a copied function, that one copy is fixed and the other quietly is not, is
+  closed by the type.
+
+  Against that: lifting means touching `@downloader/contract` a second time on a
+  branch that has already taken four gates, and a helper that strips a credential
+  deserves its own review rather than a footnote in someone else's. **Lift it on
+  the next touch of either file.** This is a decision, not a smell someone
+  forgot — if a third consumer appears, or either copy needs changing for any
+  reason other than a `JobResult` field, that is the moment.
+
+  **The mock's stripping branch had compile-time cover and no runtime cover.**
+  `mock-api.test.ts`'s `listJobs` test passed only because its jobs never reach
+  `completed`, so `downloadUrl` was never examined — a real hole in a test that
+  looked like it covered this. There is now a completed-job test on the mock side
+  mirroring the API-side pair, verified red by bypassing the mock's stripping.
+  The older test was validating list entries against `jobSchema`; it now uses
+  `jobListItemSchema`, which is the shape it is actually handed.
+
+  **What is left of the exposure is filed as
+  [dl-32](./dl-32-the-job-list-has-no-caller.md)**, at the user's request. It
+  carries the measured reproduction and, as the thing it exists to force, the
+  decision nobody has taken: whether this service is single-trust-boundary by
+  design or `/api/jobs` should be scoped per caller. Four options with their real
+  costs, deliberately unranked, because the right answer depends on how the thing
+  is deployed and the code cannot say. Measuring the reproduction turned up one
+  thing worth flagging there and not obvious from here: the list still carries
+  `variant.url`, and `contract/src/media.ts` says these routinely carry a signed
+  query parameter — a second credential-bearing field, and the one `redactUrl`
+  was actually written for.
+
+  Two limits of this branch's guards, from gate D and worth inheriting rather
+  than rediscovering: the `?: never` barrier is defeatable by an explicit
+  `as JobListItem[]` cast — inherent to TypeScript, and caught at runtime by the
+  wire-level assertion instead — and the v4-shape test pins format, not entropy,
+  so a contrived UUID-shaped counter would pass it. The realistic regression, a
+  plain sequential id, does not.
