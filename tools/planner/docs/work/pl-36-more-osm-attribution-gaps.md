@@ -186,6 +186,69 @@ What it reproduced rather than took on trust:
   the note below, which is the part worth more than the corrected sentences.
 - **findings** · 0 high, 0 med, 1 low (closed).
 
+### Gate 3 — 2026-08-31, at `72f68ea` — defect hunt run by the reviewer, at `medium`, over `origin/main...72f68ea`
+
+**Gate: PASS**
+
+**What I re-derived vs. what I am not re-deriving.** Gates 1 and 2 already recorded
+in the ticket are, by their own text, "the coordinator's relay, not the reviewer's
+own text" — so I did not treat either as ground truth. I re-read the whole diff
+myself, re-ran the suites, re-resolved the ticket's own citations, and
+independently traced each Done-when line to its test. I am not re-deriving pl-29's
+or pl-35's own history, which this ticket only references.
+
+**Tree confirmed.** `git checkout --detach 72f68ea` then `git log --oneline -1`
+returns `72f68ea Merge remote-tracking branch 'origin/main' into pl-36`, matching
+the sha I was given. `git diff --stat origin/main...72f68ea` shows the branch's own
+12-file, 1020-line change (3 non-merge commits: `cc970dd`, `4c7be18`, `fc91c93`).
+All line numbers below are against this tree.
+
+| Done when                                                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A geocoded place's `Source` survives from `locate` to somewhere a reader can see it                                                                  | proven — `api/test/travel-measure.test.ts:302-384` (three tests: both ends geocoded, neither, one of two), rendering side proven by `web/test/plan-view.test.tsx:717-763`                                                                                                                                                                               |
+| A decision recorded for discovery-derived candidate provenance, and a find's sources reach it, or a reasoned argument that it stays `model-asserted` | proven — the reasoned-refusal path was taken (Log, "The decision"); enforced at `agent/src/ask.ts:71-76` (`candidateProposalSchema` omits `provenance`) and `agent/src/orchestrator.ts:367,373` (`accept` stamps `MODEL_ASSERTED` on both `provenance` and `cost.provenance`); self-certification closure proven by `agent/test/fan-out.test.ts:85-121` |
+| Whatever is rendered follows pl-29 Build step 6's copy rule                                                                                          | proven — `web/src/plan/Provenance.tsx:111` copy unchanged, asserted at `web/test/plan-view.test.tsx:690` for the new `RouteReading` section specifically                                                                                                                                                                                                |
+| `npm run check` and `npm test -- --project planner` pass                                                                                             | verified — ran both: `npm run check` exits 0; planner project reports 53 files, 823 tests passing, matching the Log. Also ran full `npm test` (115 files, 1772 tests passing), which exercises `packages/core/test/host-resolution.test.ts` against this branch — it passes and this branch touches nothing that scan covers                            |
+
+**Independently reproduced, not just read:**
+
+- `node scripts/citations.mjs` on this ticket: 10/10 resolve against the working
+  tree. Against `--rev 80bfc64` one citation fails, which the Log's own pinning
+  instructions already predict — not a defect.
+- No literal NUL bytes remain in `travel-measure.test.ts`, confirming the round-2 fix.
+- `KEY_SEPARATOR` at `api/src/grounding/place-key.ts:79` is the NUL escape, matching
+  the separator reused in `citations()` and in the dedup keys.
+- `costEstimateSchema` is a `.refine`d `ZodObject`, which has no `.omit` — confirms
+  why `cost.provenance` is overwritten rather than schema-omitted.
+- No read of `Place.coordinates.latitude` anywhere under `web/src` — confirms the
+  load-bearing premise for hanging the citation on the leg rather than on `Place`.
+- `discoveryBlock` in `agent/src/prompt.ts:229-243` renders name, kind, coordinates
+  and tags, never a URL — confirms the premise behind leaving discovery-derived
+  provenance `model-asserted`.
+- The corridor-endpoint `locate` at `api/src/runs/discovery.ts:484-499` does still
+  discard `outcome.value.source` — the disclosed deferral is accurately described.
+- The PR title passes `node scripts/commit-message.mjs --text`.
+
+**Settled findings, not proposed as new work:**
+
+- **low, already settled** · `citations()`'s `.slice(0, MAX_SOURCES)` is unpinned by
+  a test. Gate 1 rated it low and the ticket argues why (unreachable through its
+  only caller today). I agree and am not re-raising it.
+- **low, already settled** · the corridor-endpoint `locate` still drops its
+  `Source`. Argued in the same section. I agree and am not re-raising it.
+- **dropped** · a collision risk in the new url-plus-separator-plus-title dedup key:
+  `sourceSchema.title` is `z.string()` and could in principle carry an embedded
+  separator from external data, which would only ever coalesce two citations, never
+  fail in a security-meaningful way, and the same strategy is already load-bearing
+  in this file. Not worth carrying at `medium` depth.
+- **findings** · defect hunt at medium, run by the reviewer, over
+  `origin/main...72f68ea`: 0 new findings; 2 carried-forward-and-settled, not
+  counted as open; 0 dropped in the unresolved-disagreement sense.
+- NFR: security — n/a for new attack surface, the change removes a
+  self-certification hole rather than adding one · performance — n/a, one extra
+  `Map` per `measureTravel` call · reliability ✓ — spot-checked two mutations and
+  both reproduced the described failures · maintainability ✓.
+
 ## Log
 
 **2026-08-29 — filed per gate D's trace, during pl-29's review.** Not folded
