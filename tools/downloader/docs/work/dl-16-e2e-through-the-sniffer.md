@@ -507,18 +507,18 @@ else. Gate 2 also enumerated every statically-bound port in the repo and
 confirmed 8097 collides with nothing, which is the check the port fix above
 deserved and had not had.
 
-### The gate section is , not
+### The gate section is `## Review`, not `## Gates`
 
-Renamed on 2026-08-31, with gates 1-3 kept as subsections.
-specifies for a reviewed, non-filing ticket; this ticket had used
-, as did and as six already-merged tickets still do (,
-, , , , ).
+Renamed on 2026-08-31, with gates 1-3 kept as subsections. `docs/01-TICKETS.md`
+specifies `## Review` for a reviewed, non-filing ticket; this ticket had used
+`## Gates`, as `dl-23` did and as six already-merged tickets still do — `repo-3`,
+`repo-6`, `dl-20`, `dl-21`, `dl-24`, `dl-27`.
 
-Worth knowing what the rename does not fix: the board check added keys on
-to catch a ticket that is yet already carries a gate
-record. Anything recording under is invisible to it. This ticket was
-never exposed — it is — but those six merged tickets are permanently
-outside that check's reach, and a future ticket recording under would
+Worth knowing what the rename does not fix: the board check `repo-12` added keys on
+`## Review` to catch a ticket that is `status: ready` yet already carries a gate
+record. Anything recording under `## Gates` is invisible to it. This ticket was
+never exposed — it is `status: done` — but those six merged tickets are permanently
+outside that check's reach, and a future ticket recording under `## Gates` would
 slip past it silently.
 
 Recorded by the orchestrating agent, from gate E on dl-23.
