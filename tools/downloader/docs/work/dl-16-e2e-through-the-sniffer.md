@@ -123,7 +123,7 @@ loopback fixture — currently exists only in unit tests that stub one of the fo
   browser tier stays smoke-tested only**: this ticket does not reach it, and
   should not claim to. Say so in the Log rather than leaving it unsaid.
 
-## Gates
+## Review
 
 ### Gate 1 — 2026-08-31, PASS (reviewed at `461e9dd`)
 
@@ -506,3 +506,19 @@ carries is the one the user asked for rather than filed: the planner's
 else. Gate 2 also enumerated every statically-bound port in the repo and
 confirmed 8097 collides with nothing, which is the check the port fix above
 deserved and had not had.
+
+### The gate section is , not
+
+Renamed on 2026-08-31, with gates 1-3 kept as subsections.
+specifies for a reviewed, non-filing ticket; this ticket had used
+, as did and as six already-merged tickets still do (,
+, , , , ).
+
+Worth knowing what the rename does not fix: the board check added keys on
+to catch a ticket that is yet already carries a gate
+record. Anything recording under is invisible to it. This ticket was
+never exposed — it is — but those six merged tickets are permanently
+outside that check's reach, and a future ticket recording under would
+slip past it silently.
+
+Recorded by the orchestrating agent, from gate E on dl-23.
