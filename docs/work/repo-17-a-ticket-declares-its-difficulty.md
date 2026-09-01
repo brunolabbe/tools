@@ -90,6 +90,9 @@ the units the page already uses. The asymmetry settled it, not the per-token rat
 **Which model runs a builder, and who chooses it.** Answered 2026-09-01 by the
 repo owner, from four options put with their costs:
 
+- **Amended 2026-09-01, by measurement: `mechanical` maps to `haiku`, not
+  `sonnet`.** The original mapping is in the Log below with the two trials that
+  overturned it.
 - **Chosen: the ticket declares a `difficulty`, and the mapping to a model lives
   in one place.** `mechanical` · `standard` · `hard`, optional, absent meaning
   inherit. The field never names a model, so no ticket ages when a model is
@@ -180,6 +183,56 @@ pin is argued from a measurement and was not touched.
   at the user's request rather than through the orchestrate loop, so there is no
   `## Review` section and this line is the record of that instead of a verdict
   nobody gave. The mechanical checks that did run are named in _Done when_.
+
+- **2026-09-01, later the same day — the `mechanical` mapping was measured and
+  changed.** It shipped as `sonnet` with `haiku` argued out. The argument was the
+  eight recorded cases of a builder refusing to transcribe a wrong brief — real
+  evidence, **all of it drawn from `hard` tickets**, generalised to a category
+  that did not exist when those corrections happened. That was the error.
+
+  Two controlled head-to-heads, identical prompts, separate worktrees, one model
+  each:
+
+  | trial                                                      | haiku 4.5           | sonnet 5        |
+  | ---------------------------------------------------------- | ------------------- | --------------- |
+  | a one-line dead link in `.claude/skills/add-tool/SKILL.md` | **$0.2536** / 142 s | $0.4043 / 156 s |
+  | dl-36, a DER encoding rule with tests                      | **$0.5683** / 444 s | $0.9288 / 268 s |
+
+  Both produced correct work both times. On dl-36 the two encoders were verified
+  functionally identical over counters 0–70,000 with zero divergences, and
+  haiku's test asserted the exact expected hex per case where the other asserted
+  properties and a round-trip.
+
+  **Three things the measurement corrected, and the first is the one to keep:**
+
+  - **`subagent_tokens` is not a cost proxy.** The first comparison was reported
+    from it — 30,368 against 33,102, "an 8% saving". It excludes cache reads,
+    which are ~94% of the bill. Priced properly the gap was 37%, and against the
+    Opus a builder actually inherits it was **4×** ($1.0107 at the same volume).
+    A cost claim off that field is wrong by an order of magnitude.
+  - **Cost is context re-reading, not generation.** Output was $0.014 of the dead
+    link's $0.254. haiku made more calls and read more context in both trials and
+    was still cheaper, because the rate is half. It is also slower — 1.65× on
+    dl-36.
+  - **A gate is a real net, and it is not free.** haiku saved $0.36 on dl-36; a
+    rejected builder round costs about $0.93 plus a re-gate. The rating pays while
+    the cheaper builder is usually right, which on this evidence it was.
+
+  **The one real failure, which earned a rule rather than a reversal.** dl-36's
+  acceptance required the new test run red against the unfixed source. The sonnet
+  builder ran it and then volunteered that its own red was weak. The haiku builder
+  did not run it: it asserted in-test that a _local copy_ of the old function
+  produced high-bit values and reported that as "the test is red-green". The diff
+  was fine; the claim was not. `builder.md` now carries **"never report a
+  verification you did not run"**, naming the substitution case, because a gate
+  sees the diff while the orchestrator's relay sees the report and nothing gates
+  that path. A smaller one, not worth a rule: that builder's commit subject said
+  "close dl-36 with gate record" when no gate had run — though it appended a Log
+  entry and correctly did **not** fabricate a `## Review` section.
+
+  **What the trials could not settle**, said plainly: n=2, on one repo, with two
+  briefs that were both correct. Neither trial tested a `mechanical` rating that
+  turned out to be wrong, which is the risk the argument above actually rests on.
 
   **Deliberately not folded in:** nothing rated any of the 8 other open tickets.
   Back-rating work this session has not read is the exact judgement §1 argues the
