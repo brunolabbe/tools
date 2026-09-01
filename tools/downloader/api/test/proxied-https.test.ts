@@ -111,15 +111,15 @@ async function startPinnedProxy(): Promise<EgressProxy & { port: number }> {
  * The proxy `server.ts` gives ffmpeg since dl-27: it verifies the origin here
  * and re-encrypts under a leaf it issued.
  *
- * `caFile` is what the proxy trusts, and it is the fixture CA rather than
+ * `operatorCa` is what the proxy trusts, and it is the fixture CA rather than
  * nothing — the point of the pair below is trust, not reachability. Passing no
- * `caFile` leaves the system store, against which the fixture is genuinely
+ * `operatorCa` leaves the system store, against which the fixture is genuinely
  * untrusted, which is the negative case.
  */
 async function startTerminatingProxy(
-  caFile?: string,
+  operatorCa?: string,
 ): Promise<EgressProxy & { port: number; intercept: TlsInterception }> {
-  const intercept = await createTlsInterception(caFile === undefined ? {} : { caFile });
+  const intercept = await createTlsInterception(operatorCa === undefined ? {} : { operatorCa });
   cleanups.push(() => intercept.close());
   const proxy = await startProxy({
     guard: guardAllowingOrigin(),
@@ -576,7 +576,7 @@ describe("guardedFetch through the proxy the deployment configures", () => {
     const dispatcher = createEgressDispatcher({
       guard,
       proxyUrl: proxy.url,
-      requestTls: { ca: certificate.ca },
+      originTls: { ca: certificate.ca },
     });
     cleanups.push(() => dispatcher.close());
     expect(dispatcher.mode).toBe("proxy");
@@ -611,7 +611,7 @@ describe("guardedFetch through the proxy the deployment configures", () => {
     const dispatcher = createEgressDispatcher({
       guard,
       proxyUrl: proxy.url,
-      requestTls: { ca: certificate.ca },
+      originTls: { ca: certificate.ca },
     });
     cleanups.push(() => dispatcher.close());
 
@@ -658,7 +658,7 @@ describe("the terminating proxy, which is the one ffmpeg gets", () => {
     // The replacement for what the tunnel test above asserts, stated as what is
     // true rather than as a deletion: ffmpeg never sees an origin certificate
     // again, and the chain it does see ends at the root `-ca_file` names.
-    const proxy = await startTerminatingProxy(certificate.caPath);
+    const proxy = await startTerminatingProxy(certificate.ca);
     expect(proxy.tls).toBe("terminate");
 
     const { body, peerCertificate } = await getThroughTunnel(
@@ -706,7 +706,7 @@ describe("the terminating proxy, which is the one ffmpeg gets", () => {
     // A proxy that checked the chain and forgot the name would verify a
     // certificate issued for anything at all, which is most of the value gone.
     // `BLOCKED_HOST` is in this fixture's SAN list and `elsewhere.test` is not.
-    const intercept = await createTlsInterception({ caFile: certificate.caPath });
+    const intercept = await createTlsInterception({ operatorCa: certificate.ca });
     cleanups.push(() => intercept.close());
     const proxy = await startProxy({
       guard: createSsrfGuard({
@@ -733,7 +733,7 @@ describe("the terminating proxy, which is the one ffmpeg gets", () => {
     // dl-19's pair, re-run on the wiring production now uses. The engine's
     // `-ca_file` is the generated root in both halves; the only thing that
     // moves is what the *proxy* trusts.
-    const trusting = await startTerminatingProxy(certificate.caPath);
+    const trusting = await startTerminatingProxy(certificate.ca);
     const ok = await startEngine(trusting.url, { tlsCaFile: trusting.intercept.rootCaPath });
     const outcome = await ok.download(downloadRequest("terminating-trusted"));
     expect(outcome.sizeBytes).toBeGreaterThan(10_000);

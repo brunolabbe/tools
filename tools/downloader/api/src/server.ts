@@ -22,6 +22,7 @@ import { createEgressDispatcher } from "./dispatcher.ts";
 import { startEgressProxy } from "./egress-proxy.ts";
 import type { EgressProxy } from "./egress-proxy.ts";
 import { createGuardedFetch } from "./guarded-fetch.ts";
+import { readOperatorCa, withSystemRoots } from "./operator-ca.ts";
 import { toErrorResponse } from "./http-errors.ts";
 import { JobEventHub } from "./jobs/events.ts";
 import { JobOrchestrator } from "./jobs/orchestrator.ts";
@@ -71,12 +72,33 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     allowHosts: config.ssrfAllowHosts,
     allowPrivateAddresses: config.ssrfAllowPrivateAddresses,
   });
+  // **Read once, here, and shared by everything that meets an origin.** Two
+  // reads of one path is how two error behaviours grow, and this one is fatal:
+  // an unreadable trust anchor means refusing the operator's own origins in a
+  // way that reads like their CDN is compromised. Unconditional, so
+  // `FFMPEG_TLS_INTERCEPT=false` no longer skips the boot check.
+  const operatorCa =
+    config.egressCaFile === undefined
+      ? null
+      : await readOperatorCa(config.egressCaFile, config.egressCaFileVar ?? "EGRESS_CA_FILE");
+
+  if (config.egressCaFileVar === "FFMPEG_CA_FILE") {
+    logger.warn("FFMPEG_CA_FILE is deprecated; it is EGRESS_CA_FILE now", {
+      hint: "The value is still being used and nothing is broken. The name is: since dl-27 it configures an egress proxy that is not ffmpeg, and since dl-31 the undici dispatcher behind every probe. Rename it; EGRESS_CA_FILE wins if both are set.",
+    });
+  }
+
   // Pins each connection to an address the guard vetted — the half of the SSRF
   // answer a pre-flight check cannot give — and carries the egress proxy, which
   // Node's global fetch would otherwise ignore. See `dispatcher.ts`.
+  //
+  // `originTls` is dl-31: without it this dispatcher had the system store and
+  // nothing else, so an operator with a private root got a working ffmpeg
+  // download behind a probe that answered `502 UNREACHABLE`.
   const egress = createEgressDispatcher({
     guard,
     ...(config.proxyUrl === undefined ? {} : { proxyUrl: config.proxyUrl }),
+    ...(operatorCa === null ? {} : { originTls: { ca: withSystemRoots(operatorCa) } }),
   });
   const guardedFetch = createGuardedFetch(guard, globalThis.fetch, {
     dispatcher: egress.dispatcher,
@@ -118,18 +140,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
         // so ffmpeg's becomes the generated root and nothing else; the proxy is
         // the side that meets real origins, so the operator's root goes here,
         // merged with the system store.
-        ...(config.ffmpegCaFile === undefined ? {} : { caFile: config.ffmpegCaFile }),
+        ...(operatorCa === null ? {} : { operatorCa }),
         verifyOrigins: !config.ffmpegAllowUnverifiedTls,
-      }).catch((error: unknown) => {
-        // dl-19 recorded that a typo'd `FFMPEG_CA_FILE` was discovered one
-        // download at a time. It cannot be now: the file is a trust anchor this
-        // proxy needs before it can verify anything, and quietly carrying on
-        // with the system store would refuse the operator's own origins in a way
-        // that reads like their CDN is compromised.
-        throw new AppError("INTERNAL", "FFMPEG_CA_FILE could not be read.", {
-          cause: error,
-          details: { path: config.ffmpegCaFile },
-        });
       })
     : null;
 
@@ -155,7 +167,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       proxyUrl: tierProxy.url,
       // Back to ffmpeg, because ffmpeg is meeting the origin again. This is
       // dl-19's arrangement, unchanged.
-      tlsCaFile: config.ffmpegCaFile,
+      tlsCaFile: config.egressCaFile,
       tls: tierProxy.tls,
     };
   } else {
@@ -189,7 +201,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     logger.warn(
       "FFMPEG_ALLOW_UNVERIFIED_TLS is on: nothing checks the certificates this service downloads video over",
       {
-        hint: "Since dl-27 it is the egress proxy that verifies, so this turns off the check for manifests and segments alike. Prefer FFMPEG_CA_FILE with your proxy's root certificate; anything on the path to a CDN can substitute the video while this is set.",
+        hint: "Since dl-27 it is the egress proxy that verifies, so this turns off the check for manifests and segments alike. Prefer EGRESS_CA_FILE with your proxy's root certificate; anything on the path to a CDN can substitute the video while this is set.",
       },
     );
   } else if (ffmpegInterception === null) {
@@ -202,7 +214,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     logger.warn(
       "FFMPEG_TLS_INTERCEPT is off: HLS and DASH segment certificates are not checked at all",
       {
-        hint: "This is dl-21's hole, reopened deliberately. ffmpeg verifies the manifest connection only — libavformat does not propagate the TLS options onto a demuxer's segment connections and no argument changes that — so the manifest is kilobytes and the segments are the whole video. An attacker on the path to the segment origin can substitute it and the job will report success. Prefer FFMPEG_CA_FILE, and turn this back on. See tools/downloader/docs/work/dl-27-verify-segment-origins.md.",
+        hint: "This is dl-21's hole, reopened deliberately. ffmpeg verifies the manifest connection only — libavformat does not propagate the TLS options onto a demuxer's segment connections and no argument changes that — so the manifest is kilobytes and the segments are the whole video. An attacker on the path to the segment origin can substitute it and the job will report success. Prefer EGRESS_CA_FILE, and turn this back on. See tools/downloader/docs/work/dl-27-verify-segment-origins.md.",
       },
     );
   } else {
@@ -242,7 +254,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       // **Both halves come from `ffmpegEgress` and neither is read from
       // `config` here.** Interception on, that is the terminating proxy and the
       // generated root; off, it is the tunnel and the operator's own
-      // `FFMPEG_CA_FILE`. Reaching past it for either one is how the pair gets
+      // `EGRESS_CA_FILE`. Reaching past it for either one is how the pair gets
       // split.
       ...(ffmpegEgress.tlsCaFile === undefined ? {} : { tlsCaFile: ffmpegEgress.tlsCaFile }),
       proxyUrl: ffmpegEgress.proxyUrl,

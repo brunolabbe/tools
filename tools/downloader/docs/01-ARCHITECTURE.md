@@ -132,23 +132,23 @@ data/downloader.sqlite  jobs, probe cache, file tokens
 All via environment, parsed and validated once at boot with zod. Fail fast on a
 bad value rather than discovering it mid-job. See `.env.example`.
 
-| Variable                      | Default      | Why it matters                                                                                                                                                                                                                              |
-| ----------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                        | `3000`       |                                                                                                                                                                                                                                             |
-| `STORAGE_DIR`                 | `./storage`  |                                                                                                                                                                                                                                             |
-| `MAX_CONCURRENT_JOBS`         | `2`          | ffmpeg is I/O and CPU hungry                                                                                                                                                                                                                |
-| `MAX_CONCURRENT_BROWSERS`     | `2`          | ~300 MB each                                                                                                                                                                                                                                |
-| `MAX_FILE_SIZE_MB`            | `4096`       | checked _before_ download, from bitrate × duration                                                                                                                                                                                          |
-| `FILE_RETENTION_HOURS`        | `6`          | GC deadline                                                                                                                                                                                                                                 |
-| `PROBE_TIMEOUT_MS`            | `45000`      | browser sniffing is slow                                                                                                                                                                                                                    |
-| `JOB_TIMEOUT_MS`              | `3600000`    | hard kill                                                                                                                                                                                                                                   |
-| `FFMPEG_PATH`                 | bundled      | override system binary                                                                                                                                                                                                                      |
-| `YTDLP_PATH`                  | `yt-dlp`     | optional; degrade gracefully if absent                                                                                                                                                                                                      |
-| `PROXY_URL`                   | —            | must apply to probe _and_ download (IP-bound signed URLs)                                                                                                                                                                                   |
-| `FFMPEG_CA_FILE`              | system store | extra CA bundle, **merged** with the public roots; whoever is verifying gets it — the proxy normally, ffmpeg when interception is off                                                                                                       |
-| `FFMPEG_TLS_INTERCEPT`        | `true`       | the proxy terminates ffmpeg's TLS, which is what verifies **segment** origins. `false` restores the `dl-14` tunnel: ffmpeg keeps working and the manifest is still checked, but the segments go back to unverified (`dl-21`). Warns at boot |
-| `FFMPEG_ALLOW_UNVERIFIED_TLS` | `false`      | **strictly larger, and the last resort.** Nothing is verified at all, manifest included. If the interception is what broke, `FFMPEG_TLS_INTERCEPT=false` is the smaller answer and is tried first. Warns louder, see `dl-19`                |
-| `ENABLE_BROWSER_RESOLVER`     | `true`       | lets you run a cheap, fast-only deployment                                                                                                                                                                                                  |
+| Variable                      | Default      | Why it matters                                                                                                                                                                                                                                                        |
+| ----------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                        | `3000`       |                                                                                                                                                                                                                                                                       |
+| `STORAGE_DIR`                 | `./storage`  |                                                                                                                                                                                                                                                                       |
+| `MAX_CONCURRENT_JOBS`         | `2`          | ffmpeg is I/O and CPU hungry                                                                                                                                                                                                                                          |
+| `MAX_CONCURRENT_BROWSERS`     | `2`          | ~300 MB each                                                                                                                                                                                                                                                          |
+| `MAX_FILE_SIZE_MB`            | `4096`       | checked _before_ download, from bitrate × duration                                                                                                                                                                                                                    |
+| `FILE_RETENTION_HOURS`        | `6`          | GC deadline                                                                                                                                                                                                                                                           |
+| `PROBE_TIMEOUT_MS`            | `45000`      | browser sniffing is slow                                                                                                                                                                                                                                              |
+| `JOB_TIMEOUT_MS`              | `3600000`    | hard kill                                                                                                                                                                                                                                                             |
+| `FFMPEG_PATH`                 | bundled      | override system binary                                                                                                                                                                                                                                                |
+| `YTDLP_PATH`                  | `yt-dlp`     | optional; degrade gracefully if absent                                                                                                                                                                                                                                |
+| `PROXY_URL`                   | —            | must apply to probe _and_ download (IP-bound signed URLs)                                                                                                                                                                                                             |
+| `EGRESS_CA_FILE`              | system store | extra CA bundle, **merged** with the public roots; every client that meets an origin gets it — the proxy, the undici dispatcher behind every probe, and ffmpeg when interception is off. `FFMPEG_CA_FILE` is the deprecated spelling and still works, warning at boot |
+| `FFMPEG_TLS_INTERCEPT`        | `true`       | the proxy terminates ffmpeg's TLS, which is what verifies **segment** origins. `false` restores the `dl-14` tunnel: ffmpeg keeps working and the manifest is still checked, but the segments go back to unverified (`dl-21`). Warns at boot                           |
+| `FFMPEG_ALLOW_UNVERIFIED_TLS` | `false`      | **strictly larger, and the last resort.** Nothing is verified at all, manifest included. If the interception is what broke, `FFMPEG_TLS_INTERCEPT=false` is the smaller answer and is tried first. Warns louder, see `dl-19`                                          |
+| `ENABLE_BROWSER_RESOLVER`     | `true`       | lets you run a cheap, fast-only deployment                                                                                                                                                                                                                            |
 
 ---
 
@@ -167,7 +167,14 @@ Non-negotiable, because this service fetches arbitrary URLs on request:
   `ProbeResult` ever contained is still checked. `PROXY_URL`, when set, is
   chained to rather than replaced.
 - **TLS verification, and who performs it.** The engine's own fetches go through
-  undici, which verifies without being asked. ffmpeg's do not unless told —
+  undici, which verifies without being asked — against the system store **plus
+  `EGRESS_CA_FILE`** since `dl-31`, which is when that dispatcher was told about
+  the operator's root at all. Until then the operator's root reached ffmpeg and
+  the proxy and not the dispatcher, so a private-root deployment half worked
+  with the halves the confusing way round: the download succeeded and the probe
+  that set it up answered `502 UNREACHABLE`, because a rejected chain reaches
+  `fetch` as a bare `TypeError` that reads as a network failure. ffmpeg's do not
+  verify unless told —
   `tls_verify` defaults to off in libavformat — so since `dl-19` every remote
   input ffmpeg opens carries `-tls_verify 1`. That covers the manifest
   connection and, on its own, nothing else:
@@ -196,7 +203,7 @@ Non-negotiable, because this service fetches arbitrary URLs on request:
   ffmpeg egress has gone through this service's loopback guarded proxy since
   `dl-11`, so the proxy is already on every segment connection. It now
   **terminates** ffmpeg's connections instead of tunnelling them: it verifies the
-  real origin itself, against the system store plus `FFMPEG_CA_FILE`, and
+  real origin itself, against the system store plus `EGRESS_CA_FILE`, and
   re-encrypts to ffmpeg under a leaf issued by a root generated per process.
   ffmpeg checks that leaf on the manifest, where `-tls_verify 1` reaches, and
   ignores it on the segments, where it never could — and either way the origin
@@ -206,7 +213,7 @@ Non-negotiable, because this service fetches arbitrary URLs on request:
 
   - **The two CA settings swapped sides.** `-ca_file` _replaces_ ffmpeg's trust
     store, so ffmpeg's is now the generated root and nothing else, and
-    `FFMPEG_CA_FILE` goes to the proxy, merged with the system store. Reversed,
+    `EGRESS_CA_FILE` goes to the proxy, merged with the system store. Reversed,
     a deployment fails closed on every public origin.
   - **This reverses `dl-14`, which chose a tunnel precisely so the certificate
     reaching the client is the origin's own.** ffmpeg no longer sees one, and
@@ -218,7 +225,7 @@ Non-negotiable, because this service fetches arbitrary URLs on request:
     loads for a guarantee they already have. `server.ts` starts one of each.
   - **There is a way back, and it is deliberately not the big switch.**
     `FFMPEG_TLS_INTERCEPT=false` returns ffmpeg to the tunnelling proxy: the
-    manifest stays verified, `FFMPEG_CA_FILE` goes back to ffmpeg, and the
+    manifest stays verified, `EGRESS_CA_FILE` goes back to ffmpeg, and the
     segments are unchecked again exactly as `dl-21` described them. It exists so
     an operator whom the interception breaks has somewhere to go other than
     `FFMPEG_ALLOW_UNVERIFIED_TLS`, which also gives up the manifest. The two are

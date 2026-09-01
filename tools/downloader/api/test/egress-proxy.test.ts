@@ -197,8 +197,8 @@ async function startUntrustedTlsOrigin(): Promise<{ port: number }> {
   return { port: origin.port };
 }
 
-async function interception(caFile?: string): Promise<TlsInterception> {
-  const intercept = await createTlsInterception(caFile === undefined ? {} : { caFile });
+async function interception(operatorCa?: string): Promise<TlsInterception> {
+  const intercept = await createTlsInterception(operatorCa === undefined ? {} : { operatorCa });
   cleanups.push(() => intercept.close());
   return intercept;
 }

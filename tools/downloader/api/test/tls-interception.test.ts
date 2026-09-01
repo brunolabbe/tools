@@ -27,8 +27,8 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) await cleanup();
 });
 
-async function interception(caFile?: string): Promise<TlsInterception> {
-  const intercept = await createTlsInterception(caFile === undefined ? {} : { caFile });
+async function interception(operatorCa?: string): Promise<TlsInterception> {
+  const intercept = await createTlsInterception(operatorCa === undefined ? {} : { operatorCa });
   cleanups.push(() => intercept.close());
   return intercept;
 }
@@ -50,14 +50,14 @@ describe("the trust store the proxy verifies origins against", () => {
     // private root.
     const fixture = await createFixtureCertificate({ ipAddresses: ["127.0.0.1"] });
     cleanups.push(() => fixture.cleanup());
-    const intercept = await interception(fixture.caPath);
+    const intercept = await interception(fixture.ca);
 
     // The system store is really there to be kept — if this were empty the
     // assertion below would be vacuous.
     expect(tls.rootCertificates.length).toBeGreaterThan(20);
     expect(intercept.originCa).toHaveLength(tls.rootCertificates.length + 1);
     expect(intercept.originCa).toContain(tls.rootCertificates[0]);
-    expect(intercept.originCa?.at(-1)).toBe(await fs.readFile(fixture.caPath, "utf8"));
+    expect(intercept.originCa?.at(-1)).toBe(fixture.ca);
   });
 
   test("with no operator root it stays undefined, which is Node's own system store", async () => {
