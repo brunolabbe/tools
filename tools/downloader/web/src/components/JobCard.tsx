@@ -19,6 +19,7 @@ import {
   statusIndex,
 } from "../lib/status.ts";
 import { ErrorPanel } from "./ErrorPanel.tsx";
+import { Preview } from "./Preview.tsx";
 import { ProgressBar } from "./ProgressBar.tsx";
 
 interface JobCardProps {
@@ -55,9 +56,15 @@ export function JobCard({
   return (
     <li className={`job job--${job.status}`}>
       <div className="job__head">
-        <div className="job__titles">
-          <h3 className="job__title">{title}</h3>
-          <p className="muted url-echo">{job.sourceUrl}</p>
+        {/* Same grouping reason as `card__headline`: `job__head` is
+            `space-between`, and this must be additive — a job from before dl-29,
+            or one whose probe found no image, renders exactly as it did. */}
+        <div className="job__headline">
+          <Preview path={job.thumbnailPath} size="card" />
+          <div className="job__titles">
+            <h3 className="job__title">{title}</h3>
+            <p className="muted url-echo">{job.sourceUrl}</p>
+          </div>
         </div>
         <div className="pills">
           {streamState === "reconnecting" && (

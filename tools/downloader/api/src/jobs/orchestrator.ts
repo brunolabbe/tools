@@ -36,9 +36,12 @@ import type { ResolverRegistry } from "@downloader/resolvers";
 import { initialProgress } from "../db/job-store.ts";
 import type { JobStore } from "../db/job-store.ts";
 import { withoutEgressProxy } from "../egress-proxy.ts";
+import type { GuardedFetch } from "../guarded-fetch.ts";
 import type { AppLogger } from "../logger.ts";
 import type { SsrfGuard } from "../ssrf.ts";
 import { urlsInProbeResult } from "../ssrf.ts";
+import { captureThumbnail, withThumbnailPath } from "../thumbnails.ts";
+import type { ThumbnailStore } from "../thumbnails.ts";
 import type { JobEventHub } from "./events.ts";
 import { createFileToken } from "./tokens.ts";
 import { chooseVariant } from "./variant-selection.ts";
@@ -60,6 +63,10 @@ export interface OrchestratorOptions {
   proxyUrl?: string | undefined;
   /** Builds the `downloadUrl` on a `JobResult`. Injected so routes own the path. */
   fileUrl: (token: string) => string;
+  /** Where a captured preview image is held. See `thumbnails.ts`. */
+  thumbnails: ThumbnailStore;
+  /** The redirect-re-checking fetch the preview capture uses. */
+  fetchImpl: GuardedFetch;
   now?: () => Date;
 }
 
@@ -206,8 +213,10 @@ export class JobOrchestrator {
 
     // Resolver output is attacker-influenced: a hostile page can name any
     // address it likes and this server would fetch it. Vet every URL the
-    // engine could touch before handing it any of them.
-    await guard.assertAllAllowed(urlsInProbeResult(probe));
+    // engine could touch before handing it any of them. `bestEffort` — the
+    // preview image — is vetted separately, below, because a refusal there must
+    // not fail a downloadable video. See `urlsInProbeResult`.
+    await guard.assertAllAllowed(urlsInProbeResult(probe).mustPass);
 
     const { variant, substituted } = chooseVariant(probe, options);
     if (substituted) {
@@ -226,9 +235,26 @@ export class JobOrchestrator {
       });
     }
 
+    // The re-probe is unconditional (rule 1 above), so the credentials needed to
+    // fetch the preview are in hand right here and the token below is one this
+    // run minted — nothing depends on the probe cache still holding anything.
+    const thumbnailPath = await captureThumbnail({
+      probe,
+      guard,
+      fetchImpl: this.#options.fetchImpl,
+      store: this.#options.thumbnails,
+      logger: log,
+    });
+
     // A field write, not a state change: the job is already in the right state.
-    store.patch(jobId, { variant, variantId: variant.id }, this.#iso());
-    events.probed(jobId, probe);
+    // The preview rides along with the variant snapshot for the same reason it
+    // exists — so the downloads list can still show the video once the probe has
+    // aged out.
+    store.patch(jobId, { variant, variantId: variant.id, thumbnailPath }, this.#iso());
+    // The **rewritten** probe: this frame carries a whole `ProbeResult` to the
+    // client, so it is the second door the origin thumbnail URL could have
+    // walked out of. Same reason `withoutEgressProxy` is applied in `#probe`.
+    events.probed(jobId, withThumbnailPath(probe, thumbnailPath));
 
     // --- downloading / muxing -------------------------------------------
     throwIfAborted(signal);

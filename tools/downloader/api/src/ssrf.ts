@@ -278,18 +278,47 @@ export function createSsrfGuard(options: SsrfGuardOptions = {}): SsrfGuard {
   };
 }
 
-/** Every URL in a probe result that the engine might fetch. */
+/**
+ * Every URL a probe result causes this service to fetch, split by what a
+ * refusal costs.
+ *
+ * One function rather than two, so this file stays the single answer to "what
+ * does a probe make us fetch" — the question that was answered wrongly until
+ * dl-29, when the thumbnail was absent from here and unvetted, safe only for as
+ * long as nothing fetched it.
+ *
+ * The split is about the consequence of a refusal, not about the check:
+ *
+ *  - `mustPass` is the media. A refusal there is the probe's whole answer, so
+ *    both call sites hand this array straight to `assertAllAllowed`, which
+ *    throws, exactly as they did before this field existed.
+ *  - `bestEffort` is decorative — today, the preview image and nothing else. A
+ *    preview on a blocked address must not cost a user a downloadable video, so
+ *    its refusal is caught and the preview dropped. See `captureThumbnail`.
+ *
+ * One array could not express that: `assertAllAllowed` throws on any member, so
+ * a blocked thumbnail would have failed the whole probe.
+ */
+export interface ProbeUrls {
+  mustPass: string[];
+  bestEffort: string[];
+}
+
 export function urlsInProbeResult(probe: {
   variants: readonly { url: string; audioUrl?: string | undefined }[];
   subtitles: readonly { url: string }[];
-}): string[] {
-  const urls: string[] = [];
+  thumbnailUrl?: string | undefined;
+}): ProbeUrls {
+  const mustPass: string[] = [];
   for (const variant of probe.variants) {
-    urls.push(variant.url);
-    if (variant.audioUrl !== undefined && variant.audioUrl !== "") urls.push(variant.audioUrl);
+    mustPass.push(variant.url);
+    if (variant.audioUrl !== undefined && variant.audioUrl !== "") mustPass.push(variant.audioUrl);
   }
   // Subtitles are fetched by the engine with the same credentials as the media,
   // so they are the same surface even though they are not "the video".
-  for (const track of probe.subtitles) urls.push(track.url);
-  return urls;
+  for (const track of probe.subtitles) mustPass.push(track.url);
+
+  const bestEffort =
+    probe.thumbnailUrl === undefined || probe.thumbnailUrl === "" ? [] : [probe.thumbnailUrl];
+  return { mustPass, bestEffort };
 }

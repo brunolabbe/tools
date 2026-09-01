@@ -37,8 +37,10 @@ import { registerFileRoutes } from "./routes/files.ts";
 import { registerHealthRoute } from "./routes/health.ts";
 import { registerJobRoutes } from "./routes/jobs.ts";
 import { registerProbeRoute } from "./routes/probe.ts";
+import { registerThumbnailRoute } from "./routes/thumbnail.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 import { createSsrfGuard } from "./ssrf.ts";
+import { ThumbnailStore } from "./thumbnails.ts";
 import { createTlsInterception } from "./tls-interception.ts";
 import { ROUTES } from "@downloader/contract";
 
@@ -260,6 +262,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   });
   const events = new JobEventHub(options.now);
   const probeCache = new ProbeCache({ ttlMs: config.probeCacheTtlMs });
+  const thumbnails = new ThumbnailStore();
 
   let shuttingDown = false;
   const queue = new InProcessJobQueue({
@@ -289,6 +292,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     // only check that can reach them is the one at this proxy. See dl-12.
     proxyUrl: tierProxy.url,
     fileUrl: (token) => ROUTES.file(token),
+    // The re-probe is where a job's own preview comes from, and the only place
+    // the source's credentials are in hand to fetch it with. See `thumbnails.ts`.
+    thumbnails,
+    fetchImpl: guardedFetch,
     now,
   });
 
@@ -307,6 +314,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     queue,
     events,
     probeCache,
+    thumbnails,
+    guardedFetch,
     orchestrator,
     rateLimits: {
       probe: new RateLimiter({
@@ -350,6 +359,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   registerJobRoutes(server, context);
   registerEventRoutes(server, context);
   registerFileRoutes(server, context);
+  registerThumbnailRoute(server, context);
   // After the API routes, so a `/api/…` path can never be shadowed by a file
   // that happens to sit at the same name in the bundle.
   const servingWeb = await registerWebRoutes(server, context);

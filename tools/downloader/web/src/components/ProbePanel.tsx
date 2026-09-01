@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from "react";
 import type { JobOptions, ProbeResult } from "@downloader/contract";
 import { formatDuration } from "../lib/format.ts";
 import { pickDefaultVariantId } from "../lib/variants.ts";
+import { Preview } from "./Preview.tsx";
 import { VariantTable } from "./VariantTable.tsx";
 
 const CONTAINERS = ["mp4", "mkv", "webm", "source"] as const;
@@ -53,9 +54,17 @@ export function ProbePanel({
   return (
     <section className="card" aria-labelledby="probe-heading">
       <div className="card__head">
-        <h2 id="probe-heading" className="card__title">
-          {probe.title}
-        </h2>
+        {/* Grouped with the title rather than added as a third child of
+            `card__head`, which is `space-between` — a bare third child would
+            push the title into the middle of the row. `card__headline` collapses
+            to just the title when there is no preview, so the layout does not
+            depend on the image existing. */}
+        <div className="card__headline">
+          <Preview path={probe.thumbnailPath} size="panel" />
+          <h2 id="probe-heading" className="card__title">
+            {probe.title}
+          </h2>
+        </div>
         <div className="pills">
           {probe.isLive && <span className="pill pill--warn">Live</span>}
           {cached && <span className="pill">cached</span>}

@@ -133,7 +133,27 @@ export interface ProbeResult {
   resolver: string;
   title: string;
   durationSec?: number | undefined;
+  /**
+   * The preview image **at the origin**, as a resolver found it (`og:image`,
+   * `info.thumbnail`). Server-side only: it is page-controlled, so it is vetted
+   * with the rest of the probe and fetched only through the guarded fetch. The
+   * API strips it before the result reaches a client and puts `thumbnailPath`
+   * in its place — see `thumbnails.ts` and `withThumbnailPath`.
+   */
   thumbnailUrl?: string | undefined;
+  /**
+   * The preview image **as this API serves it**: `/api/thumbnail/<token>`, a
+   * path on our own origin. Only the API sets this, and only on the way out.
+   *
+   * It is a second field rather than a re-use of `thumbnailUrl` because the two
+   * are different things that must never be confused — one is an address a
+   * hostile page chose and the browser must never be handed, the other is ours.
+   * A single field would mean the same name denoting an origin URL inside the
+   * server and a proxied path outside it, and nothing in the type would say
+   * which side of the boundary a given value came from. Exactly one of the two
+   * is populated at any point on the wire.
+   */
+  thumbnailPath?: string | undefined;
   /** Ordered best-first by the resolver; the UI may re-sort. */
   variants: MediaVariant[];
   subtitles: SubtitleTrack[];

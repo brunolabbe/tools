@@ -61,6 +61,14 @@ const MIGRATIONS: readonly string[] = [
   // difference between a user thinking they mistyped a link and a user
   // understanding that downloads do not last forever.
   `ALTER TABLE file_tokens ADD COLUMN swept_at TEXT;`,
+
+  // 3 — the preview image's proxied path, snapshotted onto the job.
+  //
+  // A path on this API, never the origin URL a page named. Nullable and with no
+  // default, so every job written before dl-29 reads back as "no preview" — the
+  // case the UI has to render anyway, since a probe that found no image is the
+  // common one.
+  `ALTER TABLE jobs ADD COLUMN thumbnail_path TEXT;`,
 ];
 
 export function migrate(db: Database): void {

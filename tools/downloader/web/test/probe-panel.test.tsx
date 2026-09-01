@@ -16,7 +16,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { JobOptions } from "@downloader/contract";
+import type { JobOptions, ProbeResult } from "@downloader/contract";
 import { ProbePanel } from "../src/components/ProbePanel.tsx";
 import { pickDefaultVariantId } from "../src/lib/variants.ts";
 import { probe, variants } from "./fixtures.ts";
@@ -77,6 +77,19 @@ function mount(result = probe(), options: { cached?: boolean; busy?: boolean } =
     />,
   );
   return spies;
+}
+
+/** `mount` returns the spies; the preview tests need the container instead. */
+function renderPanel(result: ProbeResult): ReturnType<typeof render> {
+  return render(
+    <ProbePanel
+      probe={result}
+      cached={false}
+      busy={false}
+      onDownload={vi.fn<(options: JobOptions) => void>()}
+      onReanalyse={vi.fn<() => void>()}
+    />,
+  );
 }
 
 function download(): void {
@@ -251,4 +264,49 @@ test("analysing again is always available, because the links expire", () => {
 
   fireEvent.click(screen.getByRole("button", { name: "Analyse again" }));
   expect(spies.onReanalyse).toHaveBeenCalledOnce();
+});
+
+/**
+ * The preview image.
+ *
+ * `alt=""` makes it invisible to `getByRole("img")` — which is correct, and is
+ * the whole point of the attribute — so these query the container instead. A
+ * test that could find it by role would be a test proving the accessibility
+ * decision wrong.
+ */
+test("a probe with a preview renders it, from our path and not the origin URL", () => {
+  const { container } = renderPanel(probe({ thumbnailPath: "/api/thumbnail/abc123" }));
+
+  const image = container.querySelector(".preview img");
+  expect(image).not.toBeNull();
+  // A path on our own origin. Anything with a host in it would mean the origin
+  // URL had leaked through and the browser was being asked to fetch an address
+  // a page chose — the thing the whole proxy exists to prevent.
+  expect(image?.getAttribute("src")).toBe("/api/thumbnail/abc123");
+  // Decorative: the title is right beside it, and a duplicated alt would have a
+  // screen reader read the same string twice.
+  expect(image?.getAttribute("alt")).toBe("");
+  // Still findable by its heading, so this is not a test of an empty panel.
+  expect(screen.getByRole("heading", { name: "A sample recording" })).toBeDefined();
+});
+
+test("a probe with no preview renders the panel unchanged and with no broken image", () => {
+  const { container } = renderPanel(probe());
+
+  // No `<img>` at all, rather than one that will draw a broken-image glyph.
+  expect(container.querySelectorAll("img")).toHaveLength(0);
+  expect(screen.getByRole("heading", { name: "A sample recording" })).toBeDefined();
+  expect(screen.getByRole("table")).toBeDefined();
+});
+
+test("an image that fails to load takes itself off the page", () => {
+  const { container } = renderPanel(probe({ thumbnailPath: "/api/thumbnail/expired" }));
+
+  const image = container.querySelector(".preview img");
+  expect(image).not.toBeNull();
+  // A token expires out of an in-memory store, so this is an ordinary outcome
+  // rather than an exceptional one, and it must not leave a broken glyph.
+  fireEvent.error(image as Element);
+  expect(container.querySelectorAll("img")).toHaveLength(0);
+  expect(screen.getByRole("heading", { name: "A sample recording" })).toBeDefined();
 });

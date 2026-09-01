@@ -3,6 +3,8 @@
  * and file serving. The pipeline itself is covered in `pipeline.test.ts`.
  */
 
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import path from "node:path";
 import {
   AppError,
@@ -21,6 +23,12 @@ import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from ".
 import type { Harness } from "./helpers.ts";
 
 let harness: Harness | undefined;
+
+/** A 1×1 PNG. Real bytes, so a content-type assertion means something. */
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 afterEach(async () => {
   await harness?.dispose();
@@ -101,6 +109,168 @@ describe("POST /api/probe", () => {
     // 451 is the one status that means precisely this.
     expect(response.statusCode).toBe(451);
     expect(response.json()).toMatchObject({ error: { code: "DRM_PROTECTED", retryable: false } });
+  });
+});
+
+describe("the preview image never lets the client name a URL", () => {
+  /** A real origin on loopback, so the probe route's own `guardedFetch` runs. */
+  async function imageOrigin(): Promise<{ origin: string; close: () => Promise<void> }> {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "image/png" });
+      response.end(PNG);
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    return {
+      origin: `http://127.0.0.1:${port}`,
+      close: async () =>
+        await new Promise<void>((resolve) => {
+          server.closeAllConnections();
+          server.close(() => resolve());
+        }),
+    };
+  }
+
+  test("the response carries our path and not the origin URL the page chose", async () => {
+    const image = await imageOrigin();
+    try {
+      harness = await createHarness({
+        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
+      });
+      const response = await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.probe,
+        payload: { url: SOURCE_URL },
+      });
+      const body = response.json() as ProbeResponse;
+
+      // Asserted on the body rather than by reading the code: an origin URL the
+      // client is not allowed to fetch has no business reaching the client.
+      expect(body.probe.thumbnailUrl).toBeUndefined();
+      expect(JSON.stringify(body)).not.toContain(image.origin);
+      expect(body.probe.thumbnailPath).toMatch(/^\/api\/thumbnail\/[A-Za-z0-9_-]+$/u);
+    } finally {
+      await image.close();
+    }
+  });
+
+  test("that path serves the bytes, typed from an allowlist and with nosniff", async () => {
+    const image = await imageOrigin();
+    try {
+      harness = await createHarness({
+        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
+      });
+      const probe = (
+        await harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.probe,
+          payload: { url: SOURCE_URL },
+        })
+      ).json() as ProbeResponse;
+
+      const served = await harness.app.server.inject({
+        method: "GET",
+        url: probe.probe.thumbnailPath ?? "",
+      });
+      expect(served.statusCode).toBe(200);
+      expect(served.headers["content-type"]).toBe("image/png");
+      // Without this a browser may overrule the type on a body whose first bytes
+      // a hostile origin chose.
+      expect(served.headers["x-content-type-options"]).toBe("nosniff");
+      expect(served.rawPayload.equals(PNG)).toBe(true);
+    } finally {
+      await image.close();
+    }
+  });
+
+  test("a cache hit hands back a token that still resolves", async () => {
+    // The token is minted before the probe cache is written, so the second
+    // (cached) answer carries the first answer's token. That only works while
+    // the thumbnail store outlives `PROBE_CACHE_TTL_CEILING_MS`.
+    const image = await imageOrigin();
+    try {
+      harness = await createHarness({
+        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
+      });
+      const send = async (): Promise<ProbeResponse> =>
+        (
+          await (harness as Harness).app.server.inject({
+            method: "POST",
+            url: ROUTES.probe,
+            payload: { url: SOURCE_URL },
+          })
+        ).json() as ProbeResponse;
+
+      const first = await send();
+      const second = await send();
+      expect(second.cached).toBe(true);
+      expect(second.probe.thumbnailPath).toBe(first.probe.thumbnailPath);
+      expect(
+        (
+          await harness.app.server.inject({
+            method: "GET",
+            url: second.probe.thumbnailPath ?? "",
+          })
+        ).statusCode,
+      ).toBe(200);
+    } finally {
+      await image.close();
+    }
+  });
+
+  test("a thumbnail on a blocked address costs the preview, not the probe", async () => {
+    // A real guard, not a stub. Private addresses are refused, and only the two
+    // fictional media hosts are exempted — so `169.254.169.254` is blocked on
+    // its address without any DNS being consulted.
+    harness = await createHarness({
+      resolver: new StubResolver(
+        probeResult({ thumbnailUrl: "http://169.254.169.254/latest/meta-data/" }),
+      ),
+      config: {
+        ssrfAllowPrivateAddresses: false,
+        ssrfAllowHosts: ["site.example", "cdn.example"],
+      },
+    });
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      payload: { url: SOURCE_URL },
+    });
+
+    // The video is still downloadable, which is the whole point of `bestEffort`.
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as ProbeResponse;
+    expect(body.probe.variants).toHaveLength(1);
+    expect(body.probe.thumbnailPath).toBeUndefined();
+    expect(body.probe.thumbnailUrl).toBeUndefined();
+  });
+
+  test("a probe with no thumbnail is unchanged", async () => {
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const body = (
+      await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.probe,
+        payload: { url: SOURCE_URL },
+      })
+    ).json() as ProbeResponse;
+    expect(body.probe.thumbnailPath).toBeUndefined();
+    expect(body.probe.variants).toHaveLength(1);
+  });
+
+  test("an unknown token is THUMBNAIL_NOT_FOUND, 404 — not JOB_NOT_FOUND and not a 500", async () => {
+    harness = await createHarness();
+    const response = await harness.app.server.inject({
+      method: "GET",
+      url: ROUTES.thumbnail("a".repeat(43)),
+    });
+    expect(response.statusCode).toBe(404);
+    // Its own code: this names neither a job nor a route, and reusing
+    // `JOB_NOT_FOUND` would need its copy rewritten here — the tell that the
+    // code is wrong.
+    expect(response.json()).toMatchObject({
+      error: { code: "THUMBNAIL_NOT_FOUND", retryable: false },
+    });
   });
 });
 

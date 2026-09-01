@@ -39,6 +39,9 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   TIMEOUT: 504,
   RATE_LIMITED: 429,
   JOB_NOT_FOUND: 404,
+  // A document that expired out of an in-memory store, which is an ordinary
+  // outcome rather than a fault — 404, never a 500.
+  THUMBNAIL_NOT_FOUND: 404,
   // The route, not the document. Raised by `registerNotFoundHandler` for any
   // URL that matches no route.
   NOT_FOUND: 404,

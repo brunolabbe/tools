@@ -124,6 +124,17 @@ export interface Job {
   updatedAt: string;
   /** Set when the job reaches a terminal state. */
   finishedAt: string | null;
+  /**
+   * Snapshot of the preview image's **proxied path** — `/api/thumbnail/<token>`
+   * on this API, never the origin URL a page named. Kept for the same reason
+   * `variant` is: so the downloads list can still show the video after the
+   * probe has aged out.
+   *
+   * Optional as well as nullable, and deliberately: the field is newer than the
+   * `downloader:jobs:v1` records in browsers today, and `jobSchema` is what
+   * those records are re-read through. See the note in `api.ts`.
+   */
+  thumbnailPath?: string | null | undefined;
 }
 
 /**

@@ -724,6 +724,50 @@ test("each card is handed its own pipeline mark, looked up by job id", () => {
   ]);
 });
 
+test("a job with a preview shows it beside the title, from our path", () => {
+  const { container } = render(
+    <ul>
+      <JobCard
+        job={job("downloading", { thumbnailPath: "/api/thumbnail/xyz789" })}
+        streamState={undefined}
+        watchedStep={undefined}
+        onCancel={vi.fn()}
+        onRemove={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    </ul>,
+  );
+
+  const image = container.querySelector(".preview img");
+  expect(image?.getAttribute("src")).toBe("/api/thumbnail/xyz789");
+  expect(image?.getAttribute("alt")).toBe("");
+  // The title is still the title: the preview is additive, not a replacement.
+  expect(screen.getByRole("heading", { name: "1080p · H.264 + AAC" })).toBeDefined();
+});
+
+test("a job with no preview renders exactly as it did before dl-29", () => {
+  // Both the pre-dl-29 records (no key at all) and a probe that found no image
+  // (`null`) land here, and neither may change the card.
+  for (const value of [undefined, null] as const) {
+    const { container, unmount } = render(
+      <ul>
+        <JobCard
+          job={job("downloading", value === undefined ? {} : { thumbnailPath: value })}
+          streamState={undefined}
+          watchedStep={undefined}
+          onCancel={vi.fn()}
+          onRemove={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </ul>,
+    );
+    expect(container.querySelectorAll("img")).toHaveLength(0);
+    expect(screen.getByRole("heading", { name: "1080p · H.264 + AAC" })).toBeDefined();
+    expect(screen.getByText(SOURCE_URL)).toBeDefined();
+    unmount();
+  }
+});
+
 test("a list with nothing finished offers no clear button", () => {
   render(
     <JobList

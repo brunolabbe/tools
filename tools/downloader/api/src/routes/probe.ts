@@ -21,6 +21,7 @@ import type { AppContext } from "../context.ts";
 import { withoutEgressProxy } from "../egress-proxy.ts";
 import { createRateLimitHook } from "../rate-limit.ts";
 import { urlsInProbeResult } from "../ssrf.ts";
+import { captureThumbnail, withThumbnailPath } from "../thumbnails.ts";
 
 /** What we tell a client to wait when the gate, rather than a bucket, refused. */
 const GATE_RETRY_AFTER_SEC = 10;
@@ -97,18 +98,38 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
     }
 
     // Resolver output is attacker-influenced. Vetting it here means a client
-    // never even learns that an internal address answered.
-    await context.guard.assertAllAllowed(urlsInProbeResult(probe));
+    // never even learns that an internal address answered. `mustPass` only —
+    // `bestEffort` is the preview image, whose refusal must not cost the user a
+    // downloadable video, so it is vetted inside `captureThumbnail` where the
+    // refusal is caught. See `urlsInProbeResult`.
+    await context.guard.assertAllAllowed(urlsInProbeResult(probe).mustPass);
 
-    context.probeCache.set(cacheKey, probe);
+    // Before the cache write and before the response, so both carry our path
+    // and neither carries the origin URL. Eager rather than on demand because
+    // `probe.requestContext.headers` is the only credential that will ever
+    // fetch this image, and it exists here and nowhere later.
+    const thumbnailPath = await captureThumbnail({
+      probe,
+      guard: context.guard,
+      fetchImpl: context.guardedFetch,
+      store: context.thumbnails,
+      logger: context.logger,
+    });
+    const clientProbe = withThumbnailPath(probe, thumbnailPath);
+
+    // The **rewritten** probe is what is cached, so the double-click that this
+    // cache exists for gets the same token rather than a second fetch. That is
+    // why `THUMBNAIL_TTL_MS` is required to exceed `PROBE_CACHE_TTL_CEILING_MS`.
+    context.probeCache.set(cacheKey, clientProbe);
     context.logger.info("probe complete", {
       resolver: probe.resolver,
       variants: probe.variants.length,
       drm: probe.drm.protected,
+      preview: thumbnailPath !== null,
       requestContext: probe.requestContext,
     });
 
-    const body: ProbeResponse = { probe, cached: false };
+    const body: ProbeResponse = { probe: clientProbe, cached: false };
     return await reply.send(body);
   });
 }

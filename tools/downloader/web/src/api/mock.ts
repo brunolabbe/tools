@@ -291,6 +291,10 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
       createdAt: at,
       updatedAt: at,
       finishedAt: null,
+      // Snapshotted at creation, as the orchestrator does after its re-probe.
+      // `?? null` rather than omitted, so the mock produces the shape the server
+      // actually sends rather than a subtly narrower one.
+      thumbnailPath: result.thumbnailPath ?? null,
     };
 
     const runtime: JobRuntime = {

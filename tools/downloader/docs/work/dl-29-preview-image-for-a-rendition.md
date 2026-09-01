@@ -3,7 +3,7 @@ id: dl-29
 tool: downloader
 title: Show a preview image when choosing a rendition, and in the downloads list
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -463,3 +463,141 @@ Three `med` findings, no `high`. Under the strict reading of the rubric (all ten
   `DEFAULT_ERROR_MESSAGES` at `errors.ts:66`, and like `STATUS_BY_CODE` it is an
   exhaustive `Record<ErrorCode, …>` — so both fail `npm run check` if a new code
   is added without them, which is worth a builder knowing.
+
+- **2026-09-01** — Built, on `origin/main` at `6f29eb0`. The two decisions gate 1
+  left open are settled below, with the reasoning, so neither comes back a third
+  time.
+
+  **Decision 1 — `urlsInProbeResult` returns `{ mustPass, bestEffort }`**, the
+  brief's recommended option. What settled it was not taste but a count the brief
+  did not make: **two** call sites need the best-effort URL, not one. Build 2 puts
+  the fetch in `probe.ts`, and Build 5 puts a second one in the orchestrator,
+  which re-probes unconditionally and mints the job's own token. The alternative —
+  "vet the thumbnail on its own line in `probe.ts`" — would therefore have been
+  that line written twice, in two files, with the answer to "what does a probe
+  cause us to fetch" split three ways instead of two. One inventory, two lists,
+  and `captureThumbnail` reads `bestEffort` off it rather than off
+  `probe.thumbnailUrl` directly, so `ssrf.ts` stays the single place that knows.
+
+  Done-when 6 therefore stands as written and did not need rewriting.
+
+  **Decision 2 — a new `thumbnailPath`, not a re-use of `thumbnailUrl`.** This is
+  the one that went against the brief's recommendation, and the prompt's framing
+  is what decided it: adding a field is normal contract work; changing what an
+  existing one means is not something to do unilaterally. Folding the proxied path
+  into `thumbnailUrl` would have left one name denoting an origin URL inside the
+  server and one of our own paths outside it, with nothing in the type saying
+  which side of the boundary a value came from — and `probeResultSchema` types it
+  `z.string()`, so nothing would ever catch a confusion.
+
+  The brief's objection to two fields ("a second field the UI must choose
+  between") does not survive the shape actually built: the API **strips**
+  `thumbnailUrl` on the way out, exactly as `withoutEgressProxy` strips
+  `requestContext.proxyUrl`, so exactly one of the two is ever populated on the
+  wire and the UI has nothing to choose between. `grep -rn thumbnailUrl
+tools/downloader/web` returns nothing.
+
+  For the same reason the `Job` field is spelled `thumbnailPath` rather than the
+  brief's `thumbnailUrl`. The brief itself supplied the argument: it asked for a
+  comment saying the field holds "our proxied path, not the origin URL, since the
+  name alone will not say it". A name that has to be corrected by its own comment
+  is the wrong name.
+
+  **What the brief had wrong, or did not know.**
+
+  - **The origin URL had a second door, and Done-when 5 only guards the first.**
+    `events.probed(jobId, probe)` in the orchestrator ships a whole `ProbeResult`
+    to the client over SSE. Rewriting only `POST /api/probe`'s body — which is all
+    Done-when 5 asks for — would have left the origin URL reaching the browser by
+    the other route. `withThumbnailPath` is applied at both, and the orchestrator's
+    call sits next to the `withoutEgressProxy` note explaining the identical
+    problem for the proxy port.
+  - **`Job.thumbnailPath` needed a database migration, which Build 5 does not
+    mention.** `Job` is persisted in SQLite as well as in `localStorage`; the brief
+    reasons carefully about the second and not at all about the first. Migration 3
+    adds a nullable `thumbnail_path` column. `#write` needs `?? null` as well as
+    the `undefined` check — better-sqlite3 refuses to bind an `undefined`, and a
+    row written before this branch reads back with the property absent.
+  - **A third exhaustive `Record<ErrorCode, …>`.** The brief names
+    `DEFAULT_ERROR_MESSAGES` and `STATUS_BY_CODE`. There is also
+    `ERROR_PRESENTATION` in `web/src/lib/error-presentation.ts`, and a runtime
+    exhaustiveness test — "every ErrorCode is demonstrable" in
+    `web/test/mock-api.test.ts` — which `npm run check` cannot catch because it is
+    an assertion rather than a type. `THUMBNAIL_NOT_FOUND` joins `NOT_FOUND` in
+    that test's not-reachable-in-the-mock list, with the reason written down.
+  - **The component tests do not run against `scenarios.ts`.** Done-when 1–3 say
+    they do. `web/test/fixtures.ts` says the opposite in its own docblock —
+    "Nothing here comes from `src/api/mock.ts`… a component test fed only mock data
+    proves the mock renders" — and dl-15 is why. So the panel and card assertions
+    use `fixtures.ts` builders, and the scenario table's own claim (a base probe
+    with a preview, a `nopreview` scenario without) is asserted in
+    `mock-api.test.ts`, which is the file that owns the mock.
+  - **`guardedFetch` was not reachable from a route.** Build 2 says "use the
+    injected `guardedFetch`", but it was a local in `createApp` handed to the
+    engine and the resolvers, and nothing put it on `AppContext`. It is on the
+    context now, with a note that anything fetching on a client's behalf must use
+    it rather than `globalThis.fetch`.
+
+  **Two `low` findings gate 1 left to "a builder with the code in front of them"
+  are now settled in code rather than in prose.** The probe-cache read path
+  returns before the fetch would run, so the token is minted _before_
+  `probeCache.set` and the rewritten probe is what gets cached — a cache hit hands
+  back the first answer's token rather than paying for a second fetch. That makes
+  `THUMBNAIL_TTL_MS > PROBE_CACHE_TTL_CEILING_MS` load-bearing rather than
+  arbitrary, and `thumbnails.test.ts` reads the ceiling out of `config.ts` rather
+  than restating it, so the two cannot drift. Build 4's `withoutEgressProxy`
+  line-ordering imprecision resolved as gate 1 predicted: same technique, near the
+  response, after the fetch.
+
+  **The rate limiter, considered deliberately as the Traps section asks.** No
+  bucket. The other three limited routes each protect something expensive — a
+  ~15 s browser probe, a worker slot, gigabytes off a disk. This answers from a
+  `Map`, from at most 512 KB already resident, to a caller who had to hold an
+  unguessable 256-bit token; a caller without one gets a 404 cheaper than the
+  not-found handler's. The reasoning and the way back in (dl-23's optional `key`,
+  `fileBucketKey` as the worked example) are written into `routes/thumbnail.ts`
+  rather than left here, so whoever reconsiders it reads it where the decision
+  lives.
+
+  **CSP was not added**, as the Traps section instructs. This branch adds the
+  first image the app loads and the two changes would mask each other. Worth
+  filing.
+
+  **What was measured, including where a test lied.**
+
+  - The `.nullable()` trap is real and worse than the brief says. Mutating
+    `jobSchema` to a bare `.nullable()` and re-running `job-store.test.ts` fails
+    **five** tests, not one: `loadJobs` returns `[]` for every record, because
+    every fixture in that file predates the field. Restored, 10 pass.
+  - `captureThumbnail`'s own `assertAllowed` was mutated away: the blocked-address
+    test goes red. It uses a plain spy `fetch` rather than `createGuardedFetch`
+    precisely so that it can — with a guarded fetch, hop 0 would refuse anyway and
+    the test would have passed with the check deleted.
+  - **The redirect test's first draft passed for the wrong reason and was
+    rewritten.** It pointed at `169.254.169.254`, and it stayed green with a plain
+    unguarded `fetch` substituted — because link-local is simply unreachable from
+    this container, so the fetch failed on its own and the assertion measured the
+    sandbox. It now redirects to a _reachable_ loopback fixture that serves a
+    perfectly good image, under a guard that exempts the literal `127.0.0.1` and
+    not the name `localhost`. Swapping `createGuardedFetch` for `globalThis.fetch`
+    now turns it red, which is the property the test is for.
+  - The oversize test was likewise rewritten. A body sent with a _short_
+    `Content-Length` does not reach `readBounded` at all — undici truncates at the
+    declared length — so the original assertion proved nothing about the cap. The
+    cap is now exercised by a chunked response with no `Content-Length`, which is
+    the case a header-based cap cannot bound, and the truncation case is asserted
+    separately so the two cannot be confused.
+
+  **Not measured, and not inferred.** No live probe and no browser: the LAN-CSRF
+  gadget in the Why is still reasoned, not demonstrated, and no real `og:image`
+  was fetched from a real site. The e2e suite was not run (it needs Playwright
+  browsers) and no container was built, so nothing here says the preview renders
+  in a real browser — only that the component emits the `<img>` and the route
+  serves the bytes. `tools/downloader/api/test/tls-interception.test.ts` failed
+  once in three full `npm test` runs with an ASN.1 "illegal padding" error from
+  `new X509Certificate(...)`; it passed in isolation, passed on the next full run,
+  and 520 leaf generations under two probing scripts did not reproduce it. My
+  hypothesis — `newSerial()` prefixing `00` onto sixteen random bytes whose first
+  is itself `0x00` — was tested directly against forge and **disproved**. So it is
+  an unexplained pre-existing flake in a file this branch does not touch, recorded
+  rather than diagnosed.
