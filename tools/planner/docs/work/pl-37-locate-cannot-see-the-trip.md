@@ -136,15 +136,28 @@ dissolved it.
 
 ### What the brief had wrong
 
-**Its line numbers are stale, and `scripts/citations.mjs` reports 5/5.** Build
-step 2 names `api/src/runs/travel.ts:295` and `api/src/runs/discovery.ts:226`.
-On `6f29eb0` the `locate` calls are at `travel.ts:310` and `discovery.ts:491`;
-line 295 is `const total = places.toLocate.length + 1;` and line 226 is blank.
-The checker passes because **a bare `file:line` with no quoted text beside it is
-checked for existing, not for saying anything** — worth knowing before trusting
-a green run of it. pl-36 is what moved them, having inserted the `geocoded` map
-and the `Source` capture into exactly this loop, which is the hazard its own Log
-names: the set of files an event edits is not the set it invalidates.
+**Its line numbers are stale, and `scripts/citations.mjs` still reports them
+resolved.** Build step 2 names `api/src/runs/travel.ts:295` and
+`api/src/runs/discovery.ts:226`. At `6f29eb0` the `locate` calls are in fact at
+`api/src/runs/travel.ts:310` and `api/src/runs/discovery.ts:491`, while line 295
+is the doc comment `* \`Place\` — see \`measured\` for where it lands …`and line
+226 is`],`, the tail of an unrelated array literal.
+
+**The four line numbers in this paragraph are evidence about `6f29eb0` and not
+about the working tree**, where this branch has since moved both files — check
+them with `node scripts/citations.mjs <this file> --rev 6f29eb0`, which is the
+case the script's own header calls out as the one it cannot judge for you.
+
+The checker reports the _brief's_ two as fine because **a bare `file:line` with
+no quoted text beside it can only be checked for existing**. That is the
+script's design and not a gap in it: its header says it "cannot tell you a
+citation is semantically right … It can tell you a citation cannot possibly be
+right, which is the half that is checkable". So a clean run over this file means
+none of its citations is _impossible_, which is a weaker sentence than "they
+point at what they claim". pl-36 is what moved them, having inserted the
+`geocoded` map and the `Source` capture into exactly this loop, which is the
+hazard its own Log names: the set of files an event edits is not the set it
+invalidates.
 
 **Build step 2's "neither has the brief in hand today" is half wrong.**
 `discoverAlongCorridor` has taken `brief: TripBrief` since pl-29. Only
