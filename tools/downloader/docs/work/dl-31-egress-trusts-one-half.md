@@ -112,7 +112,7 @@ verification. Two consequences, and both are the reason `depends_on` names it:
 
 **FAIL**, on Done-when 2 alone, and the reviewer labelled it a testability gap
 rather than a code defect: `withSystemRoots`
-([`operator-ca.ts:36`](../../api/src/operator-ca.ts)) reads the real,
+([`tools/downloader/api/src/operator-ca.ts:36`](../../api/src/operator-ca.ts)) reads the real,
 non-injectable `tls.rootCertificates`, and no fixture in this repo can be signed
 by a real public root — so the line as worded is unprovable by **any**
 implementation under the fixtures-only rule, not by this one in particular.
@@ -121,7 +121,7 @@ Everything else passed.
 What it reproduced independently, rather than read:
 
 - The positive control, exactly: reverting the `originTls` spread at
-  [`server.ts:101`](../../api/src/server.ts) turns 2 of the (then) 9 tests red
+  [`tools/downloader/api/src/server.ts:101`](../../api/src/server.ts) turns 2 of the (then) 9 tests red
   and leaves 7 green.
 - The two-root array claim, by mutating the array to a single entry and watching
   the other origin fail — so the test really does show undici honouring every
@@ -146,7 +146,7 @@ as is.
    `unwrapCause` re-threw only an `AppError`, so a TLS rejection stayed a bare
    `TypeError`; `direct.ts`'s `#request` caught any non-abort failure into a
    blanket `UNREACHABLE`; and `UNREACHABLE` is in `CORE_RETRYABLE_CODES`
-   ([`errors.ts:115-117`](../../../../packages/core/src/errors.ts)). Not limited
+   ([`packages/core/src/errors.ts:115-117`](../../../../packages/core/src/errors.ts)). Not limited
    to "CA unset" — it fires for any origin `EGRESS_CA_FILE` does not cover.
    Fixed on this branch at the user's direction, against both the reviewer's and
    the orchestrator's recommendation to file it.
@@ -158,6 +158,79 @@ as is.
 Its file:line citations were written against `2715466`; every one was
 re-resolved against this branch's tip before being quoted above, and two had
 moved.
+
+### Gate C — 2026-09-01, Sonnet (build was Opus), after PR #125 opened
+
+**PASS, no findings.** All eight items reproduced as stated.
+
+**Scoped to the post-gate corrections alone**, and that is why this record is
+short. The rename to `EGRESS_CA_FILE`, the alias and its boot warning, the
+documentation, the dispatcher wiring, the read-once/merge-once arrangement in
+`operator-ca.ts` and the two earlier gate records were all settled by Gates A and
+B above and were **not** re-examined here. What was in scope is the second commit
+on the branch: the `TLS_VERIFICATION_FAILED` classifier, the `direct.ts`
+passthrough, the engine CLI's environment fallback, and the two traps the round-two
+Log reports. Read the three records together rather than as one gate that missed
+things.
+
+What it established independently:
+
+- **The dangerous direction is clean.** Six transient-failure shapes produced
+  against real sockets — `ECONNREFUSED`, `ECONNRESET`, `ENOTFOUND`, `EAI_AGAIN`,
+  a connect timeout and an abort — and **zero** matched the closed code set or
+  the `ERR_TLS_CERT_` prefix. That is the half the Log argued for on principle
+  (under-matching is survivable, over-matching fails a job that would have
+  succeeded) and it is now measured rather than argued.
+- **The three provoked verify codes exercise two branches, not one.** Killing the
+  classifier and killing the `direct.ts` passthrough each turn two tests red —
+  and they are **different pairs**. So set-membership and the prefix are pinned
+  separately, rather than one branch wearing three names.
+- **"Both edits are required" reproduces**, which was this branch's correction to
+  the relayed finding rather than the finding itself.
+- **All four engine-CLI combinations**, with precedence matching the `api` side.
+
+It confirmed both reported traps, and both are worth more than this ticket:
+
+- **The rebuild trap is load-bearing.** It mutated
+  [`direct.ts`](../../resolvers/src/resolvers/direct.ts) without rebuilding, got
+  12/12 green — a false negative — and the same mutation went red after
+  `npm run build`. That inverts the result of any cross-workspace mutation test
+  in this repo, which is a technique this ticket relied on four times.
+- **`ssrfAllowPrivateAddresses` is worse than its name.**
+  [`ssrf.ts:209-211`](../../api/src/ssrf.ts) — `isExemptHost` is
+  `return allowPrivate || allowHosts.has(...)`, with no per-address gating — so
+  the flag exempts **every hostname unconditionally**. An SSRF test written with
+  it on can never observe a block, which is exactly how the round-two
+  `BLOCKED_TARGET` test first passed for the wrong reason.
+
+**On the sibling finding this branch reported and did not fix**, it went past the
+grep to an enumeration: no certificate flag or environment override on
+`chromium.launch()` ([`browser/pool.ts:117-126`](../../resolvers/src/browser/pool.ts)
+for `BASE_ARGS`, `:254-268` for the launch call) or on `ytdlp.ts`'s `spawn()`
+([`ytdlp.ts:516`](../../resolvers/src/resolvers/ytdlp.ts)), and zero hits for
+`--ca-certificate`, `--ignore-certificate-errors`, `NODE_EXTRA_CA_CERTS`,
+`SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` or `NSS`. Its strongest
+evidence is first-party: [`tools/downloader/api/src/server.ts:116-128`](../../api/src/server.ts) already
+says in its own comment that Chromium and yt-dlp verify their own connections and
+that nothing needs a trust-store change. So this is dl-27's deliberate
+tunnel-versus-terminate split, **pre-existing and correctly outside what dl-31
+could fix** — not a regression this branch introduced. It goes to the user as a
+ticket rather than onto this branch.
+
+Its citations were written against `f12e060`; every one was re-resolved against
+this tip before being quoted here, and **three of five had moved** — `ssrf.ts`,
+`pool.ts`'s `BASE_ARGS` and the `server.ts` comment block all start a few lines
+later than the record it arrived in said.
+
+`node scripts/citations.mjs` on this file reports **31 of 33**, and the two it
+cannot resolve are deliberate. Both are in the Why above, are the filer's own
+verification against `6b6c785`, and one of them —
+`server.ts:142` routes `ffmpegCaFile` to the engine — describes code **this
+branch changed**. Qualifying its path would make it resolve while pointing at a
+line that no longer says what the sentence claims, which is worse than an honest
+miss. Every citation in the three gate records and both Log entries resolves; the
+bare ones were qualified to a downloader-rooted path, because in a two-tool repo
+`api/src/server.ts` matches twice.
 
 ## Log
 
@@ -179,7 +252,7 @@ moved.
 
   Two things made it invisible rather than merely unfixed. First, core's taxonomy
   already forbids it **in words** — `UNREACHABLE`'s own docstring
-  ([`errors.ts:34`](../../../../packages/core/src/errors.ts)) says a certificate
+  ([`packages/core/src/errors.ts:34`](../../../../packages/core/src/errors.ts)) says a certificate
   that _did_ arrive belongs on `TLS_VERIFICATION_FAILED` and that the retry
   answer differs — so a reader checking the rule would have found the rule
   correct and never looked at the one client that had no ticket. Second, the
@@ -197,7 +270,7 @@ moved.
   `AppError` through instead of re-wrapping it. **Both were needed** — fixing
   only the first changes nothing at the route, which the mutation run showed.
   The rest of the path was already built and simply never reached: 502 at
-  `http-errors.ts:23`, not-retryable by omission from `CORE_RETRYABLE_CODES`, and
+  `tools/downloader/api/src/http-errors.ts:23`, not-retryable by omission from `CORE_RETRYABLE_CODES`, and
   finished UI copy at `web/src/lib/error-presentation.ts:62`.
 
   **Three verify codes, produced rather than listed.** Every fixture in this repo
@@ -224,9 +297,9 @@ moved.
 
   **Correction to my own last entry.** I wrote that
   `engine/src/config.ts`'s `FFMPEG_CA_FILE` fallback was "unreachable". Gate B
-  traced it properly: it is unreachable _from `api`_ — `server.ts:259` omits
+  traced it properly: it is unreachable _from `api`_ — `tools/downloader/api/src/server.ts:259` omits
   `tlsCaFile` only when interception is off **and** `egressCaFile` is undefined,
-  which since the alias merge means neither variable is set, and `main.ts:22`
+  which since the alias merge means neither variable is set, and `tools/downloader/api/src/main.ts:22`
   passes no overrides — but it is live for the M1 CLI, which passes no
   `tlsCaFile` at all. "Inert for `api`" is the true and more useful sentence.
   `engine/src/config.ts:210` now reads `EGRESS_CA_FILE` first and `FFMPEG_CA_FILE`
@@ -388,8 +461,8 @@ moved.
 
   **What I then verified myself, against `origin/main` at `6b6c785`**, rather
   than against the relay: `requestTls` exists at `dispatcher.ts:94` and is
-  documented "Unset in production"; `server.ts:75-78` constructs the dispatcher
-  without it; `server.ts:142` routes `ffmpegCaFile` to the engine alone; and the
+  documented "Unset in production"; `tools/downloader/api/src/server.ts:75-78` constructs the dispatcher
+  without it; `tools/downloader/api/src/server.ts:142` routes `ffmpegCaFile` to the engine alone; and the
   only `requestTls` caller in the tree is `api/test/proxied-https.test.ts:579`.
   So the mechanism is confirmed by reading.
 
