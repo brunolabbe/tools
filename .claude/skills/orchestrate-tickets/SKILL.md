@@ -185,10 +185,24 @@ against the CLI it was testing, a brief's claim that an option "removes the whol
 class", an orchestrator framing that treated a choice as settled when its premise
 was unmeasured, and a ticket's own baseline.
 
-### Two clauses that turn a correction into a rule
+**The hardest finding to relay safely is one whose premises are all true.** In the
+sixth session a gate reported that two call sites logged a request context
+unredacted, and every premise held: the sites do log it raw, the headers are
+documented as carrying `Cookie` and `Authorization`, and the redactor that exists
+for exactly that shape is called at neither. The orchestrator checked the premises,
+found them sound, and relayed the conclusion as work to do. The conclusion was
+false — the logger recognises that field structurally and redacts on the way out,
+by design, so a call site is **not** supposed to redact, and adding one would have
+taught the next reader the opposite of the intended pattern. The builder
+reproduced it first, refuted it, applied nothing, and wrote the regression test the
+finding had actually been pointing at. Checking a finding's premises is not
+checking a finding; only running it is. Relay the premises **as premises**.
 
-Both are one sentence in a relay, and both were the direct cause of the fourth
-session's best builder output. They cost nothing and they are easy to omit.
+### Three clauses that turn a correction into a rule
+
+The first two are one sentence in a relay and were the direct cause of the fourth
+session's best builder output. The third cost the sixth session a whole builder
+round by its absence. All three cost nothing and all three are easy to omit.
 
 **Ask for the mechanism, not the fix.** When you relay a finding, add: *"why did
 the argument not transfer?"*, or *"why did the discipline not catch its own
@@ -204,9 +218,24 @@ disproof of its own claim wrote the sharpest diagnosis of the batch; a verdict
 handed down would have got "reproduced, agreed, fixed". This also catches the
 reviewer being wrong, which happens (see [reference/records.md](reference/records.md) on citations).
 
+**Paste the artifact; never describe it.** When a relay carries something the
+builder must *commit* — a gate's `## Review` section, a diff, any text that is
+evidence rather than instruction — paste it verbatim. In the sixth session the
+orchestrator described a gate record instead: its verdict, its method, seven of its
+citations, accurately. The builder searched its worktree, the ticket, `git status`
+and `origin`, found no such text, and **stopped**, on the grounds that composing a
+reviewer's record from a summary is fabricated evidence. It was right, and the
+round was lost. A description is not a smaller version of a record; it is a
+different object, and no amount of accuracy converts one into the other. The tell
+is the verb: if the relay asks the builder to *commit*, *post* or *quote*
+something, that something has to be in the relay.
+
 The shape to avoid is the opposite one: relaying a finding as an instruction to
 apply. That gets it applied and learns nothing, and when the reviewer is wrong it
 gets a wrong thing applied confidently.
+
+**All three failures are one mistake in different costumes: compressing something
+the receiving agent needed in full.**
 
 ### When two gates disagree, relay the disagreement
 
