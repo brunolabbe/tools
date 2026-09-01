@@ -138,23 +138,56 @@ property every rejected alternative lacked.
 
 **Suppression does not weaken the guarantee, because the comment was never the
 guarantee.** Rule 3 makes that explicit and it is measured, not asserted:
-removing both `guard.assertAllowed` calls from `egress-proxy.ts` fails five tests
-in `egress-proxy.test.ts`, and — for the alert this record deliberately does not
-excuse — deleting the `onRequest` hook from `routes/files.ts` fails five in
-`rate-limit.test.ts`. Both suites run on every push. The risk that a suppression
-hides a genuine regression is the reason rule 3 exists, and it is answered by the
-suites rather than by care.
+disabling `guard.assertAllowed` in `egress-proxy.ts` fails 5 tests in
+`egress-proxy.test.ts`; disabling the address rejection inside the pinning
+`lookup` fails 2 there and 6 in `dispatcher.test.ts`; and — for the alert this
+record deliberately does not excuse — deleting the `onRequest` hook from
+`routes/files.ts` fails 5 in `rate-limit.test.ts`. All three suites run on every
+push.
 
-**Whether GitHub honours the comment natively is unverified, and the first pull
-request under this record is the experiment.** CodeQL records the suppression in
-its SARIF; whether code scanning then dismisses the alert, or merely reports it
-as suppressed and leaves the check red, could not be determined from a
-development container, where `gh api` is denied. If the check stays red, the
-supported follow-up is the `advanced-security/dismiss-alerts` action, which
-converts SARIF suppression data into real dismissals — a change to
-`security.yml`, and a decision to take on its own evidence rather than to
-pre-empt here. **The documentation value of the comment holds either way**, which
-is why this record does not depend on the answer.
+**Rule 2's last field has to be measured every time, because the first attempt at
+it was wrong.** The original comment on the egress proxy claimed five tests for
+_both_ guards. That was true of `assertAllowed` and false of the pinning lookup,
+where the real figure in that file was **one** — and repo-13's gate caught it by
+isolating each guard rather than trusting the sentence. Worse, the single test
+then covering it was not the one named for the job: `egress-proxy.test.ts`'s
+"a name that rebinds after the pre-flight check is refused at connect" asserted
+only a `502`, which a socket dying on its own also produces, so it passed with
+the guard disabled. It was strengthened to assert the refusal in the log, which
+is what raised that file's figure from 1 to 2.
+
+The lesson is not "count carefully". It is that **a claim about what a test
+proves decays exactly like the code it describes**, so the number in rule 2 is
+worth re-measuring whenever the comment is touched — by breaking each guard
+separately and watching which tests notice. A guard covered only by a test that
+cannot fail is the case this whole record exists to prevent, and it was found
+inside the first excuse written under it.
+
+**Whether GitHub honours the comment natively is still unverified.** The first
+pull request under this record (#126) was expected to settle it and did not. Its
+`CodeQL` check was green, but every line it added was comment: the flagged
+`http.request` call itself is unmodified context, so the alert may never have
+been attributed to that diff at all — which is also why #124, a pull request
+touching no code, was green while the alert sat open on `main`. **A green check
+is therefore consistent with both "suppression honoured" and "never
+attributed", and proves neither.**
+
+**What settles it is the alert showing as _suppressed_ rather than `Open` in the
+security tab**, which needs the tab or `gh api` — denied in the development
+container where this was written. A weaker but useful signal is a future pull
+request that _modifies_ the flagged line and still passes. There is one piece of
+evidence favouring "honoured": `dl-27` is recorded as having reopened this alert
+in 2026-08-30 without touching the flagged line either, only shifting the lines
+below it, and if a shift alone reattributes then this diff should have been
+reattributed too. That history is screenshot-relayed and unverified, so it is
+evidence rather than an answer.
+
+If suppression turns out not to be honoured, the supported follow-up is the
+`advanced-security/dismiss-alerts` action, which converts SARIF suppression data
+into real dismissals — a change to `security.yml`, and a decision to take on its
+own evidence rather than to pre-empt here. **The documentation value of the
+comment holds in every reading**, which is why this record does not depend on the
+answer.
 
 **Nothing enforces the five fields.** A suppression comment with no reasoning and
 no named test would pass every gate this repo has. That is a real gap, and the
