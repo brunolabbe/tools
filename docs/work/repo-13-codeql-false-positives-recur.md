@@ -309,102 +309,9 @@ Sonnet reviewing an Opus build.
   reasonable to defer with a stated trigger, given there is one suppression today —
   consistent with this repo's "second consumer, not the first guess" philosophy.
 - **verified, no defect** · ticket record shape — `status: done`, `## Review` pending
-  this gate, `- **2026-09-01, after the gate** — Gate findings applied. Both were right and I
-  reproduced each before touching anything.
-
-  **The high finding, confirmed exactly.** Commenting out only the
-  `isBlockedAddress` rejection inside `createPinningLookup` (`dispatcher.ts:156`)
-  with mocked DNS left intact fails **1** test in `egress-proxy.test.ts`, not the
-  five my comment claimed. The `assertAllowed` half was right: 5, names matching.
-  So the comment was half true and stated as if wholly measured.
-
-  **The test named for the job could not do the job.**
-  `egress-proxy.test.ts:234`, "a name that rebinds after the pre-flight check is
-  refused at connect", asserted only `result.status === 502`. Its resolver points
-  at `127.0.0.1` where nothing listens, so the socket dies on its own and yields
-  the same `502` whether or not anything vetted the address. Its comment claimed
-  "a pass means the address the socket reached was vetted by the connector",
-  which the assertion could not establish.
-
-  **The mechanism, which is the part worth keeping.** The test sits in
-  `describe("the holes dl-11 closes")`, whose two other tests assert `403` — a
-  code only `guard.assertAllowed` produces, so for them the status _is_
-  discriminating. The rebind case was written in the same idiom, but a rebind is
-  caught by the pinning lookup and surfaces as a socket error, so the proxy
-  answers `502` — and `502` is reachable by accident. **The idiom was copied into
-  the one case where the idiom's discriminating power did not hold.** Then the
-  history: `git log -S` dates the weak test to `721ccd8` (dl-11, 2026-08-14) and
-  the strong one to `59974b9` (dl-26, 2026-08-23). dl-26 was _about_ this exact
-  ambiguity — "say whether the proxy refused a fetch or could not reach it" — and
-  it encoded the insight in a **new** test in a **new** describe block instead of
-  going back to repair the old one. The old test kept its name and its confident
-  comment, and those are what made it invisible for eighteen days: they assert
-  the intent so plainly that nobody re-read the assertion under them. A later
-  ticket adding coverage beside a weak test rather than fixing it is the pattern
-  to watch for, not the arithmetic.
-
-  **Fix, made to fail first.** `:234` now takes a `recordingLogger` and asserts
-  `msg === "refused a subprocess fetch"`, `code === "BLOCKED_TARGET"` and the
-  host, the way `:289` already did, keeping the `502` as a statement about what
-  the client sees. With `isBlockedAddress` disabled it goes red; with the guard
-  restored the file is 20/20. One correction of my own along the way: I first
-  asserted `host === "rebind.test"` and it is `"rebind.test:443"` — the CONNECT
-  path logs the authority it was given, port included. Caught by the run, not by
-  review, which is the argument for making it fail first.
-
-  **The measured numbers, replacing the sentence the gate disproved.** Disabling
-  `guard.assertAllowed` fails 5 in `egress-proxy.test.ts`. Disabling the pinning
-  lookup's rejection fails **2** in `egress-proxy.test.ts` after the fix (1
-  before) **and 6 in `dispatcher.test.ts`**, which is the file that owns the
-  lookup — 8 across the project, up from 7. The comment now says that. **The
-  design was never weakly covered; my comment cited the wrong file for half of
-  it**, which is a different and less alarming defect than the raw "1 not 5"
-  suggests, and worth stating plainly so the next reader does not think the
-  pinning lookup was unprotected.
-
-  **Siblings: none, and I checked rather than assumed.** Every other assertion on
-  an ambiguous status in the suite pairs with something discriminating —
-  `egress-proxy.test.ts:295` and `:338` assert log fields, `:524` asserts the
-  upstream actually received the CONNECT (`seen`), `:565` asserts the certificate
-  message, and `proxied-https.test.ts:697`/`:727` both assert `statusLine`
-  matching `/certificate/`. Tests asserting `403` are safe by construction. The
-  nearest thing to a sibling is `egress-proxy.test.ts:230`'s
-  `expect(first.status).not.toBe(403)`, a weak negative — but it is the control
-  half of a two-host test whose other half is discriminating, and it asserts no
-  security property on its own. Left alone, and not fixed here per the gate.
-
-  **The med finding, and it lands on a green check.** The Log framed this pull
-  request as "green means honoured, red means not". The check came back green,
-  which under that framing would have read as proof, and it is not: every line
-  the suppression added is a `+` comment while the flagged `http.request` line is
-  unmodified context, so the alert may never have been attributed to this diff —
-  exactly why #124 was green. Both passages and the ADR now name the third
-  reading, and say what would actually settle it: the alert showing as
-  _suppressed_ rather than `Open` in the security tab. The gate's own
-  counter-evidence is recorded too — `dl-27` also never touched the flagged line
-  and is said to have reopened the alert, which favours "honoured" — marked
-  unverified, because that history is screenshot-relayed.
-
-  **The ADR gained the lesson, not just the correction.** Rule 2's last field is
-  now flagged as something to re-measure whenever the comment is touched, with
-  this failure as the worked example: the first excuse ever written under adr/005
-  contained a wrong claim about its own coverage, and the thing that caught it
-  was isolating each guard rather than reading the sentence.
-
-  Gates: `npm run check`; `npm test -- --project downloader` at **845 passing in
-  55 files, unchanged from before this round**. The gate expected the count to
-  move because a test changed, and it did not: `:234` was strengthened in place
-  with four added assertions rather than split into new cases, so the case count
-  is identical and only the assertion count grew. Saying so because I first wrote
-  "846, up from 845" into this Log from reasoning and the run corrected me —
-  which is the same mistake, in miniature, that the high finding was about.
-  Fail-first proofs are recorded above, and both edits were reverted.
-
-## The gate on this filing` kept as #124's separate record. Matches
-
-`docs/01-TICKETS.md:154-163`; `npm run status -- --json` exits 0 with no
-`reviewed-but-ready` problem.
-
+  this gate, `## The gate on this filing` kept as #124's separate record. Matches
+  `docs/01-TICKETS.md:154-163`; `npm run status -- --json` exits 0 with no
+  `reviewed-but-ready` problem.
 - **findings** · defect hunt at medium, self-run, returned 2; 2 carried, 0 dropped.
 - NFR: security — the high finding is a security-documentation defect (an inaccurate
   claim about a suppression's regression net), not a live vulnerability, since
@@ -424,6 +331,77 @@ removing `files.ts:119` → 5 failed, names matching; removing `lookup` from
 **Could not verify**: the actual code-scanning SARIF/fingerprint match for this PR;
 whether `js/missing-rate-limiting` is currently open or closed; whether any CodeQL
 query fires on the `net.connect` call. All three need `gh api`, which is denied.
+
+### Gate 2 — 2026-09-01, CONCERNS (reviewed at `e614ec9`)
+
+Scoped to the fix round, `6e273cc...e614ec9`. Defect hunt run directly by the
+reviewer, at `medium`. Sonnet reviewing an Opus build. Gate 1's ADR-structure,
+register-argument, `net.connect`-restraint and deferred-rate-limit findings are not
+re-litigated here.
+
+| Gate 1 finding                                                                             | Verdict this round                | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **high** — the suppression comment overclaimed "5 tests" for the pinning-lookup half       | **fixed, and correctly reframed** | Reproduced independently: disabling only the `isBlockedAddress` rejection in `createPinningLookup` (`dispatcher.ts:156-160`) fails **2** in `egress-proxy.test.ts` and **6** in `dispatcher.test.ts`, 8 project-wide. Both the scoped and project-wide runs match the builder's claim exactly. The reframing holds: `dispatcher.test.ts` genuinely owns `createPinningLookup`, so the design was never weakly covered — gate 1's "1 not 5" was real but understated the true net, because it only ran the file gate 1 had scoped to. The updated comment and `docs/adr/005:139-146` now state 5 / 2 / 6 exactly, matching these runs |
+| — fail-first on the strengthened test                                                      | **confirmed, does its job**       | `egress-proxy.test.ts:234-263` now takes a `recordingLogger` and asserts the refusal message, `code === "BLOCKED_TARGET"` and `host === "rebind.test:443"`, keeping the `502`. With the pinning rejection disabled it goes red (2 failures, including this one); with the guard intact, 20/20 green in that file                                                                                                                                                                                                                                                                                                                     |
+| **med** — Log and ADR framed the green `CodeQL` check as proof the suppression is honoured | **fixed honestly**                | The Log, `docs/adr/005:166-179`, and Done-when 5 and 8 now name the third reading explicitly — the alert may never have been attributed to this diff — and state what would settle it (suppressed vs `Open` in the security tab), while keeping the `dl-27` counter-evidence flagged as unverified. Read as a stranger, nothing reads as though the green check proved the mechanism                                                                                                                                                                                                                                                 |
+
+**Sibling sweep, walked in full rather than sampled.** Every `.status`/`statusLine`
+assertion in both files. `egress-proxy.test.ts`: 17 assertions
+(`:215,230,231,257,295,338,377,394,406,437,453,465,474,483,524,565,600`). Of the
+ambiguous ones — 502, reachable by a dead socket as well as a real block — `:257`
+now discriminates via the log (fixed this round); `:295` via log message plus
+`errno` plus an explicit "not `refused`"; `:338` via a certificate-specific message
+and code; `:524` via `seen`, proving the upstream actually received the CONNECT;
+`:565` via a message containing "certificate did not verify". `:230`
+(`not.toBe(403)`) is the one true near-miss and is a weak negative, but it asserts
+no security property and is the control half of a two-host test whose other half is
+fully discriminating. Correctly left alone. `proxied-https.test.ts`: assertions at
+`:589,691,698,699,702,721,728,729`; the two ambiguous 502s (`:691`, `:721`) both
+pair status with `statusLine` matched against `/certificate/iu` plus a specific
+error-code substring. **No sibling of the original defect survives uncaught.**
+
+- **med (new this round)** · the fix-round narrative was spliced into the middle of
+  gate 1's committed bullet rather than appended to `## Log`, cutting the sentence
+  after `` `## Review` pending this gate, ` `` and leaving the remainder to resume
+  ninety lines later as a second, garbled `## The gate on this filing` heading,
+  duplicating the real one. `npm run check` still passed — oxfmt does not validate
+  heading semantics — and `npm run status` is unaffected, since it reads
+  frontmatter. But a reader looking for where gate 1's record ends meets a corrupted
+  heading, and a review-record bullet silently becomes builder prose with no change
+  of attribution. This is the verbatim-gate-record property the review skill spends
+  several paragraphs protecting, broken by an edit to the record rather than by a
+  reviewer. Two remedies: leave the corruption and add this gate cleanly below it,
+  or restore gate 1's bullet verbatim and move the narrative into a dated `## Log`
+  entry where it reads as belonging. Recommend the latter.
+- **verified, no defect** · fail-first test — mutation reproduced, red with the
+  guard disabled, green restored.
+- **verified, no defect** · comment numbers — every number in the rewritten
+  `egress-proxy.ts` comment and in `docs/adr/005`'s Consequences matches these runs.
+- **verified, no defect** · sibling sweep — every status-code assertion in both
+  files walked; the single near-miss is correctly identified as a different class.
+- **verified, no defect** · Log and ADR softening — all three sites read plainly to
+  a stranger and state what would actually settle the question.
+- **verified, no defect** · behaviour — `npm test -- --project downloader` at
+  `e614ec9`: 845 passing, 55 files, unchanged from gate 1's baseline. The
+  `egress-proxy.ts` diff is a comment rewrite only, no code line touched; the only
+  logic-bearing change is the new assertions in the test. `gh pr checks 126`: all 11
+  pass, `CodeQL` included.
+- **findings** · defect hunt at medium, self-run, scoped to the fix round: 1 new
+  finding, 1 carried, 0 dropped. Gate 1's two findings are closed — fixed, not
+  carried.
+- NFR: security n/a — comment and test only, `guard.assertAllowed` still gates
+  unconditionally · performance n/a · reliability improved, the rebind test can now
+  actually fail · maintainability — the new finding is a record-integrity concern;
+  everything else in the round improves it.
+
+**Could not verify**, both needing `gh api`, which is denied: the actual
+SARIF/fingerprint attribution for PR #126 — whether the green `CodeQL` check means
+"suppression honoured" or "never attributed" — and whether
+`js/missing-rate-limiting` is currently open or closed. Both are already recorded
+as open in the ticket and the ADR; neither was claimed to be settled by this round.
+
+_Record repaired by the orchestrating agent: gate 1's bullet restored verbatim and
+the fix-round narrative moved into `## Log`, per this gate's recommended remedy._
 
 ## Log
 
@@ -639,6 +617,97 @@ query fires on the `net.connect` call. All three need `gh api`, which is denied.
   Gates for this round: `npm run check`, and `npm test -- --project downloader`,
   which is the proof the change is inert — the suppression is a comment, so
   `egress-proxy.test.ts` and its four siblings must pass unchanged.
+
+- **2026-09-01, after the gate** — Gate findings applied. Both were right and I
+  reproduced each before touching anything.
+
+  **The high finding, confirmed exactly.** Commenting out only the
+  `isBlockedAddress` rejection inside `createPinningLookup` (`dispatcher.ts:156`)
+  with mocked DNS left intact fails **1** test in `egress-proxy.test.ts`, not the
+  five my comment claimed. The `assertAllowed` half was right: 5, names matching.
+  So the comment was half true and stated as if wholly measured.
+
+  **The test named for the job could not do the job.**
+  `egress-proxy.test.ts:234`, "a name that rebinds after the pre-flight check is
+  refused at connect", asserted only `result.status === 502`. Its resolver points
+  at `127.0.0.1` where nothing listens, so the socket dies on its own and yields
+  the same `502` whether or not anything vetted the address. Its comment claimed
+  "a pass means the address the socket reached was vetted by the connector",
+  which the assertion could not establish.
+
+  **The mechanism, which is the part worth keeping.** The test sits in
+  `describe("the holes dl-11 closes")`, whose two other tests assert `403` — a
+  code only `guard.assertAllowed` produces, so for them the status _is_
+  discriminating. The rebind case was written in the same idiom, but a rebind is
+  caught by the pinning lookup and surfaces as a socket error, so the proxy
+  answers `502` — and `502` is reachable by accident. **The idiom was copied into
+  the one case where the idiom's discriminating power did not hold.** Then the
+  history: `git log -S` dates the weak test to `721ccd8` (dl-11, 2026-08-14) and
+  the strong one to `59974b9` (dl-26, 2026-08-23). dl-26 was _about_ this exact
+  ambiguity — "say whether the proxy refused a fetch or could not reach it" — and
+  it encoded the insight in a **new** test in a **new** describe block instead of
+  going back to repair the old one. The old test kept its name and its confident
+  comment, and those are what made it invisible for eighteen days: they assert
+  the intent so plainly that nobody re-read the assertion under them. A later
+  ticket adding coverage beside a weak test rather than fixing it is the pattern
+  to watch for, not the arithmetic.
+
+  **Fix, made to fail first.** `:234` now takes a `recordingLogger` and asserts
+  `msg === "refused a subprocess fetch"`, `code === "BLOCKED_TARGET"` and the
+  host, the way `:289` already did, keeping the `502` as a statement about what
+  the client sees. With `isBlockedAddress` disabled it goes red; with the guard
+  restored the file is 20/20. One correction of my own along the way: I first
+  asserted `host === "rebind.test"` and it is `"rebind.test:443"` — the CONNECT
+  path logs the authority it was given, port included. Caught by the run, not by
+  review, which is the argument for making it fail first.
+
+  **The measured numbers, replacing the sentence the gate disproved.** Disabling
+  `guard.assertAllowed` fails 5 in `egress-proxy.test.ts`. Disabling the pinning
+  lookup's rejection fails **2** in `egress-proxy.test.ts` after the fix (1
+  before) **and 6 in `dispatcher.test.ts`**, which is the file that owns the
+  lookup — 8 across the project, up from 7. The comment now says that. **The
+  design was never weakly covered; my comment cited the wrong file for half of
+  it**, which is a different and less alarming defect than the raw "1 not 5"
+  suggests, and worth stating plainly so the next reader does not think the
+  pinning lookup was unprotected.
+
+  **Siblings: none, and I checked rather than assumed.** Every other assertion on
+  an ambiguous status in the suite pairs with something discriminating —
+  `egress-proxy.test.ts:295` and `:338` assert log fields, `:524` asserts the
+  upstream actually received the CONNECT (`seen`), `:565` asserts the certificate
+  message, and `proxied-https.test.ts:697`/`:727` both assert `statusLine`
+  matching `/certificate/`. Tests asserting `403` are safe by construction. The
+  nearest thing to a sibling is `egress-proxy.test.ts:230`'s
+  `expect(first.status).not.toBe(403)`, a weak negative — but it is the control
+  half of a two-host test whose other half is discriminating, and it asserts no
+  security property on its own. Left alone, and not fixed here per the gate.
+
+  **The med finding, and it lands on a green check.** The Log framed this pull
+  request as "green means honoured, red means not". The check came back green,
+  which under that framing would have read as proof, and it is not: every line
+  the suppression added is a `+` comment while the flagged `http.request` line is
+  unmodified context, so the alert may never have been attributed to this diff —
+  exactly why #124 was green. Both passages and the ADR now name the third
+  reading, and say what would actually settle it: the alert showing as
+  _suppressed_ rather than `Open` in the security tab. The gate's own
+  counter-evidence is recorded too — `dl-27` also never touched the flagged line
+  and is said to have reopened the alert, which favours "honoured" — marked
+  unverified, because that history is screenshot-relayed.
+
+  **The ADR gained the lesson, not just the correction.** Rule 2's last field is
+  now flagged as something to re-measure whenever the comment is touched, with
+  this failure as the worked example: the first excuse ever written under adr/005
+  contained a wrong claim about its own coverage, and the thing that caught it
+  was isolating each guard rather than reading the sentence.
+
+  Gates: `npm run check`; `npm test -- --project downloader` at **845 passing in
+  55 files, unchanged from before this round**. The gate expected the count to
+  move because a test changed, and it did not: `:234` was strengthened in place
+  with four added assertions rather than split into new cases, so the case count
+  is identical and only the assertion count grew. Saying so because I first wrote
+  "846, up from 845" into this Log from reasoning and the run corrected me —
+  which is the same mistake, in miniature, that the high finding was about.
+  Fail-first proofs are recorded above, and both edits were reverted.
 
 ## The gate on this filing
 
