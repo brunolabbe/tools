@@ -73,6 +73,89 @@ discarded. So:
   guessing** (this repo has two `logging.test.ts`), and exits non-zero so it can
   gate a commit. It prints each cited line so you can judge the content.
 
+  **A record and a Log passage pin to different commits, and swapping them breaks
+  one of them.** This repo squash-merges, so a branch sha does not survive the
+  merge — pin a record to it and the `--rev` dangles for everyone who reads the
+  ticket afterwards. The obvious correction, pinning to the base instead, is
+  worse: a gate record cites the tests the branch *introduced*, and those lines
+  do not exist at the base, so every citation fails. So:
+
+  - **A gate record pins to the sha it reviewed**, and says in its header that
+    this is a pre-squash branch sha, kept because it is the only tree where those
+    citations resolve, reachable afterwards through the ticket's pull request.
+  - **A Log passage citing pre-existing code pins to a sha that survives** — the
+    base, or a `main` commit.
+
+  **A committed record can be spliced by a later edit, and nothing here catches
+  it.** `review-ticket` spends several paragraphs protecting "the caller commits
+  the gate record **verbatim**", and frames the threat as the caller editing a
+  reviewer's words. The realistic threat is different: a *later* agent, appending
+  something unrelated, splicing into the record it is not touching.
+
+  The mechanism, verified in this repo: an agent anchored its insertion on the
+  bare string `## The gate on this filing`, which also appears **backticked inside
+  a gate record's own prose** — ticket prose here quotes headings constantly, and
+  in that file the quoted form sits nearly 500 lines above the real heading. The
+  insert landed inside the committed record, cutting a sentence in half; ninety
+  lines of unrelated narrative went in, and the sentence resumed as a second,
+  garbled heading duplicating the real one.
+
+  **Nothing mechanical fails.** Measured directly: with a duplicated `## Review`
+  heading and a half-sentence in a ticket, `npm run check` exits **0** — oxfmt
+  formats markdown, it does not validate heading semantics — and
+  `npm run status -- --json` exits **0**, because it reads frontmatter. The ticket
+  looks fine to every gate this repo has. **A record that has been edited reads
+  exactly like one that has not**, which is why the discipline cannot be an
+  inspection.
+
+  So, two practices, both one line:
+
+  - **Anchor on the heading *form*, never the bare heading text** — `\n\n## …\n`,
+    not `## …`. Headings get quoted inside prose here as a matter of course.
+  - **Diff the record's section against `HEAD` before committing any edit to a
+    ticket that carries one.** One command, and it is the only thing that detects
+    this.
+  - **Verify a pin by diffing the two runs, never by comparing totals.** Measured
+    on the same batch: a record pinned with `--rev` and the same record resolved
+    against the working tree both reported **16/34 — identical** — while three
+    citations pointed at *different content*, because a later commit had moved the
+    lines under them. One was the record's own quoted evidence for a finding, so
+    remapping the number would have destroyed the finding. This is the script's
+    documented limit arriving in practice: it tells you a citation is not
+    *impossible*, and a matching count says nothing at all.
+  - **Renumbering records can break things outside the ticket.** Inserting a
+    late-arriving record in run order looked like a rename of the ones after it,
+    until a builder found two *test files* citing "dl-29's third gate" by number.
+    Prefer a date-and-sha label over renumbering, and grep for the ordinal first.
+
+  Provenance: the two incidents are the `repo-13` session's, reported to this one
+  — it happened twice on one ticket, to two different agents, for the identical
+  reason, which is what makes it a pattern rather than an accident; a reviewer
+  caught the first, and the second agent caught itself by diffing before
+  committing. The quoted-heading mechanism and the two exit codes above were
+  verified here.
+
+  Surfaced in the sixth session by a builder that **refused the pin it was given**
+  and returned three options instead. The orchestrator had conflated the two
+  cases; only the builder was close enough to the tree to see that the base pin
+  resolved nothing.
+
+  Two more things that session measured about this script, both of which read as
+  staleness and are not:
+
+  - **`--section <name>` is documented and unimplemented.** It appears once, in
+    the usage line, with no parser and no validation, so it is silently accepted:
+    `--section Log`, `--section Nonsense` and no flag return byte-identical
+    output. A whole-file pass wearing the label of a filtered one. Filed as
+    `repo-14`.
+  - **A flag's value can be eaten as the positional argument.** `argv.find((a) =>
+    !a.startsWith("--"))` takes the first non-`--` token as the ticket path, so
+    `citations.mjs --rev HEAD <ticket>` opens `HEAD` as the ticket. **Always put
+    the ticket path first.** It fails loudly — ENOENT, exit 1 — so any run that
+    reported "N/N resolve" used a valid invocation; only the `--section` no-op is
+    silent. (Measure that exit code without a pipe: `$?` after `| tail` is
+    tail's.)
+
   **So a bare filename is not a citation in this repo — it is a coin flip the
   tool refuses to make.** `travel.ts:286` matches three tracked files and
   `brief.ts:505` matches two; the resolver fails both rather than picking, which
