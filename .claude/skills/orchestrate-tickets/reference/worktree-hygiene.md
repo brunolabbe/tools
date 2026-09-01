@@ -59,6 +59,15 @@ accepting it, because a builder that comes back "this does not reproduce" is a
 question only that reviewer can answer. That is the test: **hold a reviewer only
 while a specific open question could go back to it.**
 
+**That exception is now the common case, not the rare one.** The reviewer sends
+its findings to the builder directly and fields the pushback itself, so "a
+specific open question could go back to it" is true for every gate until the
+builder is done answering. Retire a reviewer when its record is pushed **and** the
+exchange has ended — not on the record alone. The fourth session's 133 MB → 61 MB
+saving came from retiring four reviewers at report time; expect to keep them a
+round longer now and to give some of that back. That is the price of the hop this
+removes, and it is disk rather than context.
+
 Before removing any of them, confirm what the tree actually holds. A reviewer that
 checked out the builder's branch shows commits ahead of `main` — those are the
 *builder's*, already pushed, not review work. One command settles it:

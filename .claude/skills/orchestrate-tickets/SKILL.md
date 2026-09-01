@@ -72,12 +72,30 @@ you are there.
    `fable`. Say which model gated in the record — that is what makes the next
    audit one command instead of an assumption. Measured before this line existed:
    **11 tickets, 22 gates, none gated by a different model than built it.**
-5. **Relay findings** to the builder as one batched message.
-6. **Repeat 4–5** until the gate passes or the findings are cosmetic.
+5. **The reviewer sends its findings to the builder itself**, as one batched
+   message, and copies you. You are not the courier — **both recorded relay
+   corruptions in this repo were introduced at this hop by an orchestrator
+   rewriting a report**, not by either agent. Name the builder in the gate prompt
+   so the reviewer knows who to address; the mechanics are in
+   [reference/dispatching.md](reference/dispatching.md).
+   - **What still comes to you, and only this**: a disagreement the two cannot
+     settle, and any **open decision** either of them surfaces. A decision is not
+     a disagreement — it is a question neither agent is allowed to answer, and
+     you are the only participant who can ask the user. If it reaches the builder
+     instead of you, it dies quietly.
+   - **What you add is never a summary of the findings.** Ship authority, what is
+     already settled, priority across a batch — those are yours because only you
+     hold them. The findings are not.
+6. **Repeat 4–5** until the gate passes or the findings are cosmetic. **Hold the
+   reviewer alive** across rounds now: a builder that comes back "this does not
+   reproduce" is asking a question only that reviewer can answer, and it can now
+   be asked directly. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
 7. **Builder opens the PR**, commits the gate record, posts the reviewer's report to
    the PR thread.
-8. **Remove the reviewer's worktree** once its record is pushed — in the ticket and
-   on the PR thread. **Hold the builder's until the ticket is finished**, because
+8. **Remove the reviewer's worktree** once its record is pushed **and its
+   conversation with the builder is over** — the second condition is new with the
+   direct channel, and it is the one that bites. **Hold the builder's until the
+   ticket is finished**, because
    steps 9 and 4-above may still need that agent. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
 9. **Check the merge landed what it was supposed to.** Not polling — one look,
    after the fact. See _After a merge_.

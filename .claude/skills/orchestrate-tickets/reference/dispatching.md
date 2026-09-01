@@ -49,6 +49,34 @@ Gate yield tracked prompt specificity, not gate number. In the reference session
 gates 4 and 5 were the cheapest **and** the highest-yield, because by then the
 prompts said *reproduce this exact mutation* instead of *review this*.
 
+**Name the builder in every gate prompt.** The reviewer sends its findings to the
+builder itself now, so a gate prompt that does not say who to address has no
+channel — give the builder's agent name and say that `SendMessage` is deferred and
+needs a `ToolSearch` first. Say explicitly what still comes back to you: an
+unsettleable disagreement, and any open decision. Anything else you ask to be
+routed through yourself, you are volunteering to retype.
+
+### What was measured about the channel, and what was not
+
+Three probes on 2026-09-01, before any of this was written down:
+
+- **A subagent can hold `ListAgents` and `SendMessage`.** Confirmed against a
+  `general-purpose` subagent, which has them.
+- **Siblings are mutually visible.** That agent's `ListAgents` listed a
+  `ticket-reviewer` running under the same parent, which it had not spawned. This
+  is the fact the whole design rests on, and it is the one that was in doubt.
+- **`SendMessage` is deferred**, not in the default set — `ToolSearch` for it
+  first. A prompt that assumes it is present will fail on the first call.
+
+**Not measured: an actual reviewer → builder round trip.** The agent registry is
+read at session start, so adding the two tools to the frontmatter did not reach
+builders and reviewers dispatched later in the same session; both probes of the
+real agent types came back without the tools and made zero tool calls. The
+frontmatter is correct and takes effect in a **new session** — so the first batch
+run after this lands is the one that proves the channel, and it should say in its
+record whether the message actually arrived. Until then this page describes a
+mechanism verified in its parts and not end to end.
+
 **So make gate 1 look like gate 4.** Every gate prompt should:
 
 - **Name what to attack.** The riskiest decision, the seam with the longest reach,
