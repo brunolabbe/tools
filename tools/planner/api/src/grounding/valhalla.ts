@@ -73,6 +73,7 @@ import type {
   TravelEstimate,
   TravelMatrix,
   TravelRequest,
+  TripContext,
 } from "@planner/agent";
 import { AppError, coordinatesSchema } from "@planner/contract";
 import type { Coordinates, Place, Source } from "@planner/contract";
@@ -296,6 +297,15 @@ export class ValhallaGroundingProvider implements GroundingProvider {
    * among them, which means `null` here now also covers *ambiguous*, not only
    * *unmatched*. See `chooseResult` for why those are one value today and
    * what it costs.
+   *
+   * **`request.trip` narrows the choice and never the query** — pl-37. The
+   * destination is evidence about the trip and not about this place, so
+   * appending it to `q` would ask the geocoder a question nobody asked: "Percé,
+   * Gaspésie" is a different search from "Percé", and a place genuinely outside
+   * the destination would stop being found at all rather than merely stop being
+   * disambiguated. It reaches `chooseResult` instead, where it can only break a
+   * tie the reply itself could not. It is also what keeps pl-34's ten captures
+   * usable: they are keyed by the exact query sent.
    */
   async locate(request: LocateRequest): Promise<LocatedPlace | null> {
     const query = placeQuery(request.place);
@@ -311,7 +321,7 @@ export class ValhallaGroundingProvider implements GroundingProvider {
       { method: "GET", headers: { "user-agent": USER_AGENT, accept: "application/json" } },
       request.signal,
     );
-    const coordinates = chooseResult(geocoderResults(body), request.place);
+    const coordinates = chooseResult(geocoderResults(body), request.place, request.trip);
     if (coordinates === null) return null;
 
     // A fresh object, never one held anywhere in this provider. `Object.freeze`
@@ -904,21 +914,77 @@ function geocoderResults(body: unknown): GeocoderResult[] {
  * pl-34's open question rather than an oversight — naming it needs a word in
  * `@planner/agent`'s seam and in `UncheckedConstraint`, which is
  * contract-adjacent. Recorded in pl-34's Log; not decided here.
+ *
+ * ## The trip's destination, third and last, and with no tiebreak behind it — pl-37
+ *
+ * A bare name with no locality had **nothing** to narrow with: the reply had to
+ * agree with itself or the call declined. `LocateRequest.trip` is the caller
+ * saying what the trip already knew, and it enters here as one more set of
+ * unlabelled hints — the same `hintsFrom` the locality goes through, matched
+ * the same way, with nothing parsed out of either. The captured bare `Percé`
+ * is the case: `Québec` is in the town's `display_name` and not in
+ * `Nez Perce County, Idaho, United States`, so one row survives and agrees
+ * with itself.
+ *
+ * **It is third, and the order is the whole safety argument.** The destination
+ * is evidence about the *trip*, not about this place, and a trip contains
+ * places outside its destination — the stop on the way, the day over the
+ * border. So it is consulted only where the place itself narrows nothing
+ * (`hintsFrom(place.locality)` is empty) *and* the reply does not already agree
+ * with itself. Every reply that located before pl-37 takes one of those two
+ * earlier exits and is answered identically; the destination can only turn a
+ * decline into an answer, never an answer into a different one.
+ *
+ * **The settlement tiebreak does not run behind it, and this is measured
+ * rather than cautious.** pl-34's boundary is that `addresstype` may say *what
+ * kind* only once something independent has said *where*, and a destination is
+ * not always independent: `api/src/runs/discovery.ts` grounds the corridor's
+ * own endpoints, so the place it locates and the destination it would hand as
+ * context are **the same string**. Over the captured bare `Percé` reply, the
+ * hint `perce` matches *both* rows — `Percé, Le Rocher-Percé, …` and `Nez
+ * Perce County, Idaho, …` — so nothing is narrowed, and a tiebreak behind that
+ * would answer Québec on no evidence at all. Which is precisely the failure
+ * pl-34 refused, arriving through a hint that only looks like evidence. So the
+ * destination must produce a shortlist that agrees on its own or produce
+ * nothing.
+ *
+ * **Rejected: scoring the destination alongside the locality's fragments**,
+ * which is what pl-37's brief asked for in as many words. `bestMatches` keeps
+ * only the top-scoring rows, so a destination fragment that the *wrong* row
+ * mentions and the right row does not pulls the shortlist towards the wrong
+ * row — a candidate whose `locality` says Ontario, on a trip whose destination
+ * says Québec, ties a Québec row with the Ontario one and then declines for
+ * disagreeing. Blending lets evidence about the trip outvote evidence about
+ * the place, and no capture in this repo measures what that costs. The ladder
+ * cannot: it is additive by construction, which is what lets pl-34's ten
+ * captures be re-run as a regression test rather than re-argued.
  */
-function chooseResult(results: readonly GeocoderResult[], place: Place): Coordinates | null {
-  const hints = localityHints(place.locality);
+function chooseResult(
+  results: readonly GeocoderResult[],
+  place: Place,
+  trip: TripContext | undefined,
+): Coordinates | null {
+  const hints = hintsFrom(place.locality);
+  if (hints.length > 0) {
+    const shortlist = bestMatches(results, hints);
+    const located = agreedPoint(shortlist);
+    if (located !== null) return located;
 
-  // Nothing narrows a reply to a name alone, so it has to speak for itself:
-  // either its rows are one place or this call has no answer.
-  if (hints.length === 0) return agreedPoint(results);
+    // The locality has already said where; `addresstype` may now say what kind.
+    // See the header — this is the only place it is allowed to run, and pl-37
+    // deliberately did not become a second one.
+    return agreedPoint(shortlist.filter((each) => SETTLEMENT_ADDRESS_TYPES.has(each.addressType)));
+  }
 
-  const shortlist = bestMatches(results, hints);
-  const located = agreedPoint(shortlist);
-  if (located !== null) return located;
+  // Nothing on the *place* narrows a reply to a bare name, so it has to speak
+  // for itself first: either its rows are one place, or the trip gets a turn.
+  const agreed = agreedPoint(results);
+  if (agreed !== null) return agreed;
 
-  // The locality has already said where; `addresstype` may now say what kind.
-  // See the header — this is the only place it is allowed to run.
-  return agreedPoint(shortlist.filter((each) => SETTLEMENT_ADDRESS_TYPES.has(each.addressType)));
+  // pl-37, and no `SETTLEMENT_ADDRESS_TYPES` line follows this one on purpose.
+  // An empty hint list makes `bestMatches` empty and `agreedPoint` `null`, so a
+  // request with no trip context needs no check of its own here.
+  return agreedPoint(bestMatches(results, hintsFrom(trip?.destination ?? null)));
 }
 
 /**
@@ -961,17 +1027,24 @@ function bestMatches(
 }
 
 /**
- * The candidate's `locality` as a set of things to look for.
+ * A piece of prose as a set of things to look for.
  *
  * Split on commas because that is how the prose is written — `"Québec,
  * Canada"`, `"Trieste, Italy"` — and folded so that a candidate saying
  * `"quebec"` still matches a `display_name` saying `"Québec"`. Fragments
  * shorter than `MIN_HINT_CHARS` are dropped; duplicates are collapsed so a
  * repeated word cannot outvote a distinct one.
+ *
+ * **Named for what it does and not for where it comes from** — pl-37, which
+ * gave it a second caller. It was `localityHints`, and the candidate's
+ * `locality` is now one of two pieces of free text that go through it; the
+ * other is the trip's own destination. Neither is parsed, both are folded and
+ * split identically, and the name saying so is what stops a second copy of
+ * this from being written for the second source.
  */
-function localityHints(locality: string | null): string[] {
-  if (locality === null) return [];
-  const parts = foldForMatching(locality)
+function hintsFrom(prose: string | null): string[] {
+  if (prose === null) return [];
+  const parts = foldForMatching(prose)
     .split(",")
     .map((part) => part.trim())
     .filter((part) => part.length >= MIN_HINT_CHARS);

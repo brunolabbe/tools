@@ -26,7 +26,9 @@
  * source on it is the worst failure this tool has, and it is exactly what
  * `Provenance` exists to make impossible.
  *
- * `LocateRequest` carries the whole `Place` for this reason, and says so.
+ * `LocateRequest` carries the whole `Place` for this reason, and says so. Since
+ * pl-37 it carries a trip context as well, which is evidence about the trip
+ * rather than about the place and so is not part of this identity.
  *
  * ## Locality **narrows** the collision class; it does not close it
  *
@@ -101,10 +103,17 @@ export function normalisePart(value: string): string {
  *
  * Name **and** locality, because `locality` is what separates
  * Sainte-Anne-des-Monts in Québec from every other one — the sentence
- * `LocateRequest` already carries. It is the cache's key for `locate`, half of
- * its key for `travel`, and the identity the travel pass deduplicates its place
- * list by; those three must be the same string or two of them disagree about
- * what one place is.
+ * `LocateRequest` already carries. It is **part of** the cache's key for
+ * `locate` and part of its key for `travel`, and it is the whole of the
+ * identity the travel pass deduplicates its place list by; all three must build
+ * on the same string or two of them disagree about what one place is.
+ *
+ * It was the whole of the `locate` key until pl-37 gave `LocateRequest` a trip
+ * context, which the answer can depend on and which is therefore in that key
+ * too — see `locateKey`. What did **not** change is this function: a trip is
+ * not part of a place's identity, and folding it in here would have followed
+ * the destination into `runPlaceKey` and split one run's matrix rows on
+ * something that is constant across the run.
  *
  * `coordinates` is deliberately not in it: they are what `locate` is *for*, and
  * a candidate that already has them asks a different question only in the sense

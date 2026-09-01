@@ -713,7 +713,9 @@ describe("the grounding cache", () => {
     });
 
     test("repeated whitespace inside a name, which a model writes both ways", () => {
-      expect(locateKey(place("Québec  City"))).toBe(locateKey(place("Québec City")));
+      expect(locateKey(place("Québec  City"), undefined)).toBe(
+        locateKey(place("Québec City"), undefined),
+      );
     });
 
     test("the same three, on `travel`, at both ends of the leg", () => {
@@ -763,19 +765,27 @@ describe("the grounding cache", () => {
       // business: it is deciding whether its own table holds an answer, not
       // deciding that two questions are one. A real backend may well answer
       // these differently.
-      expect(locateKey(place("Montréal"))).not.toBe(locateKey(place("Montreal")));
+      expect(locateKey(place("Montréal"), undefined)).not.toBe(
+        locateKey(place("Montreal"), undefined),
+      );
     });
 
     test("nor punctuation, nor an abbreviation anyone would expand by eye", () => {
-      expect(locateKey(place("Sainte-Anne-des-Monts"))).not.toBe(
-        locateKey(place("Sainte Anne des Monts")),
+      expect(locateKey(place("Sainte-Anne-des-Monts"), undefined)).not.toBe(
+        locateKey(place("Sainte Anne des Monts"), undefined),
       );
-      expect(locateKey(place("Mt Albert"))).not.toBe(locateKey(place("Mont Albert")));
+      expect(locateKey(place("Mt Albert"), undefined)).not.toBe(
+        locateKey(place("Mont Albert"), undefined),
+      );
     });
 
     test("a locality is part of the question, and having none is not having an empty one", () => {
-      expect(locateKey(place("Alma", "Québec"))).not.toBe(locateKey(place("Alma")));
-      expect(locateKey(place("Alma", "   "))).not.toBe(locateKey(place("Alma")));
+      expect(locateKey(place("Alma", "Québec"), undefined)).not.toBe(
+        locateKey(place("Alma"), undefined),
+      );
+      expect(locateKey(place("Alma", "   "), undefined)).not.toBe(
+        locateKey(place("Alma"), undefined),
+      );
     });
 
     test("a travel key is ordered, because the two directions are two questions", () => {
@@ -789,6 +799,143 @@ describe("the grounding cache", () => {
       // member of `TRAVEL_MODES` rather than a migration and an invalidation.
       expect(travelKey(place("A"), place("B"), "driving")).toContain("driving");
     });
+  });
+});
+
+/**
+ * The trip context is part of the question, so it has to be part of the key —
+ * pl-37.
+ *
+ * **This is the trap the ticket named, and it is silent.** `locate` began
+ * answering differently per trip the moment `LocateRequest` gained `trip`; a
+ * key that still read only the place would have stored one trip's answer and
+ * served it to the next, with a `Source` attached and nothing anywhere saying
+ * the two runs had asked different questions. A run to Québec locates a bare
+ * `Percé` in the Gaspé; a run to Idaho reads that row back and gets Québec.
+ *
+ * The inner double below answers **by destination**, which is what makes these
+ * tests able to fail. A double that answered identically would pass a
+ * context-blind key on the coordinates and could only ever catch it on a call
+ * count — and a call count says the cache is less useful, not that it is wrong.
+ */
+describe("the trip context in the locate key (pl-37)", () => {
+  const QUEBEC = { latitude: 48.5222989, longitude: -64.2136423 };
+  const IDAHO = { latitude: 46.3959861, longitude: -116.8072307 };
+
+  /** Answers `Percé` as whichever place the trip's destination points at. */
+  class PerDestinationProvider implements GroundingProvider {
+    readonly name = "per-destination";
+    locates = 0;
+
+    async locate(request: LocateRequest): Promise<LocatedPlace | null> {
+      this.locates += 1;
+      const destination = request.trip?.destination ?? "";
+      const coordinates = destination.includes("Idaho") ? IDAHO : QUEBEC;
+      return {
+        coordinates,
+        source: {
+          url: `https://fixtures.invalid/per-destination/${destination}`,
+          title: "A double that answers per trip, not a measurement",
+          fetchedAt: new Date("2026-08-22T09:00:00.000Z").toISOString(),
+        },
+      };
+    }
+
+    async travel(): Promise<TravelMatrix> {
+      return [];
+    }
+
+    async nearby(): Promise<Find[]> {
+      return [];
+    }
+
+    async articlesNear(): Promise<NearbyArticle[]> {
+      return [];
+    }
+  }
+
+  function buildPerDestination(clock: Clock): {
+    cache: CachingGroundingProvider;
+    inner: PerDestinationProvider;
+    database: Database.Database;
+  } {
+    const database = new Database(":memory:");
+    migrate(database);
+    db = database;
+
+    const inner = new PerDestinationProvider();
+    const cache = new CachingGroundingProvider({
+      db: database,
+      inner,
+      ttlHours: TTL,
+      now: clock.now,
+    });
+    return { cache, inner, database };
+  }
+
+  test("two trips to different destinations get two answers, not one served twice", async () => {
+    const clock = new Clock("2026-08-22T09:00:00.000Z");
+    const { cache, inner, database } = buildPerDestination(clock);
+
+    const quebecTrip = await cache.locate({
+      place: place("Percé"),
+      trip: { destination: "Québec, Canada" },
+    });
+    const idahoTrip = await cache.locate({
+      place: place("Percé"),
+      trip: { destination: "Idaho, United States" },
+    });
+
+    // Drop the trip from `locateKey` and the second call never happens: the
+    // first row answers it, and this reads Québec where Idaho was asked for.
+    expect(quebecTrip?.coordinates).toEqual(QUEBEC);
+    expect(idahoTrip?.coordinates).toEqual(IDAHO);
+    expect(inner.locates).toBe(2);
+    expect(countGrounding(database)).toBe(2);
+  });
+
+  test("and two trips to the same destination still share one row", async () => {
+    // The other half, and the one that says the key is partitioned rather than
+    // simply disabled: a cache that missed on every trip would pass the test
+    // above and buy nothing.
+    const clock = new Clock("2026-08-22T09:00:00.000Z");
+    const { cache, inner, database } = buildPerDestination(clock);
+
+    await cache.locate({ place: place("Percé"), trip: { destination: "Québec, Canada" } });
+    await cache.locate({ place: place("Percé"), trip: { destination: "  québec,  CANADA " } });
+
+    // Normalised the same way every other part of a key is — case and
+    // whitespace are not two questions.
+    expect(inner.locates).toBe(1);
+    expect(countGrounding(database)).toBe(1);
+  });
+
+  test("a trip with no destination is a different question from any trip with one", async () => {
+    // Not the empty string, and not folded into whichever destination came
+    // first: a brief that declined its destination asked something else, and
+    // `ABSENT` is how `placeIdentity` already draws that line for a locality.
+    const clock = new Clock("2026-08-22T09:00:00.000Z");
+    const { cache, inner } = buildPerDestination(clock);
+
+    await cache.locate({ place: place("Percé") });
+    await cache.locate({ place: place("Percé"), trip: { destination: "Québec, Canada" } });
+
+    expect(inner.locates).toBe(2);
+  });
+
+  test("the key itself distinguishes them, which is where the failure would be", () => {
+    // Asserted on the function as well as through the table, because the table
+    // test above would also pass if two different keys collided into two rows
+    // for some unrelated reason.
+    expect(locateKey(place("Percé"), { destination: "Québec" })).not.toBe(
+      locateKey(place("Percé"), { destination: "Idaho" }),
+    );
+    expect(locateKey(place("Percé"), { destination: "Québec" })).not.toBe(
+      locateKey(place("Percé"), undefined),
+    );
+    expect(locateKey(place("Percé"), { destination: "" })).not.toBe(
+      locateKey(place("Percé"), undefined),
+    );
   });
 });
 

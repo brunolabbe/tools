@@ -27,7 +27,7 @@ import {
   type RunGrounding,
 } from "../src/grounding/cache.ts";
 import { createLogger } from "../src/logger.ts";
-import { discoverAlongCorridor, hasCorridor } from "../src/runs/discovery.ts";
+import { discoverAlongCorridor, hasCorridor, tripContextFor } from "../src/runs/discovery.ts";
 
 const logger = createLogger({ level: "silent" });
 
@@ -118,6 +118,32 @@ describe("hasCorridor", () => {
   });
 });
 
+/**
+ * The one place that decides what trip context is — pl-37.
+ *
+ * Exported because the orchestrator needs the same answer for pl-27's
+ * measuring pass, and two readers of `brief.destination` is how two readers
+ * disagree.
+ */
+describe("tripContextFor", () => {
+  test("is the brief's destination, as the free text a person typed", () => {
+    expect(tripContextFor(briefWith("Montréal", "Gaspésie, Québec"))).toEqual({
+      destination: "Gaspésie, Québec",
+    });
+  });
+
+  test("is undefined for a declined destination, which is an instruction and not a hole", () => {
+    expect(tripContextFor(briefWith("Montréal", null))).toBeUndefined();
+  });
+
+  test("and does not need a corridor — an origin may be declined and a destination still stand", () => {
+    // `hasCorridor` needs both ends; this needs one. They are different
+    // questions and the measuring pass asks only the second, so a brief with
+    // no origin still grounds its places against where it is going.
+    expect(tripContextFor(briefWith(null, "Percé"))).toEqual({ destination: "Percé" });
+  });
+});
+
 describe("discoverAlongCorridor", () => {
   test("no corridor: nothing found, nothing said, no call made", async () => {
     const { events, onProgress } = progressOf();
@@ -189,6 +215,42 @@ describe("discoverAlongCorridor", () => {
         detail: expect.stringMatching(/very little on the map/i) as unknown as string,
         candidateIds: [],
       },
+    ]);
+  });
+
+  /**
+   * Both endpoint lookups carry the trip context — pl-37, including the
+   * endpoint that *is* the destination.
+   *
+   * `placeFor` builds both ends with `locality: null`, so both are exactly the
+   * bare-name case the context exists for. For the destination the context is
+   * the place's own name, which narrows only among rows the query already
+   * matched — which is why `chooseResult` runs no settlement tiebreak behind a
+   * destination hint. That boundary is pinned in
+   * `grounding-valhalla.test.ts`, over the capture that measures it; what is
+   * pinned here is only that the pass hands the field over.
+   */
+  test("both corridor endpoints are located with the trip's destination behind them", async () => {
+    const asked: { name: string; destination: string | undefined }[] = [];
+    await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Québec City"),
+      provider: provider({
+        locate: async (request) => {
+          asked.push({ name: request.place.name, destination: request.trip?.destination });
+          return answered({
+            coordinates: MONTREAL,
+            source: { url: "x", title: null, fetchedAt: "2027-01-01T00:00:00.000Z" },
+          });
+        },
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    expect(asked).toEqual([
+      { name: "Montréal", destination: "Québec City" },
+      { name: "Québec City", destination: "Québec City" },
     ]);
   });
 
