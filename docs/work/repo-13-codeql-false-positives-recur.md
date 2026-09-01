@@ -226,6 +226,111 @@ excused — see the Log.
 9. ~~`npm run check` passes, and `npm run format` has been run if any `.md`
    changed.~~ **Done — see the gate record.**
 
+## Review
+
+**Gate: FAIL** — 2026-09-01 · `origin/main(7d56035)...196fd28` · defect hunt run
+directly by the reviewer (no `Skill`/`Agent` tool in that role), to `medium` depth.
+Sonnet reviewing an Opus build.
+
+| Done when                                                        | Proof                                                                                                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Both alerts re-verified at the tip, guard/line recorded       | proven — triage record (ticket:115-193); guard lines and `connectOptions` arm re-checked at `196fd28`, resolve exactly as cited            |
+| 2. What fails the check established (scoped to diff)             | verified — `gh pr checks` on #121/#122/#124/#126 all consistent with "CodeQL results-check is diff-scoped, separate from the `codeql` job" |
+| 3. `js/missing-rate-limiting` open/closed                        | correctly left **deferred** — `gh api` denied, ticket does not claim otherwise, no defect                                                  |
+| 4. Path-scoped query filter confirmed not to exist               | not re-verified (caller: already settled against GitHub's docs)                                                                            |
+| 5. Inline suppression honoured, confirmed on a real PR           | **contested, not proven** — see high/med findings below                                                                                    |
+| 6. Option chosen by owner, rejected options costed               | proven — `docs/adr/005-excusing-a-code-scanning-finding.md:103-131`                                                                        |
+| 7. Durable home, five fields, criteria discoverable              | proven — `docs/adr/005:52-82`; register command reproduced, returns exactly one line                                                       |
+| 8. Answered by this PR's own `CodeQL` check                      | check ran and passed (`gh pr checks 126`), but what it answers is ambiguous — see med finding                                              |
+| 9. `npm run check` passes, `npm run format` run if `.md` changed | verified — ran `npm run check` at `196fd28`: pass (lint, format, typecheck)                                                                |
+
+- **high** · `tools/downloader/api/src/egress-proxy.ts:357-364` — the suppression
+  comment claims "remove either [`guard.assertAllowed` or the pinning `lookup`] and
+  `egress-proxy.test.ts` fails five tests." That is exactly true for
+  `guard.assertAllowed`: removing both call sites (`:345`, `:406`) fails 5 tests,
+  names matching the ticket exactly. It is **not** true for the pinning lookup under
+  either natural interpretation. Deleting `lookup` from `connectOptions`
+  (`egress-proxy.ts:239`) fails **6** tests, not 5 — one extra because `lookup` also
+  carries the test harness's mocked DNS resolution, so this edit breaks legitimate
+  "allowed" requests too. Isolating the guard itself — commenting out only the
+  `isBlockedAddress` rejection inside `createPinningLookup` (`dispatcher.ts:153-158`)
+  while leaving DNS resolution intact — fails only **1** test ("a rebind caught at
+  connect stays a refusal, though it arrives as a socket error",
+  `egress-proxy.test.ts:289`). The companion test at `egress-proxy.test.ts:234` ("a
+  name that rebinds after the pre-flight check is refused at connect") **still passes
+  with the guard disabled**, because its mock target (`127.0.0.1` with nothing
+  listening) produces the same `502` whether the guard blocked it or the connection
+  just failed on its own — it does not distinguish "blocked" from "let through and
+  then failed". Notably `docs/adr/005`'s Consequences section (lines 139-146) is more
+  careful and only claims "five" for `guard.assertAllowed` and for the `files.ts`
+  `onRequest` hook; it never repeats the claim for the pinning lookup. The overclaim
+  is specific to the shipped code comment, which is the artifact rule 4 designates as
+  the register future readers will trust. Two remedies, not one fix: (a) narrow the
+  comment's wording to what was measured, or (b) strengthen
+  `egress-proxy.test.ts:234` to assert on the distinguishing signal (log message and
+  error code, as `:289` does) rather than status code. Recommend (b) first since it
+  closes the real gap; (a) is the minimum honest fix.
+- **med** · `docs/work/repo-13-codeql-false-positives-recur.md:393-398` (also softer
+  at `:210-211`) — the Log states the PR "either goes green because the suppression
+  is honoured, or red because it is not." That is a false dichotomy.
+  `git diff origin/main...196fd28 -- tools/downloader/api/src/egress-proxy.ts` shows
+  the 8 new lines are all `+` comment and `const proxied = http.request(` carries no
+  `+`/`-` prefix — unmodified context, not an added line. A third explanation the
+  prose forecloses: the alert was never attributed to this PR's diff at all
+  (structurally like #124's control). Which explanation holds could not be resolved —
+  `gh api` is denied, so the SARIF/fingerprint match is unreadable. One relevant,
+  double-edged data point: `dl-27` (`ec1dd6b`), the commit the ticket cites as having
+  moved and reopened this alert, also never touched the `http.request` line — its
+  hunks are in the CONNECT handler, comments and imports — it only shifted line
+  numbers below its edits. If that shift alone caused reattribution once, the same
+  mechanism plausibly reattributes here, which would favour "suppression honoured".
+  But the ticket's own Log says that alert history is "relayed from screenshots and
+  not verified", so the counter-evidence is itself unverified. A later reader seeing
+  this check green and reading `:393-398` as written would reasonably conclude the
+  mechanism is proven, when the branch's own diff makes that unsupported. Remedies:
+  (a) soften `:393-398` and `:210-211` to name the third possibility explicitly, or
+  (b) get the alert state read before declaring Done-when 5/8 settled. Recommend (a)
+  now, since (b) is blocked in this container.
+- **verified, no defect** · the `net.connect` restraint — only `http.request` was
+  suppressed. Right call: `guard.assertAllowed` gates both paths unconditionally
+  (`:345`/`:406`), so no functional gap results, and an unconfirmed suppression would
+  corrupt rule 4's register. Whether any query fires on `net.connect` could not be
+  independently confirmed (`gh api` denied); the premise is inherited from the
+  earlier screenshot-based triage.
+- **verified, no defect** · the comment is inert — `npm test -- --project downloader`
+  at `196fd28`: 55 files, 845 tests passing; the source diff is exactly 8 added
+  comment lines.
+- **verified, no defect** · register argument — `grep -rn 'codeql\[' --include='*.ts' .`
+  returns exactly one line, `egress-proxy.ts:364`, matching the ADR. The adr/003
+  parallel is honestly drawn, reused for the same structural reason rather than
+  borrowed for authority.
+- **verified, no defect** · the known gap (nothing enforces the five fields) is
+  reasonable to defer with a stated trigger, given there is one suppression today —
+  consistent with this repo's "second consumer, not the first guess" philosophy.
+- **verified, no defect** · ticket record shape — `status: done`, `## Review` pending
+  this gate, `## The gate on this filing` kept as #124's separate record. Matches
+  `docs/01-TICKETS.md:154-163`; `npm run status -- --json` exits 0 with no
+  `reviewed-but-ready` problem.
+- **findings** · defect hunt at medium, self-run, returned 2; 2 carried, 0 dropped.
+- NFR: security — the high finding is a security-documentation defect (an inaccurate
+  claim about a suppression's regression net), not a live vulnerability, since
+  `guard.assertAllowed` still blocks unconditionally · performance n/a (comment-only
+  diff) · reliability n/a · maintainability — both findings are trust-in-the-register
+  concerns.
+
+**Reproductions run**, all edits reverted and the worktree confirmed clean:
+`npm run build` / `npm run check` / `npm test -- --project downloader` at `196fd28`
+(845/845); removing both `guard.assertAllowed` calls → 5 failed, names matching;
+removing `files.ts:119` → 5 failed, names matching; removing `lookup` from
+`connectOptions` → 6 failed; disabling only `isBlockedAddress` inside
+`createPinningLookup` → 1 failed; the register grep → one match;
+`git show ec1dd6b -- egress-proxy.ts` → confirmed dl-27 never touched the
+`http.request` line; `gh pr checks 126` → all pass including `CodeQL`.
+
+**Could not verify**: the actual code-scanning SARIF/fingerprint match for this PR;
+whether `js/missing-rate-limiting` is currently open or closed; whether any CodeQL
+query fires on the `net.connect` call. All three need `gh api`, which is denied.
+
 ## Log
 
 - **2026-08-31** — Filed. The two code claims in the brief were reproduced
