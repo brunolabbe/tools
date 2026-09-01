@@ -47,6 +47,18 @@ report a reader holds against it.
 **Expect to stay alive past your report.** The builder may come back "this does
 not reproduce", and you are the only one who can answer that.
 
+**You are done when the two of you agree you are done** — every finding answered,
+every reproduction actually run, the verdict settled between you. The orchestrator
+does not adjudicate that; it re-enters only on the two escalations above. Then
+**report to the orchestrator yourself**, separately from the builder's report, and
+say what was run rather than that it was addressed. Both accounts of the same
+exchange, written by two models, is what lets a reader hold one against the other.
+
+**Do not agree in order to be finished.** A pair that both want to be done can
+converge on "addressed" with nothing run between them, and that failure looks
+exactly like success from outside. If you cannot say what command settled a
+finding, it is not settled — say so and stay open.
+
 ## Why the frontmatter pins a model
 
 `model: sonnet` is not a cost choice — it is the *different model* rule, made a

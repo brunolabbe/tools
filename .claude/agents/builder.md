@@ -164,3 +164,9 @@ which, because the second is the one that gets lost:
   anything contract-adjacent. Neither you nor the reviewer may settle it, and the
   orchestrator is the only participant that can ask a human. Do not resolve it in
   a commit and do not leave it as an observation in the Log.
+
+**You are done when the two of you agree you are done**, and then you each report
+to the orchestrator separately — your account and the reviewer's, of the same
+exchange. Say what you ran, not that it was addressed. **Do not agree in order to
+be finished**: a finding you closed without running anything is a finding still
+open, and "addressed" is the word that hides it.

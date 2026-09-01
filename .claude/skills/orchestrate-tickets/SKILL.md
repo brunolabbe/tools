@@ -62,7 +62,12 @@ you are there.
    read it, which is the whole point of step 2. See
    [reference/dispatching.md](reference/dispatching.md).
 4. **Gate** each finished branch — `subagent_type: "ticket-reviewer"`. Builders
-   never open a PR before a gate. **Check the model rather than assuming it**: the
+   never open a PR before a gate. **You spawn the reviewer, never the builder**,
+   even though the builder is the one who then talks to it: the model-difference
+   rule is enforced by reading the builder's `resolvedModel`, and a builder that
+   picks its own reviewer is the thing being checked choosing its checker. The
+   builder has no `Agent` tool and is told not to spawn, and both of those are
+   this rule, not an oversight. **Check the model rather than assuming it**: the
    builder's Agent result carries `resolvedModel`, and the agent definition
    defaults the gate to Sonnet, which is right when the builder ran Opus. If the
    builder ran Sonnet, pass `model: "opus"` on the gate. **Since repo-17 this
@@ -86,12 +91,23 @@ you are there.
    - **What you add is never a summary of the findings.** Ship authority, what is
      already settled, priority across a batch — those are yours because only you
      hold them. The findings are not.
-6. **Repeat 4–5** until the gate passes or the findings are cosmetic. **Hold the
-   reviewer alive** across rounds now: a builder that comes back "this does not
-   reproduce" is asking a question only that reviewer can answer, and it can now
-   be asked directly. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
-7. **Builder opens the PR**, commits the gate record, posts the reviewer's report to
-   the PR thread.
+6. **They iterate until they agree the work is done** — findings answered,
+   reproductions run, the gate's verdict settled between them. **That agreement is
+   theirs to reach, not yours to adjudicate**; you re-enter only on the two
+   escalations above. **Hold the reviewer alive** across those rounds: a builder
+   that comes back "this does not reproduce" is asking a question only that
+   reviewer can answer, and it can now be asked directly. See
+   [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
+   - **Watch for the failure this shape introduces**: a pair that agrees too
+     easily. Two agents that want to be done can converge on "addressed" without
+     either running anything. The defence is in the gate prompt — demand
+     reproductions and a positive control — and in what they report next.
+7. **Both report to you when they are done**, separately, and that is the point of
+   asking both: you get the builder's account and the reviewer's account of the
+   same exchange, written by two models, and can hold one against the other. A
+   pair that agrees and cannot each say what was run has not finished. **Then the
+   builder opens the PR**, commits the gate record, and posts the reviewer's
+   report to the PR thread.
 8. **Remove the reviewer's worktree** once its record is pushed **and its
    conversation with the builder is over** — the second condition is new with the
    direct channel, and it is the one that bites. **Hold the builder's until the
