@@ -55,7 +55,12 @@ describe("placeIdentity", () => {
     // deduplicates by one identity and a cache that stores by another will
     // send a place it already holds an answer for, every run.
     const one = place("Rimouski", "Québec, Canada");
-    expect(locateKey(one)).toBe(placeIdentity(one));
+    // `toContain` and no longer `toBe` — pl-37 gave the locate key a second
+    // part, the trip context the answer may depend on, exactly as `travelKey`
+    // has always had a mode and a second end. What must hold is that the
+    // identity the pass deduplicates by is *in* the key, not that it is the
+    // whole of it.
+    expect(locateKey(one, undefined)).toContain(placeIdentity(one));
     expect(travelKey(one, place("Percé"), "driving")).toContain(placeIdentity(one));
   });
 });

@@ -88,6 +88,11 @@ export interface EngineConfig {
    * A CA bundle for ffmpeg to trust instead of the system store. Unset means
    * the system store, which is what both ffmpeg builds this repo runs actually
    * use — measured in dl-19, not assumed.
+   *
+   * The environment fallback reads `EGRESS_CA_FILE` first and `FFMPEG_CA_FILE`
+   * second, matching the API's alias policy. It matters only for a caller that
+   * passes nothing — `scripts/download.ts`, the M1 CLI — because `api` always
+   * supplies this explicitly on the path where it can differ.
    */
   tlsCaFile: string | undefined;
   /**
@@ -202,7 +207,7 @@ export function loadEngineConfig(
     maxBackoffMs: input.maxBackoffMs ?? ENGINE_DEFAULTS.maxBackoffMs,
     proxyUrl: input.proxyUrl ?? env["PROXY_URL"] ?? undefined,
     tlsVerify: input.tlsVerify ?? !boolean(env["FFMPEG_ALLOW_UNVERIFIED_TLS"], false),
-    tlsCaFile: input.tlsCaFile ?? env["FFMPEG_CA_FILE"] ?? undefined,
+    tlsCaFile: input.tlsCaFile ?? env["EGRESS_CA_FILE"] ?? env["FFMPEG_CA_FILE"] ?? undefined,
     fetchImpl: input.fetchImpl ?? globalThis.fetch,
     clock: input.clock ?? SYSTEM_CLOCK,
     logger: input.logger ?? NOOP_LOGGER,

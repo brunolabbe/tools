@@ -48,7 +48,7 @@
  * is a cancellation, because a canceled run must not quietly produce a draft.
  */
 
-import type { TravelEstimate } from "@planner/agent";
+import type { TravelEstimate, TripContext } from "@planner/agent";
 import { AppError, MAX_SOURCES, NOT_ESTABLISHED, OVER_BUDGET } from "@planner/contract";
 import type {
   Candidate,
@@ -216,6 +216,21 @@ export interface MeasureInput {
    * have to guess about.
    */
   provider: RunGrounding;
+  /**
+   * What this run's trip already knows about where it is — pl-37.
+   *
+   * Undefined when the brief declined its destination, which is an ordinary
+   * outcome and not a hole: `contract/src/brief.ts` deliberately leaves
+   * `destination` unrequired, and a run without one grounds exactly as it did
+   * before pl-37.
+   *
+   * **It is passed to `locate` and to nothing else in this pass.** It is a hint
+   * for choosing among a geocoder's answers, not a fact about any place, and it
+   * never reaches a `Place`, a candidate or the table the composer packs under —
+   * a place that could not be located is still a place that could not be
+   * located, and the trip's destination is not evidence that it is somewhere.
+   */
+  trip?: TripContext | undefined;
   logger: AppLogger;
   signal: AbortSignal;
   /** One `{ done, total }` frame per lookup answered. */
@@ -265,7 +280,7 @@ function unanswered(outcome: { kind: "unknown" } | { kind: "refused" }): ItemTra
 }
 
 export async function measureTravel(input: MeasureInput): Promise<MeasureResult> {
-  const { places, provider, logger, signal } = input;
+  const { places, provider, trip, logger, signal } = input;
 
   // Knowable before the first lookup goes out, which is what lets the UI show a
   // fraction rather than a spinner — the same property the roster's size has.
@@ -307,7 +322,7 @@ export async function measureTravel(input: MeasureInput): Promise<MeasureResult>
 
   for (const each of places.toLocate) {
     try {
-      const outcome = await provider.locate({ place: each.place, signal });
+      const outcome = await provider.locate({ place: each.place, trip, signal });
       if (outcome.kind === "answered") {
         located.set(each.key, outcome.value.coordinates);
         geocoded.set(each.key, outcome.value.source);

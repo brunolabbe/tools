@@ -47,14 +47,86 @@ export interface GuardedFetchOptions {
 }
 
 /**
+ * OpenSSL's chain-verification failures, plus Node's own name check.
+ *
+ * **Why a list of strings and not a socket.** `tls-interception.ts` says of the
+ * same problem that Node's error for a rejected chain carries `code` and
+ * nothing else — the same *shape* an `ECONNREFUSED` has — and escapes it by
+ * reading `TLSSocket.authorizationError` off a socket the egress proxy owns.
+ * Nothing here owns a socket: undici does, and what reaches this file is an
+ * object whose only own key is `code` (measured, not assumed). So the shape is
+ * useless and the value is not: these codes are OpenSSL's, disjoint from the
+ * errno set a connection failure produces.
+ *
+ * **Under-matching is the safe direction and the list is deliberately closed.**
+ * A certificate failure this misses stays `UNREACHABLE` and retryable, which is
+ * merely today's behaviour; a network blip wrongly matched here becomes
+ * permanent and fails a job that would have succeeded on the next attempt.
+ */
+const TLS_VERIFY_CODES: ReadonlySet<string> = new Set([
+  "CERT_CHAIN_TOO_LONG",
+  "CERT_HAS_EXPIRED",
+  "CERT_NOT_YET_VALID",
+  "CERT_REJECTED",
+  "CERT_REVOKED",
+  "CERT_SIGNATURE_FAILURE",
+  "CERT_UNTRUSTED",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "ERROR_IN_CERT_NOT_AFTER_FIELD",
+  "ERROR_IN_CERT_NOT_BEFORE_FIELD",
+  "HOSTNAME_MISMATCH",
+  "INVALID_CA",
+  "INVALID_PURPOSE",
+  "PATH_LENGTH_EXCEEDED",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY",
+  "UNABLE_TO_DECRYPT_CERT_SIGNATURE",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+]);
+
+/**
+ * Node raises its own name-mismatch rather than an OpenSSL verify code, and it
+ * is the one certificate error that arrives with the peer certificate attached.
+ * `ERR_TLS_CERT_ALTNAME_INVALID` is the case; the prefix covers the family.
+ */
+function isCertificateVerificationFailure(cause: unknown): boolean {
+  const code = (cause as { code?: unknown } | null)?.code;
+  if (typeof code !== "string") return false;
+  return TLS_VERIFY_CODES.has(code) || code.startsWith("ERR_TLS_CERT_");
+}
+
+/**
  * A connector failure reaches `fetch` as a bare `TypeError: fetch failed` with
  * the real reason hidden on `cause`. Our own address check is one of those, so
  * without this unwrap a blocked rebind would surface to the client as a generic
  * network error rather than as `BLOCKED_TARGET`.
+ *
+ * **A refused certificate is the second, and it was missed for six tickets.**
+ * The `AppError` test below is a test for errors *this repo threw*, and a TLS
+ * rejection is Node's, so it fell through to the caller as a bare `TypeError`
+ * and every caller classified it as a transport failure. Core's taxonomy has
+ * said in words the whole time that this is wrong — `UNREACHABLE`'s own
+ * docstring names `TLS_VERIFICATION_FAILED` as the code for a certificate that
+ * *did* arrive and did not verify, and says the retry answer differs. Every
+ * existing raise of it was on ffmpeg's path (`ffmpeg/runner.ts` off stderr,
+ * `egress-proxy.ts` off a socket), because ffmpeg's TLS is what dl-19, dl-21
+ * and dl-27 were each about. undici verifies without being asked, so no ticket
+ * ever looked at what happens when it refuses. dl-31 is that ticket.
  */
 function unwrapCause(error: unknown): never {
   const cause: unknown = (error as { cause?: unknown } | null)?.cause;
   if (cause instanceof AppError) throw cause;
+  if (isCertificateVerificationFailure(cause)) {
+    throw new AppError("TLS_VERIFICATION_FAILED", undefined, {
+      cause,
+      // No URL: this is reached for a hop the caller may not have named, and a
+      // signed URL carries its credential in the query string. The verify code
+      // is the diagnostic and it is a fixed OpenSSL token.
+      details: { reason: (cause as { code: string }).code },
+    });
+  }
   throw error;
 }
 

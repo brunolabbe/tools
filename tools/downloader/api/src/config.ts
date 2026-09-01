@@ -58,7 +58,7 @@ export interface ApiConfig {
    *
    * It exists for one real case — an operator behind a TLS-intercepting
    * corporate proxy, whose certificates are re-issued by a root this process has
-   * never heard of. `ffmpegCaFile` is the better answer for that operator and
+   * never heard of. `egressCaFile` is the better answer for that operator and
    * should be tried first; this one is the answer when even that is not
    * available. `createApp` warns at boot whenever it is on, because a security
    * check that can be turned off silently is one that gets turned off and left.
@@ -92,21 +92,29 @@ export interface ApiConfig {
    */
   ffmpegTlsIntercept: boolean;
   /**
-   * An extra CA bundle for the **egress proxy** to trust, merged with the system
-   * store.
+   * An extra CA bundle for **this service's whole egress** to trust, merged with
+   * the system store. `EGRESS_CA_FILE`.
    *
-   * Read the noun carefully, because dl-27 moved it: ffmpeg's own trust store is
-   * the root that proxy generates, and this is the file the proxy uses when it
-   * verifies the real origin. It is merged rather than substituted — `-ca_file`
-   * and Node's `ca` option both *replace* a store, and a deployment given only
-   * its operator's root would refuse every public origin.
+   * It is merged rather than substituted — `-ca_file` and Node's `ca` option
+   * both *replace* a store, and a deployment given only its operator's root
+   * would refuse every public origin.
    *
-   * **It moves back to ffmpeg when `ffmpegTlsIntercept` is off**, because then
-   * ffmpeg is the party meeting the origin again and the proxy is a tunnel that
-   * sees no certificate. `server.ts` picks the proxy and the trust store as one
-   * decision for exactly that reason.
+   * Three clients reach an origin and each is handed it, which is what the name
+   * had stopped being true of. The terminating egress proxy verifying on
+   * ffmpeg's behalf (dl-27); the undici dispatcher behind every `GuardedFetch`,
+   * which is the probe path (dl-31); and **ffmpeg itself when
+   * `ffmpegTlsIntercept` is off**, because then ffmpeg is the party meeting the
+   * origin again and the proxy is a tunnel that sees no certificate.
+   * `server.ts` picks ffmpeg's proxy and ffmpeg's trust store as one decision
+   * for exactly that reason.
    */
-  ffmpegCaFile: string | undefined;
+  egressCaFile: string | undefined;
+  /**
+   * Which variable supplied `egressCaFile`, so `server.ts` can name the
+   * deprecated one at boot. `undefined` when nothing in the environment did —
+   * either it is unset, or a caller passed the path directly, as tests do.
+   */
+  egressCaFileVar: "EGRESS_CA_FILE" | "FFMPEG_CA_FILE" | undefined;
 
   /**
    * Built UI to serve from this process, same-origin. Undefined serves nothing,
@@ -211,6 +219,29 @@ function int(
   return Math.min(max, Math.max(min, Math.trunc(value)));
 }
 
+/**
+ * `EGRESS_CA_FILE`, with `FFMPEG_CA_FILE` as the alias it replaced.
+ *
+ * The old name is kept working rather than dropped: it is documented, it is in
+ * deployed environments, and the failure of silently ignoring it is a service
+ * that refuses the operator's own origins. It is deprecated rather than kept
+ * because it stopped being true — since dl-27 the file configures a proxy that
+ * is not ffmpeg, and since dl-31 an undici dispatcher that is not either.
+ *
+ * The new name wins when both are set, and `server.ts` says so at boot.
+ */
+function egressCa(
+  override: string | undefined,
+  env: NodeJS.ProcessEnv,
+): { file: string | undefined; variable: ApiConfig["egressCaFileVar"] } {
+  if (override !== undefined) return { file: override, variable: undefined };
+  const preferred = optionalPath(env["EGRESS_CA_FILE"]);
+  if (preferred !== undefined) return { file: preferred, variable: "EGRESS_CA_FILE" };
+  const legacy = optionalPath(env["FFMPEG_CA_FILE"]);
+  if (legacy !== undefined) return { file: legacy, variable: "FFMPEG_CA_FILE" };
+  return { file: undefined, variable: undefined };
+}
+
 function optionalPath(raw: string | undefined): string | undefined {
   const value = raw?.trim() ?? "";
   return value === "" ? undefined : path.resolve(value);
@@ -286,6 +317,9 @@ export function loadApiConfig(
       ? ":memory:"
       : (rawDatabase ?? path.join(storageDir, API_DEFAULTS.databaseFile));
 
+  // Hoisted because two fields come out of one lookup across two variable names.
+  const caFile = egressCa(overrides.egressCaFile, env);
+
   // Hoisted because the default probe concurrency is derived from it.
   const maxConcurrentBrowsers =
     overrides.maxConcurrentBrowsers ??
@@ -341,7 +375,8 @@ export function loadApiConfig(
     ffmpegAllowUnverifiedTls:
       overrides.ffmpegAllowUnverifiedTls ?? bool(env["FFMPEG_ALLOW_UNVERIFIED_TLS"], false),
     ffmpegTlsIntercept: overrides.ffmpegTlsIntercept ?? bool(env["FFMPEG_TLS_INTERCEPT"], true),
-    ffmpegCaFile: overrides.ffmpegCaFile ?? optionalPath(env["FFMPEG_CA_FILE"]),
+    egressCaFile: caFile.file,
+    egressCaFileVar: overrides.egressCaFileVar ?? caFile.variable,
     ytdlpPath: overrides.ytdlpPath ?? env["YTDLP_PATH"] ?? undefined,
     // Resolved so a relative WEB_DIR means the same thing wherever the process
     // was started from, matching how storageDir is handled above.

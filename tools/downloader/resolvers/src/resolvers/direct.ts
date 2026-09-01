@@ -158,6 +158,16 @@ export class DirectUrlResolver implements Resolver {
         if (signal?.aborted === true) throw toAbortError(signal, ABORT_MESSAGE);
         throw new AppError("TIMEOUT", ABORT_MESSAGE);
       }
+      // **An already-classified failure passes through unchanged**, and the
+      // absence of this line is what made dl-31's misdiagnosis reach a client.
+      // `fetchImpl` here is `guardedFetch`, which raises `BLOCKED_TARGET` for a
+      // rebound DNS answer and `TLS_VERIFICATION_FAILED` for a refused
+      // certificate; re-wrapping either as `UNREACHABLE` replaces the copy at
+      // the raise site, which is the repo's own tell for the wrong code, and
+      // turns a permanent misconfiguration into a retryable one. The browser
+      // tier had this from the start — `browser/classify.ts`'s
+      // `classifyNavigationError` opens with the same check.
+      if (cause instanceof AppError) throw cause;
       throw new AppError("UNREACHABLE", undefined, {
         cause,
         details: { url: url.href },

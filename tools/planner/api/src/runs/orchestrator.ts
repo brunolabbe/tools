@@ -86,7 +86,7 @@ import {
 import { evictExpiredGrounding, groundingForRun } from "../grounding/cache.ts";
 import { intakeTitle } from "../intakes/title.ts";
 import { readIntake } from "../intakes/state.ts";
-import { discoverAlongCorridor, hasCorridor } from "./discovery.ts";
+import { discoverAlongCorridor, hasCorridor, tripContextFor } from "./discovery.ts";
 import { measureTravel, runPlaces } from "./travel.ts";
 
 /**
@@ -356,6 +356,10 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
             // nothing, a miss claims a call against the one budget the whole
             // run carries, and a refusal makes none.
             provider: grounding,
+            // What the trip already knew, for the places a model named without
+            // saying where they are — pl-37. `undefined` for a brief that
+            // declined its destination, which grounds exactly as before.
+            trip: tripContextFor(brief),
             logger,
             signal,
             onProgress: (event) => {

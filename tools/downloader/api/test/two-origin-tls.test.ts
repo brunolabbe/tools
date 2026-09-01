@@ -90,7 +90,7 @@ let manifestOrigin: TlsOrigin;
 let segmentCertificate: FixtureCertificate;
 let segmentOrigin: TlsOrigin;
 
-let bothCas: { path: string; cleanup(): Promise<void> };
+let bothCas: { path: string; pem: string; cleanup(): Promise<void> };
 let playlistDir: string;
 let segmentDir: string;
 let storageDir: string;
@@ -137,8 +137,8 @@ function masterUrl(): string {
 }
 
 /**
- * The proxy `server.ts` gives ffmpeg: it verifies each origin against `caFile`
- * and re-encrypts under a leaf it issued.
+ * The proxy `server.ts` gives ffmpeg: it verifies each origin against
+ * `operatorCa` and re-encrypts under a leaf it issued.
  *
  * The guard allows private addresses because both origins are on loopback and
  * this proxy is the only thing resolving anything — the same trade dl-8
@@ -146,9 +146,9 @@ function masterUrl(): string {
  * test here; trust is.
  */
 async function startFfmpegProxy(
-  caFile: string,
+  operatorCa: string,
 ): Promise<EgressProxy & { intercept: TlsInterception }> {
-  const intercept = await createTlsInterception({ caFile });
+  const intercept = await createTlsInterception({ operatorCa });
   cleanups.push(() => intercept.close());
   const proxy = await startEgressProxy({
     guard: createSsrfGuard({ allowPrivateAddresses: true }),
@@ -188,7 +188,7 @@ async function startEngine(
  * A real `createApp`, differing between the two wiring tests **only** in the
  * flag under test.
  *
- * `FFMPEG_CA_FILE` is origin A and nothing else in both, which is what makes the
+ * `EGRESS_CA_FILE` is origin A and nothing else in both, which is what makes the
  * pair comparable: the whole question is whether origin B gets checked, and the
  * two legitimate answers are opposite.
  */
@@ -206,7 +206,7 @@ async function wiredApp(
       enableBrowserResolver: false,
       enableYtdlpResolver: false,
       // Origin A only. The whole question is whether B is checked.
-      ffmpegCaFile: manifestCertificate.caPath,
+      egressCaFile: manifestCertificate.caPath,
       ...overrides,
     },
   });
@@ -306,7 +306,7 @@ describe("dl-27: the proxy verifies what ffmpeg cannot", () => {
       // different — the proxy trusts B and meets A — and the run has to die at
       // the very first connection, with the reason surviving all the way to the
       // job's error code.
-      const proxy = await startFfmpegProxy(segmentCertificate.caPath);
+      const proxy = await startFfmpegProxy(segmentCertificate.ca);
       const engine = await startEngine(proxy.url, proxy.intercept.rootCaPath);
 
       const before = manifestOrigin.requests.length;
@@ -333,7 +333,7 @@ describe("dl-27: the proxy verifies what ffmpeg cannot", () => {
       // same fixture and the same one-PEM difference produce a refusal — and
       // it is a refusal at the *segment* connections, which is the half no
       // ffmpeg argument has ever reached.
-      const proxy = await startFfmpegProxy(manifestCertificate.caPath);
+      const proxy = await startFfmpegProxy(manifestCertificate.ca);
       const engine = await startEngine(proxy.url, proxy.intercept.rootCaPath);
 
       const beforeManifest = manifestOrigin.requests.length;
@@ -364,7 +364,7 @@ describe("dl-27: the proxy verifies what ffmpeg cannot", () => {
       // cannot download at all". One PEM with both certificates in it: a trust
       // store replaces rather than adds, so this is the only way to trust two
       // origins without turning verification off anywhere.
-      const proxy = await startFfmpegProxy(bothCas.path);
+      const proxy = await startFfmpegProxy(bothCas.pem);
       const engine = await startEngine(proxy.url, proxy.intercept.rootCaPath);
 
       const before = segmentOrigin.requests.length;
@@ -386,7 +386,7 @@ describe("dl-27: the proxy verifies what ffmpeg cannot", () => {
       // silent, restoring dl-21's hole with every other test green. It was
       // measured surviving before this test existed.
       //
-      // It also pins the CA swap, which nothing else does. `FFMPEG_CA_FILE` is
+      // It also pins the CA swap, which nothing else does. `EGRESS_CA_FILE` is
       // the *proxy's* trust store here and the engine's `-ca_file` is the
       // generated root; passing the operator's root to ffmpeg instead — the
       // arrangement dl-19 shipped — leaves ffmpeg unable to verify the one
