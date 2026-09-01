@@ -152,7 +152,7 @@ place at `:237-238` — "in chained mode the upstream resolves the target, so
 there is no local resolution to pin — the same trade dl-8 documents for
 `PROXY_URL`" — and it is safe for three reasons that hold together:
 `guard.assertAllowed` still runs unconditionally at `:345` and `:398`; the socket
-is aimed at `upstream.hostname` from `PROXY_URL` (`config.ts:339`), which is
+is aimed at `upstream.hostname` from `PROXY_URL` (`tools/downloader/api/src/config.ts:373`), which is
 operator configuration and not user input; and the residual — the upstream doing
 its own resolution — is the operator's egress policy, which is the trade `dl-8`
 records. Covered by `egress-proxy.test.ts` (three chained cases from `:496`) and
@@ -484,7 +484,7 @@ the fix-round narrative moved into `## Log`, per this gate's recommended remedy.
   to `dl-8`, whose Why paragraph does record the `PROXY_URL` trade. It is safe on
   three legs, not one: `guard.assertAllowed` runs unconditionally at `:345` and
   `:398` regardless of the arm; the socket is aimed at `upstream.hostname`
-  derived from `PROXY_URL` at `config.ts:339`, which is operator configuration
+  derived from `PROXY_URL` at `tools/downloader/api/src/config.ts:373`, which is operator configuration
   and never user input; and chained mode is covered by three cases in
   `egress-proxy.test.ts` from `:496` plus `proxied-https.test.ts:628`. The
   residual is the upstream's own resolution, which is the operator's egress
@@ -822,6 +822,18 @@ the fix-round narrative moved into `## Log`, per this gate's recommended remedy.
   Nothing of repo-15's is touched by this, and nothing of repo-13's touches
   repo-15's ticket. Both `## Review` gate records on this ticket are untouched
   and were verified byte-identical against the tip before committing.
+
+- **2026-09-01, a citation this ticket's own subject caught** — `config.ts:339`
+  appeared twice and was wrong twice over: ambiguous across three tracked
+  `config.ts` files, and pointing at `MAX_CONCURRENT_PROBES` rather than
+  `PROXY_URL`, which is at `tools/downloader/api/src/config.ts:373`. Both are
+  now qualified — except one occurrence inside `## The gate on this filing`,
+  which is a committed gate record and stays as its reviewer wrote it. Found
+  because a peer session measured that a bare filename is
+  ambiguous in a two-tool repo and `scripts/citations.mjs` reports it as a
+  failure that reads like staleness. The claim the citation supports was
+  correct; only its pointer was not — which is the failure mode this ticket
+  exists to describe, found in the ticket describing it.
 
 ## The gate on this filing
 
