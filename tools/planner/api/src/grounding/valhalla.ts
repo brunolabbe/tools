@@ -915,7 +915,7 @@ function geocoderResults(body: unknown): GeocoderResult[] {
  * `@planner/agent`'s seam and in `UncheckedConstraint`, which is
  * contract-adjacent. Recorded in pl-34's Log; not decided here.
  *
- * ## The trip's destination, third and last, and with no tiebreak behind it — pl-37
+ * ## The trip's destination, on the two rungs where everything else has run out — pl-37
  *
  * A bare name with no locality had **nothing** to narrow with: the reply had to
  * agree with itself or the call declined. `LocateRequest.trip` is the caller
@@ -926,17 +926,47 @@ function geocoderResults(body: unknown): GeocoderResult[] {
  * `Nez Perce County, Idaho, United States`, so one row survives and agrees
  * with itself.
  *
- * **It is third, and the order is the whole safety argument.** The destination
- * is evidence about the *trip*, not about this place, and a trip contains
- * places outside its destination — the stop on the way, the day over the
- * border. So it is consulted only where the place itself narrows nothing
- * (`hintsFrom(place.locality)` is empty) *and* the reply does not already agree
- * with itself. Every reply that located before pl-37 takes one of those two
- * earlier exits and is answered identically; the destination can only turn a
- * decline into an answer, never an answer into a different one.
+ * **It is always the last thing tried, and the order is the whole safety
+ * argument.** The destination is evidence about the *trip*, not about this
+ * place, and a trip contains places outside its destination — the stop on the
+ * way, the day over the border. So it never runs until everything that knows
+ * about *this place* has been asked and declined. There are two such paths and
+ * the destination is at the bottom of each:
  *
- * **The settlement tiebreak does not run behind it, and this is measured
- * rather than cautious.** pl-34's boundary is that `addresstype` may say *what
+ * 1. **No locality.** The reply must agree with itself; if it does not, the
+ *    destination narrows the whole reply.
+ * 2. **A locality that narrowed but did not finish.** The survivors disagree
+ *    and the settlement tiebreak could not separate them either, so the
+ *    destination narrows *those survivors*.
+ *
+ * Every reply that located before pl-37 exits above both, so the destination
+ * can only turn a decline into an answer, never an answer into a different
+ * one. That is what lets pl-34's ten captures stand as a regression test.
+ *
+ * **Rung 2 was first argued to be unreachable, and that was wrong.** pl-37's
+ * first build stopped at path 1 and refused path 2 on the grounds that no
+ * checked-in capture could reach it. Its gate measured all fourteen
+ * `nominatim-search-*.json` replies and found exactly one that does:
+ * `nominatim-search-ambiguous-limit10.json` on the fragment `canada`, where
+ * `City of Saint John, … New Brunswick / Nouveau-Brunswick, Canada` and
+ * `St. John's, Newfoundland, Newfoundland and Labrador, Canada` are 1 054 km
+ * apart and **both** `addresstype: city`, so the allowlist narrows nothing.
+ * The other two multi-row captures finish at the tiebreak because in each,
+ * exactly one of the disagreeing rows is a settlement type.
+ *
+ * **Path 2 narrows the locality's survivors, not the settlement filter's**,
+ * and that follows from what the allowlist is: its own note says a type not on
+ * it "is not *rejected*; it merely fails to be preferred". Narrowing the
+ * filtered subset would make it reject after all — two rows of an unfamiliar
+ * type would become unresolvable by any destination, so an incomplete
+ * allowlist would start costing lookups, which is the one thing pl-34 designed
+ * it never to do. **No capture distinguishes the two**: in the only reply that
+ * reaches this rung both survivors are settlements, so the two sets are equal.
+ * The choice is therefore argued and not measured, and it is recorded here so
+ * the next capture that separates them is recognised as evidence.
+ *
+ * **The settlement tiebreak never runs behind the destination, on either
+ * path, and this is measured rather than cautious.** pl-34's boundary is that `addresstype` may say *what
  * kind* only once something independent has said *where*, and a destination is
  * not always independent: `api/src/runs/discovery.ts` grounds the corridor's
  * own endpoints, so the place it locates and the destination it would hand as
@@ -971,9 +1001,16 @@ function chooseResult(
     if (located !== null) return located;
 
     // The locality has already said where; `addresstype` may now say what kind.
-    // See the header — this is the only place it is allowed to run, and pl-37
-    // deliberately did not become a second one.
-    return agreedPoint(shortlist.filter((each) => SETTLEMENT_ADDRESS_TYPES.has(each.addressType)));
+    // See the header — this is the only place it is allowed to run.
+    const settled = agreedPoint(
+      shortlist.filter((each) => SETTLEMENT_ADDRESS_TYPES.has(each.addressType)),
+    );
+    if (settled !== null) return settled;
+
+    // The locality narrowed and the tiebreak could not finish: the trip gets
+    // the last word, over `shortlist` and not over the settlement subset. See
+    // the header for why that distinction is argued rather than measured.
+    return agreedPoint(bestMatches(shortlist, hintsFrom(trip?.destination ?? null)));
   }
 
   // Nothing on the *place* narrows a reply to a bare name, so it has to speak

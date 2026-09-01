@@ -274,9 +274,12 @@ export type TravelMode = (typeof TRAVEL_MODES)[number];
  * *the trip*, and a trip routinely contains places outside its destination —
  * the stop on the way, the day trip over the border. So a provider that lets
  * trip context outvote or dilute the place's own hints will decline places it
- * locates today. `ValhallaGroundingProvider.locate` consults it only where the
- * place itself narrows nothing and the reply does not already agree; see
- * `chooseResult`.
+ * locates today. `ValhallaGroundingProvider.locate` asks it last on every
+ * path — only once the place's own `locality`, the reply's agreement with
+ * itself and the settlement tiebreak have each been tried and declined. It is
+ * therefore only ever able to turn "not located" into an answer. See
+ * `chooseResult`, which is where a provider's own version of that ordering
+ * has to be argued.
  */
 export interface TripContext {
   /**

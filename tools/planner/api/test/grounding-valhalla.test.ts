@@ -1103,7 +1103,7 @@ describe("the trip's destination, where the place says nothing (pl-37)", () => {
    * lets evidence about the *trip* outvote evidence about the *place* — and a
    * trip contains places outside its destination. Here the candidate says
    * Newfoundland and the trip says New Brunswick: blended, both rows score 1,
-   * they disagree by ~1 400 km, both are `city` so the tiebreak cannot help,
+   * they disagree by 1 054 km, both are `city` so the tiebreak cannot help,
    * and a lookup that works today returns `null`. On the ladder the
    * destination is never consulted at all, because the locality narrowed.
    */
@@ -1121,6 +1121,46 @@ describe("the trip's destination, where the place says nothing (pl-37)", () => {
         trip: { destination: "New Brunswick, Canada" },
       }),
     ).resolves.toMatchObject({ coordinates: { latitude: 47.5646794, longitude: -52.7066964 } });
+  });
+
+  /**
+   * **The fourth rung: a locality that narrowed, and a settlement tiebreak
+   * that could not finish the job** — added after pl-37's gate measured the
+   * branch this build had first argued was unreachable.
+   *
+   * The first build stopped at three rungs and gave, as its reason for
+   * refusing a fourth, that no capture reaches it. **That was wrong.** Of the
+   * fourteen `nominatim-search-*.json` captures, exactly one can reach it —
+   * this reply, on the fragment `canada`. `City of Saint John, … New
+   * Brunswick / Nouveau-Brunswick, Canada` and `St. John's, Newfoundland,
+   * Newfoundland and Labrador, Canada` both mention it, they are 1 054 km
+   * apart, and **both are `addresstype: city`** — so the settlement allowlist
+   * narrows nothing and rung 2 leaves them as tied as it found them. In the
+   * other two multi-row captures (`gaspe-quebec`, `perce-bare`) exactly one of
+   * the disagreeing rows is a settlement type, which is why both finish at
+   * rung 2 and neither could ever have shown this.
+   *
+   * The rung is additive on the same terms as the three above it: it runs only
+   * where all three have declined, so the only outcome it can change is
+   * `null`.
+   */
+  test("a locality that narrows to two settlements is finished by the destination", async () => {
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const inCanada: Place = { name: "Saint-Jean", locality: "Canada", coordinates: null };
+
+    await expect(
+      provider(fetch).locate({ place: inCanada, trip: { destination: "New Brunswick" } }),
+    ).resolves.toMatchObject({ coordinates: SAINT_JOHN_NB });
+  });
+
+  test("and the same reply, same locality, with no destination still declines", async () => {
+    // The half that says the destination is what finished it. Without one the
+    // two `city` rows stay tied and `locate` answers honestly, exactly as it
+    // did before pl-37 — and exactly as it did before the fourth rung.
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const inCanada: Place = { name: "Saint-Jean", locality: "Canada", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: inCanada })).resolves.toBeNull();
   });
 
   test("the destination is not appended to the query the geocoder is asked", async () => {

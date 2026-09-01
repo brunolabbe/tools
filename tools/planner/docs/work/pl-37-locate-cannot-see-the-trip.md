@@ -346,3 +346,116 @@ Nominatim. Every geocoder claim here rests on the fourteen checked-in captures
 and pl-37 added none — the two multi-row replies it turns on
 (`nominatim-search-perce-bare.json` and
 `nominatim-search-ambiguous-limit10.json`) were captured by pl-34.
+
+**2026-09-01, second round — the fourth rung, after the gate falsified the
+argument against it.** Gate verdict PASS; the user chose the fourth rung from
+the options the first round put up as an open decision, and this is that rung.
+
+### The argument I was wrong about, and the measurement that says so
+
+The first round recommended keeping three rungs and gave one reason: a fourth
+would be "an unexercised branch no capture reaches". **That was an assumption
+wearing a measurement's clothes — I never counted.** The gate did, and it is
+false.
+
+Reproduced here before building to it, rather than taken from the relay. The
+survey walks all fourteen `nominatim-search-*.json` captures and asks, for every
+comma- or slash-separated fragment of ≥ `MIN_HINT_CHARS` that at least two rows
+share: does that hint leave two or more survivors, do they disagree beyond
+`SAME_PLACE_METRES`, and does the `SETTLEMENT_ADDRESS_TYPES` filter still leave
+them unresolved? The distance helper was cross-checked first against the two
+numbers `valhalla.ts` states — it returns 3 882.3 km for the bare `Percé` pair
+and 118.6 km for the `Gaspé` pair.
+
+**1 of 14 reaches it**, exactly as the gate reported:
+
+```
+>>  nominatim-search-ambiguous-limit10.json  (6 rows) REACHES RUNG 4:
+      hint "canada" -> 2 survivors, 2 after settlement filter, types ["city"]
+```
+
+`City of Saint John, … New Brunswick / Nouveau-Brunswick, Canada` and
+`St. John's, Newfoundland, Newfoundland and Labrador, Canada`, **1 054 km**
+apart — not the "~1 400 km" the first round wrote into a test comment, which is
+corrected in this commit — and **both `addresstype: city`**, so the allowlist
+narrows nothing and the tiebreak returns them as tied as it found them.
+
+The gate's account of the other two multi-row captures also holds: in
+`gaspe-quebec` and `perce-bare` exactly one of the disagreeing rows is a
+settlement type, so both finish at the tiebreak and neither could ever have
+exercised this. That is _why_ the first round's survey-by-intuition came out
+wrong — the two replies I had spent the round staring at are precisely the two
+that cannot show it.
+
+**The gate's method is sound and I did not find anything it counts that it
+should not.** Its survivor-count test is the same three questions the code asks,
+in the same order.
+
+### What the rung is
+
+After the settlement tiebreak fails, the destination narrows the locality's
+survivors:
+
+```ts
+const settled = agreedPoint(shortlist.filter(isSettlement));
+if (settled !== null) return settled;
+return agreedPoint(bestMatches(shortlist, hintsFrom(trip?.destination ?? null)));
+```
+
+`locate({ place: { name: "Saint-Jean", locality: "Canada" }, trip: { destination: "New Brunswick" } })`
+now answers `{45.272764, -66.0627914}` and answers `null` with no trip. Both
+halves are tests; the positive one was written first and failed with
+`expected null to match object { coordinates: … }` before the rung existed.
+
+**Additive, on the same terms as the other three.** It runs only where all three
+above it have declined — which today returns `null` — so the only outcome it can
+change is a decline. The ten-capture regression block re-ran unchanged: nine
+located at the coordinates they already had, and the tenth still joins them via
+the no-locality path. Nothing moved.
+
+### One thing no capture can settle, recorded as unmeasured
+
+**The rung narrows `shortlist` — the locality's survivors — and not the
+settlement filter's subset.** The argument is that
+`SETTLEMENT_ADDRESS_TYPES`'s own note says a type not on it "is not _rejected_;
+it merely fails to be preferred": narrowing the filtered subset would make it
+reject after all, so two rows of an unfamiliar type would become unresolvable by
+any destination and an incomplete allowlist would start costing lookups — the
+one thing pl-34 designed it never to do.
+
+**That choice is argued, not measured, and I checked rather than assumed this
+time.** Swapping `shortlist` for `results` in the rung and re-running the file:
+**97 passed, nothing failed.** In the only reply that reaches the rung both
+survivors are settlements, so the two sets are equal and no checked-in capture
+can distinguish the designs. It is written down in `chooseResult`'s header so
+that the first capture which does separate them is recognised as evidence rather
+than as noise.
+
+### Gates, second round
+
+```
+$ node <survey over the fourteen captures>                          1 of 14 reaches rung 4
+$ npx vitest run .../grounding-valhalla.test.ts                     97 passed
+$ npm run build                                                     0
+$ npm test -- --project planner                                     53 files, 845 tests
+$ npm test                                                          115 files, 1815 tests
+$ npm run format
+$ npm run check                                                     0
+```
+
+Two tests added, 843 → 845. `origin/main` moved to `7d56035` during this round
+(`repo-13`, one file, `docs/work/repo-13-codeql-false-positives-recur.md`); it
+touches nothing this branch does, so the branch was left on `6f29eb0` rather
+than rebased for a docs-only commit.
+
+**Still not measured**, unchanged from the first round: no e2e run, no container
+build, no request against a real Nominatim.
+
+### On `scripts/citations.mjs`, phrased correctly this time
+
+The first round called it a gap that a bare `file:line` with no quoted text is
+checked only for existing. It is not a gap, it is the script's stated design —
+its header says it "cannot tell you a citation is _semantically_ right … It can
+tell you a citation cannot possibly be right, which is the half that is
+checkable." So a 5/5 on this file means **none of its citations is impossible**,
+which is a weaker and more useful sentence than "they resolve".
