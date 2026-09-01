@@ -28,15 +28,15 @@ Then `dl-27` edited `tools/downloader/api/src/egress-proxy.ts` on 2026-08-30
 (`ec1dd6b`), the alert's location moved, and it came back on the same code, for
 the same reason, with the same answer.
 
-`js/missing-rate-limiting` on `tools/downloader/api/src/routes/files.ts` arrived
-at the same place by a different road. It was a **true** positive when it was
-filed — it is what produced `dl-23`. `dl-23` merged on 2026-08-31 (`6f29eb0`)
-and the route is now metered, so from that commit the alert is either closed or
-permanently wrong. Which of the two is the **open input** this ticket cannot
-resolve from inside the container; see the Log.
+`js/missing-rate-limiting` on `tools/downloader/api/src/routes/files.ts` was
+this ticket's second subject for a week, and **it should never have been one.**
+It was a true positive — it is what produced `dl-23` — and when `dl-23` merged on
+2026-08-31 the alert **closed** (security tab, read 2026-09-01, relayed). No
+query blind spot, no permanent wrongness, nothing to excuse. The Log records how
+it got in here and why that matters more than the fact it left.
 
-So the question is not "are these two alerts wrong". The evidence below says
-they are. It is: **what does this repo do with a finding it has looked at and
+So this ticket has **one** subject, and the question is not "are these alerts
+wrong". It is: **what does this repo do with a finding it has looked at and
 rejected, such that the next reader can tell it apart from one nobody has looked
 at yet?** Today there is no answer anywhere — `docs/` contains no CodeQL triage
 record of any kind, and the 2026-08-23 triage survives only as four lines inside
@@ -116,18 +116,21 @@ test double by its category rather than by arguing its logic.
 
 Kept as the working evidence behind
 [adr/005](../adr/005-excusing-a-code-scanning-finding.md). The `js/request-forgery`
-half now lives at the excused line in `egress-proxy.ts`; the
-`js/missing-rate-limiting` half is **deferred, not excused** — see the Log for
-what would settle it. Verified at `6f29eb0`.
+half now lives at the excused line in `egress-proxy.ts`. **The
+`js/missing-rate-limiting` half was struck on 2026-09-01** — it turned out to be
+a true positive that `dl-23` fixed, so it never belonged in an excusing policy at
+all. Its entry is kept below, marked, because the reasoning that put it here is
+the reasoning worth not repeating. Verified at `6f29eb0`.
 
 ### `js/request-forgery` — `tools/downloader/api/src/egress-proxy.ts`
 
-|              |                                                                                   |
-| ------------ | --------------------------------------------------------------------------------- |
-| **Query**    | `js/request-forgery`                                                              |
-| **Verdict**  | False positive, structural and permanent                                          |
-| **Verified** | 2026-08-31 at `6f29eb0`                                                           |
-| **History**  | Dismissed 2026-08-23; reopened when `dl-27` (`ec1dd6b`) moved the file 2026-08-30 |
+|              |                                                                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Query**    | `js/request-forgery`                                                                                                                             |
+| **Severity** | **Critical** (security tab, read 2026-09-01, relayed)                                                                                            |
+| **Verdict**  | False positive, structural and permanent                                                                                                         |
+| **Verified** | 2026-08-31 at `6f29eb0`                                                                                                                          |
+| **History**  | Dismissed 2026-08-23; reopened when `dl-27` (`ec1dd6b`) moved the file 2026-08-30; still `Open` on `main` 2026-09-01, first detected ~2026-08-18 |
 
 The alert says the request URL depends on user input. It does, and that is the
 file's purpose: it is a forward proxy. Two guards stand behind it.
@@ -149,7 +152,7 @@ place at `:237-238` — "in chained mode the upstream resolves the target, so
 there is no local resolution to pin — the same trade dl-8 documents for
 `PROXY_URL`" — and it is safe for three reasons that hold together:
 `guard.assertAllowed` still runs unconditionally at `:345` and `:398`; the socket
-is aimed at `upstream.hostname` from `PROXY_URL` (`config.ts:339`), which is
+is aimed at `upstream.hostname` from `PROXY_URL` (`tools/downloader/api/src/config.ts:373`), which is
 operator configuration and not user input; and the residual — the upstream doing
 its own resolution — is the operator's egress policy, which is the trade `dl-8`
 records. Covered by `egress-proxy.test.ts` (three chained cases from `:496`) and
@@ -163,22 +166,31 @@ the origin", "a POST to a blocked target never reaches it". Measured, not
 assumed. Rebinding specifically is `egress-proxy.test.ts:234`, "a name that
 rebinds after the pre-flight check is refused at connect".
 
-### `js/missing-rate-limiting` — `tools/downloader/api/src/routes/files.ts`
+### ~~`js/missing-rate-limiting` — `tools/downloader/api/src/routes/files.ts`~~ — STRUCK 2026-09-01
 
-|              |                                                                         |
-| ------------ | ----------------------------------------------------------------------- |
-| **Query**    | `js/missing-rate-limiting`                                              |
-| **Verdict**  | True positive until `6f29eb0`; false from that commit **if still open** |
-| **Verified** | 2026-08-31 at `6f29eb0`                                                 |
-| **History**  | Filed as `dl-23` on 2026-08-23; fixed and merged 2026-08-31 (#123)      |
+|             |                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------- |
+| **Query**   | `js/missing-rate-limiting`                                                          |
+| **Verdict** | **True positive.** Correctly fixed by `dl-23`. Never a false positive at any commit |
+| **Status**  | **Closed** by CodeQL when `dl-23` merged (security tab, read 2026-09-01, relayed)   |
+| **History** | Filed as `dl-23` on 2026-08-23; fixed and merged 2026-08-31 (#123); closed on merge |
+
+> **This entry does not describe an excused finding, and it never should have.**
+> It is kept struck rather than deleted because the wrong turn is the useful
+> part — see the Log entry for 2026-09-01.
 
 The alert says the handler performs a file system access and is not rate-limited.
 Since `dl-23` it is limited: `files.ts:119` passes `{ onRequest: rateLimit }` as
 the route's options argument, one line above the handler body at `:120` where
 the alert's range begins. The hook is built at `:110` by `createRateLimitHook`,
 keyed by `fileBucketKey` at `:97`, exactly as `routes/jobs.ts` and
-`routes/probe.ts` build theirs. If the alert is still open, the cause is that the
-query reads the handler body and not its sibling options object.
+`routes/probe.ts` build theirs.
+
+**The suspected cause was wrong.** This ticket assumed for a week that the query
+reads the handler body and not its sibling options object. It does read the
+options object: the alert closed the moment `dl-23` merged. There was no query
+blind spot, and the drafting about "a query limitation" describes something that
+does not exist.
 
 **Test that catches the regression:** `rate-limit.test.ts`. Deleting line 119
 fails 5 tests — "refuses with a 429 and a Retry-After once the bucket is empty",
@@ -187,9 +199,10 @@ spend another link's allowance", "a token that is not even well formed cannot
 mint itself a bucket", "the bucket key never contains the token itself".
 Measured, not assumed.
 
-**This entry is conditional.** If the alert closed when `dl-23` merged, it was
-never a false positive and it should be struck from the record rather than
-excused — see the Log.
+**This entry is struck.** The alert closed when `dl-23` merged, so it was a true
+positive throughout and there is nothing here to excuse. The test named above
+still matters — it is what keeps the route metered — but it is ordinary
+regression cover, not the evidence behind an excuse.
 
 ## Done when
 
@@ -198,19 +211,22 @@ excused — see the Log.
    and what it relies on.~~ **Done 2026-08-31 at `6f29eb0`.**
 2. ~~What fails the check is established: which check run, and whether it is
    scoped to the pull request's diff.~~ **Done 2026-08-31.**
-3. **Deferred, deliberately.** Whether `js/missing-rate-limiting` closed when
-   `dl-23` merged still needs someone who can read the alert list. Its entry is
-   kept and marked deferred rather than excused, because excusing an alert nobody
-   has confirmed is still open would break adr/005's own rule 3.
+3. ~~Whether `js/missing-rate-limiting` closed when `dl-23` merged is supplied by
+   someone who can read the alert list, and its entry is struck or kept on that
+   answer.~~ **Answered 2026-09-01: it closed.** It was a true positive
+   throughout, so its entry is **struck** — and the stronger result is what that
+   does to adr/005's scope, not the answer itself. See the Log.
 4. ~~Whether a CodeQL query filter can be scoped to a path is confirmed against
    the action's configuration schema, not from memory.~~ **Done 2026-09-01: it
    cannot. Option 3 struck.**
-5. **Still open.** This branch edits `egress-proxy.ts` and its `CodeQL` check is
-   green, but that does not settle it: the suppression's eight lines are all
-   added, while the flagged `http.request` line is unmodified context, so the
-   alert may simply never have been attributed to this diff — the same reason
-   #124 was green. What settles it is the alert showing as _suppressed_ rather
-   than `Open` in the security tab. See the Log.
+5. **Still open, and the pull-request check cannot close it.** This branch's
+   `CodeQL` check is green, but the suppression's lines are all added comment
+   while the flagged `http.request` line is unmodified context, so the alert may
+   never have been attributed to this diff — the same reason #124 was green.
+   Reading the security tab cannot close it either, and that was tried on
+   2026-09-01: the alert reads `Open` on `main`, which is what **both** readings
+   predict while the only copy of the comment sits on an unmerged branch. **The
+   experiment is the merge** — see acceptance line 8 and the Log.
 6. ~~One of the four options is chosen by the repo's owner, with the rejected
    ones named alongside the cost that ruled each out.~~ **Done 2026-09-01:
    inline comments, in [adr/005](../adr/005-excusing-a-code-scanning-finding.md)
@@ -220,10 +236,14 @@ excused — see the Log.
    written down somewhere a reader of an unfamiliar alert will find them.~~
    **Done 2026-09-01: adr/005 for the rule and the criteria, the suppression
    comments themselves for the register.**
-8. **Not established.** The `CodeQL` check on this branch is green, but for
-   acceptance line 5's reason that may be attribution rather than suppression.
-   The honest test is a future pull request that _modifies_ the flagged line and
-   still passes.
+8. **Deferred to the merge, with a control and two outcomes.** `dl-23` closing
+   `js/missing-rate-limiting` on merge proves the pipeline retires an alert once
+   the fix is on `main`. #126 merged as `94206d9`, so the suppression is on
+   `main` and the experiment is **already running**: **if `js/request-forgery`
+   closes, suppression comments are honoured**; **if it stays `Open`, they are
+   not**, and the follow-up is the `advanced-security/dismiss-alerts` action — a
+   change to `security.yml`, named in adr/005 and not taken here. The next person
+   to open the security tab settles it by reading one line.
 9. ~~`npm run check` passes, and `npm run format` has been run if any `.md`
    changed.~~ **Done — see the gate record.**
 
@@ -464,7 +484,7 @@ the fix-round narrative moved into `## Log`, per this gate's recommended remedy.
   to `dl-8`, whose Why paragraph does record the `PROXY_URL` trade. It is safe on
   three legs, not one: `guard.assertAllowed` runs unconditionally at `:345` and
   `:398` regardless of the arm; the socket is aimed at `upstream.hostname`
-  derived from `PROXY_URL` at `config.ts:339`, which is operator configuration
+  derived from `PROXY_URL` at `tools/downloader/api/src/config.ts:373`, which is operator configuration
   and never user input; and chained mode is covered by three cases in
   `egress-proxy.test.ts` from `:496` plus `proxied-https.test.ts:628`. The
   residual is the upstream's own resolution, which is the operator's egress
@@ -558,14 +578,15 @@ the fix-round narrative moved into `## Log`, per this gate's recommended remedy.
   reused, and it is what answers the question this ticket was filed to ask: an
   alert with such a comment was examined, one without was not.
 
-  **The rate-limit half is deferred, not excused.** `dl-23` merged, and whether
-  `js/missing-rate-limiting` closed is still unread — `gh api` is denied and I
-  did not attempt it. If it closed it was never a false positive and there is
-  nothing to suppress; if it stayed open it needs its own comment at
-  `files.ts:119`. Excusing it now would break adr/005's rule 3 by excusing an
-  alert nobody has confirmed is still open. What settles it: one look at the
-  security tab, or the next pull request that edits `routes/files.ts`, whose
-  `CodeQL` check will say so for free.
+  **The rate-limit half is deferred, not excused.** _(Superseded 2026-09-01 — the
+  alert was read and it is **closed**, so this half was a true positive and is
+  now struck. The paragraph is kept as written because it records what was known
+  on 2026-08-31; see the final Log entry.)_ `dl-23` merged, and whether
+  `js/missing-rate-limiting` closed was still unread at the time — `gh api` is
+  denied and I did not attempt it. If it closed it was never a false positive and
+  there is nothing to suppress; if it stayed open it needs its own comment at
+  `files.ts:119`. Excusing it then would have broken adr/005's rule 3 by excusing
+  an alert nobody had confirmed was still open.
 
   **This pull request was meant to be the experiment for acceptance line 5, and
   it is not conclusive.** It edits `egress-proxy.ts`, so the intent was that the
@@ -708,6 +729,113 @@ the fix-round narrative moved into `## Log`, per this gate's recommended remedy.
   "846, up from 845" into this Log from reasoning and the run corrected me —
   which is the same mistake, in miniature, that the high finding was about.
   Fail-first proofs are recorded above, and both edits were reverted.
+
+- **2026-09-01, the open input** — The user read the security tab. Both facts
+  below are **relayed from that reading and were not verified by me**; `gh api`
+  is denied and I did not attempt it.
+
+  **`js/missing-rate-limiting` is CLOSED, and closed on `dl-23`'s merge.** That
+  settles the question this ticket carried for a week, and it settles it against
+  the reading this ticket had adopted. CodeQL **did** see
+  `{ onRequest: rateLimit }`: the query has no blind spot on Fastify's route
+  options, and the "query limitation" three rounds of this ticket wrote down as
+  fact never existed. The alert was a **true positive throughout** — filed,
+  fixed, closed — which is the ordinary, healthy path and not this ticket's
+  subject at all.
+
+  **The struck half is the more useful result, so it is struck rather than
+  ticked.** The triage record entry, the section preamble, the Why and acceptance
+  line 3 now all say it was a true positive that `dl-23` fixed. What makes that
+  worth more than "deferred question answered" is what it does to **adr/005's
+  scope**: the policy governs findings that are _structurally permanent_ — where
+  no shape the code could take stops the query firing, as with a forward proxy
+  whose purpose is to fetch a URL a user chose. **A query limitation is not such
+  a finding, because it resolves itself**: either the code changes and the alert
+  closes, or the query improves and it closes. Reaching for a suppression comment
+  because a query looks wrong is now named in the ADR as the failure mode to
+  avoid, with this ticket as the worked example. The test is not "is this alert
+  wrong today" but "will it be wrong for every version of this code" — and on
+  that test the rate-limit alert never qualified, which is plain in hindsight and
+  was not plain at the time.
+
+  **The severity was understated everywhere.** `js/request-forgery` reads
+  **Critical**, not the `high` this ticket assumed from the first relayed
+  screenshot. The triage record now carries a Severity row, and the ADR names it
+  in its context and no longer implies `high` is the ceiling its
+  settings-threshold alternative would have to clear. A policy document that
+  understates what it excuses is the wrong document.
+
+  **`js/request-forgery` is still `Open` on `main`, first detected around
+  2026-08-18 — and that is not evidence against the suppression.** The comment
+  exists only on this unmerged branch, so it is not in the code CodeQL analysed;
+  `Open` is what **both** readings predict. This retires the "just read the
+  security tab" plan the previous round wrote into acceptance line 5: the look
+  happened, and it could not answer, because the observation was never capable of
+  distinguishing the two cases while the branch was unmerged.
+
+  **What alert 3's closure does give is the control the experiment lacked.** A
+  fix landing on `main` causes re-analysis and retires its alert — the pipeline
+  works end to end, which was itself unproven before today. Applied to this
+  branch, that yields two outcomes and no third:
+
+  - **`js/request-forgery` closes** — suppression comments are honoured, and
+    adr/005's rules stand as written.
+  - **It stays `Open`** — they are not honoured natively, and the follow-up is
+    the `advanced-security/dismiss-alerts` action, converting SARIF suppression
+    data into real dismissals. A change to `security.yml`, to be taken on its own
+    evidence rather than pre-empted here.
+
+  **#126 merged as `94206d9` while this round was being written**, which starts
+  the experiment without anyone doing anything: the suppression is on `main` and
+  the `security` workflow's push analysis has re-read it. The next person to open
+  the security tab settles it by reading one line, and should record the outcome
+  in adr/005, where it is flagged as that document's last unverified claim.
+  Acceptance lines 5 and 8 now say this instead of the stale plan. **Not polled
+  from here** — the observation is a tab, not a check.
+
+  **One process note, because it nearly cost a gate record.** My first attempt at
+  this entry anchored on the string `## The gate on this filing`, which also
+  appears backticked _inside_ gate 2's own text — so the insertion landed in the
+  middle of the gate record and corrupted it. Caught by diffing that section
+  against `HEAD` before committing, reverted, and redone against the heading form
+  `\n\n## …\n`, which is unique. Recorded because this is the second time this
+  ticket's gate records have been damaged by an edit anchored on a string that
+  reads like a heading and is not one.
+
+- **2026-09-01, where this correction landed** — These corrections are **not on
+  their own pull request.** They were written against #126 and missed its merge
+  by minutes: #126 squashed to `main` as `94206d9` while the round was in
+  progress, taking the stale text with it. So for a short window `main` carried
+  a ticket and an ADR asserting that `js/missing-rate-limiting` was "deferred,
+  not excused" and its status "still unread", both false — the exact defect this
+  ticket describes, in the document whose subject is that stale records mislead.
+
+  They are folded into **PR #130** (`repo-15-deny-list-guardrail`) instead,
+  because re-filing two paragraphs of prose as their own pull request costs an
+  intake, a gate and a merge for a correction that is already written and
+  already verified. That pull request's title is repo-15's, so **a reader asking
+  why `docs/adr/005` changed under a repo-15 title finds the answer here and in
+  #130's body**, which says the same thing. The trail is deliberately in both
+  places: on the pull request that carried it, and on the ticket that was
+  corrected.
+
+  Nothing of repo-15's is touched by this, and nothing of repo-13's touches
+  repo-15's ticket. Both `## Review` gate records on this ticket are untouched
+  and were verified byte-identical against the tip before committing.
+
+- **2026-09-01, a citation this ticket's own subject caught** — `config.ts:339`
+  appeared twice and was wrong twice over: ambiguous across three tracked
+  `config.ts` files, and pointing at `MAX_CONCURRENT_PROBES` rather than
+  `PROXY_URL`, which is at `tools/downloader/api/src/config.ts:373`. Both are
+  now qualified. The one occurrence `citations.mjs` still reports is the
+  quotation in this very entry, which has to stay wrong to name what was
+  wrong — the tool's own output calls this case out: a citation that is a
+  finding's own evidence must stay as written. Found
+  because a peer session measured that a bare filename is
+  ambiguous in a two-tool repo and `scripts/citations.mjs` reports it as a
+  failure that reads like staleness. The claim the citation supports was
+  correct; only its pointer was not — which is the failure mode this ticket
+  exists to describe, found in the ticket describing it.
 
 ## The gate on this filing
 

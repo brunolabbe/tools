@@ -13,7 +13,8 @@ which is the common case and the reason the workflow exists.
 
 The problem is the other kind. **A dismissal binds to an alert instance, not to
 the reason it was wrong.** `js/request-forgery` on the downloader's egress proxy
-was dismissed as a false positive on 2026-08-23. `dl-27` edited
+— severity **Critical** — was dismissed as a false positive on 2026-08-23.
+`dl-27` edited
 `egress-proxy.ts` on 2026-08-30 (`ec1dd6b`), the alert's location moved, and it
 came back on the same code, for the same reason, with the same answer. The repo
 paid for that triage twice, and the second bill arrived with none of the first
@@ -120,9 +121,11 @@ spot. Recorded at length because the shape is plausible enough that the next
 person will propose it again.
 
 **Raise the check's failure severity in repository settings.** Not in version
-control, invisible from a checkout, and global: it would silence real `high`
-findings everywhere to quiet one known-wrong finding in one file. Rejected on
-sight.
+control, invisible from a checkout, and global: it would silence real `high` and
+`critical` findings everywhere to quiet one known-wrong finding in one file. The
+finding this record does excuse is itself **Critical**, so the threshold would
+have to be set high enough to blind the repo to its most serious class. Rejected
+on sight.
 
 **A register document under `docs/`.** Rejected for the reason in rule 4, and
 for a second: a page describing two files inside one tool is where the root
@@ -140,9 +143,7 @@ property every rejected alternative lacked.
 guarantee.** Rule 3 makes that explicit and it is measured, not asserted:
 disabling `guard.assertAllowed` in `egress-proxy.ts` fails 5 tests in
 `egress-proxy.test.ts`; disabling the address rejection inside the pinning
-`lookup` fails 2 there and 6 in `dispatcher.test.ts`; and — for the alert this
-record deliberately does not excuse — deleting the `onRequest` hook from
-`routes/files.ts` fails 5 in `rate-limit.test.ts`. All three suites run on every
+`lookup` fails 2 there and 6 in `dispatcher.test.ts`. Both suites run on every
 push.
 
 **Rule 2's last field has to be measured every time, because the first attempt at
@@ -163,31 +164,46 @@ separately and watching which tests notice. A guard covered only by a test that
 cannot fail is the case this whole record exists to prevent, and it was found
 inside the first excuse written under it.
 
-**Whether GitHub honours the comment natively is still unverified.** The first
-pull request under this record (#126) was expected to settle it and did not. Its
-`CodeQL` check was green, but every line it added was comment: the flagged
-`http.request` call itself is unmodified context, so the alert may never have
+**Whether GitHub honours the comment natively is still unverified, and the
+pull-request check cannot answer it.** #126 was expected to settle it and did
+not. Its `CodeQL` check was green, but every line it added was comment: the
+flagged `http.request` call is unmodified context, so the alert may never have
 been attributed to that diff at all — which is also why #124, a pull request
 touching no code, was green while the alert sat open on `main`. **A green check
-is therefore consistent with both "suppression honoured" and "never
-attributed", and proves neither.**
+is consistent with both "suppression honoured" and "never attributed", and
+proves neither.** Reading the security tab does not settle it either: the alert
+is expected to read `Open` there while the only copy of the comment sits on an
+unmerged branch, so `Open` is what both readings predict.
 
-**What settles it is the alert showing as _suppressed_ rather than `Open` in the
-security tab**, which needs the tab or `gh api` — denied in the development
-container where this was written. A weaker but useful signal is a future pull
-request that _modifies_ the flagged line and still passes. There is one piece of
-evidence favouring "honoured": `dl-27` is recorded as having reopened this alert
-in 2026-08-30 without touching the flagged line either, only shifting the lines
-below it, and if a shift alone reattributes then this diff should have been
-reattributed too. That history is screenshot-relayed and unverified, so it is
-evidence rather than an answer.
+**The experiment that does settle it is the merge, and there is now a control
+for it.** `js/missing-rate-limiting` was `Open` on `main` and **closed when
+`dl-23` merged its fix** (relayed 2026-09-01). That is the pipeline working end
+to end: a change landing on `main` is re-analysed and its alert is retired. So
+the same mechanism applies to this record's own suppression, with two outcomes
+and no third:
 
-If suppression turns out not to be honoured, the supported follow-up is the
-`advanced-security/dismiss-alerts` action, which converts SARIF suppression data
-into real dismissals — a change to `security.yml`, and a decision to take on its
-own evidence rather than to pre-empt here. **The documentation value of the
-comment holds in every reading**, which is why this record does not depend on the
-answer.
+- **The alert closes** — suppression comments are honoured, and rules 1–4 stand
+  as written.
+- **It stays `Open`** — they are not honoured natively, and the follow-up is the
+  `advanced-security/dismiss-alerts` action, which converts SARIF suppression
+  data into real dismissals. That is a change to `security.yml`, to be taken on
+  its own evidence rather than pre-empted here.
+
+Either way the comment keeps its documentation value, which is why this record
+does not depend on the answer.
+
+**The experiment is now running, and nobody needs to do anything to start it.**
+#126 merged on 2026-09-01 as `94206d9`, so the suppression comment is on `main`
+and the `security` workflow's push analysis has already re-read it. **The next
+person to open the security tab settles this by reading one line**, and should
+record the outcome in the two bullets above. Until then it is the last unverified
+claim in this document.
+
+One piece of evidence favours "honoured": `dl-27` is recorded as having reopened
+this alert on 2026-08-30 without touching the flagged line either, only shifting
+the lines below it — and if a shift alone reattributes, this diff should have
+been reattributed too. That history is screenshot-relayed and unverified, so it
+is evidence rather than an answer.
 
 **Nothing enforces the five fields.** A suppression comment with no reasoning and
 no named test would pass every gate this repo has. That is a real gap, and the
@@ -198,9 +214,20 @@ rather than forgotten: there is one suppression in the repo today, and a scan
 built for one instance is a guess about the second. Revisit it when a third
 arrives, or sooner if one lands without its reasoning.
 
-**`js/missing-rate-limiting` on `routes/files.ts` is deliberately not excused.**
-`dl-23` metered that route on 2026-08-31, so if the alert closed it was never a
-false positive and there is nothing to suppress. Reading the alert list is what
-settles it, and that needs `gh api` or the security tab. Until somebody looks,
-excusing it would violate rule 3's spirit — excusing an alert nobody has
-confirmed is still open.
+**`js/missing-rate-limiting` on `routes/files.ts` is not excused, and never
+should have been a candidate.** It was a **true positive**, correctly fixed:
+`dl-23` metered the route on 2026-08-31, and the alert **closed on merge**
+(security tab, read 2026-09-01, relayed). So CodeQL did read the
+`{ onRequest: rateLimit }` sibling options object after all — the query has no
+blind spot on Fastify's route options, and the "query limitation" this repo
+believed in for a week did not exist.
+
+**That failure of ours is what fixes the scope of this record.** This policy
+governs findings that are **structurally permanent** — where no shape the code
+could take would stop the query firing, as with a forward proxy whose whole
+purpose is to fetch a URL a user chose. A query limitation is not such a finding,
+because it resolves itself: either the code changes and the alert closes, or the
+query improves and it closes. **Reaching for a suppression comment because a
+query looks wrong is the failure mode this paragraph exists to prevent.** Fix the
+code, or wait; do not excuse it. The test is not "is this alert wrong today", it
+is "will this alert be wrong for every version of this code".
