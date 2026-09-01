@@ -827,8 +827,10 @@ the fix-round narrative moved into `## Log`, per this gate's recommended remedy.
   appeared twice and was wrong twice over: ambiguous across three tracked
   `config.ts` files, and pointing at `MAX_CONCURRENT_PROBES` rather than
   `PROXY_URL`, which is at `tools/downloader/api/src/config.ts:373`. Both are
-  now qualified — except one occurrence inside `## The gate on this filing`,
-  which is a committed gate record and stays as its reviewer wrote it. Found
+  now qualified. The one occurrence `citations.mjs` still reports is the
+  quotation in this very entry, which has to stay wrong to name what was
+  wrong — the tool's own output calls this case out: a citation that is a
+  finding's own evidence must stay as written. Found
   because a peer session measured that a bare filename is
   ambiguous in a two-tool repo and `scripts/citations.mjs` reports it as a
   failure that reads like staleness. The claim the citation supports was
