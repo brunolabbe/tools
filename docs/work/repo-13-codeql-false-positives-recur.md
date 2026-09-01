@@ -3,7 +3,7 @@ id: repo-13
 tool: repo
 title: A CodeQL false positive comes back every time its file moves, and dismissal does not hold
 kind: chore
-status: in-flight
+status: done
 milestone: null
 depends_on: [dl-23]
 ---
@@ -66,109 +66,59 @@ Done. The `security` workflow and the failing check are **not the same thing**,
 and conflating them sends you to edit a file that is working. Detail and the four
 data points are in the Log.
 
-### 3. Decide the policy — **OPEN, and deliberately not settled here**
+### 3. Decide the policy — settled 2026-09-01: inline suppression comments
 
-This is a policy change about how the repo excuses a security finding, and a
-wrong answer fails silently: an over-broad exclusion hides a real alert and
-nobody notices, because the signal it removes is the one nobody was going to see
-anyway. It belongs to whoever owns the repo's security posture, not to the agent
-that happened to be in the file.
+**Chosen by the user: option 2, inline `// codeql[query-id]` comments**, on the
+line _before_ the alert rather than at the end of it, because code scanning
+hashes the alert's line contents and a trailing comment churns the alert it was
+meant to settle.
 
-The four options, with the costs that are now measured rather than guessed:
+**Option 3 was struck, because it does not exist.** The ticket costed "a
+path-scoped query filter" as the config-level answer and it is not expressible:
+`paths`/`paths-ignore` govern which files are analysed at all, for every query,
+and `query-filters` select queries by metadata — `id`, `tags`, `severity` — with
+no path key. See the Log.
 
-1. **Dismiss each recurrence by hand.** Zero configuration, and it is the only
-   option that keeps a human in front of every finding. Costs a full triage every
-   time either file is refactored — measured: the check goes red on any pull
-   request whose diff moves the alert, and stays red until someone dismisses it.
-   Already failed once, on the egress proxy, between 2026-08-23 and 2026-08-30.
-   The dismissal reason is a free-text box on GitHub: not in version control, not
-   visible to anyone reading the code, and absent from the diff entirely.
-2. **Inline `// codeql[js/...]` suppression comments.** Lives with the code,
-   moves with it, is reviewed with it, and is legible to someone who has never
-   opened the security tab. Its stated cost — that it would also mask a genuine
-   regression — **is measured and largely answered**: the tests catch the
-   regression that the suppression would hide, in both files, and they run on
-   every push. Numbers in the Log. **Unverified and blocking: whether inline
-   suppression is actually honoured by this repo's CodeQL setup.** Confirming it
-   requires reading the alert list, which cannot be done from the container.
-3. **A path-scoped query filter in `security.yml`.** Config-level, in version
-   control, and it survives any refactoring inside the named path. **This option
-   may not exist in the form the brief imagines** — see the Log. A CodeQL config
-   file's `query-filters` selects queries by _metadata_ (`id`, `tags`,
-   `severity`), with no path key, while `paths-ignore` excludes files from
-   analysis for _every_ query. So the achievable variants are "this query off
-   everywhere" or "all queries off for this file", both materially coarser than
-   "this query off for this file". **Verify this before choosing option 3**; it
-   is the single fact that most changes the answer.
-4. **Raise the code-scanning check's failure threshold in repository settings.**
-   Listed for completeness and almost certainly wrong: not in version control,
-   invisible from the repo, and it would silence real `high` findings everywhere
-   to quiet two known ones. **Not verifiable from inside this container** —
-   reading or changing it needs the settings UI or `gh api`, which
-   `.claude/settings.json` denies.
+The decision, the two surviving rejected options, and the reasoning are in
+[adr/005](../adr/005-excusing-a-code-scanning-finding.md).
 
-The two alerts are **not the same kind of thing**, and the answer may differ per
-alert without that being an inconsistency:
+### 4. Give the triage record a durable home — settled 2026-09-01
 
-- `js/request-forgery` on `egress-proxy.ts` is a **structural, permanent** false
-  positive. The file is a forward proxy; its entire purpose is to make a request
-  to a URL a user supplied. No code shape will ever stop this query firing there.
-- `js/missing-rate-limiting` on `routes/files.ts` is a **query limitation**, not
-  a design. It fires because the query reads the handler body and not the sibling
-  options object one line above it. It is narrower, it may already be closed, and
-  it is the sort of thing that gets fixed upstream.
+**The home is two halves, and neither is a ticket Log.**
 
-### 4. Give the triage record a durable home — blocked on step 3
+- **The policy** is [adr/005](../adr/005-excusing-a-code-scanning-finding.md).
+  Root `docs/` is where a decision binding more than one tool goes, and
+  `docs/00-TOOLS.md` already names "how CI is split" as ADR-worthy. It is indexed
+  there beside the other four.
+- **The register is the suppression comments themselves.** No list, no page to
+  keep in sync: `grep -rn 'codeql\[' --include='*.ts' .` is every excused finding
+  in the repo, with its reasoning in the lines above it. An alert with such a
+  comment was examined; an alert without one was not — which is the answer to the
+  question this ticket poses, and it cannot drift from the code because it is the
+  code.
 
-The record's **content is written** and sits in the triage record below. Its
-**home is not**, and this step cannot be finished without step 3, for a reason
-worth stating plainly: **a ticket Log is not an acceptable home.** That is
-exactly where the 2026-08-23 triage went, and its being there is why this ticket
-exists. Leaving the record in `repo-13`'s Log and calling step 4 done would
-reproduce the defect under a new id.
+That second half is [adr/003](../adr/003-the-status-page-is-generated.md)'s
+reasoning reused: a projection kept by hand needs a writer, and the writer here
+is a person who will forget.
 
-Whatever step 3 chooses must carry, per excused alert: the query id, the file,
-the date, the reasoning, and **the test that would catch the corresponding true
-positive if the design regressed**. That last field is what makes the record
-auditable instead of reassuring.
+### 5. Say what happens to the next one — settled 2026-09-01
 
-Where it goes is part of the decision, and the choice is narrow on purpose. A
-comment beside `queries:` in `security.yml` is a candidate; so is a section in
-that workflow's header, which already explains at length why CodeQL fits this
-codebase; so is a comment at the excused line itself. **A new top-level document
-is not** — `docs/` is repo-wide only, and a page describing two files inside one
-tool is where the split starts to rot. Follow the rule in `CLAUDE.md`: narrowest
-home that fits.
+The five criteria are in
+[adr/005](../adr/005-excusing-a-code-scanning-finding.md) under "Triaging a new
+alert", in the same file as the rule, so a reader who finds one finds the other.
+They are unchanged from the draft below: reproduce against the tip first; decide
+true or false on the evidence, with true being an ordinary ticket in the owning
+tool and the common case; if false, name the test that goes red on regression and
+write it first if it does not exist; record with all five fields; and excuse a
+test double by its category rather than by arguing its logic.
 
-### 5. Say what happens to the next one — criteria settled, home blocked on step 3
+## The triage record, as it was drafted
 
-The triage that produced these two also produced `dl-24` from a real finding and
-dismissed a `startsWith` inside a test double, so the next alert is not
-hypothetical either. The **criteria** below are decision-independent and hold
-whichever mechanism wins; only where they get written down waits on step 3.
-
-For any new code-scanning alert, in order:
-
-1. **Reproduce it against the tip before anything else.** Both of this ticket's
-   alerts had citations that resolved on a branch and not on `main`, and one of
-   them changed truth value mid-ticket. An alert is a claim about a commit.
-2. **Decide true or false positive, and say which on the evidence.** If true, it
-   is an ordinary ticket in the owning tool's `work/` — that is `dl-23` and
-   `dl-24`, and it is the common case, not the exception.
-3. **If false, name the test that would go red if the design regressed.** If no
-   such test exists, that is the finding: write the test, and do not excuse the
-   alert until it exists. An excused alert with nothing behind it is worse than
-   an open one, because it looks handled.
-4. **Record it wherever step 3 decides, with all five fields.** A dismissal with
-   no in-repo trace is not a decision, it is a disappearance.
-5. **A test double is not production code.** The `startsWith` dismissed on
-   2026-08-23 was in a test fixture. Say so in the record rather than arguing the
-   code is safe; the reason is the category, not the logic.
-
-## The triage record, pending a home
-
-The content step 4 owes, written now because it is decision-independent.
-**Placement is still open** — see Build steps 3 and 4. Verified at `6f29eb0`.
+Kept as the working evidence behind
+[adr/005](../adr/005-excusing-a-code-scanning-finding.md). The `js/request-forgery`
+half now lives at the excused line in `egress-proxy.ts`; the
+`js/missing-rate-limiting` half is **deferred, not excused** — see the Log for
+what would settle it. Verified at `6f29eb0`.
 
 ### `js/request-forgery` — `tools/downloader/api/src/egress-proxy.ts`
 
@@ -248,24 +198,33 @@ excused — see the Log.
    and what it relies on.~~ **Done 2026-08-31 at `6f29eb0`.**
 2. ~~What fails the check is established: which check run, and whether it is
    scoped to the pull request's diff.~~ **Done 2026-08-31.**
-3. Whether `js/missing-rate-limiting` closed when `dl-23` merged is supplied by
-   someone who can read the alert list, and the triage record's second entry is
-   either struck or kept on that answer.
-4. Before option 3 can be chosen: whether a CodeQL query filter can be scoped to
-   a path at all is confirmed against the CodeQL action's configuration schema,
-   not from memory.
-5. Before option 2 can be chosen: whether inline `// codeql[...]` suppression is
-   honoured by this repo's setup is confirmed on a real pull request.
-6. One of the four options is chosen **by the repo's owner**, with the rejected
-   ones named alongside the cost that ruled each out.
-7. The triage record has a durable in-repo home that is not a ticket Log,
+3. **Deferred, deliberately.** Whether `js/missing-rate-limiting` closed when
+   `dl-23` merged still needs someone who can read the alert list. Its entry is
+   kept and marked deferred rather than excused, because excusing an alert nobody
+   has confirmed is still open would break adr/005's own rule 3.
+4. ~~Whether a CodeQL query filter can be scoped to a path is confirmed against
+   the action's configuration schema, not from memory.~~ **Done 2026-09-01: it
+   cannot. Option 3 struck.**
+5. ~~Whether inline `// codeql[...]` suppression is honoured by this repo's setup
+   is confirmed on a real pull request.~~ **This branch is that pull request** —
+   it edits `egress-proxy.ts`, so the alert lands in the diff and the `CodeQL`
+   check answers it either way. The verdict belongs in the gate record, not here.
+6. ~~One of the four options is chosen by the repo's owner, with the rejected
+   ones named alongside the cost that ruled each out.~~ **Done 2026-09-01:
+   inline comments, in [adr/005](../adr/005-excusing-a-code-scanning-finding.md)
+   under "Alternatives considered".**
+7. ~~The triage record has a durable in-repo home that is not a ticket Log,
    carrying all five fields per excused alert, and Build step 5's criteria are
-   written down somewhere a reader of an unfamiliar alert will find them.
-8. A pull request touching either file no longer fails the `CodeQL` check run,
-   confirmed on a real pull request with `gh pr checks` rather than reasoned
-   about.
-9. `npm run check` passes, and `npm run format` has been run if any `.md`
-   changed.
+   written down somewhere a reader of an unfamiliar alert will find them.~~
+   **Done 2026-09-01: adr/005 for the rule and the criteria, the suppression
+   comments themselves for the register.**
+8. **Answered by this pull request's own `CodeQL` check**, which is the
+   experiment rather than a claim. A red check is a result: it means suppression
+   comments are not honoured natively and the follow-up is the
+   `advanced-security/dismiss-alerts` action — a separate decision, named in
+   adr/005 and not taken here.
+9. ~~`npm run check` passes, and `npm run format` has been run if any `.md`
+   changed.~~ **Done — see the gate record.**
 
 ## Log
 
@@ -380,7 +339,88 @@ excused — see the Log.
   Step 3 not settled, per dispatch. No source file was changed by this round; the
   two edits above were measurements and were reverted.
 
+- **2026-09-01** — Built and closed. Fresh branch off `origin/main@7d56035`,
+  because the filing (#124) had landed and the implementation is a different
+  change with a different type: this one edits source, so `## Review` waits for a
+  reviewer while `## The gate on this filing` below stays as the record of #124.
+
+  **Option 3 does not exist, and that is the finding worth carrying forward.**
+  The ticket costed "a path-scoped query filter in `security.yml`" as the
+  config-level answer, and the previous round flagged it as probably
+  inexpressible from knowledge without a way to check. Settled now: `paths` and
+  `paths-ignore` govern which files are analysed at all, for **every** query,
+  while `query-filters` select queries by metadata — `id`, `tags`, `severity` —
+  with no path key. The two do not compose into "this query, this path". The
+  consequence is not just that one option lost: **the only remaining mechanisms
+  that survive a refactor are inline comments**, because everything else is
+  either instance-bound (a dismissal) or repo-wide (a query filter, a settings
+  threshold). The option that looked like the balanced middle was never on the
+  table. Recorded at length in adr/005's alternatives so the next person does not
+  re-propose it.
+
+  **Decision: inline `// codeql[query-id]`, on the line above the alert.** Not
+  the same line: code scanning identifies an alert partly by a hash of its line's
+  contents, so a trailing comment churns the alert it was meant to settle. The
+  comment sits at `egress-proxy.ts:364`, immediately above the `http.request` at
+  `:365`, and carries the five fields adr/005 requires.
+
+  **What made inline suppression defensible was the measurement, not the
+  argument.** Its one real cost is that it would also mask a genuine regression,
+  and the previous round measured that away: removing both `guard.assertAllowed`
+  calls fails 5 tests in `egress-proxy.test.ts`, and deleting the `onRequest`
+  hook fails 5 in `rate-limit.test.ts`. The tests are the guarantee; the comment
+  only explains it. That asymmetry is rule 3 in adr/005 — no test, no excuse —
+  and it is the rule that keeps this from being a way to silence things.
+
+  **The record's home is two halves.**
+  [adr/005](../adr/005-excusing-a-code-scanning-finding.md) holds the policy and
+  the five triage criteria, indexed in `docs/00-TOOLS.md`, which already names
+  "how CI is split" as ADR-worthy. The **register is the comments themselves** —
+  `grep -rn 'codeql\[' --include='*.ts' .` — so there is no page to keep in sync
+  and no way for it to disagree with the code. That is adr/003's reasoning
+  reused, and it is what answers the question this ticket was filed to ask: an
+  alert with such a comment was examined, one without was not.
+
+  **The rate-limit half is deferred, not excused.** `dl-23` merged, and whether
+  `js/missing-rate-limiting` closed is still unread — `gh api` is denied and I
+  did not attempt it. If it closed it was never a false positive and there is
+  nothing to suppress; if it stayed open it needs its own comment at
+  `files.ts:119`. Excusing it now would break adr/005's rule 3 by excusing an
+  alert nobody has confirmed is still open. What settles it: one look at the
+  security tab, or the next pull request that edits `routes/files.ts`, whose
+  `CodeQL` check will say so for free.
+
+  **This pull request is the experiment for acceptance line 5.** It edits
+  `egress-proxy.ts`, so the alert lands in the diff, and the `CodeQL` check —
+  which the previous round established is scoped to a pull request's own diff,
+  with #124 as the control — either goes green because the suppression is
+  honoured, or red because it is not. **A red check here is a result, not a
+  failure.** The supported follow-up in that case is the
+  `advanced-security/dismiss-alerts` action, which converts SARIF suppression
+  data into real dismissals; that is a change to `security.yml` and a decision to
+  take on its own evidence, deliberately not pre-empted in this branch. The
+  comment's documentation value holds either way, which is why adr/005 does not
+  depend on the answer.
+
+  **One thing deliberately left out.** Nothing enforces the five fields — a
+  suppression comment with no reasoning and no named test would pass every gate
+  here, and this repo has the shape that would close it
+  (`spawn-safety.test.ts`, `image-closure.test.ts` are source scans policing
+  exactly this kind of convention). Not folded in: there is one suppression in
+  the repo, and a scan written for one instance is a guess about the second. It
+  is recorded as a known gap in adr/005's consequences with a trigger — revisit
+  on the third suppression, or sooner if one lands without its reasoning —
+  rather than left silent.
+
+  Gates for this round: `npm run check`, and `npm test -- --project downloader`,
+  which is the proof the change is inert — the suppression is a comment, so
+  `egress-proxy.test.ts` and its four siblings must pass unchanged.
+
 ## The gate on this filing
+
+**This section records the gate on PR #124, the filing.** The implementation
+landed separately on `repo-13-excuse-codeql-findings`; its gate belongs in
+`## Review`, which a reviewer adds.
 
 Not gated by a reviewer. `## Review` is left empty per `docs/01-TICKETS.md`: a
 pull request that only files a ticket has no work to check, and a gate record in
