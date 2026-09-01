@@ -105,6 +105,46 @@ describe("the logger", () => {
     expect(JSON.stringify(lines[0])).not.toContain("super-secret");
   });
 
+  test("the path layer is case-sensitive, which is what bounds it — not nesting", () => {
+    // The obvious guess is that pino's `*.headers.cookie` fails on depth. It does
+    // not: three levels deep is fine as long as the segment names match exactly.
+    const lower = capturing();
+    lower.logger.info("upstream", { any: { headers: { cookie: "session=super-secret" } } });
+    expect(JSON.stringify(lower.lines[0])).not.toContain("super-secret");
+
+    // What it cannot do is match HTTP casing, which is exactly what a
+    // `RequestContext` carries — see `contract/src/media.ts:121`. Not at depth
+    // three, and not at depth two either, so this is about the name and nothing
+    // else. `safeFields` is what covers the real shape; this layer never did.
+    const upper = capturing();
+    upper.logger.info("upstream", { any: { headers: { Cookie: "session=super-secret" } } });
+    expect(JSON.stringify(upper.lines[0])).toContain("super-secret");
+  });
+
+  test("known limitation: a RequestContext nested under another key is not redacted", () => {
+    // **This test asserts the gap, on purpose.** `safeFields` matches the literal
+    // key `requestContext` at the top level of `fields` and nowhere else, and
+    // `REDACT_PATHS` cannot help because the keys are HTTP-cased. Every call site
+    // in the tool passes it at the top level, so nothing leaks today.
+    //
+    // It is pinned rather than left implicit so that widening `safeFields` — the
+    // right fix if a call site ever needs to nest — turns this red and sends
+    // whoever did it to the caveat in `logger.ts` that this documents.
+    const nested = capturing();
+    nested.logger.info("probed", { details: { requestContext: CREDENTIALED } });
+    expect(JSON.stringify(nested.lines[0])).toContain("super-secret");
+
+    const inArray = capturing();
+    inArray.logger.info("probed", { items: [CREDENTIALED] });
+    expect(JSON.stringify(inArray.lines[0])).toContain("super-secret");
+
+    // The same context at the top level *is* redacted, so the two assertions
+    // above are about position and not about the fixture.
+    const top = capturing();
+    top.logger.info("probed", { requestContext: CREDENTIALED });
+    expect(JSON.stringify(top.lines[0])).not.toContain("super-secret");
+  });
+
   test("a field that will not serialise does not take the process down", () => {
     const { logger, lines } = capturing();
     const cyclic: Record<string, unknown> = {};

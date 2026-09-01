@@ -59,9 +59,11 @@ stream was found on that page"** for a trust-store problem. That is the worst
 available sentence: it points at the source, invites a retry, and hides the one
 setting that would fix it.
 
-**Not the same defect, do not sweep them in.** `resolvers/src/size-probe.ts:74` and `resolvers/src/size-probe.ts:98`
-and `resolvers/src/size-sample.ts:371` also
-swallow to `undefined`, and that is correct and documented at
+**Not the same defect, do not sweep them in.** `resolvers/src/size-probe.ts:74`
+and `resolvers/src/size-probe.ts:98` also swallow a failure to `undefined`, and
+`resolvers/src/size-sample.ts:371` swallows one to `unchanged` — the declared
+estimate it started from. Different values, same intent, and it is correct and
+documented at
 `resolvers/src/size-probe.ts:7-11`: "a probe that fails the whole resolve because a CDN would
 not answer a HEAD is a regression, and it would be one on the _common_ path".
 Those are size estimates degrading to a declared value. This ticket is about a

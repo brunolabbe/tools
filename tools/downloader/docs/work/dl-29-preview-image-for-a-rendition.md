@@ -733,8 +733,40 @@ tools/downloader/web` returns nothing.
   bytes" are different claims and only the second is worth having. Made to fail
   first: deleting the `redactRequestContext` call inside `safeFields` reddens
   both, plus the pre-existing unit test — three in total. pino's own
-  `*.cookie`/`*.authorization` redact paths do **not** save it, because the
-  credential sits at depth three (`requestContext.headers.Cookie`).
+  `REDACT_PATHS` do **not** save it.
+
+  **Correction, from the post-PR gate: my first explanation of _why_ pino does
+  not save it was wrong.** I wrote that the credential sits at depth three. That
+  is not the obstacle. Re-measured against this repo's own logger before
+  accepting the correction, one field shape per row, asking only whether the
+  literal secret survives into the serialised line:
+
+  | fields passed to `logger.info`                | outcome                                |
+  | --------------------------------------------- | -------------------------------------- |
+  | `{ any: { headers: { cookie } } }`            | **redacted** — depth three is fine     |
+  | `{ any: { headers: { Cookie } } }`            | **leaks**                              |
+  | `{ headers: { cookie } }`                     | **redacted**                           |
+  | `{ headers: { Cookie } }`                     | **leaks** — so not depth, at any depth |
+  | `{ requestContext: { headers: { Cookie } } }` | redacted, by `safeFields`              |
+
+  The obstacle is **case**. pino matches a path segment exactly, so
+  `*.headers.cookie` covers Node's `IncomingHttpHeaders`, which are always
+  lower-cased, and never covers a `RequestContext`, whose keys carry real HTTP
+  casing — as `downloader/contract/src/media.ts:121` says and as this file's own
+  `CREDENTIALED` fixture shows. That is a more useful fact than the one I
+  replaced it with: the second layer is a net under _Node's_ headers, not under
+  ours, and `safeFields` is the only thing that has ever covered the real shape.
+  Both rows are now pinned by a test, and the caveat is written where the paths
+  are declared rather than only here.
+
+  **A second gap, also from that gate, also measured here.** `safeFields` matches
+  the literal key `requestContext` at the **top level** and nowhere else, so a
+  context nested under another key or inside an array leaks in full — through both
+  layers. Every call site in the tool passes it at the top level, so this is a gap
+  in the safety net rather than a live leak. It is now a documented limitation in
+  `downloader/api/src/logger.ts` and a test that asserts the gap; widening
+  `safeFields` to recurse turns that test red, which was verified by doing it, so
+  the caveat cannot go quietly stale.
 
   **The migration had no test at all, and the obvious test would not have
   caught the obvious bug.** `job-store.test.ts` gains a
@@ -787,15 +819,24 @@ tools/downloader/web` returns nothing.
   here from what is inherited and unverified, and the two unverified claims are
   the exact strings Chromium and yt-dlp emit, which its Build step depends on.
 
-  **Citations: 29/52, and the 23 failures are deliberate.** `scripts/citations.mjs`
-  reports a bare `orchestrator.ts:257` as ambiguous — three tracked files match it
-  across two tools — which reads as staleness and is not. Qualifying to
-  `downloader/api/src/jobs/orchestrator.ts:257` fixes it; that is dl-31's finding,
-  relayed, and it holds here.
+  **Citations: every failure is deliberate, and they are all in one place.**
+  `scripts/citations.mjs` reports a bare `orchestrator.ts:257` as ambiguous —
+  three tracked files match it across two tools — which reads as staleness and is
+  not. Qualifying to `downloader/api/src/jobs/orchestrator.ts:257` fixes it; that
+  is dl-31's finding, relayed, and it holds here.
+
+  **No count is given, on purpose.** An earlier draft of this paragraph said
+  "29/52", and it was wrong by the time it was committed: the paragraph cites
+  `downloader/api/src/jobs/orchestrator.ts:257` one line further down as its own
+  example, and two more citations landed in the paragraphs after it, so the
+  denominator moved under a sentence whose whole point was that its numbers had
+  been checked. It then moved _again_ while this correction was being written. A
+  number in prose beside a command anyone can run is a maintenance liability, so
+  the command is the answer: `node scripts/citations.mjs <this file>`.
 
   **I qualified only the sections this session wrote** — the two gate records and
-  the two 2026-09-01 Log entries — and every one of those now resolves to the
-  exact line intended, checked line by line rather than by the count.
+  the two 2026-09-01 Log entries — and every one of those resolves to the exact
+  line intended, checked line by line rather than by a total.
 
   **Everything before them is left failing on purpose**, because qualifying it
   would make it _worse_. The Build section's line numbers were verified against
@@ -814,3 +855,77 @@ answered. mustPass only —`, because this branch rewrote that comment two lines
   second reason as well: its citation list _is_ its evidence — a record of what
   that gate checked and where, at the commit it checked. Rewriting it would
   falsify the record rather than repair it.
+
+- **2026-09-01** — **The probe response was shipping the source's session
+  credentials to the browser.** Found by dl-29's post-PR gate while reproducing
+  the SSE test on this branch; pre-existing, unrelated to the preview image, and
+  folded in here by the user's decision rather than given its own branch.
+
+  `RequestContext.headers` is what a resolver captured from the source —
+  `downloader/contract/src/media.ts:121` says "Replayed verbatim. Typically
+  Referer, Origin, User-Agent, Cookie, Authorization" — and it sat inside
+  `probeResultSchema`, which goes out on the wire. `withoutEgressProxy` strips
+  `proxyUrl` and explicitly puts `headers` back. So every probe response and every
+  `probed` frame carried a live third-party session to a client that has never
+  read the field: `requestContext` appears nowhere under `web/src` except the
+  mock's own fixture data.
+
+  **Reproduced first, on the wire, before anything was changed.** `probeResult()`
+  in `api/test/helpers.ts` has carried `Cookie: session=super-secret` since it was
+  written, so no special fixture was needed — which is also why nobody noticed.
+  Driving the three outbound paths and grepping the raw body for the literal
+  secret:
+
+  | path                          | before    |
+  | ----------------------------- | --------- |
+  | `POST /api/probe`, fresh      | **leaks** |
+  | `POST /api/probe`, from cache | **leaks** |
+  | the `probed` SSE frame        | **leaks** |
+
+  The SSE row took two attempts and the first one lied. A naive probe reported
+  "no leak" because the job had raced past `probing` before the test connected, so
+  the stream held no `probed` frame at all — the assertion was measuring the
+  absence of the frame, not the absence of the credential. The committed test
+  asserts `toContain('"type":"probed"')` **first**, for exactly that reason.
+
+  **The trap, answered by grep rather than by the docblock.** Gate 1 had
+  established that the probe cache stores the already-rewritten `clientProbe`, and
+  the question was whether anything downstream drives a download from it — if so,
+  stripping into the stored object would break every cached-path download
+  silently. `grep -rn probeCache` returns exactly two accesses, both in
+  `routes/probe.ts`: `:51` `get` and `:123` `set`. Nothing else in the repo reads
+  it, and the orchestrator re-probes unconditionally. So the answer is no — but
+  the strip is still at the response seam and not on the stored object, because
+  that is the property that stays true when someone later adds a third reader.
+
+  **Three seams, one function.** `probeForClient` in
+  `downloader/api/src/probe-out.ts`, called identically at `POST /api/probe`
+  fresh, `POST /api/probe` **cached**, and the `probed` frame. One function rather
+  than a few lines inlined at each, precisely because the cached branch returns
+  early and is the one that gets missed — it is the seam the original code missed.
+  Proven per seam, not just in aggregate: mutating the cached call site alone
+  reddens exactly one test, mutating the SSE call site alone reddens exactly one,
+  and removing the function's body reddens all three. All assertions are on the
+  raw serialised body.
+
+  A fourth test asserts the opposite direction — that the engine is still handed
+  the real headers — because the failure mode of over-stripping is a CDN quietly
+  refusing every credentialed download, which no other test here would catch.
+
+  **`headers: {}`, not removed.** `requestContextSchema.headers` is required, so
+  emptying it keeps every client, parse and fixture valid with no contract edit.
+  Removing the field from the wire schema would be a contract change and this repo
+  does not make those unilaterally. **Whether `requestContext` belongs on the wire
+  at all, given nothing reads it, is raised as an open decision and deliberately
+  not settled here.**
+
+  Also confirmed before writing the fix, because it is what makes it safe: a
+  client never sends a probe back. `createJobRequestSchema` is `{ url, options }`,
+  and both `probeResultSchema` uses are outbound. So stripping on the way out
+  cannot break job creation.
+
+  **Known cost, accepted:** the PR title now under-describes the branch. It says
+  "show a preview image"; the branch also stops sending session cookies to
+  browsers. This repo squash-merges, so that is the changelog line. It was raised
+  before the fold-in and taken knowingly; a title covering both is proposed in the
+  report.

@@ -51,6 +51,16 @@ export interface AppLogger extends Logger {
  * line of defence and not the first. `censor` matches `REDACTED` so a reader
  * cannot tell which of the two mechanisms fired, and neither can be mistaken
  * for a real value.
+ *
+ * **These paths are case-sensitive, and that is the limit of what they cover.**
+ * pino matches a path segment exactly, so `headers.cookie` catches Node's own
+ * `IncomingHttpHeaders`, which are always lower-cased, and does *not* catch a
+ * `RequestContext`-shaped bag, whose keys carry real HTTP casing — `Cookie`,
+ * `Authorization`. Measured, because the obvious guess is wrong: nesting is not
+ * the constraint. `{ any: { headers: { cookie } } }` is redacted here by
+ * `*.headers.cookie`, while `{ headers: { Cookie } }` is not redacted at any
+ * depth. So this layer is a net under Node's headers, not under ours; the
+ * structural pass below is the one that covers a `RequestContext`.
  */
 const REDACT_PATHS = [
   "headers.cookie",
@@ -76,6 +86,20 @@ function isRequestContext(value: unknown): value is RequestContext {
  * A `requestContext` field is the one shape that reliably holds credentials, so
  * it is recognised structurally: a caller that forgets to redact still cannot
  * leak one through this logger.
+ *
+ * **Known limitation: top level only.** This walks `fields` one level deep and
+ * matches the literal key `requestContext`. A context nested under another key
+ * (`{ details: { requestContext } }`) or inside an array
+ * (`{ items: [{ headers: { Cookie } }] }`) is *not* redacted, and neither is
+ * caught by `REDACT_PATHS` above, whose case-sensitivity is described there. Both
+ * are pinned as known limitations in `logging.test.ts`, so widening this function
+ * turns those tests red rather than leaving the caveat quietly wrong.
+ *
+ * Every call site in the tool passes `requestContext` at the top level today —
+ * all of them were enumerated when this note was written — so the gap is in the
+ * safety net rather than in live behaviour. It is documented because a net whose
+ * edges are unmarked is one a future call site falls through silently, and this
+ * one is deliberately the thing call sites are told to rely on.
  */
 function safeFields(
   fields: Record<string, unknown> | undefined,
