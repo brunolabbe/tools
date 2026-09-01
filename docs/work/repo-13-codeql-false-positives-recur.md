@@ -3,7 +3,7 @@ id: repo-13
 tool: repo
 title: A CodeQL false positive comes back every time its file moves, and dismissal does not hold
 kind: chore
-status: in-flight
+status: done
 milestone: null
 depends_on: [dl-23]
 ---
@@ -66,109 +66,59 @@ Done. The `security` workflow and the failing check are **not the same thing**,
 and conflating them sends you to edit a file that is working. Detail and the four
 data points are in the Log.
 
-### 3. Decide the policy — **OPEN, and deliberately not settled here**
+### 3. Decide the policy — settled 2026-09-01: inline suppression comments
 
-This is a policy change about how the repo excuses a security finding, and a
-wrong answer fails silently: an over-broad exclusion hides a real alert and
-nobody notices, because the signal it removes is the one nobody was going to see
-anyway. It belongs to whoever owns the repo's security posture, not to the agent
-that happened to be in the file.
+**Chosen by the user: option 2, inline `// codeql[query-id]` comments**, on the
+line _before_ the alert rather than at the end of it, because code scanning
+hashes the alert's line contents and a trailing comment churns the alert it was
+meant to settle.
 
-The four options, with the costs that are now measured rather than guessed:
+**Option 3 was struck, because it does not exist.** The ticket costed "a
+path-scoped query filter" as the config-level answer and it is not expressible:
+`paths`/`paths-ignore` govern which files are analysed at all, for every query,
+and `query-filters` select queries by metadata — `id`, `tags`, `severity` — with
+no path key. See the Log.
 
-1. **Dismiss each recurrence by hand.** Zero configuration, and it is the only
-   option that keeps a human in front of every finding. Costs a full triage every
-   time either file is refactored — measured: the check goes red on any pull
-   request whose diff moves the alert, and stays red until someone dismisses it.
-   Already failed once, on the egress proxy, between 2026-08-23 and 2026-08-30.
-   The dismissal reason is a free-text box on GitHub: not in version control, not
-   visible to anyone reading the code, and absent from the diff entirely.
-2. **Inline `// codeql[js/...]` suppression comments.** Lives with the code,
-   moves with it, is reviewed with it, and is legible to someone who has never
-   opened the security tab. Its stated cost — that it would also mask a genuine
-   regression — **is measured and largely answered**: the tests catch the
-   regression that the suppression would hide, in both files, and they run on
-   every push. Numbers in the Log. **Unverified and blocking: whether inline
-   suppression is actually honoured by this repo's CodeQL setup.** Confirming it
-   requires reading the alert list, which cannot be done from the container.
-3. **A path-scoped query filter in `security.yml`.** Config-level, in version
-   control, and it survives any refactoring inside the named path. **This option
-   may not exist in the form the brief imagines** — see the Log. A CodeQL config
-   file's `query-filters` selects queries by _metadata_ (`id`, `tags`,
-   `severity`), with no path key, while `paths-ignore` excludes files from
-   analysis for _every_ query. So the achievable variants are "this query off
-   everywhere" or "all queries off for this file", both materially coarser than
-   "this query off for this file". **Verify this before choosing option 3**; it
-   is the single fact that most changes the answer.
-4. **Raise the code-scanning check's failure threshold in repository settings.**
-   Listed for completeness and almost certainly wrong: not in version control,
-   invisible from the repo, and it would silence real `high` findings everywhere
-   to quiet two known ones. **Not verifiable from inside this container** —
-   reading or changing it needs the settings UI or `gh api`, which
-   `.claude/settings.json` denies.
+The decision, the two surviving rejected options, and the reasoning are in
+[adr/005](../adr/005-excusing-a-code-scanning-finding.md).
 
-The two alerts are **not the same kind of thing**, and the answer may differ per
-alert without that being an inconsistency:
+### 4. Give the triage record a durable home — settled 2026-09-01
 
-- `js/request-forgery` on `egress-proxy.ts` is a **structural, permanent** false
-  positive. The file is a forward proxy; its entire purpose is to make a request
-  to a URL a user supplied. No code shape will ever stop this query firing there.
-- `js/missing-rate-limiting` on `routes/files.ts` is a **query limitation**, not
-  a design. It fires because the query reads the handler body and not the sibling
-  options object one line above it. It is narrower, it may already be closed, and
-  it is the sort of thing that gets fixed upstream.
+**The home is two halves, and neither is a ticket Log.**
 
-### 4. Give the triage record a durable home — blocked on step 3
+- **The policy** is [adr/005](../adr/005-excusing-a-code-scanning-finding.md).
+  Root `docs/` is where a decision binding more than one tool goes, and
+  `docs/00-TOOLS.md` already names "how CI is split" as ADR-worthy. It is indexed
+  there beside the other four.
+- **The register is the suppression comments themselves.** No list, no page to
+  keep in sync: `grep -rn 'codeql\[' --include='*.ts' .` is every excused finding
+  in the repo, with its reasoning in the lines above it. An alert with such a
+  comment was examined; an alert without one was not — which is the answer to the
+  question this ticket poses, and it cannot drift from the code because it is the
+  code.
 
-The record's **content is written** and sits in the triage record below. Its
-**home is not**, and this step cannot be finished without step 3, for a reason
-worth stating plainly: **a ticket Log is not an acceptable home.** That is
-exactly where the 2026-08-23 triage went, and its being there is why this ticket
-exists. Leaving the record in `repo-13`'s Log and calling step 4 done would
-reproduce the defect under a new id.
+That second half is [adr/003](../adr/003-the-status-page-is-generated.md)'s
+reasoning reused: a projection kept by hand needs a writer, and the writer here
+is a person who will forget.
 
-Whatever step 3 chooses must carry, per excused alert: the query id, the file,
-the date, the reasoning, and **the test that would catch the corresponding true
-positive if the design regressed**. That last field is what makes the record
-auditable instead of reassuring.
+### 5. Say what happens to the next one — settled 2026-09-01
 
-Where it goes is part of the decision, and the choice is narrow on purpose. A
-comment beside `queries:` in `security.yml` is a candidate; so is a section in
-that workflow's header, which already explains at length why CodeQL fits this
-codebase; so is a comment at the excused line itself. **A new top-level document
-is not** — `docs/` is repo-wide only, and a page describing two files inside one
-tool is where the split starts to rot. Follow the rule in `CLAUDE.md`: narrowest
-home that fits.
+The five criteria are in
+[adr/005](../adr/005-excusing-a-code-scanning-finding.md) under "Triaging a new
+alert", in the same file as the rule, so a reader who finds one finds the other.
+They are unchanged from the draft below: reproduce against the tip first; decide
+true or false on the evidence, with true being an ordinary ticket in the owning
+tool and the common case; if false, name the test that goes red on regression and
+write it first if it does not exist; record with all five fields; and excuse a
+test double by its category rather than by arguing its logic.
 
-### 5. Say what happens to the next one — criteria settled, home blocked on step 3
+## The triage record, as it was drafted
 
-The triage that produced these two also produced `dl-24` from a real finding and
-dismissed a `startsWith` inside a test double, so the next alert is not
-hypothetical either. The **criteria** below are decision-independent and hold
-whichever mechanism wins; only where they get written down waits on step 3.
-
-For any new code-scanning alert, in order:
-
-1. **Reproduce it against the tip before anything else.** Both of this ticket's
-   alerts had citations that resolved on a branch and not on `main`, and one of
-   them changed truth value mid-ticket. An alert is a claim about a commit.
-2. **Decide true or false positive, and say which on the evidence.** If true, it
-   is an ordinary ticket in the owning tool's `work/` — that is `dl-23` and
-   `dl-24`, and it is the common case, not the exception.
-3. **If false, name the test that would go red if the design regressed.** If no
-   such test exists, that is the finding: write the test, and do not excuse the
-   alert until it exists. An excused alert with nothing behind it is worse than
-   an open one, because it looks handled.
-4. **Record it wherever step 3 decides, with all five fields.** A dismissal with
-   no in-repo trace is not a decision, it is a disappearance.
-5. **A test double is not production code.** The `startsWith` dismissed on
-   2026-08-23 was in a test fixture. Say so in the record rather than arguing the
-   code is safe; the reason is the category, not the logic.
-
-## The triage record, pending a home
-
-The content step 4 owes, written now because it is decision-independent.
-**Placement is still open** — see Build steps 3 and 4. Verified at `6f29eb0`.
+Kept as the working evidence behind
+[adr/005](../adr/005-excusing-a-code-scanning-finding.md). The `js/request-forgery`
+half now lives at the excused line in `egress-proxy.ts`; the
+`js/missing-rate-limiting` half is **deferred, not excused** — see the Log for
+what would settle it. Verified at `6f29eb0`.
 
 ### `js/request-forgery` — `tools/downloader/api/src/egress-proxy.ts`
 
@@ -248,24 +198,210 @@ excused — see the Log.
    and what it relies on.~~ **Done 2026-08-31 at `6f29eb0`.**
 2. ~~What fails the check is established: which check run, and whether it is
    scoped to the pull request's diff.~~ **Done 2026-08-31.**
-3. Whether `js/missing-rate-limiting` closed when `dl-23` merged is supplied by
-   someone who can read the alert list, and the triage record's second entry is
-   either struck or kept on that answer.
-4. Before option 3 can be chosen: whether a CodeQL query filter can be scoped to
-   a path at all is confirmed against the CodeQL action's configuration schema,
-   not from memory.
-5. Before option 2 can be chosen: whether inline `// codeql[...]` suppression is
-   honoured by this repo's setup is confirmed on a real pull request.
-6. One of the four options is chosen **by the repo's owner**, with the rejected
-   ones named alongside the cost that ruled each out.
-7. The triage record has a durable in-repo home that is not a ticket Log,
+3. **Deferred, deliberately.** Whether `js/missing-rate-limiting` closed when
+   `dl-23` merged still needs someone who can read the alert list. Its entry is
+   kept and marked deferred rather than excused, because excusing an alert nobody
+   has confirmed is still open would break adr/005's own rule 3.
+4. ~~Whether a CodeQL query filter can be scoped to a path is confirmed against
+   the action's configuration schema, not from memory.~~ **Done 2026-09-01: it
+   cannot. Option 3 struck.**
+5. **Still open.** This branch edits `egress-proxy.ts` and its `CodeQL` check is
+   green, but that does not settle it: the suppression's eight lines are all
+   added, while the flagged `http.request` line is unmodified context, so the
+   alert may simply never have been attributed to this diff — the same reason
+   #124 was green. What settles it is the alert showing as _suppressed_ rather
+   than `Open` in the security tab. See the Log.
+6. ~~One of the four options is chosen by the repo's owner, with the rejected
+   ones named alongside the cost that ruled each out.~~ **Done 2026-09-01:
+   inline comments, in [adr/005](../adr/005-excusing-a-code-scanning-finding.md)
+   under "Alternatives considered".**
+7. ~~The triage record has a durable in-repo home that is not a ticket Log,
    carrying all five fields per excused alert, and Build step 5's criteria are
-   written down somewhere a reader of an unfamiliar alert will find them.
-8. A pull request touching either file no longer fails the `CodeQL` check run,
-   confirmed on a real pull request with `gh pr checks` rather than reasoned
-   about.
-9. `npm run check` passes, and `npm run format` has been run if any `.md`
-   changed.
+   written down somewhere a reader of an unfamiliar alert will find them.~~
+   **Done 2026-09-01: adr/005 for the rule and the criteria, the suppression
+   comments themselves for the register.**
+8. **Not established.** The `CodeQL` check on this branch is green, but for
+   acceptance line 5's reason that may be attribution rather than suppression.
+   The honest test is a future pull request that _modifies_ the flagged line and
+   still passes.
+9. ~~`npm run check` passes, and `npm run format` has been run if any `.md`
+   changed.~~ **Done — see the gate record.**
+
+## Review
+
+**Gate: FAIL** — 2026-09-01 · `origin/main(7d56035)...196fd28` · defect hunt run
+directly by the reviewer (no `Skill`/`Agent` tool in that role), to `medium` depth.
+Sonnet reviewing an Opus build.
+
+| Done when                                                        | Proof                                                                                                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Both alerts re-verified at the tip, guard/line recorded       | proven — triage record (ticket:115-193); guard lines and `connectOptions` arm re-checked at `196fd28`, resolve exactly as cited            |
+| 2. What fails the check established (scoped to diff)             | verified — `gh pr checks` on #121/#122/#124/#126 all consistent with "CodeQL results-check is diff-scoped, separate from the `codeql` job" |
+| 3. `js/missing-rate-limiting` open/closed                        | correctly left **deferred** — `gh api` denied, ticket does not claim otherwise, no defect                                                  |
+| 4. Path-scoped query filter confirmed not to exist               | not re-verified (caller: already settled against GitHub's docs)                                                                            |
+| 5. Inline suppression honoured, confirmed on a real PR           | **contested, not proven** — see high/med findings below                                                                                    |
+| 6. Option chosen by owner, rejected options costed               | proven — `docs/adr/005-excusing-a-code-scanning-finding.md:103-131`                                                                        |
+| 7. Durable home, five fields, criteria discoverable              | proven — `docs/adr/005:52-82`; register command reproduced, returns exactly one line                                                       |
+| 8. Answered by this PR's own `CodeQL` check                      | check ran and passed (`gh pr checks 126`), but what it answers is ambiguous — see med finding                                              |
+| 9. `npm run check` passes, `npm run format` run if `.md` changed | verified — ran `npm run check` at `196fd28`: pass (lint, format, typecheck)                                                                |
+
+- **high** · `tools/downloader/api/src/egress-proxy.ts:357-364` — the suppression
+  comment claims "remove either [`guard.assertAllowed` or the pinning `lookup`] and
+  `egress-proxy.test.ts` fails five tests." That is exactly true for
+  `guard.assertAllowed`: removing both call sites (`:345`, `:406`) fails 5 tests,
+  names matching the ticket exactly. It is **not** true for the pinning lookup under
+  either natural interpretation. Deleting `lookup` from `connectOptions`
+  (`egress-proxy.ts:239`) fails **6** tests, not 5 — one extra because `lookup` also
+  carries the test harness's mocked DNS resolution, so this edit breaks legitimate
+  "allowed" requests too. Isolating the guard itself — commenting out only the
+  `isBlockedAddress` rejection inside `createPinningLookup` (`dispatcher.ts:153-158`)
+  while leaving DNS resolution intact — fails only **1** test ("a rebind caught at
+  connect stays a refusal, though it arrives as a socket error",
+  `egress-proxy.test.ts:289`). The companion test at `egress-proxy.test.ts:234` ("a
+  name that rebinds after the pre-flight check is refused at connect") **still passes
+  with the guard disabled**, because its mock target (`127.0.0.1` with nothing
+  listening) produces the same `502` whether the guard blocked it or the connection
+  just failed on its own — it does not distinguish "blocked" from "let through and
+  then failed". Notably `docs/adr/005`'s Consequences section (lines 139-146) is more
+  careful and only claims "five" for `guard.assertAllowed` and for the `files.ts`
+  `onRequest` hook; it never repeats the claim for the pinning lookup. The overclaim
+  is specific to the shipped code comment, which is the artifact rule 4 designates as
+  the register future readers will trust. Two remedies, not one fix: (a) narrow the
+  comment's wording to what was measured, or (b) strengthen
+  `egress-proxy.test.ts:234` to assert on the distinguishing signal (log message and
+  error code, as `:289` does) rather than status code. Recommend (b) first since it
+  closes the real gap; (a) is the minimum honest fix.
+- **med** · `docs/work/repo-13-codeql-false-positives-recur.md:393-398` (also softer
+  at `:210-211`) — the Log states the PR "either goes green because the suppression
+  is honoured, or red because it is not." That is a false dichotomy.
+  `git diff origin/main...196fd28 -- tools/downloader/api/src/egress-proxy.ts` shows
+  the 8 new lines are all `+` comment and `const proxied = http.request(` carries no
+  `+`/`-` prefix — unmodified context, not an added line. A third explanation the
+  prose forecloses: the alert was never attributed to this PR's diff at all
+  (structurally like #124's control). Which explanation holds could not be resolved —
+  `gh api` is denied, so the SARIF/fingerprint match is unreadable. One relevant,
+  double-edged data point: `dl-27` (`ec1dd6b`), the commit the ticket cites as having
+  moved and reopened this alert, also never touched the `http.request` line — its
+  hunks are in the CONNECT handler, comments and imports — it only shifted line
+  numbers below its edits. If that shift alone caused reattribution once, the same
+  mechanism plausibly reattributes here, which would favour "suppression honoured".
+  But the ticket's own Log says that alert history is "relayed from screenshots and
+  not verified", so the counter-evidence is itself unverified. A later reader seeing
+  this check green and reading `:393-398` as written would reasonably conclude the
+  mechanism is proven, when the branch's own diff makes that unsupported. Remedies:
+  (a) soften `:393-398` and `:210-211` to name the third possibility explicitly, or
+  (b) get the alert state read before declaring Done-when 5/8 settled. Recommend (a)
+  now, since (b) is blocked in this container.
+- **verified, no defect** · the `net.connect` restraint — only `http.request` was
+  suppressed. Right call: `guard.assertAllowed` gates both paths unconditionally
+  (`:345`/`:406`), so no functional gap results, and an unconfirmed suppression would
+  corrupt rule 4's register. Whether any query fires on `net.connect` could not be
+  independently confirmed (`gh api` denied); the premise is inherited from the
+  earlier screenshot-based triage.
+- **verified, no defect** · the comment is inert — `npm test -- --project downloader`
+  at `196fd28`: 55 files, 845 tests passing; the source diff is exactly 8 added
+  comment lines.
+- **verified, no defect** · register argument — `grep -rn 'codeql\[' --include='*.ts' .`
+  returns exactly one line, `egress-proxy.ts:364`, matching the ADR. The adr/003
+  parallel is honestly drawn, reused for the same structural reason rather than
+  borrowed for authority.
+- **verified, no defect** · the known gap (nothing enforces the five fields) is
+  reasonable to defer with a stated trigger, given there is one suppression today —
+  consistent with this repo's "second consumer, not the first guess" philosophy.
+- **verified, no defect** · ticket record shape — `status: done`, `## Review` pending
+  this gate, `## The gate on this filing` kept as #124's separate record. Matches
+  `docs/01-TICKETS.md:154-163`; `npm run status -- --json` exits 0 with no
+  `reviewed-but-ready` problem.
+- **findings** · defect hunt at medium, self-run, returned 2; 2 carried, 0 dropped.
+- NFR: security — the high finding is a security-documentation defect (an inaccurate
+  claim about a suppression's regression net), not a live vulnerability, since
+  `guard.assertAllowed` still blocks unconditionally · performance n/a (comment-only
+  diff) · reliability n/a · maintainability — both findings are trust-in-the-register
+  concerns.
+
+**Reproductions run**, all edits reverted and the worktree confirmed clean:
+`npm run build` / `npm run check` / `npm test -- --project downloader` at `196fd28`
+(845/845); removing both `guard.assertAllowed` calls → 5 failed, names matching;
+removing `files.ts:119` → 5 failed, names matching; removing `lookup` from
+`connectOptions` → 6 failed; disabling only `isBlockedAddress` inside
+`createPinningLookup` → 1 failed; the register grep → one match;
+`git show ec1dd6b -- egress-proxy.ts` → confirmed dl-27 never touched the
+`http.request` line; `gh pr checks 126` → all pass including `CodeQL`.
+
+**Could not verify**: the actual code-scanning SARIF/fingerprint match for this PR;
+whether `js/missing-rate-limiting` is currently open or closed; whether any CodeQL
+query fires on the `net.connect` call. All three need `gh api`, which is denied.
+
+### Gate 2 — 2026-09-01, CONCERNS (reviewed at `e614ec9`)
+
+Scoped to the fix round, `6e273cc...e614ec9`. Defect hunt run directly by the
+reviewer, at `medium`. Sonnet reviewing an Opus build. Gate 1's ADR-structure,
+register-argument, `net.connect`-restraint and deferred-rate-limit findings are not
+re-litigated here.
+
+| Gate 1 finding                                                                             | Verdict this round                | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **high** — the suppression comment overclaimed "5 tests" for the pinning-lookup half       | **fixed, and correctly reframed** | Reproduced independently: disabling only the `isBlockedAddress` rejection in `createPinningLookup` (`dispatcher.ts:156-160`) fails **2** in `egress-proxy.test.ts` and **6** in `dispatcher.test.ts`, 8 project-wide. Both the scoped and project-wide runs match the builder's claim exactly. The reframing holds: `dispatcher.test.ts` genuinely owns `createPinningLookup`, so the design was never weakly covered — gate 1's "1 not 5" was real but understated the true net, because it only ran the file gate 1 had scoped to. The updated comment and `docs/adr/005:139-146` now state 5 / 2 / 6 exactly, matching these runs |
+| — fail-first on the strengthened test                                                      | **confirmed, does its job**       | `egress-proxy.test.ts:234-263` now takes a `recordingLogger` and asserts the refusal message, `code === "BLOCKED_TARGET"` and `host === "rebind.test:443"`, keeping the `502`. With the pinning rejection disabled it goes red (2 failures, including this one); with the guard intact, 20/20 green in that file                                                                                                                                                                                                                                                                                                                     |
+| **med** — Log and ADR framed the green `CodeQL` check as proof the suppression is honoured | **fixed honestly**                | The Log, `docs/adr/005:166-179`, and Done-when 5 and 8 now name the third reading explicitly — the alert may never have been attributed to this diff — and state what would settle it (suppressed vs `Open` in the security tab), while keeping the `dl-27` counter-evidence flagged as unverified. Read as a stranger, nothing reads as though the green check proved the mechanism                                                                                                                                                                                                                                                 |
+
+**Sibling sweep, walked in full rather than sampled.** Every `.status`/`statusLine`
+assertion in both files. `egress-proxy.test.ts`: 17 assertions
+(`:215,230,231,257,295,338,377,394,406,437,453,465,474,483,524,565,600`). Of the
+ambiguous ones — 502, reachable by a dead socket as well as a real block — `:257`
+now discriminates via the log (fixed this round); `:295` via log message plus
+`errno` plus an explicit "not `refused`"; `:338` via a certificate-specific message
+and code; `:524` via `seen`, proving the upstream actually received the CONNECT;
+`:565` via a message containing "certificate did not verify". `:230`
+(`not.toBe(403)`) is the one true near-miss and is a weak negative, but it asserts
+no security property and is the control half of a two-host test whose other half is
+fully discriminating. Correctly left alone. `proxied-https.test.ts`: assertions at
+`:589,691,698,699,702,721,728,729`; the two ambiguous 502s (`:691`, `:721`) both
+pair status with `statusLine` matched against `/certificate/iu` plus a specific
+error-code substring. **No sibling of the original defect survives uncaught.**
+
+- **med (new this round)** · the fix-round narrative was spliced into the middle of
+  gate 1's committed bullet rather than appended to `## Log`, cutting the sentence
+  after `` `## Review` pending this gate, ` `` and leaving the remainder to resume
+  ninety lines later as a second, garbled `## The gate on this filing` heading,
+  duplicating the real one. `npm run check` still passed — oxfmt does not validate
+  heading semantics — and `npm run status` is unaffected, since it reads
+  frontmatter. But a reader looking for where gate 1's record ends meets a corrupted
+  heading, and a review-record bullet silently becomes builder prose with no change
+  of attribution. This is the verbatim-gate-record property the review skill spends
+  several paragraphs protecting, broken by an edit to the record rather than by a
+  reviewer. Two remedies: leave the corruption and add this gate cleanly below it,
+  or restore gate 1's bullet verbatim and move the narrative into a dated `## Log`
+  entry where it reads as belonging. Recommend the latter.
+- **verified, no defect** · fail-first test — mutation reproduced, red with the
+  guard disabled, green restored.
+- **verified, no defect** · comment numbers — every number in the rewritten
+  `egress-proxy.ts` comment and in `docs/adr/005`'s Consequences matches these runs.
+- **verified, no defect** · sibling sweep — every status-code assertion in both
+  files walked; the single near-miss is correctly identified as a different class.
+- **verified, no defect** · Log and ADR softening — all three sites read plainly to
+  a stranger and state what would actually settle the question.
+- **verified, no defect** · behaviour — `npm test -- --project downloader` at
+  `e614ec9`: 845 passing, 55 files, unchanged from gate 1's baseline. The
+  `egress-proxy.ts` diff is a comment rewrite only, no code line touched; the only
+  logic-bearing change is the new assertions in the test. `gh pr checks 126`: all 11
+  pass, `CodeQL` included.
+- **findings** · defect hunt at medium, self-run, scoped to the fix round: 1 new
+  finding, 1 carried, 0 dropped. Gate 1's two findings are closed — fixed, not
+  carried.
+- NFR: security n/a — comment and test only, `guard.assertAllowed` still gates
+  unconditionally · performance n/a · reliability improved, the rebind test can now
+  actually fail · maintainability — the new finding is a record-integrity concern;
+  everything else in the round improves it.
+
+**Could not verify**, both needing `gh api`, which is denied: the actual
+SARIF/fingerprint attribution for PR #126 — whether the green `CodeQL` check means
+"suppression honoured" or "never attributed" — and whether
+`js/missing-rate-limiting` is currently open or closed. Both are already recorded
+as open in the ticket and the ADR; neither was claimed to be settled by this round.
+
+_Record repaired by the orchestrating agent: gate 1's bullet restored verbatim and
+the fix-round narrative moved into `## Log`, per this gate's recommended remedy._
 
 ## Log
 
@@ -380,7 +516,204 @@ excused — see the Log.
   Step 3 not settled, per dispatch. No source file was changed by this round; the
   two edits above were measurements and were reverted.
 
+- **2026-09-01** — Built and closed. Fresh branch off `origin/main@7d56035`,
+  because the filing (#124) had landed and the implementation is a different
+  change with a different type: this one edits source, so `## Review` waits for a
+  reviewer while `## The gate on this filing` below stays as the record of #124.
+
+  **Option 3 does not exist, and that is the finding worth carrying forward.**
+  The ticket costed "a path-scoped query filter in `security.yml`" as the
+  config-level answer, and the previous round flagged it as probably
+  inexpressible from knowledge without a way to check. Settled now: `paths` and
+  `paths-ignore` govern which files are analysed at all, for **every** query,
+  while `query-filters` select queries by metadata — `id`, `tags`, `severity` —
+  with no path key. The two do not compose into "this query, this path". The
+  consequence is not just that one option lost: **the only remaining mechanisms
+  that survive a refactor are inline comments**, because everything else is
+  either instance-bound (a dismissal) or repo-wide (a query filter, a settings
+  threshold). The option that looked like the balanced middle was never on the
+  table. Recorded at length in adr/005's alternatives so the next person does not
+  re-propose it.
+
+  **Decision: inline `// codeql[query-id]`, on the line above the alert.** Not
+  the same line: code scanning identifies an alert partly by a hash of its line's
+  contents, so a trailing comment churns the alert it was meant to settle. The
+  comment sits at `egress-proxy.ts:364`, immediately above the `http.request` at
+  `:365`, and carries the five fields adr/005 requires.
+
+  **What made inline suppression defensible was the measurement, not the
+  argument.** Its one real cost is that it would also mask a genuine regression,
+  and the previous round measured that away: removing both `guard.assertAllowed`
+  calls fails 5 tests in `egress-proxy.test.ts`, and deleting the `onRequest`
+  hook fails 5 in `rate-limit.test.ts`. The tests are the guarantee; the comment
+  only explains it. That asymmetry is rule 3 in adr/005 — no test, no excuse —
+  and it is the rule that keeps this from being a way to silence things.
+
+  **The record's home is two halves.**
+  [adr/005](../adr/005-excusing-a-code-scanning-finding.md) holds the policy and
+  the five triage criteria, indexed in `docs/00-TOOLS.md`, which already names
+  "how CI is split" as ADR-worthy. The **register is the comments themselves** —
+  `grep -rn 'codeql\[' --include='*.ts' .` — so there is no page to keep in sync
+  and no way for it to disagree with the code. That is adr/003's reasoning
+  reused, and it is what answers the question this ticket was filed to ask: an
+  alert with such a comment was examined, one without was not.
+
+  **The rate-limit half is deferred, not excused.** `dl-23` merged, and whether
+  `js/missing-rate-limiting` closed is still unread — `gh api` is denied and I
+  did not attempt it. If it closed it was never a false positive and there is
+  nothing to suppress; if it stayed open it needs its own comment at
+  `files.ts:119`. Excusing it now would break adr/005's rule 3 by excusing an
+  alert nobody has confirmed is still open. What settles it: one look at the
+  security tab, or the next pull request that edits `routes/files.ts`, whose
+  `CodeQL` check will say so for free.
+
+  **This pull request was meant to be the experiment for acceptance line 5, and
+  it is not conclusive.** It edits `egress-proxy.ts`, so the intent was that the
+  alert land in the diff and the `CodeQL` check answer whether the suppression is
+  honoured. The check came back **green**, and the round that wrote this
+  originally framed the outcome as a dichotomy — green means honoured, red means
+  not — which was wrong and would have let a green check read as proof.
+
+  **There is a third reading, and it may be the true one.** The eight added lines
+  are all `+` comment; `const proxied = http.request(` carries neither `+` nor
+  `-` and is unmodified context. If the check attributes alerts to added lines,
+  this alert was never attributed to this diff at all — the same reason #124, the
+  control, was green while the alert sat open on `main`. That would make the
+  green check evidence of nothing. #123 is consistent with it: that branch failed
+  because it rewrote its handler wholesale, putting its alert on genuinely added
+  lines.
+
+  **The best available evidence points the other way, and it is unverified.**
+  `dl-27` (`ec1dd6b`) is said to have reopened this alert on 2026-08-30, and it
+  also never touched the `http.request` line — it only shifted line numbers below
+  it. If a shift alone caused reattribution then, the same mechanism should
+  reattribute now, which would favour "suppression honoured". That history is
+  itself screenshot-relayed and was not verified here, so it is the open
+  question's best evidence rather than its answer. Recorded because the gate
+  found it while arguing against its own finding.
+
+  **What would actually settle it:** the alert showing as _suppressed_ rather
+  than plain `Open` in the security tab. Nothing observable from a pull request
+  check distinguishes "suppressed" from "never attributed". A red check would
+  have been decisive; a green one is not.
+
+  If suppression turns out not to be honoured, the supported follow-up is the
+  `advanced-security/dismiss-alerts` action, which converts SARIF suppression
+  data into real dismissals; that is a change to `security.yml` and a decision to
+  take on its own evidence, deliberately not pre-empted in this branch. The
+  comment's documentation value holds in every reading, which is why adr/005 does
+  not depend on the answer.
+
+  **One thing deliberately left out.** Nothing enforces the five fields — a
+  suppression comment with no reasoning and no named test would pass every gate
+  here, and this repo has the shape that would close it
+  (`spawn-safety.test.ts`, `image-closure.test.ts` are source scans policing
+  exactly this kind of convention). Not folded in: there is one suppression in
+  the repo, and a scan written for one instance is a guess about the second. It
+  is recorded as a known gap in adr/005's consequences with a trigger — revisit
+  on the third suppression, or sooner if one lands without its reasoning —
+  rather than left silent.
+
+  Gates for this round: `npm run check`, and `npm test -- --project downloader`,
+  which is the proof the change is inert — the suppression is a comment, so
+  `egress-proxy.test.ts` and its four siblings must pass unchanged.
+
+- **2026-09-01, after the gate** — Gate findings applied. Both were right and I
+  reproduced each before touching anything.
+
+  **The high finding, confirmed exactly.** Commenting out only the
+  `isBlockedAddress` rejection inside `createPinningLookup` (`dispatcher.ts:156`)
+  with mocked DNS left intact fails **1** test in `egress-proxy.test.ts`, not the
+  five my comment claimed. The `assertAllowed` half was right: 5, names matching.
+  So the comment was half true and stated as if wholly measured.
+
+  **The test named for the job could not do the job.**
+  `egress-proxy.test.ts:234`, "a name that rebinds after the pre-flight check is
+  refused at connect", asserted only `result.status === 502`. Its resolver points
+  at `127.0.0.1` where nothing listens, so the socket dies on its own and yields
+  the same `502` whether or not anything vetted the address. Its comment claimed
+  "a pass means the address the socket reached was vetted by the connector",
+  which the assertion could not establish.
+
+  **The mechanism, which is the part worth keeping.** The test sits in
+  `describe("the holes dl-11 closes")`, whose two other tests assert `403` — a
+  code only `guard.assertAllowed` produces, so for them the status _is_
+  discriminating. The rebind case was written in the same idiom, but a rebind is
+  caught by the pinning lookup and surfaces as a socket error, so the proxy
+  answers `502` — and `502` is reachable by accident. **The idiom was copied into
+  the one case where the idiom's discriminating power did not hold.** Then the
+  history: `git log -S` dates the weak test to `721ccd8` (dl-11, 2026-08-14) and
+  the strong one to `59974b9` (dl-26, 2026-08-23). dl-26 was _about_ this exact
+  ambiguity — "say whether the proxy refused a fetch or could not reach it" — and
+  it encoded the insight in a **new** test in a **new** describe block instead of
+  going back to repair the old one. The old test kept its name and its confident
+  comment, and those are what made it invisible for eighteen days: they assert
+  the intent so plainly that nobody re-read the assertion under them. A later
+  ticket adding coverage beside a weak test rather than fixing it is the pattern
+  to watch for, not the arithmetic.
+
+  **Fix, made to fail first.** `:234` now takes a `recordingLogger` and asserts
+  `msg === "refused a subprocess fetch"`, `code === "BLOCKED_TARGET"` and the
+  host, the way `:289` already did, keeping the `502` as a statement about what
+  the client sees. With `isBlockedAddress` disabled it goes red; with the guard
+  restored the file is 20/20. One correction of my own along the way: I first
+  asserted `host === "rebind.test"` and it is `"rebind.test:443"` — the CONNECT
+  path logs the authority it was given, port included. Caught by the run, not by
+  review, which is the argument for making it fail first.
+
+  **The measured numbers, replacing the sentence the gate disproved.** Disabling
+  `guard.assertAllowed` fails 5 in `egress-proxy.test.ts`. Disabling the pinning
+  lookup's rejection fails **2** in `egress-proxy.test.ts` after the fix (1
+  before) **and 6 in `dispatcher.test.ts`**, which is the file that owns the
+  lookup — 8 across the project, up from 7. The comment now says that. **The
+  design was never weakly covered; my comment cited the wrong file for half of
+  it**, which is a different and less alarming defect than the raw "1 not 5"
+  suggests, and worth stating plainly so the next reader does not think the
+  pinning lookup was unprotected.
+
+  **Siblings: none, and I checked rather than assumed.** Every other assertion on
+  an ambiguous status in the suite pairs with something discriminating —
+  `egress-proxy.test.ts:295` and `:338` assert log fields, `:524` asserts the
+  upstream actually received the CONNECT (`seen`), `:565` asserts the certificate
+  message, and `proxied-https.test.ts:697`/`:727` both assert `statusLine`
+  matching `/certificate/`. Tests asserting `403` are safe by construction. The
+  nearest thing to a sibling is `egress-proxy.test.ts:230`'s
+  `expect(first.status).not.toBe(403)`, a weak negative — but it is the control
+  half of a two-host test whose other half is discriminating, and it asserts no
+  security property on its own. Left alone, and not fixed here per the gate.
+
+  **The med finding, and it lands on a green check.** The Log framed this pull
+  request as "green means honoured, red means not". The check came back green,
+  which under that framing would have read as proof, and it is not: every line
+  the suppression added is a `+` comment while the flagged `http.request` line is
+  unmodified context, so the alert may never have been attributed to this diff —
+  exactly why #124 was green. Both passages and the ADR now name the third
+  reading, and say what would actually settle it: the alert showing as
+  _suppressed_ rather than `Open` in the security tab. The gate's own
+  counter-evidence is recorded too — `dl-27` also never touched the flagged line
+  and is said to have reopened the alert, which favours "honoured" — marked
+  unverified, because that history is screenshot-relayed.
+
+  **The ADR gained the lesson, not just the correction.** Rule 2's last field is
+  now flagged as something to re-measure whenever the comment is touched, with
+  this failure as the worked example: the first excuse ever written under adr/005
+  contained a wrong claim about its own coverage, and the thing that caught it
+  was isolating each guard rather than reading the sentence.
+
+  Gates: `npm run check`; `npm test -- --project downloader` at **845 passing in
+  55 files, unchanged from before this round**. The gate expected the count to
+  move because a test changed, and it did not: `:234` was strengthened in place
+  with four added assertions rather than split into new cases, so the case count
+  is identical and only the assertion count grew. Saying so because I first wrote
+  "846, up from 845" into this Log from reasoning and the run corrected me —
+  which is the same mistake, in miniature, that the high finding was about.
+  Fail-first proofs are recorded above, and both edits were reverted.
+
 ## The gate on this filing
+
+**This section records the gate on PR #124, the filing.** The implementation
+landed separately on `repo-13-excuse-codeql-findings`; its gate belongs in
+`## Review`, which a reviewer adds.
 
 Not gated by a reviewer. `## Review` is left empty per `docs/01-TICKETS.md`: a
 pull request that only files a ticket has no work to check, and a gate record in

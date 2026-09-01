@@ -233,18 +233,33 @@ describe("the holes dl-11 closes", () => {
 
   test("a name that rebinds after the pre-flight check is refused at connect", async () => {
     // The dl-8 test, in this proxy's shape: the guard is told the name is
-    // public, the connector's resolver says loopback. A pass means the address
-    // the socket reached was vetted by the connector, not by anything earlier.
+    // public, the connector's resolver says loopback.
+    //
+    // **The status code cannot carry this one.** Its two siblings above assert
+    // `403`, which only `guard.assertAllowed` produces, so the code discriminates
+    // for them. A rebind is caught by the pinning `lookup` and surfaces as a
+    // socket error, so the proxy answers `502` — and `502` is also what a socket
+    // that simply died produces, which is exactly what the loopback resolver
+    // would cause on its own with the guard disabled. Asserting the status alone
+    // passed whether or not anything vetted the address, which is the gap
+    // repo-13's gate found. The refusal in the log is the only signal that
+    // separates the two, the same reason dl-26 gives below.
+    const { logger, warnings } = recordingLogger();
     const guard = guardResolving({ "rebind.test": ["93.184.216.34"] });
     const proxy = await startProxy({
       guard,
-      logger: NOOP_LOGGER,
+      logger,
       resolve: resolverFor([v4("127.0.0.1")]),
     });
 
     const result = await connectThrough(proxy.port, "rebind.test:443");
 
     expect(result.status).toBe(502);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.msg).toBe("refused a subprocess fetch");
+    expect(warnings[0]?.fields["code"]).toBe("BLOCKED_TARGET");
+    // The CONNECT path logs the authority it was given, port included.
+    expect(warnings[0]?.fields["host"]).toBe("rebind.test:443");
   });
 });
 

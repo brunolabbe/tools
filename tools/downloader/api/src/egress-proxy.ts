@@ -354,6 +354,18 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           ? { url: target, options: { ...connectOptions } }
           : { url: target, options: { host: upstream.hostname, port: upstreamPort(upstream) } };
 
+      // This proxy exists to fetch a URL the user chose, so `js/request-forgery`
+      // fires on the call below on every shape this code could take — the taint is
+      // the feature. Two separate things bound it, and they are covered in
+      // different files: disabling `guard.assertAllowed` above fails 5 tests in
+      // `egress-proxy.test.ts`, while disabling the address rejection inside the
+      // pinning `lookup` carried in `connectOptions` fails 2 there and 6 in
+      // `dispatcher.test.ts`, which is the file that owns that lookup. Those
+      // suites are the guarantee; this comment only explains it. Excused under
+      // `docs/adr/005`, which carries the rule and doubles as the register.
+      // Measured 2026-09-01 at 6e273cc — an earlier draft of this comment claimed
+      // 5 for both halves, which repo-13's gate disproved.
+      // codeql[js/request-forgery]
       const proxied = http.request(
         forward.url,
         {
