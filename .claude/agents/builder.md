@@ -149,9 +149,10 @@ survive contact with the code, say so and record your own reasoning. Reproduce a
 finding before accepting it. Reviewers are usually right and occasionally not, and
 you are the one in contact with the code.
 
-**Findings arrive from the reviewer directly, and you answer it directly.** Reach
-it with `SendMessage` — **a deferred tool, so `ToolSearch` for it first**
-(`select:SendMessage`); `ListAgents` shows you who is running. Push back to the
+**Findings arrive from the reviewer directly, and you answer it directly.**
+`ListAgents` shows you who is running and `SendMessage` reaches it; **both are in
+your tool list directly**, and you have no `ToolSearch`, so do not go looking for
+one. Push back to the
 reviewer, not to the orchestrator: it has the context that produced the finding
 and it can answer "this does not reproduce" in one exchange instead of two.
 

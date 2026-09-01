@@ -56,26 +56,32 @@ needs a `ToolSearch` first. Say explicitly what still comes back to you: an
 unsettleable disagreement, and any open decision. Anything else you ask to be
 routed through yourself, you are volunteering to retype.
 
-### What was measured about the channel, and what was not
+### What was measured about the channel
 
-Three probes on 2026-09-01, before any of this was written down:
+Probed on 2026-09-01, against the real agent types rather than reasoned from the
+tool docs:
 
-- **A subagent can hold `ListAgents` and `SendMessage`.** Confirmed against a
-  `general-purpose` subagent, which has them.
-- **Siblings are mutually visible.** That agent's `ListAgents` listed a
-  `ticket-reviewer` running under the same parent, which it had not spawned. This
-  is the fact the whole design rests on, and it is the one that was in doubt.
-- **`SendMessage` is deferred**, not in the default set — `ToolSearch` for it
-  first. A prompt that assumes it is present will fail on the first call.
+- **Both `builder` and `ticket-reviewer` carry `ListAgents` and `SendMessage`
+  directly.** Not deferred, and **neither has `ToolSearch`** — a prompt telling
+  either to fetch `SendMessage` first sends it to a tool it does not have.
+- **Siblings are mutually visible.** A subagent's `ListAgents` listed another
+  agent running under the same parent that it had not spawned. This is the fact
+  the whole design rests on and it was the one in doubt.
 
-**Not measured: an actual reviewer → builder round trip.** The agent registry is
-read at session start, so adding the two tools to the frontmatter did not reach
-builders and reviewers dispatched later in the same session; both probes of the
-real agent types came back without the tools and made zero tool calls. The
-frontmatter is correct and takes effect in a **new session** — so the first batch
-run after this lands is the one that proves the channel, and it should say in its
-record whether the message actually arrived. Until then this page describes a
-mechanism verified in its parts and not end to end.
+**One correction worth keeping, because it nearly became a rule.** An earlier pass
+probed both agent types immediately after adding the tools to their frontmatter,
+got "I do not have those tools" from both, and concluded that the agent registry
+is read once at session start and that frontmatter edits cannot take effect until
+a new session. **That was wrong** — a later probe in the same session found both
+tools present. The refresh mechanism was not determined and is not worth guessing
+at; what is worth keeping is that a negative probe taken moments after an edit is
+not evidence about the design, and a claim that broad deserved a second
+measurement before it was written down.
+
+**Also note the self-report is unreliable.** Each probe listed fewer tools than
+its own frontmatter grants — a builder reporting eight where the file lists
+thirteen, omitting `Grep` and `Glob`, which it certainly has. Ask an agent to
+*call* a tool, not to tell you whether it has one.
 
 **So make gate 1 look like gate 4.** Every gate prompt should:
 

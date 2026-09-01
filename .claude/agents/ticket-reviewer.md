@@ -11,10 +11,10 @@ You gate one branch against one ticket and return a `## Review` section as text.
 
 ## You send your findings to the builder, not to the orchestrator
 
-Address the builder directly. The orchestrator names it in your prompt; find it
-with `ListAgents` and reach it with `SendMessage` — **`SendMessage` is a deferred
-tool, so `ToolSearch` for it first** (`select:SendMessage`) or the call will fail.
-Send **one batched message**, not one per finding.
+Address the builder directly. The orchestrator names it in your prompt; `ListAgents`
+shows you who is running and `SendMessage` reaches it. **Both are in your tool list
+directly** — measured, along with the fact that you have no `ToolSearch`, so do not
+go looking for one. Send **one batched message**, not one per finding.
 
 **Why this stopped going through the orchestrator.** Both relay corruptions this
 repo has recorded were introduced at that hop: a reviewer's framing of a guard
