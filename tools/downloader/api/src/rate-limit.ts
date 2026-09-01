@@ -1,5 +1,5 @@
 /**
- * Per-IP admission control, as this service refuses it.
+ * Admission control, as this service refuses it.
  *
  * `/api/probe` runs a browser probe costing ~15 s and ~300 MB. Without a limit
  * that is a one-line denial of service, which is why the brief calls this out
@@ -23,6 +23,15 @@ export interface RateLimitHookOptions {
   logger: AppLogger;
   /** Appears in the log line and in `details.scope`. Not sent to the client. */
   scope: string;
+  /**
+   * What to bucket on. Defaults to the caller's address, which is right when
+   * the thing being protected is *the service*.
+   *
+   * The file route protects a *file* instead, and keys on its capability token
+   * — the reasoning is on `registerFileRoutes`. Whatever this returns reaches a
+   * log line, so a key derived from a secret has to be reduced first.
+   */
+  key?: (request: FastifyRequest) => string;
 }
 
 /**
@@ -35,12 +44,12 @@ export interface RateLimitHookOptions {
 export function createRateLimitHook(
   options: RateLimitHookOptions,
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
-  const { limiter, logger, scope } = options;
+  const { limiter, logger, scope, key: keyOf = (request) => clientKey(request.ip) } = options;
 
   return async function rateLimit(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     if (!limiter.enabled) return;
 
-    const key = clientKey(request.ip);
+    const key = keyOf(request);
     const decision = limiter.check(key);
 
     reply.header("RateLimit-Limit", String(decision.limit));

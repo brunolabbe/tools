@@ -44,8 +44,15 @@ const LEG = {
   cost: null,
   season: null,
   bookingLeadTimeDays: null,
+  // Still sent, and no longer read: `candidateProposalSchema` omits
+  // `provenance` since pl-36, so zod strips it and `accept` stamps its own.
+  // Left in place deliberately — this fixture is what a model writes, and a
+  // model that copies the old reply shape must not lose its candidate over it.
   provenance: MODEL_ASSERTED,
 };
+
+/** A `fetchedAt` for a source no one fetched. */
+const TIMESTAMP = "2027-01-01T00:00:00.000Z";
 
 describe("a run against the scripted provider", () => {
   test("produces candidates from every rostered specialist", async () => {
@@ -64,6 +71,52 @@ describe("a run against the scripted provider", () => {
     for (const candidate of result.candidates) {
       expect(candidate.id.startsWith(`run-1-${candidate.specialist}-`)).toBe(true);
     }
+  });
+
+  /**
+   * pl-36. `Provenance` is this tool's whole answer to "which lines were
+   * checked", and until this ticket `candidateProposalSchema` accepted a
+   * `grounded` one straight out of a model reply — so a specialist could mark
+   * its own invention **Sourced** in the plan view and hang a clickable link
+   * off a URL nobody had ever fetched. A model reply is untrusted input, and
+   * the field that says whether to believe it is the last one the model may
+   * fill in.
+   *
+   * The cost's own provenance is asserted beside it because it is the version
+   * that would have done the most damage: §5 ranks prices the fastest-ageing
+   * thing this tool touches and they are what a reader acts on.
+   */
+  test("a model does not get to say its own candidate was checked", async () => {
+    const invented = {
+      ...LEG,
+      cost: {
+        currency: "CAD",
+        low: 40,
+        high: 60,
+        basis: "per-party",
+        provenance: {
+          kind: "grounded",
+          sources: [
+            { url: "https://example.invalid/made-up", title: "A page", fetchedAt: TIMESTAMP },
+          ],
+        },
+      },
+      provenance: {
+        kind: "grounded",
+        sources: [
+          { url: "https://example.invalid/also-made-up", title: null, fetchedAt: TIMESTAMP },
+        ],
+      },
+    };
+
+    const result = await run(
+      new FakeProvider({ "route-and-logistics": [candidates(invented)] }, candidates()),
+    );
+
+    const leg = result.candidates.find((each) => each.specialist === "route-and-logistics");
+    expect(leg).toBeDefined();
+    expect(leg?.provenance).toEqual(MODEL_ASSERTED);
+    expect(leg?.cost?.provenance).toEqual(MODEL_ASSERTED);
   });
 
   test("is deterministic — the same run twice is the same candidate set", async () => {

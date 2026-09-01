@@ -232,6 +232,7 @@ function Document({
           <Gaps gaps={revision.gaps} />
           <Unchecked unchecked={view.unchecked} candidates={plan.candidates} />
           <TravelSources days={revision.days} />
+          <RouteReading reading={revision.reading} />
         </>
       )}
 
@@ -460,23 +461,33 @@ function Unchecked({
  * `over-budget` have no `Provenance` to cite — nothing here would be sourcing
  * a leg nothing measured, which is exactly the thing pl-35's Done-when named
  * as the trap.
+ *
+ * **Deduplicated on the URL *and* the title** — pl-36, and this changed. A leg
+ * now cites the geocoder that placed its two ends as well as the router that
+ * measured between them, and the provider gives both the *same* URL: it cites
+ * `openstreetmap.org/copyright` for everything, because that is the attribution
+ * page the ODbL asks for rather than the deployment's own endpoint, and names
+ * the service in the title. Keying on the URL alone kept whichever leg was read
+ * first and dropped the other service entirely, so the plan would have credited
+ * one of the two backends it actually used.
  */
 function travelSourcesOf(days: readonly PlanDay[]): Source[] {
-  const byUrl = new Map<string, Source>();
+  const distinct = new Map<string, Source>();
   for (const day of days) {
     for (const item of day.items) {
       const travel = item.travelFromPrevious;
       if (travel === null || travel.kind !== "measured") continue;
       if (travel.provenance.kind !== "grounded") continue;
       for (const source of travel.provenance.sources) {
-        // First seen wins — every candidate for the same URL is the same
-        // citation, and a plan measured across one run shares one `fetchedAt`
-        // per backend call regardless of which one is kept.
-        if (!byUrl.has(source.url)) byUrl.set(source.url, source);
+        // First seen wins — every candidate for the same URL and title is the
+        // same citation, and a plan measured across one run shares one
+        // `fetchedAt` per backend call regardless of which one is kept.
+        const key = `${source.url}\u0000${source.title ?? ""}`;
+        if (!distinct.has(key)) distinct.set(key, source);
       }
     }
   }
-  return [...byUrl.values()];
+  return [...distinct.values()];
 }
 
 function TravelSources({ days }: { days: readonly PlanDay[] }): React.ReactElement | null {
@@ -488,6 +499,47 @@ function TravelSources({ days }: { days: readonly PlanDay[] }): React.ReactEleme
       <ProvenanceNote
         provenance={{ kind: "grounded", sources }}
         what="Distance and travel time on this plan"
+      />
+    </section>
+  );
+}
+
+/**
+ * What has been written about the route itself, once for the document — pl-33
+ * stored it, pl-36 renders it.
+ *
+ * **The third instance of pl-35's shape, closed the same way.** `coverage`
+ * reaches the page through `unchecked`, and a measured leg's citation through
+ * `TravelSources`; `PlanRevision.reading` was plumbed end to end by pl-33 —
+ * discovery, to the orchestrator, to the `reading_json` column, to the contract
+ * — and then rendered nowhere, so a Wikivoyage entry this tool fetched, stored
+ * and capped with `MAX_REVISION_READING` was visible only to whoever ran
+ * `sqlite3` against the database.
+ *
+ * **Plan-level because the data is**, which is `PlanRevision.reading`'s own
+ * argument and not a layout choice: a Wikivoyage article is about a region the
+ * corridor crosses, never about one item on one day, and hanging it under a day
+ * would claim a relationship the source does not have.
+ *
+ * **`what` is "Background on this route"**, taking `TravelSources`'s cadence —
+ * a noun phrase naming the claim, so the sentence this component ships reads
+ * "Background on this route is something we read at a source — reading it is not
+ * recommending it". That trailing clause is doing more work here than anywhere
+ * else it is used: editorial coverage of a whole region is the citation a reader
+ * is likeliest to mistake for an endorsement of the trip, and §5's amendment is
+ * explicit that "OSM says a viewpoint exists; it does not say anyone should go".
+ *
+ * Deduplication is `runs/discovery.ts`'s, done as the list is built. Repeating
+ * it here would be a second answer to a question already settled upstream.
+ */
+function RouteReading({ reading }: { reading: readonly Source[] }): React.ReactElement | null {
+  if (reading.length === 0) return null;
+
+  return (
+    <section className="route-reading">
+      <ProvenanceNote
+        provenance={{ kind: "grounded", sources: [...reading] }}
+        what="Background on this route"
       />
     </section>
   );

@@ -22,6 +22,7 @@ import type {
   ErrorCode,
   Job,
   JobEvent,
+  JobListItem,
   JobListResponse,
   JobOptions,
   JobProgress,
@@ -324,7 +325,15 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
     },
 
     async listJobs(): Promise<JobListResponse> {
-      const jobs = [...runtimes.values()].map((runtime) => runtime.job);
+      // Strips the capability exactly as the real route does, so the mock
+      // cannot make the UI look like it works against a shape the server never
+      // sends. The compiler enforces it: `JobListResult` declares
+      // `downloadUrl?: never`, so returning the raw jobs does not typecheck.
+      const jobs = [...runtimes.values()].map(({ job }): JobListItem => {
+        if (job.result === null) return { ...job, result: null };
+        const { filename, sizeBytes, container, durationSec, expiresAt } = job.result;
+        return { ...job, result: { filename, sizeBytes, container, durationSec, expiresAt } };
+      });
       return { jobs, total: jobs.length };
     },
 

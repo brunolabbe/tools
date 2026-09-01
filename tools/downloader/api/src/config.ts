@@ -131,13 +131,32 @@ export interface ApiConfig {
   /** Per-IP token bucket on `POST /api/jobs`. Zero disables it. */
   rateLimitJobsPerMinute: number;
   /**
+   * Token bucket on `GET /api/files/:token`, keyed on the **file token** rather
+   * than the caller — see `routes/files.ts`. Zero disables it, which is the
+   * escape hatch for an operator serving large files to a small audience.
+   *
+   * Two orders of magnitude above the other two because the client is a video
+   * player, not a form. A Chromium `<video>` issues one open-ended `Range`
+   * request per completed seek, so a user dragging the scrub bar generates
+   * hundreds of requests a minute with no ill intent at all; dl-23 measured
+   * 207–274 in a minute of heavy scrubbing against a 39 MB clip. This is a
+   * rate limit on a capability that was deliberately handed out, so it is sized
+   * to leave that client alone and still cut an unmetered hammer — measured at
+   * 24k requests a minute from eight sockets — by roughly forty.
+   */
+  rateLimitFilesPerMinute: number;
+  /**
    * Whether `X-Forwarded-For` may name the client.
    *
    * Off by default, and that default is load-bearing rather than conservative:
-   * every per-IP limit above is keyed on `request.ip`, so trusting a header any
-   * client can send would turn the rate limiter into a formality. Set it to
+   * the probe and jobs limits above are keyed on `request.ip`, so trusting a
+   * header any client can send would turn those two into a formality. Set it to
    * `true` — or better, to the proxy's address or CIDR — only when this process
    * genuinely sits behind a proxy that overwrites the header.
+   *
+   * `rateLimitFilesPerMinute` is deliberately outside that dependency: it keys
+   * on the file token, so it means the same thing behind a proxy, behind CGNAT
+   * and with this setting off.
    */
   trustProxy: boolean | string;
 
@@ -166,6 +185,7 @@ export const API_DEFAULTS = {
   logLevel: "info",
   rateLimitProbePerMinute: 10,
   rateLimitJobsPerMinute: 5,
+  rateLimitFilesPerMinute: 600,
 } as const;
 
 /**
@@ -369,6 +389,9 @@ export function loadApiConfig(
     rateLimitJobsPerMinute:
       overrides.rateLimitJobsPerMinute ??
       int(env["RATE_LIMIT_JOBS_PER_MINUTE"], API_DEFAULTS.rateLimitJobsPerMinute, { min: 0 }),
+    rateLimitFilesPerMinute:
+      overrides.rateLimitFilesPerMinute ??
+      int(env["RATE_LIMIT_FILES_PER_MINUTE"], API_DEFAULTS.rateLimitFilesPerMinute, { min: 0 }),
     trustProxy: overrides.trustProxy ?? trustProxy(env["TRUST_PROXY"]),
     ssrfAllowHosts: overrides.ssrfAllowHosts ?? list(env["SSRF_ALLOW_HOSTS"]),
     ssrfAllowPrivateAddresses:

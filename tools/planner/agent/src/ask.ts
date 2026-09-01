@@ -17,13 +17,32 @@
  * That is this function. Past `maxAttemptsPerSpecialist` it raises, and the
  * orchestrator turns the raise into a `PlanGap` rather than into a failed run.
  *
- * ## Ids are not the model's to choose
+ * ## Ids are not the model's to choose, and neither is provenance
  *
- * The reply schema omits `id` and `specialist`. A model that names its own ids
- * can collide with another specialist's, and a model that names its own
- * specialist can lie about who proposed something — which is the one field
- * `Candidate` carries so that "which agent proposed this" is answerable. Both
- * are stamped on by the orchestrator, which knows.
+ * The reply schema omits `id`, `specialist` and `provenance`. A model that
+ * names its own ids can collide with another specialist's, and a model that
+ * names its own specialist can lie about who proposed something — which is the
+ * one field `Candidate` carries so that "which agent proposed this" is
+ * answerable. All three are stamped on by the orchestrator, which knows.
+ *
+ * **`provenance` joined them in pl-36, and it is the sharpest of the three.**
+ * It was omitted here neither for tidiness nor for tokens: `provenanceSchema`
+ * accepts `{"kind":"grounded","sources":[…]}` and `Provenance` is the tool's
+ * whole answer to "which lines were checked", so a reply that stated its own
+ * provenance could mark itself **Sourced** in the plan view and hang a
+ * clickable link off a URL it made up. The one field whose job is to say
+ * whether the model is to be believed cannot be a field the model fills in. It
+ * follows this file's own opening rule — *a model reply is untrusted input* —
+ * and it is what made pl-36's other question — which sources a candidate written
+ * off a `Find` should carry — answerable at all: there is exactly one place in
+ * this tool that decides, `accept` in `orchestrator.ts`, and that is where
+ * pl-36's answer landed. It is `model-asserted`, and the reasoning is on that
+ * function rather than duplicated here.
+ *
+ * `CostEstimate.provenance` is **not** omitted, because `costEstimateSchema` is
+ * refined and a refined schema has no `.omit`; splitting it would be a contract
+ * edit. It is overwritten in the same `accept` instead, so a model cannot
+ * self-certify a price either — see the note there.
  */
 
 import { AppError, candidateSchema } from "@planner/contract";
@@ -41,8 +60,19 @@ import type { TripCapacity } from "./specialists.ts";
  */
 export const MAX_CANDIDATES_PER_REPLY = 12;
 
-/** A candidate as a specialist may state it: everything but who proposed it and its id. */
-export const candidateProposalSchema = candidateSchema.omit({ id: true, specialist: true });
+/**
+ * A candidate as a specialist may state it: everything but who proposed it, its
+ * id, and whether anybody checked it.
+ *
+ * Zod strips a key an object schema does not declare, so a model that sends one
+ * of the three anyway loses it silently rather than failing the whole reply —
+ * which is the right trade for a field nothing downstream would have read.
+ */
+export const candidateProposalSchema = candidateSchema.omit({
+  id: true,
+  specialist: true,
+  provenance: true,
+});
 
 export type CandidateProposal = z.infer<typeof candidateProposalSchema>;
 

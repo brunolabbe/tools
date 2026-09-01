@@ -8,7 +8,15 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { location, MODEL_ASSERTED, type Candidate, type Place } from "@planner/contract";
+import {
+  location,
+  MODEL_ASSERTED,
+  type Candidate,
+  type Coordinates,
+  type ItemTravel,
+  type Place,
+  type Source,
+} from "@planner/contract";
 import type { LocateRequest, TravelRequest } from "@planner/agent";
 import {
   answered,
@@ -43,6 +51,13 @@ function at(name: string, locality: string | null): Candidate {
     bookingLeadTimeDays: null,
     provenance: MODEL_ASSERTED,
   };
+}
+
+/** The same candidate, at a place that already knows where it is. */
+function withPoint(candidate: Candidate, coordinates: Coordinates): Candidate {
+  const { location: where } = candidate;
+  if (where.kind !== "at") throw new Error("this helper only moves an `at` candidate");
+  return { ...candidate, location: location.at({ ...where.place, coordinates }) };
 }
 
 /** A gazetteer keyed the way the seam keys places: name **and** locality. */
@@ -243,5 +258,127 @@ describe("what a leg says when there is no measurement", () => {
     });
 
     expect(broken.travel.between(here, there)).toEqual({ kind: "not-established" });
+  });
+});
+
+/**
+ * What a measured leg says it read, or a failure naming what the leg was
+ * instead — a leg that came back `not-established` would otherwise fail an
+ * assertion about titles with no hint of why.
+ */
+function legSources(travel: ItemTravel): Source[] {
+  if (travel.kind !== "measured") throw new Error(`the leg was ${travel.kind}, not measured`);
+  if (travel.provenance.kind !== "grounded") throw new Error("a measured leg was not grounded");
+  return travel.provenance.sources;
+}
+
+/**
+ * pl-36's finding 1: `locate` answers with a `Source` and this pass used to
+ * drop it on the floor, so every geocoded point on every plan was
+ * unattributed. It lands on the leg the geocode made measurable — the only
+ * user-visible fact a coordinate produces — so these tests read it off
+ * `ItemTravel.measured.provenance`.
+ *
+ * The real provider gives its geocoder and its router the **same URL** and
+ * tells them apart in the title, which is why every assertion below reads
+ * titles rather than URLs: it is the shape the defect actually has.
+ */
+describe("what a measured leg cites", () => {
+  const GEOCODED = "OpenStreetMap, geocoded by Nominatim";
+  const ROUTED = "OpenStreetMap, routed by Valhalla";
+  const OSM = "https://www.openstreetmap.org/copyright";
+
+  /**
+   * A provider shaped like the real one: one URL, two titles, and a `fetchedAt`
+   * that moves with each lookup so "the earliest reading wins" can be seen.
+   */
+  function osm(
+    entries: Record<string, { latitude: number; longitude: number }>,
+    readAt: readonly string[] = ["2027-03-01T00:00:00.000Z", "2027-03-02T00:00:00.000Z"],
+  ): RunGrounding {
+    const table = new Map(Object.entries(entries));
+    let lookups = 0;
+    return {
+      ...gazetteer(entries),
+      async locate(request: LocateRequest) {
+        const found = table.get(placeIdentity(request.place));
+        if (found === undefined) return UNKNOWN;
+        const fetchedAt = readAt[lookups % readAt.length] ?? readAt[0] ?? "";
+        lookups += 1;
+        return answered({
+          coordinates: found,
+          source: { url: OSM, title: GEOCODED, fetchedAt },
+        });
+      },
+      async travel(request: TravelRequest): Promise<TravelOutcomeMatrix> {
+        return request.origins.map(() =>
+          request.destinations.map(() =>
+            answered({
+              distanceMeters: 100_000,
+              durationMinutes: 90,
+              source: { url: OSM, title: ROUTED, fetchedAt: "2027-03-03T00:00:00.000Z" },
+            }),
+          ),
+        );
+      },
+    };
+  }
+
+  test("names the geocoder that placed its ends, not only the router", async () => {
+    const here = at("Rimouski", "Québec, Canada");
+    const there = at("Percé", "Québec, Canada");
+
+    const result = await measure(
+      [here, there],
+      osm({
+        [placeIdentity(place("Rimouski", "Québec, Canada"))]: {
+          latitude: 48.45,
+          longitude: -68.52,
+        },
+        [placeIdentity(place("Percé", "Québec, Canada"))]: { latitude: 48.52, longitude: -64.21 },
+      }),
+    );
+
+    const sources = legSources(result.travel.between(here, there));
+    expect(sources.map((each) => each.title)).toEqual([ROUTED, GEOCODED]);
+    // Two lookups, one citation: the pair collapses on url *and* title, and
+    // the earlier of the two readings is the one the plan keeps — claiming
+    // the fresher for both would be the plan saying it knows something more
+    // recently than it does.
+    expect(sources.filter((each) => each.title === GEOCODED)).toHaveLength(1);
+    expect(sources[1]?.fetchedAt).toBe("2027-03-01T00:00:00.000Z");
+  });
+
+  test("cites no geocoder for an end it never looked up", async () => {
+    // Both ends arrive carrying their own point, so nothing is geocoded and
+    // there is nothing to attribute to a geocoder. The paired assertion above
+    // is what makes this one worth having: without it, a leg citing only the
+    // router would pass whether the fix existed or not.
+    const here = withPoint(at("Gaspé", "Québec, Canada"), { latitude: 48.83, longitude: -64.48 });
+    const there = withPoint(at("Matane", "Québec, Canada"), { latitude: 48.84, longitude: -67.53 });
+
+    const result = await measure([here, there], osm({}));
+
+    expect(legSources(result.travel.between(here, there)).map((each) => each.title)).toEqual([
+      ROUTED,
+    ]);
+  });
+
+  test("cites the one end it did look up, and not the one it did not", async () => {
+    const here = withPoint(at("Amqui", "Québec, Canada"), { latitude: 48.46, longitude: -67.43 });
+    const there = at("Causapscal", "Québec, Canada");
+
+    const result = await measure(
+      [here, there],
+      osm({
+        [placeIdentity(place("Causapscal", "Québec, Canada"))]: {
+          latitude: 48.36,
+          longitude: -67.23,
+        },
+      }),
+    );
+
+    const sources = legSources(result.travel.between(here, there));
+    expect(sources.map((each) => each.title)).toEqual([ROUTED, GEOCODED]);
   });
 });
