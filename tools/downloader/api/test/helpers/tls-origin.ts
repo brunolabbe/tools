@@ -127,6 +127,16 @@ export async function createFixtureCertificate(names: {
    * one origin, silently refuses the other, and reads as a network failure.
    */
   commonName?: string;
+  /**
+   * Backdates `notAfter` so the certificate is already expired.
+   *
+   * The point is a *second* verify code. A trust classifier that keyed on
+   * `DEPTH_ZERO_SELF_SIGNED_CERT` alone would pass every test a self-signed
+   * fixture can write, and every fixture in this repo is self-signed — so
+   * "expired" is the cheapest way to make the classifier prove it reads a set
+   * rather than a string. See `egress-ca.test.ts`.
+   */
+  expired?: boolean;
 }): Promise<FixtureCertificate> {
   const keys = forge.pki.rsa.generateKeyPair({ bits: 2048 });
   const cert = forge.pki.createCertificate();
@@ -139,10 +149,12 @@ export async function createFixtureCertificate(names: {
   // here depends on them.
   serialCounter += 1;
   cert.serialNumber = serialCounter.toString(16).padStart(2, "0");
-  cert.validity.notBefore = new Date(Date.now() - 60_000);
+  cert.validity.notBefore = new Date(Date.now() - (names.expired === true ? 172_800_000 : 60_000));
   // Short-lived on purpose: it exists for one test run, and a fixture key that
   // outlives the run is a key somebody could be tempted by.
-  cert.validity.notAfter = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  cert.validity.notAfter = new Date(
+    names.expired === true ? Date.now() - 86_400_000 : Date.now() + 24 * 60 * 60 * 1000,
+  );
 
   const attributes = [{ name: "commonName", value: names.commonName ?? CERTIFICATE_COMMON_NAME }];
   cert.setSubject(attributes);

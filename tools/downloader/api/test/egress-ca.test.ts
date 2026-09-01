@@ -22,8 +22,9 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import net from "node:net";
 import tls from "node:tls";
-import { ROUTES } from "@downloader/contract";
+import { AppError, ROUTES } from "@downloader/contract";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { ApiConfig } from "../src/config.ts";
 import { createEgressDispatcher } from "../src/dispatcher.ts";
@@ -106,6 +107,38 @@ async function fetchThrough(
   } finally {
     await egress.close();
   }
+}
+
+/** The code a `guardedFetch` failure carries, or the status if it succeeded. */
+async function classify(url: string, ca?: string | string[]): Promise<string> {
+  const guard = createSsrfGuard({ allowHosts: ["127.0.0.1"] });
+  const egress = createEgressDispatcher({
+    guard,
+    ...(ca === undefined ? {} : { originTls: { ca } }),
+  });
+  const guardedFetch = createGuardedFetch(guard, globalThis.fetch, {
+    dispatcher: egress.dispatcher,
+  });
+  try {
+    return `status ${String((await guardedFetch(url)).status)}`;
+  } catch (error) {
+    if (!(error instanceof AppError)) return `unclassified ${String(error)}`;
+    // The verify code comes back too, so a test can pin *which* failure it
+    // provoked rather than trusting a comment that says they differ.
+    const reason = error.details?.["reason"];
+    return typeof reason === "string" ? `${error.code}/${reason}` : error.code;
+  } finally {
+    await egress.close();
+  }
+}
+
+/** A port nothing is listening on: bind, read it back, close. */
+async function freePort(): Promise<number> {
+  const server = net.createServer();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as { port: number };
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return port;
 }
 
 describe("the dispatcher's trust anchors", () => {
@@ -198,15 +231,27 @@ async function probe(
 describe("the wiring, through a real `createApp`", () => {
   const url = (): string => `https://127.0.0.1:${operatorOrigin.port}/master.m3u8`;
 
-  test("unset: the probe fails, and it fails as a network error rather than a trust one", async () => {
-    // Byte-for-byte today's behaviour, which is what Done-when 3 asks for: no
-    // anchor passed, so the system store and nothing else. The status is the
-    // observable — a dispatcher that quietly gained a `ca` would answer 200.
+  test("unset: the probe fails, and says the certificate is why", async () => {
+    // Two claims in one, and they were separate defects.
+    //
+    // Done-when 3 is the first: no anchor passed, so the system store and
+    // nothing else, and this fixture is refused. A dispatcher that quietly
+    // gained a `ca` would answer 200.
+    //
+    // The second is what this branch's first round *measured and shipped
+    // anyway*: the answer used to be `UNREACHABLE` / "The site could not be
+    // reached" / `retryable: true`, because nothing between undici and the
+    // client classified a refused certificate. An operator with a private root
+    // was told their CDN was down, on a retryable code — the one diagnosis that
+    // never leads to a trust setting. `retryable` is asserted rather than
+    // implied: it is the field that decides whether a client keeps asking.
     const app = await wiredApp("unset", {});
     const response = await probe(app, url());
+    const error = (response.json() as { error: { code: string; retryable: boolean } }).error;
 
     expect(response.statusCode).toBe(502);
-    expect((response.json() as { error: { code: string } }).error.code).toBe("UNREACHABLE");
+    expect(error.code).toBe("TLS_VERIFICATION_FAILED");
+    expect(error.retryable).toBe(false);
   });
 
   test("set: the same probe against the same origin succeeds", async () => {
@@ -261,4 +306,112 @@ describe("an unreadable anchor", () => {
       ).rejects.toMatchObject({ code: "INTERNAL" });
     });
   }
+});
+
+describe("a refused certificate is a trust failure, not a transport one", () => {
+  /**
+   * The verify codes, **produced rather than listed**.
+   *
+   * `guarded-fetch.ts` matches on a closed set of OpenSSL codes, and a set is
+   * exactly the kind of thing that is written once against the one case the
+   * author had in front of them. Every fixture in this repo is self-signed, so
+   * a classifier keyed on `DEPTH_ZERO_SELF_SIGNED_CERT` alone would pass a
+   * suite built only from them. These three are different codes from three
+   * different causes, and each one was read off a real handshake here before
+   * being written down.
+   */
+  test("self-signed, expired and wrong-name all arrive as TLS_VERIFICATION_FAILED", async () => {
+    const expired = await createFixtureCertificate({
+      ipAddresses: ["127.0.0.1"],
+      commonName: "dl31-expired",
+      expired: true,
+    });
+    const expiredOrigin = await startTlsOrigin(expired, playlist);
+    // No IP in `subjectAltName`, so a connection to 127.0.0.1 fails the *name*
+    // check rather than the chain check — Node's own error, not OpenSSL's.
+    const wrongName = await createFixtureCertificate({
+      dnsNames: ["not-this-host.example"],
+      commonName: "dl31-wrong-name",
+    });
+    const wrongNameOrigin = await startTlsOrigin(wrongName, playlist);
+    cleanups.push(
+      () => expiredOrigin.close(),
+      () => expired.cleanup(),
+    );
+    cleanups.push(
+      () => wrongNameOrigin.close(),
+      () => wrongName.cleanup(),
+    );
+
+    // Each certificate is trusted for its own case, so only the property under
+    // test can fail — otherwise all three would just be "untrusted issuer"
+    // wearing three names, and the set would be no better tested than by one.
+    await expect(classify(`https://127.0.0.1:${operatorOrigin.port}/x`)).resolves.toBe(
+      "TLS_VERIFICATION_FAILED/DEPTH_ZERO_SELF_SIGNED_CERT",
+    );
+    await expect(
+      classify(`https://127.0.0.1:${expiredOrigin.port}/x`, withSystemRoots(expired.ca)),
+    ).resolves.toBe("TLS_VERIFICATION_FAILED/CERT_HAS_EXPIRED");
+    await expect(
+      classify(`https://127.0.0.1:${wrongNameOrigin.port}/x`, withSystemRoots(wrongName.ca)),
+    ).resolves.toBe("TLS_VERIFICATION_FAILED/ERR_TLS_CERT_ALTNAME_INVALID");
+  });
+
+  test("a connection that never got a certificate is left alone, and stays UNREACHABLE", async () => {
+    // The control, and the one that keeps the fix from being "call everything a
+    // trust failure". Under-matching is the safe direction: a missed verify code
+    // stays retryable, which is merely today's behaviour, while a network blip
+    // wrongly classified here would fail a job that the next attempt would have
+    // completed.
+    //
+    // Two levels, because they are two different answers and both matter.
+    // `guardedFetch` deliberately does *not* classify a genuine connection
+    // failure — it re-throws the bare `TypeError`, which is what it did before
+    // this branch — and `direct.ts` is what turns that into `UNREACHABLE`. So
+    // the fetch-level assertion is "untouched" and the route-level one is "still
+    // the transport code, still retryable".
+    const dead = await freePort();
+    await expect(classify(`https://127.0.0.1:${dead}/x`)).resolves.toBe(
+      "unclassified TypeError: fetch failed",
+    );
+
+    const app = await wiredApp("refused", {});
+    const response = await probe(app, `https://127.0.0.1:${dead}/master.m3u8`);
+    const error = (response.json() as { error: { code: string; retryable: boolean } }).error;
+    expect(error.code).toBe("UNREACHABLE");
+    expect(error.retryable).toBe(true);
+  });
+
+  test("the guard's own BLOCKED_TARGET survives the direct resolver", async () => {
+    // Same defect, second victim, and it is why fixing `guarded-fetch.ts` alone
+    // would have changed nothing at the route: `direct.ts`'s `#request` caught
+    // *any* non-abort failure into a blanket `UNREACHABLE`, including an
+    // `AppError` the fetch had already classified.
+    //
+    // **It has to be a redirect, and the first draft of this test did not know
+    // that.** `routes/probe.ts` runs `guard.assertAllowed` on the submitted URL
+    // before any resolver sees it, so a directly-blocked address never reaches
+    // `#request` and a test that submits one passes on the pre-flight check
+    // without exercising anything. The mutation proved it: deleting the
+    // passthrough left that version green. A *redirect* to a blocked address is
+    // the case only `guardedFetch` can catch — it re-checks every hop — and it
+    // is the one the blanket catch was swallowing.
+    const redirector = await startTlsOrigin(operatorCertificate, (_request, response) => {
+      response.writeHead(302, { location: "http://169.254.169.254/latest/meta-data/" }).end();
+    });
+    cleanups.push(() => redirector.close());
+
+    const app = await wiredApp("blocked", {
+      egressCaFile: operatorCertificate.caPath,
+      // Not `ssrfAllowPrivateAddresses`, which exempts every host and would let
+      // the metadata address through: the fixture is named instead.
+      ssrfAllowPrivateAddresses: false,
+      ssrfAllowHosts: ["127.0.0.1"],
+    });
+    const response = await probe(app, `https://127.0.0.1:${redirector.port}/master.m3u8`);
+    const error = (response.json() as { error: { code: string; retryable: boolean } }).error;
+
+    expect(error.code).toBe("BLOCKED_TARGET");
+    expect(error.retryable).toBe(false);
+  });
 });

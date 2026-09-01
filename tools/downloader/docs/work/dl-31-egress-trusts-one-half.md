@@ -106,7 +106,177 @@ verification. Two consequences, and both are the reason `depends_on` names it:
    and if an alias was kept, a boot warning names it.
 5. `npm run check` and `npm test -- --project downloader` pass.
 
+## Gates
+
+### Gate A — 2026-09-01, Sonnet (build was Opus)
+
+**FAIL**, on Done-when 2 alone, and the reviewer labelled it a testability gap
+rather than a code defect: `withSystemRoots`
+([`operator-ca.ts:36`](../../api/src/operator-ca.ts)) reads the real,
+non-injectable `tls.rootCertificates`, and no fixture in this repo can be signed
+by a real public root — so the line as worded is unprovable by **any**
+implementation under the fixtures-only rule, not by this one in particular.
+Everything else passed.
+
+What it reproduced independently, rather than read:
+
+- The positive control, exactly: reverting the `originTls` spread at
+  [`server.ts:101`](../../api/src/server.ts) turns 2 of the (then) 9 tests red
+  and leaves 7 green.
+- The two-root array claim, by mutating the array to a single entry and watching
+  the other origin fail — so the test really does show undici honouring every
+  element rather than the first or last.
+- Both halves of the `NODE_EXTRA_CA_CERTS` finding, including that an explicit
+  `ca` is **not** merged with it.
+- That the boot test is not vacuous, by re-creating the pre-dl-27 conditional
+  read and watching the `FFMPEG_TLS_INTERCEPT=false` case go red.
+
+It called the `tls.rootCertificates.length > 50` floor a tautology, but not
+misleading, since the test's own comment already calls it a sanity floor. Left
+as is.
+
+**Disposition:** the user accepted the Done-when 2 substitution; see the
+2026-09-01 Log entry, which states plainly what is not proven.
+
+### Gate B — 2026-09-01, Sonnet (build was Opus)
+
+**PASS**, with two findings, both taken:
+
+1. **A refused certificate reached the client as a retryable transport error.**
+   `unwrapCause` re-threw only an `AppError`, so a TLS rejection stayed a bare
+   `TypeError`; `direct.ts`'s `#request` caught any non-abort failure into a
+   blanket `UNREACHABLE`; and `UNREACHABLE` is in `CORE_RETRYABLE_CODES`
+   ([`errors.ts:115-117`](../../../../packages/core/src/errors.ts)). Not limited
+   to "CA unset" — it fires for any origin `EGRESS_CA_FILE` does not cover.
+   Fixed on this branch at the user's direction, against both the reviewer's and
+   the orchestrator's recommendation to file it.
+2. **`engine/src/config.ts`'s `FFMPEG_CA_FILE` fallback is not unreachable**, as
+   the first Log entry claimed — it is inert for `api` but live for the M1 CLI at
+   [`engine/scripts/download.ts:173`](../../engine/scripts/download.ts), which
+   passes no `tlsCaFile`. Fixed and the Log corrected.
+
+Its file:line citations were written against `2715466`; every one was
+re-resolved against this branch's tip before being quoted above, and two had
+moved.
+
 ## Log
+
+- **2026-09-01** — Second round, after two gates. Merged `origin/main` up to
+  `6f29eb0` first (#121, #122, #123 all landed under this branch); the merge was
+  clean, and dl-23 added no new reference to the renamed field, which I checked
+  by grepping the merged tree rather than trusting the pre-merge measurement.
+
+  **The mechanism, which is the part worth keeping.** A trust failure ended up
+  on a retryable transport code because **every party that had ever been asked
+  to classify one was ffmpeg.** Both existing raises of
+  `TLS_VERIFICATION_FAILED` are on ffmpeg's path — `ffmpeg/runner.ts:265` off
+  stderr, and `egress-proxy.ts:456` off a socket the proxy owns — because dl-19,
+  dl-21 and dl-27 were each about ffmpeg's TLS. undici "verifies without being
+  asked", so no ticket ever asked what happens when it refuses, and the answer
+  was: nothing looks. `unwrapCause` tests `cause instanceof AppError`, which is a
+  test for errors _this repo threw_; Node's is not one, so it fell through as a
+  bare `TypeError` and every caller downstream read it as transport.
+
+  Two things made it invisible rather than merely unfixed. First, core's taxonomy
+  already forbids it **in words** — `UNREACHABLE`'s own docstring
+  ([`errors.ts:34`](../../../../packages/core/src/errors.ts)) says a certificate
+  that _did_ arrive belongs on `TLS_VERIFICATION_FAILED` and that the retry
+  answer differs — so a reader checking the rule would have found the rule
+  correct and never looked at the one client that had no ticket. Second, the
+  comment on `OriginCertificateError`
+  ([`tls-interception.ts:280`](../../api/src/tls-interception.ts)) reads as "you
+  cannot tell a rejected chain from a refused packet", and that is true **of the
+  shape** — one own key, `code` — but not of the _value_. The escape it
+  documents is owning the socket, which undici does not let you do, so the file
+  that knew the most about this problem also read as saying the fix was
+  unavailable. It was not; the codes are OpenSSL's and disjoint from errno.
+
+  **What I built for it.** `guarded-fetch.ts:66-131` classifies on a closed set
+  of verify codes plus the `ERR_TLS_CERT_` prefix, and raises
+  `TLS_VERIFICATION_FAILED`; `direct.ts:170` passes an already-classified
+  `AppError` through instead of re-wrapping it. **Both were needed** — fixing
+  only the first changes nothing at the route, which the mutation run showed.
+  The rest of the path was already built and simply never reached: 502 at
+  `http-errors.ts:23`, not-retryable by omission from `CORE_RETRYABLE_CODES`, and
+  finished UI copy at `web/src/lib/error-presentation.ts:62`.
+
+  **Three verify codes, produced rather than listed.** Every fixture in this repo
+  is self-signed, so a classifier keyed on `DEPTH_ZERO_SELF_SIGNED_CERT` alone
+  would pass a suite built only from them. The test now provokes and asserts
+  `DEPTH_ZERO_SELF_SIGNED_CERT`, `CERT_HAS_EXPIRED` (a new `expired` knob on the
+  fixture, three lines) and `ERR_TLS_CERT_ALTNAME_INVALID` — three causes, three
+  codes, one of them exercising the prefix branch rather than the set.
+
+  **A test of mine was passing for the wrong reason and the mutation caught it.**
+  The first draft of the `BLOCKED_TARGET` case submitted a blocked address
+  directly, which `routes/probe.ts:46` refuses on the pre-flight guard before any
+  resolver runs — so it never reached `#request`, and deleting the passthrough
+  left it green. It is now a **redirect** to `169.254.169.254`, which only
+  `guardedFetch`'s per-hop re-check can raise, with `ssrfAllowHosts` instead of
+  `ssrfAllowPrivateAddresses` because the latter exempts every host including the
+  metadata address. Recorded because the trap is general: with
+  `allowPrivateAddresses` on, an SSRF test cannot fail.
+
+  **A rebuild gotcha worth the line.** `api`'s tests import
+  `@downloader/resolvers` from `dist`, so the first mutation of `direct.ts`
+  reported "not caught" until `npm run build` ran. A source-only edit to another
+  workspace is invisible to a mutation run without it.
+
+  **Correction to my own last entry.** I wrote that
+  `engine/src/config.ts`'s `FFMPEG_CA_FILE` fallback was "unreachable". Gate B
+  traced it properly: it is unreachable _from `api`_ — `server.ts:259` omits
+  `tlsCaFile` only when interception is off **and** `egressCaFile` is undefined,
+  which since the alias merge means neither variable is set, and `main.ts:22`
+  passes no overrides — but it is live for the M1 CLI, which passes no
+  `tlsCaFile` at all. "Inert for `api`" is the true and more useful sentence.
+  `engine/src/config.ts:210` now reads `EGRESS_CA_FILE` first and `FFMPEG_CA_FILE`
+  second, matching the alias policy, with four tests in a new
+  `engine/test/config.test.ts`. **This widens one line past the ticket's declared
+  `Packages: api`**, which is said here rather than left to be noticed.
+
+  **The alias is permanent — the user's decision, 2026-09-01.** Option A of the
+  three put to them: `FFMPEG_CA_FILE` keeps working with the boot warning, no end
+  date and no removal ticket. Recorded so it is not re-litigated: the two
+  rejected options were a follow-up ticket to drop it at the next breaking
+  release, and dropping it now.
+
+  **Done-when 2 is substituted, not proven, and the user accepted it as such.**
+  The line asks that a **public** origin still verifies with the variable set.
+  **No test here proves that.** It cannot be proven here by any implementation:
+  the merge reads the real `tls.rootCertificates`, which is not injectable, and
+  the fixtures-only rule forbids reaching a real origin — Gate A reached the same
+  conclusion independently and called it a testability gap rather than a defect
+  in this branch. What stands in its place is two claims that _are_ measured, and
+  **Gate A mutation-tested both halves itself**: replacing the merge with the
+  operator CA alone is caught (`expected 1 to be 146`), and dropping one root
+  from the two-root array makes that origin fail. What remains unmeasured is an
+  actual handshake against a publicly-signed origin. Also still unmeasured: no
+  container was built and no real system trust store was consulted.
+
+  **The sibling survey Gate B's finding prompted — reported, not fixed, because
+  the shape recurs and where it lands is not mine to decide.** All three resolver
+  tiers end a failed fetch in a catch-all, and they are not equally bad:
+
+  - `direct.ts:150` had **no** `AppError` passthrough. Fixed here.
+  - `browser/classify.ts:149` **already** passes an `AppError` through and
+    special-cases `TIMEOUT`, then falls back to blanket `UNREACHABLE`. Chromium
+    names a certificate failure in the message it throws
+    (`net::ERR_CERT_AUTHORITY_INVALID`), so it is classifiable and is not
+    classified.
+  - `ytdlp.ts:622` string-matches DRM, auth, geo and 429 off stderr and falls
+    back to `NO_MEDIA_FOUND`. yt-dlp says `CERTIFICATE_VERIFY_FAILED` on stderr;
+    likewise classifiable, likewise unclassified.
+  - `size-probe.ts` and `size-sample.ts` swallow to `undefined`. Deliberate — a
+    size probe is best-effort — and not the same defect.
+
+  **And a second dimension neither this ticket nor dl-27 touched.** Chromium and
+  yt-dlp sit behind the _tunnelling_ proxy and verify against their own stores,
+  which are never given `EGRESS_CA_FILE` by any route — I grepped for a
+  `--ca-certificate`, an `--ignore-certificate-errors` and a `NODE_EXTRA_CA_CERTS`
+  and there is none. So on a private-root deployment those two tiers still fail,
+  and now they fail with a code that says "no media found" or "site unreachable".
+  That is a bigger claim than a misdiagnosis and it is **unverified**: I did not
+  run either tier against a private-root origin. Worth a ticket; not one I filed.
 
 - **2026-08-31** — Built. Branch `dl-31-egress-ca-file`, off `origin/main` at
   `1d2647b`.
