@@ -217,6 +217,37 @@ test("a kind outside the taxonomy is a failure too", () => {
   expect(() => readTickets(root)).toThrow(/"epic" is not a kind/);
 });
 
+// repo-17. `difficulty` is the field a dispatcher reads, so it is validated the
+// same way `kind` and `status` are rather than passed through: a typo in a
+// value that selects a *model* is not a cosmetic error, and the whole reason
+// the field is worth having is that a reader can trust the three words.
+test("a difficulty outside the taxonomy is a failure, like a kind", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { difficulty: "tricky" }) });
+  expect(() => readTickets(root)).toThrow(/"tricky" is not a difficulty/);
+});
+
+// The field went in optional on purpose: 89 tickets existed when it was added
+// and none of them were rated. Absent has to keep meaning "the builder
+// inherits", or adding the field would have silently re-dispatched every open
+// ticket at a different model.
+test("difficulty is optional, and absent reads as null rather than missing", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1") });
+  expect(readTickets(root)[0]?.difficulty).toBe(null);
+});
+
+// `parseScalar` maps an empty value and a literal `null` to the same thing, so
+// a ticket that spells the field out as unset must not be a parse error — the
+// author who writes `difficulty: null` is saying what the omission says.
+test("difficulty spelled out as null is the same as omitting it", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { difficulty: "null" }) });
+  expect(readTickets(root)[0]?.difficulty).toBe(null);
+});
+
+test("a rated ticket carries its difficulty onto the record", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { difficulty: "mechanical" }) });
+  expect(readTickets(root)[0]?.difficulty).toBe("mechanical");
+});
+
 test("a missing required field is named", () => {
   const withoutMilestone = ticket({
     id: "pl-1",
@@ -530,6 +561,18 @@ const closingLine = (stdout: string) => stdout.trimEnd().split("\n").at(-1);
 // repo has — including, after repo-3, the two states the assertion was there to
 // distinguish. It was also one frontmatter edit away from meaning nothing, since
 // flipping its subject to `done` would have changed the line it never read.
+// repo-17. The row is on `--show` and in `--json` and nowhere else — there is
+// deliberately no column for it in the table, because the table is what a
+// person reads and this field is for the dispatcher.
+test("--show reports the difficulty, and an em dash when nobody rated it", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { difficulty: "hard" }),
+    [at("pl-2")]: pl("pl-2"),
+  });
+  expect(run(["--show", "pl-1"], root).stdout).toContain("difficulty  hard");
+  expect(run(["--show", "pl-2"], root).stdout).toContain("difficulty  —");
+});
+
 test("--show prints a ticket's path and the dependencies still open", () => {
   const root = repoWith({
     [at("pl-1")]: pl("pl-1", { status: "in-flight" }),

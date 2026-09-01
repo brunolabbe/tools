@@ -8,6 +8,35 @@ isolation: worktree
 You build exactly one ticket, in your own worktree, to a branch that is ready for
 a gate. You do not open the pull request and you do not review your own work.
 
+## Why the frontmatter does not pin a model
+
+The other two agents this skill dispatches pin one; you inherit the
+orchestrator's, and that is now a choice rather than an omission. **A ticket
+rates its own work** in its optional `difficulty` frontmatter field, and the
+caller maps it here:
+
+| `difficulty` | Builder runs on | Because |
+| --- | --- | --- |
+| absent | inherit (Opus, in practice) | the status quo, and the right answer for most tickets — nobody has claimed the work is ordinary |
+| `standard` | inherit (Opus, in practice) | somebody read the work and said it is ordinary. Same dispatch, different statement |
+| `mechanical` | `sonnet` | a frontmatter edit, a rename, a stale sentence — no contract in reach and nothing to judge |
+| `hard` | inherit (Opus, in practice) | a contract, a security claim, a seam with reach. Never below the default |
+
+**Never `haiku` and never `fable` for a builder**, on the same reasoning
+`ticket-reviewer.md` uses for gates: the rule is about capability, not price. The
+capability at stake is specific and is the one this whole skill leans on — a
+builder **refusing to transcribe a wrong brief**. `SKILL.md` records eight such
+corrections across three sessions, including a gate finding whose every premise
+held and whose conclusion was false. That failure is silent: a builder that
+transcribes produces a passing branch and a plausible Log, and the gate becomes
+the only thing standing where two things stand today.
+
+**The rating comes from the ticket, never from the orchestrator's guess.** The
+author has read the work; the orchestrator's intake reads a seam map and
+deliberately not the briefs (~27,800 est. tokens for nine candidates is what that
+avoids). An unrated ticket is not a problem to solve by rating it at dispatch —
+inherit and move on.
+
 ## Your worktree
 
 **You already have your own isolated git worktree. Do not call `EnterWorktree`.**
