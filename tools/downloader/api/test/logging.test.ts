@@ -105,6 +105,46 @@ describe("the logger", () => {
     expect(JSON.stringify(lines[0])).not.toContain("super-secret");
   });
 
+  test("the path layer is case-sensitive, which is what bounds it — not nesting", () => {
+    // The obvious guess is that pino's `*.headers.cookie` fails on depth. It does
+    // not: three levels deep is fine as long as the segment names match exactly.
+    const lower = capturing();
+    lower.logger.info("upstream", { any: { headers: { cookie: "session=super-secret" } } });
+    expect(JSON.stringify(lower.lines[0])).not.toContain("super-secret");
+
+    // What it cannot do is match HTTP casing, which is exactly what a
+    // `RequestContext` carries — see `contract/src/media.ts:121`. Not at depth
+    // three, and not at depth two either, so this is about the name and nothing
+    // else. `safeFields` is what covers the real shape; this layer never did.
+    const upper = capturing();
+    upper.logger.info("upstream", { any: { headers: { Cookie: "session=super-secret" } } });
+    expect(JSON.stringify(upper.lines[0])).toContain("super-secret");
+  });
+
+  test("known limitation: a RequestContext nested under another key is not redacted", () => {
+    // **This test asserts the gap, on purpose.** `safeFields` matches the literal
+    // key `requestContext` at the top level of `fields` and nowhere else, and
+    // `REDACT_PATHS` cannot help because the keys are HTTP-cased. Every call site
+    // in the tool passes it at the top level, so nothing leaks today.
+    //
+    // It is pinned rather than left implicit so that widening `safeFields` — the
+    // right fix if a call site ever needs to nest — turns this red and sends
+    // whoever did it to the caveat in `logger.ts` that this documents.
+    const nested = capturing();
+    nested.logger.info("probed", { details: { requestContext: CREDENTIALED } });
+    expect(JSON.stringify(nested.lines[0])).toContain("super-secret");
+
+    const inArray = capturing();
+    inArray.logger.info("probed", { items: [CREDENTIALED] });
+    expect(JSON.stringify(inArray.lines[0])).toContain("super-secret");
+
+    // The same context at the top level *is* redacted, so the two assertions
+    // above are about position and not about the fixture.
+    const top = capturing();
+    top.logger.info("probed", { requestContext: CREDENTIALED });
+    expect(JSON.stringify(top.lines[0])).not.toContain("super-secret");
+  });
+
   test("a field that will not serialise does not take the process down", () => {
     const { logger, lines } = capturing();
     const cyclic: Record<string, unknown> = {};
@@ -191,6 +231,70 @@ describe("correlation, end to end", () => {
     expect(
       correlated.filter((line) => line["jobId"] === job.id && line.msg !== "job accepted").length,
     ).toBeGreaterThan(0);
+  });
+
+  /**
+   * The two lines that carry a whole `RequestContext`, driven end to end.
+   *
+   * These assert on the **raw serialised string**, not on a parsed field. That
+   * is the difference between "the shape we expected was redacted" and "the
+   * secret is not in the bytes", and only the second is the property worth
+   * having — a credential that escaped under some other key would satisfy the
+   * first and fail the second.
+   *
+   * dl-29 is why they exist. The redaction predates it and is not its work, but
+   * this branch made those exact headers newly load-bearing as an *outbound*
+   * credential: `captureThumbnail` replays them to a page-chosen origin. A
+   * redaction protecting them was being carried by `safeFields` alone, with
+   * nothing pinning it at either call site.
+   */
+  test("a session cookie in a probe's context never reaches the probe route's log line", async () => {
+    const raw: string[] = [];
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+      resolver: new StubResolver(probeResult({ requestContext: CREDENTIALED })),
+    });
+
+    await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      payload: { url: SOURCE_URL },
+    });
+
+    // Not one line, anywhere, at any level.
+    expect(raw.filter((line) => line.includes("super-secret"))).toEqual([]);
+    // And the line that carries the context is present and redacted, so this is
+    // not passing because nothing was logged at all.
+    const complete = raw.filter((line) => line.includes('"msg":"probe complete"'));
+    expect(complete).toHaveLength(1);
+    expect(complete[0]).toContain(REDACTED);
+    // The non-secret header survives: redaction, not deletion.
+    expect(complete[0]).toContain("https://example.com/watch");
+  });
+
+  test("nor the orchestrator's, whose re-probe fetches the preview with those headers", async () => {
+    const raw: string[] = [];
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+      resolver: new StubResolver(probeResult({ requestContext: CREDENTIALED })),
+    });
+
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.jobs,
+      payload: { url: SOURCE_URL },
+    });
+    const job = (response.json() as JobResponse).job;
+    await waitFor(
+      () => harness?.app.context.store.get(job.id) as Job,
+      (current) => current.status === "completed" || current.status === "failed",
+      { label: "job to finish" },
+    );
+
+    expect(raw.filter((line) => line.includes("super-secret"))).toEqual([]);
+    const reprobe = raw.filter((line) => line.includes('"msg":"re-probe complete"'));
+    expect(reprobe.length).toBeGreaterThan(0);
+    expect(reprobe[0]).toContain(REDACTED);
   });
 
   test("the health check is logged at debug, so a liveness probe cannot bury the log", async () => {

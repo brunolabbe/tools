@@ -251,7 +251,17 @@ describe("what the API hands the tiers", () => {
 
       const body = response.json<{ probe: ProbeResult }>();
       expect(body.probe.requestContext.proxyUrl).toBeUndefined();
-      expect(body.probe.requestContext.headers["Referer"]).toBe("https://site.example/");
+      // The control: `requestContext` itself survives, so `proxyUrl` being
+      // undefined is the field being dropped and not the whole object.
+      //
+      // This used to assert `headers["Referer"]` reached the client, which is no
+      // longer true and should never have been: `headers` is the credential bag
+      // the source handed us, and dl-29 stops it crossing the wire at all. The
+      // header half of this control now lives where it belongs — on the engine,
+      // which still gets the real values. See "the source's credentials never
+      // reach the client" in `routes.test.ts`.
+      expect(body.probe.requestContext.headers).toEqual({});
+      expect(body.probe.variants).toHaveLength(1);
     } finally {
       await harness.dispose();
     }

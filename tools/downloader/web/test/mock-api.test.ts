@@ -15,7 +15,7 @@ import {
 } from "@downloader/contract";
 import type { ErrorCode, Job, JobEvent, JobOptions } from "@downloader/contract";
 import { createMockClient } from "../src/api/mock.ts";
-import { SCENARIOS, findScenario, scenarioUrl } from "../src/api/scenarios.ts";
+import { SCENARIOS, baseProbeResult, findScenario, scenarioUrl } from "../src/api/scenarios.ts";
 import type { ApiClient } from "../src/api/types.ts";
 
 import { applyJobEvents } from "../src/lib/job-reducer.ts";
@@ -317,6 +317,22 @@ describe("scenario coverage", () => {
     expect(findScenario("not a url").keyword).toBe("");
   });
 
+  test("the base probe carries a preview and at least one scenario carries none", () => {
+    // "No preview" is the path that must not break and the common case for a
+    // resolver that found nothing, so the table has to be able to show both.
+    // `thumbnailPath`, never `thumbnailUrl`: the real API strips the origin URL
+    // and sends only its own path, and a mock carrying the other field would let
+    // a component work against a shape the server never sends.
+    const base = baseProbeResult(scenarioUrl(""), "2026-08-20T12:00:00.000Z");
+    expect(base.thumbnailPath).toBeDefined();
+    expect(base.thumbnailUrl).toBeUndefined();
+
+    const withoutPreview = SCENARIOS.filter(
+      (scenario) => scenario.probe?.(base).thumbnailPath === undefined,
+    );
+    expect(withoutPreview.map((scenario) => scenario.keyword)).toContain("nopreview");
+  });
+
   test("every ErrorCode is demonstrable", () => {
     const fromScenarios = new Set<ErrorCode>();
     for (const scenario of SCENARIOS) {
@@ -336,7 +352,13 @@ describe("scenario coverage", () => {
     // Not demonstrable here, and not a gap: the mock answers the routes it
     // implements, so nothing it can be asked for produces a route miss. The
     // real server raises this one, and only for a URL it has no handler for.
-    const notReachableInTheMock: ErrorCode[] = ["NOT_FOUND"];
+    //
+    // `THUMBNAIL_NOT_FOUND` joins it for a related reason: a preview is fetched
+    // by the browser's own `<img>` against `/api/thumbnail/:token`, which is a
+    // route the mock has no way to serve — its scenarios carry an inline
+    // `data:` URI instead. A miss there reaches `Preview`'s `onError`, never
+    // this transport. `api/test/routes.test.ts` is where the code is proven.
+    const notReachableInTheMock: ErrorCode[] = ["NOT_FOUND", "THUMBNAIL_NOT_FOUND"];
     for (const code of notReachableInTheMock) fromScenarios.add(code);
 
     const missing = ERROR_CODES.filter((code) => !fromScenarios.has(code));

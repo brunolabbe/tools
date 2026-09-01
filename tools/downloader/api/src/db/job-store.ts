@@ -48,6 +48,8 @@ export interface TransitionPatch {
   variant?: MediaVariant | null;
   variantId?: string | null;
   attempts?: number;
+  /** Our proxied path for the preview image, or null when there is none. */
+  thumbnailPath?: string | null;
 }
 
 interface JobRow {
@@ -64,6 +66,7 @@ interface JobRow {
   created_at: string;
   updated_at: string;
   finished_at: string | null;
+  thumbnail_path: string | null;
 }
 
 export function initialProgress(stage: JobStatus = "queued"): JobProgress {
@@ -105,6 +108,7 @@ function rowToJob(row: JobRow): Job {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     finishedAt: row.finished_at,
+    thumbnailPath: row.thumbnail_path,
   };
 
   // The database is a boundary like any other: a row written by an older build,
@@ -153,7 +157,8 @@ export class JobStore {
       update: db.prepare(
         `UPDATE jobs SET status = @status, progress_json = @progress_json, result_json = @result_json,
                          error_json = @error_json, variant_id = @variant_id, variant_json = @variant_json,
-                         attempts = @attempts, updated_at = @updated_at, finished_at = @finished_at
+                         attempts = @attempts, updated_at = @updated_at, finished_at = @finished_at,
+                         thumbnail_path = @thumbnail_path
          WHERE id = @id`,
       ),
       touch: db.prepare(
@@ -272,6 +277,12 @@ export class JobStore {
       attempts: patch.attempts ?? current.attempts,
       updated_at: now,
       finished_at: terminal ? (current.finishedAt ?? now) : null,
+      // `?? null` as well as the `undefined` check: the column is `TEXT NULL`
+      // and `current.thumbnailPath` is optional on `Job`, so a job read back
+      // from a pre-dl-29 row would otherwise hand better-sqlite3 an `undefined`
+      // it refuses to bind.
+      thumbnail_path:
+        patch.thumbnailPath === undefined ? (current.thumbnailPath ?? null) : patch.thumbnailPath,
     });
     return this.get(current.id);
   }

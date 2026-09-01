@@ -10,6 +10,7 @@ import type { DownloadEngine } from "@downloader/engine";
 import type { BrowserResolver, ResolverRegistry, YtDlpResolver } from "@downloader/resolvers";
 import type { ApiConfig } from "./config.ts";
 import type { JobStore } from "./db/job-store.ts";
+import type { GuardedFetch } from "./guarded-fetch.ts";
 import type { JobEventHub } from "./jobs/events.ts";
 import type { ConcurrencyGate, RateLimiter } from "@webtools/core/rate-limit";
 import type { JobOrchestrator } from "./jobs/orchestrator.ts";
@@ -17,6 +18,7 @@ import type { ProbeCache } from "./jobs/probe-cache.ts";
 import type { JobQueue } from "./jobs/queue.ts";
 import type { AppLogger } from "./logger.ts";
 import type { SsrfGuard } from "./ssrf.ts";
+import type { ThumbnailStore } from "./thumbnails.ts";
 
 export interface AppContext {
   config: ApiConfig;
@@ -51,6 +53,15 @@ export interface AppContext {
   queue: JobQueue;
   events: JobEventHub;
   probeCache: ProbeCache;
+  /** Preview images fetched at probe time, held by token. See `thumbnails.ts`. */
+  thumbnails: ThumbnailStore;
+  /**
+   * The redirect-re-checking `fetch`, so a route can make an outbound request
+   * without reaching for the platform one. Only the preview-image capture uses
+   * it today; anything else that fetches on a client's behalf must use this and
+   * not `globalThis.fetch`.
+   */
+  guardedFetch: GuardedFetch;
   orchestrator: JobOrchestrator;
   /**
    * Token buckets, one per expensive endpoint.

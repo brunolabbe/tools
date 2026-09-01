@@ -144,6 +144,7 @@ export const probeResultSchema = z.object({
   title: z.string(),
   durationSec: z.number().optional(),
   thumbnailUrl: z.string().optional(),
+  thumbnailPath: z.string().optional(),
   variants: z.array(mediaVariantSchema),
   subtitles: z.array(subtitleTrackSchema),
   requestContext: requestContextSchema,
@@ -186,6 +187,13 @@ export const jobSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   finishedAt: z.string().nullable(),
+  // `.optional()` as well as `.nullable()`, and it is not decoration: this key
+  // is absent from every job already persisted under `downloader:jobs:v1`, and
+  // `loadJobs` keeps only records that parse. A bare `.nullable()` rejects a
+  // missing key outright (measured on zod 4.4.3), which would empty every
+  // user's downloads list on their first load after deploy. `variant` above
+  // survives on `.nullable()` alone only because it has always been written.
+  thumbnailPath: z.string().nullable().optional(),
 }) satisfies z.ZodType<Job>;
 
 /**
@@ -306,4 +314,11 @@ export const ROUTES = {
   cancelJob: (id: string) => `/api/jobs/${id}/cancel`,
   /** `token` is opaque and unguessable — it is the capability, not the job id. */
   file: (token: string) => `/api/files/${token}`,
+  /**
+   * Same shape and same reason as `file`: the token is the capability. It also
+   * exists so that no route anywhere takes a URL to fetch from a caller — the
+   * client asks for an image this server already decided to fetch, by a name
+   * only this server could have minted.
+   */
+  thumbnail: (token: string) => `/api/thumbnail/${token}`,
 } as const;

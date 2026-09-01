@@ -7,6 +7,8 @@
  * them is the real thing.
  */
 
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { AppError, ROUTES } from "@downloader/contract";
 import type { Job, JobResponse, JobStatus, ProbeResponse } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
@@ -20,6 +22,12 @@ import {
   waitFor,
 } from "./helpers.ts";
 import type { Harness } from "./helpers.ts";
+
+/** A 1x1 PNG. Real bytes, so a content-type assertion means something. */
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 let harness: Harness | undefined;
 
@@ -130,6 +138,86 @@ describe("the happy path", () => {
     const created = await createJob(harness);
     await runToTerminal(harness, created.id);
     expect(handed).toEqual(["hd"]);
+  });
+});
+
+describe("the preview a job keeps", () => {
+  /** A loopback origin serving a real image, so the capture runs for real. */
+  async function imageOrigin(): Promise<{ origin: string; close: () => Promise<void> }> {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "image/png" });
+      response.end(PNG);
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    return {
+      origin: `http://127.0.0.1:${port}`,
+      close: async () =>
+        await new Promise<void>((resolve) => {
+          server.closeAllConnections();
+          server.close(() => resolve());
+        }),
+    };
+  }
+
+  test("the re-probe's preview is snapshotted onto the job and survives to completion", async () => {
+    // The whole persistence path in one go: the orchestrator's own capture, the
+    // `store.patch` beside the variant, the SQLite column, and `rowToJob`'s
+    // re-parse through `jobSchema`. The job's token is one *this run* minted —
+    // nothing here depends on the probe cache still holding anything.
+    const image = await imageOrigin();
+    try {
+      harness = await createHarness({
+        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
+      });
+
+      const created = await createJob(harness);
+      // Not yet: the snapshot is written by the re-probe, not at intake.
+      expect(created.thumbnailPath).toBeNull();
+
+      const finished = await runToTerminal(harness, created.id);
+      expect(finished.status).toBe("completed");
+      expect(finished.thumbnailPath).toMatch(/^\/api\/thumbnail\/[A-Za-z0-9_-]+$/u);
+      // Our path, never the address the page named.
+      expect(finished.thumbnailPath).not.toContain(image.origin);
+
+      // And it actually serves, which is what makes the snapshot worth keeping.
+      const served = await harness.app.server.inject({
+        method: "GET",
+        url: finished.thumbnailPath ?? "",
+      });
+      expect(served.statusCode).toBe(200);
+      expect(served.headers["content-type"]).toBe("image/png");
+    } finally {
+      await image.close();
+    }
+  });
+
+  test("a probe with no preview leaves the job with none, and still completes", async () => {
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const finished = await runToTerminal(harness, (await createJob(harness)).id);
+    expect(finished.status).toBe("completed");
+    expect(finished.thumbnailPath).toBeNull();
+  });
+
+  test("a preview on a blocked address costs the preview, not the download", async () => {
+    // The orchestrator's half of Done-when 7. A real guard: private addresses
+    // refused, only the two fictional media hosts exempt, so the link-local
+    // literal is blocked without any DNS being consulted.
+    harness = await createHarness({
+      resolver: new StubResolver(
+        probeResult({ thumbnailUrl: "http://169.254.169.254/latest/meta-data/" }),
+      ),
+      config: {
+        ssrfAllowPrivateAddresses: false,
+        ssrfAllowHosts: ["site.example", "cdn.example"],
+      },
+    });
+
+    const finished = await runToTerminal(harness, (await createJob(harness)).id);
+    expect(finished.status).toBe("completed");
+    expect(finished.result?.filename).toBe("video.mp4");
+    expect(finished.thumbnailPath).toBeNull();
   });
 });
 

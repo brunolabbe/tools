@@ -193,6 +193,18 @@ export const ERROR_PRESENTATION: Record<ErrorCode, ErrorPresentationEntry> = {
     tone: "unavailable",
     allowRetry: false,
   },
+  // Copy for a code no panel is expected to render: a preview is fetched by an
+  // `<img>`, which reports a failure to `Preview`'s `onError` and never reaches
+  // `ErrorPanel`. The entry exists because the table is exhaustive, and the
+  // sentence is written for the one way a user could ever see it — reading the
+  // JSON of `/api/thumbnail/<token>` directly.
+  THUMBNAIL_NOT_FOUND: {
+    title: "Preview not available",
+    detail:
+      "Preview images are kept in memory for a short while. Analyse the page again to fetch a fresh one.",
+    tone: "unavailable",
+    allowRetry: false,
+  },
   INTERNAL: {
     title: "Something went wrong",
     detail: "This one is on us. Nothing about the page you gave us is wrong.",

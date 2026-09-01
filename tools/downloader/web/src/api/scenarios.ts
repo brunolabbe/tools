@@ -63,6 +63,19 @@ const SUBTITLES: SubtitleTrack[] = [
 
 const DURATION_SEC = 1284;
 
+/**
+ * A preview the mock serves itself.
+ *
+ * `thumbnailPath`, never `thumbnailUrl`: the real API strips the origin URL and
+ * substitutes a path on its own origin, and a mock that handed the UI an origin
+ * URL would let the component work against a shape the server never sends. A
+ * `data:` URI stands in for `/api/thumbnail/<token>` because the mock has no
+ * server to serve bytes from — a 2×2 GIF, inline, so the component test renders
+ * a real `<img>` that resolves.
+ */
+const THUMBNAIL_PATH =
+  "data:image/gif;base64,R0lGODlhAgACAIAAAP///wAAACH5BAAAAAAALAAAAAACAAIAAAIDRAJZADs=";
+
 function baseVariants(): MediaVariant[] {
   return [
     {
@@ -159,6 +172,7 @@ export function baseProbeResult(sourceUrl: string, probedAt: string): ProbeResul
     resolver: "browser-sniffer",
     title: "Sample broadcast — how streams are actually delivered",
     durationSec: DURATION_SEC,
+    thumbnailPath: THUMBNAIL_PATH,
     variants: baseVariants(),
     subtitles: SUBTITLES,
     requestContext: {
@@ -214,6 +228,18 @@ export const SCENARIOS: readonly Scenario[] = [
         }),
     }),
     job: { indeterminate: true },
+  },
+  {
+    keyword: "nopreview",
+    title: "No preview image",
+    description:
+      "A page with no og:image, which is the common case rather than the exceptional one. The panel and the job card must render exactly as they do with one, minus the picture — no gap, no broken-image glyph.",
+    probeDelayMs: 1_200,
+    probe: (base) => {
+      const { thumbnailPath: _none, ...rest } = base;
+      return rest;
+    },
+    job: SUCCESS,
   },
   {
     keyword: "indeterminate",

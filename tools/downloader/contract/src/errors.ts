@@ -49,6 +49,17 @@ export const DOWNLOADER_ERROR_CODES = [
   "DOWNLOAD_FAILED",
   /** ffmpeg exited non-zero while remuxing or concatenating. */
   "MUX_FAILED",
+
+  // --- Serving ---
+  /**
+   * No preview image is held under that token — it expired out of the in-memory
+   * store, or the token was never minted.
+   *
+   * A *document*, so it is ours and not core's: `NOT_FOUND` says of itself that
+   * it is about the transport and that "a missing anything-else belongs to the
+   * tool's own taxonomy", and `JOB_NOT_FOUND` names a job, which this is not.
+   */
+  "THUMBNAIL_NOT_FOUND",
 ] as const;
 
 /** Core codes first, so the generic ones keep their familiar order. */
@@ -79,6 +90,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   VARIANT_GONE: "The stream link expired. Analyse the page again.",
   DOWNLOAD_FAILED: "The download failed partway through.",
   MUX_FAILED: "The video could not be assembled into a playable file.",
+  THUMBNAIL_NOT_FOUND: "That preview image is no longer available.",
 };
 
 /**

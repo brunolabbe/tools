@@ -13,13 +13,15 @@ import net from "node:net";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, test } from "vitest";
 import type { AddressResolver, ResolvedAddress } from "../src/dispatcher.ts";
-import { startEgressProxy } from "../src/egress-proxy.ts";
+import { startEgressProxy, withoutEgressProxy } from "../src/egress-proxy.ts";
 import type { EgressProxy } from "../src/egress-proxy.ts";
 import type { AppLogger } from "../src/logger.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
 import type { SsrfGuard } from "../src/ssrf.ts";
 import { createTlsInterception } from "../src/tls-interception.ts";
 import type { TlsInterception } from "../src/tls-interception.ts";
+import type { ProbeResult } from "@downloader/contract";
+import { probeResult } from "./helpers.ts";
 import { createFixtureCertificate, startTlsOrigin } from "./helpers/tls-origin.ts";
 
 const NOOP_LOGGER = {
@@ -599,5 +601,67 @@ describe("chaining to an operator proxy", () => {
 
     expect(result.status).toBe(200);
     expect(result.body).toBe("through two proxies");
+  });
+});
+
+/**
+ * `withoutEgressProxy` — the *server-side* rewrite, and the one thing it must
+ * not do.
+ *
+ * This function had no coverage at all until dl-29's third gate, and that gap is
+ * why a response-body assertion in `tiers-behind-the-proxy.test.ts` was carrying
+ * the weight of guarding it. A response-body assertion cannot carry it: since
+ * dl-29, `probeForClient` empties `headers` at the response seam anyway, so the
+ * body looks identical whether this function left them alone or destroyed them.
+ * The gate proved that by making this function empty `headers` too and watching
+ * all 897 downloader tests pass.
+ *
+ * The failure hiding behind that green suite is specific: an operator with
+ * `config.proxyUrl` set — dl-12's documented case, and the only one where this
+ * function does anything at all — loses the `Referer` and `Cookie` the engine
+ * replays, and every download starts 403ing at the CDN for a reason nothing
+ * reports.
+ *
+ * So these assert on the function directly. Nothing here goes near a response.
+ */
+const probeThroughProxy = (): ProbeResult =>
+  probeResult({
+    requestContext: {
+      headers: { Referer: "https://site.example/", Cookie: "session=super-secret" },
+      proxyUrl: "http://127.0.0.1:1",
+      expiresAt: "2026-08-06T11:00:00.000Z",
+    },
+  });
+
+describe("withoutEgressProxy keeps the credentials it is not there to touch", () => {
+  test("drops the proxy and nothing else", () => {
+    const out = withoutEgressProxy(probeThroughProxy());
+
+    // The whole job of the function.
+    expect(out.requestContext.proxyUrl).toBeUndefined();
+    // And the whole of what it must leave alone. These are the credentials the
+    // engine replays on every segment fetch; emptying them here is invisible on
+    // the wire and fatal to a proxied deployment.
+    expect(out.requestContext.headers).toEqual({
+      Referer: "https://site.example/",
+      Cookie: "session=super-secret",
+    });
+    // `expiresAt` is the other survivor — a client reads it to know its variant
+    // URLs are going stale.
+    expect(out.requestContext.expiresAt).toBe("2026-08-06T11:00:00.000Z");
+  });
+
+  test("returns the probe untouched when there is no proxy to drop", () => {
+    // The early-return branch, which is every deployment without an operator
+    // proxy — and the reason an integration test that does not set one never
+    // exercises the branch above.
+    const plain = probeResult();
+    expect(withoutEgressProxy(plain)).toBe(plain);
+  });
+
+  test("leaves the rest of the probe alone", () => {
+    const out = withoutEgressProxy(probeThroughProxy());
+    expect(out.variants).toHaveLength(1);
+    expect(out.title).toBe("A test video");
   });
 });

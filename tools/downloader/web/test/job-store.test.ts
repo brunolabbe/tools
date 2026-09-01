@@ -111,4 +111,48 @@ describe("job persistence", () => {
     clearJobs(storage);
     expect(loadJobs(storage)).toEqual([]);
   });
+
+  test("a preview path survives the round trip", () => {
+    const storage = createMemoryStorageStub();
+    const withPreview: Job = {
+      ...job("a", "2026-08-05T10:00:00.000Z"),
+      thumbnailPath: "/api/thumbnail/abc123",
+    };
+    saveJobs(storage, [withPreview]);
+    expect(loadJobs(storage)[0]?.thumbnailPath).toBe("/api/thumbnail/abc123");
+  });
+
+  test("a record written before the field existed still loads", () => {
+    // **The one that matters.** `thumbnailPath` is new, so every record already
+    // in a browser under `downloader:jobs:v1` lacks the key — and `loadJobs`
+    // silently keeps only what parses. Spelled `.nullable()` alone in
+    // `jobSchema`, zod rejects a missing key outright and this would return
+    // `[]`: every user's downloads list emptied on their first load after
+    // deploy, with no error and no version bump to explain it.
+    //
+    // Written as a raw v1-shaped object rather than by deleting a key from a
+    // `Job`, because that is the shape actually sitting in storage today.
+    const storage = createMemoryStorageStub();
+    const { thumbnailPath: _absent, ...v1Shaped } = {
+      ...job("a", "2026-08-05T10:00:00.000Z"),
+      thumbnailPath: undefined,
+    };
+    expect("thumbnailPath" in v1Shaped).toBe(false);
+    storage.setItem(JOBS_STORAGE_KEY, JSON.stringify([v1Shaped]));
+
+    const loaded = loadJobs(storage);
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]?.id).toBe("a");
+    // Absent, not invented: nothing may fabricate a token that was never minted.
+    expect(loaded[0]?.thumbnailPath).toBeUndefined();
+  });
+
+  test("an explicit null preview is preserved, and is not the same as absent", () => {
+    // The server writes `null` when a probe found no image. Both spellings have
+    // to survive, which is why the schema is `.nullable().optional()` and not
+    // one or the other.
+    const storage = createMemoryStorageStub();
+    saveJobs(storage, [{ ...job("a", "2026-08-05T10:00:00.000Z"), thumbnailPath: null }]);
+    expect(loadJobs(storage)[0]?.thumbnailPath).toBeNull();
+  });
 });

@@ -153,6 +153,125 @@ describe("patch and progress", () => {
   });
 });
 
+describe("the preview path, and the migration that adds its column", () => {
+  /**
+   * The schema as it stood before migration 3, written out rather than derived.
+   *
+   * A frozen copy is the right shape here and cannot go stale: `schema.ts` says
+   * never to edit a shipped migration, so this is what is in every deployed
+   * database that predates dl-29. Deriving it by re-running `migrate()` would
+   * only ever produce the *current* schema, which is precisely the thing this
+   * test must not assume.
+   */
+  const BEFORE_MIGRATION_3 = `
+    CREATE TABLE jobs (
+      id            TEXT PRIMARY KEY,
+      source_url    TEXT NOT NULL,
+      variant_id    TEXT,
+      variant_json  TEXT,
+      status        TEXT NOT NULL,
+      progress_json TEXT NOT NULL,
+      result_json   TEXT,
+      error_json    TEXT,
+      attempts      INTEGER NOT NULL DEFAULT 0,
+      options_json  TEXT NOT NULL DEFAULT '{}',
+      created_at    TEXT NOT NULL,
+      updated_at    TEXT NOT NULL,
+      finished_at   TEXT
+    ) STRICT;
+    CREATE INDEX jobs_created_at ON jobs (created_at DESC);
+    CREATE INDEX jobs_status ON jobs (status);
+    CREATE TABLE file_tokens (
+      token      TEXT PRIMARY KEY,
+      job_id     TEXT NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
+      path       TEXT NOT NULL,
+      filename   TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      swept_at   TEXT
+    ) STRICT;
+    CREATE UNIQUE INDEX file_tokens_job ON file_tokens (job_id);
+    CREATE INDEX file_tokens_expires_at ON file_tokens (expires_at);
+  `;
+
+  /** A database as a deployment running the previous release would have it. */
+  function legacyDatabase(): Database.Database {
+    const legacy = new Database(":memory:");
+    legacy.exec(BEFORE_MIGRATION_3);
+    legacy.pragma("user_version = 2");
+    legacy
+      .prepare(
+        `INSERT INTO jobs (id, source_url, variant_id, variant_json, status, progress_json,
+                           result_json, error_json, attempts, options_json, created_at, updated_at, finished_at)
+         VALUES ('legacy-1', 'https://site.example/watch', 'v1', NULL, 'completed', @progress,
+                 NULL, NULL, 1, '{}', '2026-08-01T10:00:00.000Z', '2026-08-01T10:05:00.000Z',
+                 '2026-08-01T10:05:00.000Z')`,
+      )
+      .run({ progress: JSON.stringify(initialProgress("completed")) });
+    return legacy;
+  }
+
+  test("an existing row survives migration 3 and reads back with no preview", () => {
+    // **The load-bearing case.** A migration test that only exercises the
+    // fresh-create path passes against a broken `ALTER TABLE`, because the
+    // fresh path never runs one. The row has to already be there.
+    const legacy = legacyDatabase();
+    expect(legacy.pragma("user_version", { simple: true })).toBe(2);
+
+    migrate(legacy);
+
+    expect(legacy.pragma("user_version", { simple: true })).toBe(3);
+    const upgraded = new JobStore(legacy).get("legacy-1");
+    expect(upgraded.status).toBe("completed");
+    // Null, not absent and not invented: nothing may fabricate a token that was
+    // never minted. `rowToJob` re-parses through `jobSchema`, so a column that
+    // failed to appear would surface here as an INTERNAL rather than as a quiet
+    // undefined.
+    expect(upgraded.thumbnailPath).toBeNull();
+    legacy.close();
+  });
+
+  test("migrate is idempotent — a second run is a no-op, not a duplicate column", () => {
+    const legacy = legacyDatabase();
+    migrate(legacy);
+    expect(() => migrate(legacy)).not.toThrow();
+    expect(legacy.pragma("user_version", { simple: true })).toBe(3);
+    expect(new JobStore(legacy).get("legacy-1").thumbnailPath).toBeNull();
+    legacy.close();
+  });
+
+  test("a freshly created job starts with no preview", () => {
+    create();
+    expect(store.get("job-1").thumbnailPath).toBeNull();
+  });
+
+  test("patch sets the path, preserves it when not named, and clears it on null", () => {
+    create();
+    store.transition("job-1", "probing");
+
+    expect(store.patch("job-1", { thumbnailPath: "/api/thumbnail/tok" }).thumbnailPath).toBe(
+      "/api/thumbnail/tok",
+    );
+    // The `undefined` branch: an unrelated patch must not clobber it. This is
+    // the one `#write` needs `?? null` for, and a regression here would lose a
+    // job's preview on its next unrelated write rather than loudly.
+    expect(store.patch("job-1", { attempts: 3 }).thumbnailPath).toBe("/api/thumbnail/tok");
+    // And an explicit null still clears, which is what a re-probe that found no
+    // image writes.
+    expect(store.patch("job-1", { thumbnailPath: null }).thumbnailPath).toBeNull();
+  });
+
+  test("a transition carries the path through as well as a patch does", () => {
+    create();
+    // `patch` and `transition` share `#write`, but only one of them was
+    // exercised above and they are different call sites.
+    store.transition("job-1", "probing", { thumbnailPath: "/api/thumbnail/tok" });
+    expect(store.get("job-1").thumbnailPath).toBe("/api/thumbnail/tok");
+    expect(store.transition("job-1", "downloading").thumbnailPath).toBe("/api/thumbnail/tok");
+  });
+});
+
 describe("listing and restart recovery", () => {
   test("lists newest first with a total", () => {
     for (const [index, id] of ["a", "b", "c"].entries()) {

@@ -158,12 +158,34 @@ describe("assertAllAllowed", () => {
       // attack surface even though they are not "the video".
       subtitles: [{ url: "https://cdn.example/en.vtt" }],
     });
-    expect(urls).toEqual([
+    expect(urls.mustPass).toEqual([
       "https://cdn.example/v.m3u8",
       "https://cdn.example/a.m3u8",
       "https://cdn.example/v2.mp4",
       "https://cdn.example/en.vtt",
     ]);
+    expect(urls.bestEffort).toEqual([]);
+  });
+
+  test("the thumbnail is accounted for, and in `bestEffort` rather than with the media", () => {
+    const urls = urlsInProbeResult({
+      variants: [{ url: "https://cdn.example/v.m3u8" }],
+      subtitles: [],
+      thumbnailUrl: "http://192.168.1.1/admin?action=reboot",
+    });
+    // In the inventory at all — before dl-29 it was absent, which is what made
+    // it unvetted.
+    expect(urls.bestEffort).toEqual(["http://192.168.1.1/admin?action=reboot"]);
+    // And *not* in the list both call sites feed to `assertAllAllowed`, which
+    // throws: a blocked preview must not fail a downloadable video.
+    expect(urls.mustPass).toEqual(["https://cdn.example/v.m3u8"]);
+  });
+
+  test("an empty thumbnail is nothing to fetch, not an empty URL to check", () => {
+    expect(urlsInProbeResult({ variants: [], subtitles: [], thumbnailUrl: "" }).bestEffort).toEqual(
+      [],
+    );
+    expect(urlsInProbeResult({ variants: [], subtitles: [] }).bestEffort).toEqual([]);
   });
 });
 
