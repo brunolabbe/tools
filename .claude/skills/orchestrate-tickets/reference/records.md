@@ -86,6 +86,43 @@ discarded. So:
   - **A Log passage citing pre-existing code pins to a sha that survives** — the
     base, or a `main` commit.
 
+  **A committed record can be spliced by a later edit, and nothing here catches
+  it.** `review-ticket` spends several paragraphs protecting "the caller commits
+  the gate record **verbatim**", and frames the threat as the caller editing a
+  reviewer's words. The realistic threat is different: a *later* agent, appending
+  something unrelated, splicing into the record it is not touching.
+
+  The mechanism, verified in this repo: an agent anchored its insertion on the
+  bare string `## The gate on this filing`, which also appears **backticked inside
+  a gate record's own prose** — ticket prose here quotes headings constantly, and
+  in that file the quoted form sits nearly 500 lines above the real heading. The
+  insert landed inside the committed record, cutting a sentence in half; ninety
+  lines of unrelated narrative went in, and the sentence resumed as a second,
+  garbled heading duplicating the real one.
+
+  **Nothing mechanical fails.** Measured directly: with a duplicated `## Review`
+  heading and a half-sentence in a ticket, `npm run check` exits **0** — oxfmt
+  formats markdown, it does not validate heading semantics — and
+  `npm run status -- --json` exits **0**, because it reads frontmatter. The ticket
+  looks fine to every gate this repo has. **A record that has been edited reads
+  exactly like one that has not**, which is why the discipline cannot be an
+  inspection.
+
+  So, two practices, both one line:
+
+  - **Anchor on the heading *form*, never the bare heading text** — `\n\n## …\n`,
+    not `## …`. Headings get quoted inside prose here as a matter of course.
+  - **Diff the record's section against `HEAD` before committing any edit to a
+    ticket that carries one.** One command, and it is the only thing that detects
+    this.
+
+  Provenance: the two incidents are the `repo-13` session's, reported to this one
+  — it happened twice on one ticket, to two different agents, for the identical
+  reason, which is what makes it a pattern rather than an accident; a reviewer
+  caught the first, and the second agent caught itself by diffing before
+  committing. The quoted-heading mechanism and the two exit codes above were
+  verified here.
+
   Surfaced in the sixth session by a builder that **refused the pin it was given**
   and returned three options instead. The orchestrator had conflated the two
   cases; only the builder was close enough to the tree to see that the base pin
