@@ -27,9 +27,9 @@ you are there.
 | [reference/sizing.md](reference/sizing.md) | Before dispatch, to pick gate count and ship authority per ticket (step 2) |
 | [reference/concurrency.md](reference/concurrency.md) | Before dispatching more than one builder — seams, collisions, stacking (step 2–3) |
 | [reference/dispatching.md](reference/dispatching.md) | Writing a builder prompt or a gate prompt (steps 3 and 4) |
-| [reference/defect-shapes.md](reference/defect-shapes.md) | Writing a gate prompt, and before believing what one returns (step 4) |
-| [reference/worktree-hygiene.md](reference/worktree-hygiene.md) | Whenever a worktree is created, held or removed (steps 3 and 8) |
-| [reference/records.md](reference/records.md) | Committing a gate record, a ticket log or a PR comment (step 7) |
+| [reference/defect-shapes.md](reference/defect-shapes.md) | Writing a gate prompt, and before believing what one returns (steps 4 and 8) |
+| [reference/worktree-hygiene.md](reference/worktree-hygiene.md) | Whenever a worktree is created, held or removed (steps 3, 6 and 10) |
+| [reference/records.md](reference/records.md) | Committing a gate record, a ticket log or a PR comment (step 9) |
 
 ## The loop
 
@@ -104,16 +104,40 @@ you are there.
      reproductions and a positive control — and in what they report next.
 7. **Both report to you when they are done**, separately, and that is the point of
    asking both: you get the builder's account and the reviewer's account of the
-   same exchange, written by two models, and can hold one against the other. A
-   pair that agrees and cannot each say what was run has not finished. **Then the
-   builder opens the PR**, commits the gate record, and posts the reviewer's
+   same exchange, written by two models, and can hold one against the other.
+8. **You accept, or you send it back. The work is not done until you do** — the
+   pair decides when *they* are finished, you decide whether that is true. This is
+   the only thing that catches a pair which agreed too easily, and it is four
+   checks, not a re-review:
+   - **Does each report say what was run?** Commands and their results, not
+     "addressed" and not "confirmed". A finding closed with no command named is a
+     finding still open.
+   - **Do the two accounts describe the same exchange?** They were written by
+     different models and should not need to be reconciled. If one says a finding
+     was reproduced and the other does not mention it, something is missing.
+   - **Does every `Done when` line have a verdict** — `proven`, `verified`,
+     `unproven`, `unproven (gate)` — with a test named, `file.test.ts:88` rather
+     than "covered"? The acceptance table is the half a finding list silently
+     replaces.
+   - **Is there an open decision in either report?** It comes to you precisely
+     because neither of them may answer it. Put it to the user before the PR, not
+     after.
+
+   **You are judging whether they are finished, not whether they were right.** Do
+   not re-open a finding the two of them settled with evidence, do not substitute
+   your reading of the code for the builder's — that is the hop this loop removed,
+   arriving from the other direction. Send it back naming the specific line whose
+   evidence is missing, and let them close it. If a report satisfies all four, say
+   so plainly and move on; an acceptance step that always finds something is a
+   relay wearing a different hat.
+9. **Builder opens the PR**, commits the gate record, and posts the reviewer's
    report to the PR thread.
-8. **Remove the reviewer's worktree** once its record is pushed **and its
+10. **Remove the reviewer's worktree** once its record is pushed **and its
    conversation with the builder is over** — the second condition is new with the
    direct channel, and it is the one that bites. **Hold the builder's until the
    ticket is finished**, because
-   steps 9 and 4-above may still need that agent. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
-9. **Check the merge landed what it was supposed to.** Not polling — one look,
+   steps 11 and 4-above may still need that agent. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
+11. **Check the merge landed what it was supposed to.** Not polling — one look,
    after the fact. See _After a merge_.
 
 **The PR is not the end of gating; the merge is.** Step 7 reads as a terminus and
