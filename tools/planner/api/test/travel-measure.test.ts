@@ -17,7 +17,7 @@ import {
   type Place,
   type Source,
 } from "@planner/contract";
-import type { LocateRequest, TravelRequest } from "@planner/agent";
+import type { LocateRequest, TravelRequest, TripContext } from "@planner/agent";
 import {
   answered,
   REFUSED,
@@ -99,15 +99,41 @@ function gazetteer(entries: Record<string, { latitude: number; longitude: number
 async function measure(
   candidates: readonly Candidate[],
   provider: RunGrounding,
+  trip?: TripContext,
 ): Promise<Awaited<ReturnType<typeof measureTravel>>> {
   return measureTravel({
     candidates,
     places: runPlaces(candidates),
     provider,
+    trip,
     logger,
     signal: new AbortController().signal,
     onProgress: () => {},
   });
+}
+
+/**
+ * The same provider, recording every `LocateRequest` it is handed — pl-37.
+ *
+ * The whole request and not just one field: what is under test is that the
+ * pass hands the seam what it was given, and a recorder that only kept
+ * `trip.destination` could not see a rewritten `place` beside it.
+ */
+function watching(provider: RunGrounding): {
+  provider: RunGrounding;
+  requests: LocateRequest[];
+} {
+  const requests: LocateRequest[] = [];
+  return {
+    provider: {
+      ...provider,
+      locate: (request) => {
+        requests.push(request);
+        return provider.locate(request);
+      },
+    },
+    requests,
+  };
 }
 
 /** Every place on a candidate, so a test can read what the pass wrote back. */
@@ -380,5 +406,56 @@ describe("what a measured leg cites", () => {
 
     const sources = legSources(result.travel.between(here, there));
     expect(sources.map((each) => each.title)).toEqual([ROUTED, GEOCODED]);
+  });
+});
+
+/**
+ * The trip context the pass carries to `locate`, and nowhere else — pl-37.
+ *
+ * The seam grew a field; this file's job is that the *pass* hands it over
+ * unchanged and does not let it become a fact about anything. The choosing
+ * behind it is `grounding-valhalla.test.ts`'s, over real captures.
+ */
+describe("what the pass tells `locate` about the trip", () => {
+  test("every lookup carries it, as the prose it was handed", async () => {
+    const first = at("Percé", null);
+    const second = at("Tadoussac", null);
+    const { provider, requests } = watching(gazetteer({}));
+
+    await measure([first, second], provider, { destination: "Québec, Canada" });
+
+    expect(requests.map((each) => each.trip?.destination)).toEqual([
+      "Québec, Canada",
+      "Québec, Canada",
+    ]);
+  });
+
+  test("a run with no destination sends none, rather than an empty one", async () => {
+    // A brief may decline its destination and that is an instruction, not a
+    // hole. `undefined` and `""` are different questions to the cache key, so
+    // inventing the second here would partition rows for nothing.
+    const { provider, requests } = watching(gazetteer({}));
+
+    await measure([at("Percé", null)], provider);
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.trip).toBeUndefined();
+  });
+
+  /**
+   * **It is a hint for choosing, never evidence that a place is somewhere.**
+   *
+   * The failure this rules out is the tempting one: a place the geocoder could
+   * not find, quietly given the destination's coordinates because "the trip is
+   * going there anyway". That is a fabricated point with a `Source` behind it,
+   * which is the worst thing this tool can produce. A destination changes
+   * which of a geocoder's answers is believed and it never manufactures one.
+   */
+  test("and a place nobody could locate is still unlocated, destination or not", async () => {
+    const nowhere = at("Zzqqxv", null);
+
+    const result = await measure([nowhere], gazetteer({}), { destination: "Québec, Canada" });
+
+    expect(coordinatesOf(result.candidates[0] as Candidate)).toEqual([null]);
   });
 });

@@ -59,7 +59,7 @@ import type {
   TripBrief,
   UncheckedConstraint,
 } from "@planner/contract";
-import type { Corridor, Find, NearbyArticle } from "@planner/agent";
+import type { Corridor, Find, NearbyArticle, TripContext } from "@planner/agent";
 import { DISCOVERY_KINDS } from "@planner/agent";
 import { unchecked } from "@planner/itinerary";
 import type { GroundingOutcome, RunGrounding, TravelOutcomeMatrix } from "../grounding/cache.ts";
@@ -178,6 +178,23 @@ function corridorEndpoints(brief: TripBrief): { origin: string; destination: str
 }
 
 /**
+ * The trip context a `locate` call gets, out of the brief — pl-37.
+ *
+ * `undefined` when the destination was declined, which is a real answer and not
+ * a hole: `contract/src/brief.ts` leaves `destination` unrequired on purpose,
+ * and "somewhere warm, you pick" is a trip with nothing here to say.
+ *
+ * **It lives in this file because this is where the brief is already read.**
+ * `hasCorridor` and `corridorEndpoints` are here for the same reason, and the
+ * orchestrator already imports from here — a fourth module holding one
+ * four-line brief reader would be a module named for a type rather than for a
+ * job.
+ */
+export function tripContextFor(brief: TripBrief): TripContext | undefined {
+  return isAnswered(brief.destination) ? { destination: brief.destination.value } : undefined;
+}
+
+/**
  * Whether this brief has a corridor to discover along at all — the orchestrator's
  * question, asked *before* it decides whether to enter `grounding`. A run that
  * will not call `provider.nearby` must not pass through a state it spends no
@@ -202,9 +219,14 @@ export async function discoverAlongCorridor(input: DiscoverInput): Promise<Disco
   const origin = placeFor(endpoints.origin);
   const destination = placeFor(endpoints.destination);
 
-  const originLocated = await locate(provider, origin, signal, logger);
+  // Non-null by construction: `corridorEndpoints` returned, so the destination
+  // is answered. Read through the same helper the orchestrator uses rather than
+  // rebuilt here, so one function decides what trip context is.
+  const trip = tripContextFor(brief);
+
+  const originLocated = await locate(provider, origin, trip, signal, logger);
   finished();
-  const destinationLocated = await locate(provider, destination, signal, logger);
+  const destinationLocated = await locate(provider, destination, trip, signal, logger);
   finished();
 
   if (originLocated === null || destinationLocated === null) {
@@ -481,14 +503,29 @@ function notabilityTiles(corridor: Corridor): Coordinates[] {
   return points;
 }
 
+/**
+ * One corridor endpoint, located.
+ *
+ * **`trip` is passed even for the endpoint that *is* the destination**, and the
+ * circularity is deliberate rather than overlooked — pl-37. `placeFor` builds
+ * both endpoints with `locality: null`, so both are exactly the bare-name case
+ * the trip context exists for, and the origin genuinely benefits. For the
+ * destination the context is the place's own name, which can narrow only among
+ * rows the query already matched: measured over the captured bare `Percé`
+ * reply, the hint `perce` matches the Idaho county as well as the Québec town.
+ * That is why `chooseResult` runs no settlement tiebreak behind a destination
+ * hint — with one, this call site would have answered Québec on no evidence.
+ * With none, the worst it can do is what it did before: decline.
+ */
 async function locate(
   provider: RunGrounding,
   place: Place,
+  trip: TripContext | undefined,
   signal: AbortSignal,
   logger: AppLogger,
 ): Promise<Place | null> {
   try {
-    const outcome = await provider.locate({ place, signal });
+    const outcome = await provider.locate({ place, trip, signal });
     if (outcome.kind !== "answered") return null;
     return { ...place, coordinates: outcome.value.coordinates };
   } catch (error: unknown) {

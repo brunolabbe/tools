@@ -78,6 +78,16 @@ export class FixtureGroundingProvider implements GroundingProvider {
     this.#now = now;
   }
 
+  /**
+   * `request.trip` is ignored, and so is `request.place.locality` — pl-37 did
+   * not change that and did not need to.
+   *
+   * This is a table lookup by name over a gazetteer small enough that no two
+   * entries in it share one, which is the licence `fixturePlaceKey` already
+   * argues for. There is nothing here for a hint to choose *between*: a name
+   * hits one row or none. A provider with a real geocoder behind it has the
+   * ambiguity and reads the field; see `ValhallaGroundingProvider`.
+   */
   async locate(request: LocateRequest): Promise<LocatedPlace | null> {
     throwIfAborted(request.signal);
 

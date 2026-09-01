@@ -245,6 +245,52 @@ export type TravelMode = (typeof TRAVEL_MODES)[number];
 // Finding a place
 // ---------------------------------------------------------------------------
 
+/**
+ * What the trip already knows about where it is, for a lookup that has nothing
+ * else — pl-37.
+ *
+ * ## Why the seam has this at all
+ *
+ * `LocateRequest` used to carry a `Place` and nothing else, so the only
+ * evidence a provider could reason from was the candidate's own `locality` —
+ * and `Place.locality` is nullable, and a model omits it routinely. A bare
+ * `Percé` is the town in Québec and it is Nez Perce County, Idaho, 3 882 km
+ * apart, and a provider with nothing to choose between them declines. The trip
+ * knew the answer the whole time: its brief named a destination before any
+ * specialist ran, and none of it reached here.
+ *
+ * ## It is prose, and nothing may parse structure out of it
+ *
+ * The same rule `Place.locality` carries. `destination` is the brief's own free
+ * text — what a person typed into the intake — so it is `"Gaspésie, Québec"`,
+ * `"somewhere along the 132"` or `"the Charlevoix loop"`, and it is never a
+ * country, a region code or an administrative anything. A provider may match
+ * against it; nothing may decide which part of it means what. The day a
+ * country has to be *known* rather than *matched*, it becomes its own field.
+ *
+ * ## It is a weaker hint than the place's own, and a provider must treat it so
+ *
+ * A `locality` is evidence about *this place*. A destination is evidence about
+ * *the trip*, and a trip routinely contains places outside its destination —
+ * the stop on the way, the day trip over the border. So a provider that lets
+ * trip context outvote or dilute the place's own hints will decline places it
+ * locates today. `ValhallaGroundingProvider.locate` asks it last on every
+ * path — only once the place's own `locality`, the reply's agreement with
+ * itself and the settlement tiebreak have each been tried and declined. It is
+ * therefore only ever able to turn "not located" into an answer. See
+ * `chooseResult`, which is where a provider's own version of that ordering
+ * has to be argued.
+ */
+export interface TripContext {
+  /**
+   * Where the trip is going, as the brief's free text.
+   *
+   * Required within this object, because a `TripContext` with nothing in it is
+   * the same as no `TripContext`. The whole field is what is optional.
+   */
+  destination: string;
+}
+
 export interface LocateRequest {
   /**
    * The place as a candidate names it. A `Place` and not a string: `locality`
@@ -254,6 +300,16 @@ export interface LocateRequest {
    * Its `coordinates` are ignored — they are what this call is for.
    */
   place: Place;
+  /**
+   * The trip this lookup is on behalf of — pl-37. See `TripContext`.
+   *
+   * **Optional, and its absence is ordinary rather than exceptional.** A brief
+   * may decline its destination — "somewhere warm, you pick" is a real trip,
+   * and `contract/src/brief.ts` says a declined destination is an instruction
+   * and not a hole — so a caller with no destination to give omits this, and a
+   * provider answers exactly as it did before pl-37.
+   */
+  trip?: TripContext | undefined;
   signal?: AbortSignal | undefined;
 }
 

@@ -81,6 +81,7 @@ import type {
   TravelMatrix,
   TravelMode,
   TravelRequest,
+  TripContext,
 } from "@planner/agent";
 import { AppError, coordinatesSchema, sourceSchema } from "@planner/contract";
 import type { Place, Source } from "@planner/contract";
@@ -88,7 +89,7 @@ import type { Database } from "better-sqlite3";
 import type { GroundingCacheTtlHours } from "../config.ts";
 import { deleteExpiredGrounding, selectGrounding, upsertGrounding } from "../db/grounding-cache.ts";
 import type { AppLogger } from "../logger.ts";
-import { KEY_SEPARATOR, placeIdentity } from "./place-key.ts";
+import { ABSENT, KEY_SEPARATOR, normalisePart, placeIdentity } from "./place-key.ts";
 
 /**
  * The kinds, which are the seam's methods.
@@ -114,9 +115,38 @@ const TRAVEL = "travel";
  * the full argument, including what it drops and what it refuses to.
  */
 
-/** The key for "where is this place". The place's identity, and nothing else. */
-export function locateKey(place: Place): string {
-  return placeIdentity(place);
+/**
+ * The key for "where is this place, on behalf of this trip".
+ *
+ * The place's identity, **and the trip context the answer may depend on** —
+ * pl-37. It was the identity and nothing else, which was right for exactly as
+ * long as `LocateRequest` carried nothing else. The moment the seam gained
+ * `trip`, a key that ignored it would serve one trip's answer to another: a run
+ * to Québec locates a bare `Percé` at the Gaspé town, stores it under `perce`,
+ * and a later run to Idaho reads that row back and gets Québec — silently, with
+ * a `Source` on it, which is the worst failure this tool has. Two rows for two
+ * questions is the whole fix.
+ *
+ * **Unconditional, and that is deliberate.** Whether the trip changes *this*
+ * answer is a question only the inner provider can answer — `chooseResult`
+ * consults it just where the place's own hints narrow nothing — and this cache
+ * wraps whatever `GroundingProvider` it was handed. A key that tried to be
+ * clever about when context matters would be encoding one provider's internals,
+ * and would be wrong the day a second provider weighs it differently.
+ *
+ * The cost is a lower hit rate across runs, and it is bounded: a run's
+ * destination is constant, so every lookup *within* one run shares a partition
+ * and nothing about the intra-run deduplication in `runPlaces` changes. Only
+ * two runs to different destinations stop sharing a row, which is precisely the
+ * pair that must not.
+ *
+ * A request with no trip context keys as `ABSENT`, not as the empty string: a
+ * declined destination is a different question from a destination of `"  "`,
+ * the same distinction `placeIdentity` draws for a missing locality.
+ */
+export function locateKey(place: Place, trip: TripContext | undefined): string {
+  const destination = trip === undefined ? ABSENT : normalisePart(trip.destination);
+  return `${placeIdentity(place)}${KEY_SEPARATOR}${destination}`;
 }
 
 /**
@@ -394,7 +424,7 @@ export class CachingGroundingProvider implements GroundingProvider, RunGrounding
     spend: RunSpend | null,
   ): Promise<GroundingOutcome<LocatedPlace>> {
     const { db, inner, now } = this.#options;
-    const key = locateKey(request.place);
+    const key = locateKey(request.place, request.trip);
     const at = now();
 
     const cached = selectGrounding(db, { kind: LOCATE, key, now: at.toISOString() });

@@ -895,6 +895,48 @@ describe("every captured limit=10 reply, through locate (pl-34 round 2)", () => 
     expect(outcomes.filter((each) => each !== null)).toHaveLength(9);
     expect(outcomes.at(-1)).toBeNull();
   });
+
+  /**
+   * The same ten, re-run with a trip context behind them — pl-37's Done-when.
+   *
+   * The brief's claim was that a bare `Percé` with a Québec destination "should
+   * join the nine without moving any of the others", and this is that sentence
+   * as an assertion: **ten located, and the nine at the coordinates they
+   * already had.** It is one test rather than ten because what is being pinned
+   * is the *set* — a change that located the tenth by moving one of the nine
+   * would pass ten separate assertions rewritten one at a time, and fails here.
+   *
+   * The nine are unmoved by construction, not by luck: each supplies a
+   * locality, and `chooseResult` consults the destination only where the
+   * locality narrows nothing. That is the property this test exists to keep
+   * true as the function changes.
+   */
+  test("with a Québec destination the bare name joins the nine, and the nine do not move", async () => {
+    const trip = { destination: "Québec, Canada" } as const;
+    const outcomes = await Promise.all(
+      cases.map(async ({ place: subject }) => {
+        const { fetch } = answeringCaptures();
+        return await provider(fetch).locate({ place: subject, trip });
+      }),
+    );
+
+    expect(outcomes.filter((each) => each !== null)).toHaveLength(10);
+
+    // The nine, each still where it was without a destination. `cases` already
+    // carries the expected coordinate per row, so this compares against the
+    // block above rather than against a second copy of the same numbers.
+    for (const [index, { place: subject, expected }] of cases.entries()) {
+      const located = outcomes[index];
+      if (expected === null) continue;
+      expect(located?.coordinates, `${subject.name} moved`).toEqual(expected);
+    }
+
+    // And the tenth, which declined above and is the whole point of pl-37.
+    expect(outcomes.at(-1)?.coordinates).toEqual({
+      latitude: 48.5222989,
+      longitude: -64.2136423,
+    });
+  });
 });
 
 /** The settlement tiebreak: what it decides, and what it is not allowed to. */
@@ -954,6 +996,185 @@ describe("preferring a settlement over a larger feature (pl-34 round 2)", () => 
     await expect(provider(fetch).locate({ place: political })).resolves.toMatchObject({
       coordinates: { latitude: 45.2129063, longitude: -73.2194252 },
     });
+  });
+});
+
+/**
+ * The trip's destination as the last hint a bare name has — pl-37.
+ *
+ * pl-34 left one whole class of query with nothing to reason from: a `Place`
+ * whose `locality` is `null`, which a model emits routinely. The trip knew the
+ * answer the whole time and `LocateRequest` had nowhere to carry it. Every
+ * case below runs over a checked-in capture, and the two that decline decline
+ * for a *named* reason rather than for want of a fixture.
+ *
+ * **The rung it sits on is what these tests are really about.** It is
+ * consulted only where the place's own locality narrows nothing *and* the
+ * reply does not already agree, and no settlement tiebreak runs behind it.
+ * Three of the six below fail if either of those boundaries is moved.
+ */
+describe("the trip's destination, where the place says nothing (pl-37)", () => {
+  const PERCE_TOWN = { latitude: 48.5222989, longitude: -64.2136423 };
+  const SAINT_JOHN_NB = { latitude: 45.272764, longitude: -66.0627914 };
+
+  test("a bare name a locality never narrowed is located by the trip's destination", async () => {
+    // The captured bare `Percé`: the Québec town and Nez Perce County, Idaho,
+    // 3 882 km apart. `Québec` is in the first `display_name` and not in the
+    // second, so one row survives and agrees with itself.
+    const { fetch } = answering(captured("Percé"));
+    const bare: Place = { name: "Percé", locality: null, coordinates: null };
+
+    await expect(
+      provider(fetch).locate({ place: bare, trip: { destination: "Québec, Canada" } }),
+    ).resolves.toMatchObject({ coordinates: PERCE_TOWN });
+  });
+
+  test("and the same reply with no destination still declines", async () => {
+    // The other half of the pair, and the half that says the destination is
+    // doing the work rather than the fixture having changed.
+    const { fetch } = answering(captured("Percé"));
+    const bare: Place = { name: "Percé", locality: null, coordinates: null };
+
+    await expect(provider(fetch).locate({ place: bare })).resolves.toBeNull();
+  });
+
+  test("it separates six places on three continents, which nothing else could", async () => {
+    // The reply pl-34 was filed over. `City of Saint John, … New Brunswick /
+    // Nouveau-Brunswick, Canada` is index 1, behind Toulouse, and `importance`
+    // would have chosen St. John's, Newfoundland. Before pl-37 a candidate
+    // with no locality got `null` here and the leg went unmeasured.
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const bare: Place = { name: "Saint-Jean", locality: null, coordinates: null };
+
+    await expect(
+      provider(fetch).locate({ place: bare, trip: { destination: "New Brunswick, Canada" } }),
+    ).resolves.toMatchObject({ coordinates: SAINT_JOHN_NB });
+  });
+
+  test("a destination too coarse to separate two rows declines rather than guessing", async () => {
+    // `Canada` matches both the New Brunswick city and St. John's,
+    // Newfoundland — about 1 400 km apart. A hint that narrows to two places
+    // has not found one, and the honest answer is the one pl-34 gives.
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const bare: Place = { name: "Saint-Jean", locality: null, coordinates: null };
+
+    await expect(
+      provider(fetch).locate({ place: bare, trip: { destination: "Canada" } }),
+    ).resolves.toBeNull();
+  });
+
+  test("a destination no result mentions leaves the reply exactly as it was", async () => {
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const bare: Place = { name: "Saint-Jean", locality: null, coordinates: null };
+
+    await expect(
+      provider(fetch).locate({ place: bare, trip: { destination: "Patagonia" } }),
+    ).resolves.toBeNull();
+  });
+
+  /**
+   * **The settlement tiebreak must not run behind a destination hint**, and
+   * this is the measured reason rather than a cautious one.
+   *
+   * `runs/discovery.ts` grounds the corridor's own endpoints, so the place it
+   * locates and the destination it hands as context are the *same string*.
+   * Over this capture the hint `perce` matches both rows — `Percé, Le
+   * Rocher-Percé, …` **and** `Nez Perce County, Idaho, …` — so nothing is
+   * narrowed, and exactly one of the two survivors is a settlement. A tiebreak
+   * here would answer Québec with real confidence and no evidence, which is
+   * the failure pl-34 refused, arriving through a hint that only looks like
+   * evidence.
+   */
+  test("a destination that narrows nothing does not get a settlement tiebreak", async () => {
+    const { fetch } = answering(captured("Percé"));
+    const bare: Place = { name: "Percé", locality: null, coordinates: null };
+
+    await expect(
+      provider(fetch).locate({ place: bare, trip: { destination: "Percé" } }),
+    ).resolves.toBeNull();
+  });
+
+  /**
+   * **The destination never dilutes the place's own locality**, which is the
+   * boundary pl-37's brief asked to cross and this build refused to.
+   *
+   * The brief said to score the destination "alongside the locality's
+   * fragments". `bestMatches` keeps only the top-scoring rows, so blending
+   * lets evidence about the *trip* outvote evidence about the *place* — and a
+   * trip contains places outside its destination. Here the candidate says
+   * Newfoundland and the trip says New Brunswick: blended, both rows score 1,
+   * they disagree by 1 054 km, both are `city` so the tiebreak cannot help,
+   * and a lookup that works today returns `null`. On the ladder the
+   * destination is never consulted at all, because the locality narrowed.
+   */
+  test("a locality that says where is not diluted by a destination that says elsewhere", async () => {
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const inNewfoundland: Place = {
+      name: "Saint-Jean",
+      locality: "Newfoundland",
+      coordinates: null,
+    };
+
+    await expect(
+      provider(fetch).locate({
+        place: inNewfoundland,
+        trip: { destination: "New Brunswick, Canada" },
+      }),
+    ).resolves.toMatchObject({ coordinates: { latitude: 47.5646794, longitude: -52.7066964 } });
+  });
+
+  /**
+   * **The fourth rung: a locality that narrowed, and a settlement tiebreak
+   * that could not finish the job** — added after pl-37's gate measured the
+   * branch this build had first argued was unreachable.
+   *
+   * The first build stopped at three rungs and gave, as its reason for
+   * refusing a fourth, that no capture reaches it. **That was wrong.** Of the
+   * fourteen `nominatim-search-*.json` captures, exactly one can reach it —
+   * this reply, on the fragment `canada`. `City of Saint John, … New
+   * Brunswick / Nouveau-Brunswick, Canada` and `St. John's, Newfoundland,
+   * Newfoundland and Labrador, Canada` both mention it, they are 1 054 km
+   * apart, and **both are `addresstype: city`** — so the settlement allowlist
+   * narrows nothing and rung 2 leaves them as tied as it found them. In the
+   * other two multi-row captures (`gaspe-quebec`, `perce-bare`) exactly one of
+   * the disagreeing rows is a settlement type, which is why both finish at
+   * rung 2 and neither could ever have shown this.
+   *
+   * The rung is additive on the same terms as the three above it: it runs only
+   * where all three have declined, so the only outcome it can change is
+   * `null`.
+   */
+  test("a locality that narrows to two settlements is finished by the destination", async () => {
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const inCanada: Place = { name: "Saint-Jean", locality: "Canada", coordinates: null };
+
+    await expect(
+      provider(fetch).locate({ place: inCanada, trip: { destination: "New Brunswick" } }),
+    ).resolves.toMatchObject({ coordinates: SAINT_JOHN_NB });
+  });
+
+  test("and the same reply, same locality, with no destination still declines", async () => {
+    // The half that says the destination is what finished it. Without one the
+    // two `city` rows stay tied and `locate` answers honestly, exactly as it
+    // did before pl-37 — and exactly as it did before the fourth rung.
+    const { fetch } = answering(NOMINATIM_AMBIGUOUS_LIMIT_10);
+    const inCanada: Place = { name: "Saint-Jean", locality: "Canada", coordinates: null };
+
+    await expect(provider(fetch).locate({ place: inCanada })).resolves.toBeNull();
+  });
+
+  test("the destination is not appended to the query the geocoder is asked", async () => {
+    // It narrows the *choice*, never the *question*. Appending it would make
+    // "Percé, Gaspésie" a different search from "Percé" — a place genuinely
+    // outside the destination would stop being found rather than stop being
+    // disambiguated — and it would invalidate every capture in this file,
+    // which are keyed by the exact query sent.
+    const { fetch, calls } = answering(captured("Percé"));
+    const bare: Place = { name: "Percé", locality: null, coordinates: null };
+
+    await provider(fetch).locate({ place: bare, trip: { destination: "Gaspésie, Québec" } });
+
+    expect(new URL(String(calls[0]?.url)).searchParams.get("q")).toBe("Percé");
   });
 });
 
