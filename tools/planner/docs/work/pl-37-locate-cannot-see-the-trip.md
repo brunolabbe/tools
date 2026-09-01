@@ -91,6 +91,36 @@ is the thing that generalises.
   `@planner/contract` and pl-27's `UncheckedConstraint` vocabulary say so —
   the same clause pl-34 carried and deferred.
 
+## Review
+
+**Gate: PASS** — 2026-09-01 · `origin/main...HEAD` (381532e) · self-run defect hunt, full diff read + mutation reproduction of every documented falsification
+
+_Added when committing, not by the reviewer: the record is **pinned to
+`381532e`**, a pre-squash branch sha, and its citations resolve only there —
+`node scripts/citations.mjs <this file> --section Review --rev 381532e`. It is
+kept rather than remapped because the tests it cites do not exist at the base
+commit, so no sha that survives the squash-merge can resolve them; after merge
+the tree is reachable through this ticket's pull request. The gate was **Sonnet,
+against an Opus build**, and it reviewed `381532e` — which predates the fourth
+rung added below in the Log's second round._
+
+| Done when                                                                                                    | Proof                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bare `Percé` + Québec destination locates the town, and still declines with no destination                   | `grounding-valhalla.test.ts:1028` (locates) ✓ · `:1037` (declines) ✓                                                                                                                                           |
+| `locateKey` distinguishes two runs whose destinations differ, by a test that fails if the context is dropped | `grounding-cache.test.ts:892` / `:923` / `:930` ✓ — reproduced: dropping `trip` from `locateKey` fails 3 of the 4 new cache tests, the positive one stays green as designed                                    |
+| pl-34's ten-capture block still passes, with any changed outcome named                                       | `grounding-valhalla.test.ts:895` (unmodified pl-34 test, still 9/10) ✓ · `:914` (new: with a Québec destination, 10/10, nine unmoved) ✓                                                                        |
+| Widened `LocateRequest` — whether it changes what a provider may return                                      | **verified** — `locate` still returns `LocatedPlace \| null`; zero diff to `tools/planner/contract/` or `tools/planner/itinerary/`; no `UncheckedConstraintKind` added (`contract/src/unchecked.ts` untouched) |
+
+- **Build step 4 refusal, independently reproduced.** Implemented the literal blend ("destination as another unlabelled hint alongside the locality's fragments") in `chooseResult` and ran it: exactly 2 of 95 tests in `grounding-valhalla.test.ts` fail — `a destination that narrows nothing does not get a settlement tiebreak` and `a locality that says where is not diluted by a destination that says elsewhere`, the latter failing precisely as described (St. John's, Newfoundland on a New Brunswick trip goes from `{47.5646794, -52.7066964}` to `null`). Reverted cleanly. The refusal is justified on a real, reproduced regression, not a hypothetical.
+- **Settlement-tiebreak-behind-destination removal, independently reproduced.** Reinstated a tiebreak behind rung 3 and ran the suite: `a destination that narrows nothing does not get a settlement tiebreak` goes red, answering the Québec town `{48.5222989, -64.2136423}` on the circular `perce` hint that also matches `Nez Perce County, Idaho` — exactly the false-confidence failure the builder's Log describes. Reverted cleanly.
+- **Mutation-testing claim, independently reproduced for all 7 documented falsifications**, each applied to `valhalla.ts` / `cache.ts` / `travel.ts` / `discovery.ts`, run, then reverted: third rung removed → 3 failed (bare-Percé locate, six-continents case, ten-with-destination block); tiebreak added behind destination → 1 failed; destination blended into locality hints → 2 failed; `trip` dropped from `locateKey` → 3 of 4 cache tests failed, the 4th (positive, same-destination) stayed green; `trip` dropped from `travel.ts`'s call → 1 failed; `trip` dropped from `discovery.ts`'s call → 1 failed; `tripContextFor` returning `{ destination: "" }` for a declined slot → 1 failed. All 7 exactly matched the Log's claimed counts. Walked all 20 new tests (36 new `expect(` calls) across the five touched files for logical soundness; none read as tautological or unreachable.
+- **Cache key.** Intra-run consistency verified by reading, not assuming: `orchestrator.ts` computes `tripContextFor(brief)` once per run (`travel.ts:362`) and `discovery.ts` computes it once per corridor call (`discovery.ts:224`) from the same immutable `brief`, so every `locate` call in one run shares one `trip` value — no path produces two different trip contexts for one run. Collision check: `locateKey` = `placeIdentity(place) + KEY_SEPARATOR + destination-part`; `KEY_SEPARATOR`/`ABSENT` are control characters stripped by `normalisePart` before joining, so no user-controlled string can forge a separator across the (name, locality, destination) boundary — no two distinct triples can collide.
+- **pl-34's allowlist.** `SETTLEMENT_ADDRESS_TYPES` (`valhalla.ts:206`) unchanged, still `{city, town, village, municipality}`, still referenced exactly once (`valhalla.ts:976`), still behind locality only — no second reference was added behind the destination rung.
+- **Fourth-rung measurement (item 6), exhaustive.** Walked all 14 checked-in Nominatim captures programmatically (shared substring ≥3 chars between rows, disagreement > `SAME_PLACE_METRES`, post-settlement-filter survivor count). **1 of 14** — `nominatim-search-ambiguous-limit10.json` — could exercise a fourth rung: the fragment `canada` ties the two `city`-type rows (New Brunswick, Newfoundland), both settlement types, so the existing settlement tiebreak leaves them tied unresolved. Confirmed by implementing a literal 4th rung and running `locate({ place: { name: "Saint-Jean", locality: "Canada" }, trip: { destination: "New Brunswick" } })`: resolves to `{45.272764, -66.0627914}` with the rung, still `null` without a trip. `gaspe-quebec.json` and `perce-bare.json` (the other two multi-row captures) always resolve at rung 1 alone, because in both, exactly one of the two disagreeing rows is a settlement type. No shipped test currently exercises this — it requires a `locality: "Canada"` case nobody has written.
+- **Invariants.** `LocateRequest`/`TripContext` live in `@planner/agent/src/grounding.ts`, where `LocateRequest` already lived pre-pl-37 (confirmed against `origin/main`) — not `@planner/contract`; this is the seam a provider implements, not the tool's shared contract, so no unilateral contract edit occurred. No bare `Error`, no `console`, no `any` in the diff (scanned). `npm run check` — 0. `npm test` — 115 files, 1813 tests, matching the Log's claimed counts exactly. Ticket frontmatter is `status: done`; Log records three "what the brief had wrong" findings. `node scripts/commit-message.mjs --text "fix(planner): let locate see the trip it is grounding (pl-37)"` — exit 0. Diff touches only `tools/planner/` — one tool.
+- NFR: security n/a (destination never reaches the query, no new external surface) · performance — cross-run cache hit-rate cost is reasoned not measured, disclosed by the builder, bounded to cross-destination pairs · reliability ✓ (ladder additive by construction, confirmed by mutation) · maintainability — **low**, already disclosed in the ticket's own Log (`MIN_HINT_CHARS` now filters a destination too, with no dedicated test); settled, not new work to propose.
+- **findings** · self-run hunt (no delegate) returned 0 new findings beyond what the ticket's own Log already discloses and settles.
+
 ## Log
 
 **2026-08-30 — filed from pl-34's second round, id checked rather than
@@ -472,3 +502,71 @@ its header says it "cannot tell you a citation is _semantically_ right … It ca
 tell you a citation cannot possibly be right, which is the half that is
 checkable." So a 5/5 on this file means **none of its citations is impossible**,
 which is a weaker and more useful sentence than "they resolve".
+
+### The gate record above, and how to read its line numbers
+
+**It is a snapshot of `381532e` and it has deliberately not been amended.** It
+therefore predates the fourth rung, which was added afterwards at the user's
+direction, on the strength of the gate's own 1-of-14 measurement. Editing the
+record to mention the rung would misrepresent what the reviewer actually saw, so
+the rung is recorded here instead and the record stands as written.
+
+**A record pins to the sha it reviewed; a Log passage pins to a sha that
+survives.** These are two different pins in one file and the difference is not
+cosmetic:
+
+- The **record** is pinned to `381532e`, a pre-squash branch sha. Its citations
+  are into tests this branch introduced — `grounding-valhalla.test.ts:1028`,
+  `grounding-cache.test.ts:892` — and those lines **do not exist at the base**,
+  so no sha that outlives the squash-merge can resolve them. After merge the
+  tree is reachable through this ticket's pull request.
+- The **Log's** "what the brief had wrong" passage is pinned to `6f29eb0`,
+  because it is evidence _about the base commit_ and the base survives.
+
+Check them separately: `--rev 381532e` for the record, `--rev 6f29eb0` for the
+Log. Note that **`--section` is advertised in `scripts/citations.mjs`'s usage
+line and is not implemented** — passing it silently changes nothing and you get
+the whole file, which is easy to misread as a filtered pass.
+
+**One mis-citation in the record, recorded rather than corrected.** Its cache-key
+paragraph says `orchestrator.ts` computes `tripContextFor(brief)` once per run,
+and then points at `travel.ts` line 362. The prose names the right file and the
+parenthetical does not. At `381532e` the line it means is
+`tools/planner/api/src/runs/orchestrator.ts:362`, which is
+`trip: tripContextFor(brief)`; `travel.ts` line 362 is an unrelated `return`,
+and a bare `travel.ts` is in any case ambiguous across three tracked files.
+**The finding is sound; only the pointer is wrong.** It is left as the reviewer
+wrote it, because a gate record is a snapshot, and corrected here.
+
+Its own citation is therefore the one `FAIL` that
+`node scripts/citations.mjs <this file> --rev 381532e` reports, and that is the
+expected state rather than something still to fix — the passage above is what it
+resolves to.
+
+### A method caveat worth more than the numbers it produced
+
+The first round reported that the brief's `discovery.ts:226` was "blank". It is
+not — at `6f29eb0` it is `],`. The mistake was not arithmetic: **the line was
+read off the working tree, where this branch had already inserted code above it,
+rather than off the commit the claim was about.** That produces a _confident
+wrong_ citation, which is strictly worse than a dangling one — a dangling
+citation announces itself, and a confident wrong one reads as evidence and gets
+repeated.
+
+The same slip is what left a bare `travel.ts` line 310 ambiguous in the first
+round, and it is the same shape as the gate's own bare `travel.ts` above. The
+rule that falls out:
+**resolve a citation against the tree the sentence is about, and name that tree
+in the sentence** — `--rev` exists for exactly this and costs one flag.
+
+### What was argued versus what was counted
+
+Worth keeping visible, because the split is what the gate caught. The first
+round's refusal of a fourth rung was filed under "measured" and was not: no
+survey had been run, and the two captures the round had spent its time in are
+precisely the two that cannot exercise the branch. The gate counted, and the
+answer was 1 of 14 rather than 0. Everything else in the first round that
+claimed a measurement had one behind it — the gate reproduced all seven
+falsifications at the exact counts claimed. The lesson is narrow and worth
+carrying: **an exhaustive claim about a fixture corpus is cheap to actually
+run**, and a survey over fourteen files is a script, not a judgement.
