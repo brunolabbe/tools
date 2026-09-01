@@ -214,3 +214,47 @@ Traps worth knowing in advance:
   One hypothesis was tested and ruled out rather than written down as a
   suspicion; see above. The negative serial numbers it turned up are real and
   should be fixed whenever someone is next in that file, but they are not this.
+
+- **2026-09-01** — **A second, independent disproof of the serial-number
+  hypothesis**, from dl-29's builder, who hit this without knowing dl-33 existed
+  and arrived at the same suspect from the other direction. Recorded so nobody
+  spends a third session on it.
+
+  Sighting: `tls-interception.test.ts > two targets get two certificates and one
+key` failed once in three consecutive full `npm test` runs on this devcontainer
+  (Linux, not Windows), `Error: error:068000DD:asn1 encoding routines::illegal
+padding` out of `new X509Certificate(...)` at the spec's own `leafOf` helper.
+  It passed in isolation immediately after, and passed on the next two full runs.
+  So: **a fifth sighting, and the second on Linux**, which further weakens the
+  Windows-only framing this ticket already discarded.
+
+  The hypothesis, reached independently: `newSerial()`
+  (`tools/downloader/api/src/tls-interception.ts:116-121`) prefixes `00` onto
+  sixteen random bytes to keep the DER INTEGER positive, so a draw whose _first_
+  random byte is itself `0x00` yields two leading zero bytes — redundant leading
+  zeros being precisely what "illegal padding" names. P(1/256) per serial also
+  fits the observed rarity, which is what made it attractive.
+
+  **It is wrong.** Three measurements, none of them a re-run of dl-33's:
+
+  1. 400 leaves from one interception, parsed through `X509Certificate` —
+     0 rejected.
+  2. 60 fresh interceptions (fresh root, fresh key each), 2 leaves apiece —
+     0/120 rejected.
+  3. The decisive one, because the first two only sample: forge driven directly
+     with three _chosen_ serials rather than waiting on a 1-in-256 draw —
+     `00` + `ff…` (high bit set), `00` + `7f…` (high bit clear, so a redundant
+     leading zero), and `00` + `00` + `ab…` (two leading zero bytes, the exact
+     hypothesised case). **All three parse.** forge normalises on write, so the
+     `00` prefix cannot produce this error at all.
+
+  That is a different method from dl-33's 13 counter values and it reaches the
+  same verdict, so the serial number is now ruled out twice over from two
+  directions. 520 leaf generations across the two sampling scripts did not
+  reproduce the failure by any means, which is itself evidence: whatever this is,
+  it does not live in leaf generation on a quiet machine. The contention framing
+  in this ticket's Build section survives dl-29's data; the serial framing does
+  not, and should not be revisited.
+
+  dl-29 did not fix it and did not widen into `tls-interception.ts`. It has no
+  reproduction to offer beyond the above.

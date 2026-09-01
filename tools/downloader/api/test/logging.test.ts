@@ -193,6 +193,70 @@ describe("correlation, end to end", () => {
     ).toBeGreaterThan(0);
   });
 
+  /**
+   * The two lines that carry a whole `RequestContext`, driven end to end.
+   *
+   * These assert on the **raw serialised string**, not on a parsed field. That
+   * is the difference between "the shape we expected was redacted" and "the
+   * secret is not in the bytes", and only the second is the property worth
+   * having — a credential that escaped under some other key would satisfy the
+   * first and fail the second.
+   *
+   * dl-29 is why they exist. The redaction predates it and is not its work, but
+   * this branch made those exact headers newly load-bearing as an *outbound*
+   * credential: `captureThumbnail` replays them to a page-chosen origin. A
+   * redaction protecting them was being carried by `safeFields` alone, with
+   * nothing pinning it at either call site.
+   */
+  test("a session cookie in a probe's context never reaches the probe route's log line", async () => {
+    const raw: string[] = [];
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+      resolver: new StubResolver(probeResult({ requestContext: CREDENTIALED })),
+    });
+
+    await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      payload: { url: SOURCE_URL },
+    });
+
+    // Not one line, anywhere, at any level.
+    expect(raw.filter((line) => line.includes("super-secret"))).toEqual([]);
+    // And the line that carries the context is present and redacted, so this is
+    // not passing because nothing was logged at all.
+    const complete = raw.filter((line) => line.includes('"msg":"probe complete"'));
+    expect(complete).toHaveLength(1);
+    expect(complete[0]).toContain(REDACTED);
+    // The non-secret header survives: redaction, not deletion.
+    expect(complete[0]).toContain("https://example.com/watch");
+  });
+
+  test("nor the orchestrator's, whose re-probe fetches the preview with those headers", async () => {
+    const raw: string[] = [];
+    harness = await createHarness({
+      logger: createLogger({ level: "debug", write: (line) => void raw.push(line) }),
+      resolver: new StubResolver(probeResult({ requestContext: CREDENTIALED })),
+    });
+
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.jobs,
+      payload: { url: SOURCE_URL },
+    });
+    const job = (response.json() as JobResponse).job;
+    await waitFor(
+      () => harness?.app.context.store.get(job.id) as Job,
+      (current) => current.status === "completed" || current.status === "failed",
+      { label: "job to finish" },
+    );
+
+    expect(raw.filter((line) => line.includes("super-secret"))).toEqual([]);
+    const reprobe = raw.filter((line) => line.includes('"msg":"re-probe complete"'));
+    expect(reprobe.length).toBeGreaterThan(0);
+    expect(reprobe[0]).toContain(REDACTED);
+  });
+
   test("the health check is logged at debug, so a liveness probe cannot bury the log", async () => {
     const { logger, lines } = capturing("info");
     harness = await createHarness({ logger });

@@ -13,7 +13,12 @@ import {
   parseJobEvent,
   ROUTES,
 } from "@downloader/contract";
-import type { JobListResponse, JobResponse, ProbeResponse } from "@downloader/contract";
+import type {
+  JobListResponse,
+  JobResponse,
+  ProbeResponse,
+  ProbeResult,
+} from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { formatSseFrame } from "../src/routes/events.ts";
 import { contentDisposition, parseRange } from "../src/routes/files.ts";
@@ -578,6 +583,54 @@ describe("SSE", () => {
     // verbatim, with no envelope.
     expect(events.every((event) => event !== null)).toBe(true);
     expect(events.at(-1)?.type).toBe("completed");
+  });
+
+  test("the `probed` frame carries our path and not the origin URL", async () => {
+    // **The second door.** This frame ships a whole `ProbeResult` to the client,
+    // so rewriting only `POST /api/probe`'s body — which is all Done-when 5 asks
+    // for — would have let the origin URL out by the other route. Asserted on
+    // the raw frame text, not on a parsed field: "the shape we expected was
+    // rewritten" and "the address is not in the bytes" are different claims and
+    // only the second is the one worth having.
+    const image = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "image/png" });
+      response.end(PNG);
+    });
+    await new Promise<void>((resolve) => image.listen(0, "127.0.0.1", resolve));
+    const origin = `http://127.0.0.1:${(image.address() as AddressInfo).port}`;
+    try {
+      harness = await createHarness({
+        resolver: new StubResolver(probeResult({ thumbnailUrl: `${origin}/og.png` })),
+      });
+      const created = (
+        await harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.jobs,
+          payload: { url: SOURCE_URL },
+        })
+      ).json() as JobResponse;
+
+      const response = await harness.app.server.inject({
+        method: "GET",
+        url: ROUTES.jobEvents(created.job.id),
+      });
+
+      expect(response.body).not.toContain(origin);
+      const probed = response.body
+        .split("\n\n")
+        .filter((chunk) => chunk.startsWith("data: "))
+        .map((chunk) => parseJobEvent(chunk.slice("data: ".length)))
+        .find((event) => event?.type === "probed");
+
+      // Present, so this is not passing because no frame was emitted.
+      expect(probed).toBeDefined();
+      const probe = (probed as { probe: ProbeResult }).probe;
+      expect(probe.thumbnailUrl).toBeUndefined();
+      expect(probe.thumbnailPath).toMatch(/^\/api\/thumbnail\/[A-Za-z0-9_-]+$/u);
+    } finally {
+      image.closeAllConnections();
+      await new Promise<void>((resolve) => image.close(() => resolve()));
+    }
   });
 
   test("a job that finished before the client connected still gets its result", async () => {

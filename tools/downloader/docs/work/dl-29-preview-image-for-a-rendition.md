@@ -363,6 +363,82 @@ Citations checked against `origin/main` and all resolved exactly: `api.ts:138` (
 
 Three `med` findings, no `high`. Under the strict reading of the rubric (all ten `Done when` lines literally `unproven` because nothing is implemented), the verdict would mechanically be `FAIL`; I did not apply that reading for the reasons given above, and flag it explicitly as the alternative someone reviewing this gate might prefer.
 
+## Gate 1 — 2026-09-01 · Sonnet, against an Opus build · `origin/main`…`ce3e799`
+
+Verdict **CONCERNS**. No design defect found. Both this gate and gate 2
+reproduced this ticket's Log claims independently rather than accepting them.
+
+Reproduced and upheld: the `.nullable()` mutation count of five, exactly;
+deleting `captureThumbnail`'s `assertAllowed` reddens exactly one test; swapping
+`createGuardedFetch` for `globalThis.fetch` in the redirect test reddens it,
+confirming the rewrite fixed the sandbox-measuring problem the Log describes;
+the chunked oversize test exercises the counting path, verified against a
+purpose-written never-ending-stream server, which also confirmed the timeout
+fires rather than hanging.
+
+**Finding (med) — a fourth door: the credentials, not the URL.** Extending this
+ticket's own enumeration of the paths a `ProbeResult` reaches a client, gate 1
+found the three the branch covers and then argued a fourth: `downloader/api/src/routes/probe.ts:129` and
+`downloader/api/src/jobs/orchestrator.ts:326` log `requestContext: probe.requestContext` raw;
+`RequestContext.headers` is documented at `downloader/contract/src/media.ts:121` as
+typically carrying Cookie and Authorization; `redactRequestContext` exists at
+`downloader/contract/src/redact.ts:18-24` and neither site calls it. Pre-existing —
+`origin/main` has the identical line — but this branch edits that object literal
+and makes those headers newly load-bearing as an outbound credential.
+
+**Not upheld on reproduction. See the 2026-09-01 Log entry.** Every premise is
+true; the conclusion is not. `downloader/api/src/logger.ts:73-91`'s `safeFields` applies
+`redactRequestContext` structurally on the way out, by design and by its own
+docblock, so the call sites are not supposed to redact. Driving a real probe with
+a live cookie and reading the raw serialised line shows `"Cookie":"[redacted]"`
+and no occurrence of the secret anywhere. No redaction was added. The regression
+tests the finding was really asking for were.
+
+## Gate 2 — 2026-09-01 · Sonnet, against an Opus build · `origin/main`…`ce3e799`
+
+Verdict **CONCERNS**. No design defect found; two coverage gaps, both of the
+shape "correct today, unguarded tomorrow".
+
+Upheld this branch's two open decisions on its own reading. On the contract
+question: adding `thumbnailPath` is "add a new optional field", **not** a
+unilateral contract change, because Build step 4 named that alternative and
+instructed the builder to decide and record it — which it did. On the error code:
+`THUMBNAIL_NOT_FOUND` belongs in the tool's taxonomy rather than core, on the
+repo's own tell — the copy at the raise site is not reworded. On the module
+constants, gate 2 supplied a better reason than the branch gave:
+`probeCacheTtlMs` is operator-configurable but clamped by the hardcoded
+`PROBE_CACHE_TTL_CEILING_MS`, so `THUMBNAIL_TTL_MS > PROBE_CACHE_TTL_CEILING_MS`
+holds under every configuration, and making the thumbnail TTL configurable would
+add the only way to break it.
+
+**Finding (med) — the migration and persistence path had no coverage.**
+`grep -c thumbnail tools/downloader/api/test/job-store.test.ts` returned 0 and
+`pipeline.test.ts` never ran a job whose probe carried a thumbnail. Verified by
+hand that the behaviour was correct — a synthetic pre-migration-3 database with
+an existing row upgrades with `thumbnail_path` NULL, a second `migrate()` is
+idempotent, `patch` preserves on the `undefined` branch and clears on explicit
+`null`, a fresh `create()` defaults correctly. **Upheld and fixed.** Written as
+tests in `job-store.test.ts` and `pipeline.test.ts`, with the pre-migration row
+as the load-bearing case: proven fail-first by moving the column into
+migration 1, which reddens exactly the two legacy-database tests and leaves every
+fresh-create test green.
+
+**Finding (low) — the SSE strip was untested.** The branch found the second door
+itself and closed it at `downloader/api/src/jobs/orchestrator.ts:257`, but only the `POST /api/probe`
+side had a test; gate 2 recorded low confidence it was actually broken.
+**Upheld and fixed** — it was not broken. `routes.test.ts`'s SSE block now reads
+the `probed` frame and asserts on the raw body; reverting `withThumbnailPath`
+reddens it.
+
+**Finding (low) — the abort-signal gap.** `captureThumbnail` does not receive the
+probe route's `controller.signal`, so a client that navigates away can leave the
+image fetch running up to 4 s past the rest of the probe. **Accepted as a known
+trade-off, not changed**: bounded, and after the concurrency slot is released, so
+it holds nothing scarce.
+
+Gate 2 offered to write both test fixes. Declined on principle — a gate reports,
+the builder fixes.
+
 ## Log
 
 - **2026-08-30** — Filed from a user request: a preview picture when choosing a
@@ -601,3 +677,140 @@ tools/downloader/web` returns nothing.
   is itself `0x00` — was tested directly against forge and **disproved**. So it is
   an unexplained pre-existing flake in a file this branch does not touch, recorded
   rather than diagnosed.
+
+- **2026-09-01** — Two gates (both Sonnet, against this Opus build), both
+  `CONCERNS`, neither finding a design defect. Four user decisions came back.
+  Applied below, with one of them **refuted rather than applied** — which is the
+  entry worth reading.
+
+  **Gate 1's credential-leak finding does not reproduce, and the fix was not
+  made.** The finding: `downloader/api/src/routes/probe.ts:129` and `downloader/api/src/jobs/orchestrator.ts:326` log
+  `requestContext: probe.requestContext` raw; `RequestContext.headers` is
+  documented at `downloader/contract/src/media.ts:121` as typically carrying Cookie and
+  Authorization; `redactRequestContext` exists at
+  `downloader/contract/src/redact.ts:18-24` and neither site calls it. Every one of those
+  statements is true. The conclusion drawn from them is not.
+
+  Reproduced before touching anything, as instructed: a real `POST /api/probe`
+  through the harness, resolver returning `Cookie: session=super-secret`,
+  capturing the **raw serialised** lines. The line is
+
+  ```
+  {"level":"info",...,"requestContext":{"headers":{"Cookie":"[redacted]","Authorization":"[redacted]"}},"msg":"probe complete"}
+  ```
+
+  and no line at any level contains `super-secret`. The reason is
+  `downloader/api/src/logger.ts:72-91`: `safeFields` recognises a field named `requestContext`
+  **structurally** and applies `redactRequestContext` on the way out. Its own
+  docblock states the intent — _"Redacts on the way out rather than trusting call
+  sites… a caller that forgets to redact still cannot leak one through this
+  logger."_ The two call sites do not redact **because they are not supposed
+  to.** Adding `redactRequestContext(...)` at each would have been redundant, and
+  worse than redundant: it would imply call sites carry that duty, which is the
+  design this logger exists to replace, and the next person to log a context
+  would copy the wrong pattern.
+
+  I also checked the coverage question the coordinator asked rather than assumed
+  it: `redactRequestContext` handles all three members of `RequestContext` —
+  `headers` through `redactHeaders`, `proxyUrl` through `redactUrl`, `expiresAt`
+  passed through as a non-secret. It covers the shape. (One real limit, not a
+  defect and not mine to change: `redactHeaders` is a deliberate **denylist** of
+  eight names, so a CDN gating on a bespoke header such as `x-session-id` would
+  be logged in full. `packages/core/src/redact.ts:16-23` argues for the denylist
+  explicitly.)
+
+  A third `requestContext` site turned up while enumerating —
+  `downloader/api/src/jobs/orchestrator.ts:268` — which Gate 1 did not name. It is not a log line; it is
+  the `engine.download({ requestContext })` argument. Not a leak.
+
+  **What was built instead: the regression tests the finding was really asking
+  for.** The redaction predates this branch, but dl-29 makes those exact headers
+  newly load-bearing as an _outbound_ credential — `captureThumbnail` replays
+  them to a page-chosen origin — and nothing pinned the redaction at either call
+  site end to end. Two tests in `api/test/logging.test.ts` now drive a real probe
+  and a real job and assert on the **raw serialised string**, not on a parsed
+  field: "the shape we expected was redacted" and "the secret is not in the
+  bytes" are different claims and only the second is worth having. Made to fail
+  first: deleting the `redactRequestContext` call inside `safeFields` reddens
+  both, plus the pre-existing unit test — three in total. pino's own
+  `*.cookie`/`*.authorization` redact paths do **not** save it, because the
+  credential sits at depth three (`requestContext.headers.Cookie`).
+
+  **The migration had no test at all, and the obvious test would not have
+  caught the obvious bug.** `job-store.test.ts` gains a
+  `BEFORE_MIGRATION_3` schema — a frozen copy, which cannot go stale because
+  `schema.ts` forbids editing a shipped migration — a row inserted into it at
+  `user_version = 2`, then the real `migrate()`. Proven fail-first with the
+  precise defect rather than a broad one: moving `thumbnail_path` into
+  migration 1's `CREATE TABLE` and deleting migration 3 reddens **exactly** the
+  two legacy-database tests while every fresh-create test stays green. That is
+  the whole argument for the pre-migration row, demonstrated rather than
+  asserted.
+
+  **The SSE strip is now pinned.** `pipeline.test.ts` runs a job whose probe
+  carries a thumbnail through to `completed` and asserts the persisted
+  `Job.thumbnailPath` serves; `routes.test.ts` reads the `probed` frame and
+  asserts on the raw body that the origin does not appear in it. Gate 2 had low
+  confidence this was broken and was right — it was not. Reverting
+  `withThumbnailPath` at `downloader/api/src/jobs/orchestrator.ts:257` reddens it, on the raw-body
+  assertion.
+
+  **Three things recorded as decisions rather than changed.**
+
+  - **The `Preview` same-origin guard was raised, put to the user, and
+    declined.** I proposed refusing a `thumbnailPath` that is not a same-origin
+    path, since `jobSchema` types it `z.string()` and it is re-read from
+    `localStorage`. My own argument against, which the user took: writing another
+    origin's `localStorage` requires XSS on our origin, at which point a beacon
+    is the least of the problem — and the guard would need a `data:image/`
+    exception for the mock, which has no server to serve bytes from. Recorded so
+    the next reader sees a decision and not an omission.
+  - **The abort-signal gap stays.** `captureThumbnail` does not receive the
+    probe route's own `controller.signal`, so a client that navigates away can
+    leave the image fetch running up to `THUMBNAIL_FETCH_TIMEOUT_MS` (4 s) past
+    the rest of the probe. It is bounded, and it happens after the concurrency
+    slot is released, so it holds nothing scarce. Known trade-off, not churned.
+  - **`THUMBNAIL_TTL_MS` and friends stay module constants**, and a gate supplied
+    a better reason than I gave: `probeCacheTtlMs` is operator-configurable but
+    **clamped** by the hardcoded `PROBE_CACHE_TTL_CEILING_MS`, so
+    `THUMBNAIL_TTL_MS > PROBE_CACHE_TTL_CEILING_MS` holds for every possible
+    configuration. Making the thumbnail TTL configurable would add the only way
+    to break that invariant.
+
+  **Two tickets filed on this branch**, on dl-32/dl-33's precedent of riding
+  dl-23's: **dl-34** (the resolver tiers have no route to the operator's CA, and
+  misclassify a certificate failure as `NO_MEDIA_FOUND`) and **dl-35** (no CSP,
+  which matters now that this branch gave the page its first `<img>`). dl-34's
+  citations were relayed from two agents; every one was re-resolved before being
+  written down, and **the relayed paths did not resolve as given** — this repo
+  has two `size-probe.ts` and two `pool.ts`. dl-34 separates what was verified
+  here from what is inherited and unverified, and the two unverified claims are
+  the exact strings Chromium and yt-dlp emit, which its Build step depends on.
+
+  **Citations: 29/52, and the 23 failures are deliberate.** `scripts/citations.mjs`
+  reports a bare `orchestrator.ts:257` as ambiguous — three tracked files match it
+  across two tools — which reads as staleness and is not. Qualifying to
+  `downloader/api/src/jobs/orchestrator.ts:257` fixes it; that is dl-31's finding,
+  relayed, and it holds here.
+
+  **I qualified only the sections this session wrote** — the two gate records and
+  the two 2026-09-01 Log entries — and every one of those now resolves to the
+  exact line intended, checked line by line rather than by the count.
+
+  **Everything before them is left failing on purpose**, because qualifying it
+  would make it _worse_. The Build section's line numbers were verified against
+  `1d420b7` at filing time, and this branch's own edits moved several of the files
+  they point into. Adding a path prefix would turn "ambiguous" into a confident
+  green arrow pointing at a line that has since shifted — which is exactly the
+  failure mode worth avoiding. It is already visible in one that resolves without
+  help: `probe.ts:101` is cited in the Why for the verbatim "attacker-influenced"
+  comment, and today resolves to `// never even learns that an internal address
+answered. mustPass only —`, because this branch rewrote that comment two lines
+  up. The citation is green and wrong. The Build section is now history rather
+  than instructions, so the honest state is an unresolved citation plus this
+  paragraph, not a resolved one that lies.
+
+  The filing-gate section at `## The gate on this filing` is untouched for a
+  second reason as well: its citation list _is_ its evidence — a record of what
+  that gate checked and where, at the commit it checked. Rewriting it would
+  falsify the record rather than repair it.
