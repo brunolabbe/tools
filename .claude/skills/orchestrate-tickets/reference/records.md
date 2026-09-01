@@ -73,6 +73,40 @@ discarded. So:
   guessing** (this repo has two `logging.test.ts`), and exits non-zero so it can
   gate a commit. It prints each cited line so you can judge the content.
 
+  **A record and a Log passage pin to different commits, and swapping them breaks
+  one of them.** This repo squash-merges, so a branch sha does not survive the
+  merge — pin a record to it and the `--rev` dangles for everyone who reads the
+  ticket afterwards. The obvious correction, pinning to the base instead, is
+  worse: a gate record cites the tests the branch *introduced*, and those lines
+  do not exist at the base, so every citation fails. So:
+
+  - **A gate record pins to the sha it reviewed**, and says in its header that
+    this is a pre-squash branch sha, kept because it is the only tree where those
+    citations resolve, reachable afterwards through the ticket's pull request.
+  - **A Log passage citing pre-existing code pins to a sha that survives** — the
+    base, or a `main` commit.
+
+  Surfaced in the sixth session by a builder that **refused the pin it was given**
+  and returned three options instead. The orchestrator had conflated the two
+  cases; only the builder was close enough to the tree to see that the base pin
+  resolved nothing.
+
+  Two more things that session measured about this script, both of which read as
+  staleness and are not:
+
+  - **`--section <name>` is documented and unimplemented.** It appears once, in
+    the usage line, with no parser and no validation, so it is silently accepted:
+    `--section Log`, `--section Nonsense` and no flag return byte-identical
+    output. A whole-file pass wearing the label of a filtered one. Filed as
+    `repo-14`.
+  - **A flag's value can be eaten as the positional argument.** `argv.find((a) =>
+    !a.startsWith("--"))` takes the first non-`--` token as the ticket path, so
+    `citations.mjs --rev HEAD <ticket>` opens `HEAD` as the ticket. **Always put
+    the ticket path first.** It fails loudly — ENOENT, exit 1 — so any run that
+    reported "N/N resolve" used a valid invocation; only the `--section` no-op is
+    silent. (Measure that exit code without a pipe: `$?` after `| tail` is
+    tail's.)
+
   **So a bare filename is not a citation in this repo — it is a coin flip the
   tool refuses to make.** `travel.ts:286` matches three tracked files and
   `brief.ts:505` matches two; the resolver fails both rather than picking, which
