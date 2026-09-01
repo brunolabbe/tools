@@ -115,6 +115,18 @@ discarded. So:
   - **Diff the record's section against `HEAD` before committing any edit to a
     ticket that carries one.** One command, and it is the only thing that detects
     this.
+  - **Verify a pin by diffing the two runs, never by comparing totals.** Measured
+    on the same batch: a record pinned with `--rev` and the same record resolved
+    against the working tree both reported **16/34 — identical** — while three
+    citations pointed at *different content*, because a later commit had moved the
+    lines under them. One was the record's own quoted evidence for a finding, so
+    remapping the number would have destroyed the finding. This is the script's
+    documented limit arriving in practice: it tells you a citation is not
+    *impossible*, and a matching count says nothing at all.
+  - **Renumbering records can break things outside the ticket.** Inserting a
+    late-arriving record in run order looked like a rename of the ones after it,
+    until a builder found two *test files* citing "dl-29's third gate" by number.
+    Prefer a date-and-sha label over renumbering, and grep for the ordinal first.
 
   Provenance: the two incidents are the `repo-13` session's, reported to this one
   — it happened twice on one ticket, to two different agents, for the identical
