@@ -372,9 +372,24 @@ describe("the source's credentials never reach the client", () => {
     // The strip is a response-seam rewrite, not a mutation of what the server
     // holds. If it ever became the latter, every credentialed download would
     // break — quietly, since the engine would simply be refused by the CDN.
+    //
+    // **The fixture sets `proxyUrl` deliberately.** Without it
+    // `withoutEgressProxy` takes its early return and the only server-side
+    // rewrite on this path never runs, so the assertion below would pass
+    // whatever that function did to `headers`. dl-29's third gate found exactly
+    // that hole. With it set, this covers the operator-proxy deployment of dl-12
+    // end to end: whichever layer widened a header strip, the engine is what
+    // notices, and it notices here.
     const seen: string[] = [];
     harness = await createHarness({
-      resolver: new StubResolver(probeResult()),
+      resolver: new StubResolver(
+        probeResult({
+          requestContext: {
+            headers: { Referer: SOURCE_URL, Cookie: "session=super-secret" },
+            proxyUrl: "http://127.0.0.1:1",
+          },
+        }),
+      ),
       engineOptions: {
         onDownload: (request) => {
           seen.push(JSON.stringify(request.requestContext.headers));

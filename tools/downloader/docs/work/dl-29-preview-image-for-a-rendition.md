@@ -439,6 +439,56 @@ it holds nothing scarce.
 Gate 2 offered to write both test fixes. Declined on principle — a gate reports,
 the builder fixes.
 
+## Gate 3 — 2026-09-01 · Sonnet, against an Opus build · the credential strip
+
+Verdict **CONCERNS**, one finding.
+
+**Scope.** The response-seam credential strip and its three call sites, the two
+`logger.ts` caveats and their tests, the citation-count removal, and dl-34's
+`size-sample` correction. Everything else on this branch was settled by the
+earlier gates and was **not** re-reviewed: the SSRF guard and the redirect
+re-check, the capability token, the byte cap and content-type allowlist, the
+contract additions, the SQLite migration, the whole web layer, and the two tickets
+filed from this branch (dl-34, dl-35).
+
+Reproduced and upheld: per-seam pinning — mutating the cached call site alone
+reddens exactly one test, the SSE call site alone exactly one, emptying
+`probeForClient` all three. **Twelve server-side consumers of
+`probe.requestContext` were enumerated**; every one reads the pre-strip object and
+none sees `probeForClient`'s output, so there is no over-strip anywhere. The
+frame-presence guard fails on the frame assertion when the event is suppressed
+rather than passing vacuously. The known-limitation test reddens when `safeFields`
+is widened to recurse. Two rows of the pino case-sensitivity table were verified
+against pino directly, outside this repo's harness.
+
+**Finding (med) — the replacement control does not control, and it was
+measured.** `tiers-behind-the-proxy.test.ts` asserted
+`body.probe.requestContext.headers` equals `{}` as the control for `proxyUrl`
+being dropped. The gate mutated `withoutEgressProxy` to **also** empty `headers`
+whenever `proxyUrl` is set — the exact over-strip that control existed to catch —
+and ran the whole downloader project: **897/897 passed.**
+
+Two independent reasons, both confirmed here by reproducing the mutation:
+
+1. The assertion is satisfied by `probeForClient`'s later strip regardless of what
+   `withoutEgressProxy` does, so it can no longer distinguish "stripped once, at
+   the response seam" from "stripped a layer too early".
+2. `routes.test.ts`'s engine-side check did not set `requestContext.proxyUrl`, so
+   `withoutEgressProxy`'s early return meant that branch never ran there either.
+
+The failure this leaves unguarded: an operator with `config.proxyUrl` set —
+dl-12's documented case — silently loses the credentials the engine replays, and
+every download 403s at the CDN with a green suite.
+
+**Upheld and fixed, in both halves.** `egress-proxy.test.ts` had **no coverage of
+`withoutEgressProxy` at all**, which is why a response-body assertion was carrying
+that weight; it now has direct unit assertions that the function drops `proxyUrl`
+and preserves `headers` and `expiresAt`, plus its early-return branch. And the
+engine-side test's fixture now sets `proxyUrl`, so reason 2 is closed as well —
+the gate recommended only the first, and the second is one fixture line that makes
+the operator-proxy deployment covered end to end. Both go red under the gate's
+mutation and green when it is reverted, verified separately.
+
 ## Log
 
 - **2026-08-30** — Filed from a user request: a preview picture when choosing a
@@ -825,6 +875,12 @@ tools/downloader/web` returns nothing.
   not. Qualifying to `downloader/api/src/jobs/orchestrator.ts:257` fixes it; that
   is dl-31's finding, relayed, and it holds here.
 
+  **That bare `orchestrator.ts:257` in the sentence above is deliberate and must
+  stay unresolved — it is the example, not a citation.** `citations.mjs` says as
+  much in its own closing note: a citation that is a finding's own evidence has
+  to stay as written. Qualifying it would make the tool green and the paragraph
+  meaningless.
+
   **No count is given, on purpose.** An earlier draft of this paragraph said
   "29/52", and it was wrong by the time it was committed: the paragraph cites
   `downloader/api/src/jobs/orchestrator.ts:257` one line further down as its own
@@ -929,3 +985,68 @@ answered. mustPass only —`, because this branch rewrote that comment two lines
   browsers. This repo squash-merges, so that is the changelog line. It was raised
   before the fold-in and taken knowingly; a title covering both is proposed in the
   report.
+
+- **2026-09-01** — Gate 3's one finding, and the two open decisions the user
+  settled.
+
+  **The control I wrote to replace the old one did not control, and I had said as
+  much without following my own sentence.** When the credential strip reddened
+  `tiers-behind-the-proxy.test.ts`, I replaced its `headers["Referer"]` assertion
+  with `headers` equals `{}` and wrote in the report that "a security fix that
+  reddens a test whose comment says 'the rest of the context survived' is exactly
+  the shape that gets reverted by someone in a hurry". That was the right
+  instinct and I stopped one step short of acting on it: the replacement asserts
+  a value that `probeForClient` guarantees at the response seam no matter what
+  any earlier layer did, so it cannot fail.
+
+  Reproduced before fixing, as the gate did: make `withoutEgressProxy` empty
+  `headers` too whenever `proxyUrl` is set, then run the project. **897 passed,
+  897 green, bug live.** Watching a full suite go green over a deliberately
+  broken credential path is the part that makes the remedy obvious.
+
+  The underlying cause is that `withoutEgressProxy` had **no test at all** — a
+  response-body assertion had been standing in for coverage of a function, and
+  once a later layer started rewriting the same field the stand-in stopped
+  working without anyone touching it. `egress-proxy.test.ts` now asserts on the
+  function directly: `proxyUrl` dropped, `headers` and `expiresAt` preserved, and
+  the early-return branch.
+
+  **I closed the gate's second reason as well, which it did not ask for.** It
+  noted that `routes.test.ts`'s engine check never set `requestContext.proxyUrl`,
+  so `withoutEgressProxy`'s early return meant that branch was unexercised there
+  too — then recommended only the unit test. The unit test pins one function; the
+  engine test pins the property that actually matters (the engine receives real
+  credentials in a proxied deployment) whichever layer breaks it. One fixture
+  line. Both go red under the mutation independently, verified one at a time.
+
+  **Decision — `headers: {}` stays on the wire.** Raised as an open question with
+  three options and put to the user, who chose option 1. The alternatives were
+  removing `requestContext` from `probeResultSchema` (honest, since nothing reads
+  it, but a real contract change touching the SSE frame, the mock, fixtures and
+  the web types) and narrowing it to `{ expiresAt? }` (most honest about what a
+  client may have, same contract cost plus a second shape to name). Option 1
+  needs no contract edit, every client and fixture still parses, and `expiresAt`
+  — the one member a client can act on — survives. Its cost, recorded so nobody
+  rediscovers it as a defect: the type says `Record<string, string>` and a client
+  always sees `{}`. **Answered, not overlooked.**
+
+  **Decision — the PR title stays `feat(downloader)`, over my objection.** I
+  raised that `feat` routes the changelog line to **Features**, so an operator
+  scanning **Fixes** for a credential leak will not find it there, and that
+  `fix(downloader)` would invert the problem by burying the user-visible feature.
+  Put to the user with that argument; they chose to leave it. Recording the
+  objection because an accepted cost and an unnoticed one look identical six
+  months later, and this one was accepted.
+
+  **Not in scope and not touched:** the finding that `requestContext` reaches the
+  client at all was the _previous_ entry's work; this entry is only about the test
+  that was supposed to guard the server side of it.
+
+  **A third sighting of dl-33's flake, this time with a contention measurement.**
+  The first `npm test -- --project downloader` run of this session failed on
+  `two-origin-tls.test.ts` with `ERR_OSSL_ASN1_ILLEGAL_PADDING`, a hook timeout
+  and a test timeout, and took **185 s**. The immediate re-run, same commit, same
+  machine, passed 900/900 in **37.6 s**. A 5× wall-clock difference between a
+  failing and a passing run minutes apart is the strongest evidence I have seen
+  for dl-33's contention framing, so it is recorded on that ticket rather than
+  only here.

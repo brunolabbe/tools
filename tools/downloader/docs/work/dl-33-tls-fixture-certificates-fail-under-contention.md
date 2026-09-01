@@ -258,3 +258,33 @@ padding` out of `new X509Certificate(...)` at the spec's own `leafOf` helper.
 
   dl-29 did not fix it and did not widen into `tls-interception.ts`. It has no
   reproduction to offer beyond the above.
+
+- **2026-09-01** — **A contention measurement, from dl-29's branch.** Same
+  session as the disproof above, and the first direct wall-clock evidence for
+  this ticket's framing rather than for what it is not.
+
+  `npm test -- --project downloader` failed on `two-origin-tls.test.ts` — this
+  ticket's own file — with `ERR_OSSL_ASN1_ILLEGAL_PADDING`, plus
+  `Hook timed out in 60000ms`, `Test timed out in 120000ms` and four unhandled
+  errors of the same ASN.1 kind. The named case was "the same download succeeds
+  when the proxy trusts both origins". **That run took 185 s.**
+
+  The immediate re-run — same commit, same machine, no change of any kind between
+  them — passed **900/900 in 37.6 s**.
+
+  A 5× wall-clock difference between a failing and a passing run minutes apart,
+  on an otherwise idle developer container, is the strongest signal I have for
+  contention being the mechanism. It also explains why the leaf-generation probes
+  recorded above found nothing across 520 attempts: they ran on a quiet machine,
+  one certificate at a time, which is the condition under which this does not
+  reproduce.
+
+  A cheap next step for whoever picks this up, offered rather than taken: try to
+  force it by running the downloader project under artificial CPU load rather
+  than by generating more certificates. This ticket's Done-when 3 already asks
+  for the failure to be reproduced "under artificial contention if necessary" —
+  the numbers above are a reason to start there rather than treat it as a
+  fallback.
+
+  Not measured: which resource is contended. No profiling was done, and "5×
+  slower" is consistent with CPU, I/O or scheduler pressure alike.
