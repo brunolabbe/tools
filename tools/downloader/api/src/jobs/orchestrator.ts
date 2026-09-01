@@ -38,6 +38,7 @@ import type { JobStore } from "../db/job-store.ts";
 import { withoutEgressProxy } from "../egress-proxy.ts";
 import type { GuardedFetch } from "../guarded-fetch.ts";
 import type { AppLogger } from "../logger.ts";
+import { probeForClient } from "../probe-out.ts";
 import type { SsrfGuard } from "../ssrf.ts";
 import { urlsInProbeResult } from "../ssrf.ts";
 import { captureThumbnail, withThumbnailPath } from "../thumbnails.ts";
@@ -253,8 +254,9 @@ export class JobOrchestrator {
     store.patch(jobId, { variant, variantId: variant.id, thumbnailPath }, this.#iso());
     // The **rewritten** probe: this frame carries a whole `ProbeResult` to the
     // client, so it is the second door the origin thumbnail URL could have
-    // walked out of. Same reason `withoutEgressProxy` is applied in `#probe`.
-    events.probed(jobId, withThumbnailPath(probe, thumbnailPath));
+    // walked out of, and the third seam the source's credentials could. Same
+    // reason `withoutEgressProxy` is applied in `#probe`.
+    events.probed(jobId, probeForClient(withThumbnailPath(probe, thumbnailPath)));
 
     // --- downloading / muxing -------------------------------------------
     throwIfAborted(signal);

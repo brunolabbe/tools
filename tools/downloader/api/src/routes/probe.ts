@@ -19,6 +19,7 @@ import type { ProbeResponse, ProbeResult, ResolveOptions } from "@downloader/con
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
 import { withoutEgressProxy } from "../egress-proxy.ts";
+import { probeForClient } from "../probe-out.ts";
 import { createRateLimitHook } from "../rate-limit.ts";
 import { urlsInProbeResult } from "../ssrf.ts";
 import { captureThumbnail, withThumbnailPath } from "../thumbnails.ts";
@@ -50,7 +51,12 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
     if (refresh !== true) {
       const cached = context.probeCache.get(cacheKey);
       if (cached !== null) {
-        const body: ProbeResponse = { probe: cached, cached: true };
+        // `probeForClient` here as well as on the fresh path below, and this is
+        // the call most easily forgotten: this branch returns before every
+        // rewrite the fresh path does. The cache deliberately holds the
+        // credentials — nothing else reads it today, but a stored object that is
+        // already stripped is one nothing *could* ever drive a download from.
+        const body: ProbeResponse = { probe: probeForClient(cached), cached: true };
         return await reply.send(body);
       }
     }
@@ -129,7 +135,7 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
       requestContext: probe.requestContext,
     });
 
-    const body: ProbeResponse = { probe: clientProbe, cached: false };
+    const body: ProbeResponse = { probe: probeForClient(clientProbe), cached: false };
     return await reply.send(body);
   });
 }

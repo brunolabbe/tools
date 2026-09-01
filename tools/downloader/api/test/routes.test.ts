@@ -279,6 +279,124 @@ describe("the preview image never lets the client name a URL", () => {
   });
 });
 
+describe("the source's credentials never reach the client", () => {
+  /**
+   * `RequestContext.headers` is a live session for a third-party site — the
+   * contract says "Typically Referer, Origin, User-Agent, Cookie,
+   * Authorization" — and it was serialised into every probe response and every
+   * `probed` frame in full. Nothing in `web/src` has ever read it.
+   *
+   * Every assertion here is on the **raw serialised body**. "The shape we
+   * expected was emptied" and "the secret is not in the bytes" are different
+   * claims and only the second is worth having: a credential that survived under
+   * some other key satisfies the first.
+   *
+   * `probeResult()` carries `Cookie: session=super-secret` by default, so these
+   * need no special fixture — which is also why the leak went unnoticed.
+   */
+  test("not in a fresh probe response", async () => {
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.probe,
+      payload: { url: SOURCE_URL },
+    });
+
+    expect(response.body).not.toContain("super-secret");
+    const body = response.json() as ProbeResponse;
+    // Emptied, not removed: `headers` is required by `requestContextSchema`, so
+    // the shape a client parses is unchanged and no contract edit is implied.
+    expect(body.probe.requestContext.headers).toEqual({});
+    // And the probe is otherwise intact, so this is not passing because the
+    // response fell apart.
+    expect(body.probe.variants).toHaveLength(1);
+  });
+
+  test("nor in the one served from cache, which returns before every other rewrite", async () => {
+    // The seam most easily missed: this branch short-circuits above all of the
+    // fresh path's rewriting.
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const send = async () =>
+      await (harness as Harness).app.server.inject({
+        method: "POST",
+        url: ROUTES.probe,
+        payload: { url: SOURCE_URL },
+      });
+
+    await send();
+    const second = await send();
+
+    expect((second.json() as ProbeResponse).cached).toBe(true);
+    expect(second.body).not.toContain("super-secret");
+    expect((second.json() as ProbeResponse).probe.requestContext.headers).toEqual({});
+  });
+
+  test("nor on the `probed` SSE frame", async () => {
+    // The loopback image origin is what keeps the probe slow enough that the
+    // `probed` frame is still ahead of us when we connect; without it the job
+    // races past and the assertion passes for the wrong reason.
+    const image = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "image/png" });
+      response.end(PNG);
+    });
+    await new Promise<void>((resolve) => image.listen(0, "127.0.0.1", resolve));
+    const origin = `http://127.0.0.1:${(image.address() as AddressInfo).port}`;
+    try {
+      harness = await createHarness({
+        resolver: new StubResolver(probeResult({ thumbnailUrl: `${origin}/og.png` })),
+      });
+      const created = (
+        await harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.jobs,
+          payload: { url: SOURCE_URL },
+        })
+      ).json() as JobResponse;
+
+      const sse = await harness.app.server.inject({
+        method: "GET",
+        url: ROUTES.jobEvents(created.job.id),
+      });
+
+      // Asserted first: without it, "no secret in the body" is satisfied by a
+      // stream that never carried the frame at all.
+      expect(sse.body).toContain('"type":"probed"');
+      expect(sse.body).not.toContain("super-secret");
+    } finally {
+      image.closeAllConnections();
+      await new Promise<void>((resolve) => image.close(() => resolve()));
+    }
+  });
+
+  test("the server keeps them, because the download needs them", async () => {
+    // The strip is a response-seam rewrite, not a mutation of what the server
+    // holds. If it ever became the latter, every credentialed download would
+    // break — quietly, since the engine would simply be refused by the CDN.
+    const seen: string[] = [];
+    harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      engineOptions: {
+        onDownload: (request) => {
+          seen.push(JSON.stringify(request.requestContext.headers));
+        },
+      },
+    });
+
+    await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.jobs,
+      payload: { url: SOURCE_URL },
+    });
+    await waitFor(
+      () => seen,
+      (calls) => calls.length > 0,
+      { label: "the engine to be handed a request" },
+    );
+
+    expect(seen[0]).toContain("super-secret");
+  });
+});
+
 describe("job routes", () => {
   test("creating a job validates the body", async () => {
     harness = await createHarness({ resolver: new StubResolver(probeResult()) });
