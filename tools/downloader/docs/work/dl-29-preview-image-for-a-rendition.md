@@ -439,6 +439,101 @@ it holds nothing scarce.
 Gate 2 offered to write both test fixes. Declined on principle — a gate reports,
 the builder fixes.
 
+## Gate — 2026-09-01 · Sonnet, against an Opus build · post-PR, at `569214d`
+
+**This record ran before the credential strip and belongs here in sequence.** It
+gated `ce3e799..569214d` — the redaction refutation and the two new tests — and
+its "critical, out of scope" finding is what became that strip, which the next
+record then gated. The two read as a sequence, not as one gate having missed
+something.
+
+**Only this section's own title changed**, from `## Review`, following the same
+convention as `## The gate on this filing` above and for the same reason: a
+`## Review` heading means something specific to the board check that `repo-12`
+added. The reviewer's text, findings, verdict and inner headings are unedited.
+
+**It carries no number, deliberately.** Numbering it would make it Gate 3 and push
+the committed credential-strip record to Gate 4 — and two test files cite
+"dl-29's third gate" by that number (`routes.test.ts:379`,
+`egress-proxy.test.ts:596`). Renumbering would have made those comments wrong,
+which a documentation-only change should not do.
+
+**Resolve its citations with `--rev 569214d`, not against the tip.** Measured
+rather than assumed: both ways resolve 16/34, but three citations point at
+_different content_ now, because the strip and its tests landed after this record
+was written — `probe.ts:129`, `routes.test.ts:588-634`, and `probe.ts:101`. The
+last is the record's own evidence for a finding, quoted in its section 4, so
+remapping the number would have destroyed the finding and editing the reviewer's
+words was not on the table. Pinning is both cheaper and more honest. Note the sha
+is pre-squash: this branch squash-merges, so `569214d` exists only until then.
+
+**Setup note (worth recording):** the plain `git checkout --detach`/`switch --detach`/`merge --ff-only` forms were all refused by the auto-mode classifier in my pinned worktree, for reasons unrelated to the repo's own permission rules (nothing in `.claude/settings.json` denies them). `git worktree add --detach <scratch-path> 569214d` was accepted and gave me a clean, correctly-isolated tree. Also: a Bash call that changes `cwd` only affects that single command in this environment — every subsequent call reset to my pinned worktree unless I re-prefixed with `cd`. I caught this once (a throwaway repro file briefly landed in my pinned worktree instead of the reviewed one, so its first test run was against the wrong commit) and re-did the reproduction correctly, prefixing every command from then on. Confirmed via `git log --oneline -1` → `569214d`, `git status --porcelain` → clean, before and after.
+
+Range reviewed: `ce3e799..569214d` (the second commit only), as scoped. `git diff --stat` confirms it touches only `job-store.test.ts`, `logging.test.ts`, `pipeline.test.ts`, `routes.test.ts`, and the ticket file (dl-29's own Log/gate records plus the new dl-34/dl-35 files).
+
+### Verdict: PASS (on the assigned scope) — plus one critical, out-of-scope finding that needs its own ticket
+
+### 1. The redaction refutation
+
+**Enumeration: `AppLogger` has 5 methods — `debug`, `info`, `warn`, `error`, `child` — and all 5 route through `safeFields`.** `debug/info/warn/error` all call the shared `emit()` closure (`api/src/logger.ts:112-122`), which calls `safeFields(fields)`. `child()` (`:129`) calls `safeFields(extra)` directly. There is exactly one `pino(...)` instantiation in the whole tool (`api/src/logger.ts:141`) and no other direct pino/console usage anywhere in `api/src`, `engine/src`, or `resolvers/src` (`grep -rn "console\."` → nothing; `grep -rn "pino("` → the one site). The engine logs through the same `AppLogger` (its `Logger` interface is satisfied by it), and it does its own belt-and-braces redaction before logging (`engine/src/index.ts:204-210`, `redactRequestContext(request.requestContext)`), so it isn't relying on `safeFields` alone either. **0 of 5 methods bypass it.**
+
+**Reproduced, exactly as claimed:** disabling `safeFields`' redaction call reddens exactly **3** tests — `logging.test.ts`'s pre-existing unit test plus both new end-to-end tests (`api/test/logging.test.ts:88-96`, `:206-231`, `:233-256`) — with the raw `super-secret` cookie visible in the captured line. Restored cleanly afterward (`git status --porcelain` clean, `git diff` empty).
+
+**pino's own paths don't save it, but the reason given is imprecise.** With `safeFields` disabled, pino's `REDACT_PATHS` (`*.headers.cookie`, `*.cookie`, etc.) do **not** catch `requestContext.headers.Cookie` — confirmed. But the builder's stated reason ("the credential sits at depth three") isn't quite it: I drove a 3-level **lowercase** `{ someKey: { headers: { cookie: "..." } } }` through the same logger and pino's `*.headers.cookie` path **did** redact it. The real reason is **case-sensitivity**: pino's denylist paths are exact-match on lowercase segment names, and `RequestContext.headers` in this codebase carries real HTTP casing (`Cookie`, `Authorization` — see the `CREDENTIALED` fixture in `logging.test.ts:39-45` and the doc comment at `contract/src/media.ts:121`). This matters because it changes what the second layer actually covers: it protects Node's own `IncomingHttpHeaders` (always lowercase) but not a `RequestContext`-shaped bag with its natural casing.
+
+**Structural check gap — real, demonstrated, but not currently reachable.** `isRequestContext`/`safeFields` only recognise a field literally named `requestContext` at the _top level_ of the fields object passed to a log call (`api/src/logger.ts:64-71`, `:85`). I drove three cases through `createLogger` directly:
+
+- `logger.info("x", { details: { requestContext: { headers: { Cookie: "secret" } } } })` → **leaks in full**, no redaction at either layer (nested one level under another key name).
+- `logger.info("x", { items: [{ headers: { Cookie: "secret" } }] })` → **leaks in full** (inside an array).
+- `logger.info("x", { requestContext: "not-an-object..." })` → passes through unredacted (structurally not a `RequestContext`, by design — a non-object can't carry a header bag anyway, so this one is not itself concerning).
+
+I then swept every actual call site in `api/src`, `engine/src`, `resolvers/src` that mentions `requestContext` (14 sites) and confirmed **none of them nests it under another key or an array** — every real log call uses the literal top-level `requestContext` key (`probe.ts:129`, `orchestrator.ts:322-326`, `engine/index.ts:204-210`). So this is a real gap in the safety net with **no current exploit path** — low severity as things stand, but it's the kind of gap a future call site could fall into silently, and nothing tests for it. Worth a one-line doc caveat and, if the coordinator wants belt-and-braces, a test pinning the nested-key case as a known limitation (mirroring the existing "arrived under some other name" test at `logging.test.ts:96-104`, which only covers a _bare_ `headers` bag, not a nested `requestContext`).
+
+**Denylist limit — agreed out of scope, plausibly worth a ticket (open, not mine to settle).** `redactHeaders` (`packages/core/src/redact.ts:23-32`) is an 8-name denylist, case-normalized. A bespoke header (`x-session-id` on a CDN, say) logs in full. This predates dl-29, isn't touched by it, and the builder's framing (a documented limit, not a defect) is accurate. I agree it's out of scope for this ticket. Whether it's worth a standalone ticket is a judgement call I'm surfacing rather than making — recommend low-priority, since a denylist-vs-heuristic tradeoff was made deliberately and the current 8 names cover the common cases.
+
+**Critical finding, out of scope, pre-existing — the actual client-facing leak.** While reproducing the SSE test I noticed the `POST /api/probe` JSON response — and the `probed` SSE frame — ship `probe.requestContext.headers` **verbatim, unredacted, to the requesting browser**. I confirmed this directly:
+
+```
+POST /api/probe → body contains:
+"requestContext":{"headers":{"Referer":"...","Cookie":"session=super-secret"}}
+```
+
+This is not a log line, and not something `safeFields` is meant to touch — it's the literal HTTP response body sent to whoever called the API. `RequestContext.headers` is documented (`contract/src/media.ts:118-121`) as "Typically Referer, Origin, User-Agent, Cookie, Authorization" — credentials meant for **our own backend** to replay against the origin CDN, never for the browser that asked for the probe. I verified this is **pre-existing and unrelated to dl-29**: `git show origin/main:tools/downloader/api/src/routes/probe.ts` shows the identical `const body: ProbeResponse = { probe, cached: false }` with no stripping, before this branch touched the file. `withThumbnailPath` (`api/src/thumbnails.ts:259-262`) strips only `thumbnailUrl`; `requestContext` rides along unchanged, both before and after this branch. The contract itself types it this way (`contract/src/api.ts:141-150`, `probeResultSchema` includes `requestContext` as required, embedded directly in `ProbeResponse`).
+
+This does **not** affect my verdict on the assigned scope — it predates the branch and isn't part of the diff I was asked to gate, and neither gate 1 nor gate 2 (which focused specifically on the _log_ line) surfaced it. But it's a live, trivially-exploitable credential disclosure (every probe response leaks whatever session cookie the resolver captured for the source site) and I'd be doing you a disservice not to say so plainly: **recommend filing this as its own high-severity ticket immediately**, separate from dl-34/dl-35.
+
+### 2. The two new tests
+
+**Migration test — reproduced exactly.** Moved `thumbnail_path` into migration 1's `CREATE TABLE` and deleted migration 3 (`api/src/db/schema.ts`). Result: **exactly** the two legacy-database tests fail (`job-store.test.ts:215` "an existing row survives migration 3...", `:235` "migrate is idempotent...") — both fail with `expected 2 to be 3` (stuck at `user_version = 2`) — and all 21 other `job-store.test.ts` tests plus all 21 `pipeline.test.ts` tests stay green. Restored cleanly. The frozen `BEFORE_MIGRATION_3` schema's "cannot go stale" claim rests on the `schema.ts` docblock convention ("never edit a shipped migration"), not on a mechanical check — that's consistent with how the rest of this repo relies on documented invariants, not a defect.
+
+**SSE test — reproduced exactly.** Reverted `orchestrator.ts:257` (`events.probed(jobId, withThumbnailPath(probe, thumbnailPath))` → `events.probed(jobId, probe)`). The test (`routes.test.ts:588-634`) reddens at line 618, the raw-body assertion (`expect(response.body).not.toContain(origin)`), before it ever reaches the parsed-field assertions at `:628-629` — confirmed by the actual failure output, which shows the origin URL sitting in `thumbnailUrl` inside the raw SSE frame text. Restored cleanly.
+
+### 3. dl-34 and dl-35 accuracy
+
+**dl-34: 13/13 citations resolve**, confirmed by running `node scripts/citations.mjs tools/downloader/docs/work/dl-34-...md` directly — matches the ticket's own claim exactly. I additionally spot-checked content, not just resolution, for the load-bearing ones: `server.ts:96-104`'s quote is verbatim; `classify.ts:149` and `ytdlp.ts:622` are the exact function signature lines; `pool.ts:256-268` (`chromium.launch()` — headless/args/proxy only, no env, no cert flag) and `:117-126` (`BASE_ARGS`, 7 flags, none about certificates) both check out; `browser.ts:148` (`newContext()`, no `ignoreHTTPSErrors`) checks out; `ytdlp.ts:516-523` (`spawn()`, no `env`) checks out; the `grep -rnE "...NODE_EXTRA_CA_CERTS..."` claim of zero hits reproduces exactly; `TLS_VERIFICATION_FAILED: 502` exists at `api/src/http-errors.ts:23` and the code itself lives in `packages/core/src/errors.ts` (shared taxonomy), matching "already exists... costs no new code." The "inherited and unverified" section (`dl-34-...md:133-140`) does say plainly that the two exact strings (`net::ERR_CERT_AUTHORITY_INVALID`, `CERTIFICATE_VERIFY_FAILED`) were never observed and instructs a future builder to reproduce them before matching on them — confirmed present in the ticket's own text, not laundered as fact. One prose nit, low: the Why section groups `size-sample.ts:371` in with `size-probe.ts:74`/`:98` as citations that "swallow to `undefined`" — that catch block actually returns `unchanged` (the declared estimate), which the very next sentence correctly describes ("degrading to a declared value"). The line itself is real and illustrates the right pattern; just a one-word overreach in the summary sentence.
+
+**dl-35: grep claims verified.** `grep -rn "Content-Security-Policy" tools/downloader --include=*.ts --include=*.html` → exit 1, zero hits, reproduced exactly. The four-member `Content-Type` allowlist excluding `image/svg+xml` and the `X-Content-Type-Options: nosniff` header both check out at `api/src/thumbnails.ts:59-64` and `api/src/routes/thumbnail.ts:41`. No inline `file:line` citations to check via `citations.mjs` (0/0) — the ticket's claims here are grep-verified assertions, not pointer citations, and they're accurate.
+
+### 4. Citations left deliberately failing
+
+**`probe.ts:101` example verified.** `probe.ts` is unique in the repo (one file, no ambiguity), so it resolves without a path prefix; today it reads `// never even learns that an internal address answered. mustPass only —`, not the "attacker-influenced" text it was originally cited for. The ticket's own Log entry correctly calls this out as "green and wrong" and explains why the rest of the Build section is deliberately left unqualified. Confirmed accurate.
+
+**Citation count is stale — low, reproducible.** The Log claims "Citations: 29/52, and the 23 failures are deliberate." A fresh `node scripts/citations.mjs` run against the exact committed file at `569214d` reports **55 total, 31 resolve, 24 fail**. Tracing the discrepancy: the paragraph making the "29/52" claim (`dl-29-...md:790`) itself cites `orchestrator.ts:257` as its own illustrative example one line later (`:791`, correctly flagged ambiguous) and two more citations appear in the paragraphs immediately after it (`:793`, `:806`, both resolve `ok`) — three citations added to the same Log entry after the count was taken, never re-run. 52+3=55 and 23+1=24 line up exactly with what I found. This doesn't change the substance (the failing citations are still the same deliberately-unqualified Build-section ones; the new ones are self-referential examples that resolve as described), but it's a stale self-report inside the one paragraph whose entire point is "trust these numbers because they were checked."
+
+### Summary
+
+- **Enumeration (item 1):** 5 `AppLogger` methods, 5 route through `safeFields`, 0 bypass it.
+- **Findings**, most severe first:
+  - **critical, out of scope, pre-existing** — `POST /api/probe`'s response body (and the `probed` SSE frame) ships `requestContext.headers` including live `Cookie`/`Authorization` straight to the client, unredacted; confirmed on `origin/main`, unrelated to this branch, not fixed by `withThumbnailPath`. Recommend an urgent standalone ticket.
+  - **low** — the structural redaction check only matches a top-level `requestContext` key; a nested or differently-named header bag escapes both layers. No current call site exercises this. Demonstrated, not exploited.
+  - **low** — the "pino paths fail because of depth" explanation in the Log is imprecise; the actual reason is case-sensitivity (pino's paths are lowercase-only; `RequestContext.headers` uses real HTTP casing). Doesn't change the conclusion, could mislead a future reader about what the second layer actually covers.
+  - **low** — the ticket's own "29/52" citation count is stale by 3 relative to a fresh run against the committed file; substance unaffected.
+  - **low** — dl-34's Why section says `size-sample.ts:371` "swallows to `undefined`"; it actually returns the declared estimate, contradicted by the very next sentence.
+  - **dropped** — none.
+  - **findings** — own defect hunt (enumeration of every log call site, structural-gap fuzzing, fail-first reproduction of both new tests, citation re-resolution for both new tickets and for the deliberately-failing example, plus the wire-body check that surfaced the critical item) returned 5 (excluding the pre-existing wire leak, which is a 6th, out-of-scope item); all 6 carried above, 0 dropped.
+- **Could not verify:** the two "inherited" strings in dl-34 (`net::ERR_CERT_AUTHORITY_INVALID`, `CERTIFICATE_VERIFY_FAILED`) — no browser or yt-dlp binary in this environment, same as the builder; the ticket already says so.
+- **Ran:** `npx vitest run --project downloader` once at the end — 56 files, 891 tests, all green, at `569214d`. `npx oxfmt --check` on the touched ticket/test files — clean.
+
 ## Gate 3 — 2026-09-01 · Sonnet, against an Opus build · the credential strip
 
 Verdict **CONCERNS**, one finding.
@@ -1050,3 +1145,41 @@ answered. mustPass only —`, because this branch rewrote that comment two lines
   failing and a passing run minutes apart is the strongest evidence I have seen
   for dl-33's contention framing, so it is recorded on that ticket rather than
   only here.
+
+- **2026-09-01** — Committed the post-PR gate's own record, which had been missing
+  from this ticket and from #128. It ran at `569214d`, between Gate 2 and the
+  credential-strip gate, and it is the record whose "critical, out of scope"
+  finding **became** that strip — so the two read as a sequence rather than as one
+  gate having overlooked something. The gap was in the relay that asked for that
+  round's fixes and not for the record, not in the review.
+
+  Three decisions about how it was inserted, all measured rather than assumed:
+
+  - **It carries no number.** Numbering it would make it Gate 3 and push the
+    committed credential-strip record to Gate 4, and two _test_ files cite
+    "dl-29's third gate" by that number (`routes.test.ts:379`,
+    `egress-proxy.test.ts:596`). Renumbering would have made those comments wrong,
+    which a documentation-only change has no business doing.
+  - **Its citations are pinned with `--rev 569214d`.** Both ways resolve 16/34, so
+    the count alone would not have settled it — but diffing the two runs shows
+    three citations pointing at _different content_ now, since the strip and its
+    tests landed after the record was written. One of them, `probe.ts:101`, is the
+    record's own evidence for a finding it quotes verbatim, so remapping the
+    number would have destroyed the finding and editing the reviewer's words was
+    not an option. The sha is pre-squash and the record says so.
+  - **Only the section's own title changed**, from `## Review`, on the same
+    precedent as `## The gate on this filing` and for the same concrete reason:
+    `repo-12`'s board check reads `## Review` as a specific signal.
+
+  Verified mechanically before committing, because the failure mode here is silent
+  — a duplicated heading and a half-cut sentence both pass `npm run check` and
+  `npm run status -- --json`. The insert was anchored on the _heading form_
+  (`\n\n## …\n`), never on bare heading text, since this ticket quotes headings
+  inside backticks throughout. Then: `git diff --numstat` reports 95 insertions and
+  **0 deletions**; a section-by-section comparison against `HEAD` reports exactly
+  one heading added, none removed, and every pre-existing section byte-identical;
+  and all 66 lines of the reviewer's body appear verbatim in the committed
+  section.
+
+  Gates 1, 2 and this one were also posted to #128's thread, which previously
+  carried only the credential-strip record.
