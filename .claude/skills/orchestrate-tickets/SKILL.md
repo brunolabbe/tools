@@ -78,7 +78,10 @@ you are there.
    audit one command instead of an assumption. Measured before this line existed:
    **11 tickets, 22 gates, none gated by a different model than built it.**
 5. **The reviewer sends its findings to the builder itself**, as one batched
-   message, and copies you. You are not the courier — **both recorded relay
+   message, **and sends the same findings to you in full** — not a status line
+   saying it did. Measured: a reviewer that reported only "findings sent" left
+   this step with one account of a two-party exchange, which is not enough to
+   accept on at step 8. You are not the courier — **both recorded relay
    corruptions in this repo were introduced at this hop by an orchestrator
    rewriting a report**, not by either agent. Name the builder in the gate prompt
    so the reviewer knows who to address; the mechanics are in
@@ -94,9 +97,12 @@ you are there.
 6. **They iterate until they agree the work is done** — findings answered,
    reproductions run, the gate's verdict settled between them. **That agreement is
    theirs to reach, not yours to adjudicate**; you re-enter only on the two
-   escalations above. **Hold the reviewer alive** across those rounds: a builder
-   that comes back "this does not reproduce" is asking a question only that
-   reviewer can answer, and it can now be asked directly. See
+   escalations above. **This is a chain of wakes, not a live conversation** — each
+   side ends its turn after it sends, and `SendMessage` wakes the other back into
+   its own context. So **keep the reviewer's agent record and worktree** until the
+   exchange is over, which is not the same as keeping it alive; nothing is. A
+   builder that comes back "this does not reproduce" is asking a question only
+   that reviewer can answer. See
    [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
    - **Watch for the failure this shape introduces**: a pair that agrees too
      easily. Two agents that want to be done can converge on "addressed" without

@@ -44,8 +44,25 @@ You still **never commit** and never open a pull request. The builder writes the
 reason is unchanged too: two different models should write the record and the
 report a reader holds against it.
 
-**Expect to stay alive past your report.** The builder may come back "this does
-not reproduce", and you are the only one who can answer that.
+**A sibling that has finished is still reachable — this is the single thing that
+broke the first run of this loop.** An agent ends its turn after it sends; it does
+not sit listening. `ListAgents` will show the other side as `completed`, and that
+is **not** a closed channel: `SendMessage` wakes it back into its own context,
+measured on 2026-09-01 (a reviewer woke a completed builder, which resumed with
+everything it knew). A builder that read `completed` as "no longer listening" and
+reported to the orchestrator instead ended the exchange after one message. **Never
+infer from a status that the other side has gone.** Send, and let it wake.
+
+**Send the same findings to the orchestrator, in full, in the same pass** — not a
+status line saying you sent them. It has to weigh your account against the
+builder's at the end, and it cannot do that from "findings sent". Measured: a
+reviewer that reported only that it had messaged the builder left the orchestrator
+with one account of a two-party exchange.
+
+**Expect to be woken past your report.** The builder may come back "this does not
+reproduce", and you are the only one who can answer that — so your worktree and
+your agent record have to survive until the exchange is over. Nothing is *alive*
+in between; the wake is what continues you.
 
 **You are done when the two of you agree you are done** — every finding answered,
 every reproduction actually run, the verdict settled between you. The orchestrator

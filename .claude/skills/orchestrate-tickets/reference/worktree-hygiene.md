@@ -59,6 +59,13 @@ accepting it, because a builder that comes back "this does not reproduce" is a
 question only that reviewer can answer. That is the test: **hold a reviewer only
 while a specific open question could go back to it.**
 
+**"Alive" is the wrong word, and it misled the first run of this loop.** No agent
+sits listening between messages; both end their turn after sending, and
+`SendMessage` wakes a `completed` sibling back into its own context. What has to
+survive is therefore the **agent record and its worktree**, so a wake has
+something to resume into — removing a reviewer's tree while the builder may still
+answer it is what actually closes the channel.
+
 **That exception is now the common case, not the rare one.** The reviewer sends
 its findings to the builder directly and fields the pushback itself, so "a
 specific open question could go back to it" is true for every gate until the

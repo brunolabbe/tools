@@ -156,6 +156,15 @@ one. Push back to the
 reviewer, not to the orchestrator: it has the context that produced the finding
 and it can answer "this does not reproduce" in one exchange instead of two.
 
+**A sibling that has finished is still reachable — this is the single thing that
+broke the first run of this loop.** An agent ends its turn after it sends; it does
+not sit listening. `ListAgents` will show the other side as `completed`, and that
+is **not** a closed channel: `SendMessage` wakes it back into its own context,
+measured on 2026-09-01 (a reviewer woke a completed builder, which resumed with
+everything it knew). A builder that read `completed` as "no longer listening" and
+reported to the orchestrator instead ended the exchange after one message. **Never
+infer from a status that the other side has gone.** Send, and let it wake.
+
 **Two things go to the orchestrator instead**, and it is worth being exact about
 which, because the second is the one that gets lost:
 
