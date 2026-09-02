@@ -6,6 +6,7 @@ kind: fix
 status: ready
 milestone: null
 depends_on: []
+difficulty: hard
 ---
 
 # dl-33 — `ERR_OSSL_ASN1_ILLEGAL_PADDING` under load, in two specs and on two platforms

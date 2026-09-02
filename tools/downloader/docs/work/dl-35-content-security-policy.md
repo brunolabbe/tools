@@ -6,6 +6,7 @@ kind: work-package
 status: ready
 milestone: null
 depends_on: []
+difficulty: standard
 ---
 
 # dl-35 — a Content-Security-Policy for the downloader

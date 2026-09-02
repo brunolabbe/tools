@@ -6,6 +6,7 @@ kind: chore
 status: in-flight
 milestone: null
 depends_on: [dl-10]
+difficulty: standard
 ---
 
 # pl-2 — A released image, and a hostname to serve it from

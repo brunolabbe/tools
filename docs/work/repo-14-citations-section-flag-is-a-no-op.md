@@ -6,6 +6,7 @@ kind: fix
 status: ready
 milestone: null
 depends_on: []
+difficulty: standard
 ---
 
 # repo-14 — `--section` is documented, accepted, and does nothing
