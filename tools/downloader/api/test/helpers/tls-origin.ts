@@ -103,6 +103,32 @@ const SAN_IP = 7;
 let serialCounter = 0;
 
 /**
+ * A counter as the hex of a **positive** DER `INTEGER`, which is what
+ * `cert.serialNumber` is fed straight into.
+ *
+ * A DER `INTEGER` is signed and two's-complement, and RFC 5280 §4.1.2.2 wants a
+ * serial that is positive. So two conditions, not one: the hex must be
+ * even-length, **and** its leading byte must have the high bit clear — a value
+ * from `0x80` up takes a `00` prefix. The `padStart(2, "0")` this replaced
+ * (dl-36) met neither in the case that matters: counter 128 encoded as
+ * `02 01 80`, which reads back as −128, and Node's own `X509Certificate` prints
+ * that serial as `-80`.
+ *
+ * Odd length on its own is harmless, and dl-33's note that it is a second half
+ * of the defect does not hold: `forge.util.hexToBytes` left-pads, so `"fff"` is
+ * already `0f ff`. Padding to even here is what makes the leading-byte test
+ * below mean anything — it is not fixing a bug of its own.
+ *
+ * Exported only so the encoding can be asserted over the counters a real run
+ * never reaches, without generating a certificate per case.
+ */
+export function fixtureSerialNumberHex(counter: number): string {
+  const hex = counter.toString(16);
+  const evenLength = hex.length % 2 === 0 ? hex : `0${hex}`;
+  return Number.parseInt(evenLength.slice(0, 2), 16) >= 0x80 ? `00${evenLength}` : evenLength;
+}
+
+/**
  * A self-signed certificate for the names a test will actually use.
  *
  * Both forms are needed and for different reasons. `dnsNames` covers the
@@ -148,7 +174,7 @@ export async function createFixtureCertificate(names: {
   // certificates sharing one is wrong on its own terms, not because anything
   // here depends on them.
   serialCounter += 1;
-  cert.serialNumber = serialCounter.toString(16).padStart(2, "0");
+  cert.serialNumber = fixtureSerialNumberHex(serialCounter);
   cert.validity.notBefore = new Date(Date.now() - (names.expired === true ? 172_800_000 : 60_000));
   // Short-lived on purpose: it exists for one test run, and a fixture key that
   // outlives the run is a key somebody could be tempted by.

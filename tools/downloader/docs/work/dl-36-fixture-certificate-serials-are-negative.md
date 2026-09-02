@@ -3,7 +3,7 @@ id: dl-36
 tool: downloader
 title: Fixture certificate serial numbers encode as negative integers, which RFC 5280 forbids
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -130,3 +130,71 @@ ticket exists because the reproduction is the deliverable.
   `dl-36` confirmed free: `tools/downloader/docs/work/` tops out at `dl-35`, a
   grep for `dl-<n>` across the tree adds only `dl-999` (a `scripts/status.mjs`
   fixture), and no remote branch or pull request in any state names `dl-36`.
+
+- **2026-09-02** — Built on local `dl-36-orchestrated` (base had no remote;
+  branched off the local ref rather than `origin/`). The encoding is now
+  `fixtureSerialNumberHex`, exported from
+  `tools/downloader/api/test/helpers/tls-origin.ts` and asserted in
+  `test/helpers/tls-origin.test.ts`. The dl-21 comment at the call site is
+  untouched.
+
+  **The brief's reproduction table reproduces exactly, and its correction of
+  dl-33 holds.** Both were re-run here before building rather than taken on
+  trust: every row of the table matched byte for byte through
+  `forge.asn1.toDer`, and `hexToBytes` does left-pad — `"fff"` → `0f ff`,
+  `"abcde"` → `0a bc de`. The sign bit is the whole defect, as the ticket says.
+
+  **Two things the brief did not have, both of which the fix depended on.**
+
+  First, the fix only works because **forge's DER writer does not minimise the
+  `00` prefix back off**: `derOf("0080")` is `02 02 00 80`, not `02 01 80`. That
+  was the one way this fix could have silently not worked, and it is the reason
+  the new test goes through forge's writer rather than asserting hex alone.
+
+  Second, "Node's `X509Certificate` parses the certificates cleanly either way"
+  is true only in the sense that nothing throws. It **reports the negative**:
+  generating real certificates at counters 128/255/32768 gives
+  `serialNumber = -80 / -01 / -8000` before the fix and `80 / FF / 8000` after.
+  Cosmetic still holds — 9 call sites, per-process counter — but the defect was
+  observable, not merely notional.
+
+  And a consequence worth recording, because it is the collision the dl-21
+  comment calls "wrong on its own terms" arriving by another route: under the
+  old encoding **counters 255 and 65535 produce identical DER**, `02 01 ff`.
+  Forge minimises the redundant leading `ff` of a negative integer, so two
+  different counters become the same serial. Fixed encoding keeps them
+  distinct (`00 ff` vs `00 ff ff`).
+
+  **Red run, and exactly which one.** Acceptance line 1 was run two ways, since
+  the extraction is itself part of the fix and "the unfixed source" is ambiguous
+  once the function exists. Against the _literally_ unfixed file
+  (`git checkout --` on the helper, new test kept) all 23 tests fail with
+  `TypeError: fixtureSerialNumberHex is not a function` — a missing symbol, which
+  proves nothing about encoding. So the meaningful red is the second: the
+  extracted function with its **old body** restored
+  (`counter.toString(16).padStart(2, "0")`), which fails 14 of 23 on values —
+  `expected '80' to be '0080'`, `expected '020180' to be '02020080'`, and 41201
+  violations in the sweep, first at 128. Both runs were executed; neither is
+  reasoned.
+
+  One outcome from that red is worth keeping, because it is the dl-33 correction
+  restated as test results: counters **256, 4095 and 65536 fail only the
+  even-length assertion and pass the DER round-trip**. The odd-length hex really
+  is harmless, exactly as this ticket claimed against dl-33.
+
+  **Nothing to fold in, and here is what was checked.**
+  `api/src/tls-interception.ts:121-125` already prefixes `00` and its comment
+  already states this rule — production code knew it; only the test helper did
+  not. So the fix makes the helper consistent with an existing precedent rather
+  than introducing one, and there is no second site to correct. `serialNumber`
+  appears nowhere else in `tools/` or `packages/`.
+
+  Sweep bound is 70000 rather than the table's 32768 so the second affected
+  range (32768–65535) is covered on both sides.
+
+  Gates, all green:
+  `npx vitest run tools/downloader/api/test/helpers/tls-origin.test.ts` — 23
+  passed, 2.0 s wall; `npx vitest run tools/downloader/api` — 18 files, 322
+  passed, 35.3 s wall; `npm run check`; `npm run format`. Iteration was on the
+  single spec rather than the directory throughout, which is the difference
+  between 2 s and 35 s a run.
