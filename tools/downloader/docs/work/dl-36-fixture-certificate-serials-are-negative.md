@@ -17,7 +17,8 @@ depends_on: []
 
 `createFixtureCertificate` builds every TLS fixture certificate in the
 downloader's API suite, and sets the serial number like this
-(`tools/downloader/api/test/helpers/tls-origin.ts:150-151`):
+(`tools/downloader/api/test/helpers/tls-origin.ts:150-151`, at `1fe5a4d` —
+the fix moved these to 176-177):
 
 ```ts
 serialCounter += 1;
@@ -106,8 +107,84 @@ ticket exists because the reproduction is the deliverable.
    against the current `padStart(2, "0")` — run it red first and say so.
 2. `npx vitest run tools/downloader/api` passes.
 3. `npm run check` passes.
-4. The comment at `tls-origin.ts:143-149` still says what it says now about the
-   dl-21 collision, or the Log says why it changed.
+4. The comment at `tls-origin.ts:144-149` (line numbers as at `1fe5a4d`, where
+   this line was written; the fix shifted it to 170-175) still says what it says
+   now about the dl-21 collision, or the Log says why it changed.
+
+## Review
+
+_Preamble, from the builder. **Both halves of this record are here in one place**
+— the short form and the reasoning. That is not where they normally live: the
+reasoning usually goes on the pull request thread and only the short form is
+committed. **This branch opened no pull request** — no ship authority this
+session — so committing the short form alone would have thrown the reasoning
+away rather than filed it elsewhere. Nothing was dropped and nothing was
+summarised._
+
+_**The citations in this section are pinned to `dab661c`**, the sha the gate
+actually reviewed. It is a **pre-squash branch sha** and will not survive a
+squash merge; it is kept because it is the only tree in which the reviewer's line
+numbers point at the code the reviewer was looking at._
+
+_`node scripts/citations.mjs <this file> --rev dab661c` reports **9/9 resolve**,
+and that number is not a clean bill — it is the trap the script's own header
+warns about. Resolving means the lines exist, not that they say what the citation
+claims. **Four of the nine have their referent in the base `1fe5a4d`, not in
+`dab661c`**, because this fix inserted 28 lines above the code the ticket was
+written about: the comment moved 144-149 → 170-175 and the assignment 150-151 →
+176-177. Two of those four are in the brief above (`## Why` and `Done when` 4)
+and are now labelled with the sha they were written against. The other two are
+**deliberately left wrong and must stay that way**: the `143-149` in Done-when
+4's row below is the reviewer's own evidence for the off-by-one it reports, and
+the Log quotes the same bad number as the subject of its note. Correcting either
+would delete the finding it is evidence for. The corrected `144-149` is in the
+acceptance line above, and why the original author got it wrong is in the Log._
+
+**Gate: PASS** — 2026-09-02 · `1fe5a4d...dab661c` · self-run defect hunt at medium (no `code-review` subagent — I have none — I ran the hunt myself per instruction)
+
+| Done when                                                                                                                                                    | Proof                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Test asserts even-length, leading byte <0x80, round-trip for counters incl. 1,127,128,255,256,4095,4096,32768; fails red against current `padStart` first | **proven** — `api/test/helpers/tls-origin.test.ts:61` and `:73`; red run reproduced independently: 14/23 fail against the reverted body, restored and re-confirmed 23/23 green                                            |
+| 2. `npx vitest run tools/downloader/api` passes                                                                                                              | **proven** — re-ran myself: 18 files / 322 passed (base `1fe5a4d`: 17 files / 299 passed; delta +1 file/+23 tests exactly matches the new spec, no other test file touched)                                               |
+| 3. `npm run check` passes                                                                                                                                    | **verified by builder, not independently re-run** — nothing I found implicates it                                                                                                                                         |
+| 4. Comment at `tls-origin.ts:143-149` unchanged                                                                                                              | **proven** — text identical `1fe5a4d` vs `dab661c`. Ticket's own citation is off by one at the start (143 is `cert.publicKey = keys.publicKey;`; the comment itself is 144-149) — not spent as a finding, per instruction |
+
+- **findings** · self-run hunt at medium returned 0; 0 carried, 0 dropped.
+- NFR: security n/a (test-only fixture; correctness-improving) · performance n/a (new spec ~0.5s) · reliability + (removes a latent defect class) · maintainability + (extraction is testable, precedent-consistent with `tls-interception.ts:121-125`).
+- What the gate did **not** do: e2e, the container build, the Windows CI matrix, full `npm test` (excluded from this loop per reviewer's brief); an independent re-run of `npm run check`/`npm run format`; extending the sweep past the spec's own 70000 bound; a real HTTPS handshake through `TlsOrigin` consuming a generated cert (called `createFixtureCertificate` directly instead, including 128 real 2048-bit keypairs to reach counter 128).
+
+### Reasoning and reproductions
+
+**1. Red-run claim (b).** Positive control first: `npx vitest run tools/downloader/api/test/helpers/tls-origin.test.ts` on the unmutated tree → `Tests 23 passed (23)`. Then replaced `fixtureSerialNumberHex`'s body with the old `return counter.toString(16).padStart(2, "0");` and re-ran the same command → `Tests 14 failed | 9 passed (23)`, sweep test reporting `count: 41201, first: [128,129,130,131,132]` — matches the ticket's Log exactly. Restored from a file-copy backup (a `trap` would not have survived across separate Bash tool calls in this harness — each call is a fresh shell), `touch`ed the file, confirmed `git status --porcelain` was empty, re-ran: 23/23 green again.
+
+**2. The nine that don't go red, enumerated (`--reporter=verbose`):**
+
+- `counter 1 encodes as a positive integer` — control, value unaffected either encoding
+- `counter 127 encodes as a positive integer` — control, unaffected (boundary below 128)
+- `counter 4096 encodes as a positive integer` — control, unaffected (hex `"1000"` already even-length, leading byte `0x10`)
+- `counter 1 survives forge's DER writer` — control
+- `counter 127 survives forge's DER writer` — control
+- `counter 4096 survives forge's DER writer` — control
+- `counter 256 survives forge's DER writer` — not a control: this is the odd-length case, passing because `forge.util.hexToBytes` left-pads odd-length hex before the DER write, so the odd-length defect never reaches the DER bytes. This is the dl-33 correction as a test result — and the paired exact-hex test for the same counter _does_ go red, so the pair distinguishes "harmless" from "the real defect" rather than masking it.
+- `counter 4095 survives forge's DER writer` — same as 256
+- `counter 65536 survives forge's DER writer` — same as 256
+
+None of the 9 passes for a reason unrelated to what it claims: 3 are legitimate below-threshold controls that would catch a regression (exact-hex `.toBe`), and 6 split into 3 controls and 3 intentional demonstrations of the odd-length non-issue.
+
+**3. Call-site wiring, verified past the unit level.** Static: `cert.serialNumber = fixtureSerialNumberHex(serialCounter);` at `api/test/helpers/tls-origin.ts:177`. Dynamic: called `createFixtureCertificate` 128 times in sequence against the fixed tree, parsed the PEM with `node:crypto`'s `X509Certificate`: `serialNumber = "80"` (positive). Mutated back to the old body, repeated the same 128-call sequence: `serialNumber = "-80"` — matches the ticket's Log claim exactly.
+
+**4. Counter coverage, enumerated not sampled.** `CASES` at `tls-origin.test.ts:28-38` has all 8 required counters (1, 127, 128, 255, 256, 4095, 4096, 32768) plus 3 extra. Every case runs both `test.each` blocks — `:61` asserts exact hex, even length, leading byte <0x80, round-trip; `:73` asserts the DER round-trip plus signed two's-complement read-back. All three requested properties present for every required counter.
+
+**5. Both extra claims reproduced independently, same numbers:**
+
+- `derOf("0080")` → `02020080` (`02 02 00 80`) — forge does not strip the `00` prefix. Confirmed.
+- Old encoding: `oldHex(255)="ff"`, `oldHex(65535)="ffff"`. `derOf("ff")` → `0201ff`, `derOf("ffff")` → `0201ff` — same DER, a genuine collision. Checked one step further: `hexToBytes("ffff")` itself returns `ffff` unchanged (no pre-minimization), so the collapse happens inside `forge.asn1.toDer` when writing — it strips a redundant leading `0xff` (sign-extension) but never inserts a missing `00` needed to flip a value positive. That asymmetry is why prefixing `00` yourself is the only fix that works.
+
+**6. dl-33 correction, reproduced.** `hexToBytes("fff")` → `0fff`, `hexToBytes("100")` → `0100`, `hexToBytes("abcde")` → `0abcde` — match the ticket's Log numbers exactly.
+
+**7/8.** Done-when 3 (`npm run check`) taken as reported, not independently re-run — flagged unverified-by-me above. Ticket edit checked: `status: done`, dated Log entries with actual numbers, no `/tmp` paths cited (`grep -n "/tmp"` on the ticket file: no matches), commit subject validated with exit 0 via `node scripts/commit-message.mjs --text "fix(downloader): encode fixture certificate serials as positive integers (dl-36)"`.
+
+No disagreement, nothing unresolved on my side.
 
 ## Log
 
@@ -198,3 +275,68 @@ ticket exists because the reproduction is the deliverable.
   passed, 35.3 s wall; `npm run check`; `npm run format`. Iteration was on the
   single spec rather than the directory throughout, which is the difference
   between 2 s and 35 s a run.
+
+- **2026-09-02, after the gate** — Three fold-ins, none of which changes the
+  code: the gate passed with zero findings and `dab661c` is untouched by this
+  entry.
+
+  **`Done when` 4's own citation was wrong, and the interesting part is why.**
+  It read `tls-origin.ts:143-149`; the comment is **144-149**. Corrected above.
+  Filing that as its own ticket would have cost an intake slot, a dispatch, a
+  gate, a pull request and a merge for one digit, paid by someone with none of
+  this context — this branch had the file open, so it was free here.
+
+  But the mechanism is worth more than the digit. The **same ticket cites
+  `150-151` for the assignment and that is exactly right** (at `1fe5a4d`, 150 is
+  `serialCounter += 1;` and 151 is the `cert.serialNumber` line), and the author
+  quoted the comment's _text_ accurately in the same paragraph. So the file was
+  genuinely open and genuinely read. What went wrong was arithmetic: the comment
+  is **exactly six lines** (`sed -n '144,149p' | wc -l` → 6), and the cited start
+  is `149 - 6` — the end anchor minus the length, missing the `+ 1` an inclusive
+  range needs.
+
+  That prediction is exact, and it rules out the other obvious explanation: had
+  the author cited the window they viewed through (`sed -n '143,151p'`, or a
+  Read offset), the cited **end** would have been 151. It is 149. So the end was
+  derived correctly from the known-good 150, and the start was computed backwards
+  from it rather than read off the file.
+
+  **The rule that generalises: cite what you read, never compute one citation
+  from another.** A comment block is unusually exposed to this, because it has no
+  unique symbol to anchor a `grep -n` on and so invites the subtraction. The text
+  survived because it was copied; the number failed because it was derived.
+
+  **The collision has a mechanism too**, and this is the reviewer's, reproduced
+  in its words rather than paraphrased: `hexToBytes("ffff")` returns `ffff`
+  unchanged, so the collapse to one byte happens inside `forge.asn1.toDer` itself
+  when writing the INTEGER — "it strips a redundant leading `0xff`
+  (sign-extension) but does _not_ insert a missing `00` needed to flip a value
+  positive. That asymmetry is exactly why prefixing `00` yourself is the only fix
+  that works." The 2026-09-02 entry above records the collision as an observed
+  fact; this is why it happens, and it is the reason the fix could not have been
+  left to the writer.
+
+  **The citation checker passed and was still hiding three wrong citations**,
+  which is the second thing worth carrying out of this ticket.
+  `node scripts/citations.mjs <this ticket> --rev dab661c` reports **9/9
+  resolve**. That is not a clean bill: this fix inserted 28 lines above the code
+  the brief was written about, so the comment moved **144-149 → 170-175** and the
+  assignment **150-151 → 176-177**. Every one of those citations still resolves
+  under the pin — to a function signature and to an unrelated doc comment
+  respectively. A dangling citation announces itself; one that lands on plausible
+  neighbouring code does not, and that is the failure the script's own header
+  calls "worse than a dangling one".
+
+  So **the count is not the check**. Four of the nine citations have their
+  referent in `1fe5a4d` rather than `dab661c`. Two were labelled with the sha
+  they were written against; the other two are evidence for the off-by-one
+  finding and were deliberately left wrong. Verifying the pin by comparing
+  totals — 9/9 here, 9/9 after — would have shown no difference at any point in
+  that work.
+
+  **Who ran what, since the gate split one check.** `npm run check` was run by
+  this session and not re-run by the reviewer; the full API suite, the red run
+  and every numeric claim in the entry above were run by both of us
+  independently and matched. The reviewer additionally measured the base
+  (`1fe5a4d`) at 17 files / 299 tests against this branch's 18 / 322 — a delta of
+  exactly the new file, which is the check this session had not thought to make.
