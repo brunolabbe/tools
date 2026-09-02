@@ -90,6 +90,16 @@ Set up in this order — the order matters and each step has bitten someone:
 1. `git fetch origin && git checkout -B <branch> origin/<base>`. Take the base
    from your prompt and say it back in your report. Never branch off local `HEAD`;
    it may be another session's work.
+
+   **When the base has no remote, branch off the named local ref instead** —
+   `git checkout -B <branch> <base>`, no fetch. A base that was created in this
+   session and never pushed is the ordinary case for stacked work and for a gate
+   on a branch that has not opened its PR, and `origin/<base>` simply does not
+   exist for it. Measured: a builder given a local-only base followed this step
+   literally, tried to fetch a ref that was not there, and spent a whole dispatch
+   asking for permissions instead of building. **The prompt owes you this** — if
+   it does not say whether the base is on the remote, check with
+   `git ls-remote --heads origin <base>` and say in your report which you used.
 2. `bash /workspaces/tools/.claude/scripts/worktree-farm.sh` — populates
    `node_modules` here in about half a second. **Do not run `npm install`**: it is
    minutes, it is the largest fixed cost of a dispatch, and it can fail outright
