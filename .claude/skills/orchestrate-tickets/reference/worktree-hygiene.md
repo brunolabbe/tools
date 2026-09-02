@@ -56,7 +56,9 @@ that was written, so like the third session's figure this is evidence about cost
 not about whether holding ever paid.) It kept exactly one reviewer alive past its
 report — the one whose builder had been told to *reproduce* a finding before
 accepting it, because a builder that comes back "this does not reproduce" is a
-question only that reviewer can answer. That is the test: **hold a reviewer only
+question only that reviewer can answer. **When there is no pull request, the ticket commit is the whole test** — the
+second location does not exist, and waiting for it retires nothing, ever. That is
+the state the skill's own default produces. That is the test: **hold a reviewer only
 while a specific open question could go back to it.**
 
 **"Alive" is the wrong word, and it misled the first run of this loop.** No agent

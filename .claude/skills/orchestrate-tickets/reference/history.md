@@ -43,3 +43,35 @@ it*. One had **every premise true and its conclusion false** — the shape that
 survives an orchestrator's own check and dies on contact with a running test. The
 count that matters is not gates-that-found-something; it is that no wrong finding
 reached a commit.
+
+## The schema, from the seventh session on
+
+The six entries above are prose and are not comparable to each other: one counts
+"agents", another "invocations", another "dispatches-or-messages", and only the
+first names its unit. **Every session from here appends a row in this shape**, so
+the series can be read rather than re-derived. Leave a field blank rather than
+estimating it, and say `not recorded` rather than guessing — a wrong number here
+outlives the session that wrote it.
+
+| Field | What it means |
+| --- | --- |
+| `tickets` | tickets taken from ready to a gated branch |
+| `agents` / `dispatches` | distinct agents spawned / total dispatches **and wakes** — a wake costs a context reload, so it belongs in the second number |
+| `builder rounds` | and **how many were the orchestrator's own fault**, which is the number that improves |
+| `gates` | and how many **returned findings**, which is not the same count |
+| `wrong findings` | findings that did not survive a builder's reproduction — and whether any reached a commit |
+| `subagent tokens` | the unit this page has always counted in. **Not** the whole volume a request moves: cache reads dwarf it and are essentially the entire bill |
+| `cost` | actual dollars, with the date, because rates move. The conversion measured 2026-09-02 was **$0.0182 per 1k subagent tokens**, which prices the six sessions above at roughly $16 to $73 each |
+| **`what the skill got wrong`** | **the field that earns this page.** What was missing, unperformable, or misleading. Ask every agent for it explicitly at dispatch — it does not arrive on its own |
+
+**Why the last field is mandatory.** On 2026-09-02 a single orchestrated ticket
+surfaced six defects in this skill: `resolvedModel` unobtainable on a backgrounded
+dispatch though step 4 calls the check load-bearing; no wake when a child finishes,
+so an unattended orchestrator stalls silently; reports arriving as summaries when
+step 5 asks for them in full; three mechanisms assuming a pull request that the
+skill's own default has not created yet; a `trap`-based restore that cannot span a
+per-call-shell harness; and `ticket-reviewer.md` never mentioning how to populate
+`node_modules`, which fails silently by resolving to the shared checkout. **All six
+came from asking. None would have been recorded by a session that merely
+succeeded** — and five earlier sessions had the same signal available and did not
+capture it.

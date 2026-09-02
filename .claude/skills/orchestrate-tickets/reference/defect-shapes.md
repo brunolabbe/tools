@@ -95,6 +95,16 @@ The countermeasure is one line, and it belongs in every builder and gate prompt:
 cheaper still — where you cannot run it, write the vague-and-true form rather than
 the precise-and-unverified one. Precision is not a courtesy to the next reader
 when it is unearned; it is a trap, because precision is what makes a claim look
+
+**A `trap` cannot do this here, and the rule survives its mechanism.** Each Bash
+call is a fresh shell, so a trap set before the mutation is gone by the time the
+next call runs the test — it protects nothing across the mutate-run-restore
+sequence this page is describing. Measured 2026-09-02: a reviewer hit exactly
+this and substituted a **file-copy backup**, restored from it, `touch`ed the file
+so the test runner saw the change, and confirmed with `git status --porcelain`
+returning empty. That is the shape to copy in a per-call-shell harness. What must
+not change is the requirement: **restore before you report, and prove the restore
+with a command rather than an assurance.**
 checked.
 
 Two consequences for how you dispatch:

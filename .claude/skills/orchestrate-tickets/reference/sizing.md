@@ -34,7 +34,8 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
 
 - **End every relay with conditional ship authority.** "Apply these, and **if**
   `npm run check` is green, the suite is green and the diff scope is unchanged,
-  open the PR yourself — do not check back. If any condition fails, stop and tell
+  open the PR yourself (**or, on a branch with no PR yet, commit the gate record
+  yourself** — the same clause, and the state this skill's default produces) — do not check back. If any condition fails, stop and tell
   me." This removes an entire round and gives up no gating, because the conditions
   are mechanical. It worked on three branches in the second session and four of
   five in the third. **Know when you cannot give it:** a FAIL whose fix is real
@@ -58,6 +59,16 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   the prompt; agents reach for the directory by default. The 20x is this repo's
   suites and will not transfer as a constant — the *shape* does, so have the agent
   measure both once and use the number it gets.
+- **A second gate on the same brief re-derives the first.** Gate count is not the
+  lever; the brief is. Measured 2026-09-02: a first gate returned PASS with zero
+  findings, and a second on the *same* branch — deliberately aimed only at ground
+  the first had declared out of scope — cost **$2.47** and returned one genuinely
+  new artifact (a real TLS handshake, run both pre- and post-fix) and **zero new
+  defects**. The verdict did not move. Run a second gate when you can name an
+  angle the first did not take; if you cannot name one, you are buying a
+  re-derivation. This is the same finding as "gate yield tracked prompt
+  specificity, not gate number" in [dispatching.md](dispatching.md), arriving from
+  the other end.
 - **Some work needs no gate at all.** Filing a ticket that *records a defect* is
   the clear case: require the builder to reproduce the defect before writing it up,
   and the reproduction **is** the verification. In the second session that builder

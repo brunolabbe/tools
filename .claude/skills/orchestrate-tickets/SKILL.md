@@ -67,8 +67,14 @@ you are there.
    rule is enforced by reading the builder's `resolvedModel`, and a builder that
    picks its own reviewer is the thing being checked choosing its checker. The
    builder has no `Agent` tool and is told not to spawn, and both of those are
-   this rule, not an oversight. **Check the model rather than assuming it**: the
-   builder's Agent result carries `resolvedModel`, and the agent definition
+   this rule, not an oversight. **Check the model rather than assuming it** — and know
+   that you may not be able to. A **foreground** dispatch reports `resolvedModel`;
+   a **backgrounded** one returns an agent id and nothing else, and background is
+   how `reference/concurrency.md` tells you to dispatch a batch. Measured
+   2026-09-02: an orchestrator ran this whole loop without ever seeing a
+   `resolvedModel`. When you cannot read it, **say in the record that the gate's
+   model was inferred rather than checked**, and state what you inferred it from.
+   Do not report an inference as a check. The agent definition
    defaults the gate to Sonnet, which is right when the builder ran Opus. If the
    builder ran Sonnet, pass `model: "opus"` on the gate. **Since repo-17 this
    check is load-bearing rather than a backstop** — a `mechanical` ticket puts a
@@ -79,7 +85,12 @@ you are there.
    **11 tickets, 22 gates, none gated by a different model than built it.**
 5. **The reviewer sends its findings to the builder itself**, as one batched
    message, **and sends the same findings to you in full** — not a status line
-   saying it did. Measured: a reviewer that reported only "findings sent" left
+   saying it did. **Expect this to arrive as a summary anyway**: a subagent's
+   report reaches you condensed, which is the same relay hop this step removed
+   between reviewer and builder, still standing between reviewer and you. So
+   **before you run step 8, read the committed record out of `git show`** rather
+   than accepting on the summary — step 8's third check names a test per
+   acceptance line and a summary cannot answer it. Measured: a reviewer that reported only "findings sent" left
    this step with one account of a two-party exchange, which is not enough to
    accept on at step 8. You are not the courier — **both recorded relay
    corruptions in this repo were introduced at this hop by an orchestrator
@@ -99,7 +110,15 @@ you are there.
    theirs to reach, not yours to adjudicate**; you re-enter only on the two
    escalations above. **This is a chain of wakes, not a live conversation** — each
    side ends its turn after it sends, and `SendMessage` wakes the other back into
-   its own context. So **keep the reviewer's agent record and worktree** until the
+   its own context.
+
+   **Sideways wakes work; upward ones do not.** Your builder and reviewer wake
+   each other unaided. **You are not woken when a child of yours finishes** —
+   measured three times on 2026-09-02, each time sitting `completed` beside a
+   finished agent until something outside nudged you. There is no completion
+   signal to wait for. If nothing external drives you, the loop stops here and
+   looks finished. Say so in your report rather than letting a stalled batch read
+   as a quiet one. So **keep the reviewer's agent record and worktree** until the
    exchange is over, which is not the same as keeping it alive; nothing is. A
    builder that comes back "this does not reproduce" is asking a question only
    that reviewer can answer. See
@@ -145,6 +164,15 @@ you are there.
    steps 11 and 4-above may still need that agent. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
 11. **Check the merge landed what it was supposed to.** Not polling — one look,
    after the fact. See _After a merge_.
+12. **Append this session's row to [reference/history.md](reference/history.md)**,
+   in the schema that page fixes. This is the step that makes the next session
+   better than yours, and it is the one with nothing forcing it — no gate fails,
+   no test goes red, and a session that skips it looks exactly like one that had
+   nothing to say. **The highest-value field is the last one**: what the skill got
+   wrong, was missing, or made impossible. Six such defects came out of one
+   session on 2026-09-02 and every one of them surfaced only because the
+   orchestrator was asked; none would have been recorded by a loop that just
+   worked.
 
 **The PR is not the end of gating; the merge is.** Step 7 reads as a terminus and
 it is not one. A branch whose fixes are themselves risky — a correction pass over

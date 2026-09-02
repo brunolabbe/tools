@@ -219,3 +219,39 @@ discarded. So:
   that says "did not re-sweep the citations, did not re-run the full suite, ran
   `--project repo` because that is what parses the ticket tree" is far more useful
   later than one that only lists conclusions.
+
+## When there is no pull request yet
+
+The skill's own default produces this state every time — builders stop before the
+PR — and three rules on these pages assume it away. What to do instead, measured
+on a gated-but-unopened branch on 2026-09-02:
+
+- **Both halves of the gate go in the ticket**, short form and reasoning, with a
+  one-line preamble saying the long form is here because no PR thread existed to
+  hold it. The two-locations rule exists so the copies cannot drift; one location
+  cannot drift.
+- **Ship authority becomes authority to _commit_**, not to open. `sizing.md`
+  phrases it as "open the PR yourself"; on a pre-PR branch the equivalent is
+  "commit the record yourself if these conditions hold, and do not check back".
+  It still removes a round.
+- **A reviewer is retired when its record is committed and its exchange is over**
+  — `worktree-hygiene.md`'s test names the PR thread as the second location, and
+  when there is none, the commit is the whole test.
+
+## `citations.mjs` reports resolution, not correctness
+
+**A green run is not evidence a citation is right.** The script checks that a
+cited line *exists* at the rev, not that it says what the citation claims — so a
+citation whose referent moved lands on whatever is now at that number and is
+reported as resolved. Measured 2026-09-02: a fix inserted 28 lines, a cited
+comment moved from `144-149` to `170-175`, and the run reported **9/9 resolve**
+while three citations pointed at a function signature and an unrelated doc
+comment.
+
+This is the **dominant** case for a gate record, not an edge: a record is always
+committed on a branch whose fix moved lines. So **judge the printed lines
+individually and never read the total** — comparing counts would have shown 9/9
+at every point in that work. And the rule the same session drew, which prevents
+the error upstream: **cite what you read, never compute one citation from
+another.** The off-by-one that started it was an end anchor minus a length,
+missing the `+1` an inclusive range needs.

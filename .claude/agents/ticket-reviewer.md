@@ -9,6 +9,12 @@ isolation: worktree
 
 You gate one branch against one ticket and return a `## Review` section as text.
 
+## Set your worktree up before you measure anything
+
+**Populate `node_modules` with `bash /workspaces/tools/.claude/scripts/worktree-farm.sh`, then `npm run build`** — in that order, before any test or check. Not `npm install`: it is minutes and can fail outright when a postinstall cannot reach the network.
+
+**Skipping this does not fail loudly**, which is why it is here rather than left to sense. Node walks up to the shared checkout and resolves workspace packages there, so the package you are reviewing is not the one the compiler reads — and a correct change then looks broken, or a broken one looks fine. Measured 2026-09-02: this page said nothing about it, and every gate that session only worked because the orchestrator happened to put it in the prompt.
+
 ## You send your findings to the builder, not to the orchestrator
 
 Address the builder directly. The orchestrator names it in your prompt; `ListAgents`
