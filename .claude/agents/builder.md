@@ -22,6 +22,18 @@ caller maps it here:
 | `mechanical` | `haiku` | measured, not assumed — see below. A gate still runs, and the diff is the cheap half to check |
 | `hard` | inherit (Opus, in practice) | a contract, a security claim, a seam with reach. Never below the default |
 
+**`difficulty` rates the work as it will be once its decisions are answered** —
+not how blocked it is now. The two are orthogonal and collapsing them destroys the
+field: a ticket with an open decision is not dispatchable *at all*, whatever its
+rating, so encoding that here says nothing a dispatcher can act on while hiding
+the thing it can. Measured 2026-09-02, the first time anything tried to use this
+scale: eight tickets rated by a reader that was warned about exactly this, and the
+correlation came back perfect — every `hard` had an open decision, the single
+`standard` had none. One of them was reasoned as *"the fix is mechanical, but the
+ticket carries an unresolved call"*, which is a mechanical job wearing a `hard`
+label because nobody has answered a question yet. **Rate the build, not the
+blockage**; `npm run status` already reports the blockage.
+
 **Never `fable` for a builder**: the point of a rating is to spend less where less
 is needed, and `fable` is the other direction with no case for it here.
 
