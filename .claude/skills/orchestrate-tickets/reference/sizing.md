@@ -11,11 +11,21 @@ rounds, two applying about four lines of markdown each — while all six of its
 gates returned landable findings. A resumed builder pays a full context reload,
 and its cost is flat in the work done and rising with transcript length:
 
-| round | tool calls | tokens |
+| round | tool calls | subagent tokens |
 |---|---|---|
 | 1 | 37 | 100 k |
 | 2 | 10 | 94 k |
 | 3 | 11 | **118 k** |
+
+**Every token figure on this page is `subagent tokens`**, the measure
+`reference/history.md` counts sessions in — not dollars, and **not** the whole
+volume a request moves. Measured 2026-09-02 on one gated ticket: 152,659 subagent
+tokens, but 3.9 M and 5.8 M tokens all-in for the builder and the reviewer once
+cache reads are counted, and cache reads are essentially the entire bill. So these
+numbers compare rounds against rounds honestly and say nothing directly about
+cost. The conversion measured on that ticket was **$0.0182 per 1k subagent
+tokens**, which prices the sessions in `history.md` at roughly $16 to $73 each —
+useful for a budget, and stale the moment rates move.
 
 Eleven tool calls cost more than thirty-seven. The third session reproduced this
 at four times the scale on its widest branch — 100 calls → 238 k, then **29 calls
