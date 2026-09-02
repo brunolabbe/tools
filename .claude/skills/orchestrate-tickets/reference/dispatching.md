@@ -56,6 +56,22 @@ needs a `ToolSearch` first. Say explicitly what still comes back to you: an
 unsettleable disagreement, and any open decision. Anything else you ask to be
 routed through yourself, you are volunteering to retype.
 
+### Addressing, which is where this loop actually failed
+
+**Give the gate prompt the builder's agent id**, and require the reviewer to
+**state its own id back** in the message it sends. The asymmetry is structural
+rather than an oversight to fix: the builder is dispatched first, so its prompt
+cannot name a reviewer that does not exist yet, and the reviewer's message is the
+only channel by which it can learn the return address.
+
+**An agent id, never an agent-type name.** `SendMessage` to `"ticket-reviewer"`
+does not resolve. Three consecutive test runs read as a broken design — a builder
+reporting the reviewer "not reachable" and falling back to the orchestrator — and
+all three were this. The same call with the id succeeded first time. When a report
+says a sibling was unreachable, **ask for the verbatim error before believing the
+channel is at fault**; none of the three reports contained one, and there was no
+error to contain.
+
 ### What was measured about the channel
 
 Probed on 2026-09-01, against the real agent types rather than reasoned from the

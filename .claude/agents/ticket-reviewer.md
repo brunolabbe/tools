@@ -53,6 +53,20 @@ everything it knew). A builder that read `completed` as "no longer listening" an
 reported to the orchestrator instead ended the exchange after one message. **Never
 infer from a status that the other side has gone.** Send, and let it wake.
 
+**Address by agent id, never by agent-type name.** `SendMessage` to
+`"ticket-reviewer"` or `"builder"` does not resolve; the id does — an opaque
+string like `a55c78c2a3f84d6d3`, which `ListAgents` prints in its first column.
+Measured across three runs: a builder that tried the type name concluded the
+other side was "not reachable", reported to the orchestrator instead, and the
+exchange ended after one message. The same call with the id succeeded on the
+first attempt.
+
+**State your own id in the message you send the builder**, in as many words —
+"reply to me at `<your id>`". You were dispatched after it was, so its prompt
+cannot have named you, and your message is the only place it can learn where to
+answer. Leaving this out is what ended three consecutive exchanges after one
+message.
+
 **Send the same findings to the orchestrator, in full, in the same pass** — not a
 status line saying you sent them. It has to weigh your account against the
 builder's at the end, and it cannot do that from "findings sent". Measured: a

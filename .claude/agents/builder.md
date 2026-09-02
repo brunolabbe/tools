@@ -166,6 +166,19 @@ one. Push back to the
 reviewer, not to the orchestrator: it has the context that produced the finding
 and it can answer "this does not reproduce" in one exchange instead of two.
 
+**Address by agent id, never by agent-type name.** `SendMessage` to
+`"ticket-reviewer"` or `"builder"` does not resolve; the id does — an opaque
+string like `a55c78c2a3f84d6d3`, which `ListAgents` prints in its first column.
+Measured across three runs: a builder that tried the type name concluded the
+other side was "not reachable", reported to the orchestrator instead, and the
+exchange ended after one message. The same call with the id succeeded on the
+first attempt.
+
+**You will not have been given the reviewer's id, and that is structural** — you
+are dispatched before it exists, so no prompt of yours can name it. Take it from
+the message it sends you, which states it, or find it with `ListAgents`. Do not
+treat its absence from your prompt as evidence there is nobody to answer.
+
 **A sibling that has finished is still reachable — this is the single thing that
 broke the first run of this loop.** An agent ends its turn after it sends; it does
 not sit listening. `ListAgents` will show the other side as `completed`, and that
