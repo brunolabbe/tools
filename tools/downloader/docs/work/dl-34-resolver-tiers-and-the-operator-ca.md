@@ -6,6 +6,7 @@ kind: work-package
 status: ready
 milestone: null
 depends_on: []
+difficulty: hard
 ---
 
 # dl-34 — Chromium and yt-dlp on a private-root deployment

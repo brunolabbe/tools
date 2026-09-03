@@ -6,6 +6,7 @@ kind: chore
 status: ready
 milestone: null
 depends_on: [repo-13]
+difficulty: hard
 ---
 
 # repo-16 — Inline suppression does not dismiss; decide what carries it

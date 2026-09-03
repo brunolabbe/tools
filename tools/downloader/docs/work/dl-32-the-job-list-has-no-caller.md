@@ -6,6 +6,7 @@ kind: fix
 status: ready
 milestone: null
 depends_on: []
+difficulty: hard
 ---
 
 # dl-32 — `GET /api/jobs` answers everyone with everyone's jobs
