@@ -144,6 +144,22 @@ Note that step 2 (reject unknown flags) makes **deleting** the strictly safer of
 the two in the short term: with validation in place, a removed `--section`
 becomes a loud error rather than the silent no-op it is now.
 
+## Review
+
+**Gate: PASS** — 2026-09-03 · `origin/main...HEAD` (91c117b...a888fd9) · own defect hunt at medium depth (ticket-reviewer subagent, no `code-review` delegation)
+
+| Done when                                                                                                                                                  | Proof                                                                                                                                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `--nonsense` exits non-zero with the usage string, CLI test alongside existing spawnSync one                                                            | proven — `scripts/test/citations.test.ts:120` (assertions :126-130)                                                                                                                                                       |
+| 2. `--rev <sha> <ticket>` resolves the ticket, not a file named after the sha                                                                              | proven — `scripts/test/citations.test.ts:142` (assertions :152-156, both argument orders)                                                                                                                                 |
+| 3. Docblock usage line, `main()` usage string and parsed flags name the same set; a filtered run reports a strictly smaller count on a two-section fixture | proven — count clause at `scripts/test/citations.test.ts:218` (assertions :222-223, 229-231, 234-236, 240); naming-agreement clause at `scripts/test/citations.test.ts:297` (assertions :302-303), added during this gate |
+| 4. `npm run check` and `npx vitest run scripts` pass                                                                                                       | verified — re-ran against `a888fd9`: `npm run check` exit 0 (only pre-existing, unrelated warnings); `npx vitest run scripts` → 3 files / 126 tests; full `npx vitest run` → 119 files / 1926 tests, all green            |
+
+- **low, folded in** · nothing tied the docblock usage line, the `USAGE` constant and `FLAGS`'s key set together — confirmed by hand at gate time, no test. Closed in `a888fd9`: `FLAGS` exported, `scripts/test/citations.test.ts:297` extracts the `--flag` tokens from all three and asserts equality. Reproduced the drift independently: dropped `--section` from `USAGE`, reran, only this test went red; restored, 22/22 green.
+- **low, declined** · the header (`scripts/citations.mjs:411-415`) shows a filtered count with no unfiltered-total denominator on the same line. Not carried as a defect — every invocation, filtered or not, already prints the scope inline, so a filtered number can't appear without the word "under" and a heading name beside it, which is unlike the defect this ticket was filed for. Declined with reasoning recorded in the ticket's Log (2026-09-03, "gate fold-ins") for repo-18 to inherit rather than left as an open question.
+- **findings** · own hunt at medium depth returned 2, both carried into the fold-in round; 1 addressed with a test, 1 declined with recorded reasoning. 0 dropped.
+- NFR: security n/a (no user-influenced URLs, no new subprocess surface) · performance n/a (single pass over markdown lines) · reliability ✓ (nesting, fence-skipping, exact/prefix/ambiguous/no-match matching, argument order, and unknown/valueless/second-positional arguments are all independently reproduced, including two disabled-invariant counterfactuals) · maintainability ✓ (the one gap found now has its own regression test)
+
 ## Log
 
 - **2026-09-01** — Filed from dl-29's branch at the user's request, rather than as
