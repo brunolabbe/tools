@@ -295,6 +295,22 @@ the body keeps its wrongness because the body is the record of an investigation
 that went wrong twice, but a frontmatter title is an index entry rather than a
 record, and `npm run status` renders it to readers who never open the file.
 
+### Review addendum — a4ceaba
+
+**Gate: PASS** — 2026-09-03 · `b48caf7...a4ceaba` · self-run defect hunt, medium depth
+
+- **The `settled`-flag refutation, independently re-verified.** Built the naive fix (catch at the original post-`onEstablished` throw site, routing to `options.onFailed`) from scratch and probed it: the callback executes fully (two probe writes fire, no exception), yet the client still times out and `afterEach` still hangs 60s — zero uncaught exceptions this time, but zero client response either. Confirms `settled` swallows the naive route and the ordering fix is required, not optional.
+- **Reordering changes nothing on the success path**: `two-origin-tls.test.ts` unforced, 9/9 green, 4.22s; `leafFor`/`createSecureContext` are synchronous, `{secureContext}` is a Node-internal equivalent of `{key,cert}`.
+- **Generality confirmed behaviourally**: guard absent reproduces both claimed escapes exactly (`ERR_OSSL_PEM_BAD_BASE64_DECODE` at `:624`, `Error: no leaf for you` at `:623`), 131.68s file, 2 unhandled errors, 60s hook timeout; guard present, 26/26 green, 3.06s.
+- **500 + phrase confirmed against `http-errors.ts`'s actual table and stated rule**, not the builder's paraphrase of it; the both-directions phrase assertion passed.
+- **The three residual assertion failures under the forced-illegal-serial harness (guard present) are correct, not a misclassification** — examined individually; all three are pre-existing tests colliding with a synthetic 100%-broken-certificate harness that no real deployment would produce, not a guard defect. 1.76s/3.28s, zero unhandled, zero timeouts (was 421s/15 unhandled with the guard absent).
+- `logger.error` vs `warn`: agreed, with independent reasoning — this is the one outcome that is the service's own defect rather than a fact about a target, and is the kind of signal an operator needs undiluted by routine refusals.
+- Citations re-verified: `citations.mjs --rev b48caf7` gives 17/17 independently; the re-resolution table's current-tip line numbers (`:718`, `:681-723`, `:151`) spot-checked correct.
+- Agreed: no sweep for other unguarded throws (no reproduction, would repeat the pattern that cost three sessions); no Windows run, labelled.
+- Gates: `npm run check` clean; `npm test -- --project downloader` 944/944 (exact match); `npm run status --json` exit 0. Full monorepo `npm test` not independently re-run.
+- **findings** · 0 new findings on this delta; everything attacked held.
+- NFR: security n/a · performance n/a · reliability ✓ (this is the second half of the fix) · maintainability ✓ (follows `OriginCertificateError`'s existing precedent for `InterceptionLeafError`, confirmed not a new bare-`Error` violation).
+
 ## Log
 
 - **2026-08-31** — Filed at the user's request, from three sightings relayed by
@@ -591,3 +607,24 @@ key, cert })`, which arms an intercepted CONNECT — **synchronously, inside a
   file — it is the only one dl-33 has evidence for, and a sweep for others was
   not in scope and is not filed, because a sweep with no reproduction is how the
   first three sessions went.
+
+- **2026-09-03** — **The naive fix would have been silently worse than the bug
+  it replaced, and the gate is the one who measured it.**
+
+  The gate rebuilt the naive version this ticket rejected — a catch at the
+  original post-`onEstablished` throw site, routing to `options.onFailed` — and
+  probed both sides of the call rather than reasoning about it. Both probes
+  fired: the callback runs to completion, nothing throws calling it. **And the
+  client still timed out**, `afterEach` still hung 60 s, 65,313 ms total — the
+  same hang as the original bug, with one difference. The original crash left
+  an uncaught exception in the log: a trace, however bad. The naive fix leaves
+  **none**. Same hang, zero diagnostic.
+
+  That is a sharper argument for the ordering fix than anything measured while
+  building it: not "the naive route doesn't respond" but "the naive route makes
+  the failure strictly harder to find than doing nothing." A silent hang is
+  what every sighting on this ticket already was, before dl-33 ever started
+  forcing the bug to hold still. Worth carrying forward as the standing reason
+  this class of fix has to be ordering rather than a catch bolted onto the
+  existing shape: a catch that cannot report anything is not a partial fix, it
+  is a worse bug wearing a smaller stack trace.
