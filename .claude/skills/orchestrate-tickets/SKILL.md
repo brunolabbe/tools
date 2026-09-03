@@ -27,9 +27,9 @@ you are there.
 | [reference/sizing.md](reference/sizing.md) | Before dispatch, to pick gate count and ship authority per ticket (step 2) |
 | [reference/concurrency.md](reference/concurrency.md) | Before dispatching more than one builder — seams, collisions, stacking (step 2–3) |
 | [reference/dispatching.md](reference/dispatching.md) | Writing a builder prompt or a gate prompt (steps 3 and 4) |
-| [reference/defect-shapes.md](reference/defect-shapes.md) | Writing a gate prompt, and before believing what one returns (step 4) |
-| [reference/worktree-hygiene.md](reference/worktree-hygiene.md) | Whenever a worktree is created, held or removed (steps 3 and 8) |
-| [reference/records.md](reference/records.md) | Committing a gate record, a ticket log or a PR comment (step 7) |
+| [reference/defect-shapes.md](reference/defect-shapes.md) | Writing a gate prompt, and before believing what one returns (steps 4 and 8) |
+| [reference/worktree-hygiene.md](reference/worktree-hygiene.md) | Whenever a worktree is created, held or removed (steps 3, 6 and 10) |
+| [reference/records.md](reference/records.md) | Committing a gate record, a ticket log or a PR comment (step 9) |
 
 ## The loop
 
@@ -62,8 +62,19 @@ you are there.
    read it, which is the whole point of step 2. See
    [reference/dispatching.md](reference/dispatching.md).
 4. **Gate** each finished branch — `subagent_type: "ticket-reviewer"`. Builders
-   never open a PR before a gate. **Check the model rather than assuming it**: the
-   builder's Agent result carries `resolvedModel`, and the agent definition
+   never open a PR before a gate. **You spawn the reviewer, never the builder**,
+   even though the builder is the one who then talks to it: the model-difference
+   rule is enforced by reading the builder's `resolvedModel`, and a builder that
+   picks its own reviewer is the thing being checked choosing its checker. The
+   builder has no `Agent` tool and is told not to spawn, and both of those are
+   this rule, not an oversight. **Check the model rather than assuming it** — and know
+   that you may not be able to. A **foreground** dispatch reports `resolvedModel`;
+   a **backgrounded** one returns an agent id and nothing else, and background is
+   how `reference/concurrency.md` tells you to dispatch a batch. Measured
+   2026-09-02: an orchestrator ran this whole loop without ever seeing a
+   `resolvedModel`. When you cannot read it, **say in the record that the gate's
+   model was inferred rather than checked**, and state what you inferred it from.
+   Do not report an inference as a check. The agent definition
    defaults the gate to Sonnet, which is right when the builder ran Opus. If the
    builder ran Sonnet, pass `model: "opus"` on the gate. **Since repo-17 this
    check is load-bearing rather than a backstop** — a `mechanical` ticket puts a
@@ -72,15 +83,96 @@ you are there.
    `fable`. Say which model gated in the record — that is what makes the next
    audit one command instead of an assumption. Measured before this line existed:
    **11 tickets, 22 gates, none gated by a different model than built it.**
-5. **Relay findings** to the builder as one batched message.
-6. **Repeat 4–5** until the gate passes or the findings are cosmetic.
-7. **Builder opens the PR**, commits the gate record, posts the reviewer's report to
-   the PR thread.
-8. **Remove the reviewer's worktree** once its record is pushed — in the ticket and
-   on the PR thread. **Hold the builder's until the ticket is finished**, because
-   steps 9 and 4-above may still need that agent. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
-9. **Check the merge landed what it was supposed to.** Not polling — one look,
+5. **The reviewer sends its findings to the builder itself**, as one batched
+   message, **and sends the same findings to you in full** — not a status line
+   saying it did. **Expect this to arrive as a summary anyway**: a subagent's
+   report reaches you condensed, which is the same relay hop this step removed
+   between reviewer and builder, still standing between reviewer and you. So
+   **before you run step 8, read the committed record out of `git show`** rather
+   than accepting on the summary — step 8's third check names a test per
+   acceptance line and a summary cannot answer it. Measured: a reviewer that reported only "findings sent" left
+   this step with one account of a two-party exchange, which is not enough to
+   accept on at step 8. You are not the courier — **both recorded relay
+   corruptions in this repo were introduced at this hop by an orchestrator
+   rewriting a report**, not by either agent. Name the builder in the gate prompt
+   so the reviewer knows who to address; the mechanics are in
+   [reference/dispatching.md](reference/dispatching.md).
+   - **What still comes to you, and only this**: a disagreement the two cannot
+     settle, and any **open decision** either of them surfaces. A decision is not
+     a disagreement — it is a question neither agent is allowed to answer, and
+     you are the only participant who can ask the user. If it reaches the builder
+     instead of you, it dies quietly.
+   - **What you add is never a summary of the findings.** Ship authority, what is
+     already settled, priority across a batch — those are yours because only you
+     hold them. The findings are not.
+6. **They iterate until they agree the work is done** — findings answered,
+   reproductions run, the gate's verdict settled between them. **That agreement is
+   theirs to reach, not yours to adjudicate**; you re-enter only on the two
+   escalations above. **This is a chain of wakes, not a live conversation** — each
+   side ends its turn after it sends, and `SendMessage` wakes the other back into
+   its own context.
+
+   **Sideways wakes work; upward ones do not.** Your builder and reviewer wake
+   each other unaided. **You are not woken when a child of yours finishes** —
+   measured three times on 2026-09-02, each time sitting `completed` beside a
+   finished agent until something outside nudged you. There is no completion
+   signal to wait for. If nothing external drives you, the loop stops here and
+   looks finished. Say so in your report rather than letting a stalled batch read
+   as a quiet one. So **keep the reviewer's agent record and worktree** until the
+   exchange is over, which is not the same as keeping it alive; nothing is. A
+   builder that comes back "this does not reproduce" is asking a question only
+   that reviewer can answer. See
+   [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
+   - **Watch for the failure this shape introduces**: a pair that agrees too
+     easily. Two agents that want to be done can converge on "addressed" without
+     either running anything. The defence is in the gate prompt — demand
+     reproductions and a positive control — and in what they report next.
+7. **Both report to you when they are done**, separately, and that is the point of
+   asking both: you get the builder's account and the reviewer's account of the
+   same exchange, written by two models, and can hold one against the other.
+8. **You accept, or you send it back. The work is not done until you do** — the
+   pair decides when *they* are finished, you decide whether that is true. This is
+   the only thing that catches a pair which agreed too easily, and it is four
+   checks, not a re-review:
+   - **Does each report say what was run?** Commands and their results, not
+     "addressed" and not "confirmed". A finding closed with no command named is a
+     finding still open.
+   - **Do the two accounts describe the same exchange?** They were written by
+     different models and should not need to be reconciled. If one says a finding
+     was reproduced and the other does not mention it, something is missing.
+   - **Does every `Done when` line have a verdict** — `proven`, `verified`,
+     `unproven`, `unproven (gate)` — with a test named, `file.test.ts:88` rather
+     than "covered"? The acceptance table is the half a finding list silently
+     replaces.
+   - **Is there an open decision in either report?** It comes to you precisely
+     because neither of them may answer it. Put it to the user before the PR, not
+     after.
+
+   **You are judging whether they are finished, not whether they were right.** Do
+   not re-open a finding the two of them settled with evidence, do not substitute
+   your reading of the code for the builder's — that is the hop this loop removed,
+   arriving from the other direction. Send it back naming the specific line whose
+   evidence is missing, and let them close it. If a report satisfies all four, say
+   so plainly and move on; an acceptance step that always finds something is a
+   relay wearing a different hat.
+9. **Builder opens the PR**, commits the gate record, and posts the reviewer's
+   report to the PR thread.
+10. **Remove the reviewer's worktree** once its record is pushed **and its
+   conversation with the builder is over** — the second condition is new with the
+   direct channel, and it is the one that bites. **Hold the builder's until the
+   ticket is finished**, because
+   steps 11 and 4-above may still need that agent. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
+11. **Check the merge landed what it was supposed to.** Not polling — one look,
    after the fact. See _After a merge_.
+12. **Append this session's row to [reference/history.md](reference/history.md)**,
+   in the schema that page fixes. This is the step that makes the next session
+   better than yours, and it is the one with nothing forcing it — no gate fails,
+   no test goes red, and a session that skips it looks exactly like one that had
+   nothing to say. **The highest-value field is the last one**: what the skill got
+   wrong, was missing, or made impossible. Six such defects came out of one
+   session on 2026-09-02 and every one of them surfaced only because the
+   orchestrator was asked; none would have been recorded by a loop that just
+   worked.
 
 **The PR is not the end of gating; the merge is.** Step 7 reads as a terminus and
 it is not one. A branch whose fixes are themselves risky — a correction pass over

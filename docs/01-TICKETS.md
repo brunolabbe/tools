@@ -231,9 +231,10 @@ produced it, so the blind spot is correlated and a second pass mostly re-derives
 the first one's confidence.
 
 **The builder commits the gate, in the branch under review** — not the reviewer.
-A reviewer works in a worktree that is thrown away when it reports, so a
-`## Review` section written there is written into nothing: the finding travels
-back as a message and the record does not travel at all. `repo-1` went through
+A reviewer works in a worktree that is thrown away once its record is pushed and
+its exchange with the builder has ended, so a `## Review` section written there is
+written into nothing: the finding travels back as a message and the record does
+not travel at all. `repo-1` went through
 two gates and neither existed in the repo afterwards, which is how it was
 noticed. So the reviewer reports and the builder writes the section down, with
 the date, the verdict, and **both halves named above**:
