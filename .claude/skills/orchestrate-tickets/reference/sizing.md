@@ -142,6 +142,25 @@ builder will otherwise get wrong:
   slice and the question are the same ticket, and the answer is only cheap while
   the builder lives.
 
+**A slice collides with the acceptance rubric, and you have to say so at
+dispatch.** The gate is asked to give every `Done when` line a verdict —
+`proven`, `verified`, `unproven`, `unproven (gate)` — and a single `unproven`
+reads as FAIL. **A sliced ticket always has them**, for the half nobody built, so
+the rubric's letter condemns a branch that did exactly what it was told. Measured
+2026-09-03: a reviewer hit this, recorded CONCERNS rather than FAIL, and — the part
+worth copying — **named the judgment out loud rather than quietly reinterpreting
+the rubric**, flagging it upward in case the orchestrator weighed it differently.
+
+The gap is the dispatcher's, not the reviewer's. So when you gate a slice:
+
+- **Name which acceptance lines belong to the unbuilt half**, and say they are
+  expected `unproven` rather than leaving the reviewer to infer it.
+- **Say the verdict should not be FAIL on those lines alone.** A reviewer told
+  only "do not gate the held half as missing work" still has a rubric telling it
+  otherwise, and you have handed it a conflict to resolve on its own.
+- **Ask for them to be marked explicitly** rather than left blank — blank is
+  indistinguishable from overlooked, which is the thing the rubric exists to catch.
+
 **The trap, and it is not obvious.** A slice can *de facto answer* the question it
 was supposed to hold. Measured 2026-09-03: a ticket's unconditional step 2 was
 "reject an unknown flag with a non-zero exit", and its held question was whether to
