@@ -65,6 +65,30 @@ Two of the ten tickets `npm run status -- --ready` returned had no Packages line
 three of the twelve that read `status: ready`. A map built from headers alone would
 have missed a live collision.
 
+**Your own batch's work is not available to your own builders.** Obvious stated
+plainly, and easy to lose after a few hours of shipping: every builder branches
+from `origin/main`, so a capability one of your branches just added does not exist
+for any of the others until it **merges**. A batch is exactly the situation that
+erodes this — you have been reading, relaying and celebrating that work all
+session, and it starts to feel landed.
+
+Measured 2026-09-03. One branch implemented a `--section` flag on a repo script and
+opened its PR. The orchestrator then told a *different* builder, in a dispatch, to
+use that flag — "note it gained a working `--section` on `main` today". It had not:
+the PR was open, never merged. The builder ran the tool, got
+`usage: node scripts/citations.mjs <ticket-file> [--rev <sha>]`, and reported back
+that whatever landed on `main` was not in its base. Confirmed afterwards in one
+line — `git show origin/main:scripts/citations.mjs | grep -c section` returns **1**
+(the stale usage line that was the defect), against **26** on the branch.
+
+Harmless there, because the builder checked. It would not be harmless in a brief
+that told an agent to *rely* on the capability, and it is the same class as the
+intake rule at the top of the loop — a ticket reads `ready` until something
+merges — arriving from the other direction. **The state of your own batch is
+`gh pr list`, not memory.** If a dispatch depends on a sibling branch's work, either
+say "this is unmerged, on branch X, do not depend on it" or stack the branch
+deliberately and say so.
+
 **Never edit a branch while it is being reviewed.** Batch the fixes and send them
 after the gate returns, or the reviewer is judging a moving target.
 
