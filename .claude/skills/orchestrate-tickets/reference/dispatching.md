@@ -51,8 +51,10 @@ prompts said *reproduce this exact mutation* instead of *review this*.
 
 **Name the builder in every gate prompt.** The reviewer sends its findings to the
 builder itself now, so a gate prompt that does not say who to address has no
-channel — give the builder's agent name and say that `SendMessage` is deferred and
-needs a `ToolSearch` first. Say explicitly what still comes back to you: an
+channel — give the builder's agent id (never an agent-type name; see below).
+**Do not tell it to fetch `SendMessage` first**: both agents carry `SendMessage`
+directly and neither has `ToolSearch`, so that instruction sends a reviewer to a
+tool it does not have — measured, and recorded below. Say explicitly what still comes back to you: an
 unsettleable disagreement, and any open decision. Anything else you ask to be
 routed through yourself, you are volunteering to retype.
 
