@@ -37,7 +37,7 @@ the ones that fail silently if skipped.
 4. `tools/<name>/CLAUDE.md` — what the tool is, and only the rules specific to
    it. Do not restate anything on this page.
 5. `tools/<name>/docs/02-ROADMAP.md` and an empty `work/`, plus a row in
-   [docs/00-TOOLS.md](./docs/00-TOOLS.md). The rest of the spine arrives when
+   [docs/00-TOOLS.md](../../../docs/00-TOOLS.md). The rest of the spine arrives when
    there is something true to put in it — a young tool with two documents is an
    honest young tool.
 6. `.github/workflows/<name>.yml` for anything slow, path-filtered to that tool.
