@@ -3,13 +3,26 @@ id: dl-33
 tool: downloader
 title: TLS fixture certificates fail to parse under contention, and it is not one test
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
 ---
 
 # dl-33 — `ERR_OSSL_ASN1_ILLEGAL_PADDING` under load, in two specs and on two platforms
+
+> **Closed 2026-09-03 with a fix. The title is wrong and the framing below is
+> wrong, and both are kept because the wrongness is the useful part.**
+>
+> It is not the fixtures, it is not contention, and it is not a race.
+> `newSerial()` in `src/tls-interception.ts` — **production code, in the image**
+> — put an unconditional `00` byte in front of sixteen random ones, which DER
+> forbids whenever the first of those bytes is `0x00` and the second is under
+> `0x80`. That is one certificate in 512, and the tool's own suite issues 133
+> per run. "Only under contention" was an artefact: the throw lands inside a
+> `secureConnect` handler, so the download hangs and the run pays a 120 s test
+> timeout plus a 60 s hook timeout — **the failure is the slowness**, which is
+> why every sighting is also a slow run. See the Log entry of 2026-09-03.
 
 ## Why
 
@@ -94,6 +107,13 @@ worth settling.
 
 ### Not retried
 
+> **Retried 2026-09-03, and it went green** (job `33348060111`, success, 22:06),
+> run by the coordinator rather than relayed. That closes Option D's "not yet
+> known to work" caveat at n=1: it proves a re-run _can_ clear the failure, not
+> that one always will, and it says nothing about the rate. It is also
+> consistent with what the mechanism predicts — a fresh run redraws every
+> serial, so a 1-in-512 draw does not recur.
+
 The failing job in sighting 3 **has not been re-run**. `gh run rerun` was refused
 with `Resource not accessible by personal access token` — a token scope limit in
 this environment, not a deny rule. I did not re-test that refusal myself, because
@@ -106,10 +126,17 @@ it, and nobody has established that.
 
 ## Hypotheses
 
+> **Corrected 2026-09-03. The first bullet below is wrong, and it is the answer.**
+> The serial number was ruled out twice, by two sessions working independently,
+> and both disproofs were sound about the code they looked at and one test case
+> short of the defect. What is preserved below is what each of them measured;
+> what it concluded is superseded by the Log entry of 2026-09-03. **The bug is
+> `newSerial()` in `src/tls-interception.ts`, not the test fixtures.**
+
 Named as hypotheses. One has been tested and is **ruled out** — recorded so the
 next person does not spend the same hour.
 
-- **Ruled out: the serial number.** `createFixtureCertificate` sets
+- **Ruled out, wrongly: the serial number.** `createFixtureCertificate` sets
   `cert.serialNumber = serialCounter.toString(16).padStart(2, "0")` from a
   module-level counter. That looked like the answer — `padStart(2, …)` leaves an
   odd-length hex string for counters 256–4095, and sets the DER INTEGER's high
@@ -125,7 +152,16 @@ next person does not spend the same hour.
   certificate gets its own `fs.mkdtemp` directory, so there is no shared path for
   two workers to race on. A `cleanup()` racing a reader would give `ENOENT`, not
   an ASN.1 error.
-- **Still open: a PEM read while empty or truncated.** The OpenSSL stack says
+- **Ruled out, and this time by a reproduction: a PEM read while empty or
+  truncated.** The two sightings that name a parse site name an _in-memory_ one
+  — `tls-interception.test.ts`'s `leafOf` helper, and the `new tls.TLSSocket({
+cert })` in `egress-proxy.ts` — neither of which reads a file. The original
+  wording is kept below because it is what sent the leading hypothesis in the
+  wrong direction. **`ERR_OSSL_ASN1_ILLEGAL_PADDING` is not what a truncated PEM
+  produces**: a cut base64 body gives a length overrun, not a malformed
+  `INTEGER`. Original text:
+
+- **Was: still open: a PEM read while empty or truncated.** The OpenSSL stack says
   `PEM routines::ASN1 lib` followed by nested ASN.1 errors, which is what parsing
   an incomplete PEM looks like. Where a PEM crosses a boundary without an
   intervening `await` on the write is the place to look — including the
@@ -289,3 +325,113 @@ padding` out of `new X509Certificate(...)` at the spec's own `leafOf` helper.
 
   Not measured: which resource is contended. No profiling was done, and "5×
   slower" is consistent with CPU, I/O or scheduler pressure alike.
+
+- **2026-09-03** — **Fixed. Option A, and the race does not exist.**
+
+  The decision, recorded as Done-when 1 asks. **Option A was taken and it
+  landed**, inside one bounded round. B was not taken because raising a timeout
+  hides the half of the symptom that is not the error; C was not taken because
+  sighting 4 was on Ubuntu, so quarantining the Windows matrix does not help and
+  costs the coverage dl-19 and dl-27 most depend on; D was the agreed fallback
+  and is not needed. **The failure it accepts was never intermittent in the way
+  the ticket assumed** — it is a 1-in-512 draw, not a race, and there is nothing
+  about it a re-run fixes except by redrawing.
+
+  **The defect.** `newSerial()` in
+  [`api/src/tls-interception.ts`](../../api/src/tls-interception.ts) returned
+  `` `00${bytesToHex(forge.random.getBytesSync(16))}` ``. A DER `INTEGER` is
+  signed and two's-complement: the leading `00` is **required** when the first
+  content byte has its high bit set and **forbidden** when it does not, and a
+  redundant one is `ASN1_R_ILLEGAL_PADDING` — reason `0xDD`, which is
+  `068000DD`, which is the error in every sighting on this ticket.
+
+  forge does normalise, and that is exactly why this survived two disproofs:
+  `asn1.toDer` strips **one** redundant leading byte and carries the comment
+  `TODO: should all leading bytes be stripped vs just one? .. ex '00 00 01' =>
+'01'?`. So the draw that gets through illegal is the one where forge's single
+  strip is not enough: **first random byte `0x00`, second under `0x80`**. That
+  is `1/256 × 1/2`. Measured over 2,000,000 draws: **3,918 illegal, 1 in
+  510.5.** Instrumented, one `npm test -- --project downloader` issues **133**
+  serials, so ≈ 23% of runs draw at least one — an upper bound, since a bad
+  serial only shows when something parses it, and CI's observed 2-in-23 sits
+  under it.
+
+  **Why the two earlier disproofs missed it, precisely.** Neither was sloppy and
+  both are worth keeping.
+
+  1. dl-33's own (13 counter values) tested `createFixtureCertificate`, whose
+     serial is a small counter with no leading zero byte. It could not have
+     found this: **the defect is not in the fixture helper at all.** The ticket's
+     "the shared surface is `createFixtureCertificate`" is the one inference in
+     the brief that does not hold. The real shared surface is `newSerial()`, and
+     both named specs reach it — `tls-interception.test.ts` directly, and
+     `two-origin-tls.test.ts` through `startFfmpegProxy` → `createTlsInterception`.
+  2. dl-29's third measurement was the right method — chosen serials rather than
+     sampling — and picked `00` + `00` + `ab…`. `0xab` has its **high bit set**,
+     so forge's one-byte strip leaves `00 ab…`, which is legal, and it parsed.
+     It was one case short: `00` + `00` + `7b…` does not. Reproduced here, with
+     both cases side by side, and its conclusion "forge normalises on write" is
+     true but not sufficient.
+
+  **Where it lands, and why it looked like load.** Not the fixtures: the throw
+  is at `egress-proxy.ts`'s `new tls.TLSSocket(clientSocket, { isServer: true,
+key, cert })`, which arms an intercepted CONNECT — **synchronously, inside a
+  `secureConnect` handler**. So it is an unhandled error rather than a failed
+  download, the CONNECT never completes, ffmpeg waits, and the run pays a 120 s
+  test timeout and then a 60 s hook timeout in `afterAll` while cleanup blocks
+  on a stuck socket. `120 + 60 = 180`; sighting 3's file took **182 s**, and
+  dl-29's contention sighting took 185 s against 37.6 s for the re-run. **That
+  5× is the timeout, not the machine.** The contention framing has the causal
+  arrow backwards, and the ticket's advice to force it with artificial CPU load
+  would have wasted the session.
+
+  **The reproduction, forced rather than waited for**, because a ~9% failure
+  cannot be shown fixed by a green run. All on this devcontainer, at
+  `91c117b`, in a worktree with `node_modules` farmed and `dist` built.
+
+  | run                           | what                                                                | result                                                                                                                                                                                                                       |
+  | ----------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | unit, unfixed source          | new test, RNG stubbed to the `00 7b…` draw                          | **red** at `tls.createSecureContext({ cert: leaf.cert, key: leaf.key })` — the production call site copied verbatim — with `error:068000DD:asn1 encoding routines::illegal padding`                                          |
+  | unit, fixed source            | same test                                                           | green, 12 tests, 1.9 s                                                                                                                                                                                                       |
+  | integration, unfixed encoding | `two-origin-tls.test.ts` with **every** serial forced to that shape | **red, and the whole CI signature**: `Hook timed out in 60000ms`, three × `Test timed out in 120000ms`, 15 unhandled `ERR_OSSL_ASN1_ILLEGAL_PADDING` whose `opensslErrorStack` is byte-for-byte sighting 3's, file **421 s** |
+  | integration, fixed encoding   | same forcing                                                        | green, 9 tests, **3.9 s**                                                                                                                                                                                                    |
+
+  The last two are the same file on the same machine minutes apart, and the only
+  difference is the encoding. 421 s → 3.9 s is the timeout disappearing.
+
+  **The fix.** `positiveDerIntegerHex` strips leading zero bytes first and only
+  then re-prefixes one when the high bit is set. Stripping before prefixing is
+  what makes it idempotent under forge's own one-byte strip — a minimal encoding
+  survives that pass unchanged, which is the property the round-trip test rests
+  on. Exported so the encoding can be asserted directly; the same reason dl-36
+  exports `fixtureSerialNumberHex`.
+
+  **This was a production defect, not a test defect.** `newSerial()` is in
+  `api/src`, `node-forge` is a runtime dependency since dl-27, and the code path
+  is a real download through the egress proxy. One CONNECT in 512 to a
+  not-yet-seen host would hang until a timeout, with an unhandled error in the
+  log and no `AppError`. Nothing in the ticket suggested that, because it was
+  filed as a flaky test.
+
+  **Not done, and stated rather than inferred.**
+
+  - **Not run on Windows.** Two of the five sightings are Windows and this
+    container is Linux. The mechanism is OpenSSL's DER decoder and forge's
+    encoder, neither platform-specific, and sighting 4 and dl-29's are on Linux
+    — but "the Windows sightings are the same bug" is an inference, not a
+    measurement. The only thing that settles it is the failure not recurring.
+  - **Not proven to be the only cause.** Every sighting on this ticket is
+    `ERR_OSSL_ASN1_ILLEGAL_PADDING` and this explains that error completely, at
+    a rate that brackets the observed one. It does not rule out a second,
+    rarer defect wearing the same timeout.
+  - **The fourth hypothesis is untouched**: an orphaned child holding a port on
+    Windows. It was offered as an explanation for the _timeout_, and the timeout
+    now has one, so there is nothing left pointing at it — but nothing here
+    tested it either. **Do not file it**; it has no reproduction.
+  - **`fixtureSerialNumberHex` was not folded into the new helper**, though it
+    now states the same rule twice in two packages. It could have been: they
+    differ only in taking a counter rather than bytes. It was not, because
+    dl-36 already made it correct and it is asserted by its own tests, so the
+    change would be churn in a file this defect never touched — and a test
+    helper importing an encoder out of `src` to save four lines is the wrong
+    trade. Recorded so the duplication is a decision rather than an oversight.

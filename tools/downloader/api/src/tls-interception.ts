@@ -118,11 +118,40 @@ export interface TlsInterception {
   close(): Promise<void>;
 }
 
+/**
+ * Sixteen random bytes as the hex of a **minimally-encoded positive** DER
+ * `INTEGER`, which is what `cert.serialNumber` is fed straight into.
+ *
+ * The unconditional `00` prefix this replaced produced a certificate OpenSSL
+ * refuses to parse at all, once in every 512 issued — the defect dl-33 was
+ * filed for. A DER `INTEGER` is signed and two's-complement, so a leading `00`
+ * is *required* when the first content byte has its high bit set and
+ * **forbidden** when it does not: a redundant one is `ASN1_R_ILLEGAL_PADDING`.
+ * forge does normalise, but by exactly one byte — `asn1.toDer` carries a `TODO:
+ * should all leading bytes be stripped vs just one? .. ex '00 00 01' => '01'?`
+ * — so `00` in front of a draw whose own first byte is `0x00` leaves one
+ * redundant zero behind whenever the *second* byte's high bit is clear.
+ * That is `1/256 × 1/2`, and a run of this tool's suite issues 133 serials.
+ *
+ * The failure is not in the test fixtures and not confined to them: it lands in
+ * `egress-proxy.ts`, at the `new tls.TLSSocket({ cert })` that arms an
+ * intercepted CONNECT, and it throws there synchronously inside a
+ * `secureConnect` handler — so a download hangs rather than failing.
+ *
+ * Stripping first and then re-prefixing is what makes this idempotent under
+ * forge's own one-byte strip: a minimal encoding survives it unchanged.
+ *
+ * Exported so the encoding can be asserted over draws a real run reaches once
+ * in five hundred, without waiting for one.
+ */
+export function positiveDerIntegerHex(bytes: string): string {
+  const hex = forge.util.bytesToHex(bytes).replace(/^(?:00)+/u, "");
+  if (hex === "") return "00";
+  return Number.parseInt(hex.slice(0, 2), 16) >= 0x80 ? `00${hex}` : hex;
+}
+
 function newSerial(): string {
-  // A leading zero byte keeps the DER INTEGER positive; forge writes the hex as
-  // given, and a serial with the high bit set is a negative number some stacks
-  // reject outright.
-  return `00${forge.util.bytesToHex(forge.random.getBytesSync(16))}`;
+  return positiveDerIntegerHex(forge.random.getBytesSync(16));
 }
 
 function generateRsaPem(): { privatePem: string; publicPem: string } {
