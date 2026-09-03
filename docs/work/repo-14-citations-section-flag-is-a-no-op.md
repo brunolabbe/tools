@@ -153,3 +153,71 @@ becomes a loud error rather than the silent no-op it is now.
 
   Not measured: no attempt was made to price the section-splitting work, which is
   why the open question carries costs in prose rather than a number.
+
+- **2026-09-03** — **Steps 1 and 2 only; step 3 and the open question below are
+  untouched, so this ticket stays `ready`.** Branched from `origin/main` at
+  `91c117b`.
+
+  **Landed.** `parseArgs` replaces `argv.find((a) => !a.startsWith("--"))`: it
+  walks argv, consumes each recognised flag's value, and refuses an unrecognised
+  flag, a flag with no value, and a second positional — each with one shared
+  `USAGE` string and a non-zero exit. Five new tests: three driving the CLI
+  through `spawnSync`, two on the now-exported `parseArgs`.
+
+  **Run red first, against the unfixed source.** The three CLI tests were written
+  and run with `scripts/citations.mjs` restored to `HEAD`; the unit tests were
+  added only afterwards, deliberately, so that the red could not be a missing
+  export standing in for a missing behaviour. 3 failed, 10 passed:
+
+  ```
+  × the CLI rejects an unknown flag with the usage string and a non-zero exit
+      AssertionError: expected +0 not to be +0        # --nonsense accepted, exit 0
+  × the CLI resolves the ticket rather than a file named after the sha, in either order
+      + ENOENT: no such file or directory, open 'HEAD'
+  × the CLI says --section did nothing rather than filtering silently
+      AssertionError: expected 1 to be +0             # --section Log <ticket> exited 1
+  ```
+
+  **The brief was accurate — every checkable claim in it was re-checked and every
+  one holds**, including `grep -c section` still being 1 at `origin/main` and the
+  byte-identical three-way reproduction. Its own four citations resolve 4/4 at
+  `origin/main`, checked by running this script against this ticket with the flag
+  _first_ — an invocation the old code could not perform at all.
+
+  **What it under-specified, which is the reason this was dispatched as a slice.**
+  Step 2 says reject an unknown flag. Read literally, `--section` is unknown, so
+  step 2 alone would make `--section Log` exit non-zero — which is precisely the
+  observable behaviour the **delete** resolution would ship, reached without
+  anyone deciding. The ticket half-sees this ("makes deleting the strictly safer
+  of the two") and does not draw the conclusion. Resolved here by keeping
+  `--section` a _known_ flag: its value is consumed, a warning on stderr says
+  nothing was filtered, and the exit stays 0. That is neither endpoint —
+  implement would filter, delete would refuse, this announces — so it fixes the
+  reported harm (a reader can no longer believe they filtered) without spending
+  the decision. **Carried to the orchestrator as an open decision**, because
+  "warn now" versus "refuse now" is itself a call with two defensible answers.
+
+  **Folded in**, all falling out of the rewritten loop rather than sought:
+  a single-dash token is rejected instead of being taken as the ticket file
+  (`-r HEAD <ticket>` used to say `ENOENT: -r` — this bug one dash over); a
+  second positional is rejected instead of silently ignored; and the docblock
+  usage line and the `main()` error string, which disagreed about `--section`,
+  became one `USAGE` constant. That last one is load-bearing for step 2, not
+  tidying: a refusal printing a usage line that omits an accepted flag tells the
+  reader that flag is invalid too, which is the open question answered by an
+  error message.
+
+  **Read this ticket's Reproduction section with `--rev 91c117b`.** Two of its
+  four citations drifted on this branch and now point at unrelated code while
+  still resolving, which is the exact failure this script exists to catch and
+  cannot catch: `citations.mjs:226` was `const file = argv.find(…)` and is now a
+  `return` inside `checkCitations`; `:229` was the usage `throw` and is now
+  blank. They are the finding's own evidence, so they stay as written.
+
+  **Not done, deliberately:** step 3, and with it Done-when 3. The docblock, the
+  usage string and the parsed set now name the same flags but not the same
+  _status_ — `--section` appears in the one-line usage without its "not
+  implemented" caveat, which lives in the docblock prose and the stderr warning
+  instead. Folding the caveat into the usage line belongs with the resolution.
+  Still not measured: the cost of section-splitting, so the open question below
+  continues to carry prose rather than a number.

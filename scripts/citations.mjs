@@ -27,6 +27,12 @@
  * `--rev` resolves against a commit rather than the working tree. Pinning the
  * record to the commit the gate actually reviewed is the cheaper answer to a fix
  * that moved the very lines the record cites — cheaper than remapping them.
+ *
+ * `--section` is **accepted and not implemented**, and says so on stderr when it
+ * is used. Whether it gets built or dropped is repo-14's open question and is
+ * deliberately not settled here: rejecting it would be the “dropped” answer
+ * shipped early, and accepting it in silence is the defect that ticket exists
+ * for. Saying so out loud is the only treatment that commits to neither.
  */
 
 import { execFileSync } from "node:child_process";
@@ -221,12 +227,75 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
   });
 }
 
+/** Every flag this CLI accepts, mapped to the option it sets. All take a value. */
+const FLAGS = new Map([
+  ["--rev", "rev"],
+  ["--section", "section"],
+]);
+
+/**
+ * One usage string, shared by the docblock above, the missing-file error and the
+ * unknown-flag error. They disagreed before — the docblock advertised
+ * `--section` and the error did not — and a rejection that prints a usage line
+ * omitting an accepted flag tells the reader that flag is invalid too, which is
+ * repo-14's open question answered by an error message.
+ */
+export const USAGE =
+  "usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>]";
+
+/**
+ * Parse argv into the ticket file and its options.
+ *
+ * A flag's **value** does not look like a flag, so the previous
+ * `argv.find((a) => !a.startsWith("--"))` could not tell one from the positional
+ * argument: `--rev HEAD <ticket>` read a file named `HEAD` and exited 1. Walking
+ * the array and consuming each recognised flag's value is what fixes that, and
+ * it is the same pass that can reject a flag it does not recognise — both
+ * defects live on this one line of parsing, which is why they are one change.
+ *
+ * @param {string[]} argv
+ * @returns {{file: string, rev: string | null, section: string | null}}
+ */
+export function parseArgs(argv) {
+  /** @type {string | null} */
+  let file = null;
+  /** @type {string | null} */
+  let rev = null;
+  /** @type {string | null} */
+  let section = null;
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    // Anything leading with `-` is a flag claim, not a filename. Letting `-r`
+    // through as the ticket file would reproduce this ticket one dash over.
+    if (!arg.startsWith("-")) {
+      if (file !== null) throw new Error(`unexpected argument ${arg}\n${USAGE}`);
+      file = arg;
+      continue;
+    }
+    const option = FLAGS.get(arg);
+    if (option === undefined) throw new Error(`unknown option ${arg}\n${USAGE}`);
+    const value = argv[++i];
+    if (value === undefined) throw new Error(`${arg} needs a value\n${USAGE}`);
+    if (option === "rev") rev = value;
+    else section = value;
+  }
+
+  if (file === null) throw new Error(USAGE);
+  return { file, rev, section };
+}
+
 function main() {
-  const argv = process.argv.slice(2);
-  const file = argv.find((a) => !a.startsWith("--"));
-  const rev = argv.includes("--rev") ? argv[argv.indexOf("--rev") + 1] : null;
-  if (!file) {
-    throw new Error("usage: node scripts/citations.mjs <ticket-file> [--rev <sha>]");
+  const { file, rev, section } = parseArgs(process.argv.slice(2));
+
+  // Loud, because the silence is the whole ticket: a reader who believes they
+  // scoped the check to one section gets a whole-file pass wearing the label of
+  // a filtered one, and every count they then quote has the wrong denominator.
+  if (section !== null) {
+    process.stderr.write(
+      "warning: --section is not implemented. Nothing was filtered — this run covers the whole\n" +
+        "record. See repo-14, where whether the flag gets built or dropped is still open.\n\n",
+    );
   }
 
   const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
