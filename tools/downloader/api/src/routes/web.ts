@@ -39,6 +39,78 @@ const IMMUTABLE_MAX_AGE_SEC = 31_536_000;
  */
 const API_PREFIX = "/api/";
 
+/**
+ * The document's Content-Security-Policy (dl-35).
+ *
+ * `default-src 'self'` already covers everything the four source lists below
+ * repeat, and they are still spelled out. Two reasons, neither decorative: a
+ * `default-src` that later has to widen for one subresource would otherwise
+ * silently widen all of them, and this list is the only place recording what
+ * the bundle was measured to need.
+ *
+ * What it was measured against — `npm run build`'s output, not the dev server,
+ * which injects a client of its own:
+ *
+ *  - `script-src 'self'` — the built `index.html` carries one
+ *    `<script type="module" src="/assets/…">` and no inline script.
+ *  - `style-src 'self'` — one `<link rel="stylesheet">`, no `<style>` block,
+ *    and no `style=` attribute anywhere in `web/src`. `'unsafe-inline'` is
+ *    therefore *not* unavoidable, which is the question worth asking before
+ *    adding it. The one CSSOM write the app makes — `theme.ts` setting
+ *    `root.style.colorScheme` — is not governed by `style-src`, because CSP
+ *    hooks the `style` content attribute rather than `CSSStyleDeclaration`;
+ *    `e2e/csp.spec.ts` measures that in a real browser rather than trusting it.
+ *  - `img-src 'self'` — dl-29's preview is `/api/thumbnail/<token>` on this
+ *    origin by construction, which is the whole point of it: the bytes come
+ *    through this service so the SSRF guard sees the fetch. If a preview ever
+ *    needs a foreign origin, that is a change to dl-29's design and not a
+ *    reason to relax this line.
+ *  - `connect-src 'self'` — `fetch` and the `EventSource` progress stream, both
+ *    same-origin because this service serves the bundle.
+ *
+ * `object-src 'none'` and `frame-ancestors 'none'` are tightenings rather than
+ * enumerations, and `frame-ancestors` has no `default-src` fallback at all — it
+ * exists only if it is written. `base-uri 'self'` stops an injected `<base>`
+ * re-pointing every relative URL on the page, the preview's included.
+ *
+ * No `report-uri`/`report-to`: there is nowhere to send a report, and a
+ * collector is a separate piece of work.
+ */
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self'",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+/**
+ * The policy goes on the *document*, and on nothing else.
+ *
+ * Gated on the response's content type rather than on a route, because there
+ * are two doors to the same document and a route-shaped check has to remember
+ * both: `@fastify/static` serves `index.html` at `/`, and
+ * `serveIndexForUnknownPath` sends the same file for every client-side deep
+ * link. A policy on the first alone is a header that looks right and is missing
+ * from most of the ways a user arrives.
+ *
+ * The other direction matters as much. `/api/*` answers JSON and bytes, where a
+ * CSP governs nothing — the thumbnail route's own answer to a content-type
+ * attack is the allowlist and `nosniff` in `routes/thumbnail.ts`, not this.
+ */
+function registerDocumentPolicy(app: FastifyInstance): void {
+  app.addHook("onSend", async (_request, reply, payload: unknown) => {
+    const contentType = reply.getHeader("content-type");
+    if (typeof contentType === "string" && contentType.startsWith("text/html")) {
+      reply.header("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+    }
+    return payload;
+  });
+}
+
 /** Whether this request is the browser asking for a page, not the app asking for data. */
 function wantsHtml(request: FastifyRequest): boolean {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
@@ -63,6 +135,12 @@ export async function registerWebRoutes(
     });
     return false;
   }
+
+  // Before the static plugin, so the hook is in place by the time its routes
+  // are: an `onSend` on this instance flows down into the plugin's own
+  // encapsulation context, and reaches the not-found handler `server.ts`
+  // registers afterwards. Both doors, one policy.
+  registerDocumentPolicy(app);
 
   await app.register(fastifyStatic, {
     root,
