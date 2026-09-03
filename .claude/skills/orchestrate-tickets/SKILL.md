@@ -54,12 +54,21 @@ you are there.
    [reference/concurrency.md](reference/concurrency.md).
 3. **Dispatch builders** — `subagent_type: "builder"`, one per ticket. The agent
    definition carries the worktree, the setup order and the scope rules; your
-   prompt carries the ticket. See [reference/dispatching.md](reference/dispatching.md).
+   prompt carries the ticket. **The builder's model comes from the ticket, not
+   from you**: read its optional `difficulty` off `npm run status -- --json`,
+   which carries it per ticket, and map it with the table in
+   [`.claude/agents/builder.md`](../../agents/builder.md). Absent is the common
+   case and means inherit. Never rate an unrated ticket yourself — you have not
+   read it, which is the whole point of step 2. See
+   [reference/dispatching.md](reference/dispatching.md).
 4. **Gate** each finished branch — `subagent_type: "ticket-reviewer"`. Builders
    never open a PR before a gate. **Check the model rather than assuming it**: the
    builder's Agent result carries `resolvedModel`, and the agent definition
    defaults the gate to Sonnet, which is right when the builder ran Opus. If the
-   builder ran Sonnet, pass `model: "opus"` on the gate. Never `haiku`, never
+   builder ran Sonnet, pass `model: "opus"` on the gate. **Since repo-17 this
+   check is load-bearing rather than a backstop** — a `mechanical` ticket puts a
+   Sonnet builder in a batch where every sibling is Opus, so the gate's model now
+   varies inside one batch and cannot be set once. Never `haiku`, never
    `fable`. Say which model gated in the record — that is what makes the next
    audit one command instead of an assumption. Measured before this line existed:
    **11 tickets, 22 gates, none gated by a different model than built it.**

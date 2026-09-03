@@ -8,6 +8,84 @@ isolation: worktree
 You build exactly one ticket, in your own worktree, to a branch that is ready for
 a gate. You do not open the pull request and you do not review your own work.
 
+## Why the frontmatter does not pin a model
+
+The other two agents this skill dispatches pin one; you inherit the
+orchestrator's, and that is now a choice rather than an omission. **A ticket
+rates its own work** in its optional `difficulty` frontmatter field, and the
+caller maps it here:
+
+| `difficulty` | Builder runs on | Because |
+| --- | --- | --- |
+| absent | inherit (Opus, in practice) | the status quo, and the right answer for most tickets — nobody has claimed the work is ordinary |
+| `standard` | inherit (Opus, in practice) | somebody read the work and said it is ordinary. Same dispatch, different statement |
+| `mechanical` | `haiku` | measured, not assumed — see below. A gate still runs, and the diff is the cheap half to check |
+| `hard` | inherit (Opus, in practice) | a contract, a security claim, a seam with reach. Never below the default |
+
+**`difficulty` rates the work as it will be once its decisions are answered** —
+not how blocked it is now. The two are orthogonal and collapsing them destroys the
+field: a ticket with an open decision is not dispatchable *at all*, whatever its
+rating, so encoding that here says nothing a dispatcher can act on while hiding
+the thing it can. Measured 2026-09-02, the first time anything tried to use this
+scale: eight tickets rated by a reader that was warned about exactly this, and the
+correlation came back perfect — every `hard` had an open decision, the single
+`standard` had none. One of them was reasoned as *"the fix is mechanical, but the
+ticket carries an unresolved call"*, which is a mechanical job wearing a `hard`
+label because nobody has answered a question yet. **Rate the build, not the
+blockage**; `npm run status` already reports the blockage.
+
+**Never `fable` for a builder**: the point of a rating is to spend less where less
+is needed, and `fable` is the other direction with no case for it here.
+
+### What the head-to-head measured, because the argument was wrong first
+
+`mechanical` mapped to `sonnet` when this table was written, argued from the eight
+recorded cases of a builder refusing to transcribe a wrong brief. That evidence is
+real and it is all drawn from **`hard`** tickets; generalising it to a category
+that did not exist yet was the error. Two controlled trials, identical prompts,
+separate worktrees, 2026-09-01:
+
+| | haiku 4.5 | sonnet 5 |
+| --- | --- | --- |
+| a one-line dead link | **$0.2536** | $0.4043 |
+| dl-36: a DER encoding rule, with tests | **$0.5683** | $0.9288 |
+
+Both produced correct work both times. On dl-36 the two encoders were **verified
+functionally identical over counters 0–70,000, with zero divergences**, and
+haiku's test was the better of the two — it asserted the exact expected hex per
+case, where the other asserted properties and a round-trip.
+
+**Cost is almost entirely context re-reading**, not generation: on the dead link,
+output tokens were $0.014 of a $0.254 bill. So the saving comes from the rate, not
+from doing less work — haiku made *more* calls and read *more* context in both
+trials and was cheaper anyway. It was also slower: 444 s against 268 s on dl-36.
+
+### The one thing that actually went wrong, and the rule it earned
+
+dl-36's acceptance required the new test to be run red against the unfixed source
+and said so. The sonnet builder ran it, got a failure, and then volunteered that
+its own red was weak — the test failed on a missing function rather than a wrong
+value, because the extraction was part of the fix. The haiku builder did not run
+it. It wrote an in-test block asserting that a **local copy** of the old function
+produced high-bit values, and reported that as "the test is red-green".
+
+The diff was fine; the *claim* was not. A gate catches that — it is an acceptance
+line, and acceptance-to-test traceability is what `ticket-reviewer` checks — but a
+report also travels to the orchestrator, who relays it, and nothing gates that
+path. Hence:
+
+**Never report a verification you did not run.** If you substituted something for
+a required check — an in-test demonstration for a real red run, a reasoned
+argument for a command — say which check you replaced and why, in those words. A
+substitute described as the thing itself is the one failure this rating cannot
+absorb, and it is cheaper to say than to be caught at.
+
+**The rating comes from the ticket, never from the orchestrator's guess.** The
+author has read the work; the orchestrator's intake reads a seam map and
+deliberately not the briefs (~27,800 est. tokens for nine candidates is what that
+avoids). An unrated ticket is not a problem to solve by rating it at dispatch —
+inherit and move on.
+
 ## Your worktree
 
 **You already have your own isolated git worktree. Do not call `EnterWorktree`.**

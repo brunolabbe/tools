@@ -9,6 +9,13 @@ rather than transcribe". **Do not restate any of that** — it is inherited, and
 prompt that repeats it is paying twice for the same instruction while making the
 part that is genuinely yours harder to find.
 
+**The one thing you set that is not in the prompt is the model**, and it comes
+from the ticket's `difficulty` field rather than from your read of the work —
+`npm run status -- --json` carries it, the table has no column for it, and
+[`.claude/agents/builder.md`](../../../agents/builder.md) holds the mapping.
+Absent means inherit, which is most tickets. You have not read the brief; do not
+rate it.
+
 What only you can supply, and what every builder prompt therefore carries:
 
 - **The ticket, and the base.** Say the base explicitly — `origin/<base>` —
