@@ -5,9 +5,9 @@
  * exercise incidentally.
  */
 
-import { REDACTED, redactHeaders, redactUrl } from "@downloader/contract";
+import { AppError, REDACTED, redactHeaders, redactUrl } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
-import { classifyFailure } from "../../src/browser/classify.ts";
+import { classifyFailure, classifyNavigationError } from "../../src/browser/classify.ts";
 import { DrmObserver, drmInitScript, toDrmSystem } from "../../src/browser/drm.ts";
 import {
   classifyMedia,
@@ -339,6 +339,96 @@ describe("classifyFailure", () => {
 
   test("a plain non-2xx is unreachable", () => {
     expect(classifyFailure({ ...base, status: 500 }).code).toBe("UNREACHABLE");
+  });
+});
+
+describe("classifyNavigationError", () => {
+  const URL_UNDER_TEST = "https://cdn.internal.example/watch";
+
+  /**
+   * Verbatim, and that matters. Produced on 2026-09-03 by launching the
+   * Chromium this repo pins and navigating it to a self-signed loopback HTTPS
+   * origin; the call log is part of what Playwright re-throws and is kept so
+   * the ordering claim below is tested against the real shape rather than a
+   * tidied one.
+   */
+  const CHROMIUM_MESSAGE =
+    "page.goto: net::ERR_CERT_AUTHORITY_INVALID at https://127.0.0.1:40799/page.html\n" +
+    'Call log:\n  - navigating to "https://127.0.0.1:40799/page.html", waiting until "domcontentloaded"\n';
+
+  test("a refused certificate is TLS_VERIFICATION_FAILED, not UNREACHABLE", () => {
+    const error = classifyNavigationError(new Error(CHROMIUM_MESSAGE), URL_UNDER_TEST);
+    expect(error.code).toBe("TLS_VERIFICATION_FAILED");
+    // Named rather than merely asserted: `UNREACHABLE` is what this returned
+    // before dl-34, and it is retryable, so the operator was told to try again
+    // for a failure that will never change on its own.
+    expect(error.code).not.toBe("UNREACHABLE");
+    expect(error.retryable).toBe(false);
+  });
+
+  test("names the setting for the operator, in details rather than in the message", () => {
+    const error = classifyNavigationError(new Error(CHROMIUM_MESSAGE), URL_UNDER_TEST);
+    expect(error.details?.["hint"]).toContain("EGRESS_CA_FILE");
+    expect(error.details?.["reason"]).toBe("ERR_CERT_AUTHORITY_INVALID");
+    expect(error.message).not.toContain("EGRESS_CA_FILE");
+    expect(error.details?.["url"]).toBe(redactUrl(URL_UNDER_TEST));
+  });
+
+  test("reads the family, not the one member a self-signed fixture can produce", () => {
+    // An untrusted issuer is decided before expiry or a name mismatch, so every
+    // certificate a fixture here can serve reports AUTHORITY_INVALID — measured,
+    // across a self-signed, an expired and a wrong-SAN certificate. A classifier
+    // keyed on that one string would pass the test above and miss the rest of
+    // the family on a deployment where the root *is* trusted.
+    for (const code of [
+      "ERR_CERT_DATE_INVALID",
+      "ERR_CERT_COMMON_NAME_INVALID",
+      "ERR_CERT_REVOKED",
+      "ERR_CERT_WEAK_SIGNATURE_ALGORITHM",
+    ]) {
+      const error = classifyNavigationError(new Error(`page.goto: net::${code} at …`), "https://x");
+      expect(error.code).toBe("TLS_VERIFICATION_FAILED");
+      expect(error.details?.["reason"]).toBe(code);
+    }
+  });
+
+  test("a certificate error wins over the word timeout in the same message", () => {
+    // Playwright appends a call log, so both can appear in one string. A message
+    // naming an ERR_CERT_* is a certificate failure whatever else it says.
+    const error = classifyNavigationError(
+      new Error("page.goto: net::ERR_CERT_AUTHORITY_INVALID at https://x\nCall log: timeout 30000"),
+      URL_UNDER_TEST,
+    );
+    expect(error.code).toBe("TLS_VERIFICATION_FAILED");
+  });
+
+  test("leaves everything it did not recognise exactly where it was", () => {
+    // The under-matching direction. These are the branches dl-34 must not move.
+    expect(
+      classifyNavigationError(new Error("Timeout 30000ms exceeded"), URL_UNDER_TEST).code,
+    ).toBe("TIMEOUT");
+    expect(
+      classifyNavigationError(new Error("net::ERR_NAME_NOT_RESOLVED"), URL_UNDER_TEST).code,
+    ).toBe("UNREACHABLE");
+    expect(
+      classifyNavigationError(new Error("net::ERR_CONNECTION_REFUSED"), URL_UNDER_TEST).code,
+    ).toBe("UNREACHABLE");
+    expect(
+      classifyNavigationError(new Error("net::ERR_SSL_PROTOCOL_ERROR"), URL_UNDER_TEST).code,
+    ).toBe("UNREACHABLE");
+    // Deliberately excluded by the trailing underscore: a private root cannot
+    // cause it, and the hint would be wrong advice.
+    expect(
+      classifyNavigationError(
+        new Error("net::ERR_CERTIFICATE_TRANSPARENCY_REQUIRED"),
+        URL_UNDER_TEST,
+      ).code,
+    ).toBe("UNREACHABLE");
+  });
+
+  test("an AppError still passes straight through", () => {
+    const raised = new AppError("BLOCKED_TARGET", undefined, {});
+    expect(classifyNavigationError(raised, URL_UNDER_TEST)).toBe(raised);
   });
 });
 

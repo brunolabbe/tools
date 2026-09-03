@@ -39,6 +39,42 @@ switch (mode) {
     process.exitCode = 1;
     break;
   }
+  // Verbatim. Produced on 2026-09-03 by running the real yt-dlp (2025.09.26,
+  // default `urllib` backend) against a self-signed loopback HTTPS origin, and
+  // pasted rather than paraphrased: dl-34's classifier matches on these
+  // substrings, so a fixture that reworded them would be testing the fixture.
+  // The line carries all three of the measured markers at once, which is what
+  // yt-dlp actually emits — `[SSL: CERTIFICATE_VERIFY_FAILED]`, `certificate
+  // verify failed` and `CertificateVerifyError` are one message, not three.
+  case "tls": {
+    process.stderr.write(
+      "ERROR: [generic] Unable to download webpage: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032) (caused by CertificateVerifyError('[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1032)')); please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U\n",
+    );
+    process.exitCode = 1;
+    break;
+  }
+  // The same refusal from libcurl's vocabulary, which is what yt-dlp prints on
+  // the `curl_cffi` backend. **Not measured**: neither `curl_cffi` nor
+  // `requests` is installed where this fixture was written, so only the default
+  // backend above could be provoked. Kept so the second marker is exercised at
+  // all rather than being a line nothing reaches.
+  case "tls-curl": {
+    process.stderr.write(
+      "ERROR: [generic] Unable to download webpage: SSL certificate problem: self-signed certificate\n",
+    );
+    process.exitCode = 1;
+    break;
+  }
+  // A refusal whose stderr also trips every looser branch in `classifyFailure`.
+  // Contrived on purpose: it pins the *order* of the checks, which is the part
+  // a later edit could silently undo.
+  case "tls-and-drm": {
+    process.stderr.write(
+      "ERROR: [generic] Unable to download webpage: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed; the video is DRM protected, not available in your country, and you must sign in. HTTP Error 429: Too Many Requests\n",
+    );
+    process.exitCode = 1;
+    break;
+  }
   case "garbage": {
     process.stdout.write("this is not json\n");
     break;

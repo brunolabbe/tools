@@ -1,8 +1,12 @@
+import { fileURLToPath } from "node:url";
 import { AppError } from "@downloader/contract";
 import type { ProbeResult, Resolver, ResolveOptions } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
 import { ResolverRegistry } from "../src/registry.ts";
 import { YtDlpResolver } from "../src/resolvers/ytdlp.ts";
+
+/** The stand-in binary `ytdlp.test.ts` drives; `mode` selects its behaviour. */
+const FAKE_YTDLP = fileURLToPath(new URL("./fixtures/ytdlp/fake-ytdlp.mjs", import.meta.url));
 
 function probe(resolver: string): ProbeResult {
   return {
@@ -295,5 +299,29 @@ describe("the yt-dlp tier is expendable", () => {
     expect(ytdlp.canHandle(URL_UNDER_TEST)).toBe(false);
     const result = await new ResolverRegistry([ytdlp, sniffer]).resolve(URL_UNDER_TEST, options());
     expect(result.resolver).toBe("browser");
+  });
+
+  // dl-34, and the one place the *behaviour* change is observable rather than
+  // just the code on the error. Expendability has a boundary: a refused
+  // certificate is not an extractor that broke overnight. The browser tier
+  // verifies against its own trust store and would meet the same private root,
+  // so falling through buys a browser launch and then answers "no downloadable
+  // video stream was found on that page" for a trust problem.
+  //
+  // The real `YtDlpResolver` over the stand-in binary, not a stub throwing the
+  // code by hand: what is under test is that `classifyFailure` produces a code
+  // the registry refuses to fall through on, and a stub would assume the half
+  // that matters.
+  test("a certificate yt-dlp refused stops the chain instead of degrading", async () => {
+    const ytdlp = new YtDlpResolver({
+      binaryPath: process.execPath,
+      binaryArgs: [FAKE_YTDLP, "tls"],
+    });
+    const sniffer = new StubResolver({ name: "browser", priority: 50, behaviour: "succeed" });
+
+    await expect(
+      new ResolverRegistry([ytdlp, sniffer]).resolve(URL_UNDER_TEST, options()),
+    ).rejects.toMatchObject({ code: "TLS_VERIFICATION_FAILED" });
+    expect(sniffer.calls).toEqual([]);
   });
 });

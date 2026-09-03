@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { AppError } from "@downloader/contract";
 import type { ResolveOptions } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
 import { mapProtocol, mapYtDlpInfo, YtDlpResolver } from "../src/resolvers/ytdlp.ts";
@@ -208,6 +209,55 @@ describe("the spawn path", () => {
   test("a region block is GEO_BLOCKED", async () => {
     await expect(fakeResolver("geo").resolve(SOURCE, options())).rejects.toMatchObject({
       code: "GEO_BLOCKED",
+    });
+  });
+
+  // dl-34. The whole point of the ticket: this stderr used to take the
+  // `NO_MEDIA_FOUND` default, so an operator on a private-root deployment was
+  // told "No downloadable video stream was found on that page" for a trust
+  // problem — a sentence that points at the source and hides the setting.
+  describe("a refused certificate", () => {
+    test("is TLS_VERIFICATION_FAILED, not the NO_MEDIA_FOUND default", async () => {
+      const error = (await fakeResolver("tls")
+        .resolve(SOURCE, options())
+        .catch((caught: unknown) => caught)) as AppError;
+      expect(error).toBeInstanceOf(AppError);
+      expect(error.code).toBe("TLS_VERIFICATION_FAILED");
+      expect(error.code).not.toBe("NO_MEDIA_FOUND");
+    });
+
+    // That this *stops the chain* — the behaviour change on top of the copy
+    // change — is proven in `registry.test.ts`, where a second tier exists to
+    // observe not being called. Asserting `retryable === false` here would look
+    // like that proof and would not be one: `NO_MEDIA_FOUND` is not retryable
+    // either, so the assertion passes with the fix reverted.
+
+    test("names the setting for the operator, and not for the client", async () => {
+      const error = (await fakeResolver("tls")
+        .resolve(SOURCE, options())
+        .catch((caught: unknown) => caught)) as AppError;
+      expect(error.details?.["hint"]).toContain("EGRESS_CA_FILE");
+      expect(error.details?.["reason"]).toBe("certificate_verify_failed");
+      // `hint` is absent from `http-errors.ts`'s CLIENT_SAFE_DETAIL_KEYS, so it
+      // reaches the log and not the page. The user-facing half is the finished
+      // copy the web app already has for this code.
+      expect(error.message).not.toContain("EGRESS_CA_FILE");
+    });
+
+    test("is recognised in libcurl's wording too", async () => {
+      await expect(fakeResolver("tls-curl").resolve(SOURCE, options())).rejects.toMatchObject({
+        code: "TLS_VERIFICATION_FAILED",
+      });
+    });
+
+    test("outranks the looser source-fact matches in the same stderr", async () => {
+      // `drm`, `sign in` and `in your country` are substring matches on the
+      // same buffer. A handshake that failed means yt-dlp never read the page,
+      // so none of them can be a fact about the source — which is why the
+      // certificate branch runs first.
+      await expect(fakeResolver("tls-and-drm").resolve(SOURCE, options())).rejects.toMatchObject({
+        code: "TLS_VERIFICATION_FAILED",
+      });
     });
   });
 
