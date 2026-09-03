@@ -56,8 +56,26 @@ that was written, so like the third session's figure this is evidence about cost
 not about whether holding ever paid.) It kept exactly one reviewer alive past its
 report — the one whose builder had been told to *reproduce* a finding before
 accepting it, because a builder that comes back "this does not reproduce" is a
-question only that reviewer can answer. That is the test: **hold a reviewer only
+question only that reviewer can answer. **When there is no pull request, the ticket commit is the whole test** — the
+second location does not exist, and waiting for it retires nothing, ever. That is
+the state the skill's own default produces. That is the test: **hold a reviewer only
 while a specific open question could go back to it.**
+
+**"Alive" is the wrong word, and it misled the first run of this loop.** No agent
+sits listening between messages; both end their turn after sending, and
+`SendMessage` wakes a `completed` sibling back into its own context. What has to
+survive is therefore the **agent record and its worktree**, so a wake has
+something to resume into — removing a reviewer's tree while the builder may still
+answer it is what actually closes the channel.
+
+**That exception is now the common case, not the rare one.** The reviewer sends
+its findings to the builder directly and fields the pushback itself, so "a
+specific open question could go back to it" is true for every gate until the
+builder is done answering. Retire a reviewer when its record is pushed **and** the
+exchange has ended — not on the record alone. The fourth session's 133 MB → 61 MB
+saving came from retiring four reviewers at report time; expect to keep them a
+round longer now and to give some of that back. That is the price of the hop this
+removes, and it is disk rather than context.
 
 Before removing any of them, confirm what the tree actually holds. A reviewer that
 checked out the builder's branch shows commits ahead of `main` — those are the

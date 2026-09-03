@@ -39,10 +39,24 @@ const FIELDS = {
   // title reads badly in a column. Absent on almost every ticket, which is the
   // intended ratio — a title that needs a gloss is usually a title to fix.
   note: { required: false },
+  // Optional, and the one field written for a dispatcher rather than for a
+  // reader: how much judgement the work needs, which `orchestrate-tickets`
+  // maps to a builder's model. Absent means the builder inherits the
+  // orchestrator's model, which is the status quo and the right answer for
+  // most tickets. The *author* fills it in, because the author has read the
+  // work and the orchestrator deliberately has not — see repo-17 and
+  // `.claude/agents/builder.md`.
+  difficulty: { required: false },
 };
 
 const KINDS = ["work-package", "fix", "chore"];
 const STATUSES = ["ready", "in-flight", "done", "dropped"];
+// Rated by how much judgement the work needs, never by how large the diff is:
+// a one-line change to a contract is `hard`, a forty-file mechanical rename is
+// not. `standard` and absent mean the same thing to a dispatcher; the value
+// exists so that "somebody judged this and it is ordinary" can be told apart
+// from "nobody said", which is the difference between a default and a choice.
+const DIFFICULTIES = ["mechanical", "standard", "hard"];
 
 /** Statuses that mean the ticket is still work. `dropped` is neither. */
 const OPEN = new Set(["ready", "in-flight"]);
@@ -131,7 +145,7 @@ function parseList(value, file, line) {
  * file twice to answer one boolean is the kind of thing that goes stale.
  *
  * @param {string} [repoRoot]
- * @returns {Array<{id: string, tool: string, title: string, kind: string, status: string, milestone: string | null, depends_on: string[], note: string | null, file: string, number: number, reviewed: boolean}>}
+ * @returns {Array<{id: string, tool: string, title: string, kind: string, status: string, milestone: string | null, depends_on: string[], note: string | null, difficulty: string | null, file: string, number: number, reviewed: boolean}>}
  */
 export function readTickets(repoRoot = DEFAULT_ROOT) {
   const tickets = [];
@@ -318,10 +332,19 @@ function validate(fields, tool, entry, file) {
       `${file}: "${ticket.status}" is not a status. Use one of: ${STATUSES.join(", ")}`,
     );
   }
+  // `null` passes: `parseScalar` maps both an empty value and a literal
+  // `null` to it, and a ticket that spells the field out as unset is saying
+  // the same thing as one that omits it.
+  if (ticket.difficulty != null && !DIFFICULTIES.includes(ticket.difficulty)) {
+    throw new Error(
+      `${file}: "${ticket.difficulty}" is not a difficulty. Use one of: ${DIFFICULTIES.join(", ")}`,
+    );
+  }
   const match = /^[a-z]+-(?<number>\d+)$/.exec(ticket.id);
   if (match?.groups === undefined) throw new Error(`${file}: "${ticket.id}" is not "<prefix>-<n>"`);
   ticket.number = Number(match.groups.number);
   ticket.note ??= null;
+  ticket.difficulty ??= null;
   return ticket;
 }
 
@@ -698,6 +721,7 @@ function printTicket({ ticket, blockers, missing }) {
     ["milestone", ticket.milestone ?? "—"],
     ["depends on", ticket.depends_on.length === 0 ? "nothing" : ticket.depends_on.join(", ")],
     ["note", ticket.note ?? "—"],
+    ["difficulty", ticket.difficulty ?? "—"],
     ["file", ticket.file],
   ]) {
     process.stdout.write(`  ${key.padEnd(11)} ${value}\n`);

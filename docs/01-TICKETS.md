@@ -96,6 +96,7 @@ wrong in the brief. This is what a future reader actually needs.
 | `milestone`  | A milestone from that tool's roadmap, or `null`                               |
 | `depends_on` | Ticket ids that must land first                                               |
 | `note`       | Optional. What the status view shows instead of the title                     |
+| `difficulty` | Optional. `mechanical` · `standard` · `hard` — how much judgement it needs    |
 
 The id prefix exists so `dl-8` means something in a commit message and in
 conversation, where the directory is not there to disambiguate it.
@@ -109,9 +110,24 @@ conversation. Take the highest of both and add one.
 `note` is the one editorial field, and it should stay rare: a title that reads
 badly in a table column is usually a title worth fixing.
 
-**These six fields are parsed, and strictly.** `scripts/status.mjs` fails by
-file and line on a key nobody has agreed on, a `status` or `kind` outside the
-lists above, or an `id` that disagrees with its own filename. A parser that
+**`difficulty` is the one field written for a dispatcher rather than a reader.**
+`orchestrate-tickets` maps it to the model it runs a builder on, and it is on the
+ticket rather than computed by the orchestrator because **the author has read the
+work and the orchestrator deliberately has not** — its intake reads a seam map,
+not the briefs. Rate the _judgement_ the work needs, never the size of the diff:
+a one-line change to a contract is `hard`, a forty-file rename is `mechanical`.
+Absent means the builder inherits the orchestrator's model, which is the status
+quo and the right answer for most tickets, so leaving it off costs nothing;
+`standard` says somebody looked and it is ordinary, which is not the same
+statement. The mapping from a value to a model lives in
+[`.claude/agents/builder.md`](../.claude/agents/builder.md) and only there, so no
+ticket ever names a model — see
+[repo-17](./work/repo-17-a-ticket-declares-its-difficulty.md).
+
+**These fields are parsed, and strictly** — the six required ones and both
+optional ones. `scripts/status.mjs` fails by file and line on a key nobody has
+agreed on, a `status`, `kind` or `difficulty` outside the lists above, or an `id`
+that disagrees with its own filename. A parser that
 shrugs at what it does not understand reports a clean status view having read
 half the tickets.
 
@@ -215,9 +231,10 @@ produced it, so the blind spot is correlated and a second pass mostly re-derives
 the first one's confidence.
 
 **The builder commits the gate, in the branch under review** — not the reviewer.
-A reviewer works in a worktree that is thrown away when it reports, so a
-`## Review` section written there is written into nothing: the finding travels
-back as a message and the record does not travel at all. `repo-1` went through
+A reviewer works in a worktree that is thrown away once its record is pushed and
+its exchange with the builder has ended, so a `## Review` section written there is
+written into nothing: the finding travels back as a message and the record does
+not travel at all. `repo-1` went through
 two gates and neither existed in the repo afterwards, which is how it was
 noticed. So the reviewer reports and the builder writes the section down, with
 the date, the verdict, and **both halves named above**:

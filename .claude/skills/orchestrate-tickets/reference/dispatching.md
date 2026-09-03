@@ -9,6 +9,13 @@ rather than transcribe". **Do not restate any of that** — it is inherited, and
 prompt that repeats it is paying twice for the same instruction while making the
 part that is genuinely yours harder to find.
 
+**The one thing you set that is not in the prompt is the model**, and it comes
+from the ticket's `difficulty` field rather than from your read of the work —
+`npm run status -- --json` carries it, the table has no column for it, and
+[`.claude/agents/builder.md`](../../../agents/builder.md) holds the mapping.
+Absent means inherit, which is most tickets. You have not read the brief; do not
+rate it.
+
 What only you can supply, and what every builder prompt therefore carries:
 
 - **The ticket, and the base.** Say the base explicitly — `origin/<base>` —
@@ -41,6 +48,56 @@ What only you can supply, and what every builder prompt therefore carries:
 Gate yield tracked prompt specificity, not gate number. In the reference session
 gates 4 and 5 were the cheapest **and** the highest-yield, because by then the
 prompts said *reproduce this exact mutation* instead of *review this*.
+
+**Name the builder in every gate prompt.** The reviewer sends its findings to the
+builder itself now, so a gate prompt that does not say who to address has no
+channel — give the builder's agent name and say that `SendMessage` is deferred and
+needs a `ToolSearch` first. Say explicitly what still comes back to you: an
+unsettleable disagreement, and any open decision. Anything else you ask to be
+routed through yourself, you are volunteering to retype.
+
+### Addressing, which is where this loop actually failed
+
+**Give the gate prompt the builder's agent id**, and require the reviewer to
+**state its own id back** in the message it sends. The asymmetry is structural
+rather than an oversight to fix: the builder is dispatched first, so its prompt
+cannot name a reviewer that does not exist yet, and the reviewer's message is the
+only channel by which it can learn the return address.
+
+**An agent id, never an agent-type name.** `SendMessage` to `"ticket-reviewer"`
+does not resolve. Three consecutive test runs read as a broken design — a builder
+reporting the reviewer "not reachable" and falling back to the orchestrator — and
+all three were this. The same call with the id succeeded first time. When a report
+says a sibling was unreachable, **ask for the verbatim error before believing the
+channel is at fault**; none of the three reports contained one, and there was no
+error to contain.
+
+### What was measured about the channel
+
+Probed on 2026-09-01, against the real agent types rather than reasoned from the
+tool docs:
+
+- **Both `builder` and `ticket-reviewer` carry `ListAgents` and `SendMessage`
+  directly.** Not deferred, and **neither has `ToolSearch`** — a prompt telling
+  either to fetch `SendMessage` first sends it to a tool it does not have.
+- **Siblings are mutually visible.** A subagent's `ListAgents` listed another
+  agent running under the same parent that it had not spawned. This is the fact
+  the whole design rests on and it was the one in doubt.
+
+**One correction worth keeping, because it nearly became a rule.** An earlier pass
+probed both agent types immediately after adding the tools to their frontmatter,
+got "I do not have those tools" from both, and concluded that the agent registry
+is read once at session start and that frontmatter edits cannot take effect until
+a new session. **That was wrong** — a later probe in the same session found both
+tools present. The refresh mechanism was not determined and is not worth guessing
+at; what is worth keeping is that a negative probe taken moments after an edit is
+not evidence about the design, and a claim that broad deserved a second
+measurement before it was written down.
+
+**Also note the self-report is unreliable.** Each probe listed fewer tools than
+its own frontmatter grants — a builder reporting eight where the file lists
+thirteen, omitting `Grep` and `Glob`, which it certainly has. Ask an agent to
+*call* a tool, not to tell you whether it has one.
 
 **So make gate 1 look like gate 4.** Every gate prompt should:
 

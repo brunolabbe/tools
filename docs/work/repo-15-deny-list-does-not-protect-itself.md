@@ -6,6 +6,7 @@ kind: chore
 status: ready
 milestone: null
 depends_on: []
+difficulty: hard
 ---
 
 # repo-15 — The deny list cannot express what it is protecting, and it does not protect itself
