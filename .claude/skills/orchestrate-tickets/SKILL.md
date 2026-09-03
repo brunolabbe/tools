@@ -269,6 +269,29 @@ audit later. Cost is a few `sed` calls against the decision headings. Measured
 orchestrator's own count on the way past, which is the argument for reading, not
 against it.
 
+**An option's stated mechanism is a proposal, not a fact — and answering the
+decision does not verify it.** The sharpest laundering route on this page, because
+it does not feel like relaying at all. A ticket or a subagent writes an option as
+*"do X by doing Y"*; you put it to the user faithfully; the user picks it; and Y
+arrives in your dispatch as an instruction that nobody ever checked. The
+faithfulness of the relay is what disguises it — you were careful with the words,
+and the words carried an unverified claim.
+
+Measured 2026-09-03. A builder surfaced a decision whose option A read "guard that
+call and **route failure to `options.onFailed`**". The user chose to fold the work
+in, and the orchestrator relayed `onFailed` as the mechanism. A gate then
+established it is **not reachable** from that call site — it is wired to a
+different handler on the same socket, and the throw is a synchronous exception in
+the success path, not an event that socket emits. The builder's own proposal had
+been wrong about its own file, the orchestrator had repeated it without checking,
+and only the gate stopped it being built.
+
+**So separate the outcome from the route when you dispatch a decided option.** Say
+what must be true — *a failure here must fail fast with a typed code instead of
+escaping* — and say explicitly that the mechanism named in the option is unverified
+and the builder should choose the route. That costs one sentence and it puts the
+decision's *purpose* beyond the reach of its *guess*.
+
 **"Accept the baseline" is rarely zero work — check before you report it as
 closing anything.** An option that reads *do nothing* usually still leaves the
 ticket's unconditional steps standing. Measured 2026-09-03: a four-option decision
