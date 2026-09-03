@@ -88,6 +88,31 @@ tool it does not have — measured, and recorded below. Say explicitly what stil
 unsettleable disagreement, and any open decision. Anything else you ask to be
 routed through yourself, you are volunteering to retype.
 
+### Tell the reviewer to paste its record, not narrate it
+
+The skill page's **Paste the artifact; never describe it** is written for the
+orchestrator, because when it was learned the orchestrator was the one carrying a
+gate record to a builder. **The direct-relay change moved that hop**: the reviewer
+now hands its own `## Review` text to the builder, and the rule did not move with
+it. So say it in the gate prompt.
+
+Measured 2026-09-03, and it is the good version of the failure. A reviewer's
+message to the orchestrator carried the literal markdown block; its message to the
+**builder** narrated the same six attacks in prose and said the block had been sent
+to the coordinator. The builder asked for the literal text rather than composing
+the record from the narrative, on the grounds that paraphrasing it and labelling
+the result verbatim is a substitution described as the thing itself. It was right,
+the reviewer re-sent the block unchanged, and nothing was committed from a
+paraphrase.
+
+Two things to take from it. **The receiving agent can enforce this**, and a builder
+that refuses to fabricate a record is doing its job rather than being obstinate —
+budget the extra round rather than pressing it. And an agent writing to two
+recipients will naturally write *differently* for each, which is right for findings
+and wrong for artifacts; the gate prompt should say which parts are which. One
+sentence does it: *the `## Review` block goes to the builder verbatim, as text it
+will commit; everything else may be summarised.*
+
 ### Addressing, which is where this loop actually failed
 
 **Give the gate prompt the builder's agent id**, and require the reviewer to
