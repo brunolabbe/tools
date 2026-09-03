@@ -1,7 +1,7 @@
 ---
 id: dl-33
 tool: downloader
-title: TLS fixture certificates fail to parse under contention, and it is not one test
+title: The egress proxy minted an unparseable certificate serial once in 512, and hung the CONNECT
 kind: fix
 status: done
 milestone: null
@@ -11,8 +11,13 @@ difficulty: hard
 
 # dl-33 — `ERR_OSSL_ASN1_ILLEGAL_PADDING` under load, in two specs and on two platforms
 
-> **Closed 2026-09-03 with a fix. The title is wrong and the framing below is
-> wrong, and both are kept because the wrongness is the useful part.**
+> **Closed 2026-09-03 with two fixes. The framing below is wrong, and it is kept
+> because the wrongness is the useful part.** The `title:` was wrong too and
+> _was_ changed, on the gate's finding: a board scan reads frontmatter and never
+> reaches this banner, so leaving it would have gone on advertising the
+> disproven framing to everyone who did not open the file. The old title was
+> "TLS fixture certificates fail to parse under contention, and it is not one
+> test".
 >
 > It is not the fixtures, it is not contention, and it is not a race.
 > `newSerial()` in `src/tls-interception.ts` — **production code, in the image**
@@ -22,7 +27,12 @@ difficulty: hard
 > per run. "Only under contention" was an artefact: the throw lands inside a
 > `secureConnect` handler, so the download hangs and the run pays a 120 s test
 > timeout plus a 60 s hook timeout — **the failure is the slowness**, which is
-> why every sighting is also a slow run. See the Log entry of 2026-09-03.
+> why every sighting is also a slow run.
+>
+> The second fix is the reason the first one took three sessions to find: that
+> throw **escaped to `uncaughtException`** and nothing refused the CONNECT, so
+> the only evidence anyone ever got was a timeout. The scope widened to cover it
+> **by explicit user decision** — see the two Log entries of 2026-09-03.
 
 ## Why
 
@@ -231,6 +241,60 @@ Traps worth knowing in advance:
 4. If no fix lands: the ticket closes `dropped` with the reasoning, rather than
    sitting open as a known-bad the board slowly stops reading.
 
+## Review
+
+**Gate: PASS** — 2026-09-03 · `origin/main...b48caf7` · self-run defect hunt at medium (ticket-reviewer subagent; no `Skill`/`Agent` tool available, hunt run directly)
+
+**Every `file:line` below resolves against `b48caf7`, the commit gated — not
+against the branch tip.** The guard commit that follows moves three of them, and
+they are left as written because they are the reviewer's evidence for what it
+ran: `node scripts/citations.mjs … --rev b48caf7` is how to check them. The
+table after the record resolves each one forward.
+
+| Done when                                                                        | Proof                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The decision is recorded, naming the option taken and why the others were not | **verified** — Log, 2026-09-03 entry: Option A taken; B/C/D reasoned against                                                                                                                              |
+| 2. Whether run `33348060111` clears on a re-run is recorded either way           | **verified** — "Not retried" banner: retried 2026-09-03, job `33348060111` green, 22:06                                                                                                                   |
+| 3. If a fix lands, the failure is reproduced first, red before green             | **proven** — `tls-interception.test.ts:242-243` (leaf-level, production call site), `:260-264` (encoding boundaries); independently reproduced by the reviewer at both unit and integration level (below) |
+| 4. If no fix lands, closes `dropped`                                             | N/A — a fix landed                                                                                                                                                                                        |
+
+- **Core claim verified against real forge + real OpenSSL, not the builder's re-implementation of the strip rule.** Signed actual certificates at the four named boundary draws and parsed each via `tls.createSecureContext` + `X509Certificate`: `00 00 7b…` → threw `ERR_OSSL_ASN1_ILLEGAL_PADDING` (predicted illegal, confirmed); `00 00 ab…`, `00 7b…`, `00 80…` → all parsed (predicted fine, confirmed). The thrown error's `opensslErrorStack` matches the ticket's quoted sighting-3 stack exactly.
+- **`positiveDerIntegerHex` verified correct** at `0x80` exactly, all-zero input (→ `"00"`, not zero-length), and the 16-byte-`0xff` worst case (→ 17 bytes, never negative, never over-long); every case round-tripped through real signing + parsing cleanly.
+- **The 2M-draw substitution judged sound**: its strip-rule assumption matches real forge at all four tested boundaries. Independently checked the derived arithmetic: `1-(511/512)^133 = 0.2290`, matching the claimed ≈23% upper bound; CI's observed 2/23 ≈ 8.7% sits under it as claimed.
+- **Unit-level red/green reproduced independently**: 12 tests green at `b48caf7` (1.96–1.99s). Reverting `positiveDerIntegerHex`'s body to the pre-fix unconditional-`00` logic reproduces the red at `tls.createSecureContext` (tls-interception.test.ts:242) with the exact OpenSSL error.
+- **Integration-level reproduction, both directions, is the strongest evidence on the branch.** Forcing every serial draw to the defect shape in `two-origin-tls.test.ts`: fixed source → 9/9 green, 4.01s (positive control, matches the builder's 3.9s); reverted source → 3 failed, **15 unhandled `ERR_OSSL_ASN1_ILLEGAL_PADDING`**, hook timeout at `afterAll:131`, three test timeouts, the named failure exactly `"the same download succeeds when the proxy trusts both origins"` (sighting 3's own case), file duration **421.44s** (matches the builder's 421s), stack naming `egress-proxy.ts:624:23` exactly.
+- **Refuted premises confirmed by code reading**: `createFixtureCertificate`'s serial path (`fixtureSerialNumberHex`, dl-36) is unrelated to `newSerial()`; both cert-parse sites are in-memory PEM with no file read at the parse boundary, so the truncated-PEM hypothesis cannot reach either.
+- **low** · `positiveDerIntegerHex` (`tls-interception.ts:147-150`) and `fixtureSerialNumberHex` (`test/helpers/tls-origin.ts:125-129`) restate the same DER-positive-integer rule in two packages, undeduplicated. Disclosed and reasoned about in the Log; accepted as a reasonable trade — in-tool duplication between `src` and a test-only fixture helper, each already independently tested, not the cross-tool sharing the repo's "packages/ on second consumer" rule targets.
+- **low** · the ticket's `title:` frontmatter is stale relative to the corrected root cause ("…fail to parse under contention, and it is not one test", while the body's own banner says it is none of those things), and `npm run status`/the board render titles from frontmatter rather than the body. Two remedies, not resolved here: leave it (consistent with "the wrongness is the record" for the rest of `## Why`) or update `title:` to name the actual defect while keeping the banner. Left as the ticket author's call.
+- **dropped** · none — everything the hunt turned up is carried above.
+- **findings** · self-run hunt found 2; both carried, 0 dropped.
+- NFR: security n/a · performance n/a · reliability ✓ (this is the fix, and the best-substantiated part of the branch) · maintainability — the one duplication above is the only ding.
+- **Out of scope for this gate, noted for context**: the unhandled-error escape at `egress-proxy.ts:614-628` (real and general — confirmed independently, not specific to this ASN.1 error) and whether `options.onFailed` is reachable from it (it is not, confirmed independently) were surfaced during this exchange but concern a _separate_, not-yet-committed guard the user has asked to fold into this same branch as a follow-up commit. That commit is unbuilt as of this gate and needs its own narrow review against the delta; it does not affect the verdict on `b48caf7` above.
+
+### Citations re-resolved against the guard commit
+
+The record above is the reviewer's, pasted unaltered — including its line numbers,
+which were correct for `b48caf7` and are the evidence for what it ran. The guard
+commit moves three of them and one was already wrong, so they are resolved here
+rather than edited in place, since rewriting a reviewer's measurements would
+destroy the thing they are for.
+
+| cited                                   | at `b48caf7`                                                      | at this tip    | note                                                                                                                                                                                                                                 |
+| --------------------------------------- | ----------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `egress-proxy.ts:624:23`                | the `new tls.TLSSocket(clientSocket, …)` the uncaught stack named | **`:718`**     | the guard moved it below a pre-built `SecureContext`                                                                                                                                                                                 |
+| `egress-proxy.ts:614-628`               | the `secureConnect` handler                                       | **`:681-723`** | same commit; the handler grew the guard                                                                                                                                                                                              |
+| `tls-interception.test.ts:242-243`      | the `createSecureContext` assertion                               | **`:242`**     | one line, not two — `oxfmt` collapsed it before `b48caf7` was committed, so this was a half-line-stale citation rather than a moved one                                                                                              |
+| `two-origin-tls.test.ts` `afterAll:131` | —                                                                 | **`:123`**     | **wrong at `b48caf7` too.** `afterAll` is at line 123, which is also what the ticket's own sighting-3 quote says (`Hook timed out … ❯ two-origin-tls.test.ts:123:1`). The finding it supports is unaffected; only the number was off |
+| `tls-interception.ts:147-150`           | `positiveDerIntegerHex`                                           | `:147-151`     | unmoved; the closing brace is 151                                                                                                                                                                                                    |
+| `test/helpers/tls-origin.ts:125-129`    | `fixtureSerialNumberHex`                                          | unchanged      | unmoved                                                                                                                                                                                                                              |
+| `tls-interception.test.ts:260-264`      | the encoding-boundary assertions                                  | unchanged      | unmoved                                                                                                                                                                                                                              |
+
+Both **low** findings are settled rather than left open. The duplication is
+accepted, on the reviewer's own reasoning. The stale `title:` **was updated** —
+the body keeps its wrongness because the body is the record of an investigation
+that went wrong twice, but a frontmatter title is an index entry rather than a
+record, and `npm run status` renders it to readers who never open the file.
+
 ## Log
 
 - **2026-08-31** — Filed at the user's request, from three sightings relayed by
@@ -435,3 +499,95 @@ key, cert })`, which arms an intercepted CONNECT — **synchronously, inside a
     change would be churn in a file this defect never touched — and a test
     helper importing an encoder out of `src` to save four lines is the wrong
     trade. Recorded so the duplication is a decision rather than an oversight.
+
+- **2026-09-03** — **A second fix, and the scope widened by explicit user
+  decision rather than by a builder exceeding its brief.**
+
+  **The question, the answer, the reason.** Fixing the serial exposed something
+  the Build never asked for: the throw it caused **escaped to
+  `uncaughtException`**, so the CONNECT was never refused and the only symptom
+  anyone ever saw was a timeout. That is true of _any_ certificate failure at
+  that site, not just this one. Offered as three options — file it, fold it in,
+  or leave it — with the cost of folding stated plainly: it widens dl-33 past
+  its Build and puts an error-path change into a security-adjacent file whose
+  value right now is being narrow and proven. **The user chose to fold it in.**
+  The builder and the coordinator had both recommended filing it; recorded so
+  the disagreement is visible rather than smoothed over.
+
+  **Two guesses at the mechanism were wrong before one was right, and both were
+  caught by measurement rather than by review.**
+
+  1. _"Route the failure to `options.onFailed`."_ — the builder's own wording,
+     relayed as an instruction without either party checking it. Wrong.
+  2. _"`onFailed` is unreachable: it is wired to `secure`'s `error` event and the
+     throw is in the `secureConnect` handler, so nothing routes it there."_ — the
+     gate's correction. Also wrong, and in a way that mattered: it implies a
+     **new reporting path** is needed.
+
+  **What is actually true, measured.** The callback is perfectly reachable from
+  inside the `secureConnect` handler — it is a parameter in lexical scope. What
+  breaks is the **order**. `options.onEstablished()` runs six lines above the
+  throw and sets the caller's `settled`, and `fail()` opens with
+  `if (settled) return`. A probe placed in the callback printed
+  `PROBE-ENTERED settled=true`: the callback **was entered** and the report was
+  then swallowed, no 502 written, the CONNECT still hanging. Worse if `settled`
+  had been false, since line 618 has already written
+  `HTTP/1.1 200 Connection Established` and a 502 would then go into an open
+  tunnel — the exact hazard `settled`'s own comment says it exists to prevent.
+
+  So the fix is **not a new path, it is the existing one moved above the point
+  of no return** — which is `terminateTls`'s own stated principle ("The order is
+  the point. The origin handshake completes **before** the client is told
+  `200`") applied to the second fallible step. The leaf is minted and its
+  `SecureContext` built inside a `try`/`catch` before `onEstablished()`; the
+  ready-made context is then handed to `new tls.TLSSocket`, which relocates the
+  build rather than adding one.
+
+  **No new error code.** `INTERNAL` from `@webtools/core` already means "this
+  service is broken", and `runFfmpeg` uses it for the same shape of fault — its
+  binary would not start. Nothing here is about video, so nothing belongs in the
+  downloader's half of the taxonomy.
+
+  **A fourth outcome, because three were not enough.** `connectFailed` split a
+  socket failure three ways — policy refusal, dead network, bad origin
+  certificate — and all three describe _the target_. This one describes us.
+  Filing it as `unreachable` says the packets went nowhere; filing it through
+  `refused` prints `refused … INTERNAL`, which that function's own comment names
+  as the line that sends a reader into `ssrf.ts`. Those are the two misreadings
+  that cost this ticket three sessions, so it gets `InterceptionLeafError`, its
+  own branch, and `logger.error` rather than `warn` — the only one of the four
+  that is a service defect rather than a fact about a target.
+
+  **The reason phrase is load-bearing and was chosen against a regex.** ffmpeg
+  echoes a proxy's status line and `isTlsVerificationFailure` reads it back out
+  of stderr, requiring `/certificate/` **and** a verification word. "Proxy could
+  not issue a certificate" has the first and not the second, so this fails as
+  itself instead of being reported as a rejected origin. Pinned by a test that
+  also asserts dl-27's real phrase still matches, so it is a discrimination and
+  not a regex that quietly stopped working.
+
+  **Red then green, at the socket and through ffmpeg.**
+
+  | run                                                                                                | result                                                                                                                                                                                                                                                                         |
+  | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+  | new socket tests, guard absent                                                                     | **red as the symptom, not as an assertion**: `connectThrough` times out, `afterEach` hook times out at 60 s, and **two uncaught exceptions escape** — `ERR_OSSL_PEM_BAD_BASE64_DECODE` at `egress-proxy.ts:624` and a plain `Error: no leaf for you` at `:623`. File **131 s** |
+  | same tests, guard present                                                                          | green, 26 tests, **3.0 s**                                                                                                                                                                                                                                                     |
+  | `two-origin-tls.test.ts`, serial encoding reverted **and** every draw forced illegal, guard absent | 421 s, 3 test timeouts, 1 hook timeout, **15 unhandled errors**                                                                                                                                                                                                                |
+  | the same, guard present                                                                            | **1.9 s, zero unhandled errors, zero timeouts.** Three honest assertion failures: the tests expecting `TLS_VERIFICATION_FAILED` get `DOWNLOAD_FAILED`, because a leaf we could not issue is correctly _not_ reported as a rejected origin                                      |
+
+  The last pair is the whole case for this commit: same broken certificates,
+  same file, **421 s to 1.9 s**, and a diagnosis that names the cause instead of
+  a timeout that names nothing.
+
+  **The third distinct OpenSSL error is the generality evidence.** dl-33's own
+  is `ILLEGAL_PADDING`; the gate reproduced `PEM routines::no start line`
+  independently; the red run above produced `PEM routines::bad base64 decode`.
+  Plus a plain `Error` thrown from minting, which is not a certificate-loading
+  failure at all. The guard covers both fallible steps, and a test asserts the
+  mint case precisely so a guard that covered only the load could not pass.
+
+  **Not done.** No Windows run, same as the first fix. The guard is not proven
+  to be the _only_ unguarded synchronous throw in a socket event handler in this
+  file — it is the only one dl-33 has evidence for, and a sweep for others was
+  not in scope and is not filed, because a sweep with no reproduction is how the
+  first three sessions went.

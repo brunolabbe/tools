@@ -20,6 +20,7 @@ import { createSsrfGuard } from "../src/ssrf.ts";
 import type { SsrfGuard } from "../src/ssrf.ts";
 import { createTlsInterception } from "../src/tls-interception.ts";
 import type { TlsInterception } from "../src/tls-interception.ts";
+import { isTlsVerificationFailure } from "@downloader/engine";
 import type { ProbeResult } from "@downloader/contract";
 import { probeResult } from "./helpers.ts";
 import { createFixtureCertificate, startTlsOrigin } from "./helpers/tls-origin.ts";
@@ -38,16 +39,23 @@ interface Line {
 }
 
 /** A logger that keeps its warnings, for the tests that are about the log itself. */
-function recordingLogger(): { logger: AppLogger; warnings: Line[] } {
+function recordingLogger(): { logger: AppLogger; warnings: Line[]; errors: Line[] } {
   const warnings: Line[] = [];
+  // Kept apart from `warnings`, because the severity is the assertion: the
+  // three outcomes that describe what a *target* did are warnings, and the one
+  // that describes what this service failed to do is not. See `connectFailed`.
+  const errors: Line[] = [];
   const logger: AppLogger = {
     ...NOOP_LOGGER,
     warn: (msg, fields) => {
       warnings.push({ msg, fields: fields ?? {} });
     },
+    error: (msg, fields) => {
+      errors.push({ msg, fields: fields ?? {} });
+    },
     child: () => logger,
   };
-  return { logger, warnings };
+  return { logger, warnings, errors };
 }
 
 /** A port that was listening long enough to be allocated, and is not now. */
@@ -663,5 +671,115 @@ describe("withoutEgressProxy keeps the credentials it is not there to touch", ()
     const out = withoutEgressProxy(probeThroughProxy());
     expect(out.variants).toHaveLength(1);
     expect(out.title).toBe("A test video");
+  });
+});
+
+/**
+ * dl-33's second half: what happens when the leaf itself cannot be loaded.
+ *
+ * A CONNECT the proxy has decided to intercept reaches a point where the origin
+ * handshake has succeeded and the only thing left is to arm the client side
+ * with a certificate we issued. That construction is a **synchronous throw in
+ * an event handler**, so before this guard it escaped the entire call stack to
+ * `uncaughtException` — nothing refused the CONNECT, nothing logged, and ffmpeg
+ * waited on a tunnel that was never going to open. dl-33 spent three sessions
+ * reading the resulting timeout as machine contention.
+ *
+ * These drive real sockets rather than asserting the branch exists, because
+ * "the guard is on the code path" and "the client gets an answer" are different
+ * claims and only the second one is the defect.
+ */
+describe("a leaf this proxy cannot load (dl-33)", () => {
+  /** An origin whose certificate the proxy will trust, so the run reaches the leaf. */
+  async function startTrustedTlsOrigin(): Promise<{ port: number; ca: string }> {
+    const certificate = await createFixtureCertificate({
+      ipAddresses: ["127.0.0.1"],
+      dnsNames: ["trusted.test"],
+      commonName: "dl33-egress-origin",
+    });
+    cleanups.push(() => certificate.cleanup());
+    const origin = await startTlsOrigin(certificate, (_request, response) => {
+      response.writeHead(200).end("the media");
+    });
+    cleanups.push(() => origin.close());
+    return { port: origin.port, ca: certificate.ca };
+  }
+
+  /** A real interception with `leafFor` replaced — everything else genuine. */
+  async function proxyWithLeaf(
+    ca: string,
+    leafFor: TlsInterception["leafFor"],
+  ): Promise<{ port: number; warnings: Line[]; errors: Line[] }> {
+    const { logger, warnings, errors } = recordingLogger();
+    const real = await interception(ca);
+    const proxy = await startProxy({
+      guard: createSsrfGuard({ allowHosts: ["trusted.test"] }),
+      logger,
+      resolve: resolverFor([v4("127.0.0.1")]),
+      interceptTls: { ...real, leafFor },
+    });
+    return { port: proxy.port, warnings, errors };
+  }
+
+  test("a certificate the runtime cannot load refuses the CONNECT rather than escaping", async () => {
+    const origin = await startTrustedTlsOrigin();
+    const proxy = await proxyWithLeaf(origin.ca, () => ({
+      key: "-----BEGIN PRIVATE KEY-----\nnot a key\n-----END PRIVATE KEY-----\n",
+      cert: "-----BEGIN CERTIFICATE-----\nnot a certificate\n-----END CERTIFICATE-----\n",
+    }));
+
+    // Without the guard this does not fail an assertion — it times out, which
+    // is the symptom the ticket chased for three sessions.
+    const result = await connectThrough(proxy.port, `trusted.test:${origin.port}`);
+
+    // **500, not the 502 the other refusals here use.** `http-errors.ts` maps
+    // `INTERNAL` to 500 and 502 to "the source was unreachable, not us"; the
+    // origin handshake had already succeeded, so blaming a gateway would be the
+    // same misreport in status form that the phrase below avoids in words.
+    expect(result.status).toBe(500);
+    // Named as ours, at `error`, and not as one of the three things a *target*
+    // can do — the misfiling that cost dl-33 those sessions.
+    expect(proxy.errors).toHaveLength(1);
+    expect(proxy.errors[0]?.msg).toBe("could not issue an interception certificate");
+    expect(proxy.errors[0]?.fields["code"]).toBe("INTERNAL");
+    expect(proxy.errors[0]?.fields["host"]).toBe(`trusted.test:${origin.port}`);
+    // The OpenSSL reason survives into the log, which is the whole diagnostic.
+    expect(String(proxy.errors[0]?.fields["reason"])).toContain("error:");
+    expect(proxy.warnings).toEqual([]);
+  });
+
+  test("a mint that throws is caught too, so the guard is not about one error", async () => {
+    // **Generality, asserted rather than argued.** The site has two fallible
+    // steps — forge minting and OpenSSL loading — and dl-33's defect was only
+    // ever in the second. A guard covering one would look identical here.
+    const origin = await startTrustedTlsOrigin();
+    const proxy = await proxyWithLeaf(origin.ca, () => {
+      throw new Error("no leaf for you");
+    });
+
+    const result = await connectThrough(proxy.port, `trusted.test:${origin.port}`);
+
+    expect(result.status).toBe(500);
+    expect(proxy.errors).toHaveLength(1);
+    expect(proxy.errors[0]?.fields["reason"]).toBe("no leaf for you");
+  });
+
+  test("the reason phrase does not tell ffmpeg the origin's certificate was rejected", () => {
+    // The phrase is the only thing that travels: ffmpeg echoes a proxy's status
+    // line and `isTlsVerificationFailure` reads it back out of stderr. dl-27
+    // spends "TLS certificate verification failed" on a *refused origin*, and
+    // this is not one — the origin verified fine and our own certificate did
+    // not load. Matching that pattern here would file a service defect as a bad
+    // CDN, so the phrase names a certificate without naming a verification.
+    expect(
+      isTlsVerificationFailure("[httpproxy] HTTP error 500 Proxy could not issue a certificate"),
+    ).toBe(false);
+    // And the pairing it must not be confused with still matches, so this is a
+    // discrimination rather than a regex that quietly stopped working.
+    expect(
+      isTlsVerificationFailure(
+        "[httpproxy] HTTP error 502 TLS certificate verification failed (DEPTH_ZERO_SELF_SIGNED_CERT)",
+      ),
+    ).toBe(true);
   });
 });
