@@ -59,6 +59,36 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   the prompt; agents reach for the directory by default. The 20x is this repo's
   suites and will not transfer as a constant — the *shape* does, so have the agent
   measure both once and use the number it gets.
+
+  **And the constant is not constant inside this repo either — re-measured
+  2026-09-03, warm, each row carrying its test count to prove the run was real:**
+
+  | target | files | tests | wall |
+  | --- | --- | --- | --- |
+  | `scripts/test/citations.test.ts` | 1 | — | **1 s** |
+  | `scripts` (the directory) | 3 | 114 | **2.4 s** |
+  | `tools/downloader/api/test/egress-proxy.test.ts` | 1 | 23 | **1 s** |
+  | `tools/downloader/api` (the directory) | 18 | 322 | **28 s** |
+  | `npm run build` | — | — | **8 s** |
+
+  So "the directory" costs **2.4 s or 28 s** depending which one — a 12x spread
+  *within* the repo, and most of the spread the 41 s figure was quoting against a
+  spec. The shape holds where the directory is large (1 s → 28 s) and vanishes
+  where it is small. **41 s reproduced for neither directory measured.** A builder
+  told "the directory costs 41 s" will avoid a 2.4 s run to save nothing — one was
+  told exactly that on 2026-09-03 and pushed back with its own timings, which is
+  the only reason this was caught. **So put the rule in the prompt, not the
+  number**, and have the agent measure its own two figures before optimising
+  against either.
+
+  **The trap that makes a broken directory look cheap.** The 28 s row first came
+  back as **2 s**, which would have "confirmed" the correction beautifully. It was
+  a worktree with no `dist`: 17 of 18 files failed to import and 23 tests ran
+  instead of 322. A suite that cannot load is the fastest suite there is. **Read
+  the test count on every timing, never the wall clock alone**, and in a fresh
+  worktree run `npm run build` before believing any number — the farm script's own
+  warning, "without dist, suites fail with packageEntryFailure", is describing
+  precisely this.
 - **A second gate on the same brief re-derives the first.** Gate count is not the
   lever; the brief is. Measured 2026-09-02: a first gate returned PASS with zero
   findings, and a second on the *same* branch — deliberately aimed only at ground
