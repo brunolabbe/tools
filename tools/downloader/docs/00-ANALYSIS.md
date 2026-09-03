@@ -199,6 +199,13 @@ First usable answer wins. `NO_MEDIA_FOUND` falls through to the next resolver;
 `DRM_PROTECTED` and `AUTH_REQUIRED` stop the chain, because those are true facts
 about the source and retrying with a different technique only burns time.
 
+`TLS_VERIFICATION_FAILED` stops it too (`dl-34`), and it is the one stop that is
+_not_ a fact about the source. It is a fact about the connection, and the reason
+it does not fall through is that the next tier would meet the same refused
+certificate: every tier verifies TLS, so a different technique against the same
+origin buys a browser launch and then reports "no media found" for a trust
+problem.
+
 Read the diagram bottom-up to see why this is safe: **delete every optional tier
 and the system still works**, just slower on well-known sites. That is the test
 for whether the layering is right. Coverage is a property of the sniffer alone;
