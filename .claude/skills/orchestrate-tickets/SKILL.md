@@ -52,6 +52,21 @@ you are there.
    **~27,800 est. tokens for nine candidates** on 2026-08-30. Then bring the user
    the batches that break up the collisions. See _Decisions_ and
    [reference/concurrency.md](reference/concurrency.md).
+   - **A board can be mostly unbuildable, and then "which batch" is the wrong
+     question.** Measured 2026-09-03: `--ready` returned nine and **eight carried
+     an open decision their own page forbids a builder from settling**. Offering
+     the user a choice of batches out of that set buys a round that ends in "this
+     ticket says I may not answer this". One call finds the shape before you
+     spend anything —
+     `grep -nE '^#{2,4} .*([Dd]ecision|[Oo]pen question)' <candidates>` — and when
+     it holds, the question becomes **which slices**, not which tickets. See
+     _Slice a blocked ticket_ in [reference/sizing.md](reference/sizing.md).
+   - **The seam-mapper does not remove the decision-reading cost, only the
+     ticket-reading cost.** The same session paid **87,596 subagent tokens** for
+     the map and then still read seven decision sections itself. That is not a
+     loss — those are disposable tokens where the ~27,800 above are the context
+     that must survive — but do not budget the map as though it ends your reading.
+     Why you have to read them yourself is under _Decisions_.
 3. **Dispatch builders** — `subagent_type: "builder"`, one per ticket. The agent
    definition carries the worktree, the setup order and the scope rules; your
    prompt carries the ticket. **The builder's model comes from the ticket, not
@@ -220,6 +235,36 @@ them. When one does, that is yours to put to the user — not to absorb.
 
 **Batch them.** Each question stalls the board. Hold them to a checkpoint unless one
 blocks a running agent.
+
+**The exception that pays best: a slice's own decision, asked while its builder is
+still alive.** If you dispatched a decision-independent slice (step 2), that
+ticket's question is the one to ask *first* rather than hold — an answer that
+reaches a running agent costs one message, where the same answer after it
+finishes costs a resume, measured in this repo at 100–330 k regardless of how
+small the remaining work is. Measured 2026-09-03: a slice dispatched as "steps 1–2
+only, the ticket stays open" was widened to the full ticket by a single message,
+because the answer arrived before the builder stopped. Ask early, and say in the
+message which part of the original dispatch you are reversing.
+
+**Read the options out of the ticket yourself before you put them to the user.**
+This is the one relay where a subagent's paraphrase is not good enough, and it is
+not the same rule as _do not launder subagent claims_. A relayed *finding* can be
+marked unverified and travel safely; a relayed *option* cannot, because the user
+acts on it — a costing that drifts becomes the basis of a decision nobody can
+audit later. Cost is a few `sed` calls against the decision headings. Measured
+2026-09-03: the map's extraction was faithful and still corrected the
+orchestrator's own count on the way past, which is the argument for reading, not
+against it.
+
+**"Accept the baseline" is rarely zero work — check before you report it as
+closing anything.** An option that reads *do nothing* usually still leaves the
+ticket's unconditional steps standing. Measured 2026-09-03: a four-option decision
+was answered with the zero-work option, and the ticket's own Build still required
+amending an ADR "whichever option wins" and clearing an outstanding alert
+"whichever way this goes" — the second explicitly noting no option retires it
+retroactively, *do nothing included*. So the answer converted a blocked ticket
+into a small dispatchable one rather than closing it. Read the Build for steps
+that survive every option before telling the user a decision cost them nothing.
 
 **And hold a question until you can bring a measurement rather than a guess.**
 When the decision turns on a fact nobody has yet, asking now buys an opinion and

@@ -75,6 +75,58 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   found more than it was briefed, corrected the orchestrator, and cost 111 k with
   no reviewer at all.
 
+### Slice a blocked ticket
+
+The inverse of the section below, and the one that makes a decision-blocked board
+productive instead of idle. A ticket whose page forbids a builder from settling
+its open question is not therefore undispatchable — **the question usually blocks
+part of it, not all of it**, and the ticket often says which part.
+
+Three tells, all readable without loading the whole ticket:
+
+- **A Build step marked unconditional.** "Fix the positional-argument parse
+  **regardless of what is decided below**"; "required whichever option wins";
+  "whichever way this goes". The ticket has already done the separation for you.
+- **The ticket recommends an ordering.** One 2026-09-03 case read "do not move
+  Chromium; fix the classification (half two) first, since it is cheap, strictly
+  an improvement, and independent — then take half one as its own decision". That
+  is a dispatch plan written by the filer.
+- **A step whose deliverable is a measurement, not a build.** "Re-run job X and
+  record whether it goes green, because that single fact separates Option D from
+  a dead end." Do it yourself; it is one call and it converts the decision you owe
+  the user from an opinion into a number.
+
+Four things the dispatch prompt must then carry, and the first two are the ones a
+builder will otherwise get wrong:
+
+- **Say the ticket does NOT close, and that its status stays `ready`.** A builder
+  told to implement a Build section will close the ticket, because that is what
+  finishing means everywhere else.
+- **Say the boundary is the point**, and name the held question in the builder's
+  own words — quote the ticket's "do not settle it here" heading. A boundary given
+  without its reason reads as an arbitrary narrowing and gets helpfully exceeded.
+- **The unconditional half still earns a Log entry**, saying what landed and what
+  remains open pending a decision. Otherwise the next agent cannot tell a sliced
+  ticket from an untouched one.
+- **Ask the held decision immediately** — see _Batch them_ in the skill page. The
+  slice and the question are the same ticket, and the answer is only cheap while
+  the builder lives.
+
+**The trap, and it is not obvious.** A slice can *de facto answer* the question it
+was supposed to hold. Measured 2026-09-03: a ticket's unconditional step 2 was
+"reject an unknown flag with a non-zero exit", and its held question was whether to
+implement or delete a documented-but-dead flag. Landing step 2 turns that flag from
+a silent no-op into a hard error — which is most of what deleting it would do. The
+ticket half-noticed, saying step 2 "makes deleting the strictly safer of the two in
+the short term", and no one had drawn the conclusion. **So before dispatching a
+slice, ask what the unconditional half does to the held option**, and put it in the
+prompt as a thing to surface rather than to resolve: *if landing this forces a
+behavioural answer to the open question, say so as an open decision rather than
+picking one — I am the only participant who can put it to the user.* The builder is
+the one with the code in front of it and is best placed to see it; it will not
+raise it unless asked, because from inside the slice it looks like scope it was
+told to stay out of.
+
 ### Fold it in, or file it
 
 **The rule itself is repo-wide and lives in `docs/01-TICKETS.md`** — a ticket

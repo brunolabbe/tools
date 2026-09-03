@@ -43,6 +43,36 @@ What only you can supply, and what every builder prompt therefore carries:
   the whole directory by default; say the spec file. See [sizing.md](sizing.md)
   for the 20x this costs.
 
+### An answered decision has to be recorded even when you do not build it
+
+The case this loop had no step for, measured 2026-09-03. A slice was dispatched
+with its ticket's question held open; the user then answered it — and the answer
+was *bigger* than the branch, reversing an architectural decline documented in the
+service's own source. Widening the running builder into it would have destroyed the
+thing that made the slice dispatchable in the first place.
+
+**The scope call is easy and the bookkeeping is the part that gets dropped.** Keep
+the slice; give the large half its own branch, its own gate and its own reviewer.
+But an answer that is neither built nor written down **evaporates**, and the ticket
+is then actively misleading: its Build still describes the mechanism the decision
+just replaced, so the next agent builds the wrong half off stale text and nothing
+in the repo contradicts it.
+
+So when you hold an answer back from the build, spend the one message anyway — the
+builder is already editing that ticket, which makes this nearly free, where a
+future dispatch to record one decision is a full round. Ask it to:
+
+- **Record the question, the answer and the reason** in the ticket's own settled-
+  decision form, unmistakably answered rather than still open.
+- **Mark the superseded Build step**, without rewriting it into a new brief — that
+  is the next agent's job, with the deployment in front of them.
+- **Carry the cost that came with the answer.** The objection the chosen option has
+  to meet travels with it, or whoever builds it rediscovers it from scratch.
+- **Say `status` stays `ready`.** The half is decided, not done.
+
+And say **do not implement any of it** in those words. An agent handed a decision
+reads it as work.
+
 ## Dispatching a gate — the highest-leverage thing you write
 
 Gate yield tracked prompt specificity, not gate number. In the reference session
