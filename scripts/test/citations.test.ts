@@ -7,9 +7,11 @@ import {
   checkCitations,
   extractCitations,
   extractSections,
+  FLAGS,
   makeResolver,
   parseArgs,
   selectSection,
+  USAGE,
 } from "../citations.mjs";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
@@ -281,6 +283,24 @@ test("a --section name matching two sections fails and names them both", () => {
   expect(ambiguous.stderr).toMatch(/Nothing here/);
 
   cleanup();
+});
+
+/**
+ * Done-when 3 says the docblock usage line, `main()`'s usage string and the
+ * flags actually parsed all name the same set — and until now that was checked
+ * once, by hand, and nothing would fail if a later edit touched one without the
+ * others. This is the gate's own low finding, folded in because it is cheap and
+ * ties directly to an acceptance line rather than being general tidying.
+ */
+const flagsIn = (text: string) => [...text.matchAll(/--[a-z]+/g)].map((m) => m[0]).toSorted();
+
+test("the docblock usage line, USAGE, and FLAGS name the same set of flags", () => {
+  const source = fs.readFileSync(CLI, "utf8");
+  const docblockLine = /^\s*\*\s+node scripts\/citations\.mjs\b.*$/m.exec(source)?.[0];
+  expect(docblockLine).toBeDefined();
+
+  expect(flagsIn(docblockLine ?? "")).toEqual(flagsIn(USAGE));
+  expect(flagsIn(USAGE)).toEqual([...FLAGS.keys()].toSorted());
 });
 
 /**

@@ -303,3 +303,39 @@ becomes a loud error rather than the silent no-op it is now.
   it. No record in the repo has one. Inventing a disambiguator (an index? the
   first?) for a case with no instance looked worse than the loud failure, and
   "the first" is the rubber-stamp shape this ticket is about.
+
+- **2026-09-03 (gate fold-ins)** — Two low findings from the gate; one folded
+  in, one declined with reasoning for whoever inherits it.
+
+  **Folded in: `FLAGS`, `USAGE` and the docblock usage line are now tied
+  together by a test**, not just by hand-checking. This is not general
+  tidying — it is this ticket's own defect class. Repo-14 exists because a
+  usage line advertised a flag the code did not implement; shipping the fix
+  for that while leaving the same three-way agreement unenforced re-arms the
+  same gun for the next flag someone adds. `FLAGS` is now exported alongside
+  `USAGE`, and `scripts/test/citations.test.ts` extracts the `--flag` tokens
+  from the docblock's `Usage:` line, from `USAGE`, and from `[...FLAGS.keys()]`
+  and asserts they match. Checked that it actually catches drift, not just that
+  it passes: dropped `[--section <name>]` from `USAGE` alone and reran the
+  single test — it failed, restored, green again.
+
+  **Declined: the output header still has no unfiltered-total denominator next
+  to a filtered count.** `citations.mjs`'s header line
+  (`N citations in <record>[ under "X" (record lines A-B)], resolved against …`)
+  already prints the scope inline on _every_ invocation, filtered or not — a
+  reader cannot get a number back without also seeing the word `under` and a
+  heading name on the same line if one was given. Adding the unfiltered total
+  next to it would answer a question nobody asked with this flag: unlike the
+  filed defect, where the same output was produced with and without `--section`
+  and the reader had no way to tell, a filtered run today looks visibly
+  different from an unfiltered one. Left as-is; repo-18 inherits this reasoning,
+  not an open question, if it wants a different header for its own reasons.
+
+  **Why the ticket's own framing hid the third path.** "Implement or delete" are
+  the two states of the _feature_; they are not the two states of the _code_,
+  and the code had a third: a flag can be a member of the parser's known set
+  without being wired to any effect. Step 2 (reject unknown flags) collapses
+  onto the feature framing only if "known to the parser" and "does something"
+  are the same axis — they are not, and treating them as one axis is what made
+  rejecting `--section` read as an implicit "delete" instead of a third, orthogonal
+  state that answers neither.

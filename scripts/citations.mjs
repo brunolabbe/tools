@@ -325,7 +325,7 @@ export function selectSection(sections, name) {
 }
 
 /** Every flag this CLI accepts, mapped to the option it sets. All take a value. */
-const FLAGS = new Map([
+export const FLAGS = new Map([
   ["--rev", "rev"],
   ["--section", "section"],
 ]);
