@@ -127,13 +127,26 @@ you are there.
    side ends its turn after it sends, and `SendMessage` wakes the other back into
    its own context.
 
-   **Sideways wakes work; upward ones do not.** Your builder and reviewer wake
-   each other unaided. **You are not woken when a child of yours finishes** —
-   measured three times on 2026-09-02, each time sitting `completed` beside a
-   finished agent until something outside nudged you. There is no completion
-   signal to wait for. If nothing external drives you, the loop stops here and
-   looks finished. Say so in your report rather than letting a stalled batch read
-   as a quiet one. So **keep the reviewer's agent record and worktree** until the
+   **Sideways wakes work.** Your builder and reviewer wake each other unaided —
+   confirmed again 2026-09-03: a builder that needed the reviewer's record woke it
+   from `completed`, and it came back with the text re-resolved against the new
+   tip, with no orchestrator hop.
+
+   **Upward wakes: the two sessions that measured this disagree, so check rather
+   than plan around either.** 2026-09-02 recorded, three times, that you are *not*
+   woken when a child finishes — sitting `completed` beside a finished agent until
+   something outside nudged you, with "no completion signal to wait for".
+   **2026-09-03 measured the opposite, six or more times**: every finishing
+   subagent delivered a `<task-notification>` that woke the orchestrator
+   unprompted, and a reviewer's `SendMessage` to `main` arrived the same way. Both
+   sessions ran this skill in this repo. Whether the harness changed between them
+   or the earlier reading was wrong cannot be settled from inside either, so
+   **assume nothing and look**: `ListAgents` costs one call and says who is
+   `running` against who is `completed`. Plan the batch so a missed wake is
+   survivable, and if you do find yourself idle beside finished work, say so in
+   your report rather than letting a stalled batch read as a quiet one.
+
+   So **keep the reviewer's agent record and worktree** until the
    exchange is over, which is not the same as keeping it alive; nothing is. A
    builder that comes back "this does not reproduce" is asking a question only
    that reviewer can answer. See
