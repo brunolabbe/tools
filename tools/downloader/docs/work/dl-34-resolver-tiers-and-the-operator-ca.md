@@ -120,10 +120,22 @@ otherwise get built.
 **The cost came with the answer and is not a reason to re-open it.** Whoever
 builds half one has to meet this objection rather than rediscover it:
 
-- **Every HTTPS page Chromium loads crosses this process in plaintext.** That is
-  a strictly larger exposure than the ffmpeg case dl-27 argued: ffmpeg fetches
-  media from a CDN, and Chromium fetches whatever the page is — including, on a
-  page behind a login the operator supplied cookies for, that session.
+- **Every HTTPS page Chromium loads crosses this process in plaintext, and that
+  is a larger exposure than ffmpeg's — but not for the reason first written
+  here.** Gate finding D, corrected: the first draft framed the session cookie
+  as new to Chromium's exposure, and it is not. `CLAUDE.md:115` requires
+  `RequestContext` replayed on every fetch, unconditionally, segments included;
+  `engine/src/ffmpeg/args.ts:162` calls `buildRequestContextArgs` on every
+  ffmpeg invocation with no gate; `Cookie` and `Authorization` are absent from
+  that function's `DROPPED_HEADERS`
+  (`engine/src/ffmpeg/headers.ts:28-42`); and `ffmpegTlsIntercept` defaults to
+  `true` (`downloader/api/src/config.ts:377`). So a captured session cookie already
+  crosses this process in plaintext through ffmpeg's terminating proxy, today,
+  by default — moving the tiers changes nothing about that half. What is
+  actually larger is **breadth**: a whole rendered page — its scripts, its
+  other subresources, whatever third-party origins it talks to — is a bigger
+  surface than the handful of manifest and segment URLs a `ProbeResult` names,
+  even though both can carry the same cookie.
 - **`downloader/api/src/server.ts:96-104` declined it in the first person**, and the comment is
   still there and still has to be rewritten by the branch that does this: _"a
   `CONNECT` is tunnelled, the origin's own certificate reaches them, and nothing
@@ -222,8 +234,14 @@ CertificateVerifyError(…))`.
     classifier in `guarded-fetch.ts`. Nothing here duplicates it: the three
     vocabularies are disjoint — OpenSSL codes off a structured `cause`,
     Chromium's `net::` tokens in a message, Python's `ssl` text on stderr — so
-    there is no shared matcher to lift, only the shared operator copy, which is
-    one constant in `resolvers/src/tls-verification.ts`.
+    there is no shared matcher to lift. **Correction, gate finding C:** what
+    follows in the first version of this entry said the operator copy was
+    shared by all three; it is shared by two. `guarded-fetch.ts`'s raise
+    (`api/src/guarded-fetch.ts:122`) carries no `hint` at all — correctly, since
+    the direct tier gets the operator's CA directly and a refusal there is not
+    a reachability gap the hint needs to explain. `TIER_TRUST_STORE_HINT`
+    (`resolvers/src/tls-verification.ts`) is the constant shared by the two
+    tiers this ticket is actually about.
   - **Step 2 is not only a copy change, and the ticket does not say so.**
     `registry.ts:71` falls through on `NO_MEDIA_FOUND` and on nothing else, so
     moving yt-dlp's verdict off that code **stops the resolver chain**. That is
@@ -308,6 +326,107 @@ in`, `in your country` or `429` in that buffer can be a fact about the
   ffmpeg-TLS lines are all `warn` for exactly this shape of fact, so it matches
   its neighbours. Flagged rather than buried in case the gate reads it the other
   way.
+
+- **2026-09-03 (same day, gate exchange)** — CONCERNS from the first gate, two
+  `med` findings and two `low`. Both `med` findings reproduced; both fixed here.
+  Both `low` findings reproduced and folded in as doc corrections above.
+
+  **Finding A, fixed: `ytdlpCertificateMarker` matched an ambiguous phrase.**
+  The gate found that the generic "certificate verify failed" match also fires
+  on `"unable to get local issuer certificate"` — Python's message for an
+  **incomplete chain** (server sent the leaf, not the intermediate), which has
+  nothing to do with a private root. It reproduced the regex match; I went
+  further and produced the message itself, live: a two-level chain (root →
+  intermediate → leaf) built for this exchange, served with only the leaf, gives
+  the real yt-dlp binary the exact stderr `…certificate verify failed: unable
+to get local issuer certificate (_ssl.c:1032)…`. I also pointed the real
+  Chromium this repo pins at the same fixture with no AIA data available, and it
+  fails identically to the self-signed case (`ERR_CERT_AUTHORITY_INVALID`) —
+  expected, since AIA chasing needs something to chase, and not evidence
+  against the gate's claim, which is about a certificate a real CA issued.
+  Chromium's own AIA recovery was **not** exercised — building a correct
+  Authority Information Access extension and serving the intermediate at its
+  URL is next week's fixture — so that half of the finding stays at the gate's
+  own evidentiary bar: reasoned from well-documented client behaviour, not
+  observed here, same bar as the `curl_cffi` caveat above.
+
+  Fixed by excluding `"unable to get local issuer certificate"` and
+  `"unable to get issuer certificate"` from the match even when the generic
+  phrase is also present — `ytdlpCertificateMarker` in
+  `resolvers/src/tls-verification.ts`, tests in the new
+  `resolvers/test/tls-verification.test.ts` and a `tls-incomplete-chain`
+  fixture mode in `fake-ytdlp.mjs` carrying the verbatim measured stderr. Red
+  before green at both layers: the raw function and the real resolver via
+  `ytdlp.test.ts`, each reverted and each caught.
+
+  **Why the ambiguity was invisible from inside the change, which is worth more
+  than the fix.** The Chromium side has a closed, named vocabulary —
+  `net_error_list.h`'s `ERR_CERT_*` range — so auditing it member-by-member for
+  an exception was a matter of reading a header file, and I did that once and
+  found `ERR_CERTIFICATE_TRANSPARENCY_REQUIRED`. yt-dlp's stderr has no such
+  enum: it is free English text, and the only instance of it I had ever
+  produced was the one self-signed fixture from the first build round. I
+  verified "this string means a certificate verify failure" and stopped, never
+  asking "what else does OpenSSL's verify-failed wrapper wrap around that I
+  have not produced" — because there was no list to iterate, the audit had to
+  be imagined rather than read, and I substituted the discipline stated in this
+  same file's own docblock ("under-matching is the safe direction") for having
+  actually applied it below the top-level "is this a cert failure" decision. A
+  single fixture is a demonstration that a classifier works, never a survey of
+  what else it might match; the gate is what supplied the second case.
+
+  **The sub-case the narrowing does not solve, and it is an accepted cost, not
+  an oversight.** An operator whose origin genuinely has an incomplete chain,
+  where the browser tier _also_ fails (no reachable AIA data, or a corporate
+  proxy that strips it) now gets `NO_MEDIA_FOUND` — the pre-dl-34 diagnosis,
+  no better than before — rather than a `TLS_VERIFICATION_FAILED` naming the
+  cause. Under-matching accepts this on purpose: the alternative is telling
+  every operator hitting an ordinary public-site misconfiguration to check a
+  trust setting that has nothing to do with their problem, which is the exact
+  failure mode half two exists to fix. `TIER_TRUST_STORE_HINT`'s docblock and
+  the marker's own comment both say so; this is the line that names the cost.
+
+  **Finding D, fixed: the Decision section's cookie argument was backwards.**
+  I had framed a captured session cookie reaching Chromium's traffic as new
+  exposure. `CLAUDE.md:115` requires `RequestContext` replayed on every fetch
+  unconditionally, `engine/src/ffmpeg/args.ts:162` calls
+  `buildRequestContextArgs` on every ffmpeg invocation with no gate, `Cookie`
+  and `Authorization` are absent from that function's `DROPPED_HEADERS`
+  (`engine/src/ffmpeg/headers.ts:28-42`), and `ffmpegTlsIntercept` defaults to
+  `true` (`downloader/api/src/config.ts:377`) — all four re-verified here, not
+  transcribed. So a captured cookie already crosses this process in plaintext
+  through ffmpeg's existing terminating proxy, by default, today. The
+  conclusion (Chromium's exposure is larger) still holds, on breadth rather
+  than on cookies: a whole rendered page is a bigger surface than the handful
+  of URLs a `ProbeResult` names. The Decision section above is corrected in
+  place, not narrated only here, since half one's builder reads that section
+  and would otherwise inherit the wrong objection to answer.
+
+  **Finding B, fixed: `TIER_TRUST_STORE_HINT` overclaimed causation for
+  certificate-policy codes.** `ERR_CERT_WEAK_SIGNATURE_ALGORITHM`,
+  `ERR_CERT_VALIDITY_TOO_LONG`, `ERR_CERT_NON_UNIQUE_NAME`,
+  `ERR_CERT_NAME_CONSTRAINT_VIOLATION` and `ERR_CERT_SYMANTEC_LEGACY` all match
+  the `net::ERR_CERT_*` prefix (confirmed by running the matcher against each)
+  and are correctly coded `TLS_VERIFICATION_FAILED`, but they are policy
+  violations a trust anchor does not change, and the hint asserted "fails here
+  with EGRESS_CA_FILE set and correct" unconditionally. Reworded to a
+  conditional ("if this is an origin chaining to a private root…") that points
+  at `details.reason` for the actual cause rather than asserting one. Asserted
+  in the new unit test.
+
+  **Finding C, fixed: a Log sentence overstated coverage by one.** Corrected in
+  place above, next to the claim it corrects, rather than only here.
+
+  **What changed nothing.** The premises this ticket rests on — that
+  `TLS_VERIFICATION_FAILED` needed no new code, that both real failure strings
+  were now produced rather than inherited, that the yt-dlp behaviour change is
+  real and tested at the registry level — were not touched by any finding; the
+  gate's own acceptance table found Done-when 1 `proven` for both tiers and
+  Done-when 3 `proven`, and said so before any of the above was fixed.
+
+  **Gates re-run after the fix**, in this worktree: `npm run format`,
+  `npm run check` (exit 0), `npm test -- --project downloader`. Numbers in the
+  final report below.
 
 - **2026-09-01** — Filed from dl-29's branch, alongside dl-35, on the precedent
   of dl-32/dl-33 riding dl-23's. Not folded into dl-29: it is a different tool

@@ -65,6 +65,22 @@ switch (mode) {
     process.exitCode = 1;
     break;
   }
+  // A gate finding on dl-34, produced rather than reasoned. Verbatim, from a
+  // real two-level chain (root -> intermediate -> leaf) served with only the
+  // leaf, against the real yt-dlp binary on 2026-09-03 — deliberately distinct
+  // from "tls" above, whose reason is "self-signed certificate" rather than
+  // this one's "unable to get local issuer certificate". The two look almost
+  // identical on the wire and mean different things: this is an *incomplete
+  // chain*, which a browser can frequently repair itself (AIA chasing) and
+  // urllib's default validation cannot. It must NOT classify as
+  // TLS_VERIFICATION_FAILED — see `ytdlpCertificateMarker`'s exclusion list.
+  case "tls-incomplete-chain": {
+    process.stderr.write(
+      "ERROR: [generic] Unable to download webpage: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032) (caused by CertificateVerifyError('[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')); please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U\n",
+    );
+    process.exitCode = 1;
+    break;
+  }
   // A refusal whose stderr also trips every looser branch in `classifyFailure`.
   // Contrived on purpose: it pins the *order* of the checks, which is the part
   // a later edit could silently undo.

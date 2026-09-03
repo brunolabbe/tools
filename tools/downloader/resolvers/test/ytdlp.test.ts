@@ -250,6 +250,18 @@ describe("the spawn path", () => {
       });
     });
 
+    // Gate finding on dl-34. "unable to get local issuer certificate" is
+    // Python's message for an *incomplete chain*, not for an untrusted root —
+    // and it is ambiguous between a private-root deployment and an ordinary
+    // public-site misconfiguration a browser tier frequently repairs itself
+    // (AIA chasing). It must degrade exactly as it did before this ticket,
+    // not hard-stop the chain on a diagnosis this tier cannot actually make.
+    test("an incomplete chain is left as NO_MEDIA_FOUND, not hard-stopped", async () => {
+      await expect(
+        fakeResolver("tls-incomplete-chain").resolve(SOURCE, options()),
+      ).rejects.toMatchObject({ code: "NO_MEDIA_FOUND" });
+    });
+
     test("outranks the looser source-fact matches in the same stderr", async () => {
       // `drm`, `sign in` and `in your country` are substring matches on the
       // same buffer. A handshake that failed means yt-dlp never read the page,

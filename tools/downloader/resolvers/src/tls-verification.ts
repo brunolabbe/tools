@@ -29,9 +29,18 @@
  * reading the service's log — and not the page, where the name of an
  * environment variable is noise. The web UI's finished copy for
  * `TLS_VERIFICATION_FAILED` already says the user-facing half.
+ *
+ * **Conditional on purpose, not asserted.** A gate on this ticket (2026-09-03)
+ * found that an earlier draft stated flatly that the origin "fails here with
+ * EGRESS_CA_FILE set and correct" — true for an untrusted issuer, false for a
+ * certificate policy violation (weak signature, name constraints, an excess
+ * validity window) that `chromiumCertificateError`'s prefix also matches and
+ * that no trust anchor changes. `details.reason` carries the exact token for
+ * whoever needs the distinction; this text does not have it and should not
+ * claim to.
  */
 export const TIER_TRUST_STORE_HINT =
-  "EGRESS_CA_FILE does not reach this tier. It configures this process's own fetches, ffmpeg, and the egress proxy that verifies on ffmpeg's behalf — but Chromium and yt-dlp are handed a tunnelling proxy (dl-27) and verify against their own trust stores, so an origin chaining to a private root fails here with EGRESS_CA_FILE set and correct. Naming the failure is all this tier can do about it; see tools/downloader/docs/work/dl-34-resolver-tiers-and-the-operator-ca.md.";
+  "EGRESS_CA_FILE does not reach this tier. It configures this process's own fetches, ffmpeg, and the egress proxy that verifies on ffmpeg's behalf — but Chromium and yt-dlp are handed a tunnelling proxy (dl-27) and verify against their own trust stores. If this is an origin chaining to a private root, EGRESS_CA_FILE will not fix it here even when set and correct; see details.reason for the exact cause, since some certificate failures are policy violations no trust setting changes. See tools/downloader/docs/work/dl-34-resolver-tiers-and-the-operator-ca.md.";
 
 /**
  * Chromium names the cause in the message Playwright re-throws, and the whole
@@ -85,8 +94,52 @@ const YTDLP_CERTIFICATE_MARKERS: readonly string[] = [
   "ssl certificate problem",
 ];
 
+/**
+ * Excluded from the match above even though they contain it, because a gate on
+ * this ticket (2026-09-03) found the phrase ambiguous in exactly the direction
+ * `TIER_TRUST_STORE_HINT`'s docblock warns about: it is Python's `ssl` message
+ * for an **incomplete chain** — the server sent the leaf and not the
+ * intermediate — and it fires on both a private-root deployment and an
+ * ordinary public-site misconfiguration that has nothing to do with one.
+ *
+ * The two are not equally likely to be told apart by falling through. Chrome
+ * (and most modern browsers) does AIA chasing: given a leaf certificate whose
+ * Authority Information Access extension names a CA-issuers URL — which is
+ * near-universal for a publicly trusted certificate, required by the CA/Browser
+ * Forum baseline requirements — Chromium fetches the missing intermediate
+ * itself and completes the chain, where `urllib`'s default validation does not
+ * and never will. So the *browser tier this failure would fall through to* is
+ * disproportionately likely to succeed at exactly this one, in a way it is not
+ * for a genuinely untrusted root. Measured, not merely reasoned, on both
+ * sides of that claim: a two-level chain (root → intermediate → leaf) built
+ * for this repro, served with only the leaf, reproduces the exact stderr
+ * above with `unable to get local issuer certificate` in place of
+ * `self-signed certificate` against the real binary; the same origin with no
+ * AIA data available fails Chromium identically to the self-signed case
+ * (`ERR_CERT_AUTHORITY_INVALID`) — which is expected, since chasing needs
+ * something to chase, and is not evidence against the claim, which is about
+ * a certificate a real CA issued rather than one this repo minted for the
+ * test. Chromium completing the chase itself was not exercised: building a
+ * correct AIA extension and serving the intermediate at its URL is next
+ * week's fixture, not this afternoon's, and the regex fix does not need it —
+ * under-matching this phrase is safe (it leaves the pre-dl-34 fallthrough
+ * exactly as it was) whether or not AIA chasing is what saves the retry.
+ *
+ * A private-root deployment whose origins genuinely have an incomplete chain
+ * is not told about it by this exclusion; it degrades to the browser tier and,
+ * per the same argument, is not disproportionately likely to be saved by that
+ * either — which is the case under-matching accepts.
+ */
+const YTDLP_AMBIGUOUS_CHAIN_MARKERS: readonly string[] = [
+  "unable to get local issuer certificate",
+  "unable to get issuer certificate",
+];
+
 /** The marker yt-dlp used, for `details.reason`. */
 export function ytdlpCertificateMarker(lowercasedStderr: string): string | undefined {
+  if (YTDLP_AMBIGUOUS_CHAIN_MARKERS.some((marker) => lowercasedStderr.includes(marker))) {
+    return undefined;
+  }
   for (const marker of YTDLP_CERTIFICATE_MARKERS) {
     if (lowercasedStderr.includes(marker)) return marker;
   }
