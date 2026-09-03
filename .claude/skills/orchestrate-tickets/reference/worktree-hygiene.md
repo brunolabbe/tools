@@ -125,6 +125,43 @@ recovery is expensive.
   capturing output rather than at the end of its review, so a second interruption
   could not strand it on `origin`.
 
+### The worktree an agent is in is not the tree it just tested
+
+Two independent sightings on 2026-09-03, in the same session, from different
+agents — which is why this is a section and not a footnote. Both produce a
+**green run that proves nothing**, and neither announces itself.
+
+**Running from the shared checkout.** A builder ran `vitest` from
+`/workspaces/tools` while its edits were in
+`.claude/worktrees/agent-<id>/` — three directories away. The run reported **35
+passing tests** for the file it thought it was testing, and a mutation that
+should have gone red stayed green. It caught this itself and re-ran everything
+from the worktree; nothing in the tooling would have told it.
+
+**Testing a worktree with no `dist`.** An orchestrator timing a directory got
+**2 s** and a plausible-looking result. The real figure was 28 s: 17 of 18 files
+had failed to import and **23 tests ran instead of 322**, because
+`worktree-farm.sh` had been run but `npm run build` had not. The farm script says
+this in its own output — "without dist, suites fail with packageEntryFailure" —
+and it is still easy to walk past, because the broken run is the fast one and the
+fast one is the one that confirms whatever you were hoping.
+
+Both collapse to one instruction worth putting in every dispatch and every gate
+prompt:
+
+- **Read the test count on every run, never the wall clock alone.** A suite that
+  cannot load is the fastest suite there is, and a suite that ran 23 of 322 tests
+  looks exactly like a suite that ran.
+- **Print the resolved path before believing a result** in any session that has
+  more than one tree on disk — which is every orchestrated batch.
+- **`npm run build` after the farm, before the first timing**, not just before
+  the first suite.
+
+This is the same family as the entries in the repo's own note on tests that
+measure the sandbox rather than the code. The distinguishing feature is that the
+sandbox failures are *silent and flattering*: they do not error, they agree with
+you.
+
 ### Give a new worktree its dependencies without installing them
 
 A fresh worktree has no `node_modules`, so every agent pays `npm install` plus
