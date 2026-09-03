@@ -28,11 +28,11 @@
  * record to the commit the gate actually reviewed is the cheaper answer to a fix
  * that moved the very lines the record cites — cheaper than remapping them.
  *
- * `--section` is **accepted and not implemented**, and says so on stderr when it
- * is used. Whether it gets built or dropped is repo-14's open question and is
- * deliberately not settled here: rejecting it would be the “dropped” answer
- * shipped early, and accepting it in silence is the defect that ticket exists
- * for. Saying so out loud is the only treatment that commits to neither.
+ * `--section` narrows the check to one heading's span — `--section Review` on a
+ * gate record with four `##` sections. The name is matched case-insensitively,
+ * exactly first and then by prefix. A name that matches nothing, or that matches
+ * more than one section, is an **error**: a quiet whole-file answer wearing the
+ * label of a filtered one is the failure this flag was reported for.
  */
 
 import { execFileSync } from "node:child_process";
@@ -227,6 +227,103 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
   });
 }
 
+/**
+ * The heading spans of a record, in document order.
+ *
+ * A heading owns every line down to the next heading of the same level or
+ * higher, so `## Review` carries its `###` subsections with it. The alternative
+ * stops at the first subheading and silently drops the citations under it, which
+ * is this script's own failure mode reintroduced by its own flag.
+ *
+ * **Fenced code is not searched for headings**, and that is not defensive
+ * coding: records here quote changelog fragments, and 40 heading-looking lines
+ * sit inside fences across the work records as measured when this was written.
+ * Reading `### Fixes` out of a quoted changelog would end the real section early
+ * and drop every citation after it, reporting a smaller count as if it were the
+ * answer.
+ *
+ * Only *heading detection* skips fences. `extractCitations` still reads every
+ * line exactly as it did before, so `--section` can never change which citations
+ * a record has — only which of them are reported.
+ *
+ * @param {string} markdown
+ * @returns {{title: string, level: number, start: number, end: number}[]}
+ */
+export function extractSections(markdown) {
+  const lines = markdown.split("\n");
+  /** @type {{title: string, level: number, start: number}[]} */
+  const headings = [];
+  /** @type {{char: string, length: number} | null} */
+  let fence = null;
+
+  lines.forEach((text, index) => {
+    // A closing fence matches the opening one's character and is at least as
+    // long, which is what lets a fenced block quote a shorter fence.
+    const mark = /^ {0,3}(`{3,}|~{3,})/.exec(text);
+    if (mark) {
+      const char = mark[1][0];
+      const length = mark[1].length;
+      if (fence === null) fence = { char, length };
+      else if (char === fence.char && length >= fence.length) fence = null;
+      return;
+    }
+    if (fence !== null) return;
+
+    const heading = /^(#{1,6})[ \t]+(.*\S)[ \t]*$/.exec(text);
+    if (heading) headings.push({ title: heading[2], level: heading[1].length, start: index + 1 });
+  });
+
+  return headings.map((h, i) => {
+    const next = headings.slice(i + 1).find((other) => other.level <= h.level);
+    return { ...h, end: next ? next.start - 1 : lines.length };
+  });
+}
+
+/** A heading as it appears in the record, for an error message that can be copied. */
+const showHeading = (s) => `${"#".repeat(s.level)} ${s.title}`;
+
+/**
+ * Pick the one section a `--section` name refers to.
+ *
+ * Case-insensitive, exact before prefix. Headings here read
+ * `## Open question — do not settle it here` and `### Gate — 2026-09-01`, and
+ * demanding the em dash on a command line would make the flag unusable; exact
+ * winning outright is what keeps `Log` meaning `## Log` in a record that also
+ * has `## Logging notes`.
+ *
+ * **A name matching more than one section fails** rather than taking the first
+ * — the rule `makeResolver` already applies to an ambiguous bare filename, for
+ * the same reason: quietly picking one is how a check becomes a rubber stamp.
+ *
+ * **A name matching nothing fails too**, and that is the one worth arguing.
+ * `0/0 resolve` with exit 0 is already the honest output for a section that
+ * exists and holds no citations, so a silent miss would be *indistinguishable
+ * from a correct result*: a typo'd section name would report success having
+ * checked nothing at all. That is a worse version of the wrong-denominator
+ * failure this flag was reported for, reached through the fix for it.
+ *
+ * @param {ReturnType<typeof extractSections>} sections
+ * @param {string} name
+ */
+export function selectSection(sections, name) {
+  const wanted = name.trim().toLowerCase();
+  const exact = sections.filter((s) => s.title.toLowerCase() === wanted);
+  const matches =
+    exact.length > 0 ? exact : sections.filter((s) => s.title.toLowerCase().startsWith(wanted));
+
+  const [only] = matches;
+  if (only && matches.length === 1) return only;
+  if (matches.length === 0) {
+    throw new Error(
+      `no section matches "${name}". This record has:\n  ${sections.map(showHeading).join("\n  ") || "(no headings)"}`,
+    );
+  }
+  throw new Error(
+    `"${name}" matches ${matches.length} sections:\n  ${matches.map(showHeading).join("\n  ")}\n` +
+      `Name one of them exactly.`,
+  );
+}
+
 /** Every flag this CLI accepts, mapped to the option it sets. All take a value. */
 const FLAGS = new Map([
   ["--rev", "rev"],
@@ -288,19 +385,19 @@ export function parseArgs(argv) {
 function main() {
   const { file, rev, section } = parseArgs(process.argv.slice(2));
 
-  // Loud, because the silence is the whole ticket: a reader who believes they
-  // scoped the check to one section gets a whole-file pass wearing the label of
-  // a filtered one, and every count they then quote has the wrong denominator.
-  if (section !== null) {
-    process.stderr.write(
-      "warning: --section is not implemented. Nothing was filtered — this run covers the whole\n" +
-        "record. See repo-14, where whether the flag gets built or dropped is still open.\n\n",
-    );
-  }
-
   const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   const markdown = fs.readFileSync(file, "utf8");
-  const citations = extractCitations(markdown);
+
+  // Selected by line span rather than by re-extracting from a slice of the
+  // markdown. `extractCitations` carries state across lines — a table's header
+  // row sets the column map for the rows under it — so extracting from a slice
+  // that began below a header would under-report the table silently. Filtering
+  // afterwards leaves the extraction seeing exactly the document it always saw.
+  const chosen = section === null ? null : selectSection(extractSections(markdown), section);
+  const citations = extractCitations(markdown).filter(
+    (c) => chosen === null || (c.line >= chosen.start && c.line <= chosen.end),
+  );
+
   const results = checkCitations(
     citations,
     makeReader(repo, rev),
@@ -309,8 +406,13 @@ function main() {
   const bad = results.filter((r) => !r.ok);
 
   const where = rev ? `against ${rev}` : "against the working tree";
+  // The scope is named next to the count, so a filtered number can never be read
+  // against the wrong denominator without the denominator being on screen.
+  const scope = chosen
+    ? ` under "${chosen.title}" (record lines ${chosen.start}-${chosen.end})`
+    : "";
   process.stdout.write(
-    `${citations.length} citations in ${path.relative(repo, path.resolve(file))}, resolved ${where}\n\n`,
+    `${citations.length} citations in ${path.relative(repo, path.resolve(file))}${scope}, resolved ${where}\n\n`,
   );
 
   for (const r of results) {

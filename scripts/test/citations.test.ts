@@ -3,7 +3,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { checkCitations, extractCitations, makeResolver, parseArgs } from "../citations.mjs";
+import {
+  checkCitations,
+  extractCitations,
+  extractSections,
+  makeResolver,
+  parseArgs,
+  selectSection,
+} from "../citations.mjs";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(REPO, "scripts", "citations.mjs");
@@ -151,31 +158,129 @@ test("the CLI resolves the ticket rather than a file named after the sha, in eit
 });
 
 /**
- * `--section` is repo-14's open question — implement it or drop it — and this
- * branch settles neither. What it settles is that the flag stops lying: still
- * accepted, still does nothing, and now says so on stderr. The byte-identical
- * stdout is the ticket's own reproduction, kept deliberately and announced
- * instead of silent. Asserted so that either resolution has to come through this
- * test rather than past it.
+ * A record with citations in more than one section, so a filtered run can be
+ * asserted to be *strictly* smaller than an unfiltered one rather than merely
+ * equal to it — which is the whole failure this flag had.
+ *
+ * The fenced `## Log` is load-bearing. Records here quote changelog fragments
+ * in code blocks: measured across every record under `docs/work`, 40
+ * heading-looking lines sit inside fences. A splitter that took them for
+ * headings would end `## Review` early and silently drop the citations after
+ * it, so this fixture makes that failure visible as a smaller count.
  */
-test("the CLI says --section did nothing rather than filtering silently", () => {
+const TWO_SECTION_RECORD = [
+  "# Record",
+  "",
+  "## Review",
+  "",
+  "Broken at `scripts/citations.mjs:1`.",
+  "",
+  "```md",
+  "## Log",
+  "A quoted heading, not a real one.",
+  "```",
+  "",
+  "Also `scripts/status.mjs:1`.",
+  "",
+  "### Nested under Review",
+  "",
+  "Nested at `scripts/commit-message.mjs:1`.",
+  "",
+  "## Log",
+  "",
+  "Elsewhere at `scripts/citations.mjs:2`.",
+  "",
+  "## Nothing here",
+  "",
+  "No citations at all.",
+  "",
+].join("\n");
+
+/** Write the fixture to a fresh temp dir and hand back its path plus a cleanup. */
+function withRecord(body: string): { record: string; cleanup: () => void } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "citations-"));
   const record = path.join(dir, "ticket.md");
-  fs.writeFileSync(record, "## Review\n\nFine at `scripts/citations.mjs:1`.\n");
+  fs.writeFileSync(record, body);
+  return { record, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
 
-  const plain = spawnSync("node", [CLI, record], { cwd: REPO, encoding: "utf8" });
-  const scoped = spawnSync("node", [CLI, "--section", "Log", record], {
-    cwd: REPO,
-    encoding: "utf8",
-  });
+const run = (...argv: string[]) =>
+  spawnSync("node", [CLI, ...argv], { cwd: REPO, encoding: "utf8" });
 
-  expect(plain.stderr).toBe("");
-  expect(scoped.status).toBe(0);
-  expect(scoped.stdout).toBe(plain.stdout);
-  expect(scoped.stderr).toMatch(/--section is not implemented/);
-  expect(scoped.stderr).toMatch(/Nothing was filtered/);
+/**
+ * Acceptance 3. A filtered run reports strictly fewer citations than an
+ * unfiltered one, and `## Review` carries its `###` subsection with it — the
+ * alternative would drop those citations, which is the failure this script
+ * exists to prevent, reintroduced by its own new flag.
+ */
+test("--section narrows the check to one heading's span, subsections included", () => {
+  const { record, cleanup } = withRecord(TWO_SECTION_RECORD);
 
-  fs.rmSync(dir, { recursive: true, force: true });
+  const all = run(record);
+  expect(all.status).toBe(0);
+  expect(all.stdout).toMatch(/4\/4 resolve/);
+
+  // Three, not one: the fenced `## Log` is not a heading. And not four: `## Log`
+  // proper is outside the span.
+  const review = run(record, "--section", "Review");
+  expect(review.status).toBe(0);
+  expect(review.stdout).toMatch(/3\/3 resolve/);
+  expect(review.stdout).toMatch(/commit-message\.mjs:1/);
+  expect(review.stdout).not.toMatch(/citations\.mjs:2/);
+
+  const log = run(record, "--section", "Log");
+  expect(log.status).toBe(0);
+  expect(log.stdout).toMatch(/1\/1 resolve/);
+  expect(log.stdout).toMatch(/citations\.mjs:2/);
+
+  // The scope is named in the output, so a count can never be read against the
+  // wrong denominator without the denominator being on screen next to it.
+  expect(log.stdout).toMatch(/under "Log"/);
+
+  cleanup();
+});
+
+/**
+ * The sub-question the ticket argued and this settles the same way, for a reason
+ * the ticket did not give: `0/0 resolve` with exit 0 is *already* the honest
+ * output for a section that exists and holds no citations, so a silent miss
+ * would be indistinguishable from a correct result. A typo'd section name would
+ * report success having checked nothing at all — a worse wrong-denominator
+ * failure than the one this ticket was filed for. Both halves are asserted here,
+ * because the pair is the point.
+ */
+test("a section that matches nothing is an error, while an empty one that exists is not", () => {
+  const { record, cleanup } = withRecord(TWO_SECTION_RECORD);
+
+  const missing = run(record, "--section", "NoSuchSectionAtAll");
+  expect(missing.status).not.toBe(0);
+  expect(missing.stderr).toMatch(/no section matches "NoSuchSectionAtAll"/);
+  // It lists what the record does have, so the typo costs one read, not two.
+  expect(missing.stderr).toMatch(/## Review/);
+  expect(missing.stdout).not.toMatch(/resolve/);
+
+  const empty = run(record, "--section", "Nothing here");
+  expect(empty.status).toBe(0);
+  expect(empty.stdout).toMatch(/0\/0 resolve/);
+
+  cleanup();
+});
+
+/**
+ * Matching more than one section fails rather than taking the first, which is
+ * the rule `makeResolver` already applies to an ambiguous bare filename for the
+ * same reason: quietly picking one is how a check becomes a rubber stamp.
+ */
+test("a --section name matching two sections fails and names them both", () => {
+  const { record, cleanup } = withRecord(TWO_SECTION_RECORD);
+
+  const ambiguous = run(record, "--section", "N");
+  expect(ambiguous.status).not.toBe(0);
+  expect(ambiguous.stderr).toMatch(/matches 2 sections/);
+  expect(ambiguous.stderr).toMatch(/Nested under Review/);
+  expect(ambiguous.stderr).toMatch(/Nothing here/);
+
+  cleanup();
 });
 
 /**
@@ -205,4 +310,53 @@ test("parseArgs refuses an unknown flag, a valueless flag and a second positiona
   // Each of those prints the usage, because being told what is wrong without
   // being told what is right is half an error message.
   expect(() => parseArgs(["ticket.md", "--nonsense"])).toThrow(/\[--rev <sha>\]/);
+});
+
+/**
+ * A heading owns everything down to the next heading of the same level or
+ * higher. Getting this wrong drops the citations under a subsection while still
+ * printing a confident count, which is the failure the whole script exists to
+ * prevent.
+ */
+test("extractSections gives a heading the span of its subsections", () => {
+  const md = ["# Top", "a", "## One", "b", "### Under one", "c", "## Two", "d"].join("\n");
+  expect(extractSections(md)).toEqual([
+    { title: "Top", level: 1, start: 1, end: 8 },
+    { title: "One", level: 2, start: 3, end: 6 },
+    { title: "Under one", level: 3, start: 5, end: 6 },
+    { title: "Two", level: 2, start: 7, end: 8 },
+  ]);
+});
+
+/**
+ * Records quote changelog fragments, so `### Fixes` inside a fence is common —
+ * 40 such lines across the work records when this was measured. Taking one for a
+ * heading would end the enclosing section early and silently shrink the count.
+ */
+test("extractSections does not read a heading out of a fenced block", () => {
+  const md = ["## Real", "```md", "## Not a heading", "```", "tail"].join("\n");
+  expect(extractSections(md)).toEqual([{ title: "Real", level: 2, start: 1, end: 5 }]);
+});
+
+test("selectSection matches case-insensitively, preferring an exact hit to a prefix", () => {
+  const sections = extractSections(["## Log", "a", "## Logging notes", "b"].join("\n"));
+  expect(selectSection(sections, "log").title).toBe("Log");
+  expect(selectSection(sections, "LOGGING").title).toBe("Logging notes");
+  // Prefix is the fallback, which is what makes an em-dashed heading typeable.
+  expect(selectSection(extractSections("### Gate — 2026-09-01"), "Gate").title).toBe(
+    "Gate — 2026-09-01",
+  );
+});
+
+/**
+ * Both refusals, and the reason they are refusals rather than an empty result:
+ * `0/0` is already what a real but citation-free section prints, so a silent
+ * miss would be indistinguishable from a correct answer.
+ */
+test("selectSection refuses a name that matches nothing, and one that matches two", () => {
+  const sections = extractSections(["## Nested", "a", "## Nothing", "b"].join("\n"));
+  expect(() => selectSection(sections, "Missing")).toThrow(/no section matches "Missing"/);
+  // The refusal lists what is there, so a typo costs one read rather than two.
+  expect(() => selectSection(sections, "Missing")).toThrow(/## Nested/);
+  expect(() => selectSection(sections, "N")).toThrow(/"N" matches 2 sections/);
 });

@@ -3,7 +3,7 @@ id: repo-14
 tool: repo
 title: citations.mjs documents a --section flag it does not implement, and accepts it silently
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -114,9 +114,17 @@ Two smaller things worth knowing, both true today:
    test can fail.
 4. `npm run check` and `npx vitest run scripts` pass.
 
-## Open question — do not settle it here
+## Open question — answered 2026-09-03: implement
 
 **Implement `--section`, or delete it from the usage line?**
+
+**Answered by the user: implement.** The reason is the lean recorded below — a
+record's `## Review` section is precisely the thing one would want to scope a
+check to. It landed on the same branch as steps 1 and 2, once the answer arrived
+mid-build. The two options are kept exactly as filed, because the costs they
+price are what the answer was weighed against; the three sub-questions the
+"implement" option leaves open were settled by the builder and are argued in the
+Log.
 
 - **Implement.** Cost: section-splitting on `##`/`###` headings, a name-matching
   rule (exact? prefix? case-insensitive?), and a decision about what a section
@@ -221,3 +229,77 @@ becomes a loud error rather than the silent no-op it is now.
   instead. Folding the caveat into the usage line belongs with the resolution.
   Still not measured: the cost of section-splitting, so the open question below
   continues to carry prose rather than a number.
+
+- **2026-09-03** — **Supersedes the entry above, which was written while the
+  question was still open.** The user answered it mid-build — **implement
+  `--section`** — so step 3 landed on the same branch and this ticket closes.
+
+  **The three sub-questions the ticket left to whoever had the code in front of
+  them.** Each decided, each tested:
+
+  1. **Splitting.** A heading owns every line down to the next heading of the
+     same level or higher, so `## Review` carries its `###` subsections. The
+     alternative stops at the first subheading and drops the citations beneath
+     it — this script's own failure mode, delivered by its own new flag. The case
+     is not hypothetical: on `repo-12`, all 8 citations live inside
+     `### Gate 1 — 2026-08-30`, so `--section Review` reports 8 under the nesting
+     rule and would have reported 0 without it.
+
+  2. **Fenced code is not searched for headings.** Measured before choosing, not
+     assumed: 40 heading-looking lines sit inside fenced blocks across the work
+     records, because records quote changelog fragments and those contain
+     `### Fixes`. Reading one as a heading would end the enclosing section early
+     and print the smaller count as the answer. Only heading _detection_ skips
+     fences — `extractCitations` still reads every line exactly as before, so
+     `--section` cannot change which citations a record has, only which of them
+     are reported.
+
+  3. **Name matching: case-insensitive, exact before prefix.** Headings here read
+     `## Open question — do not settle it here` and `### Gate 1 — 2026-08-30`;
+     requiring the em dash on a command line would make the flag unusable, and
+     `--section Gate` now works. Exact winning outright is what keeps `Log`
+     meaning `## Log` in a record that also has `## Logging notes`. **More than
+     one match is an error naming the candidates**, never the first match — the
+     rule `makeResolver` already applies to an ambiguous bare filename, for the
+     reason it already states there.
+
+  **A section matching nothing is an error. The ticket argued this and was right,
+  but understated it.** Checked against the code rather than transcribed: a record
+  with no citations already prints `0/0 resolve` and exits 0, legitimately. So a
+  silent miss would not merely be quiet, it would be **indistinguishable from a
+  correct result** — a typo'd section name reporting success having checked
+  nothing at all. That is strictly worse than the defect filed here, which at
+  least checked the whole file. The error lists the record's headings, so a typo
+  costs one read rather than two. A section that exists and holds no citations
+  still prints `0/0` and exits 0, and the two are asserted in one test, because
+  being able to tell them apart is the point.
+
+  **One output line changed** beyond the flag: the header names the scope, as in
+  `8 citations in <record> under "Gate 1 — 2026-08-30" (record lines 78-122)`. A
+  filtered count with no denominator on screen is the wrong-denominator failure
+  over again. The `N/M resolve` summary and the per-citation lines were left
+  alone; repo-18 owns those.
+
+  **For whoever changes this next:** the filter selects by line span _after_
+  `extractCitations` has run, rather than re-extracting from a slice of the
+  markdown. `extractCitations` carries state across lines — a table's header row
+  sets the column map for the rows beneath it — so extracting from a slice that
+  started below a header would under-report that table in silence.
+
+  **Run red first, again.** The three new CLI tests were run against the previous
+  commit's accept-and-warn behaviour, before the splitter existed:
+
+  ```
+  × --section narrows the check to one heading's span, subsections included
+      expected '4 citations in …' to match /3\/3 resolve/
+  × a section that matches nothing is an error, while an empty one that exists is not
+      AssertionError: expected +0 not to be +0     # exit 0 on a bogus section name
+  × a --section name matching two sections fails and names them both
+      AssertionError: expected +0 not to be +0
+  ```
+
+  **Known limitation, not measured away:** a record with two verbatim-identical
+  headings — two `## Log` — makes that name ambiguous and the flag unusable for
+  it. No record in the repo has one. Inventing a disambiguator (an index? the
+  first?) for a case with no instance looked worse than the loud failure, and
+  "the first" is the rubber-stamp shape this ticket is about.
