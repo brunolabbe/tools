@@ -195,6 +195,29 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     proxied: config.proxyUrl !== undefined,
   });
 
+  // **An operator who set a CA file is told what it reaches, at boot rather
+  // than at the first failed probe** (dl-34). Only for them: an operator who
+  // set nothing has no expectation to correct, and this would be a line per
+  // boot about a setting they are not using.
+  //
+  // A warning rather than an info line, on the same reasoning as the three
+  // ffmpeg-TLS lines below: it is a deployment fact the operator reasonably
+  // believes otherwise, and the belief is one the documentation actively
+  // encouraged until this commit — both `.env.example` and `01-ARCHITECTURE`
+  // said "everything that meets an origin gets it". Two things do not, and they
+  // are the two that load the page.
+  if (operatorCa !== null) {
+    const variable = config.egressCaFileVar ?? "EGRESS_CA_FILE";
+    logger.warn(`${variable} does not reach the browser or yt-dlp tiers`, {
+      reaches: [
+        "this process's own fetches (probes, manifests, size probes)",
+        ffmpegInterception === null ? "ffmpeg, via -ca_file" : "ffmpeg's terminating egress proxy",
+      ],
+      doesNotReach: ["chromium", "yt-dlp"],
+      hint: "Those two are handed a tunnelling proxy, so the origin's own certificate reaches them and they verify it against their own trust stores — which nothing here writes to. On a deployment whose origins chain to a private root they will fail, and since dl-34 they at least say TLS_VERIFICATION_FAILED rather than 'site unreachable' or 'no media found'. Giving them the anchor is dl-34's unbuilt half one; see tools/downloader/docs/work/dl-34-resolver-tiers-and-the-operator-ca.md.",
+    });
+  }
+
   // Loud on purpose, and at boot rather than at the first download: this is the
   // one setting that puts the tool back where dl-14 found it, fetching video
   // over a connection encrypted to a certificate nobody checked. An operator who

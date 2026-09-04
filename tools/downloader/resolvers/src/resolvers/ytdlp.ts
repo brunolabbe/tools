@@ -12,6 +12,11 @@
  *    `NO_MEDIA_FOUND` so the chain degrades to the sniffer instead of failing.
  *    Extractors break constantly as sites redesign; that must cost latency, not
  *    coverage.
+ *
+ * The one exception to the second rule is `TLS_VERIFICATION_FAILED` (dl-34): it
+ * is a fact about the *connection* rather than the source, and it is one the
+ * sniffer would meet identically, so degrading to it costs a browser launch and
+ * then reports the wrong thing. See `classifyFailure`.
  */
 
 import { spawn } from "node:child_process";
@@ -40,6 +45,7 @@ import {
 import type { MediaSegment } from "../manifest/hls.ts";
 import { createFetchSizeProbe } from "../size-probe.ts";
 import { measureVariantSizes } from "../size-sample.ts";
+import { TIER_TRUST_STORE_HINT, ytdlpCertificateMarker } from "../tls-verification.ts";
 
 /** yt-dlp JSON is far larger than a manifest; this is a memory bound, not a policy. */
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -618,10 +624,30 @@ function killTree(child: ChildProcess): void {
  * Maps yt-dlp's stderr to the taxonomy. The default is `NO_MEDIA_FOUND` on
  * purpose: an extractor that broke overnight must degrade this source to the
  * browser sniffer, not fail the request.
+ *
+ * **A refused certificate is the one failure that does not take that default**,
+ * and dl-34 is why. Degrading it hands the URL to the browser tier, which meets
+ * the same private root with its own trust store and fails the same way — so
+ * the fallthrough buys a browser launch and then reports "no downloadable video
+ * stream was found on that page" for a trust-store problem. That sentence
+ * points at the source, invites a retry, and hides the setting. Stopping the
+ * chain here is a behaviour change on top of the copy: `registry.ts` falls
+ * through on `NO_MEDIA_FOUND` and on nothing else.
  */
 function classifyFailure(stderr: string, code: number, url: URL): AppError {
   const text = stderr.toLowerCase();
   const details = { url: url.href, exitCode: code, stderr: stderr.slice(-500) };
+
+  // First, ahead of the four source-fact branches below, because a handshake
+  // that failed means yt-dlp never read the page: no `drm`, `sign in`, `in your
+  // country` or `429` in that stderr can be a fact about the source, and every
+  // one of them is a looser match than this is.
+  const certificateMarker = ytdlpCertificateMarker(text);
+  if (certificateMarker !== undefined) {
+    return new AppError("TLS_VERIFICATION_FAILED", undefined, {
+      details: { ...details, reason: certificateMarker, hint: TIER_TRUST_STORE_HINT },
+    });
+  }
 
   if (text.includes("drm")) return new AppError("DRM_PROTECTED", undefined, { details });
   if (

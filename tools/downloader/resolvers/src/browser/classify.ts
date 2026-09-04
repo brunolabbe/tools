@@ -8,6 +8,7 @@
  */
 
 import { AppError, redactUrl } from "@downloader/contract";
+import { chromiumCertificateError, TIER_TRUST_STORE_HINT } from "../tls-verification.ts";
 
 /** Everything the classifier is allowed to look at. Gathered once, in-page. */
 export interface PageSignals {
@@ -149,6 +150,32 @@ export function classifyFailure(signals: PageSignals): AppError {
 export function classifyNavigationError(error: unknown, url: string): AppError {
   if (error instanceof AppError) return error;
   const message = error instanceof Error ? error.message : String(error);
+
+  // **Before the timeout branch, and before the blanket `UNREACHABLE` this used
+  // to be the only alternative to.** Chromium names the cause and dl-34 is
+  // about the fact that we threw the name away: on a deployment whose origins
+  // chain to a private root, an operator got "the site could not be reached",
+  // on a *retryable* code, for a trust problem — the one diagnosis that never
+  // leads to the setting that would fix it. Core's taxonomy has said so in
+  // words since dl-31: `UNREACHABLE`'s own docstring names
+  // `TLS_VERIFICATION_FAILED` as the code for a certificate that did arrive.
+  //
+  // Order is not arbitrary. Playwright's message carries a call log after the
+  // first line, so a certificate failure and the word "timeout" could in
+  // principle both appear in one string; a message that names an `ERR_CERT_*`
+  // is a certificate failure whatever else the log says.
+  const certificateError = chromiumCertificateError(message);
+  if (certificateError !== undefined) {
+    return new AppError("TLS_VERIFICATION_FAILED", undefined, {
+      cause: error,
+      details: {
+        url: redactUrl(url),
+        reason: certificateError,
+        hint: TIER_TRUST_STORE_HINT,
+      },
+    });
+  }
+
   if (/timeout/i.test(message)) {
     return new AppError("TIMEOUT", "The page took too long to load.", {
       cause: error,

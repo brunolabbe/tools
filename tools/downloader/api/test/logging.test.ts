@@ -14,6 +14,8 @@ import type { Job, JobResponse, RequestContext } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
 import type { Harness } from "./helpers.ts";
+import { createFixtureCertificate } from "./helpers/tls-origin.ts";
+import type { FixtureCertificate } from "./helpers/tls-origin.ts";
 import { createLogger } from "../src/logger.ts";
 import type { AppLogger } from "../src/logger.ts";
 import { redactLoggedUrl, requestIdFrom } from "../src/request-log.ts";
@@ -412,6 +414,99 @@ describe("what boot says about how far TLS verification reaches", () => {
     // Telling a deployment that verifies nothing at all how its verification
     // works would read as a guarantee it does not have.
     expect(warnings.some((line) => /terminates TLS/u.test(line.msg))).toBe(false);
+  });
+});
+
+/**
+ * dl-34, step 3. Same property as the block above and a different axis of it:
+ * an operator who set a trust anchor is told **which halves of the pipeline it
+ * reaches**, at boot rather than at the first failed probe.
+ *
+ * It is worth a line because the documentation said the opposite until this
+ * commit — `.env.example` and `01-ARCHITECTURE.md` both claimed that everything
+ * meeting an origin is given it. Two things are not, and they are the two that
+ * load the page.
+ */
+describe("what boot says about how far the operator's CA reaches", () => {
+  let harness: Harness | undefined;
+  let certificate: FixtureCertificate | undefined;
+
+  afterEach(async () => {
+    await harness?.dispose();
+    harness = undefined;
+    await certificate?.cleanup();
+    certificate = undefined;
+  });
+
+  async function bootWithCa(config: Record<string, unknown> = {}): Promise<{ lines: Line[] }> {
+    certificate = await createFixtureCertificate({ ipAddresses: ["127.0.0.1"] });
+    const { logger, lines } = capturing("info");
+    harness = await createHarness({
+      logger,
+      config: { egressCaFile: certificate.caPath, ...config },
+    });
+    return { lines };
+  }
+
+  test("names the tiers it does not reach, and what it does", async () => {
+    const { lines } = await bootWithCa();
+
+    const warnings = lines.filter((line) => line.level === "warn");
+    const reach = warnings.filter((line) => /does not reach the browser or yt-dlp/u.test(line.msg));
+    expect(reach).toHaveLength(1);
+    // The variable by the name the operator actually typed, so a deployment on
+    // the deprecated spelling is not told about one it never set.
+    expect(reach[0]?.msg).toMatch(/^EGRESS_CA_FILE/u);
+    expect(reach[0]?.["doesNotReach"]).toEqual(["chromium", "yt-dlp"]);
+    // And the half that is working, so the line reads as a boundary rather
+    // than as "your setting does nothing".
+    expect(String(reach[0]?.["reaches"])).toMatch(/ffmpeg/u);
+    expect(String(reach[0]?.["hint"])).toMatch(/TLS_VERIFICATION_FAILED/u);
+  });
+
+  test("says ffmpeg is reached through the proxy, or directly, whichever it is", async () => {
+    // The two arrangements dl-27 leaves, and the line has to be true in both:
+    // with interception on, the operator's root goes to the proxy that verifies
+    // for ffmpeg; with it off, it goes to ffmpeg's own `-ca_file`.
+    const intercepting = await bootWithCa();
+    expect(
+      String(
+        intercepting.lines.find((line) => /does not reach the browser/u.test(line.msg))?.[
+          "reaches"
+        ],
+      ),
+    ).toMatch(/egress proxy/u);
+
+    await harness?.dispose();
+    harness = undefined;
+    await certificate?.cleanup();
+
+    const tunnelling = await bootWithCa({ ffmpegTlsIntercept: false });
+    expect(
+      String(
+        tunnelling.lines.find((line) => /does not reach the browser/u.test(line.msg))?.["reaches"],
+      ),
+    ).toMatch(/-ca_file/u);
+  });
+
+  test("the deprecated spelling is the one echoed back", async () => {
+    const { lines } = await bootWithCa({ egressCaFileVar: "FFMPEG_CA_FILE" });
+
+    const reach = lines.filter((line) => /does not reach the browser or yt-dlp/u.test(line.msg));
+    expect(reach).toHaveLength(1);
+    expect(reach[0]?.msg).toMatch(/^FFMPEG_CA_FILE/u);
+  });
+
+  test("an operator who set nothing is not told about a setting they do not have", async () => {
+    // The line is targeted, not a standing disclaimer: without a CA file there
+    // is no expectation to correct, and a per-boot warning about an unused
+    // variable is how the other four lines in this file lose their audience.
+    const { logger, lines } = capturing("info");
+    harness = await createHarness({ logger });
+
+    expect(lines.some((line) => /does not reach the browser or yt-dlp/u.test(line.msg))).toBe(
+      false,
+    );
   });
 });
 
