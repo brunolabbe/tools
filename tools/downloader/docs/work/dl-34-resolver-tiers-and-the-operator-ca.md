@@ -280,6 +280,21 @@ claim and a produced one stays visible.
 
 ## Log
 
+- **2026-09-04** — **`## Review` above is builder-written, which is the
+  convention and not a shortcut.** [`docs/01-TICKETS.md:239`](../../../../docs/01-TICKETS.md):
+  "the reviewer reports and the builder writes the section down, with the date,
+  the verdict, and **both halves named above**". It is transcribed from the
+  reviewer's two reports — the initial gate at `21bc1f9` and the confirmation at
+  `01c23dd` — and the reviewer confirmed its content accurate. Recorded because
+  the point was raised and cost a round: verbatim reproduction of a reviewer's
+  own text is **not** what the rule asks for, and the section deliberately does
+  one thing a verbatim block could not, which is attribute which side measured
+  what (the reviewer measured Finding A's regex match; this build produced the
+  two-level chain). The line underneath that is worth keeping: transcribing
+  findings you were **given** into the required structure is the convention;
+  writing a reviewer's words you never received would be fabrication, whatever
+  it is labelled.
+
 - **2026-09-03** — **Half two built; half one is still unbuilt and the ticket
   stays `ready`.** Branch `dl-34-classify-tls-failures`, off `origin/main` at
   `91c117b`. Steps 2 and 3 only, as a deliberate slice on this ticket's own
