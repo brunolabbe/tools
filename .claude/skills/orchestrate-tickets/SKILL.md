@@ -185,11 +185,17 @@ you are there.
    relay wearing a different hat.
 9. **Builder opens the PR**, commits the gate record, and posts the reviewer's
    report to the PR thread.
-10. **Remove the reviewer's worktree** once its record is pushed **and its
-   conversation with the builder is over** — the second condition is new with the
-   direct channel, and it is the one that bites. **Hold the builder's until the
-   ticket is finished**, because
-   steps 11 and 4-above may still need that agent. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
+10. **Hold every worktree — the reviewer's as well as the builder's — until the
+   ticket is finished.** The reviewer's used to come down earlier, once its record
+   was pushed and its exchange with the builder had ended. **That condition cannot
+   be evaluated**: measured twice on 2026-09-03, once from "the PR exists" and once
+   from *both agents reporting closed*, and both times the exchange resumed — a
+   builder can always push one more commit and wake its reviewer, and neither is
+   lying when it says it is done. The second removal landed mid-`npm run check` and
+   cost a verification round. Holding costs ~18 MB; removing early costs an agent
+   its tools mid-command. If you do take one early, **tell that agent you did it,
+   unprompted** — from inside, your removal and the documented auto-reclaim are
+   indistinguishable. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
 11. **Check the merge landed what it was supposed to.** Not polling — one look,
    after the fact. See _After a merge_.
 12. **Append this session's row to [reference/history.md](reference/history.md)**,

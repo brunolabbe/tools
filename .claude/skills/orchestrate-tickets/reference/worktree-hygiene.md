@@ -125,6 +125,42 @@ recovery is expensive.
   capturing output rather than at the end of its review, so a second interruption
   could not strand it on `origin`.
 
+### Hold the reviewer's worktree until the ticket merges, like the builder's
+
+**The rule used to be "remove it once its record is pushed and its exchange with
+the builder has ended". Two failures on 2026-09-03 say that condition cannot be
+evaluated, and the removal is not worth what it costs.**
+
+First attempt: the orchestrator checked "record pushed", inferred "exchange over"
+from the pull request existing, and removed the worktree. The exchange was live and
+the record on that branch had gone in *wrong*, so the reviewer lost Bash at exactly
+the moment it needed it.
+
+Second attempt, after the orchestrator had explicitly promised to ask first: **both
+agents reported closed, and it still was not over.** The builder pushed a
+follow-up commit and re-engaged the reviewer; the removal landed mid-`npm run
+check`, producing an `exit 1` the reviewer had to specifically disclaim so it would
+not be read as a finding, and leaving two of its verification claims unconfirmed.
+
+**"Both sides say they are finished" is not a durable state.** A builder can always
+push one more commit and wake the reviewer, and neither of them is lying when they
+say they are done — they are done *until the next thing*. There is no observable
+moment that means "no further exchange will occur" short of the branch merging.
+
+**And the trade is lopsided.** Holding costs about **18 MB** of disk per reviewer.
+Removing early costs an agent its tools mid-command, a misattributed failure, and a
+round. So: **hold the reviewer's worktree on the same condition as the builder's —
+until the ticket is finished.** Then remove both.
+
+If you must remove one earlier, **say so to that agent unprompted, in the same
+breath**. From inside, a worktree you removed and the documented auto-reclaim are
+indistinguishable: the failure text names the worktree, not the cause. That is why
+the first reviewer misdiagnosed it, and why its builder repeated the misdiagnosis
+upward — a tidying failure that arrives disguised as an infrastructure one.
+
+Restoring is one command, `git worktree add <path> --detach <sha>`, and worked both
+times. Re-running the farm and build afterwards is on the agent, so tell it to.
+
 ### "The PR is open" is not "the exchange is over"
 
 The condition on removing a reviewer's worktree is that its record is pushed **and
