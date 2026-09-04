@@ -88,6 +88,30 @@ tool it does not have — measured, and recorded below. Say explicitly what stil
 unsettleable disagreement, and any open decision. Anything else you ask to be
 routed through yourself, you are volunteering to retype.
 
+### Never write an install into a gate prompt
+
+**Do not tell a reviewer to run `npm ci` or `npm install`** — in this repo you
+populate a worktree with `worktree-farm.sh` then `npm run build`, and the farm
+script refuses outright when pointed at the shared checkout. Measured 2026-09-03:
+an orchestrator put `npm ci` in a gate prompt to verify a hand-edited lockfile.
+That gate ran **two hours without reporting** and was killed with its spend
+unmeasured.
+
+**The lockfile was verifiable without it**, which is the part worth keeping. The
+replacement gate checked the same thing in minutes: `npm ls zod -w @downloader/web`
+against the farmed tree, plus reading the lockfile entry against `package.json` —
+establishing that the edit added an edge to an **already-resolved** version rather
+than introducing a new one. When you genuinely need a fresh-install guarantee, say
+so as a question the gate may answer *"I could not verify this"*, and mean it.
+
+**The wider lesson is about the replacement, not the failure.** Given the correct
+setup and scoped to three named checks with the container and cross-browser tails
+explicitly dropped, it returned a sharper result than the two-hour attempt — it
+read a library's source to establish that an ordering hazard was intrinsic rather
+than assumed, and it worked out which *tier* of the suite guards that ordering.
+**Gate yield tracks prompt specificity, not runtime**, and this is the cleanest
+measurement of that on the page: same branch, same model, two prompts.
+
 ### Send the findings in full; the builder writes the section down
 
 **Do not tell the reviewer to send a `## Review` block for the builder to paste
