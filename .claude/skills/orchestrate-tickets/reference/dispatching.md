@@ -88,30 +88,48 @@ tool it does not have — measured, and recorded below. Say explicitly what stil
 unsettleable disagreement, and any open decision. Anything else you ask to be
 routed through yourself, you are volunteering to retype.
 
-### Tell the reviewer to paste its record, not narrate it
+### Send the findings in full; the builder writes the section down
 
-The skill page's **Paste the artifact; never describe it** is written for the
-orchestrator, because when it was learned the orchestrator was the one carrying a
-gate record to a builder. **The direct-relay change moved that hop**: the reviewer
-now hands its own `## Review` text to the builder, and the rule did not move with
-it. So say it in the gate prompt.
+**Do not tell the reviewer to send a `## Review` block for the builder to paste
+verbatim.** An orchestrator did exactly that on 2026-09-03 and it was wrong —
+`docs/01-TICKETS.md:239` is explicit that *"the reviewer reports and the builder
+writes the section down"*, with the date, the verdict, an acceptance table naming a
+test per `Done when` line, and a bullet per finding including the ones needing no
+change. Verbatim transcription is nowhere in that rule, and the reason it is not is
+the same one a reviewer discovers the hard way: **a reviewer's worktree is thrown
+away, so a section authored there is authored into nothing.** The record has to be
+written where it will survive.
 
-Measured 2026-09-03, and it is the good version of the failure. A reviewer's
-message to the orchestrator carried the literal markdown block; its message to the
-**builder** narrated the same six attacks in prose and said the block had been sent
-to the coordinator. The builder asked for the literal text rather than composing
-the record from the narrative, on the grounds that paraphrasing it and labelling
-the result verbatim is a substitution described as the thing itself. It was right,
-the reviewer re-sent the block unchanged, and nothing was committed from a
-paraphrase.
+**The hazard the verbatim instruction was reaching for is real, but it is a
+different one: a record must never carry findings or verdicts its writer never
+received.** Both halves of that were measured the same afternoon, and the contrast
+is the whole lesson.
 
-Two things to take from it. **The receiving agent can enforce this**, and a builder
-that refuses to fabricate a record is doing its job rather than being obstinate —
-budget the extra round rather than pressing it. And an agent writing to two
-recipients will naturally write *differently* for each, which is right for findings
-and wrong for artifacts; the gate prompt should say which parts are which. One
-sentence does it: *the `## Review` block goes to the builder verbatim, as text it
-will commit; everything else may be summarised.*
+- A reviewer sent the orchestrator a literal block and sent the **builder** a prose
+  narration of the same six attacks. The builder refused to compose the record from
+  it, on the grounds that paraphrasing a narration and labelling the result verbatim
+  is a substitution described as the thing itself. **Right call** — it did not have
+  the findings in full, only a description of them.
+- A sibling reviewer sent its builder two complete findings reports, then said "go
+  ahead and write the section". The builder wrote a compliant section: date,
+  verdict, both passes and their shas, `capture-rules.test.ts:359` and two more per
+  acceptance row, a bullet per finding. The reviewer flagged it as "not verbatim".
+  **The section was correct**, and it did something a pasted block could not — it
+  attributed which side measured what, because by then the builder had run
+  experiments the reviewer had not seen when it wrote its report.
+
+So the test is **not** "are these the reviewer's exact words". It is **"was every
+finding and verdict in this section actually received"**. What the gate prompt
+should require is therefore about completeness, not form:
+
+- **Send findings in full, not a summary** — every finding, its evidence, its
+  disposition, and the acceptance verdicts with their test citations. A builder
+  cannot write down what it was not told.
+- **Do not authorise the commit before the findings are complete.** Ordering is
+  what bit here: "ship it, my findings follow" is a race the builder cannot see,
+  where "here are my findings, then ship" is one message.
+- **A builder that refuses to fabricate a record is doing its job**, not being
+  obstinate. Budget the round rather than pressing it.
 
 ### Addressing, which is where this loop actually failed
 

@@ -125,6 +125,36 @@ recovery is expensive.
   capturing output rather than at the end of its review, so a second interruption
   could not strand it on `origin`.
 
+### "The PR is open" is not "the exchange is over"
+
+The condition on removing a reviewer's worktree is that its record is pushed **and
+its conversation with the builder has ended**. Measured 2026-09-03, by an
+orchestrator that had just written that sentence down: it checked the first,
+assumed the second because the pull request existed, and ran
+`git worktree remove … --force`. The exchange was in fact still live — and worse,
+the record on that branch had gone in **wrong**, so the reviewer needed its tools
+at exactly that moment. It lost Bash mid-correction.
+
+**The tell to distrust is the pull request itself.** An open PR looks terminal and
+is not: the gate record can still be in flight, a citation can still need
+re-resolving, and a reviewer's confirmation of a fix can still be outstanding.
+None of those are visible in `gh pr view`. **Ask the reviewer whether it is done
+rather than inferring it from artifacts** — it is one message, and the reviewer is
+the only participant who knows.
+
+**The second-order cost is the one worth naming.** The reviewer, unable to run
+Bash, diagnosed it as the documented auto-reclaim of a worktree with nothing
+uncommitted — a reasonable read, since a reviewer legitimately never commits
+anything, and the pattern is real and is on this page. It was about to report a
+hazard that had not occurred, which would have taught the next reviewer to commit
+defensive WIP markers against nothing. **An orchestrator's tidying failure
+disguises itself as an infrastructure failure**, because the agent cannot see who
+removed its worktree. So if you take one away and the agent notices, say that you
+did it, immediately and unprompted.
+
+Restoring it is one command — `git worktree add <path> --detach <sha>` at the same
+path — and worked here.
+
 ### The worktree an agent is in is not the tree it just tested
 
 Two independent sightings on 2026-09-03, in the same session, from different
