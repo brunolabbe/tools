@@ -167,6 +167,31 @@ const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"
  */
 const TUNNEL_IDLE_MS = 120_000;
 
+/**
+ * **Our own certificate, not theirs.** A leaf this proxy could not issue or
+ * load for a target it had already decided to intercept.
+ *
+ * A type rather than a shape, for the reason `OriginCertificateError` gives:
+ * the three outcomes on this socket are told apart by type, and this is a
+ * fourth. It is the only one of the four that is **this service's defect** — a
+ * policy refusal, a dead network and a bad origin certificate are all facts
+ * about the target — so it is the only one logged at `error`.
+ *
+ * dl-33 is why it exists. The throw it wraps escaped `terminateTls`'s
+ * `secureConnect` handler to `uncaughtException`, leaving the CONNECT open and
+ * ffmpeg waiting on it; the run then paid a test timeout and a hook timeout,
+ * and the resulting 182-second file was read as machine contention for three
+ * sessions. Filing it as `unreachable` would say the packets went nowhere and
+ * filing it through `refused` would say a policy fired — the two readings that
+ * cost that time.
+ */
+class InterceptionLeafError extends Error {
+  constructor(cause: unknown) {
+    super("The proxy could not issue a certificate for this target.", { cause });
+    this.name = "InterceptionLeafError";
+  }
+}
+
 function refuse(socket: net.Socket, status: number, reason: string): void {
   // The reason phrase reaches ffmpeg's stderr, and the stderr tail reaches the
   // AppError details — which is the only path a refusal has to the client,
@@ -304,8 +329,29 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
    * mode adds a third outcome to the same socket: a certificate this proxy
    * refused, which is neither our policy nor a dead network.
    */
+  /**
+   * The fourth outcome, and the only one that is ours: no leaf could be issued.
+   *
+   * `INTERNAL` rather than a new code — the taxonomy already has the one that
+   * means "this service is broken", and `runFfmpeg` uses it for the same shape
+   * of fault (its binary would not start). Nothing about a video, so nothing
+   * belongs in the downloader's half of the taxonomy.
+   *
+   * At `error`, unlike its three siblings, because they describe what a target
+   * did and this describes what we failed to do.
+   */
+  function interceptionFailed(host: string, error: InterceptionLeafError): void {
+    const cause = error.cause;
+    logger.error("could not issue an interception certificate", {
+      host,
+      code: "INTERNAL",
+      reason: cause instanceof Error ? cause.message : String(cause),
+    });
+  }
+
   function connectFailed(host: string, error: unknown): void {
-    if (error instanceof AppError) refused(host, error);
+    if (error instanceof InterceptionLeafError) interceptionFailed(host, error);
+    else if (error instanceof AppError) refused(host, error);
     else if (isCertificateRejection(error)) certificateRejected(host, error);
     else unreachable(host, error);
   }
@@ -470,6 +516,25 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           onFailed: (error) => {
             fail(error, 502, "Upstream connect failed");
           },
+          // **500, and not the 502 every other refusal here uses.** This
+          // service's own table already settles it: `http-errors.ts` maps
+          // `INTERNAL` to 500 and annotates `UNREACHABLE: 502` with "the
+          // *source* was unreachable, not us", under the rule "5xx only when
+          // this service is [the problem]". Nothing upstream failed — the
+          // origin handshake had already succeeded — so a status that blames a
+          // gateway would misreport this in the one direction that cost dl-33
+          // three sessions.
+          //
+          // Deliberately not "Upstream connect failed" either, for the same
+          // reason, and the phrase is not decoration: ffmpeg echoes a proxy's
+          // status line verbatim. It must also not read as a *verification*
+          // failure — `isTlsVerificationFailure` needs `/certificate/` **and** a
+          // verification word, and this has the first without the second, so
+          // the job fails as itself rather than as a refused origin. Asserted,
+          // because the phrase is the assertion.
+          onUnavailable: (error) => {
+            fail(error, 500, "Proxy could not issue a certificate");
+          },
         });
       };
 
@@ -561,6 +626,8 @@ interface TerminateOptions {
   onEstablished: () => void;
   onRejected: (error: unknown) => void;
   onFailed: (error: unknown) => void;
+  /** No leaf could be issued for this target — see `InterceptionLeafError`. */
+  onUnavailable: (error: InterceptionLeafError) => void;
 }
 
 /**
@@ -614,17 +681,43 @@ function terminateTls(options: TerminateOptions): void {
   secure.once("secureConnect", () => {
     if (done) return;
     done = true;
+
+    // **The leaf is issued and loaded before the client is told `200`**, which
+    // is the ordering principle above applied to the second fallible step — and
+    // dl-33 is what proves it has to be. Past this point there is no way left to
+    // report anything: `onEstablished` sets the caller's `settled`, so every
+    // later `fail()` is a no-op, and the status line would be written into a
+    // tunnel that is already open. Both were measured.
+    //
+    // Two things throw here and the guard covers both. `leafFor` mints — forge
+    // rejects a malformed `subjectAltName` address, among others — and
+    // `createSecureContext` loads, which is where dl-33's unparseable serial
+    // landed. Neither is caught by anything else: this is a synchronous throw
+    // in an event handler, so it escapes the whole call stack to
+    // `uncaughtException`, and the CONNECT then hangs until ffmpeg gives up.
+    let leafContext: tls.SecureContext;
+    try {
+      const leaf = intercept.leafFor(host);
+      leafContext = tls.createSecureContext({ key: leaf.key, cert: leaf.cert });
+    } catch (error) {
+      secure.destroy();
+      options.onUnavailable(new InterceptionLeafError(error));
+      return;
+    }
+
     options.onEstablished();
     clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
     // Bytes the client sent before it was told to go ahead are the start of its
     // ClientHello, and belong to the TLS socket about to wrap this one.
     if (head.length > 0) clientSocket.unshift(head);
 
-    const leaf = intercept.leafFor(host);
+    // The context is pre-built rather than `{ key, cert }`, which is the same
+    // work relocated: `TLSSocket` builds one itself only when it is not given
+    // one, so this moves the throw above the `200` rather than adding a second
+    // build below it.
     const clientTls = new tls.TLSSocket(clientSocket, {
       isServer: true,
-      key: leaf.key,
-      cert: leaf.cert,
+      secureContext: leafContext,
     });
     joinSockets(clientTls, secure);
   });

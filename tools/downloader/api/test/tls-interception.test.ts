@@ -16,8 +16,13 @@ import { X509Certificate } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import tls from "node:tls";
-import { afterEach, describe, expect, test } from "vitest";
-import { certificateRejectionCode, createTlsInterception } from "../src/tls-interception.ts";
+import forge from "node-forge";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import {
+  certificateRejectionCode,
+  createTlsInterception,
+  positiveDerIntegerHex,
+} from "../src/tls-interception.ts";
 import type { TlsInterception } from "../src/tls-interception.ts";
 import { createFixtureCertificate } from "./helpers/tls-origin.ts";
 
@@ -148,6 +153,115 @@ describe("the leaf issued per CONNECT target", () => {
     expect(leafOf(intercept, "a.example.test").serialNumber).not.toBe(
       leafOf(intercept, "b.example.test").serialNumber,
     );
+  });
+});
+
+/**
+ * dl-33's defect, forced rather than waited for.
+ *
+ * Every sighting in that ticket is `ERR_OSSL_ASN1_ILLEGAL_PADDING`, and it was
+ * read as contention because it only ever turned up on a busy machine. It is
+ * **not** contention and it is not the test fixtures: `newSerial()` used to put
+ * an unconditional `00` in front of sixteen random bytes, and a DER `INTEGER`
+ * forbids that leading zero when the byte after it has its high bit clear.
+ * forge normalises by exactly one byte, so the draw that survives normalisation
+ * illegal is `00` **then a byte under `0x80`** — `1/256 × 1/2 = 1/512`, against
+ * the 133 serials one `--project downloader` run issues.
+ *
+ * What made it look like load is the *shape of the symptom*, not its cause: the
+ * throw lands in `egress-proxy.ts`'s `secureConnect` handler, so the CONNECT
+ * never completes, ffmpeg waits, and the run pays a 120 s test timeout plus a
+ * 60 s hook timeout. That is the 182-second file in the ticket's sighting 3 —
+ * the failure *is* the slowness, not a consequence of it.
+ *
+ * Stubbing the draw is what makes this a test rather than a lottery: 520 leaf
+ * generations on a quiet machine failed to reproduce it (dl-29), and they never
+ * could have at that sample size.
+ */
+/** Sixteen bytes, as forge hands them over: a binary string, `hex` then filler. */
+function draw(hex: string): string {
+  return forge.util.hexToBytes(hex.padEnd(32, "c"));
+}
+
+describe("a serial number OpenSSL will actually parse (dl-33)", () => {
+  // `expected` is what `X509Certificate.serialNumber` prints: the value in
+  // uppercase hex, without the DER sign byte, which Node does not display.
+  const CASES: readonly { hex: string; expected: string; why: string }[] = [
+    {
+      hex: "007b",
+      expected: `7B${"CC".repeat(14)}`,
+      why: "the defect: a first byte of 00 and a second under 0x80",
+    },
+    {
+      hex: "00ab",
+      expected: `AB${"CC".repeat(14)}`,
+      why: "a first byte of 00 and a second at or over 0x80: legal, and the shape dl-29 picked",
+    },
+    {
+      hex: "0000007b",
+      expected: `7B${"CC".repeat(12)}`,
+      why: "several leading zeros, which forge's one-byte strip cannot rescue either",
+    },
+    {
+      hex: "ff",
+      expected: `FF${"CC".repeat(15)}`,
+      why: "the high bit set, where the 00 is required and dropping it would make the serial negative",
+    },
+    {
+      hex: "7f",
+      expected: `7F${"CC".repeat(15)}`,
+      why: "the high bit clear, where a 00 would be redundant",
+    },
+  ];
+
+  test("the leaf the proxy arms a socket with parses, for every shape of draw", async () => {
+    // The root takes the first draw and each leaf the next, so the defect shape
+    // is exercised on both halves of the chain.
+    const queue = [draw("007b"), ...CASES.map((c) => draw(c.hex))];
+    const real = forge.random.getBytesSync.bind(forge.random);
+    const spy = vi
+      .spyOn(forge.random, "getBytesSync")
+      .mockImplementation((count: number) => queue.shift() ?? real(count));
+
+    try {
+      const intercept = await interception();
+
+      // The leaves before the root, deliberately: the leaf is the production
+      // hot path, so an unfixed `newSerial()` has to fail *there* rather than
+      // on a convenience assertion about the root.
+      for (const [index, testCase] of CASES.entries()) {
+        const host = `h${String(index)}.example.test`;
+        const leaf = intercept.leafFor(host);
+        // **The production call site**, verbatim from `egress-proxy.ts`: this
+        // is a synchronous throw inside a `secureConnect` handler, which is why
+        // the symptom is a hang and four unhandled errors rather than a failed
+        // download. Before the fix it threw
+        // `ERR_OSSL_ASN1_ILLEGAL_PADDING` with the exact OpenSSL stack the
+        // ticket records — `PEM routines::ASN1 lib`, then two nested ASN.1
+        // errors.
+        expect(() => tls.createSecureContext({ cert: leaf.cert, key: leaf.key })).not.toThrow();
+        expect(leafOf(intercept, host).serialNumber, testCase.why).toBe(testCase.expected);
+      }
+
+      // A root that will not parse is a `-ca_file` ffmpeg refuses outright, and
+      // it takes the first draw — so the defect shape is covered on both halves
+      // of the chain.
+      expect(new X509Certificate(intercept.rootCaPem).serialNumber).toBe(CASES[0]?.expected);
+      expect(queue).toHaveLength(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test("the encoding is minimal and positive, including where the draw is all zeros", () => {
+    // Minimal *and* idempotent: forge strips one redundant leading byte on its
+    // way to DER, so an encoding that is already minimal has to survive that
+    // pass unchanged, which is the property the round-trip above rests on.
+    expect(positiveDerIntegerHex(forge.util.hexToBytes("00".repeat(16)))).toBe("00");
+    expect(positiveDerIntegerHex(forge.util.hexToBytes("0080"))).toBe("0080");
+    expect(positiveDerIntegerHex(forge.util.hexToBytes("007f"))).toBe("7f");
+    expect(positiveDerIntegerHex(forge.util.hexToBytes("0001"))).toBe("01");
+    expect(positiveDerIntegerHex(forge.util.hexToBytes("8000"))).toBe("008000");
   });
 });
 
