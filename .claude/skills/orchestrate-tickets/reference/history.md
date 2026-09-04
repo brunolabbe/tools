@@ -102,4 +102,14 @@ capture it.
 10. **An option's stated mechanism is a proposal, and answering the decision does not verify it.** The `onFailed` route above came from a builder's own option text, relayed unchecked.
 11. **Nothing warned against telling a gate to install.** The orchestrator wrote `npm ci` into a gate prompt; this repo forbids installing in a worktree, which is what `worktree-farm.sh` exists for. That gate ran two hours without reporting and was killed. **Its replacement, given the correct setup and scoped to three checks, returned a sharper result in a fraction of the time** — including reading zod's source to establish that an ordering hazard was intrinsic rather than assumed. Gate yield tracks prompt specificity, not runtime, and this is the cleanest measurement of it the page has.
 
+**A twelfth, found after the batch closed and worth its own line.** The slice
+pattern above told builders to hold `status: ready` while committing a gate record.
+**That combination is forbidden by CI**, in two places — `reviewedButReady` sets a
+non-zero exit and `status.test.ts:180` asserts the set is empty — and the pull
+request went red in the `check` job and the unit matrix on both platforms. The
+skill defect was written *and* deployed in the same session, and only a merge check
+caught it: no gate did, because each gate correctly reviewed the branch it was
+given and none of them owns the board invariant. **A new orchestration pattern is
+not proven by its branches passing their gates**; it is proven by the merge.
+
 **What went right, and is worth copying.** Every builder corrected the orchestrator at least once — a stale timing figure, an unmerged capability claimed as landed, a laundered mechanism, and a rule that contradicted the repo. Two agents *deleted their own tests* for passing on something the old code also satisfied. Two reviewers ran controls nobody asked for: a pure order-swap to isolate an ordering claim rather than a removal, and a simulated **over**-narrowing to prove the suite catches the mirror defect. And a builder with unconditional ship authority declined to upgrade its own gate's CONCERNS to PASS, on the grounds that doing so would be transcribing a better verdict onto its own work.

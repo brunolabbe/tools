@@ -129,9 +129,29 @@ Three tells, all readable without loading the whole ticket:
 Four things the dispatch prompt must then carry, and the first two are the ones a
 builder will otherwise get wrong:
 
-- **Say the ticket does NOT close, and that its status stays `ready`.** A builder
-  told to implement a Build section will close the ticket, because that is what
-  finishing means everywhere else.
+- **Say the ticket does not close *during the build*, and that its status stays
+  `ready` only until the gate record lands.** A builder told to implement a Build
+  section will close the ticket, because that is what finishing means everywhere
+  else — but the opposite instruction, held too long, is a CI failure. **This repo
+  forbids a ticket being `ready` while carrying a `## Review` section**, in two
+  places at once: `reviewedButReady` (`scripts/status.mjs:264`) feeds `problems`
+  and sets `process.exitCode = 1` at `:636`, and `scripts/test/status.test.ts:180`
+  asserts the set is empty. Measured 2026-09-03: an orchestrator told a builder to
+  hold `ready` *and* commit the gate record, and the pull request went red in both
+  the `check` job and the unit matrix on Ubuntu and Windows, from that one cause.
+- **So a slice ends by splitting, not by staying open.** When the gate record is
+  committed: the ticket goes **`done`** — its committed work *is* complete — and
+  **the unbuilt half is filed as its own ticket**, carrying the decision that was
+  answered, the cost that came with it, and the superseded mechanism marked as
+  superseded. That filing clears `docs/01-TICKETS.md`'s bar on the strength of the
+  decision alone. Put the split in the dispatch from the start; discovering it from
+  a red pull request costs a round.
+- **The remainder ticket must carry the objection, not just the answer.** In the
+  measured case the decided mechanism reversed a decline documented in the
+  service's own source, and the reasoning for *why* the exposure was larger had
+  itself been wrong once and corrected by a gate. A remainder ticket that records
+  the answer without the corrected reasoning invites the next builder to
+  rediscover the wrong version.
 - **Say the boundary is the point**, and name the held question in the builder's
   own words — quote the ticket's "do not settle it here" heading. A boundary given
   without its reason reads as an arbitrary narrowing and gets helpfully exceeded.
@@ -160,6 +180,10 @@ The gap is the dispatcher's, not the reviewer's. So when you gate a slice:
   otherwise, and you have handed it a conflict to resolve on its own.
 - **Ask for them to be marked explicitly** rather than left blank — blank is
   indistinguishable from overlooked, which is the thing the rubric exists to catch.
+- **And note that the split above resolves this rather than the rubric doing it.**
+  The unproven rows are unproven only while the two halves share one ticket. Once
+  the slice closes and the remainder is filed, those acceptance lines travel to the
+  new ticket, where nothing has been built and nothing claims otherwise.
 
 **The trap, and it is not obvious.** A slice can *de facto answer* the question it
 was supposed to hold. Measured 2026-09-03: a ticket's unconditional step 2 was
