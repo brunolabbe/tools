@@ -102,6 +102,90 @@ records. Step 1 is the whole of what is left.
    should, proven end to end against a locally-issued certificate.
 3. `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+**Gate: CONCERNS** — 2026-09-03/04, Sonnet (`ac44c9254b58eb601`), on Sonnet's
+own build (`ab57a4f543849d651`) — `origin/main...HEAD`, `91c117b...01c23dd`, two
+passes: an initial review at `21bc1f9` and a confirmation at `01c23dd` after the
+findings below were fixed. Both from the reviewer's own detached worktree, both
+with `worktree-farm.sh` + build first, printed `pwd` before every suite run.
+
+| Done when                                                                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A resolver meeting a certificate it cannot verify raises `TLS_VERIFICATION_FAILED`, not `UNREACHABLE` and not `NO_MEDIA_FOUND` — for both tiers, against a fixture | **proven.** Browser tier, unit: `resolvers/test/browser/capture-rules.test.ts:359`. Browser tier, real Chromium: `api/test/tier-tls-verdict.test.ts:77`. yt-dlp tier: `resolvers/test/ytdlp.test.ts:220`. Reviewer reverted each raise in turn and named the old verdict each returned to (`UNREACHABLE`, `NO_MEDIA_FOUND`) before restoring.                                                                                                                                            |
+| 2. An operator-supplied root reaches whichever tiers step 1's decision says it should, end to end against a locally-issued certificate                                | **unproven — out of scope for this slice, by design.** Half one (giving the tiers the anchor) was never built here; see `## Decision`. Not counted as a defect: the dispatch that produced this build explicitly excluded half one, the reviewer's own dispatch said not to gate it as missing work, and the orchestrator confirmed the rubric has no row for a deliberately sliced ticket.                                                                                              |
+| 3. `npm run check` and `npm test -- --project downloader` pass                                                                                                        | **proven.** `npm run check` exit 0, both passes. `npm test -- --project downloader`: 61 files / 966 tests at `01c23dd`, reproduced independently by the reviewer from a separate worktree with an identical count. Baseline at `origin/main` (`91c117b`): 59 files / 939 tests, per the reviewer's first pass; the deltas across both rounds (+1 file/+17 tests, then +1 file/+10 tests) reconcile exactly against the new `test(` blocks each round added, counted rather than assumed. |
+
+- **med, Finding A — the yt-dlp certificate marker matched an ambiguous phrase,
+  fixed.** `ytdlpCertificateMarker`'s generic "certificate verify failed" match
+  also fired on Python's message for an **incomplete chain**
+  (`"unable to get local issuer certificate"`), which is unrelated to a private
+  root and which Chromium frequently recovers from via AIA chasing where
+  yt-dlp's default backend does not. Since yt-dlp runs before the browser tier
+  and `TLS_VERIFICATION_FAILED` now stops the chain (`registry.ts:71`), an
+  ordinary public-site misconfiguration would have hard-stopped instead of
+  falling through to a tier likely to succeed. Reproduced on both sides: the
+  reviewer measured the regex match; the builder built a real two-level chain
+  (root → intermediate → leaf) served with only the leaf and got the exact
+  ambiguous stderr from the real yt-dlp binary, and pointed real Chromium at
+  the same fixture with no AIA data available, confirming it fails identically
+  to the self-signed case there (not counter-evidence — AIA chasing needs
+  something to chase). Chromium's actual AIA recovery remains **unmeasured**,
+  named as such, same evidentiary bar as the existing `curl_cffi` caveat. Fixed
+  by excluding the ambiguous phrase in `resolvers/src/tls-verification.ts`;
+  tests in the new `resolvers/test/tls-verification.test.ts`, a
+  `tls-incomplete-chain` fixture mode in `fake-ytdlp.mjs`, and a registry-level
+  assertion in `ytdlp.test.ts:259`. The reviewer additionally checked the
+  mirror risk — over-narrowing swallowing a genuine private-root signal — by
+  adding `"self-signed"` to the exclusion list and watching six tests across
+  three files go red; restored, clean. The sub-case the fix does not
+  solve — a genuinely broken chain where the browser tier also fails — is
+  documented in the Log as an accepted cost of under-matching, not an
+  oversight: it degrades to `NO_MEDIA_FOUND`, unchanged from pre-ticket
+  behaviour.
+- **low, Finding B — the operator hint overclaimed a private-root cause for
+  certificate-policy codes, fixed.** `ERR_CERT_WEAK_SIGNATURE_ALGORITHM`,
+  `ERR_CERT_VALIDITY_TOO_LONG`, `ERR_CERT_NON_UNIQUE_NAME`,
+  `ERR_CERT_NAME_CONSTRAINT_VIOLATION` and `ERR_CERT_SYMANTEC_LEGACY` all match
+  the `net::ERR_CERT_*` prefix and are correctly coded `TLS_VERIFICATION_FAILED`,
+  but they are policy violations no trust anchor changes, and
+  `TIER_TRUST_STORE_HINT` asserted "fails here with EGRESS_CA_FILE set and
+  correct" unconditionally. Reworded to a conditional that points at
+  `details.reason` for the actual cause. Both reviewer and builder ran the
+  matcher against all five codes independently.
+- **low, Finding C — a Log sentence overstated coverage by one, fixed.** The
+  build's own Log claimed the operator-copy constant was shared by all three
+  certificate-failure raises; `guarded-fetch.ts`'s (the direct/undici tier's)
+  raise carries no `hint` at all, correctly — it already has the operator's CA
+  directly, so a refusal there is not a reachability gap the hint needs to
+  explain. Corrected in place next to the original claim.
+- **med, Finding D — the Decision section's exposure argument had a backwards
+  premise, fixed.** The first draft framed a captured session cookie reaching
+  Chromium's traffic as new exposure relative to ffmpeg. `CLAUDE.md:115`
+  requires `RequestContext` replayed on every fetch unconditionally, segments
+  included; `engine/src/ffmpeg/args.ts:162` calls `buildRequestContextArgs` on
+  every ffmpeg invocation with no gate; `Cookie` and `Authorization` are absent
+  from that function's `DROPPED_HEADERS`
+  (`engine/src/ffmpeg/headers.ts:28-42`); and `ffmpegTlsIntercept` defaults to
+  `true` (`downloader/api/src/config.ts:377`) — so a captured cookie already crosses this
+  process in plaintext through ffmpeg's existing terminating proxy, by default,
+  today. Both reviewer and builder independently verified all four citations.
+  The conclusion (Chromium's exposure is larger) stands on **breadth of
+  resources**, not cookies, and the `## Decision` section is rewritten in place
+  — the Log is not the only place this correction lives, because half one's
+  builder reads the Decision section directly and would otherwise inherit the
+  wrong objection to answer.
+
+**On the verdict.** Every finding above is closed — zero open findings on
+either side. The one `unproven` acceptance line (Done-when 2) reads as `FAIL`
+by the rubric's letter, and the reviewer named that reading explicitly rather
+than silently reinterpreting it: this ticket was dispatched as a deliberate
+two-thirds slice (half two only), the reviewer's own dispatch said not to gate
+half one as missing work, and the orchestrator confirmed this is a gap in the
+rubric for a sliced ticket rather than a judgment call available to redo.
+**CONCERNS**, not **PASS**, because two findings were `med` before the fix —
+the verdict records what the gate found, not only what remains after it.
+
 ## Decision — answered 2026-09-03, not open
 
 **The question was:** should Chromium get the operator's root at all, or should
