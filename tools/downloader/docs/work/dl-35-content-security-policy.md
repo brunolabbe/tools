@@ -89,6 +89,94 @@ preview that stops working can only be the policy.
 3. No console CSP violation on the happy path, asserted in the same e2e spec.
 4. `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+**Gate: CONCERNS** — 2026-09-04 · `ed784aa` · `ticket-reviewer`, reproducing in
+its own detached worktree
+
+| Done when                                                             | Proof                                                                                                                                                                            |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 · The document response carries the policy, proven by an API test   | **proven** — `api/test/csp.test.ts:96` (the exact directive set, both directions) · `:98` (each directive's value) for `index.html`; `:123` · `:125` for the SPA fallback        |
+| 2 · The preview still renders, in `e2e/`, `<img>` with non-zero width | **unproven (gate)** — `e2e/sniffer/mse-page.spec.ts:136` (present) · `:147-148` (`naturalWidth === 64`) · `:152` (the origin was asked, by the API). See the note below          |
+| 3 · No console CSP violation on the happy path, same e2e spec         | **unproven (gate)** — `e2e/sniffer/mse-page.spec.ts:214`; the same assertion also guards the other two journeys, `e2e/csp.spec.ts:179` and `e2e/download.spec.ts:104`            |
+| 4 · `npm run check` and `npm test -- --project downloader` pass       | **verified** — both re-run by the reviewer at `ed784aa`: `check` exit 0; 60 files / 947 tests. (Reported as "proven"; `verified` is this repo's word for a row a command proves) |
+
+**What `unproven (gate)` means on rows 2 and 3, because unqualified it will be
+misread.** It means CI has not run against this commit — **not** that the lines
+are untested. Both e2e suites were run green, locally and independently, twice:
+by the builder before reporting, and by the reviewer afterwards in a separate
+detached worktree at `ed784aa` (fast config 7/7, sniffer 1/1).
+`.github/workflows/downloader.yml` runs both as `e2e (direct)` and
+`e2e (sniffer)` on every pull request touching this tool, and these rows clear to
+`proven` when it does. The branch was unpushed at gate time because the build
+deliberately stopped short of the pull request.
+
+- **decision (answered)** · The build widened past the ticket's `api` + `e2e` into
+  `web`, to stop zod's `new Function("")` JIT probe reporting a violation on every
+  page load (Log, point 3). Three options went to the user: keep the dependency
+  edge as built; relocate `config({ jitless: true })` into a new
+  `@downloader/contract` subpath export; or revert it and relax the
+  empty-violation assertion. **Answered: keep it as built.** Two findings of this
+  gate carried it — that the `package-lock.json` line adds an edge to an
+  **already-resolved** `zod@4.4.3` rather than a new version, and that relocating
+  into `contract` does **not** remove the ordering fragility, only moves which
+  file's comment nobody reads, while adding an edit to a package three siblings
+  depend on. Recorded here so the widening reads as a decision rather than creep.
+- **low** · The import order in `web/src/main.tsx` is load-bearing and only the
+  e2e suite catches a reorder. Reproduced: moving `import "./lib/zod-jitless.ts"`
+  below `@downloader/contract` and rebuilding turns exactly one assertion red
+  (`csp.spec.ts:179`, `blockedURI: "eval"`), 3 of 4 still passing. The gate then
+  established from zod's own source why no cheaper guard is possible:
+  `util.allowsEval` is a `cached()` getter that fires **once**, lazily, at the
+  first `_object` schema construction (`schemas.js:965-990`, `util.js:145-160`)
+  and memoises process-wide, and the `ctx.jitless` parse option gates only an
+  already-compiled fastpass, never the probe. It also confirmed nothing else
+  would notice: no unit test imports `main.tsx` or `zod-jitless.ts`,
+  `.oxlintrc.json` carries no `import/order` rule, and oxfmt does not reorder
+  imports. **No change** — a guard exists and it works; what this bullet records
+  is its _tier_. `npm test` and `npm run check` both stay green through a
+  reorder, so the thing that catches it is CI, not the fast loop.
+- **low** · The ticket's `**Packages:**` line named only `api` and `e2e` while the
+  Log disclosed the `web` widening in prose. **Fixed** in `a5077c0`, pointing at
+  the disclosure rather than restating it.
+- **no finding** · The policy is enforced rather than asserted. The gate
+  reproduced both red runs at the counts the Log claims — hook removed: 3 of 4 in
+  `e2e/csp.spec.ts`, 4 of 8 in `api/test/csp.test.ts` — and the cross-origin
+  differential (`csp.spec.ts:101` · `:105-106` · `:112` blocked and never
+  requested, `:120-121` the same image loading from a policy-free page).
+- **no finding** · The hand-edited `package-lock.json` line verified without
+  installing: `npm ls zod -w @downloader/web` exit 0, no `invalid`, `extraneous`
+  or `missing`. The gate was explicit that it did **not** run `npm ci`, so a
+  fresh install from this lockfile is reasoned about rather than measured.
+- **no finding** · The new `web` → `zod` dependency owes no `Dockerfile` edit.
+  Vite bundles zod into the static `dist/app` assets at build time, and the
+  runtime stage copies `web/dist/app` + `web/package.json` and never
+  `web/node_modules`, so nothing resolves zod at container runtime. The
+  two-Dockerfile-edits rule is about the API's runtime resolution.
+  `image-closure.test.ts` and `spawn-safety.test.ts` both pass.
+- **no finding** · Test integrity. `api/test/csp.test.ts`, `e2e/csp.spec.ts` and
+  `e2e/csp-violations.ts` are wholly new; `download.spec.ts` is purely additive
+  (0 deletions); `mse-page.spec.ts`'s single deletion is an import statement
+  reformatted to take two more named imports. No existing assertion was weakened
+  or removed.
+- **no finding** · `tools/downloader/contract` is untouched — no unilateral
+  contract edit. Tool boundary intact (zod is third-party, not cross-tool). The
+  new test files land inside already-registered tsconfig project globs, so they
+  cost no reference line.
+- **not chased**, and named as such by the gate rather than reasoned about: the
+  container was never built, so the policy is known to be served by `main.ts`
+  under `WEB_DIR` and not by the shipped image; and only Chromium was driven,
+  which is the single project both Playwright configs define.
+- NFR: security — the point of the change, and enforcement measured rather than
+  asserted · performance — zod's interpreted parse path in the browser instead of
+  its JIT one, on API payloads of a few hundred bytes · reliability ✓ ·
+  maintainability — the `low` above, whose whole content is which tier its guard
+  runs at.
+
+Every `file:line` cited in this section was re-resolved against the branch tip
+before it was committed; all hold. The gate read `ed784aa`, and `a5077c0` — the
+only commit since — touches this file alone.
+
 ## Log
 
 - **2026-09-01** — Filed from dl-29's branch, alongside dl-34, on the precedent
