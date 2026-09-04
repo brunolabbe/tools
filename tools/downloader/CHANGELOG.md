@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.0](https://github.com/brunolabbe/tools/compare/downloader-v0.2.0...downloader-v0.3.0) (2026-09-04)
+
+
+### Features
+
+* **downloader:** serve a Content-Security-Policy for the web UI (dl-35) ([#143](https://github.com/brunolabbe/tools/issues/143)) ([6b98b5d](https://github.com/brunolabbe/tools/commit/6b98b5d2cf60b2c4c74de559a306e2edbac3d639))
+* **downloader:** show a preview image, and stop sending source credentials to the client (dl-29) ([#128](https://github.com/brunolabbe/tools/issues/128)) ([9856e6a](https://github.com/brunolabbe/tools/commit/9856e6a5a6aee30da16179ed7f543b45c09aca38))
+
+
+### Fixes
+
+* **downloader:** encode fixture certificate serials as positive integers (dl-36) ([#134](https://github.com/brunolabbe/tools/issues/134)) ([e9f516b](https://github.com/brunolabbe/tools/commit/e9f516b36195c3344fe98e0d4b36ea7c6b83f7d2))
+* **downloader:** give the whole egress the operator's CA, as EGRESS_CA_FILE (dl-31) ([#125](https://github.com/brunolabbe/tools/issues/125)) ([68f4272](https://github.com/brunolabbe/tools/commit/68f4272044e1ce17f3401a08ffd10fdb9aa62387))
+* **downloader:** meter the download route and stop logging its token (dl-23) ([#123](https://github.com/brunolabbe/tools/issues/123)) ([6f29eb0](https://github.com/brunolabbe/tools/commit/6f29eb0b0a9b7e3e950d43975e477e79d4f7cfd3))
+* **downloader:** name a refused certificate in both resolver tiers (dl-34) ([#142](https://github.com/brunolabbe/tools/issues/142)) ([a7a795e](https://github.com/brunolabbe/tools/commit/a7a795ecc10abdcc2be209a437017b015fe44e66))
+* **downloader:** stop the egress proxy minting unparseable certificate serials (dl-33) ([#141](https://github.com/brunolabbe/tools/issues/141)) ([c2ff413](https://github.com/brunolabbe/tools/commit/c2ff4134320b0a33781f7798cdc7da48fec48f02))
+* **downloader:** stop the ttml row reading a hostname as a format claim (dl-28) ([#99](https://github.com/brunolabbe/tools/issues/99)) ([730aa90](https://github.com/brunolabbe/tools/commit/730aa907cd8310ad57171958143785da48cdf958))
+* **downloader:** stop the vtt and srt rows reading a hostname as a format claim (dl-25) ([#94](https://github.com/brunolabbe/tools/issues/94)) ([a44016a](https://github.com/brunolabbe/tools/commit/a44016a67dc2eb751498ca334df5731da42c7f0d))
+* **downloader:** verify HLS and DASH segment origins at the egress proxy (dl-27) ([#115](https://github.com/brunolabbe/tools/issues/115)) ([ec1dd6b](https://github.com/brunolabbe/tools/commit/ec1dd6b2118d7c1b1948c12146f08c57827e5758))
+* **downloader:** weigh a rendition instead of trusting its declared bitrate (dl-30) ([#112](https://github.com/brunolabbe/tools/issues/112)) ([790c4a2](https://github.com/brunolabbe/tools/commit/790c4a24178d75e6a0cd44a40e2fbd15892415b7))
+
 ## [0.2.0](https://github.com/brunolabbe/tools/compare/downloader-v0.1.1...downloader-v0.2.0) (2026-08-23)
 
 
