@@ -59,6 +59,36 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   the prompt; agents reach for the directory by default. The 20x is this repo's
   suites and will not transfer as a constant — the *shape* does, so have the agent
   measure both once and use the number it gets.
+
+  **And the constant is not constant inside this repo either — re-measured
+  2026-09-03, warm, each row carrying its test count to prove the run was real:**
+
+  | target | files | tests | wall |
+  | --- | --- | --- | --- |
+  | `scripts/test/citations.test.ts` | 1 | — | **1 s** |
+  | `scripts` (the directory) | 3 | 114 | **2.4 s** |
+  | `tools/downloader/api/test/egress-proxy.test.ts` | 1 | 23 | **1 s** |
+  | `tools/downloader/api` (the directory) | 18 | 322 | **28 s** |
+  | `npm run build` | — | — | **8 s** |
+
+  So "the directory" costs **2.4 s or 28 s** depending which one — a 12x spread
+  *within* the repo, and most of the spread the 41 s figure was quoting against a
+  spec. The shape holds where the directory is large (1 s → 28 s) and vanishes
+  where it is small. **41 s reproduced for neither directory measured.** A builder
+  told "the directory costs 41 s" will avoid a 2.4 s run to save nothing — one was
+  told exactly that on 2026-09-03 and pushed back with its own timings, which is
+  the only reason this was caught. **So put the rule in the prompt, not the
+  number**, and have the agent measure its own two figures before optimising
+  against either.
+
+  **The trap that makes a broken directory look cheap.** The 28 s row first came
+  back as **2 s**, which would have "confirmed" the correction beautifully. It was
+  a worktree with no `dist`: 17 of 18 files failed to import and 23 tests ran
+  instead of 322. A suite that cannot load is the fastest suite there is. **Read
+  the test count on every timing, never the wall clock alone**, and in a fresh
+  worktree run `npm run build` before believing any number — the farm script's own
+  warning, "without dist, suites fail with packageEntryFailure", is describing
+  precisely this.
 - **A second gate on the same brief re-derives the first.** Gate count is not the
   lever; the brief is. Measured 2026-09-02: a first gate returned PASS with zero
   findings, and a second on the *same* branch — deliberately aimed only at ground
@@ -74,6 +104,77 @@ at four times the scale on its widest branch — 100 calls → 238 k, then **29 
   and the reproduction **is** the verification. In the second session that builder
   found more than it was briefed, corrected the orchestrator, and cost 111 k with
   no reviewer at all.
+
+### Slice a blocked ticket
+
+The inverse of the section below, and the one that makes a decision-blocked board
+productive instead of idle. A ticket whose page forbids a builder from settling
+its open question is not therefore undispatchable — **the question usually blocks
+part of it, not all of it**, and the ticket often says which part.
+
+Three tells, all readable without loading the whole ticket:
+
+- **A Build step marked unconditional.** "Fix the positional-argument parse
+  **regardless of what is decided below**"; "required whichever option wins";
+  "whichever way this goes". The ticket has already done the separation for you.
+- **The ticket recommends an ordering.** One 2026-09-03 case read "do not move
+  Chromium; fix the classification (half two) first, since it is cheap, strictly
+  an improvement, and independent — then take half one as its own decision". That
+  is a dispatch plan written by the filer.
+- **A step whose deliverable is a measurement, not a build.** "Re-run job X and
+  record whether it goes green, because that single fact separates Option D from
+  a dead end." Do it yourself; it is one call and it converts the decision you owe
+  the user from an opinion into a number.
+
+Four things the dispatch prompt must then carry, and the first two are the ones a
+builder will otherwise get wrong:
+
+- **Say the ticket does NOT close, and that its status stays `ready`.** A builder
+  told to implement a Build section will close the ticket, because that is what
+  finishing means everywhere else.
+- **Say the boundary is the point**, and name the held question in the builder's
+  own words — quote the ticket's "do not settle it here" heading. A boundary given
+  without its reason reads as an arbitrary narrowing and gets helpfully exceeded.
+- **The unconditional half still earns a Log entry**, saying what landed and what
+  remains open pending a decision. Otherwise the next agent cannot tell a sliced
+  ticket from an untouched one.
+- **Ask the held decision immediately** — see _Batch them_ in the skill page. The
+  slice and the question are the same ticket, and the answer is only cheap while
+  the builder lives.
+
+**A slice collides with the acceptance rubric, and you have to say so at
+dispatch.** The gate is asked to give every `Done when` line a verdict —
+`proven`, `verified`, `unproven`, `unproven (gate)` — and a single `unproven`
+reads as FAIL. **A sliced ticket always has them**, for the half nobody built, so
+the rubric's letter condemns a branch that did exactly what it was told. Measured
+2026-09-03: a reviewer hit this, recorded CONCERNS rather than FAIL, and — the part
+worth copying — **named the judgment out loud rather than quietly reinterpreting
+the rubric**, flagging it upward in case the orchestrator weighed it differently.
+
+The gap is the dispatcher's, not the reviewer's. So when you gate a slice:
+
+- **Name which acceptance lines belong to the unbuilt half**, and say they are
+  expected `unproven` rather than leaving the reviewer to infer it.
+- **Say the verdict should not be FAIL on those lines alone.** A reviewer told
+  only "do not gate the held half as missing work" still has a rubric telling it
+  otherwise, and you have handed it a conflict to resolve on its own.
+- **Ask for them to be marked explicitly** rather than left blank — blank is
+  indistinguishable from overlooked, which is the thing the rubric exists to catch.
+
+**The trap, and it is not obvious.** A slice can *de facto answer* the question it
+was supposed to hold. Measured 2026-09-03: a ticket's unconditional step 2 was
+"reject an unknown flag with a non-zero exit", and its held question was whether to
+implement or delete a documented-but-dead flag. Landing step 2 turns that flag from
+a silent no-op into a hard error — which is most of what deleting it would do. The
+ticket half-noticed, saying step 2 "makes deleting the strictly safer of the two in
+the short term", and no one had drawn the conclusion. **So before dispatching a
+slice, ask what the unconditional half does to the held option**, and put it in the
+prompt as a thing to surface rather than to resolve: *if landing this forces a
+behavioural answer to the open question, say so as an open decision rather than
+picking one — I am the only participant who can put it to the user.* The builder is
+the one with the code in front of it and is best placed to see it; it will not
+raise it unless asked, because from inside the slice it looks like scope it was
+told to stay out of.
 
 ### Fold it in, or file it
 

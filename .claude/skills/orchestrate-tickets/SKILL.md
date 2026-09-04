@@ -52,6 +52,21 @@ you are there.
    **~27,800 est. tokens for nine candidates** on 2026-08-30. Then bring the user
    the batches that break up the collisions. See _Decisions_ and
    [reference/concurrency.md](reference/concurrency.md).
+   - **A board can be mostly unbuildable, and then "which batch" is the wrong
+     question.** Measured 2026-09-03: `--ready` returned nine and **eight carried
+     an open decision their own page forbids a builder from settling**. Offering
+     the user a choice of batches out of that set buys a round that ends in "this
+     ticket says I may not answer this". One call finds the shape before you
+     spend anything —
+     `grep -nE '^#{2,4} .*([Dd]ecision|[Oo]pen question)' <candidates>` — and when
+     it holds, the question becomes **which slices**, not which tickets. See
+     _Slice a blocked ticket_ in [reference/sizing.md](reference/sizing.md).
+   - **The seam-mapper does not remove the decision-reading cost, only the
+     ticket-reading cost.** The same session paid **87,596 subagent tokens** for
+     the map and then still read seven decision sections itself. That is not a
+     loss — those are disposable tokens where the ~27,800 above are the context
+     that must survive — but do not budget the map as though it ends your reading.
+     Why you have to read them yourself is under _Decisions_.
 3. **Dispatch builders** — `subagent_type: "builder"`, one per ticket. The agent
    definition carries the worktree, the setup order and the scope rules; your
    prompt carries the ticket. **The builder's model comes from the ticket, not
@@ -112,13 +127,26 @@ you are there.
    side ends its turn after it sends, and `SendMessage` wakes the other back into
    its own context.
 
-   **Sideways wakes work; upward ones do not.** Your builder and reviewer wake
-   each other unaided. **You are not woken when a child of yours finishes** —
-   measured three times on 2026-09-02, each time sitting `completed` beside a
-   finished agent until something outside nudged you. There is no completion
-   signal to wait for. If nothing external drives you, the loop stops here and
-   looks finished. Say so in your report rather than letting a stalled batch read
-   as a quiet one. So **keep the reviewer's agent record and worktree** until the
+   **Sideways wakes work.** Your builder and reviewer wake each other unaided —
+   confirmed again 2026-09-03: a builder that needed the reviewer's record woke it
+   from `completed`, and it came back with the text re-resolved against the new
+   tip, with no orchestrator hop.
+
+   **Upward wakes: the two sessions that measured this disagree, so check rather
+   than plan around either.** 2026-09-02 recorded, three times, that you are *not*
+   woken when a child finishes — sitting `completed` beside a finished agent until
+   something outside nudged you, with "no completion signal to wait for".
+   **2026-09-03 measured the opposite, six or more times**: every finishing
+   subagent delivered a `<task-notification>` that woke the orchestrator
+   unprompted, and a reviewer's `SendMessage` to `main` arrived the same way. Both
+   sessions ran this skill in this repo. Whether the harness changed between them
+   or the earlier reading was wrong cannot be settled from inside either, so
+   **assume nothing and look**: `ListAgents` costs one call and says who is
+   `running` against who is `completed`. Plan the batch so a missed wake is
+   survivable, and if you do find yourself idle beside finished work, say so in
+   your report rather than letting a stalled batch read as a quiet one.
+
+   So **keep the reviewer's agent record and worktree** until the
    exchange is over, which is not the same as keeping it alive; nothing is. A
    builder that comes back "this does not reproduce" is asking a question only
    that reviewer can answer. See
@@ -157,11 +185,17 @@ you are there.
    relay wearing a different hat.
 9. **Builder opens the PR**, commits the gate record, and posts the reviewer's
    report to the PR thread.
-10. **Remove the reviewer's worktree** once its record is pushed **and its
-   conversation with the builder is over** — the second condition is new with the
-   direct channel, and it is the one that bites. **Hold the builder's until the
-   ticket is finished**, because
-   steps 11 and 4-above may still need that agent. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
+10. **Hold every worktree — the reviewer's as well as the builder's — until the
+   ticket is finished.** The reviewer's used to come down earlier, once its record
+   was pushed and its exchange with the builder had ended. **That condition cannot
+   be evaluated**: measured twice on 2026-09-03, once from "the PR exists" and once
+   from *both agents reporting closed*, and both times the exchange resumed — a
+   builder can always push one more commit and wake its reviewer, and neither is
+   lying when it says it is done. The second removal landed mid-`npm run check` and
+   cost a verification round. Holding costs ~18 MB; removing early costs an agent
+   its tools mid-command. If you do take one early, **tell that agent you did it,
+   unprompted** — from inside, your removal and the documented auto-reclaim are
+   indistinguishable. See [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
 11. **Check the merge landed what it was supposed to.** Not polling — one look,
    after the fact. See _After a merge_.
 12. **Append this session's row to [reference/history.md](reference/history.md)**,
@@ -220,6 +254,59 @@ them. When one does, that is yours to put to the user — not to absorb.
 
 **Batch them.** Each question stalls the board. Hold them to a checkpoint unless one
 blocks a running agent.
+
+**The exception that pays best: a slice's own decision, asked while its builder is
+still alive.** If you dispatched a decision-independent slice (step 2), that
+ticket's question is the one to ask *first* rather than hold — an answer that
+reaches a running agent costs one message, where the same answer after it
+finishes costs a resume, measured in this repo at 100–330 k regardless of how
+small the remaining work is. Measured 2026-09-03: a slice dispatched as "steps 1–2
+only, the ticket stays open" was widened to the full ticket by a single message,
+because the answer arrived before the builder stopped. Ask early, and say in the
+message which part of the original dispatch you are reversing.
+
+**Read the options out of the ticket yourself before you put them to the user.**
+This is the one relay where a subagent's paraphrase is not good enough, and it is
+not the same rule as _do not launder subagent claims_. A relayed *finding* can be
+marked unverified and travel safely; a relayed *option* cannot, because the user
+acts on it — a costing that drifts becomes the basis of a decision nobody can
+audit later. Cost is a few `sed` calls against the decision headings. Measured
+2026-09-03: the map's extraction was faithful and still corrected the
+orchestrator's own count on the way past, which is the argument for reading, not
+against it.
+
+**An option's stated mechanism is a proposal, not a fact — and answering the
+decision does not verify it.** The sharpest laundering route on this page, because
+it does not feel like relaying at all. A ticket or a subagent writes an option as
+*"do X by doing Y"*; you put it to the user faithfully; the user picks it; and Y
+arrives in your dispatch as an instruction that nobody ever checked. The
+faithfulness of the relay is what disguises it — you were careful with the words,
+and the words carried an unverified claim.
+
+Measured 2026-09-03. A builder surfaced a decision whose option A read "guard that
+call and **route failure to `options.onFailed`**". The user chose to fold the work
+in, and the orchestrator relayed `onFailed` as the mechanism. A gate then
+established it is **not reachable** from that call site — it is wired to a
+different handler on the same socket, and the throw is a synchronous exception in
+the success path, not an event that socket emits. The builder's own proposal had
+been wrong about its own file, the orchestrator had repeated it without checking,
+and only the gate stopped it being built.
+
+**So separate the outcome from the route when you dispatch a decided option.** Say
+what must be true — *a failure here must fail fast with a typed code instead of
+escaping* — and say explicitly that the mechanism named in the option is unverified
+and the builder should choose the route. That costs one sentence and it puts the
+decision's *purpose* beyond the reach of its *guess*.
+
+**"Accept the baseline" is rarely zero work — check before you report it as
+closing anything.** An option that reads *do nothing* usually still leaves the
+ticket's unconditional steps standing. Measured 2026-09-03: a four-option decision
+was answered with the zero-work option, and the ticket's own Build still required
+amending an ADR "whichever option wins" and clearing an outstanding alert
+"whichever way this goes" — the second explicitly noting no option retires it
+retroactively, *do nothing included*. So the answer converted a blocked ticket
+into a small dispatchable one rather than closing it. Read the Build for steps
+that survive every option before telling the user a decision cost them nothing.
 
 **And hold a question until you can bring a measurement rather than a guess.**
 When the decision turns on a fact nobody has yet, asking now buys an opinion and

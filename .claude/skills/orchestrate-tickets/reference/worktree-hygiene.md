@@ -125,6 +125,109 @@ recovery is expensive.
   capturing output rather than at the end of its review, so a second interruption
   could not strand it on `origin`.
 
+### Hold the reviewer's worktree until the ticket merges, like the builder's
+
+**The rule used to be "remove it once its record is pushed and its exchange with
+the builder has ended". Two failures on 2026-09-03 say that condition cannot be
+evaluated, and the removal is not worth what it costs.**
+
+First attempt: the orchestrator checked "record pushed", inferred "exchange over"
+from the pull request existing, and removed the worktree. The exchange was live and
+the record on that branch had gone in *wrong*, so the reviewer lost Bash at exactly
+the moment it needed it.
+
+Second attempt, after the orchestrator had explicitly promised to ask first: **both
+agents reported closed, and it still was not over.** The builder pushed a
+follow-up commit and re-engaged the reviewer; the removal landed mid-`npm run
+check`, producing an `exit 1` the reviewer had to specifically disclaim so it would
+not be read as a finding, and leaving two of its verification claims unconfirmed.
+
+**"Both sides say they are finished" is not a durable state.** A builder can always
+push one more commit and wake the reviewer, and neither of them is lying when they
+say they are done — they are done *until the next thing*. There is no observable
+moment that means "no further exchange will occur" short of the branch merging.
+
+**And the trade is lopsided.** Holding costs about **18 MB** of disk per reviewer.
+Removing early costs an agent its tools mid-command, a misattributed failure, and a
+round. So: **hold the reviewer's worktree on the same condition as the builder's —
+until the ticket is finished.** Then remove both.
+
+If you must remove one earlier, **say so to that agent unprompted, in the same
+breath**. From inside, a worktree you removed and the documented auto-reclaim are
+indistinguishable: the failure text names the worktree, not the cause. That is why
+the first reviewer misdiagnosed it, and why its builder repeated the misdiagnosis
+upward — a tidying failure that arrives disguised as an infrastructure one.
+
+Restoring is one command, `git worktree add <path> --detach <sha>`, and worked both
+times. Re-running the farm and build afterwards is on the agent, so tell it to.
+
+### "The PR is open" is not "the exchange is over"
+
+The condition on removing a reviewer's worktree is that its record is pushed **and
+its conversation with the builder has ended**. Measured 2026-09-03, by an
+orchestrator that had just written that sentence down: it checked the first,
+assumed the second because the pull request existed, and ran
+`git worktree remove … --force`. The exchange was in fact still live — and worse,
+the record on that branch had gone in **wrong**, so the reviewer needed its tools
+at exactly that moment. It lost Bash mid-correction.
+
+**The tell to distrust is the pull request itself.** An open PR looks terminal and
+is not: the gate record can still be in flight, a citation can still need
+re-resolving, and a reviewer's confirmation of a fix can still be outstanding.
+None of those are visible in `gh pr view`. **Ask the reviewer whether it is done
+rather than inferring it from artifacts** — it is one message, and the reviewer is
+the only participant who knows.
+
+**The second-order cost is the one worth naming.** The reviewer, unable to run
+Bash, diagnosed it as the documented auto-reclaim of a worktree with nothing
+uncommitted — a reasonable read, since a reviewer legitimately never commits
+anything, and the pattern is real and is on this page. It was about to report a
+hazard that had not occurred, which would have taught the next reviewer to commit
+defensive WIP markers against nothing. **An orchestrator's tidying failure
+disguises itself as an infrastructure failure**, because the agent cannot see who
+removed its worktree. So if you take one away and the agent notices, say that you
+did it, immediately and unprompted.
+
+Restoring it is one command — `git worktree add <path> --detach <sha>` at the same
+path — and worked here.
+
+### The worktree an agent is in is not the tree it just tested
+
+Two independent sightings on 2026-09-03, in the same session, from different
+agents — which is why this is a section and not a footnote. Both produce a
+**green run that proves nothing**, and neither announces itself.
+
+**Running from the shared checkout.** A builder ran `vitest` from
+`/workspaces/tools` while its edits were in
+`.claude/worktrees/agent-<id>/` — three directories away. The run reported **35
+passing tests** for the file it thought it was testing, and a mutation that
+should have gone red stayed green. It caught this itself and re-ran everything
+from the worktree; nothing in the tooling would have told it.
+
+**Testing a worktree with no `dist`.** An orchestrator timing a directory got
+**2 s** and a plausible-looking result. The real figure was 28 s: 17 of 18 files
+had failed to import and **23 tests ran instead of 322**, because
+`worktree-farm.sh` had been run but `npm run build` had not. The farm script says
+this in its own output — "without dist, suites fail with packageEntryFailure" —
+and it is still easy to walk past, because the broken run is the fast one and the
+fast one is the one that confirms whatever you were hoping.
+
+Both collapse to one instruction worth putting in every dispatch and every gate
+prompt:
+
+- **Read the test count on every run, never the wall clock alone.** A suite that
+  cannot load is the fastest suite there is, and a suite that ran 23 of 322 tests
+  looks exactly like a suite that ran.
+- **Print the resolved path before believing a result** in any session that has
+  more than one tree on disk — which is every orchestrated batch.
+- **`npm run build` after the farm, before the first timing**, not just before
+  the first suite.
+
+This is the same family as the entries in the repo's own note on tests that
+measure the sandbox rather than the code. The distinguishing feature is that the
+sandbox failures are *silent and flattering*: they do not error, they agree with
+you.
+
 ### Give a new worktree its dependencies without installing them
 
 A fresh worktree has no `node_modules`, so every agent pays `npm install` plus

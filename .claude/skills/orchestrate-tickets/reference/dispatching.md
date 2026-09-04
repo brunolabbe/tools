@@ -43,6 +43,36 @@ What only you can supply, and what every builder prompt therefore carries:
   the whole directory by default; say the spec file. See [sizing.md](sizing.md)
   for the 20x this costs.
 
+### An answered decision has to be recorded even when you do not build it
+
+The case this loop had no step for, measured 2026-09-03. A slice was dispatched
+with its ticket's question held open; the user then answered it — and the answer
+was *bigger* than the branch, reversing an architectural decline documented in the
+service's own source. Widening the running builder into it would have destroyed the
+thing that made the slice dispatchable in the first place.
+
+**The scope call is easy and the bookkeeping is the part that gets dropped.** Keep
+the slice; give the large half its own branch, its own gate and its own reviewer.
+But an answer that is neither built nor written down **evaporates**, and the ticket
+is then actively misleading: its Build still describes the mechanism the decision
+just replaced, so the next agent builds the wrong half off stale text and nothing
+in the repo contradicts it.
+
+So when you hold an answer back from the build, spend the one message anyway — the
+builder is already editing that ticket, which makes this nearly free, where a
+future dispatch to record one decision is a full round. Ask it to:
+
+- **Record the question, the answer and the reason** in the ticket's own settled-
+  decision form, unmistakably answered rather than still open.
+- **Mark the superseded Build step**, without rewriting it into a new brief — that
+  is the next agent's job, with the deployment in front of them.
+- **Carry the cost that came with the answer.** The objection the chosen option has
+  to meet travels with it, or whoever builds it rediscovers it from scratch.
+- **Say `status` stays `ready`.** The half is decided, not done.
+
+And say **do not implement any of it** in those words. An agent handed a decision
+reads it as work.
+
 ## Dispatching a gate — the highest-leverage thing you write
 
 Gate yield tracked prompt specificity, not gate number. In the reference session
@@ -51,10 +81,79 @@ prompts said *reproduce this exact mutation* instead of *review this*.
 
 **Name the builder in every gate prompt.** The reviewer sends its findings to the
 builder itself now, so a gate prompt that does not say who to address has no
-channel — give the builder's agent name and say that `SendMessage` is deferred and
-needs a `ToolSearch` first. Say explicitly what still comes back to you: an
+channel — give the builder's agent id (never an agent-type name; see below).
+**Do not tell it to fetch `SendMessage` first**: both agents carry `SendMessage`
+directly and neither has `ToolSearch`, so that instruction sends a reviewer to a
+tool it does not have — measured, and recorded below. Say explicitly what still comes back to you: an
 unsettleable disagreement, and any open decision. Anything else you ask to be
 routed through yourself, you are volunteering to retype.
+
+### Never write an install into a gate prompt
+
+**Do not tell a reviewer to run `npm ci` or `npm install`** — in this repo you
+populate a worktree with `worktree-farm.sh` then `npm run build`, and the farm
+script refuses outright when pointed at the shared checkout. Measured 2026-09-03:
+an orchestrator put `npm ci` in a gate prompt to verify a hand-edited lockfile.
+That gate ran **two hours without reporting** and was killed with its spend
+unmeasured.
+
+**The lockfile was verifiable without it**, which is the part worth keeping. The
+replacement gate checked the same thing in minutes: `npm ls zod -w @downloader/web`
+against the farmed tree, plus reading the lockfile entry against `package.json` —
+establishing that the edit added an edge to an **already-resolved** version rather
+than introducing a new one. When you genuinely need a fresh-install guarantee, say
+so as a question the gate may answer *"I could not verify this"*, and mean it.
+
+**The wider lesson is about the replacement, not the failure.** Given the correct
+setup and scoped to three named checks with the container and cross-browser tails
+explicitly dropped, it returned a sharper result than the two-hour attempt — it
+read a library's source to establish that an ordering hazard was intrinsic rather
+than assumed, and it worked out which *tier* of the suite guards that ordering.
+**Gate yield tracks prompt specificity, not runtime**, and this is the cleanest
+measurement of that on the page: same branch, same model, two prompts.
+
+### Send the findings in full; the builder writes the section down
+
+**Do not tell the reviewer to send a `## Review` block for the builder to paste
+verbatim.** An orchestrator did exactly that on 2026-09-03 and it was wrong —
+`docs/01-TICKETS.md:239` is explicit that *"the reviewer reports and the builder
+writes the section down"*, with the date, the verdict, an acceptance table naming a
+test per `Done when` line, and a bullet per finding including the ones needing no
+change. Verbatim transcription is nowhere in that rule, and the reason it is not is
+the same one a reviewer discovers the hard way: **a reviewer's worktree is thrown
+away, so a section authored there is authored into nothing.** The record has to be
+written where it will survive.
+
+**The hazard the verbatim instruction was reaching for is real, but it is a
+different one: a record must never carry findings or verdicts its writer never
+received.** Both halves of that were measured the same afternoon, and the contrast
+is the whole lesson.
+
+- A reviewer sent the orchestrator a literal block and sent the **builder** a prose
+  narration of the same six attacks. The builder refused to compose the record from
+  it, on the grounds that paraphrasing a narration and labelling the result verbatim
+  is a substitution described as the thing itself. **Right call** — it did not have
+  the findings in full, only a description of them.
+- A sibling reviewer sent its builder two complete findings reports, then said "go
+  ahead and write the section". The builder wrote a compliant section: date,
+  verdict, both passes and their shas, `capture-rules.test.ts:359` and two more per
+  acceptance row, a bullet per finding. The reviewer flagged it as "not verbatim".
+  **The section was correct**, and it did something a pasted block could not — it
+  attributed which side measured what, because by then the builder had run
+  experiments the reviewer had not seen when it wrote its report.
+
+So the test is **not** "are these the reviewer's exact words". It is **"was every
+finding and verdict in this section actually received"**. What the gate prompt
+should require is therefore about completeness, not form:
+
+- **Send findings in full, not a summary** — every finding, its evidence, its
+  disposition, and the acceptance verdicts with their test citations. A builder
+  cannot write down what it was not told.
+- **Do not authorise the commit before the findings are complete.** Ordering is
+  what bit here: "ship it, my findings follow" is a race the builder cannot see,
+  where "here are my findings, then ship" is one message.
+- **A builder that refuses to fabricate a record is doing its job**, not being
+  obstinate. Budget the round rather than pressing it.
 
 ### Addressing, which is where this loop actually failed
 
