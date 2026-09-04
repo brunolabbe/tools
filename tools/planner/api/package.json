@@ -1,6 +1,6 @@
 {
   "name": "@planner/api",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "HTTP API and persistence. The join point: a conversation in, an agent's answer and a saved trip out.",
   "type": "module",
