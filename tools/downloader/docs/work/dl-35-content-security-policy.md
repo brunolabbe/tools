@@ -12,7 +12,8 @@ difficulty: standard
 # dl-35 — a Content-Security-Policy for the downloader
 
 **Packages:** `api` (`routes/web.ts`, or wherever the web bundle's headers are
-set), `e2e`.
+set), `e2e`, and `web` (a small, disclosed widening — see the 2026-09-03 Log
+entry, point 3).
 
 ## Why
 
