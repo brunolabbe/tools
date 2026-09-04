@@ -3,7 +3,7 @@ id: dl-34
 tool: downloader
 title: The resolver tiers cannot reach the operator's CA, and misreport it when they hit it
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -29,7 +29,7 @@ fixing either alone leaves the report misleading.
 ### Half one — no route to the anchor
 
 This is **not** an oversight. It is dl-27's tunnel-versus-terminate split working
-as designed, and `downloader/api/src/server.ts:96-104` says so in the first person:
+as designed, and `downloader/api/src/server.ts:118-130` says so in the first person:
 
 > Chromium and yt-dlp verify their own connections without being asked, so they
 > keep the one above: a `CONNECT` is tunnelled, the origin's own certificate
@@ -193,7 +193,7 @@ it move to the terminating proxy? dl-27 already built a proxy that terminates
 TLS and mints leaves from a generated root; ffmpeg is on it. Putting the tiers on
 it too gives them the operator's trust for free and deletes the per-tier wiring —
 at the cost of every HTTPS page Chromium loads passing through this process in
-plaintext, which `downloader/api/src/server.ts:96-104` explicitly declined.
+plaintext, which `downloader/api/src/server.ts:118-130` explicitly declined.
 
 **The answer, from the user: move the resolver tiers onto dl-27's terminating
 proxy.** Not the per-tier trust-anchor wiring Build step 1 described, which is
@@ -220,7 +220,7 @@ builds half one has to meet this objection rather than rediscover it:
   other subresources, whatever third-party origins it talks to — is a bigger
   surface than the handful of manifest and segment URLs a `ProbeResult` names,
   even though both can carry the same cookie.
-- **`downloader/api/src/server.ts:96-104` declined it in the first person**, and the comment is
+- **`downloader/api/src/server.ts:118-130` declined it in the first person**, and the comment is
   still there and still has to be rewritten by the branch that does this: _"a
   `CONNECT` is tunnelled, the origin's own certificate reaches them, and nothing
   needs a trust-store change… Pointing the tiers at this one instead would break
@@ -279,6 +279,36 @@ this section is left as it was written so the difference between an inherited
 claim and a produced one stays visible.
 
 ## Log
+
+- **2026-09-04** — **Closed. Half one is now [dl-37](./dl-37-tiers-move-onto-the-terminating-proxy.md).**
+  The committed work — half two, steps 2 and 3 — is complete and gated, so this
+  ticket is `done` rather than `ready`.
+
+  **What forced the split is an invariant, and it was right.** Holding
+  `status: ready` while carrying a `## Review` gate record is a state this repo
+  forbids: `reviewedButReady` in [`scripts/status.mjs:264`](../../../../scripts/status.mjs)
+  feeds `problems` and sets a non-zero exit, and
+  [`scripts/test/status.test.ts:180`](../../../../scripts/test/status.test.ts)
+  asserts "no ticket on the board is ready with a gate record already on it". PR
+  #142 went red on exactly that, on both the `check` job and the `scripts`
+  suite, while `downloader`, `security` and `pr-title` all passed. The two
+  instructions that produced it — keep `ready` because half one is unbuilt, and
+  commit the gate record — are each reasonable and jointly forbidden. A sliced
+  ticket cannot stay open on the strength of the half it did not build; the
+  unbuilt half is a new ticket, which is what dl-37 now is.
+
+  **The `server.ts` citation was stale before this branch existed, and it is the
+  one a half-one builder would follow.** `downloader/api/src/server.ts:96-104` was written into the
+  Why, the Decision and the Provenance at filing time; at `origin/main`
+  (`91c117b`) — checked with `git show origin/main:…`, so this is not something
+  this branch moved — the tunnel-versus-terminate comment it quotes actually
+  starts at **118** and ends at **130**, and line 96 is the dispatcher
+  construction. `scripts/citations.mjs` passes it, correctly and by its own
+  documented limit: a citation whose _content_ moved still resolves. Corrected
+  in the Why and the Decision, and carried to dl-37 as `118-130`. **Left as
+  written in `## Provenance`**, which pins itself to a different tree in its own
+  words ("Verified in this worktree, at `origin/main` + dl-29") and is a record
+  of what was checked then, not a pointer for a reader now.
 
 - **2026-09-04** — **`## Review` above is builder-written, which is the
   convention and not a shortcut.** [`docs/01-TICKETS.md:239`](../../../../docs/01-TICKETS.md):
