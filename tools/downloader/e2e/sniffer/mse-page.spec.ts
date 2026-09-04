@@ -22,7 +22,13 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { PLAYER_ERROR_PATH, startHlsOrigin } from "../fixtures/hls-origin.ts";
+import { collectCspViolations, cspViolationsOn } from "../csp-violations.ts";
+import {
+  PLAYER_ERROR_PATH,
+  PREVIEW_PATH,
+  PREVIEW_WIDTH,
+  startHlsOrigin,
+} from "../fixtures/hls-origin.ts";
 import type { HlsOrigin } from "../fixtures/hls-origin.ts";
 
 /** A browser probe is 10-20 s of page load, provocation and network quiet. */
@@ -61,6 +67,13 @@ test.afterEach(async () => {
 });
 
 test("finds a blob-only stream through the sniffer and downloads it", async ({ page, request }) => {
+  // dl-35, and this suite is not an arbitrary home for it. The preview is only
+  // ever rendered when a probe produced a `thumbnailPath`, and the browser tier
+  // is the only resolver that reads an `og:image` at all — so this is the one
+  // e2e configuration where dl-29's pipeline runs end to end, and therefore the
+  // only place `img-src 'self'` can be shown not to have broken it.
+  await collectCspViolations(page);
+
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: /downloader/iu })).toBeVisible();
@@ -112,6 +125,31 @@ test("finds a blob-only stream through the sniffer and downloads it", async ({ p
   // playlist the sniffer captured off the wire.
   await expect(renditions).toHaveCount(2);
   await expect(variants.getByText("HLS").first()).toBeVisible();
+
+  // --- The preview, rendering under the policy (dl-35) --------------------
+  // Located by its `src` rather than by a class: `Preview` renders `alt=""`,
+  // so the element is presentational and has no role to select on, and the
+  // path is the part that is load-bearing anyway.
+  const preview = page.locator('img[src^="/api/thumbnail/"]');
+  // The probe produced a preview at all — this is the assertion that fails if
+  // the `og:image` never reached `thumbnailPath`.
+  await expect(preview).toBeVisible();
+  // **This is the one that catches a wrong `img-src`, and the line above is
+  // not.** Measured, by serving `img-src 'none'` and running this spec: the
+  // element stayed in the DOM and stayed visible — `Preview`'s `onError` did
+  // not remove it — and only `naturalWidth` moved, from 64 to 0. So "the
+  // preview is on the page" and "the preview rendered" really are different
+  // claims here, exactly as dl-35 predicted, and only the second one is worth
+  // asserting. 64 rather than "greater than 0" because the fixture's own width
+  // says these are the fixture's bytes: fetched by the API through the SSRF
+  // guard from the page's `og:image`, and re-served same-origin.
+  await expect
+    .poll(async () => await preview.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBe(PREVIEW_WIDTH);
+  // The other end of the same claim: the origin was asked for the image, by
+  // this service. The browser never sees that address — which is the whole of
+  // dl-29 and the reason `img-src` can be `'self'` alone.
+  expect(hls.requests).toContain(PREVIEW_PATH);
 
   const chosen = renditions.last();
   await chosen.check();
@@ -168,4 +206,10 @@ test("finds a blob-only stream through the sniffer and downloads it", async ({ p
   // names no playlist at all, so nothing short of watching the network finds
   // one.
   expect(html).not.toContain(".m3u8");
+
+  // dl-35. Last, so it covers the probe, the preview and the download alike:
+  // nothing on this journey was refused by the policy. The preview assertions
+  // above prove the image arrived; this proves nothing *else* was quietly
+  // dropped on the way.
+  expect(await cspViolationsOn(page)).toEqual([]);
 });

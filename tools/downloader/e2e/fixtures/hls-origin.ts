@@ -31,7 +31,32 @@ export const CLIP_SECONDS = 6;
 const CONTENT_TYPES: Record<string, string> = {
   ".m3u8": "application/vnd.apple.mpegurl",
   ".ts": "video/mp2t",
+  ".png": "image/png",
 };
+
+/**
+ * A real image on a *foreign* origin, and the two suites use it for opposite
+ * purposes (dl-35).
+ *
+ * `csp.spec.ts` loads it cross-origin to prove `img-src 'self'` blocks
+ * something that would otherwise render — a negative that means nothing without
+ * a positive control, so the same URL is loaded from a page with no policy in
+ * the same browser and is expected to appear.
+ *
+ * `sniffer/mse-page.spec.ts` reaches it the other way: the watch page names it
+ * as its `og:image`, the API fetches it server-side through the SSRF guard and
+ * re-serves it from `/api/thumbnail/<token>`, and the preview renders
+ * same-origin. That is the only place in this repo where dl-29's preview
+ * pipeline runs end to end, because it is the only e2e configuration with a
+ * resolver that reads an `og:image` at all.
+ *
+ * The dimensions are exported because "it rendered" is `naturalWidth === 64`
+ * and not `naturalWidth > 0`: the stronger assertion says the bytes that came
+ * out of the browser's decoder are these bytes, not merely some image.
+ */
+export const PREVIEW_PATH = "/preview.png";
+export const PREVIEW_WIDTH = 64;
+export const PREVIEW_HEIGHT = 36;
 
 export interface HlsOrigin {
   /** `http://127.0.0.1:<port>` — the SSRF guard must be told to allow it. */
@@ -39,6 +64,8 @@ export interface HlsOrigin {
   masterUrl: string;
   /** The MSE player page. Nothing in its markup names `masterUrl`. */
   watchUrl: string;
+  /** A real `image/png`, `PREVIEW_WIDTH` × `PREVIEW_HEIGHT`. See `PREVIEW_PATH`. */
+  previewUrl: string;
   /** Every request the download made, for asserting the segments were fetched. */
   requests: string[];
   close(): Promise<void>;
@@ -75,6 +102,12 @@ function watchPage(): string {
   <head>
     <meta charset="utf-8" />
     <title>Fixture player</title>
+    <!-- Root-relative on purpose: it exercises absoluteUrl in browser.ts as
+         well as the fetch. The browser tier reads this into
+         ProbeResult.thumbnailUrl, the API fetches it through the SSRF guard
+         and re-serves it by token, and the UI renders the result - the whole
+         of dl-29, and the one thing dl-35's img-src could silently break. -->
+    <meta property="og:image" content="${PREVIEW_PATH}" />
   </head>
   <body>
     <h1>Fixture player</h1>
@@ -237,6 +270,26 @@ async function generate(dir: string): Promise<void> {
     path.join(dir, "index.m3u8"),
   ]);
 
+  // The preview image, generated rather than checked in as base64 for the same
+  // reason the stream is: a real encoder's PNG has real dimensions, so
+  // `naturalWidth === PREVIEW_WIDTH` in a browser is an assertion about these
+  // bytes rather than about "something decoded". One frame, so it costs
+  // milliseconds next to the six seconds of H.264 above.
+  await runFfmpeg(ffmpeg, [
+    "-hide_banner",
+    "-nostdin",
+    "-loglevel",
+    "error",
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    `testsrc=size=${String(PREVIEW_WIDTH)}x${String(PREVIEW_HEIGHT)}:rate=1:duration=1`,
+    "-frames:v",
+    "1",
+    path.join(dir, path.basename(PREVIEW_PATH)),
+  ]);
+
   // Two renditions pointing at the same media playlist. One variant would let
   // a UI that ignores the selection pass, which is half of what the variant
   // table exists to do.
@@ -312,6 +365,7 @@ export async function startHlsOrigin(): Promise<HlsOrigin> {
     origin,
     masterUrl: `${origin}/master.m3u8`,
     watchUrl: `${origin}${WATCH_PATH}`,
+    previewUrl: `${origin}${PREVIEW_PATH}`,
     requests,
     async close(): Promise<void> {
       await new Promise<void>((resolve) => {

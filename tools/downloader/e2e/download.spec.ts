@@ -14,6 +14,7 @@
  */
 
 import { expect, test } from "@playwright/test";
+import { collectCspViolations, cspViolationsOn } from "./csp-violations.ts";
 import { startHlsOrigin } from "./fixtures/hls-origin.ts";
 import type { HlsOrigin } from "./fixtures/hls-origin.ts";
 
@@ -28,6 +29,13 @@ test.afterAll(async () => {
 });
 
 test("paste a URL, pick a quality, and download the file", async ({ page, request }) => {
+  // dl-35. Attached before the first navigation, because a subresource the
+  // policy refuses is refused while the document is still coming up. This
+  // journey is the widest happy path there is — bundle, stylesheet, `fetch`
+  // and the SSE stream — so it is the cheapest place to notice a policy that
+  // is too strict, and it costs nothing when nothing is wrong.
+  await collectCspViolations(page);
+
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: /downloader/iu })).toBeVisible();
@@ -87,6 +95,13 @@ test("paste a URL, pick a quality, and download the file", async ({ page, reques
   // failure mode where a "download" is a manifest saved to disk.
   const segments = hls.requests.filter((url) => url.endsWith(".ts"));
   expect(segments.length).toBeGreaterThan(1);
+
+  // Last, so it covers everything above: the whole journey ran under the CSP
+  // and the browser refused none of it. Most of the directives already have a
+  // louder witness here — a refused bundle is a blank page and a refused
+  // `EventSource` is a job that never reaches "Ready" — so what this adds is
+  // the quiet case: something the policy stopped that the UI shrugged off.
+  expect(await cspViolationsOn(page)).toEqual([]);
 });
 
 test("a URL with no media fails visibly instead of hanging", async ({ page }) => {
