@@ -161,17 +161,27 @@ is a section move, a clause and a trim.
   $ grep -rlnE 'repo-(40|80|90|99|404|808|901|999)' scripts packages
   scripts/test/status.test.ts
 
-  $ grep -roE 'repo-(40|80|90|99|404|808|901|999)' scripts packages
+  $ grep -roE 'repo-(40|80|90|99|404|808|901|999)' scripts packages | sort -u
   scripts/test/status.test.ts:repo-404
   ```
+
+  The `sort -u` is not decoration and is the reason that line is the whole output:
+  the bare `-o` run prints **eight identical lines**, one per occurrence of
+  `repo-404`, and the first draft of this block showed one of them with no `sort`
+  and no ellipsis — an abridged transcript presented as the output, inside the
+  code block documenting abridgement. Caught on a last read-through. Print what
+  the command prints, or change the command until it prints what you show.
 
   **`-l` reports files rather than matches, so an alternation under `-l` cannot
   answer the question it looks like it answered.** The first run is a truthful
   answer to "which files contain any of these eight"; I read it as an answer to
   "where does each of these eight live", and those differ by exactly the
   information `-l` is defined to discard. Only `repo-404` ever matched. Re-run per
-  id — `grep -rl "<id>\b"` eight times — and they resolve to nine different files.
-  Nothing in the first output hints that seven ids are missing from it. That is
+  id — `grep -rl "<id>\b"` eight times — and the eight ids resolve to **eleven
+  files**: the nine `docs/work/repo-*.md` tickets listed above, plus
+  `docs/01-TICKETS.md` and `scripts/test/status.test.ts`, both of which carry
+  `repo-404` only. Nothing in the first output hints that seven ids are missing
+  from it. That is
   the fourth instance on this branch
   of the move it exists to record — reading a result at a glance and reporting the
   reading as the measurement — and the first committed by the agent writing the
