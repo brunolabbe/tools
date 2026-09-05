@@ -202,3 +202,60 @@ a trailing '?' to the map.` — captured from the pre-fix run of the test below.
   `contract/src/api.ts:113`, and `direct.ts:260` is now a comment saying why
   nothing is written there. `scripts/citations.mjs` reports all thirteen as
   unanchored rather than moved, because none of them carries anchor text.
+
+- **2026-09-05 — gate round, and the coverage gap it found.** The gate returned
+  CONCERNS on two changed-but-untested lines. I reproduced both — applied both
+  mutations at once, rebuilt, and watched all 1039 tests still pass, which
+  settles them jointly since a test catching either would have reddened that run
+  — and then applied the same reasoning to the rest of the diff and **found a
+  third the gate had missed**, `engine/src/index.ts`'s manifest arm.
+
+  **Why deliberate changes ended up unproven, which is the more useful note than
+  the fix.** The eight sites split by how I reached them. Five came from a
+  _failing test_ or from the _type checker_ refusing to compile — `direct.ts`,
+  `mux.ts`, the `take` line, the picker row, the zod schema — and all five have
+  tests, because the thing that took me there was itself a test. Four came from
+  a `grep`, and **nothing converts a grep hit into an obligation**. I wrote
+  tests for two of them (`variant-selection.ts`) because that was a task I set
+  myself, and none for the other three.
+
+  The sharper version: every one of the three uncovered edits has a comment
+  explaining why the branch is right — "over-estimating a size limit is the safe
+  direction", "same omission as the direct tier". **A comment is where a claim
+  goes to not be checked.** Grepping my own diff for comments that assert a
+  behaviour and asking "which test fails if this is wrong?" would have found all
+  three mechanically. `npm run check` passing is exactly the signal that a
+  `!== false` edit is _type-correct_, and I let type-correctness stand in for
+  coverage.
+
+  **Two different mechanisms, not one.** `estimate.ts` and `index.ts`'s manifest
+  arm are branches no current resolver can reach: the only two producers that
+  omit `hasAudio` both emit `protocol: "progressive"` and neither sets
+  `audioUrl`, while every producer that sets `audioUrl` (`hls.ts:472`,
+  `dash.ts:433`, `ytdlp.ts:516`) writes a boolean. They are defensive, and their
+  tests are unit tests over hand-built variants that say so.
+  `browser/variants.ts` is the opposite — fully reachable production output of
+  the sniffer, uncovered only because the module had no test file at all.
+
+  **The third one was the dangerous one.** `index.ts`'s manifest arm reading
+  `=== true` instead of `!== false` does not fail; it downloads **video only**
+  and exits 0, so the user gets a silent file and nothing reports it. The new
+  test reads the stream table back out of the produced file and catches it as
+  `expected [ 'video' ] to include 'audio'`. Making `hasAudio` optional is only
+  safe because `undefined` means "try for it" on every path.
+
+  Tests added: `engine/test/estimate.test.ts` (unverified budgeted exactly as
+  claimed, and only verified silence is not),
+  `resolvers/test/browser/variants.test.ts` (new file; also pins the deliberate
+  `opaqueManifestVariant` exclusion so it is not re-litigated), and
+  `engine/test/hls-e2e.test.ts` (audio survives an unverified claim, asserted
+  against the real output file). All three were confirmed to fail against their
+  mutants before being kept.
+
+  **One disclosure withdrawn.** My build report listed the image-closure
+  consequence of the new `api/test` → `@downloader/resolvers` import as an
+  unmeasured risk. It is not one: `git diff origin/main...HEAD --
+tools/downloader/api/package.json` is empty, `@downloader/resolvers` was
+  already at `api/package.json:19` under `dependencies`, and the `Dockerfile`
+  already carries it at lines 40 and 118–119. There is no new workspace
+  dependency for the scan to miss.
