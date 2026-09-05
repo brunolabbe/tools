@@ -29,8 +29,8 @@ the table shows.
 
 **The parser is faithful and is not the bug.** `buildMasterVariant` emits exactly
 one variant per `EXT-X-STREAM-INF`, keyed `hls-${stream.index}`
-([`hls.ts:456`](../../resolvers/src/manifest/hls.ts)), and `streams.push` assigns
-`index: streams.length` ([`hls.ts:367`](../../resolvers/src/manifest/hls.ts)) —
+([`manifest/hls.ts:456`](../../resolvers/src/manifest/hls.ts)), and `streams.push` assigns
+`index: streams.length` ([`manifest/hls.ts:367`](../../resolvers/src/manifest/hls.ts)) —
 nothing multiplies. The master playlist really did declare twenty streams.
 
 **The bug is that the picker cannot show what separates them.** Three candidate
@@ -38,7 +38,7 @@ causes, all real-world, none of them rendered:
 
 1. **One ladder per audio language.** The parser already resolves the stream's
    `AUDIO` group and picks a rendition from it
-   ([`hls.ts:436-439`](../../resolvers/src/manifest/hls.ts)), then puts its
+   ([`manifest/hls.ts:436-439`](../../resolvers/src/manifest/hls.ts)), then puts its
    language on the variant. `MediaVariant.language` exists in the contract
    ([`media.ts:107`](../../contract/src/media.ts)) — **and nothing in `web/src`
    ever reads it.** The only `.language` in the UI is for subtitle tracks. It is

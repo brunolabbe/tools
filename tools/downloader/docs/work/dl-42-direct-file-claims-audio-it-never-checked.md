@@ -47,7 +47,7 @@ Against a progressive file with no audio track, ffmpeg is handed `-map 0:a` for
 a stream that does not exist and exits with `Stream map '0:a' matches no
 streams`. The job fails, and the taxonomy has no code that means "we guessed".
 
-**Why nobody has hit it yet.** [`index.ts:440`](../../engine/src/index.ts) sets
+**Why nobody has hit it yet.** [`engine/src/index.ts:440`](../../engine/src/index.ts) sets
 `alreadyInTargetContainer` when the source extension already matches the target,
 and [`:463`](../../engine/src/index.ts) skips the mux stage entirely when that
 holds with no separate audio and no subtitles. The common case — an `.mp4` into

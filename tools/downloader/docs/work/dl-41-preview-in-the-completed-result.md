@@ -41,10 +41,10 @@ an implementation detail** — see the decision below.
 
 This is the part that decides whether the feature works at all.
 
-|                                             | lifetime                                                                               |
-| ------------------------------------------- | -------------------------------------------------------------------------------------- |
-| The downloaded file, and so the green panel | **6 hours** (`fileRetentionHours: 6`, [`config.ts:182`](../../api/src/config.ts))      |
-| The thumbnail bytes the panel would show    | **10 minutes** (`THUMBNAIL_TTL_MS`, [`thumbnails.ts:91`](../../api/src/thumbnails.ts)) |
+|                                             | lifetime                                                                                             |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| The downloaded file, and so the green panel | **6 hours** (`fileRetentionHours: 6`, [`downloader/api/src/config.ts:182`](../../api/src/config.ts)) |
+| The thumbnail bytes the panel would show    | **10 minutes** (`THUMBNAIL_TTL_MS`, [`thumbnails.ts:91`](../../api/src/thumbnails.ts))               |
 
 `ThumbnailStore` is an in-memory `Map` ([`thumbnails.ts:124`](../../api/src/thumbnails.ts))
 with a 10-minute TTL, a 400-entry cap that evicts oldest-first
@@ -52,7 +52,7 @@ with a 10-minute TTL, a 400-entry cap that evicts oldest-first
 it.
 
 Meanwhile **both** sides remember the path forever: the API's SQLite schema has a
-`thumbnail_path` column ([`db/schema.ts:71`](../../api/src/db/schema.ts)), and the
+`thumbnail_path` column ([`downloader/api/src/db/schema.ts:71`](../../api/src/db/schema.ts)), and the
 web client persists whole `Job` objects, `thumbnailPath` included, to
 `localStorage` ([`lib/job-store.ts`](../../web/src/lib/job-store.ts)). So the
 client faithfully holds a URL whose bytes were dropped hours ago.

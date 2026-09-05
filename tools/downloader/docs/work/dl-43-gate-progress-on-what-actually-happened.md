@@ -85,7 +85,7 @@ inventing — it needs emitting.
 | Stage                            | Where it already happens                                                                    | Shown today as               |
 | -------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------- |
 | Waiting for a free browser slot  | `#semaphore.acquire()`, [`browser/pool.ts:186`](../../resolvers/src/browser/pool.ts)        | "Opening a headless browser" |
-| Launching / claiming the browser | `#launch` / `#shareBrowser`, [`pool.ts:195`](../../resolvers/src/browser/pool.ts)           | same line                    |
+| Launching / claiming the browser | `#launch` / `#shareBrowser`, [`browser/pool.ts:195`](../../resolvers/src/browser/pool.ts)   | same line                    |
 | Loading the page                 | `navigate(page, url, …)`, [`browser.ts:202`](../../resolvers/src/resolvers/browser.ts)      | "Loading the page…"          |
 | Provoking playback               | `provokePlayback`, [`browser.ts:208`](../../resolvers/src/resolvers/browser.ts)             | "Provoking playback…"        |
 | Waiting for network quiet        | `waitForQuiet`, [`browser.ts:213`](../../resolvers/src/resolvers/browser.ts)                | "Waiting for the network…"   |
