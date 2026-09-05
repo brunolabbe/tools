@@ -1,5 +1,5 @@
 ---
-id: dl-38
+id: dl-42
 tool: downloader
 title: The direct tier claims audio it never checked, and the picker cannot name what it found
 kind: fix
@@ -9,7 +9,7 @@ depends_on: []
 difficulty: hard
 ---
 
-# dl-38 — a progressive file asserts an audio track, and ffmpeg is told to map it
+# dl-42 — a progressive file asserts an audio track, and ffmpeg is told to map it
 
 **Packages:** `resolvers` (`resolvers/direct.ts`), `contract` (`media.ts` — see the
 open decision), `web` (`components/VariantTable.tsx`), `engine` (`mux.ts`, if the

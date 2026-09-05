@@ -1,5 +1,5 @@
 ---
-id: dl-39
+id: dl-43
 tool: downloader
 title: Gate the analyse and download progress on events that actually happened
 kind: work-package
@@ -9,7 +9,7 @@ depends_on: []
 difficulty: hard
 ---
 
-# dl-39 — a gated progress bar, and something real for the analyse gates to read
+# dl-43 — a gated progress bar, and something real for the analyse gates to read
 
 **Packages:** `web` (`components/AnalysingPanel.tsx`, `components/JobCard.tsx`,
 `components/ProgressBar.tsx`, `styles.css`), plus — for the analyse half only —
