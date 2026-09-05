@@ -205,6 +205,30 @@ Reviewer: Sonnet 5 (`claude-sonnet-5`), verbatim from my system prompt. Builder 
 
 One low finding, no med or high. PASS per the rubric.
 
+## Review
+
+**Gate: PASS** — 2026-09-05 · `origin/main...HEAD` (`4a4cc4f...c642d25`) · own defect hunt at medium depth (ticket-reviewer has no `code-review`/`Skill` tool)
+
+Reviewer: Sonnet 5 (`claude-sonnet-5`). Builder ran Opus (explicit `model: "opus"`, per dispatch). Different models, confirmed.
+
+| Done when                                               | Proof                                                                                                                                                                                        |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Signpost lands before `## Shape`                     | **verified** — `awk '/^## Shape/{exit} /worked example/{f=1} END{exit !f}' docs/02-DEPLOYMENT.md` exits 0 at c642d25, exits 1 at origin/main (positive control)                              |
+| 2. Points forward to the two-tool section (≥2 mentions) | **verified** — `command grep -c 'Adding the second tool' docs/02-DEPLOYMENT.md` → 2                                                                                                          |
+| 3. Nothing moved or split (no removed heading)          | **verified** — `git diff origin/main...HEAD -- docs/02-DEPLOYMENT.md \| command grep '^-## '` prints nothing, exits 1                                                                        |
+| 4. Still repo-root, still repo-wide                     | **verified** — `test -f docs/02-DEPLOYMENT.md && test ! -e tools/downloader/docs/02-DEPLOYMENT.md` exits 0; `command grep -c '^## Grounding the planner' docs/02-DEPLOYMENT.md` → 1          |
+| 5. Planner still leads                                  | **verified** — planner 32, downloader 24 (`command grep -oi planner\|downloader docs/02-DEPLOYMENT.md \| wc -l`), matches Log exactly                                                        |
+| 6. `npm run check`/`format`/`status.mjs` clean          | **verified** — `check` exit 0, `format` leaves `git status --porcelain` empty, `status.mjs --json` → `problems: []`, `repo-23` at `status: done`                                             |
+| 7. This ticket's own citations resolve at `c37cab9`     | **verified** — `node scripts/citations.mjs docs/work/repo-23-*.md --rev c37cab9` → 0 moved, 0 unresolvable, exit 0 (25 unanchored — expected, that section carries no anchor text by design) |
+
+- **verified** · the two repointed, now-anchored citations (repo-1 → `docs/02-DEPLOYMENT.md:278`, dl-32 → `:155`) actually catch drift, not just pass today: injecting one line at the top of `docs/02-DEPLOYMENT.md` turns both `ok` → `MOVED`; restoring turns both back. Reproduces the builder's own disclosed probe.
+- **verified** · the `:271`/`:278` correction to the orchestrator's brief is right: `git show 022dfff:docs/02-DEPLOYMENT.md | sed -n '256p'` and `sed -n '278p'` on this branch are byte-identical; `origin/main`'s own line 256 was already the unrelated scrub-bar-drag sentence, matching this branch's line 271. The builder corrected the orchestrator, not the reverse.
+- **verified** · scope is clean: `docs/02-DEPLOYMENT.md` is a pure `15 0` insertion (`git diff --numstat`), heading list byte-identical before/after; the branch touches exactly 4 files total, none of them `vitest.config.ts`, `version.txt`, `CHANGELOG.md` or `.release-please-manifest.json`; merge-base with `origin/main` is `4a4cc4f`, which itself only touches `vitest.config.ts` (18 lines) — the rebase claim in the Log holds.
+- **verified** · changelog risk is accurately disclosed: `release-please-config.json` marks `docs` `"hidden": true`; per `docs/03-RELEASING.md`'s own worked example, a releasing-type title (e.g. `fix(repo):`) would route by path and cut a downloader release off this branch's one-line `tools/downloader/docs/work/dl-32-*.md` touch. Live only against the not-yet-opened PR's title — not a defect in this diff.
+- **verified** · both hand-checks (heading-anchor slugs, markdown link resolution) are accurately disclosed as hand checks — `npm run check` is lint+format:check+typecheck and validates neither. Left as disclosed, not upgraded to a gate.
+- **findings** · own defect hunt at medium depth, full diff (`4a4cc4f...c642d25`): 0 returned, 0 carried, 0 dropped.
+- NFR: security n/a (docs-only) · performance n/a · reliability — the changelog contingency above is real but external to this diff, flagged not fixed · maintainability — strong; anchored citations make the next drift machine-detectable instead of silent, matching this ticket's own stated goal.
+
 ## Log
 
 - **2026-09-05** — Filed. Provenance, four parties, and the claim only died when
