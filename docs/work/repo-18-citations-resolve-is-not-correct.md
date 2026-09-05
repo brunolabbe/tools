@@ -3,7 +3,7 @@ id: repo-18
 tool: repo
 title: citations.mjs reports that a line resolves, not that it says what was claimed
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -140,3 +140,160 @@ along here.
   a grep over the tree adds only `repo-404`, `repo-808`, `repo-901` and `repo-999`
   (all `scripts/status.mjs` fixtures), and no remote branch or pull request in any
   state names it.
+
+- **2026-09-04** — Built on `repo-18-citation-anchors`, off `origin/main@c37cab9`.
+
+  **The open question is answered: anchor text** — a citation carries a fragment
+  of what it points at, and the script checks the fragment is inside the cited
+  range. Answered by the repo's owner, over this ticket's own lean toward
+  reporting drift, with the format cost known. The reason it is affordable turned
+  out to be measurable, and the ticket did not know it: **the format already
+  exists in this repo.** 13 citations across six records were written as
+  `` `file.ts:NNN` "anchor" `` by reviewers before anything could read one —
+  `dl-23`, `dl-29`, `pl-24`, `pl-25`, `repo-7`. The chosen answer standardises a
+  convention that was already here rather than inventing one.
+
+  **The route is a two-format reader, and no existing record is rewritten.** The
+  ticket offers "a migration story or a two-format reader" as alternatives; with
+  the code in front of me they are the same thing, because the migration story is
+  _that there is no rewrite_. The number that settles it:
+
+  ```
+  $ node scratchpad/sweep.mjs        # extractCitations over every tracked .md
+  13 anchored of 965 citations across 136 md files
+  ```
+
+  Re-deriving anchors for the other 952 means re-reading, at the rev each was
+  written against, what every merged record claimed — re-judging finished work,
+  not migrating a format. So an unanchored citation is reported as `unanchored`
+  forever: never `verified`, never an error. Written down in
+  `.claude/skills/orchestrate-tickets/reference/records.md` before any record was
+  touched, per `Done when` 4, and no record was touched.
+
+  **Reproduction re-run first, per Build 1.** `dl-36-orchestrated` is gone; the
+  work merged as `e9f516b` (#134) and reproduces there unchanged:
+
+  ```
+  $ node scripts/citations.mjs .../dl-36-...-negative.md --rev e9f516b
+    ok   tls-origin.ts:144-149 -> .../tls-origin.ts  (record line 110, inline)
+         export async function createFixtureCertificate(names: {
+  9/9 resolve
+  ```
+
+  **`Done when` 1 and 2 — red first, on an insertion fixture.** Two commits over
+  one file, the second inserting three lines above the cited comment and changing
+  nothing else, the same record and citation run against both revs. Old script
+  against the _post-insertion_ rev:
+
+  ```
+  $ node <origin/main citations.mjs> drift.md --rev HEAD
+    ok   src/tls.ts:2-3  (record line 3, inline)
+         // inserted
+  1/1 resolve
+  EXIT=0
+  ```
+
+  `ok`, for a citation whose text is now `// inserted`. New script, same fixture:
+
+  ```
+    MOVED      src/tls.ts:2-3 "Defence in depth"  (record line 3, inline)
+               anchor "Defence in depth" is not in 2-3 — it is at 5
+  0 verified, 1 moved, 0 unanchored, 0 unresolvable — of 1 citation
+  EXIT=1
+  ```
+
+  and against the _pre-insertion_ rev the same citation is `1 verified` — which
+  is the control that makes it a drift test rather than a wrong-when-written one.
+
+  The suite itself was run against `origin/main:scripts/citations.mjs`:
+  **18 of 33 failed, every one on an assertion**, none on a missing export. The
+  two that carry the acceptance:
+
+  ```
+  × the CLI tells a citation whose referent moved from one that still points at it
+    expected '1 citations in drift.md, resolved aga…' to match
+    /1 verified, 0 moved, 0 unanchored, 0 unresolvable — of 1 citation/
+  × the summary cannot read N/N while a citation is in the moved state
+    + "  ok   src/tls.ts:2-3  (record line 3, inline)
+       + //  inserted
+       + 3/4 resolve"
+  ```
+
+  **That red is deliberate design, not luck.** `locateAnchor`, `summarize` and
+  `STATES` are **not exported**, so this module's export list is byte-identical
+  to the pre-ticket one and the new suite links against the old source. Exporting
+  them would have turned the whole red into
+  `SyntaxError: does not provide an export named 'summarize'`, which proves the
+  API changed and proves nothing about behaviour. Both are covered through
+  `checkCitations` and the CLI's own stdout.
+
+  **`Done when` 3 — the summary, checked as its own path.** `N/N` is gone
+  outright; the line is `V verified, M moved, U unanchored, X unresolvable — of N
+citations`, every bucket printed even at zero. The test asserts the buckets by
+  name _and_ that no `/\b(\d+)\/\1\b/` survives anywhere in stdout, on a record
+  holding all four states at once.
+
+  **It found a real defect in a merged record on its first run over live data**,
+  which is the strongest evidence the check is worth its cost:
+
+  ```
+  $ node scripts/citations.mjs tools/planner/docs/work/pl-24-....md
+    MOVED  .../grounding-fixtures.test.ts:29 "finds a place the checked-in candidate sets name…"
+           anchor … is not in 29 — it is at 53
+  3 verified, 1 moved, 2 unanchored, 1 unresolvable — of 7 citations
+  ```
+
+  The old script reported line 29 as resolved. It is a doc comment.
+
+  ### What the ticket had wrong, and what I chose against
+  - **"a migration story _or_ a two-format reader" is a false alternative.** See
+    above; the two-format reader is the entire migration.
+  - **The upstream-error section is right and is already fixed in prose**, so
+    nothing here re-litigates it. `records.md` keeps _cite what you read_.
+  - **Anchors are matched against the file joined into one string**, because the
+    text worth anchoring wraps — repo-7 cites `03-RELEASING.md:97-99` for text
+    that spans lines 118 and 119 of the target and is on neither. Line-by-line
+    matching reports "not anywhere in the file" and is wrong.
+  - **Lines are joined raw, so an anchor spanning a comment's `//` does not
+    match.** Not fixed, and the boundary has a test on it rather than a comment:
+    of 13 hand-written anchors, one needs the join and none needs a marker
+    stripped, so stripping `//`/`*`/`#` would be built for a case nothing has
+    asked for. The reason printed — `not anywhere in the file` — is the hint, and
+    the fix is a shorter anchor.
+  - **A trailing `...` in an anchor is a truncation mark, not text.** Two of the
+    13 end in one; treating the dots literally reports both as moved.
+  - **The unanchored note prints on stdout, not stderr.** The existing suite
+    asserts `stderr === ""` on a zero exit, and that invariant is worth more than
+    putting advice next to the failures.
+  - **`ok: boolean` is gone from `checkCitations`.** A boolean is the two-state
+    model the ticket calls the defect; every caller now has to name which of four
+    it means.
+  - **Not folded in: `dl-30`'s dangling `## Review` reference**, per instruction.
+    Confirmed still present at `c37cab9` — `dl-30`'s Log line 440 reads "The
+    record is in the Review section above", and `grep -n '^#'` on that file lists
+    `## Why`, `## Build`, `## Done when`, `### Gate 1`, `## Log` and no `Review`.
+    The gate record is the `### Gate 1` nested under `## Done when`. Unchanged
+    here; it is the owner's call to file or fold.
+
+  ### Not measured, and one decision left open
+  - **No existing record was rewritten or re-anchored**, deliberately. So the
+    tool's behaviour on the other 952 citations is measured only as
+    `unanchored` — I have not verified any of them.
+  - **`--section` interaction with anchors is untested beyond the existing
+    span-filter tests.** Filtering happens before checking and does not touch
+    anchors, but I did not add a case for it.
+  - **Open decision for the owner, not settled here:** should an unanchored
+    citation eventually be an _error_? Turning it on today fails every gate run
+    against every record in the tree, so it needs a ticket and a moment, not a
+    default flip. Options: (a) leave it advisory — recommended, and what shipped;
+    (b) add a `--require-anchors` flag for new records, ~5 lines, dead until
+    something passes it; (c) flip the default once a later ticket finds the
+    active records anchored.
+  - **This ticket's own file now contains an extractable anchored citation** —
+    the `tls-origin.ts:144 "Defence in depth"` in _Open question_ is an
+    illustration of the format, and a run over this record reports it `MOVED`.
+    That is the carve-out `records.md` already names: a citation that is a
+    finding's own evidence stays as written.
+
+  `npm run check` and `npx vitest run scripts` pass; commands and totals in the
+  gate section above this Log.

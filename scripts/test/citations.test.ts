@@ -17,9 +17,46 @@ import {
 const REPO = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(REPO, "scripts", "citations.mjs");
 
+/** A citation, with the fields a given test does not care about filled in. */
+const cite = (over: Partial<ReturnType<typeof extractCitations>[number]> = {}) => ({
+  file: "a.ts",
+  start: 1,
+  end: 1,
+  anchor: null as string | null,
+  source: "inline" as const,
+  line: 1,
+  ...over,
+});
+
+/**
+ * The summary line, asserted bucket by bucket.
+ *
+ * There is no `N/N` to match any more, and that is the point of repo-18 rather
+ * than a change of wording: a run over a record whose fix had moved the cited
+ * lines printed `9/9 resolve` while three of the nine pointed at unrelated code,
+ * so a single fraction is a number that cannot say which of four things
+ * happened. Naming each bucket is what makes a test able to fail.
+ */
+const summary = (
+  verified: number,
+  moved: number,
+  unanchored: number,
+  unresolvable: number,
+  total: number,
+) =>
+  new RegExp(
+    `${verified} verified, ${moved} moved, ${unanchored} unanchored, ` +
+      `${unresolvable} unresolvable — of ${total} citation`,
+  );
+
+/** Any `N/N`, the shape the summary must never print again. */
+const SAME_OVER_SAME = /\b(\d+)\/\1\b/;
+
 test("finds an inline file:line citation", () => {
   const found = extractCitations("The guard is wrong at `src/a.ts:12`.");
-  expect(found).toEqual([{ file: "src/a.ts", start: 12, end: 12, source: "inline", line: 1 }]);
+  expect(found).toEqual([
+    { file: "src/a.ts", start: 12, end: 12, anchor: null, source: "inline", line: 1 },
+  ]);
 });
 
 test("finds a range, and keeps both ends", () => {
@@ -74,20 +111,24 @@ test("fails a filename that matches nothing tracked", () => {
 });
 
 test("fails a line past the end of the file, and says how long the file is", () => {
-  const results = checkCitations(
-    [{ file: "a.ts", start: 99, end: 99, source: "inline", line: 1 }],
-    () => ["one", "two"],
-  );
-  expect(results[0]?.ok).toBe(false);
+  const results = checkCitations([cite({ start: 99, end: 99 })], () => ["one", "two"]);
+  expect(results[0]?.state).toBe("unresolvable");
   expect(results[0]?.reason).toBe("line 99 is past end of file (2 lines)");
 });
 
-test("returns the cited line's text so a reader can judge the content", () => {
-  const results = checkCitations(
-    [{ file: "a.ts", start: 2, end: 2, source: "inline", line: 1 }],
-    () => ["one", "  const guard = true;", "three"],
-  );
-  expect(results[0]?.ok).toBe(true);
+/**
+ * The pre-repo-18 behaviour, kept exactly — and renamed to say what it now is.
+ * A citation with no anchor still prints its line for a reader to judge, because
+ * that hand judgement is the only check it has; what changed is that it is no
+ * longer counted as anything the script verified.
+ */
+test("an unanchored citation returns the line's text, and is never verified", () => {
+  const results = checkCitations([cite({ start: 2, end: 2 })], () => [
+    "one",
+    "  const guard = true;",
+    "three",
+  ]);
+  expect(results[0]?.state).toBe("unanchored");
   expect(results[0]?.text).toBe("const guard = true;");
 });
 
@@ -107,7 +148,9 @@ test("the CLI exits non-zero on an unresolvable citation, and zero when they all
   fs.writeFileSync(record, "## Review\n\nFine at `scripts/citations.mjs:1`.\n");
   const good = spawnSync("node", [CLI, record], { cwd: REPO, encoding: "utf8" });
   expect(good.status).toBe(0);
-  expect(good.stdout).toMatch(/1\/1 resolve/);
+  expect(good.stdout).toMatch(summary(0, 0, 1, 0, 1));
+  // It resolves and it is not verified, because the record gave it no anchor.
+  expect(good.stdout).not.toMatch(SAME_OVER_SAME);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -153,10 +196,166 @@ test("the CLI resolves the ticket rather than a file named after the sha, in eit
     expect(result.status).toBe(0);
     // Both halves matter: the record was read, and the rev was actually applied.
     expect(result.stdout).toMatch(/resolved against HEAD/);
-    expect(result.stdout).toMatch(/1\/1 resolve/);
+    expect(result.stdout).toMatch(summary(0, 0, 1, 0, 1));
   }
 
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * repo-18's answer to "how does the tool know a citation is right": the citation
+ * carries a fragment of what it points at. Both spellings are accepted because
+ * reviewers here already wrote the first one thirteen times before anything
+ * could read it — the format is theirs, not a new one invented for the check.
+ */
+test("finds anchor text after a citation, inside or outside the backticks", () => {
+  expect(extractCitations('at `src/a.ts:12` "const guard = true"')[0]?.anchor).toBe(
+    "const guard = true",
+  );
+  expect(extractCitations('at `src/a.ts:12 "const guard = true"`')[0]?.anchor).toBe(
+    "const guard = true",
+  );
+  expect(extractCitations('at `src/a.ts:12-18 "const guard"`')[0]?.anchor).toBe("const guard");
+});
+
+/**
+ * The false-positive half, and the reason the separation rule is one optional
+ * space rather than `[ \t]*`: prose that quotes something a sentence later is not
+ * an anchor, and reading it as one would report a citation moved for saying so.
+ * Measured over every `.md` in the tree at the time: 13 anchors extracted, all of
+ * them genuine, and zero citations followed by a typographic quote — so `"` alone
+ * is enough and `“` would only start catching prose.
+ */
+test("does not take a quotation further along the sentence for an anchor", () => {
+  expect(extractCitations('`src/a.ts:12`, and then the reviewer said "no"')[0]?.anchor).toBe(null);
+  expect(extractCitations("`src/a.ts:12` and “a smart-quoted aside”")[0]?.anchor).toBe(null);
+});
+
+test("finds an anchor in a table's line cell, where the location is a bare number", () => {
+  const table = [
+    "| file | line | finding |",
+    "| --- | --- | --- |",
+    '| `src/a.ts` | 42 "const guard = true" | off by one |',
+  ].join("\n");
+  expect(extractCitations(table)[0]).toMatchObject({
+    file: "src/a.ts",
+    start: 42,
+    anchor: "const guard = true",
+  });
+});
+
+/**
+ * **Done when 1**, at the unit. The same citation against two versions of one
+ * file: the second inserts three lines *above* the cited region and changes
+ * nothing else. Before, it is verified; after, it is moved and the reason says
+ * where the text went.
+ *
+ * An insertion rather than a deletion on purpose — the ticket is explicit about
+ * it and it is the whole difficulty. A deleted file already failed before this
+ * change (`line 99 is past end of file`), so a deletion fixture would pass
+ * without proving anything. Here the cited lines still *exist* at both revs, and
+ * the old check called that resolved.
+ */
+const CITED_REGION = [
+  "export const before = 1;",
+  "// Defence in depth, and **not** what fixes the collision — a mutation",
+  "// run proved it.",
+  "export const after = 2;",
+];
+const INSERTED_ABOVE = ["// inserted", "// inserted", "// inserted", ...CITED_REGION];
+
+test("a citation whose referent moved is reported as moved, not as resolved", () => {
+  const citation = cite({ start: 2, end: 3, anchor: "Defence in depth" });
+
+  const before = checkCitations([citation], () => CITED_REGION)[0];
+  expect(before?.state).toBe("verified");
+
+  const after = checkCitations([citation], () => INSERTED_ABOVE)[0];
+  expect(after?.state).toBe("moved");
+  expect(after?.reason).toBe('anchor "Defence in depth" is not in 2-3 — it is at 5');
+  // The half that makes this ticket hard: it still resolves. Lines 2 and 3 exist
+  // in both files, so nothing about the coordinates is wrong.
+  expect(INSERTED_ABOVE.length).toBeGreaterThanOrEqual(3);
+  expect(after?.text).toBe("// inserted");
+});
+
+/**
+ * An anchor is matched against the file joined into one string, because the
+ * things worth anchoring wrap. This is the real case, not an invented one:
+ * repo-7 cites ``03-RELEASING.md:97-99 "heads that release's `### Features`"``
+ * and that text runs across two lines of the target, so it is on neither of
+ * them. A line-by-line match reports "not anywhere in the file" and is wrong.
+ */
+test("an anchor that wraps across two source lines still matches", () => {
+  const results = checkCitations(
+    [cite({ start: 2, end: 3, anchor: "decided downloader `0.2.0`, a **minor** bump" })],
+    () => [
+      "- **`a112cd4`** is what",
+      "  decided downloader `0.2.0`, a **minor** bump from `0.1.1`, and it heads that",
+      "  release's `### Features`.",
+    ],
+  );
+  expect(results[0]?.state).toBe("verified");
+});
+
+/**
+ * The boundary of that, pinned rather than left to be discovered. The lines are
+ * joined raw, so a comment's continuation marker sits in the middle of the
+ * haystack and an anchor spanning it does not match. Stripping `//`, `*` and `#`
+ * would be built for a case nothing has asked for — of the 13 anchors written by
+ * hand in this repo before the script could read any of them, one needs the join
+ * and none needs a marker stripped. The fix when it bites is to shorten the
+ * anchor, and the reason says how to tell: "not anywhere in the file".
+ */
+test("an anchor spanning a comment's continuation marker does not match, and says so", () => {
+  const results = checkCitations(
+    [cite({ start: 2, end: 3, anchor: "a mutation run proved it" })],
+    () => CITED_REGION,
+  );
+  expect(results[0]?.state).toBe("moved");
+  expect(results[0]?.reason).toMatch(/not anywhere in a\.ts/);
+  // Shortening it to one line's worth is what the reason is telling you to do.
+  const shorter = checkCitations(
+    [cite({ start: 2, end: 3, anchor: "what fixes the collision" })],
+    () => CITED_REGION,
+  );
+  expect(shorter[0]?.state).toBe("verified");
+});
+
+test("an anchor that is nowhere in the file says so, rather than naming a line", () => {
+  const results = checkCitations([cite({ start: 1, end: 1, anchor: "not in here" })], () => [
+    "one",
+    "two",
+  ]);
+  expect(results[0]?.state).toBe("moved");
+  expect(results[0]?.reason).toMatch(/not anywhere in a\.ts/);
+});
+
+/**
+ * A truncated anchor is a prefix of what its author read, not a literal. Two of
+ * the anchors already in this repo end in an ellipsis, and treating the dots as
+ * text would report both as moved.
+ */
+test("a trailing ellipsis in an anchor is a truncation mark, not text to match", () => {
+  const results = checkCitations(
+    [cite({ start: 1, end: 1, anchor: "an existing row survives migration 3..." })],
+    () => ["  test('an existing row survives migration 3, keeping its columns')"],
+  );
+  expect(results[0]?.state).toBe("verified");
+});
+
+/** **Done when 3**, at the unit: four states, and none of them is a boolean. */
+test("the four states are distinct, and an unanchored citation is not one of the good ones", () => {
+  const results = checkCitations(
+    [
+      cite({ start: 1, end: 1, anchor: "one" }),
+      cite({ start: 1, end: 1, anchor: "two" }),
+      cite({ start: 1, end: 1 }),
+      cite({ start: 99, end: 99 }),
+    ],
+    () => ["one", "two"],
+  );
+  expect(results.map((r) => r.state)).toEqual(["verified", "moved", "unanchored", "unresolvable"]);
 });
 
 /**
@@ -220,19 +419,19 @@ test("--section narrows the check to one heading's span, subsections included", 
 
   const all = run(record);
   expect(all.status).toBe(0);
-  expect(all.stdout).toMatch(/4\/4 resolve/);
+  expect(all.stdout).toMatch(summary(0, 0, 4, 0, 4));
 
   // Three, not one: the fenced `## Log` is not a heading. And not four: `## Log`
   // proper is outside the span.
   const review = run(record, "--section", "Review");
   expect(review.status).toBe(0);
-  expect(review.stdout).toMatch(/3\/3 resolve/);
+  expect(review.stdout).toMatch(summary(0, 0, 3, 0, 3));
   expect(review.stdout).toMatch(/commit-message\.mjs:1/);
   expect(review.stdout).not.toMatch(/citations\.mjs:2/);
 
   const log = run(record, "--section", "Log");
   expect(log.status).toBe(0);
-  expect(log.stdout).toMatch(/1\/1 resolve/);
+  expect(log.stdout).toMatch(summary(0, 0, 1, 0, 1));
   expect(log.stdout).toMatch(/citations\.mjs:2/);
 
   // The scope is named in the output, so a count can never be read against the
@@ -263,7 +462,7 @@ test("a section that matches nothing is an error, while an empty one that exists
 
   const empty = run(record, "--section", "Nothing here");
   expect(empty.status).toBe(0);
-  expect(empty.stdout).toMatch(/0\/0 resolve/);
+  expect(empty.stdout).toMatch(summary(0, 0, 0, 0, 0));
 
   cleanup();
 });
@@ -281,6 +480,128 @@ test("a --section name matching two sections fails and names them both", () => {
   expect(ambiguous.stderr).toMatch(/matches 2 sections/);
   expect(ambiguous.stderr).toMatch(/Nested under Review/);
   expect(ambiguous.stderr).toMatch(/Nothing here/);
+
+  cleanup();
+});
+
+/**
+ * A throwaway repository whose second commit inserts three lines above a cited
+ * comment and changes nothing else — the reproduction repo-18 was filed from, in
+ * miniature. It has to be a real repository because the CLI finds its root with
+ * `git rev-parse` and reads a rev with `git show`, and it has to be an insertion
+ * because the failure this ticket is about only exists while the cited lines
+ * still resolve.
+ */
+function withInsertionRepo(): {
+  dir: string;
+  record: string;
+  mixed: string;
+  before: string;
+  cleanup: () => void;
+} {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-repo-")));
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+    return result.stdout.trim();
+  };
+  const write = (lines: string[]) =>
+    fs.writeFileSync(path.join(dir, "src", "tls.ts"), `${lines.join("\n")}\n`);
+
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "citations@example.test");
+  git("config", "user.name", "citations test");
+  fs.mkdirSync(path.join(dir, "src"));
+
+  write(CITED_REGION);
+  git("add", "-A");
+  git("commit", "-qm", "the tree the record was written against");
+  const before = git("rev-parse", "HEAD");
+
+  write(INSERTED_ABOVE);
+  git("add", "-A");
+  git("commit", "-qm", "the fix, which inserted three lines above the cited region");
+
+  // One citation, so the two revs differ in the verdict and nothing else.
+  const record = path.join(dir, "drift.md");
+  fs.writeFileSync(record, '## Review\n\nThe comment at `src/tls.ts:2-3 "Defence in depth"`.\n');
+
+  // All four states at once, so the summary has something to be wrong about.
+  const mixed = path.join(dir, "mixed.md");
+  fs.writeFileSync(
+    mixed,
+    [
+      "## Review",
+      "",
+      'Moved: `src/tls.ts:2-3 "Defence in depth"`.',
+      'Still right: `src/tls.ts:7 "export const after"`.',
+      "Never checked: `src/tls.ts:1`.",
+      "Cannot be right: `src/tls.ts:400`.",
+      "",
+    ].join("\n"),
+  );
+
+  return {
+    dir,
+    record,
+    mixed,
+    before,
+    cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+/**
+ * **Done when 1**, end to end and against a real git tree. One record, one
+ * citation, two revs whose only difference is three inserted lines: verified at
+ * the first, moved at the second, and the failure names the line the text went
+ * to.
+ *
+ * Before this ticket both runs printed `1/1 resolve` and exited 0, because lines
+ * 2 and 3 exist in both trees. That is the whole defect, and it is why the
+ * fixture inserts rather than deletes.
+ */
+test("the CLI tells a citation whose referent moved from one that still points at it", () => {
+  const { dir, record, before, cleanup } = withInsertionRepo();
+
+  const atWriting = spawnSync("node", [CLI, record, "--rev", before], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  expect(atWriting.status).toBe(0);
+  expect(atWriting.stdout).toMatch(summary(1, 0, 0, 0, 1));
+  expect(atWriting.stdout).toMatch(/^ {2}ok /m);
+
+  const atTip = spawnSync("node", [CLI, record, "--rev", "HEAD"], { cwd: dir, encoding: "utf8" });
+  expect(atTip.status).toBe(1);
+  expect(atTip.stdout).toMatch(summary(0, 1, 0, 0, 1));
+  expect(atTip.stdout).toMatch(/^ {2}MOVED /m);
+  expect(atTip.stdout).toMatch(/anchor "Defence in depth" is not in 2-3 — it is at 5/);
+  expect(atTip.stderr).toMatch(/1 citation\(s\) do not point at what they say/);
+
+  cleanup();
+});
+
+/**
+ * **Done when 3.** The summary is checked on a record holding all four states at
+ * once, because the summary is a separate code path from the per-citation lines
+ * and it is where the original defect hid: the builder that found repo-18 judged
+ * nine printed lines individually and never read the total, which said 9/9.
+ */
+test("the summary cannot read N/N while a citation is in the moved state", () => {
+  const { dir, mixed, cleanup } = withInsertionRepo();
+
+  const result = spawnSync("node", [CLI, mixed, "--rev", "HEAD"], { cwd: dir, encoding: "utf8" });
+  expect(result.status).toBe(1);
+  expect(result.stdout).toMatch(summary(1, 1, 1, 1, 4));
+
+  // Not merely "the wording changed": no `N/N` of any kind survives anywhere in
+  // the output, so there is nothing left that reads as "all of them are fine".
+  expect(result.stdout).not.toMatch(SAME_OVER_SAME);
+
+  // And the four states are four distinct marks, not one word with four reasons.
+  for (const mark of [/^ {2}ok /m, /^ {2}MOVED /m, /^ {2}unanchored /m, /^ {2}FAIL /m]) {
+    expect(result.stdout).toMatch(mark);
+  }
 
   cleanup();
 });
