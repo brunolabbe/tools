@@ -46,6 +46,15 @@ by the time you read it.** Locate provisions by their quoted opening phrase, not
 by number. The line numbers are given so the sizes can be re-derived, not so they
 can be followed.
 
+**`node scripts/citations.mjs <this file>` exits 1 at `8/10 resolve`, and both
+failures are deliberate.** One is the illustrative test reference quoted verbatim
+from `SKILL.md` in Build 1.2, because it _is_ the false positive that step asks
+you to delete; the
+other is the reviewer's own citation inside its verbatim gate record, which is
+the citation the dispositions table refutes. Repointing either would destroy the
+evidence it exists to carry — the carve-out `citations.mjs` names and cannot
+check. **Do not "fix" them.**
+
 ## Why
 
 `.claude/skills/orchestrate-tickets/SKILL.md` is written by appending. Each
@@ -620,6 +629,29 @@ second pass caught me because it measured the _fix_ rather than reading the
 disposition. **Gate a disposition by measuring what it says changed, not by
 checking that the finding is marked closed.**
 
+### Gate 2 — verdict: settled, at `3f9398f`
+
+The reviewer re-gated a fresh detached checkout of `3f9398f` and reproduced every
+claim independently: Build 4 at 62 lines (`### 4.` 322 → `### 5.` 384) and read in
+full as instruction and citation with no inline narrative; the guide's reasoning
+present in the Log's second-pass entry, moved rather than lost; Build 3's
+thirteenth row and this section's write-up accurate including the admission;
+`Done when` 4 consistent at thirteen; `npm run check`, `npm run format` (532
+files, nothing reformatted), `status.mjs --json` and `--show repo-21` all exit 0;
+`git check-ignore` exit 1; `citations.mjs` exit 1 at `8/10 resolve`. Gate 1's
+record untouched and verbatim.
+
+**All seven findings settled: five fixed outright (1, 3, 4, 6, and 2 properly on
+the second attempt), one refuted and conceded by the reviewer on its own re-run
+(5), one corrected to an agreed number past both parties' arithmetic (7). No new
+issues on the final pass. No disagreement went to the orchestrator.**
+
+Worth recording about the exchange itself, since this ticket is about a page that
+nothing re-verifies: **the reviewer re-ran `citations.mjs` redirected to a file
+rather than through a pipe, citing Build 7's own generalisation as the reason** —
+`$?` after `| tail` is the pipe's status. The ticket's proposed rule was applied
+against the ticket by its own gate, before it has been written into the skill.
+
 ## Log
 
 - **2026-09-05 — filed.** Every number was measured against `origin/main@c37cab9`
@@ -680,6 +712,15 @@ checking that the finding is marked closed.**
   is printed today and is not printed there, and both halves matter. Whoever
   builds this should re-read this bullet against the merged `citations.mjs` and
   correct the verb.
+
+- **2026-09-05 — gate settled at `3f9398f`.** Seven findings, seven closed, no
+  disagreement escalated. The full verdict is in _Gate 2_ above. Two things this
+  filing cost that a future orchestrator should budget for: **four rounds**
+  (file → gate 1 → answer → gate 2 → fix → re-gate), and **a dependency that moved
+  five times underneath it** — `479b7b3` → `0d62b5e` → `87f93f3` → `69327da` →
+  `7e1fbc1`. The second is what made pinning by sha rather than branch name
+  necessary, and it is the reason two of this ticket's own reproductions carry a
+  "known to have changed since" note.
 
 - **2026-09-05, fourth pass — gate 2, and a disposition of mine that did not
   survive being measured.** The reviewer conceded finding 5 on its own re-run and
