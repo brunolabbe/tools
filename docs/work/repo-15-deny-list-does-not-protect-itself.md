@@ -3,7 +3,7 @@ id: repo-15
 tool: repo
 title: The deny list cannot express what it is protecting, and it does not protect itself
 kind: chore
-status: ready
+status: needs-decision
 milestone: null
 depends_on: []
 difficulty: hard
@@ -343,3 +343,10 @@ visibility` returns `PUBLIC`. Tier 3's "one command, irreversible as a
   UI, not a diff, so it is neither reviewable on a branch nor within an agent's
   authority — it is named in Build's honest-limits section as its own ticket for
   a human to file, and left there on purpose.
+
+- **2026-09-05** — `status: ready` → `needs-decision`, by
+  [repo-19](./repo-19-ready-does-not-mean-startable.md) in the commit that taught
+  the parser the value. Nothing about this ticket changed: it carries decisions A
+  and B under a heading that says it does not settle them, and B is the one
+  repo-13 is waiting on. It was on the `--ready` board and could not be started.
+  Move it back to `ready` in the commit that writes both answers onto this page.

@@ -3,7 +3,7 @@ id: repo-16
 tool: repo
 title: An inline CodeQL suppression documents the finding but does not clear the check
 kind: chore
-status: ready
+status: needs-decision
 milestone: null
 depends_on: [repo-13]
 difficulty: hard
@@ -256,6 +256,15 @@ security tab rather than inferred.
 
   Not done, deliberately: `.github/workflows/security.yml` is untouched and
   adr/005 is unedited. Both are the implementation, and the option is unchosen.
+
+- **2026-09-05** — `status: ready` → `needs-decision`, by
+  [repo-19](./repo-19-ready-does-not-mean-startable.md) in the commit that
+  taught the parser the value. Nothing about this ticket changed: its Build
+  section already opens with "the deliverable is a decision. Do not settle it
+  inside the implementation", which is exactly what the new status records. It
+  was on the `--ready` board and could not be started, and a builder dispatched
+  against it would have spent a full round to learn that. Move it back to `ready`
+  in the commit that writes the chosen option onto this page.
 
 ## The gate on this filing
 
