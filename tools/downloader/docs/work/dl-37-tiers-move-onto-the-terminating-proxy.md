@@ -122,7 +122,62 @@ operatorCa]`; the failure mode is that an operator root handed over on its
    this change, not before it.
 5. `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+**Gate: CONCERNS** — 2026-09-05 · `origin/main...HEAD` (`c37cab9...4f46415`) · defect hunt run directly by the reviewer (subagent, no `code-review` delegate), depth equivalent to `medium`
+
+| Done when                                                                                                          | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. A resolver tier meeting an operator-root origin succeeds, both tiers                                            | Browser: **proven** — `api/test/tiers-on-the-terminating-proxy.test.ts:200`, real Chromium, mutation-verified (removing the SPKI push from `resolvers/src/browser/pool.ts` fails it with `net::ERR_CERT_AUTHORITY_INVALID`). yt-dlp: **accepted by owner decision** on a one-time real-binary measurement, not committed to CI — see the ticket's own scope note and follow-up [dl-39](./dl-39-real-yt-dlp-tls-coverage-in-ci.md); the committed suite (`resolvers/test/ytdlp.test.ts:186-201`, both halves mutation-verified) proves only that `buildRegistry` constructs the right argv/env against a stand-in binary. |
+| 2. A tier meeting a genuinely-unverifiable certificate still raises `TLS_VERIFICATION_FAILED`; dl-34 not regressed | Browser: **proven** — `:242`, red at `:267`, mutation-verified (making the verdict wrapper a no-op fails with exactly `expected 'UNREACHABLE' to be 'TLS_VERIFICATION_FAILED'`). yt-dlp: same accepted scope as row 1. dl-34's own yt-dlp classifier tests are untouched and green.                                                                                                                                                                                                                                                                                                                                      |
+| 3. Public HTTPS still works — the merge, not the replacement                                                       | **Proven three ways**: `:288` (browser, re-run and passing; the SPKI mechanism is an allowlist-by-key, not a store replacement, so dl-31's trap cannot occur on the Chromium side — verified by reading `tls-interception.ts` and by this test), `api/test/tls-interception.test.ts:111` (yt-dlp's bundle genuinely merges the system store, re-run and passing). The live-network half (registry.npmjs.org / github.com) is unverified by me — I did not re-run it, consistent with the ticket's own framing of it as a measurement rather than a test.                                                                 |
+| 4. Boot line / `.env.example` / `01-ARCHITECTURE.md` say what's true now                                           | **Proven** — `api/test/logging.test.ts:451`, `:473`, `:494`, all three re-run and passing, covering the three boot-line states.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 5. `npm run check` and `npm test -- --project downloader` pass                                                     | **Proven/verified** — `npm run check` exit 0, independently re-run at the final tree. `npm test -- --project downloader`: **65 files / 1029 tests**, independently reproduced from scratch. Full `npm test`: **125 files / 2016 tests**, also independently reproduced from scratch. Baseline re-confirmed at `origin/main` earlier in this exchange: 62/979.                                                                                                                                                                                                                                                            |
+
+- **low, fixed** · two findings, one mechanism — of the 5 `onOtherConnectFailure` call sites in `egress-proxy.ts` (enumerated independently by reading the CONNECT handler: the SSRF-policy catch, `serverSocket`'s own `error`, `terminateTls`'s `onFailed`, `terminateTls`'s `onUnavailable`, and the chained-upstream refusal — all 5 correctly wired), only 3 had a dedicated positive test. Fixed: two tests added (`terminateTls`'s `onFailed`, and the chained-upstream refusal), both mutation-verified by me directly — removing the hook call from `onFailed` fails its test with `expected [] to deeply equal ['not-tls.test']`; removing it from the chained-upstream branch fails identically for `'chained-refusal.test'`. The stale "three... call sites" in the negative test's own comment is also corrected to five.
+- **low, fixed** · [dl-39](./dl-39-real-yt-dlp-tls-coverage-in-ci.md)'s Log attributed discovery of the `INSTALL_YTDLP=false` / `Dockerfile:90-93` citations to "dl-37's reviewer." Fixed: corrected in dl-39's own Log to the accurate chain — the reviewer had reported "zero references" to the orchestrator, which ran the grep, found the build-arg, and corrected both the reviewer and the builder. Verified by reading the corrected entry.
+- **resolved during this gate, not carried as open** · the original finding — `TlsRejectionLog`'s host+window correlation could reattach an unrelated concurrent failure's verdict as `TLS_VERIFICATION_FAILED` — was real (reproduced directly against the built class: two overlapping call windows on one host, one genuine rejection, one unrelated failure, misattributed) and is now closed in the shipped code by the outcome-kind split (`recordOtherFailure` / `#otherFailures`, gating `since()`). Independently mutation-verified in this pass: reverting `since()`'s `otherAt` check fails exactly the 3 tests the builder named (`tls-rejections.test.ts` ×2, `resolvers.test.ts` ×1); reverting `REATTACHABLE_CODES` to the original single-exclusion check fails exactly the 5 named codes (`DRM_PROTECTED`, `AUTH_REQUIRED`, `GEO_BLOCKED`, `CANCELED`, `TIMEOUT`); the self-poisoning guard (`onOtherConnectFailure` wired into the 5 individual sites rather than the shared `fail()`) holds — its own negative test passes, and the Chromium measurement it rests on (`egress-proxy.test.ts`'s `"a policy block, a leaf failure, a dead upstream and two certificate refusals are one message"`) is a real, passing, committed test against a live browser, not a docblock paraphrase. The residual this design still cannot close — a load-balanced origin's healthy backend legitimately returning `NO_MEDIA_FOUND` while a sibling backend is genuinely cert-refused, since a clean success is never recorded — is named honestly in `tls-rejections.ts`'s own docblock and filed as [dl-38](./dl-38-tls-rejection-log-does-not-track-successes.md), which correctly poses its three remedies as an open decision rather than resolving one unilaterally.
+- **findings** · this pass (against the branch's final tree) returned 3, all carried, all now fixed, 0 dropped. The med finding from the initial pass is not double-counted here — see the resolved bullet above.
+- NFR: security — ✓, the concurrency-attribution gap that motivated the deepest scrutiny in this gate is closed for the common case and honestly scoped for its residual; the SPKI mechanism, the dual yt-dlp trust plumbing, `redactUrl` usage, and the SSRF guard were all re-verified at the final tip and are unaffected by the concurrency fix. Performance — ✓, unaffected (the fix's `touch()` helper is the same amortized-O(1) eviction pattern as before, now shared by two maps instead of one; the boot-time RSA-keygen cost is unchanged). Reliability — ✓, both `TlsRejectionLog` maps are bounded and tested for eviction; `tierInterception`'s temp directory still closes on shutdown. Maintainability — ✓, the two low findings above are both fixed rather than left open.
+
+**Verdict rationale.** Not PASS: the yt-dlp halves of Done-when 1 and 2 are explicitly accepted on a one-time, non-automatable measurement rather than proven by anything that runs in `npm test` or a CI gate — a real, disclosed exception (scope note, two citations, a follow-up ticket), analogous to dl-34's own accepted precedent, but not "proven" by this skill's own definition. Not FAIL: no acceptance line is unproven-and-undisclosed, no invariant is broken, and the one finding serious enough to warrant it (the concurrency-attribution gap) was fixed and independently verified in-branch before this gate closed rather than shipped or silently deferred, and both low findings from the final pass are fixed rather than open.
+
 ## Log
+
+- **2026-09-05** — **A process finding from this gate exchange, worth keeping
+  separate from the build it happened during.** The orchestrator dispatches a
+  builder and a reviewer believing a `model` parameter made them different
+  models, and mid-gate that belief turned out false elsewhere in the same
+  batch — a builder dispatched identically to this one reported running the
+  model the reviewer was meant to be. Neither side of a builder/reviewer pair
+  can check the other's model from outside; each can only quote its own
+  context. So when the orchestrator asked this branch's builder to confirm its
+  model, the builder did not stop at answering — it noticed the reviewer's half
+  of the same fact was equally unconfirmed (resting on the same kind of belief
+  that had just failed) and asked the reviewer directly, closing the gap
+  between the two of them rather than routing it back through the
+  orchestrator. **The rule this earns: a model-difference check is a two-sided
+  fact, and the pair should establish it between themselves rather than
+  inherit it from whoever dispatched them.** Recorded here because the
+  reviewer's `## Review` below depends on it holding, and it now rests on two
+  first-person quotes exchanged directly rather than on an assumption about a
+  dispatch parameter.
+
+- **2026-09-05** — **A seam in "commit the reviewer's section verbatim", and
+  what was done about it.** [`docs/01-TICKETS.md`](../../../../docs/01-TICKETS.md)
+  has the builder commit the gate record, and the verbatim rule exists so a
+  builder cannot soften or reconstruct findings it did not like. Here the two
+  `low` findings were **fixed** between the reviewer writing its section and the
+  builder committing it — so committing the text as written would have landed a
+  record describing as open something already closed, and editing the text to
+  say otherwise would have been exactly the reconstruction the rule forbids.
+  Both failure modes are real and they point opposite ways. **The move that is
+  neither: ask the author to amend its own two bullets**, which is what
+  happened — the builder fixed the findings, reported them with their
+  mutation-verification, and asked the reviewer to mark its own text; the
+  reviewer's words stayed the reviewer's. Worth recording as a rule rather than
+  an anecdote, because a gate that finds anything cheap enough to fix
+  immediately will hit this every time.
 
 - **2026-09-05** — **Built.** Branch `dl-37-tiers-onto-terminating-proxy`, off
   `origin/main` at `c37cab9`. All four Build steps; both Build-step-1 questions
@@ -296,7 +351,7 @@ the root's SPKI>`.** Measured with the pinned Chromium (Google Chrome for
   outcome was also recorded inside the caller's window; two genuine certificate
   refusals on one host with nothing else recorded still both enrich correctly.
   This closes the gap precisely rather than trading it for a different one, at
-  the cost of four new call sites rather than a docblock caveat — judged
+  the cost of five new call sites rather than a docblock caveat — judged
   worthwhile because the alternative (b) breaks the primary use case and the
   alternative (a) leaves a real, measured ambiguity live and merely named.
 
@@ -391,6 +446,31 @@ the root's SPKI>`.** Measured with the pinned Chromium (Google Chrome for
   tracking above for a narrower edge case. Named in `tls-rejections.ts`'s own
   docblock and filed as [dl-38](./dl-38-tls-rejection-log-does-not-track-successes.md)
   rather than built here.
+
+  ### Two low findings from the final re-gate, both fixed rather than deferred
+  - **Test parity: 3 of 5 `onOtherConnectFailure` call sites had a dedicated
+    positive test; the other two (`terminateTls`'s `onFailed`, and the chained
+    upstream's own refusal) were wired correctly but only verified by reading.**
+    Fixed rather than deferred, since both were cheap once a working fixture was
+    found. The `onFailed` one was not free: the first fixture tried — a plain
+    TCP origin that stays open and never resets — hangs, because `tls.connect`
+    has no handshake timeout of its own and waits forever for a `ServerHello`
+    that a non-TLS server will never send. An origin that resets the connection
+    immediately (`socket.destroy()` on accept) gives Node's TLS layer a fast
+    socket error with no `authorizationError`, which is exactly the `onFailed`
+    path. Both new tests mutation-verified: removing the `onOtherConnectFailure`
+    call from `onFailed` fails the first with `expected [] to deeply equal
+['not-tls.test']`; removing it from the chained-upstream-refusal branch fails
+    the second identically for `'chained-refusal.test'`. The stale "three...
+    call sites" in the negative test's own comment, and one arithmetic slip
+    elsewhere in this Log ("four new call sites" against a paragraph that had
+    already named five), are both corrected to five.
+  - **Attribution in dl-39's Log.** It had credited "dl-37's reviewer" with
+    finding the `INSTALL_YTDLP=false` citation. The reviewer flagged this
+    against its own interest — it had actually reported "zero references" to
+    the orchestrator, who ran the grep that found the build-arg and corrected
+    both the reviewer and this builder. Fixed in dl-39 directly, attributing
+    the find to the orchestrator; see its Log for the corrected chain.
 
   ### What the brief and the ticket had wrong, or under-stated
   - **"There is no terminating proxy at all in that configuration" is right, and
@@ -526,16 +606,18 @@ the root's SPKI>`.** Measured with the pinned Chromium (Google Chrome for
   4. **Proven.** `downloader/api/test/logging.test.ts:451`, `:473` and `:494` cover the boot
      line's three states; `.env.example` and `01-ARCHITECTURE.md` rewritten.
   5. **Proven.** `npm run check` exit 0. `npm test -- --project downloader`:
-     **65 files / 1027 tests**, from 62 / 979 at `origin/main`. Three layers,
+     **65 files / 1029 tests**, from 62 / 979 at `origin/main`. Four layers,
      each counted against the actual per-file test count rather than assumed:
      +20 tests for dl-37's own build (2 new files); +3 for the folded
      null-codec regression (no new file — it lives in the existing
      `ytdlp.test.ts`, its fixture is a `.json`); +25 for the shipped
      concurrency-gate design (+14 in a new `resolvers.test.ts`, +6 in
      `tls-rejections.test.ts`, +5 in `egress-proxy.test.ts` — 4 wiring tests
-     plus the committed Chromium measurement — no new file for any of the three
-     beyond `resolvers.test.ts`). 999 + 3 + 25 = 1027; 64 + 1 = 65. Full
-     `npm test`: 125 files / 2014 tests.
+     plus the committed Chromium measurement); +2 for the final re-gate's test
+     parity fix (`egress-proxy.test.ts`'s `onFailed` and chained-upstream
+     tests) — no new file for any of the four beyond `resolvers.test.ts`.
+     999 + 3 + 25 + 2 = 1029; 64 + 1 = 65. Full `npm test`: 125 files / 2016
+     tests.
 
   ### Scope note, settled by the owner: the yt-dlp halves of Done-when 1 and 2
 

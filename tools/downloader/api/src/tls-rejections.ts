@@ -46,10 +46,11 @@
  *
  * A `CONNECT` to a host does not fail only one way. This proxy also refuses one
  * for an SSRF-blocked target (403), a dead upstream (502) and a leaf it could
- * not issue (500), on top of a genuine certificate refusal (502). Measured
- * against a real Chromium: a bare CONNECT proxy handed every one of those four
- * statuses, plus two different certificate-refusal messages, and Playwright
- * reported the **identical** `net::ERR_TUNNEL_CONNECTION_FAILED` for all five.
+ * not issue (500) — three non-certificate shapes — on top of a genuine
+ * certificate refusal (502). Measured against a real Chromium: a bare CONNECT
+ * proxy handed every one of those three non-certificate statuses, plus two
+ * different certificate-refusal messages, and Playwright reported the
+ * **identical** `net::ERR_TUNNEL_CONNECTION_FAILED` for all five.
  * So two concurrent probes of the same host — one genuinely cert-refused, one
  * refused or failed for an unrelated reason — are indistinguishable to the tier
  * that asks, and reattaching the recorded cert code to whichever one asks first

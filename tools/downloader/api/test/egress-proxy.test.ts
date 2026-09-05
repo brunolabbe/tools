@@ -952,7 +952,9 @@ describe("onOtherConnectFailure (dl-37)", () => {
     // The critical negative: `onRejected` in `terminateTls` also calls the
     // shared `fail()` a policy block and a dead upstream go through, and if
     // `onOtherConnectFailure` were hooked into `fail()` itself rather than into
-    // the three non-certificate call sites individually, every certificate
+    // the five non-certificate call sites individually (the SSRF-policy catch,
+    // `serverSocket`'s own `error`, `terminateTls`'s `onFailed` and
+    // `onUnavailable`, and the chained-upstream refusal), every certificate
     // rejection would immediately record itself as ambiguous and
     // `TlsRejectionLog.since` would never reattach anything, ever.
     const callbacks = recordingConnectCallbacks();
@@ -972,5 +974,64 @@ describe("onOtherConnectFailure (dl-37)", () => {
       { host: "untrusted.test", code: "DEPTH_ZERO_SELF_SIGNED_CERT" },
     ]);
     expect(callbacks.otherFailures).toEqual([]);
+  });
+
+  test("a non-certificate TLS handshake failure fires it too, via terminateTls's onFailed", async () => {
+    // Distinct from the plain `serverSocket` error above: the TCP connect
+    // succeeds here, and it is the TLS handshake itself that fails — with no
+    // `authorizationError` set, which is what routes it to `onFailed` rather
+    // than `onRejected` inside `terminateTls`. An origin that resets the
+    // connection the instant it is open gives Node's TLS layer exactly that: a
+    // socket error with no certificate ever having been offered. (A plain TCP
+    // origin that stays open and never resets was tried first and hangs —
+    // `tls.connect` has no handshake timeout of its own and simply waits for a
+    // `ServerHello` that never comes, so it is not a usable fixture here.)
+    const callbacks = recordingConnectCallbacks();
+    const origin = net.createServer((socket) => socket.destroy());
+    await new Promise<void>((resolve) => origin.listen(0, "127.0.0.1", resolve));
+    cleanups.push(() => new Promise<void>((resolve) => origin.close(() => resolve())));
+    const originPort = (origin.address() as AddressInfo).port;
+    const guard = createSsrfGuard({ allowHosts: ["not-tls.test"] });
+    const proxy = await startProxy({
+      guard,
+      logger: NOOP_LOGGER,
+      resolve: resolverFor([v4("127.0.0.1")]),
+      interceptTls: await interception(),
+      ...callbacks,
+    });
+
+    await connectThrough(proxy.port, `not-tls.test:${originPort}`);
+
+    expect(callbacks.otherFailures).toEqual(["not-tls.test"]);
+    expect(callbacks.certificateRejections).toEqual([]);
+  });
+
+  test("a chained upstream's own refusal fires it", async () => {
+    // The fifth call site: `upstream !== null` mode, where an *operator's*
+    // proxy — not this one — refuses the tunnel. `upstreamRefused` logs it;
+    // this is the assertion that it also reaches the same side channel.
+    const callbacks = recordingConnectCallbacks();
+    const upstream = http.createServer();
+    upstream.on("connect", (_request, socket) => {
+      socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    cleanups.push(
+      () =>
+        new Promise<void>((resolve) => {
+          upstream.close(() => resolve());
+        }),
+    );
+    const proxy = await startProxy({
+      guard: createSsrfGuard({ allowPrivateAddresses: true }),
+      logger: NOOP_LOGGER,
+      upstreamProxyUrl: `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`,
+      ...callbacks,
+    });
+
+    await connectThrough(proxy.port, "chained-refusal.test:443");
+
+    expect(callbacks.otherFailures).toEqual(["chained-refusal.test"]);
+    expect(callbacks.certificateRejections).toEqual([]);
   });
 });

@@ -112,14 +112,22 @@ recorded in the Log.
 
 ## Log
 
-- **2026-09-05** — Filed from dl-37's gate exchange. dl-37's reviewer
-  (`a2250d43499fa92f1`) corrected the builder's own citation check here: the
-  builder had read `.github/workflows/downloader.yml` and `e2e/*.ts` as
-  carrying zero yt-dlp references and concluded there was simply no gate to run
-  against; the reviewer found the `INSTALL_YTDLP=false` build-arg, which is
-  materially different from an absent reference — CI does not fail to test
-  yt-dlp, it deliberately ships without it. Both citations above are the
-  reviewer's, independently re-verified by the builder before filing. Id picked
+- **2026-09-05** — Filed from dl-37's gate exchange, and its own attribution is
+  corrected in place rather than left as first drafted — worth the line because
+  the citation's whole value is that a future builder does not re-derive it,
+  which needs the origin right. The chain: the builder had read
+  `.github/workflows/downloader.yml` and `e2e/*.ts` as carrying zero yt-dlp
+  references and concluded there was simply no gate to run against. The
+  reviewer (`a2250d43499fa92f1`) reported that same "zero references" claim to
+  the orchestrator. **The orchestrator** ran `grep -in
+'yt-dlp\|ytdlp\|YTDLP' .github/workflows/downloader.yml` directly, found the
+  `INSTALL_YTDLP=false` build-arg the claim had missed, read
+  `Dockerfile:90-93` for the "latency optimisation, never a dependency"
+  sentence neither builder nor reviewer had surfaced, and corrected both of
+  them — a materially different finding from an absent reference: CI does not
+  fail to test yt-dlp, it deliberately ships without it. Both citations above
+  are the orchestrator's, independently re-verified by the builder before
+  filing. Id picked
   by the documented union of two lists, alongside
   [dl-38](./dl-38-tls-rejection-log-does-not-track-successes.md) — see that
   ticket's Log for the check.
