@@ -33,6 +33,24 @@ export default defineConfig({
           name: "repo",
           include: ["scripts/test/**/*.test.ts"],
           environment: "node",
+          // These suites test CLIs, so every case spawns real `git` and `node`
+          // processes rather than importing a function. That is the point — the
+          // argument parsing and the exit code are the contract — but it makes
+          // the cost of a case a process-spawn cost, and on the Windows runner a
+          // spawn is roughly two orders of magnitude dearer than here: the
+          // citations case that builds a four-commit repo and runs the checker
+          // takes 71 ms locally and took 9194 ms on windows-latest, timing out
+          // against vitest's 5 s default and failing CI on a branch that had
+          // changed no code (run 33991666700). Its neighbours landed at 4.2 s,
+          // 2.7 s and 2.5 s, so the whole project was sitting just under the
+          // line. 30 s is ~3x the worst measured case and still far short of
+          // the downloader's minute: a CLI spawn that takes half a minute is
+          // hung, not slow, and should still fail.
+          //
+          // testTimeout only, deliberately: no case here uses a before/after
+          // hook — each builds and tears down its own fixture inline — so a
+          // hookTimeout would be config that never runs.
+          testTimeout: 30_000,
           globals: false,
         },
       },
