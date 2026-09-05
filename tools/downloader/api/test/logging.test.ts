@@ -448,20 +448,58 @@ describe("what boot says about how far the operator's CA reaches", () => {
     return { lines };
   }
 
-  test("names the tiers it does not reach, and what it does", async () => {
+  test("says the tiers ARE reached when they are behind the terminating proxy", async () => {
+    // dl-37's default arrangement, and the one this line said the opposite of
+    // until it landed. A tier has to be registered for the interception to be
+    // built at all — a generated root nobody will be given is attack surface
+    // with no user.
+    const { lines } = await bootWithCa({ enableBrowserResolver: true });
+
+    const warnings = lines.filter((line) => line.level === "warn");
+    const reach = warnings.filter((line) => /reaches the browser and yt-dlp/u.test(line.msg));
+    expect(reach).toHaveLength(1);
+    // The variable by the name the operator actually typed, so a deployment on
+    // the deprecated spelling is not told about one it never set.
+    expect(reach[0]?.msg).toMatch(/^EGRESS_CA_FILE/u);
+    expect(reach[0]?.["doesNotReach"]).toEqual([]);
+    expect(String(reach[0]?.["reaches"])).toMatch(/chromium and yt-dlp/u);
+    // The cost, in the line that reports the coverage — an operator who learns
+    // the tiers are covered is learning a page's traffic crosses this process.
+    expect(String(reach[0]?.["hint"])).toMatch(/plaintext/u);
+    // And never the sentence it replaced.
+    expect(warnings.some((line) => /does not reach the browser/u.test(line.msg))).toBe(false);
+  });
+
+  test("says they are NOT reached when interception is off, and why", async () => {
+    // dl-37 ties both proxies to one switch: `FFMPEG_TLS_INTERCEPT=false`
+    // returns the tiers to a tunnel too, which is exactly dl-34's world, so
+    // dl-34's sentence is what the operator must get back.
+    const { lines } = await bootWithCa({
+      enableBrowserResolver: true,
+      ffmpegTlsIntercept: false,
+    });
+
+    const warnings = lines.filter((line) => line.level === "warn");
+    const reach = warnings.filter((line) => /does not reach the browser or yt-dlp/u.test(line.msg));
+    expect(reach).toHaveLength(1);
+    expect(reach[0]?.["doesNotReach"]).toEqual(["chromium", "yt-dlp"]);
+    // The half that is working, so the line reads as a boundary rather than as
+    // "your setting does nothing".
+    expect(String(reach[0]?.["reaches"])).toMatch(/ffmpeg/u);
+    expect(String(reach[0]?.["hint"])).toMatch(/TLS_VERIFICATION_FAILED/u);
+    // And the way back, which is the one actionable fact in the line.
+    expect(String(reach[0]?.["hint"])).toMatch(/FFMPEG_TLS_INTERCEPT/u);
+  });
+
+  test("with no tier registered it says so rather than warning about tiers that do not exist", async () => {
     const { lines } = await bootWithCa();
 
     const warnings = lines.filter((line) => line.level === "warn");
     const reach = warnings.filter((line) => /does not reach the browser or yt-dlp/u.test(line.msg));
     expect(reach).toHaveLength(1);
-    // The variable by the name the operator actually typed, so a deployment on
-    // the deprecated spelling is not told about one it never set.
-    expect(reach[0]?.msg).toMatch(/^EGRESS_CA_FILE/u);
-    expect(reach[0]?.["doesNotReach"]).toEqual(["chromium", "yt-dlp"]);
-    // And the half that is working, so the line reads as a boundary rather
-    // than as "your setting does nothing".
-    expect(String(reach[0]?.["reaches"])).toMatch(/ffmpeg/u);
-    expect(String(reach[0]?.["hint"])).toMatch(/TLS_VERIFICATION_FAILED/u);
+    expect(String(reach[0]?.["hint"])).toMatch(/ENABLE_BROWSER_RESOLVER/u);
+    // Not the private-root failure story: there is no tier to fail.
+    expect(String(reach[0]?.["hint"])).not.toMatch(/TLS_VERIFICATION_FAILED/u);
   });
 
   test("says ffmpeg is reached through the proxy, or directly, whichever it is", async () => {

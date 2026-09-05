@@ -98,9 +98,15 @@ switch (mode) {
   case "echo-args": {
     // Reports the arguments it was invoked with as the video title, which is the
     // shortest path from "what did the resolver decide to pass" to an assertion.
+    //
+    // `SSL_CERT_FILE` is appended because dl-37's trust plumbing is half an
+    // argument and half an environment variable, and only asserting the half in
+    // argv would pass with the other half missing — which is the exact state
+    // that leaves yt-dlp reading its bundled `certifi` and failing every origin
+    // behind a terminating proxy.
     process.stdout.write(
       JSON.stringify({
-        title: process.argv.slice(3).join(" "),
+        title: `${process.argv.slice(3).join(" ")} SSL_CERT_FILE=${process.env.SSL_CERT_FILE ?? ""}`,
         formats: [
           {
             format_id: "1",

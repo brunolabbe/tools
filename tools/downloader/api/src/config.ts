@@ -69,13 +69,23 @@ export interface ApiConfig {
    */
   ffmpegAllowUnverifiedTls: boolean;
   /**
-   * Whether ffmpeg's egress proxy **terminates** its TLS, which is how the
-   * segment connections get verified at all. On by default; this is dl-27's
-   * behaviour and the reason that ticket exists.
+   * Whether the egress proxies **terminate** TLS, which is how the segment
+   * connections get verified at all. On by default; this is dl-27's behaviour
+   * and the reason that ticket exists.
    *
    * Off puts ffmpeg back behind the tunnelling proxy dl-14 built, which is
    * dl-21's state exactly: the manifest connection is verified and the segments
    * are not, because libavformat propagates neither TLS option onto them.
+   *
+   * **Since dl-37 it governs the resolver tiers too**, and the name is now
+   * narrower than the setting. One switch, because it selects one property —
+   * whether this process sits inside the TLS — and an operator who turns
+   * interception off to stop a plaintext hop has not asked to keep the larger of
+   * the two. The cost of off is that `EGRESS_CA_FILE` stops reaching Chromium
+   * and yt-dlp, which is dl-34's world and which the boot warning says in those
+   * words. Renaming it was considered and not done here: it is an operator-facing
+   * variable with a deprecation cost of its own, and dl-37 is not the ticket to
+   * pay it on.
    *
    * **It exists so that an operator broken by the interception has somewhere to
    * go that is not `ffmpegAllowUnverifiedTls`.** Those two are not

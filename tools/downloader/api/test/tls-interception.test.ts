@@ -12,7 +12,7 @@
  * Nothing here touches the network or the disk outside a temp dir.
  */
 
-import { X509Certificate } from "node:crypto";
+import { createHash, X509Certificate } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import tls from "node:tls";
@@ -88,12 +88,66 @@ describe("the generated root", () => {
     const intercept = await interception();
     const dir = path.dirname(intercept.rootCaPath);
     const files = await fs.readdir(dir);
-    expect(files).toEqual([path.basename(intercept.rootCaPath)]);
+    // Two files since dl-37, and the assertion is still that the set is closed:
+    // whatever is added here has to be argued for one file at a time.
+    expect(files.toSorted()).toEqual(
+      [path.basename(intercept.rootCaPath), path.basename(intercept.trustBundlePath)].toSorted(),
+    );
+    for (const name of files) {
+      expect(await fs.readFile(path.join(dir, name), "utf8")).not.toContain("PRIVATE KEY");
+    }
 
     const written = await fs.readFile(intercept.rootCaPath, "utf8");
     expect(written).toBe(intercept.rootCaPem);
-    expect(written).not.toContain("PRIVATE KEY");
     expect(new X509Certificate(written).subject).toContain("downloader egress proxy root");
+  });
+
+  /**
+   * dl-37, Done-when 3, on the yt-dlp half: `SSL_CERT_FILE` **replaces**
+   * OpenSSL's default file rather than adding to it, so a bundle carrying only
+   * the generated root would fail every public origin the moment anything went
+   * around the proxy. dl-31 met the identical trap on the undici side.
+   */
+  test("the tiers' trust bundle merges the public roots rather than replacing them", async () => {
+    const intercept = await interception();
+    const bundle = await fs.readFile(intercept.trustBundlePath, "utf8");
+
+    // Vacuous if the store were empty, which is why this is asserted first.
+    expect(tls.rootCertificates.length).toBeGreaterThan(20);
+    const count = bundle.match(/-----BEGIN CERTIFICATE-----/gu)?.length ?? 0;
+    expect(count).toBe(tls.rootCertificates.length + 1);
+    expect(bundle).toContain((tls.rootCertificates[0] ?? "").trim());
+    expect(bundle).toContain(intercept.rootCaPem.trim());
+
+    // A bundle OpenSSL will not parse is the same failure wearing a different
+    // hat, so it is loaded rather than only counted.
+    expect(() => tls.createSecureContext({ ca: bundle })).not.toThrow();
+  });
+
+  /**
+   * dl-37: Chromium takes a hash of the root's SPKI, not the root, and it has
+   * to be the hash BoringSSL computes or the flag silently does nothing.
+   */
+  test("the root's SPKI hash is over the SubjectPublicKeyInfo, base64", async () => {
+    const intercept = await interception();
+
+    const expected = createHash("sha256")
+      .update(
+        new X509Certificate(intercept.rootCaPem).publicKey.export({
+          type: "spki",
+          format: "der",
+        }),
+      )
+      .digest("base64");
+    expect(intercept.rootSpkiSha256).toBe(expected);
+    // 32 bytes, base64. A hex digest here would be accepted by Chromium's
+    // parser as a name it never matches, which is the silent-failure shape.
+    expect(intercept.rootSpkiSha256).toMatch(/^[A-Za-z0-9+/]{43}=$/u);
+
+    // Two processes must not share one, since what bounds the flag is that the
+    // key never leaves the process that made it.
+    const other = await interception();
+    expect(other.rootSpkiSha256).not.toBe(intercept.rootSpkiSha256);
   });
 
   test("closing takes the directory with it", async () => {

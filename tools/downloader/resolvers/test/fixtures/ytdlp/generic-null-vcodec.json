@@ -1,0 +1,27 @@
+{
+  "id": "watch-1",
+  "title": "watch (1)",
+  "webpage_url": "https://vod.example.com/watch",
+  "ext": "mp4",
+  "protocol": "https",
+  "formats": [
+    {
+      "url": "https://vod.example.com/clip.mp4",
+      "vcodec": null,
+      "ext": "mp4",
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate",
+        "Referer": "https://vod.example.com/watch"
+      },
+      "protocol": "https",
+      "vbr": null,
+      "abr": null,
+      "tbr": null,
+      "filesize_approx": null,
+      "format_id": "0"
+    }
+  ]
+}
