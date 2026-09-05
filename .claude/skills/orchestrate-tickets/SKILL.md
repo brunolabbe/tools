@@ -100,10 +100,11 @@ you are there.
    and neither needs `resolvedModel`** — which the backgrounded dispatch *does*
    carry but never shows you, and background is how `reference/concurrency.md`
    tells you to dispatch a batch. If you ever do need it read, two documented
-   routes exist — a `PostToolUse` hook on the `Agent` tool returning it through
+   routes exist: a `PostToolUse` hook on the `Agent` tool returning it through
    `hookSpecificOutput.additionalContext`, and `/tasks` (v2.1.242+), which names
-   the model per row — **both relayed, neither verifiable from a sandbox with no
-   network.** The gate's half was never in doubt:
+   the model per row. **Every claim in this paragraph about what a dispatch
+   carries is relayed and unverified here** — Claude Code's behaviour, not this
+   tree's, read from a sandbox with no network. The gate's half was never in doubt:
    [`.claude/agents/ticket-reviewer.md`](../../agents/ticket-reviewer.md) pins
    `model: sonnet` in its frontmatter, so it is a file read. The builder's half is
    the one step 3 tells you to write down at dispatch. Do both and the comparison

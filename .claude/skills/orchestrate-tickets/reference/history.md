@@ -230,11 +230,12 @@ loud in the PR body; the rule is in `records.md`.
    version of that sentence while rewriting it**, in two places and in fresh
    wording: the `tool_response` does carry `resolvedModel`; what it does not do is
    reach the parent, which sees only the subagent's final text. Corrected at
-   `bb6b8f4`, relayed and unverified from a sandbox with no network. **The finding
+   `69327da`, relayed and unverified from a sandbox with no network. **The finding
    is worth more than the fix — rewriting prose does not re-check it.** A branch
    titled "correct ten skill defects" reproduced one of them inside the sentence it
    lived in, and neither its gate nor its orchestrator caught it; `repo-21`'s filer
-   did, by reading the text. Step 3 now says to **pass the builder's model
+   did, by reading the text. That correction then cited a sha that did not exist,
+   which is the self-naming problem below rather than a separate lapse. Step 3 now says to **pass the builder's model
    explicitly**, naming your own model where the table says inherit, which makes it
    knowable by construction for one parameter. Confirmed this session: dl-37's and
    repo-19's builders both quote *"You are powered by the model named Opus 5 (1M
@@ -321,6 +322,19 @@ one, the correction became a commit, the commit moved the tip, and the corrected
 claim was stale on arrival. A record can never assert its own branch is green,
 because writing the assertion changes the branch. That is now a bullet in
 `records.md`, and `SKILL.md`'s `## After a merge` carries the look it implies.
+
+**The same shape, one field over: a commit cannot cite its own sha.** This branch
+wrote *"Corrected at `bb6b8f4`"* into the commit that made the correction. No such
+object exists — the gate caught it with `git cat-file -t`. At write time it could
+not have existed, because the citation precedes the object it names, so any value
+there is fabricated or a placeholder. **A record cannot name a state that its own
+writing creates.** Cite the *previous* commit, or record the sha in a follow-up.
+It is also the batch's sixth instance of the glance-reading family and its purest
+— a specific, checkable, plausible identifier corresponding to nothing, which is
+structurally what repo-18's builder did with a model line. **The difference is
+that one had no excuse and this one had a real trap**, and both are worth saying:
+the trap does not make the fabrication acceptable, and calling it carelessness
+would hide the mechanism that guarantees it recurs.
 
 **The first wording of that rule was too strong, and it was refuted within the
 hour by the orchestrator doing the thing it said nobody could do.** It read
