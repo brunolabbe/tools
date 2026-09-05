@@ -304,6 +304,15 @@ This gates a pull request that only _files_ repo-22 — no hook, no wiring exist
 
 **Model:** builder ran Opus explicitly (`model: "opus"`). My own context carries, verbatim: "You are powered by the model named Sonnet 5. The exact model ID is claude-sonnet-5." Cross-model gate confirmed both directions.
 
+**This record's citations are pinned to `5fed828`, the sha it reviewed** — added by repo-22's builder on 2026-09-05, and nothing the reviewer wrote was changed. `.claude/skills/orchestrate-tickets/reference/records.md` grew when #148 merged, so the `records.md:156` anchor below has moved in the working tree and a working-tree run reports it. That run is the wrong run for a record about another tree; this is the right one, and it passes:
+
+```
+node scripts/citations.mjs docs/work/repo-22-grep-is-a-wrapper.md \
+  --rev 5fed828 --section "The gate on this filing"
+```
+
+→ exit `0`, `0 moved`, with the anchored citation below reported `ok`. **Do not quote that run's totals here.** Every `path:line` written in this paragraph is itself a citation the run counts, so a total pasted into the prose that produced it is stale the moment it lands — measured twice while writing this line. Pinned rather than repointed on purpose: repointing would rewrite a reviewer's evidence to match a tree it never saw, and `citations.mjs`'s own failure text prescribes the pin for exactly this case.
+
 | Claim                                                                                                               | Verification                                                                                                                                                                                            |
 | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Fixture prints `grep: 1`, `command grep: 4`, `exit: 0`                                                              | **verified** — reproduced verbatim, twice (first paste refused by the worktree-isolation guard on the `.gitignore` line, identical second paste succeeded — matches the ticket's own disclosed flake)   |
@@ -445,7 +454,8 @@ here, because the next agent reads Build first.
 and this is a workaround, not a fix.** It is not a style choice. The title
 originally opened with a backticked `` `grep` ``, which YAML reserves as an
 indicator character, so it had to be quoted — and `parseScalar`
-(`scripts/status.mjs:115-118`) never strips quotes:
+(`scripts/status.mjs:115-118`, **pinned to `23d4bc3`**, the sha this entry was
+written against; #148 has since moved it) never strips quotes:
 
 ```js
 const trimmed = value.trim();
@@ -549,10 +559,54 @@ line was run as written, and every number below was measured here.
   (`scripts/status.mjs:291`).
 - **Two stale citations in this file were found and deliberately left alone.**
   `node scripts/citations.mjs docs/work/repo-22-grep-is-a-wrapper.md` exits `1`:
-  the gate record's `records.md:156` anchor is now at `:192`, and the Log's
-  `scripts/status.mjs:115-118` no longer holds `parseScalar`, which is at
-  `143-145`. Both were written against an earlier tip and moved when #148
-  merged; neither was introduced here, and `citations.mjs` runs in no workflow
-  and in no `package.json` script, so this is not a red pipeline. Not repointed
-  because one of them sits inside a reviewer's gate record, which is not this
-  builder's text to edit — raised to the orchestrator instead.
+  the gate record's `records.md:156` anchor has moved, and the Log's
+  `scripts/status.mjs:115-118` no longer holds `parseScalar`. Both were written
+  against an earlier tip and moved when #148 merged; neither was introduced
+  here, and `citations.mjs` runs in no workflow and in no `package.json` script,
+  so this is not a red pipeline. Not repointed because one of them sits inside a
+  reviewer's gate record, which is not this builder's text to edit — raised to
+  the orchestrator instead.
+
+**2026-09-05 — recovered after the builder above was killed mid-flight, and the
+two stale citations were pinned rather than repointed.** The branch had two
+sibling commits on one parent: a pushed one, and an unpushed one identical to it
+but for the nine Log lines recording the citation finding. Verified by diffing
+the pair — the only delta was those lines — then rebased onto `origin/main` at
+the tip that added the repo suite's spawn timeout, which merged in the meantime.
+
+- **The finding above was reproduced before being acted on, and it is right
+  about the disposition and wrong about one mechanism.** Only the gate record's
+  `records.md` citation is what makes the checker exit `1` — it is reported
+  `MOVED`, because it carries an anchor. The Log's `status.mjs` citation is
+  reported `unanchored`: the checker never resolves it either way, so it
+  contributes nothing to the exit code and was found by reading, not by the
+  tool. The distinction matters because it is the difference between a citation
+  the tool can keep honest and one only a human can.
+- **Both are pinned, neither is repointed.** The owner's call, and it is what
+  `citations.mjs`'s own failure text prescribes: "pin the record to the commit
+  the gate reviewed with `--rev` and say so in the record." Repointing would
+  rewrite a reviewer's evidence to match a tree it never reviewed. The gate
+  record now names `5fed828` and carries the `--section`-scoped command that
+  passes against it; the Log entry above names `23d4bc3`.
+- **The pin was measured, not assumed.** `--rev 5fed828 --section "The gate on
+this filing"` resolves the anchor `ok` — `1 verified, 0 moved`. The Log's
+  citation cannot be confirmed by the tool at all, being unanchored, so it was
+  confirmed by hand with `git show 23d4bc3:scripts/status.mjs`: lines `115-118`
+  there are `parseScalar`'s doc comment, its signature and the two body lines
+  the entry quotes, with the closing brace at `119`. That last detail is the one
+  `repo-24`'s gate independently recorded, which is a second attestation.
+- **A whole-file working-tree run still exits `1`, by design.** A record pinned
+  to another tree is not answerable by a run against this one. The pinned
+  commands are in the record and the Log entry; do not "fix" the working-tree
+  run by repointing.
+- **Deliberately not done: anchoring the nine unanchored citations.** The file
+  carries nine `path:line` citations with no anchor text, so the checker prints
+  them for hand judgement and verifies none. Anchoring them would make the pins
+  self-checking and is the obvious next improvement, but it edits nine
+  citations across two reviewers' records to fix something this ticket did not
+  cause. Named here rather than left silent.
+- **Not measured: whether the pinned `--section` name stays unique.** The flag
+  errors when a name matches more than one section, and this file has a second
+  heading beginning "The gate on this filing". The exact match wins today and
+  the run above proves it, but a third gate heading sharing that prefix would
+  need the name rechecked.
