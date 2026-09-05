@@ -303,6 +303,15 @@ family: **reading a result at a glance and reporting the reading as the
 measurement** — `cancelled` is a _completed_ run and a glance counts it as green,
 which is why that section now insists on `--json`.
 
+Add a thirteenth, measured on this ticket's own gate and written up under
+_Gate 2_ above: **a disposition is a relay, and "accepted" is the word that hides
+an unmeasured one** — the same shape as "addressed" in a finding. The builder here
+answered a finding about a section being too narrative by rewording it, wrote
+_"the reasoning is gone"_ into a committed gate record, and shrank the section by
+**one line**; the reviewer caught it only because it measured the fix instead of
+reading the disposition. The instruction is one clause: **gate a disposition by
+measuring what it claims changed.**
+
 Replace all of it with **one section and one table**: failure shape / one-line
 instance / date. Two of the eleven (_"So separate the outcome from the route…"_
 and _"So check the rule you are about to cite…"_) are remedies attached to their
@@ -316,59 +325,32 @@ The rule landed on `87f93f3`; the scaffolding around it is wrong as well as
 redundant. Step 4 still spends 24 lines establishing what is knowable and what to
 write in a record when you had to infer, and two of those lines are defect 4.
 
-**The open question this ticket was filed with is closed.** It asked whether a
-subagent can alter its own model or type after dispatch, which would defeat
-"fixed at dispatch time". It cannot. **Provenance, because none of it is
-verifiable from inside this repo:** the question was put to the
-`claude-code-guide` skill, which read Claude Code's own documentation rather than
-summaries of it; the verified/inferred split below is that guide's, preserved
-deliberately. **Nothing in this block was verified by the filer** — no network
-reaches this sandbox and these are facts about the harness, not about this tree.
-Treat them as relayed, and if implementing turns one up false, that is a finding
-worth more than the change.
+**The open question is closed: a subagent cannot alter its own model or type after
+dispatch.** So the resolution is fixed at dispatch time and there is nothing to
+observe afterwards. **Every harness fact in this step is relayed, not verified by
+the filer** — how it was obtained, what the guide's reasoning was, and what is
+inference rather than documentation, are in the Log's second-pass entry. Read that
+before you write any of these into `SKILL.md`, and if implementing turns one up
+false, that finding is worth more than the change.
 
-**Verified — the two facts the change rests on:**
+The facts to write in, and nothing else from this block belongs on the page:
 
-- A subagent cannot self-initiate a model change. The only model input is the
-  `model` parameter at dispatch; the events that switch a model are all host
-  actions (`/model`, the picker, `/config`, fast-mode, SDK `set_model`), none
-  reachable from a subagent's tool loop.
-- A subagent cannot change its type or widen its `tools:` list. `tools` is a hard
-  allowlist enforced before the turn runs, and an empty resolved set refuses to
-  launch rather than falling back.
+| Claim                                                                                                              | Status                                           | Consequence for the page                      |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | --------------------------------------------- |
+| A subagent cannot self-initiate a model change; the only input is `model` at dispatch                              | verified (relayed)                               | passing `model` fixes the pairing at dispatch |
+| A subagent cannot change its type or widen `tools:`                                                                | verified (relayed)                               | the gate cannot become the thing it gates     |
+| Fallback chains can move a subagent's model mid-run, at the harness's initiative                                   | verified (relayed)                               | say "dispatched as", not "ran as"             |
+| `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`, an `availableModels` allowlist, and `fork` each override an explicit `model` | verified (relayed)                               | one sentence naming all three                 |
+| The default is `CLAUDE_CODE_SUBAGENT_MODEL`, an env var, not a settings key                                        | verified (relayed); repo-local half checked here | a settings grep proves nothing either way     |
+| A subagent's "You are powered by the model named X" line is **not guaranteed to exist**                            | **inferred**, and marked so by its source        | never a verification path — see below         |
 
-**Verified — three qualifications, which make this weaker than "knowable by
-construction". Write all three in; a rule stated without them is the
-overclaiming this page keeps producing:**
+**Write the three qualifications in.** A rule stated without them is the
+overclaiming this page keeps producing.
 
-- **The model can still move mid-run, at the harness's initiative and never the
-  agent's.** Fallback chains apply to subagents; on failover the subagent
-  continues on whichever fallback accepted the request.
-- **An explicit `model` parameter is not absolute.**
-  `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` makes Claude Code ignore every definition's
-  model field _and_ prevents passing one at dispatch; an `availableModels`
-  allowlist silently substitutes a permitted model; `fork` always inherits.
-- **The default subagent model is `CLAUDE_CODE_SUBAGENT_MODEL`, an environment
-  variable, not a settings key.** I did verify the repo-local half of this:
-  `.claude/settings.json` and `~/.claude/settings.json` contain no `env` block,
-  no `CLAUDE_CODE_SUBAGENT_MODEL` and no `availableModels`, and
-  `.claude/settings.local.json` does not exist. So a settings grep here proves
-  nothing either way — the variable can be set outside any settings file.
-
-**Inferred, not stated — and it is the finding that most changes the design.** A
-subagent's "You are powered by the model named X" line **is not guaranteed to
-exist**, so asking an agent to quote it is not a verification path. Source:
-`sub-agents.md`'s statement that a subagent gets "only this system prompt plus
-basic environment details… not the Claude Code system prompt", plus a
-startup-content list containing no model-identity line — an inference from two
-documented facts, not a documented fact, and the guide marks it so. Observations
-to date: **three of four agents had the line, one searched and found none** (the
-fourth pair being this ticket's own builder and gate, both of which had it).
-
-Write the rule as an application of one this repo already measured, not as a new
-claim: `reference/dispatching.md` says _"Ask an agent to **call** a tool, not to
-tell you whether it has one"_, off a builder that listed eight tools where its
-frontmatter grants thirteen. Same failure, one field over.
+**And write the last row as an application of a rule this repo already measured,
+not as a new claim**: `reference/dispatching.md` says _"Ask an agent to **call** a
+tool, not to tell you whether it has one"_, off a builder that listed eight tools
+where its frontmatter grants thirteen. Same failure, one field over.
 
 So do:
 
@@ -515,7 +497,7 @@ restate it.** The missing-path instance is the third comment on #148.
    covered by a citation on the same line.
 4. `grep -c` for `^#{3,4} ` inside `## Decisions` shows the laundering family
    reduced to **one** section, whose body contains a table with one row per
-   failure shape and a date in every row. The twelve shapes listed in Build 3 each
+   failure shape and a date in every row. The thirteen shapes listed in Build 3 each
    appear as exactly one row; none has been dropped.
 5. `## The loop` contains twelve numbered steps and no paragraph longer than three
    lines. Checkable by `awk` over the span between `^## The loop` and the next
@@ -580,15 +562,15 @@ NFRs: security n/a · performance n/a · reliability n/a directly, though the tw
 Six accepted, one refuted, one corrected further than either of us had it. The
 reviewer also self-corrected its own last finding before I acted on it.
 
-| #   | Finding                              | Disposition                                  | Command that settled it                                                                                                                                                                                                                                                                                                                                           |
-| --- | ------------------------------------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | defect 4 going stale                 | **accepted**, remedy (a)                     | `git log --oneline 87f93f3..origin/docs/record-2026-09-04-orchestration-batch` → two more commits (`69327da`, `7e1fbc1`); `git show 87f93f3:…SKILL.md \| grep -n resolvedModel` still reproduces the defect                                                                                                                                                       |
-| 2   | Build 4 fails the ticket's own split | **accepted**                                 | `awk '/^### 4\. Retire/,/^### 5\./' \| wc -l` → 91 of 302                                                                                                                                                                                                                                                                                                         |
-| 3   | no general one-file rule             | **accepted**                                 | `grep -niE 'exactly one file\|single home\|everywhere else is a pointer'` → no match                                                                                                                                                                                                                                                                              |
-| 4   | "two commits later"                  | **accepted**                                 | `git rev-list --count a980d5e..62cb999` → 1                                                                                                                                                                                                                                                                                                                       |
-| 5   | "`citations.mjs` prints the rule"    | **refuted, and the finding improved anyway** | `sed -n '430,440p' scripts/citations.mjs` → the sentence is inside a `process.stderr.write`, and it is the tail of the ticket's own reproduced run. It **is** printed on `main`. It is a comment at `:730-732` in the **`repo-18`** version the reviewer read — which this ticket depends on, so the verb goes false when `#146` merges. Both halves now recorded |
-| 6   | `history.md` self-declaration        | **accepted**                                 | `grep -n "revising this skill"` → `.claude/skills/orchestrate-tickets/SKILL.md:17`, no hit in `history.md`                                                                                                                                                                                                                                                        |
-| 7   | "13 lines"                           | **accepted, and both counts were wrong**     | bullet 1 is `55–70` = **16** lines; `sed -n '71p'` is the next bullet's first line. Pair with the seam-mapper bullet = `55–76` = 22. The reviewer's self-correction that `main` lacks this content entirely is confirmed: `grep -n "Read the matches, do not count them" SKILL.md` exits 1 on `main`                                                              |
+| #   | Finding                              | Disposition                                                                       | Command that settled it                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --- | ------------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | defect 4 going stale                 | **accepted**, remedy (a)                                                          | `git log --oneline 87f93f3..origin/docs/record-2026-09-04-orchestration-batch` → two more commits (`69327da`, `7e1fbc1`); `git show 87f93f3:…SKILL.md \| grep -n resolvedModel` still reproduces the defect                                                                                                                                                                                                                                                                                      |
+| 2   | Build 4 fails the ticket's own split | **accepted — then my first fix failed its own disposition, and gate 2 caught it** | `### 4.`→`### 5.` spans: **90** at `6c0ee2e`, **89** at `2220501`, **62** now. The `2220501` pass reworded the narrative instead of moving it, while the disposition claimed the reasoning was "gone". Gate 2 measured it and was right. The guide's reasoning now lives in the Log's second-pass entry and Build 4 carries a six-row fact table and the `So do` list — instruction only. Build section 302 → 304, which grew only because Build 3 gained the thirteenth row this round produced |
+| 3   | no general one-file rule             | **accepted**                                                                      | `grep -niE 'exactly one file\|single home\|everywhere else is a pointer'` → no match                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 4   | "two commits later"                  | **accepted**                                                                      | `git rev-list --count a980d5e..62cb999` → 1                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 5   | "`citations.mjs` prints the rule"    | **refuted, and the finding improved anyway**                                      | `sed -n '430,440p' scripts/citations.mjs` → the sentence is inside a `process.stderr.write`, and it is the tail of the ticket's own reproduced run. It **is** printed on `main`. It is a comment at `:730-732` in the **`repo-18`** version the reviewer read — which this ticket depends on, so the verb goes false when `#146` merges. Both halves now recorded                                                                                                                                |
+| 6   | `history.md` self-declaration        | **accepted**                                                                      | `grep -n "revising this skill"` → `.claude/skills/orchestrate-tickets/SKILL.md:17`, no hit in `history.md`                                                                                                                                                                                                                                                                                                                                                                                       |
+| 7   | "13 lines"                           | **accepted, and both counts were wrong**                                          | bullet 1 is `55–70` = **16** lines; `sed -n '71p'` is the next bullet's first line. Pair with the seam-mapper bullet = `55–76` = 22. The reviewer's self-correction that `main` lacks this content entirely is confirmed: `grep -n "Read the matches, do not count them" SKILL.md` exits 1 on `main`                                                                                                                                                                                             |
 
 **Two-sided model check.** The reviewer quoted _"You are powered by the model named
 Sonnet 5. The exact model ID is `claude-sonnet-5`."_ Mine reads **"You are powered
@@ -605,6 +587,38 @@ indeed dangling; `git cat-file -t bb6b8f4` → `fatal: Not a valid object name`.
 record branch's next commit, `7e1fbc1` _"a commit cannot cite its own sha"_,
 already turned it into a documented instance. No action, and nothing for the
 orchestrator to file.
+
+### Gate 2 — the round that caught a disposition claiming more than it did
+
+Two exchanges, and the second is the one worth keeping.
+
+**Finding 5 conceded by the reviewer, on its own re-run.** It re-ran
+`sed -n '425,440p' scripts/citations.mjs` against `main` and confirmed the
+sentence is emitted from `process.stderr.write` on the `bad.length > 0` path. Its
+own account: it had tested exclusively against the `repo-18` extraction throughout
+its pass and never re-checked that claim against the current tool. It also
+re-ran the ticket's own `citations.mjs`, got `8/10` and exit 1 matching the table,
+**including its own citation now showing `FAIL` for the reason given**. No
+disagreement went up.
+
+**Finding 2 reopened by the reviewer, and it was right.** The orchestrator had
+asked it to measure whether Build 4 actually shrank, separately from whether the
+finding was marked accepted. It measured 90 lines at `6c0ee2e` and 89 at
+`2220501` — **one line** — and diffed the block I claimed to have removed: the
+guide's reasoning was still stated inline, reordered and reworded rather than
+moved. My disposition had said _"the `claude-code-guide`'s reasoning is gone, the
+conclusion and its provenance stay"_. **That was false, and it was false inside a
+gate record answering a finding about exactly this.** Re-measured here: 90 → 89 →
+**62** — a 31% cut, where the previous pass managed 1% — with the reasoning now in the Log's second-pass
+entry and Build 4 holding a six-row fact table plus the `So do` list.
+
+**The generalisable part, which is why this is in the record and not only the
+Log.** A disposition is a claim like any other, and "accepted" is the word that
+hides an unmeasured one — the same shape as "addressed" in a finding. The
+reviewer's first pass accepted my numbers because they were measurements; its
+second pass caught me because it measured the _fix_ rather than reading the
+disposition. **Gate a disposition by measuring what it says changed, not by
+checking that the finding is marked closed.**
 
 ## Log
 
@@ -667,6 +681,18 @@ orchestrator to file.
   builds this should re-read this bullet against the merged `citations.mjs` and
   correct the verb.
 
+- **2026-09-05, fourth pass — gate 2, and a disposition of mine that did not
+  survive being measured.** The reviewer conceded finding 5 on its own re-run and
+  reopened finding 2, correctly: my "accepted" had shrunk Build 4 by one line
+  while claiming the narrative was removed. Fixed properly — Build 4 is 90 → 62,
+  the guide's reasoning moved into this Log's second-pass entry rather than being
+  reworded in place, and the false disposition is corrected in the table rather
+  than quietly replaced. **The failure is now a thirteenth row in Build 3's
+  table**, because it is a new shape and it was measured here: a disposition is a
+  relay, and gating one means measuring what it claims changed. If the cleanup
+  drops that row, the ticket has thrown away the only defect its own process
+  produced.
+
 - **2026-09-05, third pass — gate 1 answered.** Six of seven findings accepted,
   one refuted with a reproduction, one corrected past both parties' numbers; the
   record and the dispositions are above. Two things worth keeping out of the
@@ -684,6 +710,39 @@ orchestrator to file.
   is marked as relayed and its verified/inferred split preserved** — no network
   reaches this sandbox and none of it is checkable against this tree, so promoting
   it to a stated fact would be the exact failure the ticket is about.
+
+  **How it was obtained, which Build 4's table points here for rather than
+  carrying.** The question went to the `claude-code-guide` skill, which read
+  Claude Code's own documentation rather than summaries of it. The
+  verified/inferred marks in that table are the guide's own, kept deliberately —
+  the point of the answer is knowing which half is guaranteed.
+
+  The verified rows rest on: the only model input being the `model` parameter at
+  dispatch, with every model-switch event a host action (`/model`, the picker,
+  `/config`, fast-mode, an SDK `set_model`) and none reachable from a subagent's
+  tool loop; and `tools` being a hard allowlist enforced before the turn runs,
+  where an empty resolved set refuses to launch rather than falling back.
+
+  **The one inferred row, and the reasoning behind it, because a future reader
+  will want to re-test it rather than re-derive it.** `sub-agents.md` says a
+  subagent receives "only this system prompt plus basic environment details… not
+  the Claude Code system prompt", and the enumerated startup-content list contains
+  no model-identity line. The conclusion — that the "You are powered by the model
+  named X" line is not guaranteed — is the guide's inference from those two
+  adjacent facts, and the guide says so. **Observations to date: three of four
+  agents had the line, one searched and found none.** The two most recent are this
+  ticket's own builder and gate, which quoted _"Opus 5 (1M context) …
+  `claude-opus-5[1m]`"_ and _"Sonnet 5 … `claude-sonnet-5`"_ respectively — a
+  useful two-sided confirmation that the gate ran a different model than the
+  build, and **no evidence at all about the rule**, since the claim is that the
+  line is not _guaranteed_ and two more instances of it existing cannot test that.
+  Recorded here so nobody later reads the tally as support for self-reporting.
+
+  **The repo-local half of the env-var row I did check**, and it is the only line
+  in that table I can stand behind directly: `.claude/settings.json` and
+  `~/.claude/settings.json` contain no `env` block, no `CLAUDE_CODE_SUBAGENT_MODEL`
+  and no `availableModels`, and `.claude/settings.local.json` does not exist. Which
+  proves nothing either way — the variable can be set outside any settings file.
 
   What I verified myself, and it is only this:
 
