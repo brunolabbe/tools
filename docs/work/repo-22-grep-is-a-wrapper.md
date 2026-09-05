@@ -11,8 +11,8 @@ difficulty: standard
 
 # repo-22 — `grep` here is a wrapper that silently honours ignore files
 
-**Blocked on the Decision below.** Do not start until it is answered: the answer
-picks which file the Build edits.
+**The Decision is answered — see below. This ticket is startable.** The hook is
+the only carrier, so its header comment has to hold the whole reasoning.
 
 ## Why
 
@@ -44,7 +44,7 @@ refuses the `mktemp -d` plus `cd` spelling outright. Even this spelling was
 refused once and accepted twice while the ticket was written, so **a refusal is
 not a failed acceptance** — run the lines separately and the result is the same.
 
-Four further facts, each measured:
+Five further facts, each measured:
 
 - **The gap is content-dependent, not a constant.** In a clean worktree
   `grep -rl vitest .` and `command grep -rl vitest .` both return **183, with
@@ -56,8 +56,15 @@ Four further facts, each measured:
 - **The wrapper is not exported** — `BASH_FUNC_grep` is absent from `export -p`.
   It applies only to commands typed into the Bash tool. A `#!/usr/bin/env bash`
   script, `bash -c`, a hook and CI all get real GNU grep, so an agent's manual
-  check does not match what the repo's own scripts see. In the fixture above:
-  inline 1, through a script 4.
+  check does not match what the repo's own scripts see. On the fixture above:
+  inline 1, through a script 4, through `bash -c` 4.
+- **The fixture must not contain the search term outside the files under test**,
+  and this one does not: the probe script lives at `/tmp/grep-wrapper-probe.sh`,
+  outside the searched tree, and `command grep -rl 'grep' /tmp/grep-wrapper-demo`
+  returns nothing. A fixture that stores its own script in the directory being
+  searched matches its own body and inflates every count by one — which happened
+  to two independent reproductions of this finding on the day it was filed, and
+  changed the numbers without changing the conclusion.
 - **Stdin is unaffected**, because the suppressed flags only govern walking a
   tree. The documented id sweep in
   `.claude/skills/orchestrate-tickets/reference/concurrency.md` pipes into
@@ -77,51 +84,84 @@ Four further facts, each measured:
   `.claude/skills/orchestrate-tickets/reference/records.md`, opening "Measure
   that exit code without a pipe". Point at it; do not copy it.
 
-## Decision — open, answer before building
+## Decision — answered 2026-09-05, not open
 
-**Where does the rule live?** All three options state the same fact and differ
-only in who reads it.
+**The question was:** where does the rule live — a block in `CLAUDE.md` (A), a
+`.claude/rules/` file (B), or a `PreToolUse` Bash hook (C)?
 
-| Option                                             | Cost                                                                                                                                                                                         | Reaches                                           |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| **A (recommended) — a short block in `CLAUDE.md`** | ~6 lines onto a 269-line, 14.5 kB file that every session pays for                                                                                                                           | every agent, before it types anything             |
-| **B — a `.claude/rules/` file**                    | ~25 lines, loaded only on a `paths:` glob match. **Measured blocker:** all five existing rules key on a file being _opened_, and a `grep` is a Bash call, so no path reliably precedes it    | only agents that first open some chosen file      |
-| **C — a `PreToolUse` Bash hook**                   | a new script. The mechanism is already wired — `.claude/hooks/check-pr-title.sh`, matcher `Bash` — and its own header records that a naive substring match misfired on that hook's first run | exactly the agent about to run a tree-wide `grep` |
+**The answer, from the owner, relayed through the orchestrator: option C alone.**
+Not A, and not A+C. The three options were put to them with the costings below.
 
-A and C are not exclusive: A is the statement, C is the reminder. B is the one
-this ticket recommends against, on the measurement in its row.
+- **B was ruled out on a measurement, and the measurement is the reason — keep
+  it.** All five existing `.claude/rules/` files key on `paths:` globs matched
+  against a file being _opened_. A `grep` is a Bash call, so no path reliably
+  precedes it. The rules mechanism structurally cannot fire for this; it is not
+  merely a weaker choice.
+- **A was declined although it is the obvious option**, and a later reader will
+  wonder why. Two reasons: the owner's standing constraint this session is less
+  prose, and `CLAUDE.md` is read once at session start while this failure happens
+  forty tool calls deep. A statement that arrives before the mistake is
+  contemplated is not the same as a reminder that arrives as it is made.
+- **So the hook is the only carrier.** There is no prose elsewhere to point at,
+  which is why Build step 2 puts the reasoning in its header comment rather than
+  in a doc. `.claude/hooks/check-pr-title.sh` already establishes that pattern —
+  its header records the mechanism, the reason the hook exists, and the misfire
+  on its own first live run.
 
 ## Build
 
-1. Answer the Decision. Record the answer in this file as a
-   `## Decision — answered <date>` section, not in the Log.
-2. Write the rule in the file the answer names. It must say: `grep` is a
-   function here; it honours ignore files and skips binaries; there is no
-   warning and no exit code; use `command grep` when a search must be
-   exhaustive; and the wrapper does not apply inside scripts, hooks or CI.
-3. Cite the two siblings and the `records.md` note by path. **Do not restate
-   them** — a fact in two places is the defect `repo-21` exists to remove.
-4. If the answer includes option C, keep the hook advisory: warn on stderr, exit 0. Match a tree-walking `grep` (`-r`/`-R`, not already `command grep` or a
-   VCS grep) only where it is being invoked, per the matching note in
-   `check-pr-title.sh`.
+1. Add `.claude/hooks/check-tree-grep.sh` and wire it into the existing
+   `PreToolUse` `Bash` matcher in `.claude/settings.json`, alongside
+   `check-pr-title.sh`. Both run; neither replaces the other.
+2. **The header comment is the deliverable, not an aside.** It is the only place
+   this reasoning will live, so it carries: that `grep` here is a bash function
+   execing `ugrep` under `--ignore-files --hidden -I --exclude-dir=…`; that the
+   result honours ignore files and skips binaries with no warning and no exit
+   code; the fixture numbers from **Why** (1 against 4); that the wrapper is not
+   exported, so scripts, hooks and CI see real GNU grep; and that `command grep`
+   is the spelling for an exhaustive search. Follow the shape of
+   `check-pr-title.sh`'s header.
+3. Cite the two siblings and the `records.md` note by path, in the header.
+   **Do not restate them** — a fact in two places is the defect `repo-21` exists
+   to remove.
+4. **Advisory, never blocking**: warn on stderr, `exit 0`. This fires on a
+   correct command far more often than on a mistaken one, so a blocking exit 2
+   would be wrong.
+5. Match a tree-walking `grep` — `-r` or `-R` — only where it is being
+   **invoked**, and not when it is already `command grep` or a VCS grep. Use the
+   `(^|[;&|(]|&&|\|\|)` anchoring from `check-pr-title.sh`: that hook's header
+   records a plain substring test firing on the command name inside a heredoc
+   and blocking an unrelated command on its first live run. A hook about `grep`
+   that misfires on the word `grep` in a search pattern would repeat it exactly.
 
 ## Done when
 
+Let `H=.claude/hooks/check-tree-grep.sh` throughout.
+
 - The fenced block under **Why**, pasted into a shell, prints `grep: 1`,
   `command grep: 4` and `exit: 0`.
-- `command grep -c 'command grep' <the file the Decision named>` returns ≥ 1,
-  and `command grep -c 'ignore-files' <same file>` returns ≥ 1.
-- `command grep -c 'repo-20' <same file>` and
-  `command grep -c 'records.md' <same file>` each return ≥ 1, while
-  `command grep -c 'alternation' <same file>` prints `0` and exits 1, which is
-  `grep`'s no-match code, not a failure — proving the siblings
-  were cited rather than copied.
+- **The hook fires, and does not block.**
+  `printf '{"tool_input":{"command":"grep -rl x ."}}' | bash $H; echo $?`
+  prints a warning on stderr and `0`.
+- **It stays quiet on the four spellings that are already correct.** Each of
+  these prints nothing and exits `0`:
+  `command grep -rl x .` · `git grep -l x` · `grep -l x file.txt` (no `-r`) ·
+  `echo "grep -rl x ."` (the command name inside a quoted argument, which is the
+  misfire `check-pr-title.sh` recorded).
+- **It fires after a shell operator**, not only at the start:
+  `printf '{"tool_input":{"command":"cd /tmp && grep -r x ."}}' | bash $H`
+  warns.
+- **The header carries the reasoning**, not a pointer to it: each of
+  `command grep -c 'ignore-files' $H`, `command grep -c 'command grep' $H`,
+  `command grep -c 'not exported' $H` returns ≥ 1.
+- **The siblings are cited, not copied**: `command grep -c 'repo-20' $H` and
+  `command grep -c 'records.md' $H` each return ≥ 1, while
+  `command grep -c 'alternation' $H` prints `0` and exits 1 — `grep`'s no-match
+  code, not a failure.
+- **It is wired**: `node -e "const s=require('./.claude/settings.json'); console.log(JSON.stringify(s.hooks.PreToolUse))"`
+  names both `check-pr-title.sh` and `check-tree-grep.sh` under a `Bash` matcher.
 - `npm run check` passes, `npm run format` leaves the tree clean, and
   `node scripts/status.mjs --json` exits `0`.
-- If option C landed:
-  `printf '{"tool_input":{"command":"grep -rl x ."}}' | bash .claude/hooks/<hook>.sh; echo $?`
-  prints the warning and `0`; the same input with `command grep -rl x .` prints
-  nothing.
 
 ## Log
 
@@ -139,13 +179,36 @@ off `c37cab9`. Two of them corrected the brief that requested this ticket.
 - **Not measured:** the shared checkout `/workspaces/tools`. The command needed
   `--exclude-dir=.git`, which the worktree-isolation guard refuses from an
   isolated agent; it was not respelled. The 12-worktree count stands in for it.
-- The id sweep ran both spellings and they agreed. `repo-21` lives on
-  `origin/repo-cleanup-orchestrate-skill`, which has no PR, so the documented
-  union-of-files sweep cannot see it — the caveat `concurrency.md` already
-  records. `repo-22` is the union of `main`, the open PRs, and that branch.
+- The id sweep ran both spellings and they agreed. `repo-22` is the union of
+  `main`, the open PRs, and `origin/repo-cleanup-orchestrate-skill` — see the
+  entry below for why that third source was needed.
 - The worktree-isolation guard refused the reproduction once and accepted the
   same fixture twice, differing only in an `echo -n` label. Noted under **Why**
   so a reviewer does not read a refusal as a failed acceptance. Not filed
   separately: it is an observation about the harness, not about this repo.
-- `difficulty: standard` rates the build after the Decision is answered: option
-  A is prose, but option C is a shell matcher whose predecessor misfired live.
+- `difficulty: standard` rates the build now that the Decision is answered. The
+  carrier is a shell matcher, not prose, and its predecessor misfired on its
+  first live run.
+
+**2026-09-05 — Decision answered, before any build.** Option C alone, from the
+owner via the orchestrator. Recorded in `## Decision` rather than here, because
+the next agent reads the Build section first and steps 1–5 changed with the
+answer.
+
+- **A number in this file was stated before it was measured, and is now
+  measured.** "Through a script 4" was carried over from an earlier scratch
+  fixture where it was 6, not from the `/tmp/grep-wrapper-demo` fixture the
+  ticket publishes. Re-run against the published fixture with the probe script
+  held outside the searched tree: inline 1, script 4, `bash -c` 4. The claim was
+  right; it had not been run in the form the ticket asserts it.
+- **That earlier scratch fixture had the self-match flaw**, and so did the
+  orchestrator's independent reproduction: a probe script written into the
+  directory being searched matches its own body and adds one to every count. Two
+  reproductions, same trap, same day. Hence the fifth bullet under **Why** and
+  the `command grep -rl 'grep' <fixture>` check that proves the published
+  fixture is clean.
+- The documented union-of-files id sweep in `concurrency.md` returned `repo-20`
+  as the maximum and missed `repo-21` entirely, because
+  `origin/repo-cleanup-orchestrate-skill` has no open PR. A live instance of the
+  caveat that page already records; it prescribes `SendMessage`, which is how
+  `repo-21` was in fact found.
