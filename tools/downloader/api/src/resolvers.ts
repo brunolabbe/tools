@@ -87,6 +87,29 @@ export const PROXY_REFUSED_ORIGIN_HINT =
   "The egress proxy verified this origin on the tier's behalf and refused its certificate; details.reason is the OpenSSL verify code. The tier itself only saw a tunnel it could not open, so this verdict was reattached here. If the origin chains to a private root, EGRESS_CA_FILE is the setting — it reaches this proxy. See tools/downloader/docs/work/dl-37-tiers-move-onto-the-terminating-proxy.md.";
 
 /**
+ * The only raw verdicts a reattached certificate cause is allowed to replace.
+ *
+ * Both mean "the connection did not happen" or "this tier learned nothing
+ * about the source" — `UNREACHABLE` is the browser tier's and the yt-dlp
+ * tier's shared bucket for a `CONNECT` that failed for any reason their own
+ * classifier does not have a more specific answer for, and `NO_MEDIA_FOUND` is
+ * yt-dlp's default fallthrough for the same shape of failure. Neither is a
+ * fact the tier established about the *source*.
+ *
+ * A gate on this ticket is why this is an allowlist rather than the single
+ * exclusion (`!== "TLS_VERIFICATION_FAILED"`) it started as: that version
+ * would have overwritten `DRM_PROTECTED`, `CANCELED`, `TIMEOUT`,
+ * `AUTH_REQUIRED` and `GEO_BLOCKED` too, on the same host-and-window
+ * coincidence a certificate refusal happens to match. Those five *are* facts
+ * the tier established — a positive result, not an absence of one — and
+ * overwriting one with an inference is the wrong direction regardless of how
+ * plausible the inference is. A relabelled `CANCELED` would be nonsense to a
+ * user who pressed cancel; a relabelled `DRM_PROTECTED` would be a worse
+ * misdiagnosis than the one dl-34 exists to have fixed.
+ */
+const REATTACHABLE_CODES = new Set(["UNREACHABLE", "NO_MEDIA_FOUND"]);
+
+/**
  * Restores the verdict a terminating proxy takes away from a tier.
  *
  * dl-34 taught both tiers to say `TLS_VERIFICATION_FAILED` when they met a
@@ -103,11 +126,19 @@ export const PROXY_REFUSED_ORIGIN_HINT =
  * raises the right code from `guarded-fetch.ts`, so wrapping it would be a
  * second answer to a question already answered.
  *
- * A verdict the tier reached on its own is left alone: an error that is already
- * `TLS_VERIFICATION_FAILED` carries the tier's own `reason`, which is more
- * specific than anything reattached here.
+ * A verdict the tier reached on its own is left alone in two ways now, not
+ * one: an error that is already `TLS_VERIFICATION_FAILED` carries the tier's
+ * own `reason`, which is more specific than anything reattached here, and an
+ * error whose code is not in `REATTACHABLE_CODES` is a fact rather than an
+ * absence and must not be overwritten by an inference at all.
+ *
+ * Exported so both rules can be pinned directly, against a resolver that
+ * throws whatever code a test names — `buildRegistry` gives no way to inject
+ * one in place of the real `YtDlpResolver` / `BrowserResolver`, and driving a
+ * real `DRM_PROTECTED` verdict through a live tier would test Chromium or
+ * yt-dlp, not this wrapper.
  */
-function namingRefusedOrigins(resolver: Resolver, rejections: TlsRejectionLog): Resolver {
+export function namingRefusedOrigins(resolver: Resolver, rejections: TlsRejectionLog): Resolver {
   return {
     name: resolver.name,
     priority: resolver.priority,
@@ -124,7 +155,7 @@ function namingRefusedOrigins(resolver: Resolver, rejections: TlsRejectionLog): 
         return await resolver.resolve(url, options);
       } catch (cause) {
         const error = AppError.from(cause);
-        if (error.code === "TLS_VERIFICATION_FAILED") throw error;
+        if (!REATTACHABLE_CODES.has(error.code)) throw error;
         const reason = rejections.since(url.hostname, startedAt);
         if (reason === undefined) throw error;
         throw new AppError("TLS_VERIFICATION_FAILED", undefined, {

@@ -50,21 +50,40 @@ import { TIER_TRUST_STORE_HINT, ytdlpCertificateMarker } from "../tls-verificati
 /** yt-dlp JSON is far larger than a manifest; this is a memory bound, not a policy. */
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 
+/**
+ * **`| null` here is measured, not defensive.** yt-dlp writes JSON `null` for a
+ * field it has no value for as readily as it omits the key, and this interface
+ * is hand-written over parsed JSON — so a field typed `string` that arrives
+ * `null` is a lie the compiler then enforces on every reader.
+ *
+ * dl-37 found the one place that mattered: `realCodec` filtered `undefined`,
+ * `""` and `"none"` but not `null`, so a `null` survived as a *real* codec and
+ * `lookup()` called `.trim()` on it — a bare `TypeError` escaping as `INTERNAL`,
+ * "Something went wrong on our end", for an ordinary page.
+ *
+ * The `| null`s below are exactly the declared fields observed null from the
+ * real 2025.09.26 binary across three shapes (a `<video src>` page, a direct
+ * `.mp4`, a direct `.mp3`): `vcodec`, `vbr`, `abr`, `tbr`, `filesize_approx`.
+ * **`acodec` was not observed null** in any of the three — it came back absent
+ * or a string — so it is not widened here, and `realCodec` accepts `null`
+ * regardless because it is the same call. Widening on symmetry rather than on a
+ * measurement is how this list stops meaning anything.
+ */
 export interface YtDlpFormat {
   format_id?: string;
   url?: string;
   ext?: string;
   protocol?: string;
-  vcodec?: string;
+  vcodec?: string | null;
   acodec?: string;
   width?: number;
   height?: number;
   fps?: number;
-  tbr?: number;
-  vbr?: number;
-  abr?: number;
+  tbr?: number | null;
+  vbr?: number | null;
+  abr?: number | null;
   filesize?: number;
-  filesize_approx?: number;
+  filesize_approx?: number | null;
   format_note?: string;
   language?: string;
   container?: string;
@@ -325,8 +344,26 @@ function firstEntry(parsed: unknown): YtDlpInfo | undefined {
 }
 
 /** `"none"` is yt-dlp's way of saying "this stream is absent", not a codec name. */
-function realCodec(codec: string | undefined): string | undefined {
-  if (codec === undefined || codec === "" || codec === "none") return undefined;
+/**
+ * A codec string that names a stream, or `undefined` for every way yt-dlp says
+ * it does not.
+ *
+ * It says it four ways and they are not synonyms, which is why they are listed
+ * rather than collapsed. `"none"` is a **statement**: the stream is absent, and
+ * that is what an adaptive video-only format puts in `acodec`. The other three
+ * are **silence**: an absent key, an empty string, and `null` — yt-dlp's
+ * spelling of "I did not determine this", which its generic extractor emits for
+ * `vcodec` on any page it has no extractor for. Both readings answer this
+ * function the same way, because a caller can do nothing with either; the
+ * conflation is pre-existing and deliberate, and only the callers that also
+ * check `height` or `abr` can tell them apart at all.
+ *
+ * `null` was the missing one until dl-37, and it was the dangerous one to miss:
+ * it is the only value here that is *truthy against `undefined`*, so it did not
+ * degrade the answer — it survived as a codec and reached `.trim()`.
+ */
+function realCodec(codec: string | null | undefined): string | undefined {
+  if (codec === undefined || codec === null || codec === "" || codec === "none") return undefined;
   return codec;
 }
 

@@ -150,6 +150,70 @@ describe("format mapping", () => {
   });
 });
 
+/**
+ * A JSON `null` codec, which is what the **generic** extractor emits — the path
+ * taken for every page yt-dlp has no site-specific extractor for, so the common
+ * one rather than an exotic one.
+ *
+ * `generic-null-vcodec.json` is real output, captured from yt-dlp 2025.09.26
+ * against a loopback fixture serving `<video src='/clip.mp4'>`, with the host
+ * rewritten and the fields the mapper never reads dropped. Kept as a payload
+ * rather than hand-written because the value under test is `null` versus an
+ * absent key, and a hand-written fixture is exactly where that distinction gets
+ * lost.
+ *
+ * Found while measuring dl-37 and present at `origin/main`: `realCodec` filtered
+ * `undefined`, `""` and `"none"` and not `null`, so `null` was the one value
+ * that survived as a *real* codec — `hasVideo` went true on it and `codecLabel`
+ * then called `.trim()` on `null`. A bare `TypeError`, which reaches a caller as
+ * `INTERNAL` / "Something went wrong on our end" and stops the resolver chain,
+ * for an ordinary page.
+ */
+describe("a codec yt-dlp reports as JSON null", () => {
+  test("is read as 'not reported' rather than surviving as a codec", () => {
+    const probe = mapYtDlpInfo(
+      fixture("generic-null-vcodec"),
+      "https://vod.example.com/watch",
+      "yt-dlp",
+      {},
+    );
+
+    // Nothing said this format carries video — no codec and no height — so it
+    // contributes no variant, exactly as an absent `vcodec` key already did.
+    // Before the fix this line threw instead of returning.
+    expect(probe.variants).toEqual([]);
+  });
+
+  test("still reaches the label path when something else proves there is video", () => {
+    // The other half, and the one that isolates the crash from the skip: with a
+    // `height` the format *is* usable, so `null` travels all the way into
+    // `codecLabel` — the call that threw. The label has to come out naming the
+    // resolution and no codec, rather than naming `null` or not existing.
+    const info = fixture("generic-null-vcodec");
+    const format = info.formats?.[0];
+    if (format === undefined) throw new Error("the fixture lost its format");
+    format.height = 720;
+    format.filesize = 10_000_000;
+
+    const probe = mapYtDlpInfo(info, "https://vod.example.com/watch", "yt-dlp", {});
+
+    expect(probe.variants).toHaveLength(1);
+    expect(probe.variants[0]?.hasVideo).toBe(true);
+    expect(probe.variants[0]?.videoCodec).toBeUndefined();
+    expect(probe.variants[0]?.label).toBe("720p · 9.5 MB");
+  });
+
+  test("degrades the whole probe to NO_MEDIA_FOUND, which falls through to the sniffer", () => {
+    // The verdict is the part that matters to a caller, and it is the reason
+    // this is a defect rather than an untidiness: `NO_MEDIA_FOUND` moves to the
+    // next resolver (`registry.ts`), and the `INTERNAL` this used to raise stops
+    // the chain — so a page the browser tier would have handled failed outright.
+    return expect(
+      fakeResolver("generic-null-vcodec").resolve(SOURCE, options()),
+    ).rejects.toMatchObject({ code: "NO_MEDIA_FOUND" });
+  });
+});
+
 describe("the spawn path", () => {
   test("resolves a probe from the process output", async () => {
     const probe = await fakeResolver("youtube-like").resolve(SOURCE, options());

@@ -124,14 +124,30 @@ export interface EgressProxyOptions {
    * are one string by the time the browser tier sees them. This callback is the
    * side channel that puts the difference back, and `tls-rejections.ts` is what
    * reads it.
-   *
-   * Deliberately not a general "something failed" hook. Widening it would
-   * re-open what the header note below says about attribution: one proxy serves
-   * every download and nothing in a request identifies the caller, so anything
-   * reported here can only be matched back by host, and only a certificate
-   * verdict is worth that.
    */
   onCertificateRejected?: ((host: string, code: string) => void) | undefined;
+  /**
+   * Called with the CONNECT target's host whenever this proxy refuses or fails
+   * a `CONNECT` for a reason that is **not** a certificate — a policy block, a
+   * dead upstream, a leaf this proxy could not issue.
+   *
+   * This is the finding that widened `onCertificateRejected` from one hook into
+   * two rather than into one general "something failed" hook, which is what the
+   * docblock above used to say to avoid. It is still true that one proxy serves
+   * every download and nothing in a request identifies the caller, and it is
+   * still true that most of what fails here is not worth reporting to a
+   * resolver that never asked. What changed is that a *certificate* verdict
+   * reattached by host and time alone can be wrong: the same measurement that
+   * justifies `onCertificateRejected` — every refusal collapsing to
+   * `net::ERR_TUNNEL_CONNECTION_FAILED` — also means a certificate refusal and
+   * an unrelated one on the *same host* inside one caller's window are
+   * indistinguishable to whoever asks. `TlsRejectionLog.since` uses this to
+   * refuse to guess rather than risk relabelling the wrong failure; see its
+   * "collision that is not benign" section for the shape of that risk and why
+   * a narrower fix (suppressing on any concurrent request to the host) was
+   * rejected in its favour.
+   */
+  onOtherConnectFailure?: ((host: string) => void) | undefined;
 }
 
 export interface EgressProxy {
@@ -481,6 +497,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
         await guard.assertAllowed(`https://${target}`);
       } catch (error) {
         refused(target, error);
+        options.onOtherConnectFailure?.(host);
         refuse(clientSocket, 403, "Blocked by egress policy");
         return;
       }
@@ -506,6 +523,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
       };
 
       serverSocket.once("error", (error: unknown) => {
+        options.onOtherConnectFailure?.(host);
         fail(error, 502, "Upstream connect failed");
       });
 
@@ -541,6 +559,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
             fail(error, 502, `TLS certificate verification failed (${code})`);
           },
           onFailed: (error) => {
+            options.onOtherConnectFailure?.(host);
             fail(error, 502, "Upstream connect failed");
           },
           // **500, and not the 502 every other refusal here uses.** This
@@ -560,6 +579,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           // the job fails as itself rather than as a refused origin. Asserted,
           // because the phrase is the assertion.
           onUnavailable: (error) => {
+            options.onOtherConnectFailure?.(host);
             fail(error, 500, "Proxy could not issue a certificate");
           },
         });
@@ -577,6 +597,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
             if (settled) return;
             settled = true;
             upstreamRefused(target, error);
+            options.onOtherConnectFailure?.(host);
             refuse(clientSocket, 502, "Upstream proxy refused");
             serverSocket.destroy();
             return;

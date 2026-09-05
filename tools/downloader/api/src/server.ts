@@ -200,6 +200,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
           onCertificateRejected: (host: string, code: string) => {
             tierRejections.record(host, code);
           },
+          // The other half of the same channel: closes the ambiguity
+          // `TlsRejectionLog` names in its own header, where a non-certificate
+          // refusal on the same host in the same window would otherwise be
+          // indistinguishable from a certificate one to whoever asks.
+          onOtherConnectFailure: (host: string) => {
+            tierRejections.recordOtherFailure(host);
+          },
         }),
   });
 

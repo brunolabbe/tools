@@ -34,18 +34,60 @@
  * call's own start time, so a record left by an earlier probe cannot be
  * borrowed.
  *
- * What is left is a collision between two concurrent probes of the **same host**
- * inside one window, and that one is benign in the only direction it can
- * happen: two probes of one host meet one origin certificate and get one
- * verdict. What it does not catch is a page that redirects to another host and
- * is refused there — the rejection is filed under the second host and the probe
+ * What it does not catch is a page that redirects to another host and is
+ * refused there — the rejection is filed under the second host and the probe
  * asked about the first, so nothing matches and the tier keeps whatever verdict
  * it had. That is the same under-matching direction `tls-verification.ts`
  * argues for: a certificate failure missed here stays today's bug, while a
  * network blip claimed here would be a new one.
+ *
+ * ## The collision two concurrent probes of one host can produce, and why one
+ * outcome-kind alone is not enough to tell them apart
+ *
+ * A `CONNECT` to a host does not fail only one way. This proxy also refuses one
+ * for an SSRF-blocked target (403), a dead upstream (502) and a leaf it could
+ * not issue (500), on top of a genuine certificate refusal (502). Measured
+ * against a real Chromium: a bare CONNECT proxy handed every one of those four
+ * statuses, plus two different certificate-refusal messages, and Playwright
+ * reported the **identical** `net::ERR_TUNNEL_CONNECTION_FAILED` for all five.
+ * So two concurrent probes of the same host — one genuinely cert-refused, one
+ * refused or failed for an unrelated reason — are indistinguishable to the tier
+ * that asks, and reattaching the recorded cert code to whichever one asks first
+ * would be a coin flip rather than an inference.
+ *
+ * `recordOtherFailure` is what closes it. A caller is told the cert code only
+ * when **every** refusal recorded for that host inside its window was a
+ * certificate refusal — if a non-certificate one was recorded too, `since`
+ * returns `undefined` rather than guess, which degrades that call back to its
+ * own raw verdict. That is the safe direction on purpose: a suppressed
+ * enrichment is the pre-dl-37 experience for this one ambiguous case, and a
+ * wrong one is new.
+ *
+ * The alternative that was not built: suppressing reattachment whenever
+ * **more than one** request to a host is in flight, whatever the outcomes. It
+ * was rejected because it is wrong on the *common* case this ticket serves —
+ * an operator with one broken private-root origin, probed twice concurrently,
+ * both genuinely cert-refused — which it would silently degrade for both,
+ * where outcome-tracking correctly enriches both because no non-certificate
+ * refusal was ever recorded for that host at all.
+ *
+ * ## What this still does not close, named rather than assumed away
+ *
+ * `recordOtherFailure` tracks *failures*, never a success — and that is the one
+ * residual left. A load-balanced origin with one broken backend and one healthy
+ * one, probed concurrently, is not fully covered: the broken backend's `CONNECT`
+ * is refused and recorded as a certificate rejection, as intended, but the
+ * healthy backend's own connection can complete cleanly and the tier can then
+ * legitimately return `NO_MEDIA_FOUND` on its own terms — no extractor for that
+ * page, nothing to do with certificates. Since that success was never recorded
+ * anywhere, `since` sees only the genuine certificate rejection in the window
+ * and no conflicting outcome, and reattaches `TLS_VERIFICATION_FAILED` onto a
+ * verdict that had nothing to do with TLS. Closing it would mean recording
+ * successes too — a materially larger surface for a narrower edge case than the
+ * one this file already closes precisely. See dl-38.
  */
 
-/** How many hosts are remembered. Small on purpose — see `record`. */
+/** How many hosts are remembered, per kind. Small on purpose — see `record`. */
 const DEFAULT_MAX_ENTRIES = 64;
 
 export interface TlsRejectionLogOptions {
@@ -68,8 +110,31 @@ function key(host: string): string {
   return trimmed.toLowerCase();
 }
 
+/**
+ * Inserts-or-touches `host` in `map`, moving it to the most-recently-used end,
+ * and evicts the oldest once `max` is exceeded.
+ *
+ * Shared by both kinds of record `TlsRejectionLog` keeps, so the eviction
+ * policy — and any future fix to it — cannot drift between them. Bounded
+ * rather than swept on a timer because this is fed by a hostile page's own
+ * subresource fetches — a page naming a thousand refused origins must cost a
+ * thousand nothing, not a timer's worth of memory.
+ */
+function touch<V>(map: Map<string, V>, host: string, value: V, max: number): void {
+  const name = key(host);
+  map.delete(name);
+  map.set(name, value);
+  while (map.size > max) {
+    const oldest = map.keys().next();
+    if (oldest.done === true) break;
+    map.delete(oldest.value);
+  }
+}
+
 export class TlsRejectionLog {
-  readonly #entries = new Map<string, { code: string; at: number }>();
+  readonly #certificates = new Map<string, { code: string; at: number }>();
+  /** Latest non-certificate refusal per host — see `recordOtherFailure`. */
+  readonly #otherFailures = new Map<string, number>();
   readonly #now: () => number;
   readonly #max: number;
 
@@ -79,36 +144,47 @@ export class TlsRejectionLog {
   }
 
   /**
-   * Files a refusal against a host, evicting the oldest once the cap is
-   * reached.
+   * Files a certificate refusal against a host.
    *
-   * Bounded rather than swept on a timer because this is fed by a hostile
-   * page's own subresource fetches — a page naming a thousand refused origins
-   * must cost a thousand nothing. Insertion order is the eviction order, and
-   * re-recording a host moves it to the end, so the hosts a run is actually
-   * failing on are the ones that survive.
+   * Re-recording a host moves it to the end of both maps' eviction order, so
+   * the hosts a run is actually failing on are the ones that survive.
    */
   record(host: string, code: string): void {
-    const name = key(host);
-    this.#entries.delete(name);
-    this.#entries.set(name, { code, at: this.#now() });
-    while (this.#entries.size > this.#max) {
-      const oldest = this.#entries.keys().next();
-      if (oldest.done === true) break;
-      this.#entries.delete(oldest.value);
-    }
+    touch(this.#certificates, host, { code, at: this.#now() }, this.#max);
+  }
+
+  /**
+   * Files that this proxy refused or failed `host`'s `CONNECT` for a reason
+   * that was **not** a certificate — an SSRF block, a dead upstream, a leaf
+   * this proxy could not issue.
+   *
+   * Exists only to make `since` refuse to guess. See the header's "collision"
+   * section for why a code recorded here has to count against reattachment
+   * even though this method never hands one back.
+   */
+  recordOtherFailure(host: string): void {
+    touch(this.#otherFailures, host, this.#now(), this.#max);
   }
 
   /**
    * The verify code this proxy refused `host` with **during** the caller's own
-   * attempt, or `undefined`.
+   * attempt, or `undefined` — including when it will not guess.
    *
-   * `at` is a start time rather than a duration, which is what makes this
-   * self-expiring: there is no TTL to tune and no sweep to run, because a
-   * record older than the call that is asking is by construction not about it.
+   * `at` is a start time rather than a duration, which is what makes the
+   * certificate half self-expiring: there is no TTL to tune and no sweep to
+   * run, because a record older than the call that is asking is by
+   * construction not about it. The same rule is applied to
+   * `#otherFailures`: a non-certificate refusal recorded **inside** the same
+   * window means this host produced more than one outcome during it, which is
+   * exactly the case a real Chromium cannot tell apart from a certificate
+   * refusal on its own — so this returns `undefined` rather than reattach a
+   * code that might belong to the other outcome.
    */
   since(host: string, at: number): string | undefined {
-    const entry = this.#entries.get(key(host));
-    return entry !== undefined && entry.at >= at ? entry.code : undefined;
+    const entry = this.#certificates.get(key(host));
+    if (entry === undefined || entry.at < at) return undefined;
+    const otherAt = this.#otherFailures.get(key(host));
+    if (otherAt !== undefined && otherAt >= at) return undefined;
+    return entry.code;
   }
 }
