@@ -133,3 +133,72 @@ a second consumer of `hasAudio` needs to tell "no audio" from "we did not look".
   reproduction. The reporter's own download succeeded, which is why the
   `needsMux` short-circuit is documented above rather than left to be
   rediscovered — it is the reason this has survived since the direct tier landed.
+- **2026-09-05 — built, option A.** The owner chose **A** over the brief's own
+  recommendation of B, so `hasAudio` is now `hasAudio?: boolean | undefined` in
+  the contract with `undefined` meaning "we did not look", distinct from `false`
+  meaning "we looked and there is none". What the brief had right, wrong, and
+  missing:
+
+  **Right.** All four proposed sites are exactly where it said they were. The
+  reproduction is real and the `needsMux` short-circuit is the reason it hid.
+
+  **Wrong in one detail, and it matters for grepping.** The failing argument is
+  `-map 0:a:0`, not `-map 0:a`: `mux()` always sets `streamIndex: 0`. ffmpeg
+  exits **234** with `Stream map '0:a:0' matches no streams. To ignore this, add
+a trailing '?' to the map.` — captured from the pre-fix run of the test below.
+
+  **Missing, and this is the substance of the ticket.** The brief lists four
+  sites; there are eight reads of `variant.hasAudio` across four packages, and
+  five of them needed a decision rather than a rename:
+
+  - `contract/src/api.ts` — the zod schema, unmentioned by the brief and the one
+    that would have failed loudest: `hasAudio: z.boolean()` rejects a variant
+    that omits the field, so a resolver honest about its ignorance could not have
+    crossed the wire at all. Now `.optional()`.
+  - `engine/src/index.ts` (the hls/dash arm, not the `take` line) — passes
+    `hasAudio` into the manifest download. Now `!== false`.
+  - `engine/src/estimate.ts` — adds an assumed audio bitrate for a separate
+    rendition. Now `!== false`: over-estimating a size limit is the safe side.
+  - `api/src/jobs/variant-selection.ts`, twice — `audioScore` is now three-way
+    (verified 2, unverified 1, silent 0) and the `audioOnly` filter keeps
+    anything not known-silent. Under truthiness, an unverified variant would have
+    been ranked below a confirmed-silent one and dropped from an audio-only
+    request, which is the "coerce to false" failure this option exists to stop.
+  - `web/src/lib/variants.ts` — `VariantRow.hasAudio: boolean` is now
+    `audio: "present" | "absent" | "unverified"`, so the picker cannot collapse
+    the states by accident and the Audio column distinguishes `none` (checked)
+    from `—` (not checked).
+
+  **Narrower than the brief implies.** `download/manifest.ts` and
+  `download/segments.ts` already emit their audio maps with `optional: true`, so
+  `mux()` was the only path that could ever have failed. The engine now maps
+  audio optionally _only_ when the claim is unverified, via a new
+  `MuxInputFile.unverified` — mapping it optionally unconditionally is the
+  brief's option B, and doing both would erase the distinction A was chosen for.
+
+  **Folded in.** `resolvers/src/browser/variants.ts` `progressiveVariants` makes
+  the identical unchecked claim from a network hit and produces `progressive`
+  variants that reach the identical mux. Fixing one and not the other would have
+  left the same download failing by the other route.
+
+  **The picker item, unchanged in substance.** `VariantTable.tsx` did render
+  `row.resolution` and never `row.label`, while `JobCard.tsx` uses
+  `variant.label`. `VariantRow` gains a `quality` field — the resolution when
+  there is one, the label when there is not, and the `—` marker when there is
+  neither, because an empty label is not an improvement on a marker.
+
+  **Where the tests live, and why.** The end-to-end proof drives the real direct
+  resolver into the real engine, so it needs both packages and lives in
+  `api/test/silent-progressive-mux.test.ts`; `engine` importing `resolvers` would
+  invert the tool's layering. Note that `@downloader/engine` resolves to `dist`,
+  so that file measures the **build**: a mutation checked without
+  `npm run build` first passes while proving nothing.
+
+  **The line numbers in _Why_ are pre-fix and are left as filed.** They describe
+  `4a4cc4f`, which is the state the reproduction was taken against, and
+  rewriting them would delete the record of where the defect was. On the fix
+  they read: the `take` line is `engine/src/index.ts:488`, the map optionality
+  is `engine/src/mux.ts:286` (inside the new `buildInputMaps`), the schema is
+  `contract/src/api.ts:113`, and `direct.ts:260` is now a comment saying why
+  nothing is written there. `scripts/citations.mjs` reports all thirteen as
+  unanchored rather than moved, because none of them carries anchor text.

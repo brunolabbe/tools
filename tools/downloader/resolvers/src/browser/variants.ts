@@ -85,7 +85,9 @@ export function progressiveVariants(hits: readonly NetworkHit[]): MediaVariant[]
       protocol: "progressive" as const,
       url: hit.url,
       hasVideo: !audioOnly,
-      hasAudio: true,
+      // Same omission as the direct tier, for the same reason: a network hit
+      // carries a URL, a Content-Type and a length, and nothing about streams
+      // (dl-42). These are `progressive`, so they reach the same mux.
       ...(container === undefined ? {} : { container }),
       ...(size !== undefined && size > 0 ? { filesizeBytes: size, filesizeIsEstimate: false } : {}),
       label: parts.join(" · "),

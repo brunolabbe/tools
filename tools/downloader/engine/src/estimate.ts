@@ -72,7 +72,13 @@ export function estimateVariantBytes(
 
   if (bitrateBps !== null && bitrateBps > 0 && durationSec !== null && durationSec > 0) {
     let bitsPerSecond = bitrateBps;
-    if (typeof variant.audioUrl === "string" && variant.audioUrl.length > 0 && variant.hasAudio) {
+    // `!== false`: an unverified track we are about to mux in should be
+    // budgeted for, because over-estimating a size limit is the safe direction.
+    if (
+      typeof variant.audioUrl === "string" &&
+      variant.audioUrl.length > 0 &&
+      variant.hasAudio !== false
+    ) {
       bitsPerSecond += options.assumedAudioBitrateBps ?? DEFAULT_ASSUMED_AUDIO_BITRATE_BPS;
     }
     const overhead = options.overheadFactor ?? DEFAULT_OVERHEAD_FACTOR;

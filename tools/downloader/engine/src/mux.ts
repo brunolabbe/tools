@@ -260,8 +260,31 @@ export interface MuxInputFile {
   path: string;
   /** Which streams to take. Order across inputs defines output stream order. */
   take: readonly ("video" | "audio" | "subtitle")[];
+  /**
+   * Kinds in `take` whose presence nobody verified — mapped with a trailing `?`
+   * so ffmpeg keeps them when they are there and does not abort when they are
+   * not. This is where `MediaVariant.hasAudio === undefined` lands (dl-42).
+   * Subtitles are always optional and need no entry here.
+   */
+  unverified?: readonly ("video" | "audio" | "subtitle")[] | undefined;
   /** BCP-47 tag applied when `take` includes a subtitle. */
   language?: string;
+}
+
+/**
+ * The stream maps one input contributes, in `take` order.
+ *
+ * Pure and exported so the trailing `?` is testable without spawning ffmpeg:
+ * subtitles are always optional, and anything the caller listed as `unverified`
+ * joins them (dl-42).
+ */
+export function buildInputMaps(input: MuxInputFile, inputIndex: number): StreamMap[] {
+  return input.take.map((kind) => ({
+    inputIndex,
+    kind,
+    streamIndex: 0,
+    optional: kind === "subtitle" || (input.unverified?.includes(kind) ?? false),
+  }));
 }
 
 export interface MuxOptions {
@@ -303,8 +326,8 @@ export async function mux(options: MuxOptions): Promise<MuxResult> {
 
   for (const [inputIndex, input] of options.inputs.entries()) {
     args.push(...buildLocalInputArgs(input.path));
+    maps.push(...buildInputMaps(input, inputIndex));
     for (const kind of input.take) {
-      maps.push({ inputIndex, kind, streamIndex: 0, optional: kind === "subtitle" });
       if (kind === "subtitle") subtitleLanguages.push(input.language ?? "");
     }
   }

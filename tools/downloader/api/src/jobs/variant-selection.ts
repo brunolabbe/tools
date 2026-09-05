@@ -26,8 +26,15 @@ function bitrate(variant: MediaVariant): number {
   return variant.bitrateBps ?? 0;
 }
 
+/**
+ * Three states, ranked (dl-42). A rendition known to carry sound beats one
+ * nobody inspected, which in turn beats one known to be silent — so an
+ * unverified variant is never demoted below a confirmed-silent one just
+ * because `undefined` happens to be falsy.
+ */
 function audioScore(variant: MediaVariant): number {
-  return variant.hasAudio ? 1 : 0;
+  if (variant.hasAudio === true) return 2;
+  return variant.hasAudio === undefined ? 1 : 0;
 }
 
 export function compareQuality(a: MediaVariant, b: MediaVariant): number {
@@ -93,9 +100,11 @@ function filterByIntent(
   options: JobOptions,
 ): readonly MediaVariant[] {
   if (options.audioOnly !== true) return variants;
-  const withAudio = variants.filter((variant) => variant.hasAudio);
-  // If nothing declares audio, hand back everything rather than refusing:
-  // `hasAudio` is a resolver's best guess, and ffmpeg will find the track or
-  // fail with a message that says so.
-  return withAudio.length > 0 ? withAudio : variants;
+  // `!== false` and not truthiness: only a resolver that actually looked and
+  // found nothing rules a variant out here (dl-42). One that never looked stays
+  // a candidate, because `undefined` is ignorance, not a negative result.
+  const maybeAudio = variants.filter((variant) => variant.hasAudio !== false);
+  // If every variant is known to be silent, hand back everything rather than
+  // refusing: ffmpeg will find the track or fail with a message that says so.
+  return maybeAudio.length > 0 ? maybeAudio : variants;
 }
