@@ -73,6 +73,18 @@ future dispatch to record one decision is a full round. Ask it to:
 And say **do not implement any of it** in those words. An agent handed a decision
 reads it as work.
 
+**The harder case is an answer to a ticket you never dispatched, because there is
+no carrier at all.** Everything above rides on a builder that is already editing
+the file. When you ask a question to *clear the board* rather than to unblock a
+running agent — which is what a decision-blocked intake produces — the answer
+arrives with nobody holding the ticket, the cheap path does not exist, and the
+rule silently does not apply. Measured **2026-09-05**, at the batch's close-out
+rather than during it: `dl-32`'s decision was answered and deferred to a later
+batch, and its page still reads "deliberately not ranked here" with a Log ending
+at the filing date, 2026-08-31 — five days. **Recording it is its own dispatch and
+has to be scheduled as one** — cheap, but not free, and not something to notice at
+close-out.
+
 ## Dispatching a gate — the highest-leverage thing you write
 
 Gate yield tracked prompt specificity, not gate number. In the reference session
@@ -111,6 +123,21 @@ read a library's source to establish that an ordering hazard was intrinsic rathe
 than assumed, and it worked out which *tier* of the suite guards that ordering.
 **Gate yield tracks prompt specificity, not runtime**, and this is the cleanest
 measurement of that on the page: same branch, same model, two prompts.
+
+### And say the checkout comes before the build
+
+`ticket-reviewer.md` gives the setup order as farm, then `npm run build`, in a
+section that sits well above the one telling the reviewer to `git checkout
+--detach <sha>`. A gate read it top to bottom on 2026-09-04 and **built `main`** —
+grading a tree that was not the branch — catching it only because `dist/` was
+missing a file the branch adds, and flagging it unprompted. Nothing else would
+have: a reviewer measuring the base produces a fluent, correctly formatted gate
+that marks acceptance lines `unproven`, which is the silent failure that page
+already warns about arriving from the other direction. One clause in the prompt —
+*fetch, detach onto the sha, **then** farm and build* — costs nothing. **This is a
+habit-dependent stopgap, and the durable fix is the agent definition's ordering**,
+filed as `repo-20`. When that lands, keep the measurement and drop the clause —
+a reminder for a bug that no longer exists is worse than no reminder.
 
 ### Send the findings in full; the builder writes the section down
 

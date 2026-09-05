@@ -31,7 +31,43 @@ discarded. So:
   verdict falsifiable, and it is the only check on it.
 - Verdicts are recorded **as given**. "FAIL, since addressed" is a verdict softened
   in place; put the addressing in the dispositions.
+- **A claim that reached a record is withdrawn in place, never deleted.** Two
+  corrections landed inside committed gate records on 2026-09-04 and both were
+  corrected in place rather than rewritten, which is the way: mark the wrong
+  paragraph
+  `WITHDRAWN — do not cite this paragraph`, leave it standing with the retraction
+  directly beneath it, restore whatever it displaced as the standing statement, and
+  put a forward-pointer on any earlier entry that repeated it. A record showing only
+  the corrected state hides that the claim was **made, propagated to another agent
+  and acted on**, and the propagation is the part a later reader needs. **Attribute
+  the error to the link that made it** — one of the two was the orchestrator's
+  wrong citation, transcribed faithfully by the gate, and a reader comparing the
+  record against the frontmatter would otherwise have had no way to see which link
+  failed. **And do not over-correct.** The builder that retracted a claim about its
+  own model replaced it with *unknown from where I sit; Opus likely on other
+  agents' evidence about themselves; not established here*, rather than asserting
+  the opposite with equal confidence. Swapping one unsupported claim for another is
+  the same failure in different clothes, and it is the pull after a retraction.
 - Every finding is listed, including those needing no change.
+- **A record cannot assert that its own branch is green, and this is structural
+  rather than a lapse.** *"Any commit that corrects a status claim invalidates the
+  status claim"* — measured 2026-09-04: a Log said "every completed run on the
+  branch is `success`"; a second opinion tallied it with
+  `gh run list --json status,conclusion` and got **13 `completed`/`success`, 1
+  `completed`/`cancelled`, 1 `in_progress`** out of 15, so the sentence was false
+  as written, a cancelled run being completed. The correction became a commit, the
+  commit moved the tip, and the corrected claim was stale on arrival. Being more
+  careful does not fix it: writing the assertion changes the thing asserted. So
+  **record what a named sha's runs did, never that "the branch is green"**, and
+  say the tip is unobserved when it is. The only true form of that claim is one
+  look after the final commit and immediately before merge. **That look is
+  available — just not to you.** A gate stops before the merge and writes its
+  record earlier still; a builder stops before the PR and moves the sha by
+  recording the check. The orchestrator is the one participant alive at merge time
+  that is not writing to the branch, and `SKILL.md`'s `## After a merge` now
+  carries the command. Do not write "nobody can check this": that was this rule's
+  first wording, and it was refuted the same day by an orchestrator that simply
+  ran it.
 - **Re-resolve every `file:line` in the record as the genuinely last action before
   `git add`** — after the final `npm run format`, with nothing between. Verify
   programmatically (check that each cited line still contains what the record
@@ -166,6 +202,18 @@ discarded. So:
   `contract/src/brief.ts:505` — and the check becomes a confirmation instead of
   a rework.
 
+  **A bare sha is the same coin flip, and `citations.mjs` does not cover it.** A
+  commit names at least two texts — its **message** and its **tree** — and the
+  same author routinely writes the finding into both, in different words.
+  Measured 2026-09-04: a quote attributed to "`cfae096`'s Log" was verbatim from
+  the ticket file that commit adds to, and a reviewer checking it reached for
+  `git show -s --format=%B` instead, found three wording differences inside the
+  quotation marks, and reported a fabricated quote. **The finding did not
+  reproduce and the citation was still at fault**: it resolved to two texts and
+  did not say which. So write `<sha>:<path>` — or the words "the commit message
+  at `<sha>`" — whenever you quote from a commit. This one costs a reviewer a
+  finding and a builder a round, and neither party is wrong.
+
   It cannot judge two of the four modes, and says so: a citation whose *content*
   changed still resolves, and a citation that is a finding's own evidence must
   stay wrong. Those are yours. Run it as the genuinely last action before
@@ -220,6 +268,18 @@ discarded. So:
   `--project repo` because that is what parses the ticket tree" is far more useful
   later than one that only lists conclusions.
 
+## When there is no ticket
+
+The mirror of the section below, and the skill's step 9 assumes it away: it says
+the builder commits the gate record **onto the ticket**, and an unticketed branch
+— a skill correction, a records pass, anything the loop produces about itself —
+has no ticket to commit it to. A ticket the branch merely *files* is not the
+answer: attributing a gate of the whole branch to work nobody has started makes
+the next reader think that ticket was built. **So the pull request thread is the
+record**, in full and verbatim, and the PR body says so in a sentence — a reader
+should never have to wonder whether a branch was gated. Measured 2026-09-04, on
+the branch that recorded this batch.
+
 ## When there is no pull request yet
 
 The skill's own default produces this state every time — builders stop before the
@@ -247,6 +307,14 @@ reported as resolved. Measured 2026-09-02: a fix inserted 28 lines, a cited
 comment moved from `144-149` to `170-175`, and the run reported **9/9 resolve**
 while three citations pointed at a function signature and an unrelated doc
 comment.
+
+Measured again 2026-09-04, on the gate record of the ticket that fixes this: the
+pre-fix script reported **10/10 resolve, exit 0** over a `## Review` section where
+two of the cited lines had become `: "";` and a stray `*/`, while the same branch's
+anchor-checking version over the identical section reported **2 verified, 8
+moved**, naming where each of the eight went. Both numbers were reproduced
+independently by the reviewer. Run the thing you are changing over the artefact
+that gates the change — it is the cheapest demonstration a ticket like this has.
 
 This is the **dominant** case for a gate record, not an edge: a record is always
 committed on a branch whose fix moved lines. So **judge the printed lines
