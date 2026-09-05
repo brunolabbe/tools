@@ -204,12 +204,23 @@ than merely living beside it**. A limitation that is about to be copied is not
 the same as one sitting still.
 
 **The accepted cost, named so it does not read as drift:** this widens the ticket
-past the grep wrapper. One branch now carries two subjects and squash-merges
-under one changelog line. It also changes the type of the PR title that lands —
-`fix(repo):`, not `docs(repo):`, and `fix` is **not** `hidden` in
-`release-please-config.json`, so unlike the filing commit this one ships a
-changelog line. Check the title with
-`node scripts/commit-message.mjs --text "<title>"` before opening.
+past the grep wrapper. One branch will carry two subjects and squash-merge under
+one changelog line.
+
+**That cost lands on the implementation PR, not on the one that filed this
+ticket** — and the two are easy to conflate, so they are separated here. The
+filing PR builds no hook, so it is `docs(repo):`, which is `hidden` at
+`release-please-config.json:31` and ships no changelog line; a `fix(repo):` title
+on it would have announced behaviour that does not exist in the tree after it
+merges. **The PR that builds the hook is the `fix(repo):` one**, `fix` being not
+hidden at `:27`, and it is the one that ships a changelog line. Whoever builds
+the hook should not read this paragraph as already accounted for. Check either
+title with `node scripts/commit-message.mjs --text "<title>"` before opening.
+
+**The frontmatter and the commit type answer different questions.** `kind: fix`
+describes the _work_ — this ticket is a fix, and `difficulty: hard` is right for
+it. The commit type describes what a _commit_ does. They diverge exactly here:
+the ticket is a fix; the commit that filed it is documentation.
 
 ### What actually surfaced this, which is the lesson
 
@@ -428,3 +439,13 @@ here, because the next agent reads Build first.
 - Verified today that `check-pr-title.sh` still exits `2` on a genuinely bad
   title, so the second half of that acceptance line can fail and is worth
   asserting.
+
+**2026-09-05 — the filing PR is `docs(repo):`, not `fix(repo):`.** Caught before
+opening. Having moved the ticket's `kind` to `fix`, this builder carried that
+into the _commit type_ and pre-checked a `fix(repo):` title — which would have
+shipped a changelog line announcing a hook that does not exist in the tree after
+the merge. `kind` describes the work; the commit type describes the commit, and
+they diverge exactly here. Decision two now separates the two PRs so the
+`fix(repo):` note is not read as already spent. Measured: `docs` is `hidden` at
+`release-please-config.json:31`, `fix` is not at `:27`, and the two sibling
+filing PRs (#148, #149) both use `docs(repo):`.
