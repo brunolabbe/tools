@@ -187,3 +187,45 @@ is a section move, a clause and a trim.
   reading as the measurement — and the first committed by the agent writing the
   record of the other three. `repo-16` and `repo-19` had both got this right in
   their own filings; flattening their wording is what produced the error.
+
+- **2026-09-05** — Built. `ticket-reviewer.md`'s two setup sections are now one,
+  at the top of the file, in the order fetch → detach → confirm → farm → build;
+  `dispatching.md`'s stopgap is a measurement that tells the next orchestrator not
+  to re-add the clause; `builder.md` defines _inherit_ in the clause that
+  introduces the table.
+
+  **Which direction the section moved was left open by the brief, and both
+  readings satisfy it.** Build step 1 gives the order to reach, not whether to
+  push the setup paragraphs down to _Getting the branch under review_ or pull that
+  section up to the top. I pulled it up and merged the two, which leaves one setup
+  section instead of two and keeps the file's first instruction the reader's first
+  action — pushing the setup down would have opened the page on _You send your
+  findings to the builder_, a reporting rule, which is worse for the audience the
+  ticket names. Recorded rather than escalated: the ticket fixes a reading order
+  and both options produce the required one, so this is a wording call, not a
+  decision with two different outcomes.
+
+  **The trim in step 3 was pre-specified by the file itself**, which is worth
+  knowing before anyone re-argues it: the section already ended "When that lands,
+  keep the measurement and drop the clause — a reminder for a bug that no longer
+  exists is worse than no reminder." The edit is that instruction carried out, not
+  a judgement about how far to cut.
+
+  **Step 4's premise was verified rather than transcribed.**
+  `.claude/skills/orchestrate-tickets/SKILL.md` step 3 does say "pass that model
+  explicitly rather than letting it inherit, naming your own model where the table
+  says inherit", with the backgrounded-`resolvedModel` reasoning attached. So the
+  clause added to `builder.md` defines the table's word and cites the step; the
+  reasoning stays where `repo-17` put it.
+
+  **What the brief had wrong, in one place.** `Done when` 6 says `npm run format`
+  "will not touch any of these files — `.claude/` is in `.oxfmtrc.json`'s
+  `ignorePatterns`". That is true of the three edited pages and false of the
+  fourth file this branch edits: `docs/` is not ignored, so this ticket is
+  formatted by oxfmt and `npm run format` has to run before `npm run check` will
+  pass. Read as written — "no formatting on this branch" — it breaks the check it
+  appears in.
+
+  **Not run:** no reviewer was dispatched from this branch's copy of
+  `ticket-reviewer.md`, so the new ordering is proofread rather than exercised.
+  The gate on this branch reads the merged `main` version, which is the old one.
