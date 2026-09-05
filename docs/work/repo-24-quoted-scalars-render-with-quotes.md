@@ -395,8 +395,12 @@ than out of its defect hunt.
 - **A citation checker did not catch this, and the one being built to catch
   citation errors would not either.** Today,
   `node scripts/citations.mjs docs/work/repo-24-quoted-scalars-render-with-quotes.md`
-  reported **`14/14 resolve`, exit 0**, marking `115-118` `ok`: it bounds-checks
-  a range against end of file (`scripts/citations.mjs:222`) and nothing else.
+  reports **every citation resolving, exit 0**, and marks `115-118` `ok` — as it
+  still does if the loose boundary is substituted back into the file as it
+  stands. No ratio is quoted here on purpose: the count grows every time
+  anything is appended to this ticket, so a number written into it is stale by
+  the next edit. It bounds-checks a range against end of file
+  (`scripts/citations.mjs:222`) and nothing else.
   repo-18 (PR #146) adds anchor checking, and **verified first-hand by reading
   `scripts/citations.mjs` at `origin/repo-18-citation-anchors@02197ea`, not from
   that ticket's description** — its rule, in the docblock above the verification
@@ -422,6 +426,21 @@ than out of its defect hunt.
   is a parser that silently accepts what it should reject. Worth carrying into
   repo-25 and any repo-18 follow-on.
 - Three checks in this one filing returned the wanted answer for a reason nobody
-  had looked at: `Done when` 5's `grep -n literal`, `citations.mjs`'s `14/14`,
-  and repo-22's gate reading an exit code instead of stdout. That recurrence is
-  the ticket's real subject.
+  had looked at: `Done when` 5's `grep -n literal`, `citations.mjs` marking a
+  loose boundary `ok`, and repo-22's gate reading an exit code instead of
+  stdout. That recurrence is the ticket's real subject.
+- **A fourth, caught by the reviewer in this Log itself.** The bullet above
+  originally quoted a `citations.mjs` ratio measured while drafting. It was
+  accurate then and wrong by the time it was committed, because the gate record
+  and this Log added citations to the very file the ratio counts. The general
+  form is worth more than the fix: **a ratio in a document counts that document,
+  so any edit invalidates it — including the edit that fixes it.** That is why
+  the remedy is not a better number. Dropped the ratio and kept the claim, which
+  holds at any count: `115-118` still reports `ok` when substituted back into
+  the file as it stands.
+- The remedy is copied rather than invented. repo-21 hit the same drift across
+  three rounds and settled it by stating the count once, at the top of its page,
+  and having later mentions not repeat it — "a figure restated in three places
+  is three places to go stale", with its historical figures left as
+  measured-at-the-time rather than updated. This ticket needs no count at all,
+  so it carries none.
