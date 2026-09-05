@@ -280,6 +280,13 @@ Four states, and no `N/N`:
 **An unanchored run is not a passing run, it is an unchecked one.** `0 verified,
 0 moved, 9 unanchored, 0 unresolvable` exits 0 and means nobody has looked.
 
+**`--require-anchors` makes that exit 1**, for a branch holding itself to the
+standard before the default gets there. It changes the exit code and nothing
+else: the states, the counts and the per-citation lines are identical with and
+without it, because whether an unchecked citation is tolerable is your policy and
+not a fact about the record. The summary says `, anchors required` when it is in
+force, so a CI log names the policy next to the numbers it judged.
+
 The summary prints every bucket even at zero, because the fraction it replaced is
 what this repo was measured getting wrong. Measured 2026-09-02: a fix inserted 28
 lines, a cited comment moved from `144-149` to `170-175`, and the run reported
@@ -319,6 +326,7 @@ tree stay exactly as they are**, and this is the decision, not a deferral:
 migration: the population that matters is the records still being read against
 live code, and they are the ones being written this week.
 
-Whether an unanchored citation should eventually become an *error* is not settled
-here, and needs a ticket rather than a habit — turning it on today would fail
-every gate run against every record in the tree.
+Making it an error **by default** is still not settled, and still needs a ticket
+rather than a habit: turning it on for everyone today fails every gate run
+against all 965. What exists is the opt-in above, so a later ticket flipping the
+default finds the machinery built and tested rather than starting from nothing.

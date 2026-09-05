@@ -34,7 +34,7 @@
  * `commit-message.mjs`.
  *
  * Usage:
- *   node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>]
+ *   node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors]
  *
  * `--rev` resolves against a commit rather than the working tree. Pinning the
  * record to the commit the gate actually reviewed is the cheaper answer to a fix
@@ -45,6 +45,15 @@
  * exactly first and then by prefix. A name that matches nothing, or that matches
  * more than one section, is an **error**: a quiet whole-file answer wearing the
  * label of a filtered one is the failure this flag was reported for.
+ *
+ * `--require-anchors` makes `unanchored` fatal, for a record that wants to hold
+ * itself to the stricter standard before the default gets there. **It changes
+ * the exit code and nothing else.** A citation's state is a fact about the
+ * record, so the same citation reports `unanchored` either way; whether that is
+ * a failure is the caller's policy, and a flag that repainted it `FAIL` would
+ * destroy the one property these states have. The default stays exit 0, because
+ * turning it on for everyone fails every run against all 965 citations already
+ * in the tree.
  */
 
 import { execFileSync } from "node:child_process";
@@ -398,21 +407,32 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
  * than no check. Both are covered through `checkCitations` and the CLI's own
  * output, which is the surface a reader actually reads.
  *
+ * `requireAnchors` is applied here rather than at the exit, so the one function
+ * that knows the counts is also the one that says what they mean. It changes
+ * `failed` and appends to `line`; it does not touch a single citation's state,
+ * because whether an unchecked citation is tolerable is the caller's policy and
+ * not a fact about the record.
+ *
  * @param {ReturnType<typeof checkCitations>} results
+ * @param {boolean} requireAnchors
  */
-function summarize(results) {
+function summarize(results, requireAnchors) {
   /** @type {Record<string, number>} */
   const counts = Object.fromEntries(STATES.map((state) => [state, 0]));
   for (const r of results) counts[r.state] += 1;
   return {
     ...counts,
     total: results.length,
+    failed: counts.moved + counts.unresolvable + (requireAnchors ? counts.unanchored : 0),
     // Deliberately never `N/N`: the pair that reads as "all fine" is the shape
-    // this script printed while three citations pointed at unrelated code.
+    // this script printed while three citations pointed at unrelated code. The
+    // suffix is on the same line as the counts so a CI log shows the policy that
+    // judged them next to the numbers it judged.
     line:
       `${counts.verified} verified, ${counts.moved} moved, ` +
       `${counts.unanchored} unanchored, ${counts.unresolvable} unresolvable` +
-      ` — of ${results.length} citation${results.length === 1 ? "" : "s"}`,
+      ` — of ${results.length} citation${results.length === 1 ? "" : "s"}` +
+      (requireAnchors ? ", anchors required" : ""),
   };
 }
 
@@ -513,10 +533,17 @@ export function selectSection(sections, name) {
   );
 }
 
-/** Every flag this CLI accepts, mapped to the option it sets. All take a value. */
+/**
+ * Every flag this CLI accepts, mapped to the option it sets and whether it takes
+ * a value. The arity is data rather than a branch in the parser because
+ * `--require-anchors` is the first flag here that takes none, and a parser that
+ * assumed otherwise would swallow the ticket file as its value — which is
+ * repo-14's defect, one flag over.
+ */
 export const FLAGS = new Map([
-  ["--rev", "rev"],
-  ["--section", "section"],
+  ["--rev", { option: "rev", takesValue: true }],
+  ["--section", { option: "section", takesValue: true }],
+  ["--require-anchors", { option: "requireAnchors", takesValue: false }],
 ]);
 
 /**
@@ -527,7 +554,7 @@ export const FLAGS = new Map([
  * repo-14's open question answered by an error message.
  */
 export const USAGE =
-  "usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>]";
+  "usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors]";
 
 /**
  * Parse argv into the ticket file and its options.
@@ -539,16 +566,20 @@ export const USAGE =
  * it is the same pass that can reject a flag it does not recognise — both
  * defects live on this one line of parsing, which is why they are one change.
  *
+ * A flag that takes no value must not consume the next argument, which is the
+ * same defect read from the other end — so the arity comes off `FLAGS` and the
+ * destination comes off the option name. Assigning by key rather than by an
+ * `if (option === "rev") … else …` chain is what keeps a fourth flag from
+ * needing a fourth arm here.
+ *
  * @param {string[]} argv
- * @returns {{file: string, rev: string | null, section: string | null}}
+ * @returns {{file: string, rev: string | null, section: string | null, requireAnchors: boolean}}
  */
 export function parseArgs(argv) {
   /** @type {string | null} */
   let file = null;
-  /** @type {string | null} */
-  let rev = null;
-  /** @type {string | null} */
-  let section = null;
+  /** @type {{rev: string | null, section: string | null, requireAnchors: boolean}} */
+  const options = { rev: null, section: null, requireAnchors: false };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -559,20 +590,23 @@ export function parseArgs(argv) {
       file = arg;
       continue;
     }
-    const option = FLAGS.get(arg);
-    if (option === undefined) throw new Error(`unknown option ${arg}\n${USAGE}`);
+    const flag = FLAGS.get(arg);
+    if (flag === undefined) throw new Error(`unknown option ${arg}\n${USAGE}`);
+    if (!flag.takesValue) {
+      options[flag.option] = true;
+      continue;
+    }
     const value = argv[++i];
     if (value === undefined) throw new Error(`${arg} needs a value\n${USAGE}`);
-    if (option === "rev") rev = value;
-    else section = value;
+    options[flag.option] = value;
   }
 
   if (file === null) throw new Error(USAGE);
-  return { file, rev, section };
+  return { file, ...options };
 }
 
 function main() {
-  const { file, rev, section } = parseArgs(process.argv.slice(2));
+  const { file, rev, section, requireAnchors } = parseArgs(process.argv.slice(2));
 
   const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   const markdown = fs.readFileSync(file, "utf8");
@@ -592,7 +626,7 @@ function main() {
     makeReader(repo, rev),
     makeResolver(candidateFiles(repo, rev)),
   );
-  const summary = summarize(results);
+  const summary = summarize(results, requireAnchors);
 
   const where = rev ? `against ${rev}` : "against the working tree";
   // The scope is named next to the count, so a filtered number can never be read
@@ -628,10 +662,11 @@ function main() {
 
   process.stdout.write(`\n${summary.line}\n`);
 
-  // Not an error, so not on stderr: the run succeeded and this is part of what
-  // it found. `stderr is empty` and `exit 0` mean the same thing here, which is
-  // an invariant the suite asserts and which advice on stderr would break.
-  if (summary.unanchored > 0) {
+  // Unanchored is advice on stdout and a failure on stderr, and which one it is
+  // depends only on the flag. That keeps `stderr is empty` and `exit 0` meaning
+  // the same thing — an invariant the suite asserts, and the reason this is not
+  // simply always written to stderr.
+  if (summary.unanchored > 0 && !requireAnchors) {
     process.stdout.write(
       `\n${summary.unanchored} citation(s) carry no anchor text, so nothing here checked them — they are printed\n` +
         `for you to judge by hand. Writing one as \`file.ts:120 "a fragment of the line"\` is what lets\n` +
@@ -639,11 +674,20 @@ function main() {
     );
   }
 
+  // Ordered as the summary line orders them, so the numbers and their reasons
+  // can be read down the screen in the same sequence.
   const advice = [];
   if (summary.moved > 0) {
     advice.push(
       `${summary.moved} citation(s) do not point at what they say. Repoint them against the tree you are\n` +
         `committing, or pin the record to the commit the gate reviewed with --rev and say so in the record.`,
+    );
+  }
+  if (summary.unanchored > 0 && requireAnchors) {
+    advice.push(
+      `${summary.unanchored} citation(s) carry no anchor text and --require-anchors is in force, so this run\n` +
+        `failed on them. Write each as \`file.ts:120 "a fragment of the line"\`, or drop the flag to get the\n` +
+        `default, which reports them and exits 0.`,
     );
   }
   if (summary.unresolvable > 0) {
@@ -656,7 +700,7 @@ function main() {
   // finding's own evidence ("the text is at :94-95, not :93-94") must stay as
   // written even when this reports it moved.
   if (advice.length > 0) process.stderr.write(`\n${advice.join("\n\n")}\n`);
-  if (summary.moved > 0 || summary.unresolvable > 0) process.exitCode = 1;
+  if (summary.failed > 0) process.exitCode = 1;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

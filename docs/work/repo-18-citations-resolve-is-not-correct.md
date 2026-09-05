@@ -297,3 +297,88 @@ citations`, every bucket printed even at zero. The test asserts the buckets by
 
   `npm run check` and `npx vitest run scripts` pass; commands and totals in the
   gate section above this Log.
+
+- **2026-09-05** — `--require-anchors` added on the owner's instruction, after
+  the entry above closed with this as an open decision. I recommended leaving it
+  advisory — a flag nothing uses is a flag nobody maintains, and this repo builds
+  for the second real consumer rather than the first guess. **The owner chose to
+  build it**: a branch can hold itself to the stricter standard now, and a later
+  ticket flipping the default finds the machinery tested. Recorded because the
+  recommendation and the decision differ, and the next reader should see both.
+
+  **It changes the exit code and nothing else.** A citation's state is a fact
+  about the record; whether `unanchored` is tolerable is the caller's policy. So
+  there is no fifth state and no repainting — the per-citation lines and all four
+  buckets are byte-identical with and without the flag, asserted by comparing the
+  two runs' mark lines directly. The default is untouched: exit 0, every existing
+  record still passes.
+
+  ```
+  $ node scripts/citations.mjs <dl-36 record> --rev e9f516b
+  0 verified, 0 moved, 9 unanchored, 0 unresolvable — of 9 citations
+  exit=0
+  $ node scripts/citations.mjs <dl-36 record> --rev e9f516b --require-anchors
+  0 verified, 0 moved, 9 unanchored, 0 unresolvable — of 9 citations, anchors required
+  exit=1
+  ```
+
+  The `, anchors required` suffix rides on the summary line so a CI log names the
+  policy beside the numbers it judged, and the unanchored note moves from stdout
+  to stderr **only** when the flag is on — which preserves the invariant the
+  suite already leaned on, that stderr is empty exactly when the exit is 0.
+
+  **The estimate of "~5 lines" was wrong, and the reason is worth keeping.**
+  `FLAGS` was documented "All take a value" and `parseArgs` consumed
+  `argv[++i]` for every flag it recognised, so `--require-anchors` is the first
+  valueless flag this CLI has had. Left alone it would have swallowed the ticket
+  file as its value — repo-14's defect one flag over. `FLAGS` now carries arity
+  as data (`{option, takesValue}`) and `parseArgs` assigns by option name into a
+  keyed object, which also deletes the `if (option === "rev") … else …` branch
+  that was there. Both argument orders are tested.
+
+  **A rubber stamp found and fixed on the way.** The existing test asserting that
+  the docblock, `USAGE` and `FLAGS` name the same flags matched them with
+  `/--[a-z]+/g`, which stops at a hyphen: it read `--require-anchors` as
+  `--require` in all three sources at once and compared them equal without ever
+  seeing the flag. Now `/--[a-z][a-z-]*/g`. It is the same agreeing-while-wrong
+  shape this ticket is about, inside the test that was supposed to catch it.
+
+  **Red before green, and the naive version of this test is green on unfixed
+  code** — worth stating because it nearly shipped that way. The old script also
+  exits 1 on `--require-anchors`, with `unknown option`, so
+  `expect(status).not.toBe(0)` passes against a source that has no flag at all.
+  Measured on the pre-ticket source, same record:
+
+  ```
+  --- stdout ---            (empty)
+  --- stderr ---
+  unknown option --require-anchors
+  usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>]
+  --- exit=1 ---
+  ```
+
+  So the test asserts the run _happened_: the summary present on stdout, the
+  count named on stderr, and stderr **not** matching `/unknown option/`. All
+  three fail against the output above. The whole suite against
+  `origin/main:scripts/citations.mjs` is now **23 of 37 failed**, all three flag
+  tests among them, still every failure an assertion and none a missing export.
+
+  **The unexported-internals property survives, and was checked rather than
+  assumed.** `FLAGS` and `parseArgs` were already exported, so nothing new was
+  added:
+
+  ```
+  $ diff <(git show origin/main:scripts/citations.mjs | grep '^export ') \
+         <(grep '^export ' scripts/citations.mjs)
+  $ echo $?
+  0
+  ```
+
+  Unchanged, as instructed: no existing record rewritten, `records.md` keeps the
+  migration story — extended with the flag's contract and with the stale sentence
+  saying the question "is not settled" corrected, since it now is, as an opt-in.
+
+  Coordinated with the gating reviewer (`abf27c3dcbe4fe477`) before committing,
+  since a new commit moves the lines a gate record cites.
+
+  `npm run check` and `npx vitest run scripts` pass — 141 tests.

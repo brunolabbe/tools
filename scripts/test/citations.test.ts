@@ -52,6 +52,9 @@ const summary = (
 /** Any `N/N`, the shape the summary must never print again. */
 const SAME_OVER_SAME = /\b(\d+)\/\1\b/;
 
+/** The per-citation lines of a run, mark included — everything `--require-anchors` must leave alone. */
+const marks = (out: string) => out.split("\n").filter((line) => /^ {2}\S/.test(line));
+
 test("finds an inline file:line citation", () => {
   const found = extractCitations("The guard is wrong at `src/a.ts:12`.");
   expect(found).toEqual([
@@ -496,6 +499,7 @@ function withInsertionRepo(): {
   dir: string;
   record: string;
   mixed: string;
+  legacy: string;
   before: string;
   cleanup: () => void;
 } {
@@ -541,10 +545,16 @@ function withInsertionRepo(): {
     ].join("\n"),
   );
 
+  // Nothing but unanchored citations, so the exit code turns on the flag alone
+  // and on nothing else in the record.
+  const legacy = path.join(dir, "legacy.md");
+  fs.writeFileSync(legacy, "## Review\n\nAt `src/tls.ts:1` and at `src/tls.ts:7`.\n");
+
   return {
     dir,
     record,
     mixed,
+    legacy,
     before,
     cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
   };
@@ -607,13 +617,106 @@ test("the summary cannot read N/N while a citation is in the moved state", () =>
 });
 
 /**
+ * `--require-anchors`, which the owner asked for over the recommendation to
+ * leave it advisory: a branch that wants the stricter standard can opt in, and a
+ * later ticket flipping the default finds the machinery built.
+ *
+ * One record, one tree, two runs. The exit code turns on the flag and on nothing
+ * else, which is the only way to show the flag is what did it.
+ *
+ * The naive version of this test passes against the *unfixed* source for the
+ * wrong reason — old code exits 1 on an unrecognised `--require-anchors` with
+ * "unknown option", so `expect(status).not.toBe(0)` is green on code that has no
+ * flag at all. So the run is asserted to have happened: the summary on stdout,
+ * the count named on stderr, and no parse error.
+ */
+test("--require-anchors makes an unanchored citation fatal, and nothing else does", () => {
+  const { dir, legacy, cleanup } = withInsertionRepo();
+  const at = (...argv: string[]) =>
+    spawnSync("node", [CLI, legacy, ...argv], { cwd: dir, encoding: "utf8" });
+
+  const lenient = at();
+  expect(lenient.status).toBe(0);
+  expect(lenient.stdout).toMatch(summary(0, 0, 2, 0, 2));
+  // The default's whole point: a legacy record still passes, and says nobody
+  // looked. `stderr is empty` and `exit 0` still mean the same thing.
+  expect(lenient.stderr).toBe("");
+  expect(lenient.stdout).toMatch(/carry no anchor text/);
+
+  const strict = at("--require-anchors");
+  expect(strict.status).toBe(1);
+  // It ran, rather than refusing the argument: same citations, same states, same
+  // counts. Without this the assertion above is satisfied by "unknown option".
+  expect(strict.stdout).toMatch(summary(0, 0, 2, 0, 2));
+  expect(strict.stderr).not.toMatch(/unknown option/);
+  expect(strict.stderr).toMatch(/2 citation\(s\) carry no anchor text and --require-anchors/);
+
+  // And the reason is on the line with the numbers, so a CI log says which
+  // policy judged them.
+  expect(strict.stdout).toMatch(/unresolvable — of 2 citations, anchors required/);
+  expect(lenient.stdout).not.toMatch(/anchors required/);
+
+  cleanup();
+});
+
+/**
+ * The flag is policy, not taxonomy. A citation's state is a fact about the
+ * record, so `--require-anchors` must not repaint one: the per-citation lines
+ * and every bucket are identical with and without it, and only the exit code and
+ * the suffix move. A flag that turned `unanchored` into a fifth failing state
+ * would make the same record report differently depending on argv.
+ */
+test("--require-anchors changes the exit code and not a single citation's state", () => {
+  const { dir, mixed, cleanup } = withInsertionRepo();
+  const at = (...argv: string[]) =>
+    spawnSync("node", [CLI, mixed, "--rev", "HEAD", ...argv], { cwd: dir, encoding: "utf8" });
+
+  const lenient = at();
+  const strict = at("--require-anchors");
+
+  expect(marks(strict.stdout)).toEqual(marks(lenient.stdout));
+  expect(strict.stdout).toMatch(summary(1, 1, 1, 1, 4));
+  expect(lenient.stdout).toMatch(summary(1, 1, 1, 1, 4));
+
+  // Both fail here, because a moved citation was already fatal — so this record
+  // cannot show what the flag does, which is why the test above uses one that
+  // has nothing but unanchored citations.
+  expect(lenient.status).toBe(1);
+  expect(strict.status).toBe(1);
+
+  cleanup();
+});
+
+/**
+ * The flag is not simply "always fail". A record whose citations are all
+ * anchored and all correct passes under it, which is the state it is asking
+ * records to reach.
+ */
+test("--require-anchors passes a record that has no unanchored citation", () => {
+  const { dir, record, before, cleanup } = withInsertionRepo();
+
+  const result = spawnSync("node", [CLI, record, "--rev", before, "--require-anchors"], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  expect(result.status).toBe(0);
+  expect(result.stderr).toBe("");
+  expect(result.stdout).toMatch(summary(1, 0, 0, 0, 1));
+
+  cleanup();
+});
+
+/**
  * Done-when 3 says the docblock usage line, `main()`'s usage string and the
  * flags actually parsed all name the same set — and until now that was checked
  * once, by hand, and nothing would fail if a later edit touched one without the
  * others. This is the gate's own low finding, folded in because it is cheap and
  * ties directly to an acceptance line rather than being general tidying.
  */
-const flagsIn = (text: string) => [...text.matchAll(/--[a-z]+/g)].map((m) => m[0]).toSorted();
+// `[a-z]+` stopped at the first hyphen, so it read `--require-anchors` as
+// `--require` in all three sources at once and compared them equal without ever
+// seeing the flag — the same agreeing-while-wrong shape this file is about.
+const flagsIn = (text: string) => [...text.matchAll(/--[a-z][a-z-]*/g)].map((m) => m[0]).toSorted();
 
 test("the docblock usage line, USAGE, and FLAGS name the same set of flags", () => {
   const source = fs.readFileSync(CLI, "utf8");
@@ -631,10 +734,37 @@ test("the docblock usage line, USAGE, and FLAGS name the same set of flags", () 
  * a test that checks the working one proves nothing.
  */
 test("parseArgs consumes a flag's value instead of mistaking it for the ticket file", () => {
-  const expected = { file: "ticket.md", rev: "HEAD", section: null };
+  const expected = { file: "ticket.md", rev: "HEAD", section: null, requireAnchors: false };
   expect(parseArgs(["--rev", "HEAD", "ticket.md"])).toEqual(expected);
   expect(parseArgs(["ticket.md", "--rev", "HEAD"])).toEqual(expected);
-  expect(parseArgs(["ticket.md"])).toEqual({ file: "ticket.md", rev: null, section: null });
+  expect(parseArgs(["ticket.md"])).toEqual({
+    file: "ticket.md",
+    rev: null,
+    section: null,
+    requireAnchors: false,
+  });
+});
+
+/**
+ * The same defect read from the other end. `--require-anchors` is the first flag
+ * here that takes no value, and a parser that assumed every flag took one would
+ * swallow the ticket file as its argument — reproducing repo-14 one flag over,
+ * and reported as `ENOENT: ticket.md` if it were reported at all. Both orders,
+ * because only one of them can be wrong.
+ */
+test("parseArgs treats --require-anchors as a flag with no value", () => {
+  const expected = { file: "ticket.md", rev: null, section: null, requireAnchors: true };
+  expect(parseArgs(["--require-anchors", "ticket.md"])).toEqual(expected);
+  expect(parseArgs(["ticket.md", "--require-anchors"])).toEqual(expected);
+  // And it composes with a flag that does take one, in any order.
+  expect(parseArgs(["--require-anchors", "--rev", "HEAD", "ticket.md"])).toEqual({
+    ...expected,
+    rev: "HEAD",
+  });
+  expect(parseArgs(["--rev", "HEAD", "--require-anchors", "ticket.md"])).toEqual({
+    ...expected,
+    rev: "HEAD",
+  });
 });
 
 /**
