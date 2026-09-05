@@ -137,40 +137,6 @@ export interface Job {
   thumbnailPath?: string | null | undefined;
 }
 
-/**
- * A finished job's result **as it appears in a list**, with the capability
- * removed.
- *
- * `GET /api/jobs` is unauthenticated and unfiltered by caller. `downloadUrl` is
- * described above as opaque and unguessable, and it is — but unguessable stops
- * a *search*, not a *listing*, and an endpoint that hands out every live token
- * at once makes the entropy irrelevant. So the list carries the summary and the
- * single-job read carries the capability, which costs an attacker a job id they
- * do not have.
- *
- * The type exists rather than `downloadUrl` becoming optional on `JobResult`,
- * which was the alternative. Optional-everywhere would describe one endpoint's
- * behaviour by weakening the type at every other use — the SSE `completed`
- * frame, `JobResponse`, the store, the UI's download button — and each of those
- * would then need a guard for a case that cannot happen there. This way the
- * shape a caller holds says which endpoint it came from, and the compiler stops
- * a list item being read for a link.
- */
-export type JobListResult = Omit<JobResult, "downloadUrl"> & {
-  /**
-   * Never present. Spelled `?: never` rather than simply omitted because
-   * TypeScript is structural: without it a full `JobResult` is assignable to
-   * this type, and the whole shape would document the redaction without
-   * enforcing it. With it, a route that forgets to strip fails to compile.
-   */
-  downloadUrl?: never;
-};
-
-/** A `Job` as `GET /api/jobs` returns it. See `JobListResult`. */
-export interface JobListItem extends Omit<Job, "result"> {
-  result: JobListResult | null;
-}
-
 /** Containers a caller may ask for. `source` means "keep the origin container". */
 export const CONTAINER_OPTIONS = ["mp4", "mkv", "webm", "source"] as const;
 
