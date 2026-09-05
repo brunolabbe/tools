@@ -807,3 +807,28 @@ moved, 0 unanchored, 0 unresolvable`.
   gates. It is a better argument for the change than anything in the Why section
   above, and it was not constructed as one; it happened because the branch kept
   moving under its own reviews.
+
+- **2026-09-05** — Two corrections to the entry above, both from the
+  second-opinion reviewer, both making the record more accurate rather than more
+  flattering.
+
+  **A status claim about a branch cannot be committed to that branch.** The
+  reviewer re-ran the tally independently — 18 runs, 15 `completed`/`success`, 1
+  `completed`/`cancelled` (`CI` at `a273cbf`), the rest queued or running — and
+  observed what falls out of it: the tip had moved to `cfae096`, whose own runs
+  were then unfinished, so "green at the tip" was _still_ unestablished. **Any
+  commit that corrects a status claim invalidates the status claim**, this entry
+  included. That is structural, not a lapse, and it means **"one look before
+  merge" is the only form of that claim that can ever be true.** Neither of us
+  can close it from inside the branch, and this Log should not pretend otherwise.
+
+  **The third instance of the pattern was shared, not mine alone.** I recorded
+  the model claim, the untested load-bearing reason, and the status summary as
+  three instances of one move — reading a result at a glance and reporting the
+  reading as the measurement. The reviewer points out it had read the same run
+  table by eye and reported `in_progress` and `cancelled` without measuring the
+  tally either; it caught my wording, not its own omission, and I measured only
+  after being prompted. **A pattern found twice by two models, each having
+  half-committed it, is a better record than one found by a clean observer** —
+  and it is the actual argument for a second opinion being a different model
+  rather than a second pass.
