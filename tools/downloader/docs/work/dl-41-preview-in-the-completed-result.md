@@ -3,7 +3,7 @@ id: dl-41
 tool: downloader
 title: Show the preview image in a completed download's result panel
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -128,6 +128,23 @@ work.
   silently.
 - If decision 1 was "move", an active job still shows the preview in the head.
 - `npm run check` and `npm test -- --project downloader` pass.
+
+## Review
+
+**Gate: PASS** — 2026-09-05 · `origin/main...HEAD` (4a4cc4f...20006ca) · code-review at medium, run by the reviewer itself (sonnet, dispatched against a builder run recorded as opus)
+
+| Done when                                                                                                                                       | Proof                                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A completed job with a live `thumbnailPath` shows the preview inside the green result panel                                                     | `job-card.test.tsx:781-793` ✓                                                                                                                                         |
+| A completed job with no `thumbnailPath` renders the panel exactly as today — no gap, no reserved empty box, no layout shift                     | `job-card.test.tsx:811-838` ✓                                                                                                                                         |
+| A component test covers the filename still sitting at the left edge with the image present, so the `space-between` trap cannot regress silently | `job-card.test.tsx:795-809` ✓ — reproduced by mutation: reinstating the trap turns this test (and `:781`) red                                                         |
+| An active job still shows the preview in the head                                                                                               | `job-card.test.tsx:744-755` ✓                                                                                                                                         |
+| `npm run check` and `npm test -- --project downloader` pass                                                                                     | verified — `npm run check` exit 0; 65 files / 1032 tests passed (re-verified at 20006ca: no source file changed since 4caf813, `job-card.test.tsx` alone still 33/33) |
+
+- **low** · fixed in-branch, no action needed: the ticket's own citations drifted — one (`fileRetentionHours` at `config.ts`) was wrong from filing (a screen off), six others were moved by this branch's own commit adding lines to `JobCard.tsx`/`styles.css`. The ticket's Log originally claimed "every citation still resolves" on the strength of `citations.mjs` reporting `0 moved, 0 unresolvable`, which was a misread — all were `unanchored`, meaning the script compared coordinates, not content. Caught when this gate's own citation (`config.ts:192`) diverged from the ticket's (`:182`) with neither side flagging it. Fixed in `20006ca`, ticket file only; verified by re-reading each repointed target line against current source and rerunning `citations.mjs` (15 parsed, 0 unresolvable at the new tip).
+- **dropped** · reviewer's own hunt initially raised: an operator setting `FILE_RETENTION_HOURS` below `THUMBNAIL_TTL_MS` (10 min) would make the FILE_EXPIRED-preview regression observable. Does not reproduce — `config.ts`'s `int()` helper defaults `min = 1` and `FILE_RETENTION_HOURS` is parsed with no override, so every reachable value clamps to at least 1 hour (6x the TTL). No reachable configuration triggers this. Retracted after the builder pointed at the clamp and the reviewer confirmed by reading the function.
+- **findings** · code-review at medium (run by the reviewer itself) returned 2 across two passes; 1 carried (citation drift, fixed), 1 dropped (retention-hours caveat, does not reproduce).
+- NFR: security n/a (no new external input; `thumbnailPath` unchanged flow) · performance n/a (trivial render change) · reliability ✓ (`Preview`'s null-on-failure behavior unchanged) · maintainability ✓ (grouping comment mirrors existing pattern; citation drift addressed above; non-blocking heads-up that dl-43 will touch the same files, edits locatable by the new `result__headline` classname).
 
 ## Log
 
