@@ -47,7 +47,7 @@ by the time you read it.** Locate provisions by their quoted opening phrase, not
 by number. The line numbers are given so the sizes can be re-derived, not so they
 can be followed.
 
-**`node scripts/citations.mjs <this file>` exits 1 at `12/14 resolve`, and both
+**`node scripts/citations.mjs <this file>` exits 1 at `14/16 resolve`, and both
 failures are deliberate.** One is the illustrative test reference quoted verbatim
 from `SKILL.md` in Build 1.2, because it _is_ the false positive that step asks
 you to delete; the
@@ -334,10 +334,13 @@ in the tree, in the wrong place and at the wrong scope:
 | model                               | the `model` parameter you passed at dispatch (Build 4) |
 | lifecycle — running, held, released | `git worktree list`                                    |
 
-`reference/dispatching.md:196-199` states it today for **tool lists only**, on a
-page about dispatch mechanics. Wrong scope and wrong home: it bites at gate and
-report time too, which is how the lifecycle instance got past two agents here
-**who had just written the model version down.** Move the statement into this
+`reference/dispatching.md` states it today for **tool lists only**, on a page about
+dispatch mechanics — find it by its opening, _"Also note the self-report is
+unreliable"_, **not by line number**: the blocking record branch inserts ~27 lines
+above it, so the passage sits at 196–198 on `main` and 223–225 on the tree you
+will actually build against. Wrong scope and wrong home either way: it bites at
+gate and report time too, which is how the lifecycle instance got past two agents
+here **who had just written the model version down.** Move the statement into this
 table, leave a pointer — the same shape as Build 7.
 
 **Disambiguate the term while you are in there.**
@@ -663,10 +666,13 @@ files, nothing reformatted), `status.mjs --json` and `--show repo-21` all exit 0
 `git check-ignore` exit 1; `citations.mjs` exit 1 at `8/10 resolve`. Gate 1's
 record untouched and verbatim.
 
-**All figures in this subsection are as measured at `3f9398f` and two have moved
-since**: Gate 3's amendment took `Done when` 4 to fourteen and the citation count
-to `12/14`. Left as measured rather than restated, because a verdict describes the
-sha it was taken on.
+**All figures in this subsection are as measured at `3f9398f`, and two of them
+moved afterwards**: gate 3 took `Done when` 4 to fourteen, and the citation count
+has since risen twice with the rounds that added citations. **The current count is
+stated once, at the top of this page, and nowhere else** — this note deliberately
+does not repeat it, because a figure restated in three places is three places to
+go stale. Left as measured rather than restated: a verdict describes the sha it
+was taken on.
 
 **All seven findings settled: five fixed outright (1, 3, 4, 6, and 2 properly on
 the second attempt), one refuted and conceded by the reviewer on its own re-run
@@ -690,12 +696,20 @@ grounds that a third instance was not worth a re-gate. The owner questioned the
 Measured before acting, all three confirmed:
 
 - `reference/dispatching.md:196-199` states it for **tool lists only**, on a page
-  about dispatch mechanics.
+  about dispatch mechanics. **Corrected by gate 3, and the correction is the
+  finding: those coordinates are `main`'s.** The blocking record branch inserts
+  ~27 lines above the passage, so on the tree this ticket says to build against it
+  is at **223–225**. Content claim true on both; coordinates wrong for the reader.
+  Left as measured with the correction attached rather than silently repointed,
+  because what I measured is what I measured — and Build 3 now cites the passage
+  by quoted phrase instead, per this ticket's own top-of-file rule.
 - **`repo-21` restated it five times** — at the pre-amendment lines 361, 383, 589,
   780, 796. A fourteenth row written as an instance would have been the sixth
   mention in one ticket.
 - `reference/defect-shapes.md:41,63` uses "self-report" for a **different** thing:
   a builder's claim about its _work_, not about _itself_. Genuine term collision.
+  **Verified stable across both trees** — the record branch does not touch this
+  file, so unlike the citation above these coordinates hold where the work happens.
 
 **Measured after, and it contradicts the expectation the amendment was given
 with.** The brief said the fix "should net the ticket smaller". It did not:
@@ -716,9 +730,40 @@ the right scope, plus two files to fix, is bigger than a rule mentioned twice in
 passing — and it is the thing the cleanup can act on.
 
 **Reported as measured rather than asserted, which is the thirteenth row applied
-to its own amendment.** If smaller matters more than complete here, the cut is the
-three-row check table (−5) and the disambiguation paragraph (−4); say so and I
-will take them out. I did not decide that quietly.
+to its own amendment.**
+
+### Gate 4 — the two delegated calls, and one new finding
+
+Neither call was mine to make: the owner recused itself as the author of the brief
+that produced this ticket, and I wrote the text. Both went to the reviewer with my
+reasons for keeping attached, and both came back as recommendations rather than
+escalations.
+
+- **The −9 cut: not taken.** The reviewer's reasoning, which is better than mine:
+  the check table is the only part that says what command to run per field, which
+  is what makes it a rule rather than a slogan; the disambiguation is instruction +
+  citation + one why + one imperative, the same shape as the other thirteen rows.
+  **Neither is narrative** — no investigation reasoning, no session story, which
+  was the actual violation in Build 4.
+- **"Only two of five were cuttable": upheld** on a line-by-line check it ran
+  itself. `589` sits in gate 1's dispositions, `780` and `796` in the Log's
+  second-pass entry; all three are committed record, and rewriting them to drop a
+  word would make them match a rule that did not exist when they were written.
+- **The growth is not a defect to fix.** Its framing, adopted here: the test was
+  never "does the ticket shrink monotonically", it is **"is each line instruction,
+  measurement or citation rather than narrative"** — and Build 3 passes that at 65
+  lines for fourteen rows exactly as it did at 42 for twelve. A real fourteenth
+  shape costs real estate the same way the first thirteen did.
+
+**One new finding, accepted: `dispatching.md:196-199` is `main`'s coordinates, not
+the build tree's.** Reproduced — `grep -n "Ask an agent to"` gives 198 on `main`
+and **225** on the record branch, which inserts ~27 lines above the passage; the
+sentence is identical on both. **This is defect 4's shape one level down** — right
+sentence, stale coordinates — and I caused it by checking against `main` while the
+rest of this ticket is pinned to the blocking dependency. Build 3 now cites the
+passage by its quoted opening instead of by number, which is what this ticket's own
+top-of-file rule already told me to do. `defect-shapes.md:41,63` was checked the
+same way and is byte-identical on both trees, so it keeps its numbers.
 
 ## Log
 
@@ -756,7 +801,7 @@ will take them out. I did not decide that quietly.
   attempt through `| tail` read `tail`'s status instead.
 
 - **This ticket fails its own citation run, on purpose.**
-  `node scripts/citations.mjs docs/work/repo-21-…md` reports `12/14 resolve`,
+  `node scripts/citations.mjs docs/work/repo-21-…md` reports `14/16 resolve`,
   exit 1, and **both failures are deliberate**. One is Build 1.2's verbatim
   quotation of `SKILL.md`'s illustrative test reference, kept as written because
   it _is_ the false positive Build 1.2 asks you to remove. The other is the
@@ -780,6 +825,17 @@ will take them out. I did not decide that quietly.
   is printed today and is not printed there, and both halves matter. Whoever
   builds this should re-read this bullet against the merged `citations.mjs` and
   correct the verb.
+
+- **2026-09-05, sixth pass — gate 4 settled the two delegated calls and found one
+  more defect.** The −9 cut was not taken and my "+21 was unavoidable" defence was
+  upheld, both on the reviewer's own line-by-line check rather than on my argument.
+  The new finding is the one worth carrying forward: **I cited
+  `dispatching.md:196-199` off `main` while every other coordinate in this ticket
+  is pinned to the blocking dependency, and the record branch moves that passage to
+  223–225.** Right sentence, wrong coordinates — defect 4's shape, committed by the
+  filer, in the amendment that added a row about checking claims from outside. Now
+  cited by quoted phrase, which the ticket's own opening rule had already
+  prescribed and which I did not follow.
 
 - **2026-09-05, fifth pass — the self-report rule, on the owner's decision.** I
   had surfaced it as an open question rather than deciding it, and recommended
