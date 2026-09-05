@@ -224,9 +224,17 @@ loud in the PR body; the rule is in `records.md`.
    unobservable — and the skill said neither.** `.claude/agents/ticket-reviewer.md`
    pins `model: sonnet` in frontmatter, so the gate's model was always two file
    reads and never needed `resolvedModel`; passing `model: "sonnet"` on every gate
-   was belt-and-braces. The builder's model genuinely is unobservable under a
-   backgrounded dispatch, which is how `concurrency.md` says to dispatch a batch —
-   and entry 4 is what that costs. Step 3 now says to **pass the builder's model
+   was belt-and-braces. The builder's model is unobservable **to the dispatcher**
+   under a backgrounded dispatch, which is how `concurrency.md` says to dispatch a
+   batch — and entry 4 is what that costs. **This branch re-derived `main`'s wrong
+   version of that sentence while rewriting it**, in two places and in fresh
+   wording: the `tool_response` does carry `resolvedModel`; what it does not do is
+   reach the parent, which sees only the subagent's final text. Corrected at
+   `bb6b8f4`, relayed and unverified from a sandbox with no network. **The finding
+   is worth more than the fix — rewriting prose does not re-check it.** A branch
+   titled "correct ten skill defects" reproduced one of them inside the sentence it
+   lived in, and neither its gate nor its orchestrator caught it; `repo-21`'s filer
+   did, by reading the text. Step 3 now says to **pass the builder's model
    explicitly**, naming your own model where the table says inherit, which makes it
    knowable by construction for one parameter. Confirmed this session: dl-37's and
    repo-19's builders both quote *"You are powered by the model named Opus 5 (1M
