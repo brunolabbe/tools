@@ -43,6 +43,7 @@ import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
 import { createSsrfGuard } from "./ssrf.ts";
 import { ThumbnailStore } from "./thumbnails.ts";
 import { createTlsInterception } from "./tls-interception.ts";
+import { TlsRejectionLog } from "./tls-rejections.ts";
 import { ROUTES } from "@downloader/contract";
 
 export interface CreateAppOptions {
@@ -105,6 +106,85 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const guardedFetch = createGuardedFetch(guard, globalThis.fetch, {
     dispatcher: egress.dispatcher,
   });
+  // **Two proxies, and which one a subprocess gets is the whole of dl-27. Both
+  // of them terminate now, and that second half is dl-37.**
+  //
+  // ffmpeg was never able to keep a tunnel: libavformat propagates a fixed
+  // seven-name option list onto the connections its HLS and DASH demuxers open
+  // for segments and the TLS settings are not in it, so `-tls_verify 1` reaches
+  // the manifest and nothing else (dl-21 measured sixteen ways round it). The
+  // one option that *is* propagated is `http_proxy`, so its proxy is already on
+  // every segment connection; making it terminate them is what puts a
+  // verification there at all.
+  //
+  // **The tiers could keep one, and this is where dl-27 said they should. The
+  // sentence it said it in is still true and is no longer the whole story:**
+  // "Chromium and yt-dlp verify their own connections without being asked, so
+  // they keep the one above: a `CONNECT` is tunnelled, the origin's own
+  // certificate reaches them, and nothing needs a trust-store change.
+  // Pointing the tiers at this one instead would break every HTTPS page
+  // Chromium loads, for no gain it does not already have."
+  //
+  // Every clause of that holds except the last. They verify against their **own**
+  // trust stores — Chromium's is NSS and yt-dlp's is a `certifi` bundle inside a
+  // PyInstaller archive, and nothing in this repo writes to either — so on a
+  // deployment whose origins chain to a private root, the two tiers that
+  // actually load the page fail, and `EGRESS_CA_FILE` cannot fix it. That is the
+  // gain dl-27 said was not there, and it is what dl-34 filed and dl-37 built.
+  // "Would break every HTTPS page Chromium loads" was the right objection and is
+  // met rather than waved away: each tier is given the generated root by a
+  // mechanism that **adds** to its store rather than replacing it, chosen by
+  // measurement, and `tls-interception.ts` documents both and why each is
+  // bounded.
+  //
+  // **What it costs, in the terms that are actually true.** A whole rendered
+  // page now crosses this process in plaintext — its scripts, its subresources,
+  // whatever third-party origins it talks to — where before only ffmpeg's
+  // manifests and segments did. That breadth is the cost, and it is the only
+  // one: it is **not** that a captured session cookie starts crossing here,
+  // which is the intuitive version and is false. `CLAUDE.md` requires
+  // `RequestContext` replayed on every fetch unconditionally, `args.ts` calls
+  // `buildRequestContextArgs` on every ffmpeg invocation with no gate, `Cookie`
+  // and `Authorization` are not in that function's `DROPPED_HEADERS`, and
+  // interception defaults to on — so a captured cookie already crossed this
+  // process in plaintext through ffmpeg's proxy, today, by default.
+  //
+  // **A refused origin is where the two clients stop being alike.** ffmpeg and
+  // yt-dlp both quote the proxy's status line, so `502 TLS certificate
+  // verification failed (<code>)` reaches them as text. Chromium collapses every
+  // non-200 CONNECT response to `net::ERR_TUNNEL_CONNECTION_FAILED` and keeps
+  // nothing else, so without a side channel dl-34's verdict silently becomes
+  // "the site could not be reached". `tls-rejections.ts` is that channel.
+  //
+  // `FFMPEG_TLS_INTERCEPT=false` is the way out for an operator the interception
+  // breaks for some reason of their own, and since dl-37 it takes **both**
+  // proxies back to tunnelling rather than only ffmpeg's. One switch for one
+  // property — "does this process sit inside the TLS" — because an operator who
+  // turns interception off for a plaintext-hop reason has not asked for the
+  // larger of the two hops to stay. The cost is that `EGRESS_CA_FILE` stops
+  // reaching the tiers in that configuration, which the boot warning below says
+  // in those words. It is a separate knob from `FFMPEG_ALLOW_UNVERIFIED_TLS` on
+  // purpose: without it, the only escape an operator can find in the environment
+  // table is the one that stops verifying anything at all, and giving up the
+  // manifest check to fix a proxy problem is the worst of the three states this
+  // service can be in.
+  //
+  // The tiers get an interception of their own rather than sharing ffmpeg's, and
+  // only when a tier is registered to be given it. `tls-interception.ts` carries
+  // both reasons.
+  const tiersRegistered = config.enableBrowserResolver || config.enableYtdlpResolver;
+  const tierInterception =
+    config.ffmpegTlsIntercept && tiersRegistered
+      ? await createTlsInterception({
+          ...(operatorCa === null ? {} : { operatorCa }),
+          // Never `!config.ffmpegAllowUnverifiedTls`. That setting is named for
+          // ffmpeg and turning it into "and also stop checking the certificates
+          // behind every probe" would be a widening nobody asked for.
+          verifyOrigins: true,
+        })
+      : null;
+  const tierRejections = new TlsRejectionLog();
+
   // The other half of the same answer, for the egress no dispatcher can reach.
   // ffmpeg fetches through libavformat and the resolver tiers fetch from their
   // own subprocesses, so all three get a proxy that runs this guard on every
@@ -113,28 +193,23 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     guard,
     logger,
     ...(config.proxyUrl === undefined ? {} : { upstreamProxyUrl: config.proxyUrl }),
+    ...(tierInterception === null
+      ? {}
+      : {
+          interceptTls: tierInterception,
+          onCertificateRejected: (host: string, code: string) => {
+            tierRejections.record(host, code);
+          },
+          // The other half of the same channel: closes the ambiguity
+          // `TlsRejectionLog` names in its own header, where a non-certificate
+          // refusal on the same host in the same window would otherwise be
+          // indistinguishable from a certificate one to whoever asks.
+          onOtherConnectFailure: (host: string) => {
+            tierRejections.recordOtherFailure(host);
+          },
+        }),
   });
 
-  // **Two proxies, and which one a subprocess gets is the whole of dl-27.**
-  //
-  // Chromium and yt-dlp verify their own connections without being asked, so
-  // they keep the one above: a `CONNECT` is tunnelled, the origin's own
-  // certificate reaches them, and nothing needs a trust-store change. ffmpeg
-  // cannot — libavformat propagates a fixed seven-name option list onto the
-  // connections its HLS and DASH demuxers open for segments and the TLS
-  // settings are not in it, so `-tls_verify 1` reaches the manifest and nothing
-  // else (dl-21 measured sixteen ways round it). The one option that *is*
-  // propagated is `http_proxy`, so this proxy is already on every segment
-  // connection; making it terminate them is what puts a verification there at
-  // all. Pointing the tiers at this one instead would break every HTTPS page
-  // Chromium loads, for no gain it does not already have.
-  //
-  // `FFMPEG_TLS_INTERCEPT=false` is the way out for an operator the interception
-  // breaks for some reason of their own. It is a separate knob from
-  // `FFMPEG_ALLOW_UNVERIFIED_TLS` on purpose: without it, the only escape an
-  // operator can find in the environment table is the one that stops verifying
-  // anything at all, and giving up the manifest check to fix a proxy problem is
-  // the worst of the three states this service can be in.
   const ffmpegInterception = config.ffmpegTlsIntercept
     ? await createTlsInterception({
         // The two CA settings swap sides here and getting it backwards fails
@@ -156,8 +231,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   // Choosing them in two places is how they drift.
   //
   // With interception off there is no second proxy at all. A tunnelling proxy is
-  // what `tierProxy` already is, so a second one would be an identical listener
-  // and two RSA keygens to no end.
+  // what `tierProxy` already is — `tierInterception` is gated on the same
+  // `config.ffmpegTlsIntercept`, so the two cannot disagree about it — and a
+  // second one would be an identical listener and two RSA keygens to no end.
   let ffmpegProxy: EgressProxy | null = null;
   let ffmpegEgress: {
     proxyUrl: string;
@@ -200,22 +276,37 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   // set nothing has no expectation to correct, and this would be a line per
   // boot about a setting they are not using.
   //
-  // A warning rather than an info line, on the same reasoning as the three
-  // ffmpeg-TLS lines below: it is a deployment fact the operator reasonably
-  // believes otherwise, and the belief is one the documentation actively
-  // encouraged until this commit — both `.env.example` and `01-ARCHITECTURE`
-  // said "everything that meets an origin gets it". Two things do not, and they
-  // are the two that load the page.
+  // dl-34 wrote this line to say the tiers were *not* covered, and dl-37 makes
+  // that false in the default configuration and still true in one an operator
+  // can choose — so the line has to be able to say either. It stays a warning in
+  // both, on the same reasoning as the three ffmpeg-TLS lines below: it is a
+  // deployment fact worth one line per boot, and in the covered case the fact
+  // being reported is that a page's whole traffic now crosses this process,
+  // which is not an `info`.
   if (operatorCa !== null) {
     const variable = config.egressCaFileVar ?? "EGRESS_CA_FILE";
-    logger.warn(`${variable} does not reach the browser or yt-dlp tiers`, {
-      reaches: [
-        "this process's own fetches (probes, manifests, size probes)",
-        ffmpegInterception === null ? "ffmpeg, via -ca_file" : "ffmpeg's terminating egress proxy",
-      ],
-      doesNotReach: ["chromium", "yt-dlp"],
-      hint: "Those two are handed a tunnelling proxy, so the origin's own certificate reaches them and they verify it against their own trust stores — which nothing here writes to. On a deployment whose origins chain to a private root they will fail, and since dl-34 they at least say TLS_VERIFICATION_FAILED rather than 'site unreachable' or 'no media found'. Giving them the anchor is dl-34's unbuilt half one; see tools/downloader/docs/work/dl-34-resolver-tiers-and-the-operator-ca.md.",
-    });
+    const ownFetches = "this process's own fetches (probes, manifests, size probes)";
+    const ffmpegReach =
+      ffmpegInterception === null ? "ffmpeg, via -ca_file" : "ffmpeg's terminating egress proxy";
+    if (tierInterception !== null) {
+      logger.warn(`${variable} reaches the browser and yt-dlp tiers through a terminating proxy`, {
+        reaches: [
+          ownFetches,
+          ffmpegReach,
+          "chromium and yt-dlp, via their terminating egress proxy",
+        ],
+        doesNotReach: [],
+        hint: "Since dl-37 the tiers are behind a proxy that verifies the origin here, against the system store plus this file, and re-encrypts to them under a locally issued leaf. That is what makes the setting reach them at all. The cost is that every page they load crosses this process in plaintext — see tools/downloader/docs/work/dl-37-tiers-move-onto-the-terminating-proxy.md. FFMPEG_TLS_INTERCEPT=false takes it back, and takes this coverage with it.",
+      });
+    } else {
+      logger.warn(`${variable} does not reach the browser or yt-dlp tiers`, {
+        reaches: [ownFetches, ffmpegReach],
+        doesNotReach: ["chromium", "yt-dlp"],
+        hint: tiersRegistered
+          ? "FFMPEG_TLS_INTERCEPT is off, so the tiers are handed a tunnelling proxy: the origin's own certificate reaches them and they verify it against their own trust stores, which nothing here writes to. On a deployment whose origins chain to a private root they will fail, saying TLS_VERIFICATION_FAILED (dl-34) rather than 'site unreachable' or 'no media found'. Turning FFMPEG_TLS_INTERCEPT back on is what gives them this anchor (dl-37)."
+          : "Neither tier is registered, so nothing here needs the anchor. ENABLE_BROWSER_RESOLVER and ENABLE_YTDLP_RESOLVER are what turn them on; with FFMPEG_TLS_INTERCEPT left on they are then given this file through a terminating proxy (dl-37).",
+      });
+    }
   }
 
   // Loud on purpose, and at boot rather than at the first download: this is the
@@ -294,6 +385,17 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     config,
     logger,
     fetchImpl: guardedFetch,
+    // Present exactly when `tierProxy` terminates, because it is the other half
+    // of that one decision — see `TierEgress`.
+    ...(tierInterception === null
+      ? {}
+      : {
+          tierEgress: {
+            rootSpkiSha256: tierInterception.rootSpkiSha256,
+            trustBundlePath: tierInterception.trustBundlePath,
+            rejections: tierRejections,
+          },
+        }),
   });
   const events = new JobEventHub(options.now);
   const probeCache = new ProbeCache({ ttlMs: config.probeCacheTtlMs });
@@ -440,9 +542,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
       await ffmpegProxy?.close().catch((error: unknown) => {
         logger.warn("the ffmpeg egress proxy did not close cleanly", { error: String(error) });
       });
-      // The generated root's temp directory. Its private key was never on disk.
+      // The generated roots' temp directories. Neither private key was ever on
+      // disk; what is there is the certificates and the tiers' trust bundle.
       await ffmpegInterception?.close().catch((error: unknown) => {
         logger.warn("the generated egress CA did not clean up", { error: String(error) });
+      });
+      await tierInterception?.close().catch((error: unknown) => {
+        logger.warn("the tiers' generated egress CA did not clean up", { error: String(error) });
       });
       db.close();
       logger.info("shutdown complete");

@@ -11,6 +11,7 @@
 import http from "node:http";
 import net from "node:net";
 import type { AddressInfo } from "node:net";
+import { chromium } from "playwright";
 import { afterEach, describe, expect, test } from "vitest";
 import type { AddressResolver, ResolvedAddress } from "../src/dispatcher.ts";
 import { startEgressProxy, withoutEgressProxy } from "../src/egress-proxy.ts";
@@ -781,5 +782,256 @@ describe("a leaf this proxy cannot load (dl-33)", () => {
         "[httpproxy] HTTP error 502 TLS certificate verification failed (DEPTH_ZERO_SELF_SIGNED_CERT)",
       ),
     ).toBe(true);
+  });
+});
+
+/**
+ * dl-37: the measurement `tls-rejections.ts`'s whole design rests on, committed
+ * rather than left as a docblock's paraphrase of it — a real Chromium, pointed
+ * at a bare CONNECT proxy that answers with each status/reason this proxy can
+ * actually produce, reports the identical `net::ERR_TUNNEL_CONNECTION_FAILED`
+ * for every one of them. If a future Chromium ever started telling these
+ * apart, this is the test that would go red and say so.
+ */
+describe("what Chromium reports for a refused CONNECT (dl-37)", () => {
+  function startFixedStatusProxy(status: number, reason: string): Promise<{ url: string }> {
+    const server = http.createServer((_request, response) => {
+      response.writeHead(400).end();
+    });
+    server.on("connect", (_request, socket) => {
+      socket.end(`HTTP/1.1 ${String(status)} ${reason}\r\n\r\n`);
+    });
+    return new Promise((resolve) => {
+      server.listen(0, "127.0.0.1", () => {
+        const { port } = server.address() as AddressInfo;
+        cleanups.push(
+          () =>
+            new Promise<void>((closed) => {
+              server.close(() => closed());
+            }),
+        );
+        resolve({ url: `http://127.0.0.1:${String(port)}` });
+      });
+    });
+  }
+
+  async function chromiumMessageFor(status: number, reason: string): Promise<string> {
+    const proxy = await startFixedStatusProxy(status, reason);
+    const browser = await chromium.launch({
+      headless: true,
+      args: ["--no-sandbox"],
+      proxy: { server: proxy.url },
+    });
+    try {
+      const page = await browser.newPage();
+      await page.goto("https://example.invalid/", { timeout: 10_000 });
+      throw new Error("the navigation was expected to fail");
+    } catch (error) {
+      return (error as Error).message.split("\n")[0] ?? "";
+    } finally {
+      await browser.close();
+    }
+  }
+
+  test(
+    "a policy block, a leaf failure, a dead upstream and two certificate refusals are one message",
+    { timeout: 60_000 },
+    async () => {
+      const messages = await Promise.all([
+        chromiumMessageFor(403, "Blocked by egress policy"),
+        chromiumMessageFor(500, "Proxy could not issue a certificate"),
+        chromiumMessageFor(502, "Upstream connect failed"),
+        chromiumMessageFor(
+          502,
+          "TLS certificate verification failed (DEPTH_ZERO_SELF_SIGNED_CERT)",
+        ),
+        chromiumMessageFor(502, "TLS certificate verification failed (CERT_HAS_EXPIRED)"),
+      ]);
+
+      for (const message of messages) {
+        expect(message).toContain("net::ERR_TUNNEL_CONNECTION_FAILED");
+      }
+      // All five, not merely each individually — the point is that nothing in
+      // any of them distinguishes one cause from another.
+      expect(new Set(messages.map((message) => message.split(" at ")[0]))).toHaveLength(1);
+    },
+  );
+});
+
+/**
+ * dl-37: `onOtherConnectFailure` exists because the measurement above is true —
+ * Chromium collapses every refused or failed `CONNECT` to the identical
+ * `net::ERR_TUNNEL_CONNECTION_FAILED`. What matters here is not that each of
+ * those still refuses the tunnel — the tests above already cover that — but
+ * that each one, and only the non-certificate ones, reaches this callback.
+ * `tls-rejections.ts`'s `TlsRejectionLog` depends on the two being kept apart:
+ * a cert rejection that also fired this one would poison itself, permanently
+ * blocking its own reattachment.
+ */
+function recordingConnectCallbacks(): {
+  certificateRejections: Array<{ host: string; code: string }>;
+  otherFailures: string[];
+  onCertificateRejected: (host: string, code: string) => void;
+  onOtherConnectFailure: (host: string) => void;
+} {
+  const certificateRejections: Array<{ host: string; code: string }> = [];
+  const otherFailures: string[] = [];
+  return {
+    certificateRejections,
+    otherFailures,
+    onCertificateRejected: (host, code) => {
+      certificateRejections.push({ host, code });
+    },
+    onOtherConnectFailure: (host) => {
+      otherFailures.push(host);
+    },
+  };
+}
+
+describe("onOtherConnectFailure (dl-37)", () => {
+  test("a policy-blocked CONNECT fires it, with the target's host", async () => {
+    const callbacks = recordingConnectCallbacks();
+    const guard = guardResolving({ "segments.evil.test": ["169.254.169.254"] });
+    const proxy = await startProxy({ guard, logger: NOOP_LOGGER, ...callbacks });
+
+    await connectThrough(proxy.port, "segments.evil.test:443");
+
+    expect(callbacks.otherFailures).toEqual(["segments.evil.test"]);
+    expect(callbacks.certificateRejections).toEqual([]);
+  });
+
+  test("a dead upstream fires it", async () => {
+    const callbacks = recordingConnectCallbacks();
+    const guard = createSsrfGuard({ allowHosts: ["unreachable.test"] });
+    const proxy = await startProxy({
+      guard,
+      logger: NOOP_LOGGER,
+      resolve: resolverFor([v4("127.0.0.1")]),
+      ...callbacks,
+    });
+
+    await connectThrough(proxy.port, `unreachable.test:${await closedPort()}`);
+
+    expect(callbacks.otherFailures).toEqual(["unreachable.test"]);
+    expect(callbacks.certificateRejections).toEqual([]);
+  });
+
+  test("a leaf this proxy could not issue fires it, not a certificate rejection", async () => {
+    const callbacks = recordingConnectCallbacks();
+    const certificate = await createFixtureCertificate({
+      ipAddresses: ["127.0.0.1"],
+      dnsNames: ["trusted.test"],
+      commonName: "dl37-egress-origin",
+    });
+    cleanups.push(() => certificate.cleanup());
+    const origin = await startTlsOrigin(certificate, (_request, response) => {
+      response.writeHead(200).end("the media");
+    });
+    cleanups.push(() => origin.close());
+    const real = await interception(certificate.ca);
+    const proxy = await startProxy({
+      guard: createSsrfGuard({ allowHosts: ["trusted.test"] }),
+      logger: NOOP_LOGGER,
+      resolve: resolverFor([v4("127.0.0.1")]),
+      interceptTls: {
+        ...real,
+        leafFor: () => {
+          throw new Error("no leaf for you");
+        },
+      },
+      ...callbacks,
+    });
+
+    await connectThrough(proxy.port, `trusted.test:${origin.port}`);
+
+    expect(callbacks.otherFailures).toEqual(["trusted.test"]);
+    expect(callbacks.certificateRejections).toEqual([]);
+  });
+
+  test("a genuine certificate rejection fires onCertificateRejected ONLY", async () => {
+    // The critical negative: `onRejected` in `terminateTls` also calls the
+    // shared `fail()` a policy block and a dead upstream go through, and if
+    // `onOtherConnectFailure` were hooked into `fail()` itself rather than into
+    // the five non-certificate call sites individually (the SSRF-policy catch,
+    // `serverSocket`'s own `error`, `terminateTls`'s `onFailed` and
+    // `onUnavailable`, and the chained-upstream refusal), every certificate
+    // rejection would immediately record itself as ambiguous and
+    // `TlsRejectionLog.since` would never reattach anything, ever.
+    const callbacks = recordingConnectCallbacks();
+    const origin = await startUntrustedTlsOrigin();
+    const guard = createSsrfGuard({ allowHosts: ["untrusted.test"] });
+    const proxy = await startProxy({
+      guard,
+      logger: NOOP_LOGGER,
+      resolve: resolverFor([v4("127.0.0.1")]),
+      interceptTls: await interception(),
+      ...callbacks,
+    });
+
+    await connectThrough(proxy.port, `untrusted.test:${origin.port}`);
+
+    expect(callbacks.certificateRejections).toEqual([
+      { host: "untrusted.test", code: "DEPTH_ZERO_SELF_SIGNED_CERT" },
+    ]);
+    expect(callbacks.otherFailures).toEqual([]);
+  });
+
+  test("a non-certificate TLS handshake failure fires it too, via terminateTls's onFailed", async () => {
+    // Distinct from the plain `serverSocket` error above: the TCP connect
+    // succeeds here, and it is the TLS handshake itself that fails — with no
+    // `authorizationError` set, which is what routes it to `onFailed` rather
+    // than `onRejected` inside `terminateTls`. An origin that resets the
+    // connection the instant it is open gives Node's TLS layer exactly that: a
+    // socket error with no certificate ever having been offered. (A plain TCP
+    // origin that stays open and never resets was tried first and hangs —
+    // `tls.connect` has no handshake timeout of its own and simply waits for a
+    // `ServerHello` that never comes, so it is not a usable fixture here.)
+    const callbacks = recordingConnectCallbacks();
+    const origin = net.createServer((socket) => socket.destroy());
+    await new Promise<void>((resolve) => origin.listen(0, "127.0.0.1", resolve));
+    cleanups.push(() => new Promise<void>((resolve) => origin.close(() => resolve())));
+    const originPort = (origin.address() as AddressInfo).port;
+    const guard = createSsrfGuard({ allowHosts: ["not-tls.test"] });
+    const proxy = await startProxy({
+      guard,
+      logger: NOOP_LOGGER,
+      resolve: resolverFor([v4("127.0.0.1")]),
+      interceptTls: await interception(),
+      ...callbacks,
+    });
+
+    await connectThrough(proxy.port, `not-tls.test:${originPort}`);
+
+    expect(callbacks.otherFailures).toEqual(["not-tls.test"]);
+    expect(callbacks.certificateRejections).toEqual([]);
+  });
+
+  test("a chained upstream's own refusal fires it", async () => {
+    // The fifth call site: `upstream !== null` mode, where an *operator's*
+    // proxy — not this one — refuses the tunnel. `upstreamRefused` logs it;
+    // this is the assertion that it also reaches the same side channel.
+    const callbacks = recordingConnectCallbacks();
+    const upstream = http.createServer();
+    upstream.on("connect", (_request, socket) => {
+      socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    cleanups.push(
+      () =>
+        new Promise<void>((resolve) => {
+          upstream.close(() => resolve());
+        }),
+    );
+    const proxy = await startProxy({
+      guard: createSsrfGuard({ allowPrivateAddresses: true }),
+      logger: NOOP_LOGGER,
+      upstreamProxyUrl: `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`,
+      ...callbacks,
+    });
+
+    await connectThrough(proxy.port, "chained-refusal.test:443");
+
+    expect(callbacks.otherFailures).toEqual(["chained-refusal.test"]);
+    expect(callbacks.certificateRejections).toEqual([]);
   });
 });

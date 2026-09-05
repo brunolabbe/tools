@@ -73,6 +73,15 @@ export interface BrowserResolverOptions {
   hlsParser?: HlsParser;
   dashParser?: DashParser;
   quietMs?: number;
+  /**
+   * Passed to the pool this resolver builds for itself — see
+   * `BrowserPoolOptions.proxyRootSpkiSha256`, which carries the reasoning.
+   *
+   * **Ignored when `pool` is supplied**, on the same rule `dispose` follows: a
+   * pool handed in belongs to the caller, and its browsers may already be
+   * launched with launch flags of the caller's choosing.
+   */
+  proxyRootSpkiSha256?: string;
 }
 
 interface ProbeOutcome {
@@ -102,6 +111,9 @@ export class BrowserResolver implements Resolver {
           ? {}
           : { maxConcurrent: options.maxConcurrentBrowsers }),
         ...(options.headless === undefined ? {} : { headless: options.headless }),
+        ...(options.proxyRootSpkiSha256 === undefined
+          ? {}
+          : { proxyRootSpkiSha256: options.proxyRootSpkiSha256 }),
       });
     this.#hlsParser = options.hlsParser ?? parseHls;
     this.#dashParser = options.dashParser ?? parseDash;

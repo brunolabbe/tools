@@ -32,9 +32,32 @@
  * this process in plaintext**. The trade is that segment origins are verified at
  * all, which they were not. See `dl-27` and `00-ANALYSIS.md` §11.
  *
- * Only ffmpeg's proxy intercepts. Chromium and yt-dlp verify their own
- * connections without help, so the tiers keep a tunnelling proxy and keep seeing
- * origin certificates — `server.ts` starts one of each.
+ * ## Who is behind an intercepting proxy
+ *
+ * ffmpeg since `dl-27`; **the browser and yt-dlp tiers as well since `dl-37`**,
+ * on a second interception of their own. The tiers were left on a tunnel
+ * originally because they verify their own connections without help — true, and
+ * true against their *own* trust stores, which nothing in this repo writes to.
+ * That is what made `EGRESS_CA_FILE` unable to reach the two tiers that load the
+ * page. Terminating their TLS here hands them the operator's trust for free,
+ * because this proxy is the side that meets the origin.
+ *
+ * Two interceptions rather than one shared root, and the reason is a flag:
+ * `FFMPEG_ALLOW_UNVERIFIED_TLS` sets `verifyOrigins: false`, and it is named for
+ * ffmpeg. A shared interception would carry that policy onto Chromium and
+ * yt-dlp, silently widening the last-resort setting to the two tiers that read
+ * pages. `server.ts` therefore builds one per client, and pays two extra RSA
+ * keygens at boot for it — measured at 237 ms for four on this machine, and only
+ * when a tier is actually registered.
+ *
+ * ## What each client needs from this to trust the leaf
+ *
+ * ffmpeg takes `rootCaPath` as `-ca_file`. The two tiers cannot: Chromium on
+ * Linux reads NSS, which needs a `certutil` this image does not ship, and
+ * yt-dlp's PyInstaller build carries its own `certifi` bundle that wins over
+ * `SSL_CERT_FILE`. So they take `rootSpkiSha256` and `trustBundlePath` instead;
+ * both are documented where they are declared, and both were measured rather
+ * than assumed (`dl-37`).
  *
  * ## Why `node-forge`
  *
@@ -50,7 +73,7 @@
  * two of them. forge only signs.
  */
 
-import { generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync, X509Certificate } from "node:crypto";
 import fs from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
@@ -110,6 +133,50 @@ export interface TlsInterception {
   /** The generated root, PEM on disk, for ffmpeg's `-ca_file`. */
   rootCaPath: string;
   rootCaPem: string;
+  /**
+   * Base64 SHA-256 of the root's DER `SubjectPublicKeyInfo` — the value
+   * Chromium's `--ignore-certificate-errors-spki-list` takes, and the only way
+   * measured to work in this image.
+   *
+   * **It says "ignore errors for chains carrying this key", not "trust this
+   * root",** and the distinction is the whole of why it is safe here. What
+   * bounds it is that the key is generated per process by `generateRsaPem`
+   * above and **never written anywhere** — not to the temp directory, which
+   * holds certificates only — so no chain outside this process can carry it.
+   * A future that put the root's private key on disk would turn this flag into
+   * a machine-wide licence to impersonate any origin to Chromium, and that is
+   * the reason the key stays in memory rather than a tidiness preference.
+   *
+   * The root rather than the leaf, though `dl-37` measured both working
+   * (Chromium matches against every SPKI in the chain it built, and the proxy
+   * sends leaf-then-root). The root is the anchor whose trust is actually being
+   * conveyed, it is the shape mitmproxy and Burp document so a reader
+   * recognises it — and `leafFor` shares one key across every host today only
+   * as an issuing optimisation, so pinning the leaf would break silently the
+   * day somebody gives each host its own.
+   */
+  rootSpkiSha256: string;
+  /**
+   * The public roots **plus** the generated root, PEM on disk — yt-dlp's
+   * `SSL_CERT_FILE`.
+   *
+   * Merged, not replaced, and that is not theoretical tidiness: `SSL_CERT_FILE`
+   * replaces OpenSSL's default file exactly as ffmpeg's `-ca_file` replaces its
+   * store, so the generated root handed over on its own would fail every public
+   * origin the moment anything reached one directly. `dl-31` hit the identical
+   * trap on the undici side and answered it with the same `withSystemRoots`.
+   *
+   * A separate file from `rootCaPath` because the two clients want opposite
+   * things: ffmpeg is *only* ever talking to this proxy and its bundle must be
+   * the generated root alone, while yt-dlp's must not fail closed if some code
+   * path of its own goes around `--proxy`.
+   *
+   * The operator's own root is deliberately **not** in here. yt-dlp behind this
+   * proxy never meets an origin certificate — it meets a leaf minted above — so
+   * adding a private anchor to a client that cannot use it would widen trust
+   * for nothing.
+   */
+  trustBundlePath: string;
   /** Trust anchors for the origin side; `undefined` means the system store. */
   originCa: readonly string[] | undefined;
   verifyOrigins: boolean;
@@ -152,6 +219,24 @@ export function positiveDerIntegerHex(bytes: string): string {
 
 function newSerial(): string {
   return positiveDerIntegerHex(forge.random.getBytesSync(16));
+}
+
+/**
+ * Base64 SHA-256 over the certificate's DER `SubjectPublicKeyInfo`.
+ *
+ * Node's `X509Certificate` is doing the parsing rather than forge because this
+ * has to agree byte-for-byte with what BoringSSL hashes inside Chromium, and
+ * the round trip through a second ASN.1 implementation is one more place for
+ * that to be subtly wrong. `export({ type: "spki" })` is the same encoding
+ * Chromium hashes: the whole `SubjectPublicKeyInfo`, algorithm identifier
+ * included, not the bare key bits.
+ */
+function spkiSha256(certificatePem: string): string {
+  const spki = new X509Certificate(certificatePem).publicKey.export({
+    type: "spki",
+    format: "der",
+  });
+  return createHash("sha256").update(spki).digest("base64");
 }
 
 function generateRsaPem(): { privatePem: string; publicPem: string } {
@@ -215,6 +300,16 @@ export async function createTlsInterception(
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "downloader-egress-ca-"));
   const rootCaPath = path.join(dir, "egress-root.pem");
   await fs.writeFile(rootCaPath, rootCaPem, { encoding: "utf8", mode: 0o600 });
+  // Same directory, so one `close()` takes both down. See `trustBundlePath` for
+  // why it is a second file rather than the same one.
+  const trustBundlePath = path.join(dir, "egress-trust-bundle.pem");
+  await fs.writeFile(
+    trustBundlePath,
+    `${withSystemRoots(rootCaPem)
+      .map((pem) => pem.trim())
+      .join("\n")}\n`,
+    { encoding: "utf8", mode: 0o600 },
+  );
 
   const operatorCa =
     options.operatorCa === undefined || options.operatorCa === "" ? null : options.operatorCa;
@@ -270,6 +365,8 @@ export async function createTlsInterception(
   return {
     rootCaPath,
     rootCaPem,
+    rootSpkiSha256: spkiSha256(rootCaPem),
+    trustBundlePath,
     // One merge, in `operator-ca.ts`, shared with the dispatcher — because
     // "passing `ca` replaces the store" is a trap each client would otherwise
     // have to be told about separately, and dl-31 added a second client.

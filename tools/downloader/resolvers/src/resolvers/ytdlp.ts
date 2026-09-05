@@ -50,21 +50,40 @@ import { TIER_TRUST_STORE_HINT, ytdlpCertificateMarker } from "../tls-verificati
 /** yt-dlp JSON is far larger than a manifest; this is a memory bound, not a policy. */
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 
+/**
+ * **`| null` here is measured, not defensive.** yt-dlp writes JSON `null` for a
+ * field it has no value for as readily as it omits the key, and this interface
+ * is hand-written over parsed JSON — so a field typed `string` that arrives
+ * `null` is a lie the compiler then enforces on every reader.
+ *
+ * dl-37 found the one place that mattered: `realCodec` filtered `undefined`,
+ * `""` and `"none"` but not `null`, so a `null` survived as a *real* codec and
+ * `lookup()` called `.trim()` on it — a bare `TypeError` escaping as `INTERNAL`,
+ * "Something went wrong on our end", for an ordinary page.
+ *
+ * The `| null`s below are exactly the declared fields observed null from the
+ * real 2025.09.26 binary across three shapes (a `<video src>` page, a direct
+ * `.mp4`, a direct `.mp3`): `vcodec`, `vbr`, `abr`, `tbr`, `filesize_approx`.
+ * **`acodec` was not observed null** in any of the three — it came back absent
+ * or a string — so it is not widened here, and `realCodec` accepts `null`
+ * regardless because it is the same call. Widening on symmetry rather than on a
+ * measurement is how this list stops meaning anything.
+ */
 export interface YtDlpFormat {
   format_id?: string;
   url?: string;
   ext?: string;
   protocol?: string;
-  vcodec?: string;
+  vcodec?: string | null;
   acodec?: string;
   width?: number;
   height?: number;
   fps?: number;
-  tbr?: number;
-  vbr?: number;
-  abr?: number;
+  tbr?: number | null;
+  vbr?: number | null;
+  abr?: number | null;
   filesize?: number;
-  filesize_approx?: number;
+  filesize_approx?: number | null;
   format_note?: string;
   language?: string;
   container?: string;
@@ -127,6 +146,27 @@ export interface YtDlpResolverOptions {
    * exactly as it did before: declared sizes, unsampled.
    */
   fetch?: typeof globalThis.fetch;
+  /**
+   * A CA bundle to hand the child as `SSL_CERT_FILE`, for when `proxyUrl` names
+   * a proxy that terminates TLS and yt-dlp has to trust the leaf it mints
+   * (dl-37).
+   *
+   * **It takes two things, not one, and dl-37 measured which.** yt-dlp ships as
+   * a PyInstaller build carrying its own `certifi`, and it prefers that bundle
+   * over the system store — so `SSL_CERT_FILE` alone is read by OpenSSL and
+   * then never consulted, and the same is true of `REQUESTS_CA_BUNDLE` and
+   * `CURL_CA_BUNDLE`. All four states were run against a self-signed loopback
+   * origin: only `SSL_CERT_FILE` **together with** `--compat-options
+   * no-certifi` — which is yt-dlp's own documented switch back to
+   * `ssl.load_default_certs()` — verified the certificate. The other three
+   * failed identically to setting nothing at all.
+   *
+   * Set at construction rather than per request because it is one half of a
+   * pair with `proxyUrl`, and the API keeps that pair in one place; and only
+   * applied when a proxy is actually in use, since replacing the store for a
+   * direct fetch is a change nothing here asked for.
+   */
+  proxyTrustBundlePath?: string;
 }
 
 export class YtDlpResolver implements Resolver {
@@ -138,12 +178,14 @@ export class YtDlpResolver implements Resolver {
   readonly #binaryPath: string | undefined;
   readonly #enabled: boolean;
   readonly #fetch: typeof globalThis.fetch | undefined;
+  readonly #proxyTrustBundlePath: string | undefined;
 
   constructor(options: YtDlpResolverOptions = {}) {
     const env = options.env ?? process.env;
     this.#enabled = options.enabled ?? env["ENABLE_YTDLP_RESOLVER"] !== "false";
     this.#binaryArgs = options.binaryArgs ?? [];
     this.#fetch = options.fetch;
+    this.#proxyTrustBundlePath = options.proxyTrustBundlePath;
     const requested = options.binaryPath ?? env["YTDLP_PATH"] ?? "yt-dlp";
     this.#binaryPath = this.#enabled ? findExecutable(requested) : undefined;
   }
@@ -177,8 +219,19 @@ export class YtDlpResolver implements Resolver {
     }
 
     const args = [...this.#binaryArgs, "--dump-single-json", "--no-warnings", "--no-playlist"];
-    if (options.proxyUrl !== undefined && options.proxyUrl !== "") {
-      args.push("--proxy", options.proxyUrl);
+    const proxyUrl = options.proxyUrl === "" ? undefined : options.proxyUrl;
+    if (proxyUrl !== undefined) {
+      args.push("--proxy", proxyUrl);
+    }
+    // Both halves or neither: `SSL_CERT_FILE` is loaded by OpenSSL and then
+    // ignored unless this option sends yt-dlp back to the system store. See
+    // `proxyTrustBundlePath`.
+    const trustBundle =
+      proxyUrl === undefined || this.#proxyTrustBundlePath === ""
+        ? undefined
+        : this.#proxyTrustBundlePath;
+    if (trustBundle !== undefined) {
+      args.push("--compat-options", "no-certifi");
     }
     if (options.cookieHeader !== undefined && options.cookieHeader !== "") {
       args.push("--add-header", `Cookie:${sanitiseHeaderValue(options.cookieHeader)}`);
@@ -188,7 +241,12 @@ export class YtDlpResolver implements Resolver {
     }
     args.push(url.href);
 
-    const result = await runProcess(binary, args, options.signal);
+    const result = await runProcess(
+      binary,
+      args,
+      options.signal,
+      trustBundle === undefined ? undefined : { SSL_CERT_FILE: trustBundle },
+    );
     if (result.code !== 0) throw classifyFailure(result.stderr, result.code, url);
 
     let parsed: unknown;
@@ -286,8 +344,26 @@ function firstEntry(parsed: unknown): YtDlpInfo | undefined {
 }
 
 /** `"none"` is yt-dlp's way of saying "this stream is absent", not a codec name. */
-function realCodec(codec: string | undefined): string | undefined {
-  if (codec === undefined || codec === "" || codec === "none") return undefined;
+/**
+ * A codec string that names a stream, or `undefined` for every way yt-dlp says
+ * it does not.
+ *
+ * It says it four ways and they are not synonyms, which is why they are listed
+ * rather than collapsed. `"none"` is a **statement**: the stream is absent, and
+ * that is what an adaptive video-only format puts in `acodec`. The other three
+ * are **silence**: an absent key, an empty string, and `null` — yt-dlp's
+ * spelling of "I did not determine this", which its generic extractor emits for
+ * `vcodec` on any page it has no extractor for. Both readings answer this
+ * function the same way, because a caller can do nothing with either; the
+ * conflation is pre-existing and deliberate, and only the callers that also
+ * check `height` or `abr` can tell them apart at all.
+ *
+ * `null` was the missing one until dl-37, and it was the dangerous one to miss:
+ * it is the only value here that is *truthy against `undefined`*, so it did not
+ * degrade the answer — it survived as a codec and reached `.trim()`.
+ */
+function realCodec(codec: string | null | undefined): string | undefined {
+  if (codec === undefined || codec === null || codec === "" || codec === "none") return undefined;
   return codec;
 }
 
@@ -515,6 +591,7 @@ function runProcess(
   binary: string,
   args: readonly string[],
   signal: AbortSignal,
+  extraEnv?: NodeJS.ProcessEnv,
 ): Promise<ProcessResult> {
   return new Promise<ProcessResult>((resolve, reject) => {
     let child: ChildProcess;
@@ -523,6 +600,12 @@ function runProcess(
         // Never a shell: the URL and any operator-supplied cookie reach argv verbatim.
         shell: false,
         windowsHide: true,
+        // **Merged onto this process's environment, never replacing it.** The
+        // child needs `PATH`, `HOME` and whatever else the operator configured
+        // yt-dlp with; handing it `{ SSL_CERT_FILE }` alone would be a new bug
+        // wearing a trust fix's clothes. No `env` key at all when there is
+        // nothing to add, which is what it did before dl-37.
+        ...(extraEnv === undefined ? {} : { env: { ...process.env, ...extraEnv } }),
         // A process group on POSIX is what makes a tree kill possible below.
         detached: process.platform !== "win32",
         stdio: ["ignore", "pipe", "pipe"],

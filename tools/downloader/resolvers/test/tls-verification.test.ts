@@ -94,4 +94,15 @@ describe("TIER_TRUST_STORE_HINT", () => {
     expect(TIER_TRUST_STORE_HINT).toMatch(/if this is/i);
     expect(TIER_TRUST_STORE_HINT).toMatch(/details\.reason/);
   });
+
+  test("does not claim the anchor never reaches the tier, which dl-37 made false", () => {
+    // Reaching this hint at all means the tier met an origin certificate
+    // itself, so it is behind a tunnel — one configuration out of two since
+    // dl-37, where it was all of them when dl-34 wrote the sentence. The hint
+    // has to name the configuration and the way out of it, or an operator on
+    // the default arrangement reads a flat denial that is simply wrong.
+    expect(TIER_TRUST_STORE_HINT).toMatch(/FFMPEG_TLS_INTERCEPT/u);
+    expect(TIER_TRUST_STORE_HINT).toMatch(/tunnelling proxy/u);
+    expect(TIER_TRUST_STORE_HINT).not.toMatch(/^EGRESS_CA_FILE does not reach this tier\./u);
+  });
 });
