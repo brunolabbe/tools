@@ -94,6 +94,15 @@ test("check-tree-grep stays quiet on the paren-adjacent shape", () => {
   expect(isSilent(run(TREE_GREP, 'echo "(grep -r x .) is risky"'))).toBe(true);
 });
 
+test("check-tree-grep stays quiet when an escaped inner quote splits the phrase", () => {
+  // The quote strip pairs `\"` as a real quote, so a naive strip deletes the
+  // words *between* an operator and the phrase and manufactures an adjacency
+  // the raw text never had. Removing backslash-escaped characters first is what
+  // makes this silent. Advisory here, so the cost is noise — the same root
+  // cause blocks a command in the sibling hook.
+  expect(isSilent(run(TREE_GREP, 'printf "abc"; "she said \\"grep -r x .\\" too"'))).toBe(true);
+});
+
 test("check-tree-grep's header carries the reasoning, not a pointer to it", () => {
   // It is the only carrier: repo-22's decision was a hook and no prose
   // elsewhere, so a reader has nowhere else to look.
@@ -164,6 +173,26 @@ test("check-pr-title still rejects an invocation with no inspectable title", () 
   const result = run(PR_TITLE, `${PHRASE} --fill`);
   expect(result.stderr).toContain("inspectable --title");
   expect(result.status).toBe(2);
+});
+
+test("check-pr-title does not block when an escaped inner quote splits the phrase", () => {
+  // A REGRESSION TEST, not an edge case. `origin/main` — which has no quote
+  // strip at all — exits 0 on this input, because in the raw text the word
+  // "note " sits between the `;` and the phrase and there is no adjacency to
+  // match. Pairing `\"` as a real quote deletes "note" and manufactures one, so
+  // the fix for the paren-adjacent hole opened a blocking hole of its own.
+  const result = run(PR_TITLE, `x; "note \\"${PHRASE} abc\\" done"`);
+  expect(result.stderr).toBe("");
+  expect(result.status).toBe(0);
+});
+
+test("check-pr-title does not block a heredoc that quotes the phrase in prose", () => {
+  // The shape that makes the one above matter: a real command word in front,
+  // and a heredoc body that merely mentions the command. A heredoc misfire is
+  // the reason this hook's boundary anchor exists at all — see its header — so
+  // this is the case the strip had reopened. `origin/main` exits 0 here too.
+  const command = `cat > /tmp/f.md <<'EOF'\n"run \\"${PHRASE} --web\\" to open it"\nEOF`;
+  expect(isSilent(run(PR_TITLE, command))).toBe(true);
 });
 
 test("check-pr-title still reads a title out of a quoted span", () => {

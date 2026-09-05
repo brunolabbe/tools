@@ -210,10 +210,10 @@ one changelog line.
 **That cost lands on the implementation PR, not on the one that filed this
 ticket** — and the two are easy to conflate, so they are separated here. The
 filing PR builds no hook, so it is `docs(repo):`, which is `hidden` at
-`release-please-config.json:31` and ships no changelog line; a `fix(repo):` title
+`release-please-config.json:31` "Documentation" and ships no changelog line; a `fix(repo):` title
 on it would have announced behaviour that does not exist in the tree after it
 merges. **The PR that builds the hook is the `fix(repo):` one**, `fix` being not
-hidden at `release-please-config.json:27`, and it is the one that ships a
+hidden at `release-please-config.json:27` "Fixes", and it is the one that ships a
 changelog line. Whoever builds
 the hook should not read this paragraph as already accounted for. Check either
 title with `node scripts/commit-message.mjs --text "<title>"` before opening.
@@ -304,14 +304,14 @@ This gates a pull request that only _files_ repo-22 — no hook, no wiring exist
 
 **Model:** builder ran Opus explicitly (`model: "opus"`). My own context carries, verbatim: "You are powered by the model named Sonnet 5. The exact model ID is claude-sonnet-5." Cross-model gate confirmed both directions.
 
-**This record's citations are pinned to `5fed828`, the sha it reviewed** — added by repo-22's builder on 2026-09-05, and nothing the reviewer wrote was changed. `.claude/skills/orchestrate-tickets/reference/records.md` grew when #148 merged, so the `records.md:156` anchor below has moved in the working tree and a working-tree run reports it. That run is the wrong run for a record about another tree; this is the right one, and it passes:
+**This record's citations are pinned to `5fed828`, the sha it reviewed** — added by repo-22's builder on 2026-09-05, and nothing the reviewer wrote was changed. `.claude/skills/orchestrate-tickets/reference/records.md` grew when #148 merged, so the `records.md:156` "Measure that exit code without a pipe" citation below has moved in the working tree and a working-tree run reports it. That run is the wrong run for a record about another tree; this is the right one, and it passes:
 
 ```
 node scripts/citations.mjs docs/work/repo-22-grep-is-a-wrapper.md \
   --rev 5fed828 --section "The gate on this filing"
 ```
 
-→ exit `0`, `0 moved`, with the anchored citation below reported `ok`. **Do not quote that run's totals here.** Every `path:line` written in this paragraph is itself a citation the run counts, so a total pasted into the prose that produced it is stale the moment it lands — measured twice while writing this line. Pinned rather than repointed on purpose: repointing would rewrite a reviewer's evidence to match a tree it never saw, and `citations.mjs`'s own failure text prescribes the pin for exactly this case.
+→ exit `0`, `0 moved`, `0 unanchored`: every citation in this record now carries anchor text and every one of them resolves. **Do not quote that run's absolute totals here.** Every `path:line` written in this paragraph is itself a citation the run counts, so a count pasted into the prose that produced it is stale the moment it lands — measured twice while writing this line. `0 moved` is safe to state because it does not vary with how many times the record is mentioned. Pinned rather than repointed on purpose: repointing would rewrite a reviewer's evidence to match a tree it never saw, and `citations.mjs`'s own failure text prescribes the pin for exactly this case.
 
 | Claim                                                                                                               | Verification                                                                                                                                                                                            |
 | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -322,7 +322,7 @@ node scripts/citations.mjs docs/work/repo-22-grep-is-a-wrapper.md \
 | Wiring line is falsifiable today, passes after build                                                                | **verified** — current `.claude/settings.json`'s only `PreToolUse`/`Bash` hook is `check-pr-title.sh`; the cited `node -e` line names only that today                                                   |
 | Build artifacts are committable                                                                                     | **verified** — `git check-ignore` on both `.claude/settings.json` and `.claude/hooks/check-tree-grep.sh` exits 1 (not ignored)                                                                          |
 | B's measurement (all `.claude/rules/` files key on `paths:` globs)                                                  | **verified** — exactly 5 files, all with `paths:` frontmatter, none keyed on command content                                                                                                            |
-| `records.md` / `concurrency.md` citations resolve                                                                   | **verified** — `records.md:156` "Measure that exit code without a pipe", `concurrency.md:143` the `grep -oE` line                                                                                       |
+| `records.md` / `concurrency.md` citations resolve                                                                   | **verified** — `records.md:156` "Measure that exit code without a pipe", `concurrency.md:143` "sort -u -t- -k2 -n" the `grep -oE` line                                                                  |
 | `repo-20`, `repo-21` sibling content                                                                                | **not independently checkable** — both live on unmerged branches (PR #148, `origin/repo-cleanup-orchestrate-skill`) not present in this tree; not a defect, just outside what this worktree can confirm |
 | Log's disclosure (premature "through a script 4" figure; the unrecorded contaminated first fixture) survives intact | **verified** — present, unsoftened                                                                                                                                                                      |
 | `npm run check`, `npm run format`, `node scripts/status.mjs --json`, `-- --show repo-22`                            | **verified** — all exit 0; ticket file already correctly formatted                                                                                                                                      |
@@ -454,7 +454,7 @@ here, because the next agent reads Build first.
 and this is a workaround, not a fix.** It is not a style choice. The title
 originally opened with a backticked `` `grep` ``, which YAML reserves as an
 indicator character, so it had to be quoted — and `parseScalar`
-(`scripts/status.mjs:115-118`, **pinned to `23d4bc3`**, the sha this entry was
+(`scripts/status.mjs:115-118` "const trimmed = value.trim();", **pinned to `23d4bc3`**, the sha this entry was
 written against; #148 has since moved it) never strips quotes:
 
 ```js
@@ -492,7 +492,7 @@ type was wrong and why. It would have shipped a changelog line announcing a hook
 that does not exist in the tree after the merge. `kind` describes the work; the commit type describes the commit, and
 they diverge exactly here. Decision two now separates the two PRs so the
 `fix(repo):` note is not read as already spent. Measured: `docs` is `hidden` at
-`release-please-config.json:31`, `fix` is not at `release-please-config.json:27`,
+`release-please-config.json:31` "Documentation", `fix` is not at `release-please-config.json:27` "Fixes",
 and the two sibling filing PRs (#148, #149) both use `docs(repo):`.
 
 Both of those were originally written as a bare `` `:27` `` — shorthand, after
@@ -556,11 +556,13 @@ line was run as written, and every number below was measured here.
 - **`status` stays `ready`.** The gate has not run, and there is no ship
   authority on this branch. It moves to `done` in the commit that lands the gate
   record, which is also what keeps `reviewedButReady` empty
-  (`scripts/status.mjs:291`).
+  (`scripts/status.mjs:291` "export function reviewedButReady").
 - **Two stale citations in this file were found and deliberately left alone.**
   `node scripts/citations.mjs docs/work/repo-22-grep-is-a-wrapper.md` exits `1`:
-  the gate record's `records.md:156` anchor has moved, and the Log's
-  `scripts/status.mjs:115-118` no longer holds `parseScalar`. Both were written
+  the gate record's `records.md:156` "Measure that exit code without a pipe"
+  anchor has moved, and the Log's
+  `scripts/status.mjs:115-118` "const trimmed = value.trim();"
+  no longer holds `parseScalar`. Both were written
   against an earlier tip and moved when #148 merged; neither was introduced
   here, and `citations.mjs` runs in no workflow and in no `package.json` script,
   so this is not a red pipeline. Not repointed because one of them sits inside a
@@ -599,14 +601,122 @@ this filing"` resolves the anchor `ok` — `1 verified, 0 moved`. The Log's
   to another tree is not answerable by a run against this one. The pinned
   commands are in the record and the Log entry; do not "fix" the working-tree
   run by repointing.
-- **Deliberately not done: anchoring the nine unanchored citations.** The file
-  carries nine `path:line` citations with no anchor text, so the checker prints
-  them for hand judgement and verifies none. Anchoring them would make the pins
-  self-checking and is the obvious next improvement, but it edits nine
-  citations across two reviewers' records to fix something this ticket did not
-  cause. Named here rather than left silent.
+- **Every citation in this file is now anchored — `0 unanchored`, on the owner's
+  instruction and against this builder's recommendation to defer.** The
+  recommendation was to leave them: it edits citations inside two reviewers'
+  records for drift this branch did not cause. The owner overrode that, and the
+  override is the better call — an unanchored citation is one the checker prints
+  and verifies nothing about, so the two `--rev` pins were resting on hand
+  reading. They are now self-checking, which is the durable half. Only anchor
+  text was appended; no reviewer's wording was altered.
+- **The pinned runs, both measured without a pipe** — `$?` after a pipe is the
+  pipe's, which is the footgun `records.md` already records and which caught
+  this builder once while writing this entry:
+  - `--rev 5fed828 --section "The gate on this filing"` → `3 verified, 0 moved,
+0 unanchored`, exit `0`.
+  - `--section Log --rev 5fed828` → `5 verified, 1 moved`. The one that moves is
+    `scripts/status.mjs:291`, and that is correct: it was written by the "built"
+    entry against the current tree, not the filing tree. **The Log genuinely
+    cites two trees**, so no single run makes it clean, and that is a fact about
+    the Log rather than a defect to fix. A default working-tree run verifies
+    that citation and reports the five pinned ones.
+- **Anchor text must not wrap.** The anchor pattern forbids a newline, so an
+  anchor broken across two lines silently stops being an anchor. One was
+  introduced and caught here; `npm run format` was then re-run to confirm oxfmt
+  does not re-wrap the surviving ones. Worth knowing before adding an anchor to
+  a long prose line.
 - **Not measured: whether the pinned `--section` name stays unique.** The flag
   errors when a name matches more than one section, and this file has a second
   heading beginning "The gate on this filing". The exact match wins today and
   the run above proves it, but a third gate heading sharing that prefix would
   need the name rechecked.
+
+**2026-09-05 — the quote strip introduced a blocking regression, and it is now
+fixed in both hooks.** Raised by the gate, reproduced independently by the
+orchestrator and again by this builder, then answered by the owner: fix both
+halves here, rather than the narrower "fix the blocker, file the noise" the
+orchestrator recommended. One root cause in two places, and splitting it would
+leave the same bug half-fixed in the tree. **Accepted cost: a third subject on a
+branch that already carried two**, under one squash-merge line.
+
+- **It is branch-introduced, not inherited.** `origin/main`'s hook has no strip
+  at all, and on both reproductions the real `origin/main` file exits `0`
+  (silent) while this branch's exits `2` (blocks). The strip removes the words
+  between a shell operator and the phrase, manufacturing an adjacency the raw
+  text never had. The gate first framed this as a shared limitation and then
+  withdrew that framing on the orchestrator's measurement; the withdrawal is
+  right.
+- **The realistic shape is a heredoc, which is this hook's own origin case.**
+  The gate's reproduction needed a lone quoted string in command position — a
+  word bash would try to execute, so nothing anyone types. This builder then
+  found a shape with a real command word in front of it: writing a markdown file
+  with `cat > f.md <<'EOF'` whose body quotes the command in prose with an
+  escaped inner quote is blocked, and `origin/main` does not block it. The hook
+  exists **because** of a heredoc misfire — its own header says so — so this is
+  the fix reopening the hole it was written to close, not a new edge.
+- **Measured blast radius: 2 of 10** realistic escaped-quote shapes block, and
+  both are the lone-quoted-string form; every shape with a real command word in
+  front (`echo`, `git commit -m`, `node -e`, `printf`, `npm run`, `jq`) is
+  silent. The heredoc case is additional to those ten.
+- **The two halves are independent** — separate files, each with its own copy of
+  the `sed`. Only `check-pr-title.sh` blocks (`exit 2`); `check-tree-grep.sh`
+  fires spuriously but exits `0`, so that half is noise, not a block, and it has
+  no `main` baseline to regress from because the file is new.
+- **The fix is one `sed` clause per file**: `s/\\.//g` first, removing
+  backslash-escaped characters before the quote pairing runs, so a `\"` can no
+  longer be counted as a real quote. All three reproductions go silent, the
+  blast radius goes from **2 of 10 to 0 of 10**, and the 46-shape battery stays
+  at 0 unexpected. It fails in the safe direction for a blocking hook: any
+  residual error costs a missed warning, never a false block.
+- **The three reproductions are now tests, and they were watched going red.**
+  Removing only the new clause from both files fails exactly the three new tests
+  with the other twelve green: `scripts/test/hooks.test.ts:97`,
+  `scripts/test/hooks.test.ts:178` and `scripts/test/hooks.test.ts:189`. The
+  heredoc one is the load-bearing case — it has a real command word in front, so
+  unlike the gate's original it is a shape somebody would actually type.
+- **A claim in `check-pr-title.sh`'s header was measurably false and is gone.**
+  It said an odd quote count or an unstripped span "both cost a match, not a
+  false block, and neither has been observed". A false block had been observed
+  by then. The header now carries the mechanism instead.
+- **The gate's `low` was declined, not overlooked.** A `grep -r` split across a
+  backslash-newline continuation is still undetected — confirmed here, exit `0`
+  and silent. Joining continuations before matching would make the sibling
+  hook's per-line boundary anchor span lines, and that hook blocks; trading a
+  missed advisory warning for a possible false block is the wrong direction. Now
+  a named limitation in `check-tree-grep.sh`'s header.
+
+**2026-09-05 — why the strip looked correct when it was written, which is the
+part worth keeping.** This is the second time on this ticket that a guard passed
+its own acceptance and misfired on a shape nobody had listed. The mechanism is
+the same both times and it is not carelessness.
+
+- **The seven-shape table was derived from the defect it was fixing.** Decision
+  two's fix was measured against seven commands, and every one of them was
+  reached by asking "how does the paren-adjacent bug show up?" A test set built
+  that way proves the fix closes the case that motivated it. It cannot prove the
+  fix opens nothing, because nothing in it was chosen by anyone asking what the
+  _fix_ might break. The table showed `stripped` beating `naive` in every row —
+  which is exactly what a table drawn from the bug's own family would show even
+  if the strip were much worse in general.
+- **The two failure modes are not symmetric, and only one was imagined.** The
+  header reasoned about the strip removing _too much_ — that was the recorded
+  trap, that substituting the stripped text into the title extraction would
+  break every real invocation, and it was guarded with a test. Nobody asked what
+  removing text does to _adjacency_. Deleting a span does not only hide things;
+  it moves the survivors together. `x; "note \"…\" done"` has no adjacency in the
+  raw text and acquires one only because the strip removed the word in between.
+  A transformation that shortens a string can manufacture a match, and the whole
+  design treated stripping as monotonically safe.
+- **`origin/main` was the available control and was never run.** The one cheap
+  question — "does the version without this fix also do this?" — would have
+  labelled it a regression immediately. The first gate did not ask it either.
+  Both of us reasoned about the anchor; neither diffed the behaviour against the
+  tree the change was leaving.
+- **What actually caught it, twice, was the same technique:** running the guard
+  against inputs invented independently of the guard. The gate found the paren
+  case that way, and the quote-parity case that way. **So the rule this ticket
+  earns is: a guard's test set must contain shapes chosen by someone trying to
+  break the fix, not only shapes drawn from the bug.** The heredoc case is in
+  the suite for that reason — it was found by asking "what does this hook exist
+  to protect, and does the fix still protect it?", which is a different question
+  from "is the bug gone?".

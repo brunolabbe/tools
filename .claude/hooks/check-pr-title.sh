@@ -29,11 +29,21 @@ cmd="$(jq -r '.tool_input.command // empty')"
 # every real invocation turns into the "without an inspectable --title"
 # rejection instead. That is the trap in this three-line change.
 #
+# **Escaped quotes are removed first, and that clause is load-bearing.** Without
+# it the pairing counts a `\"` as a real quote, so `"note \"gh pr create x\" y"`
+# strips to `note` being *deleted* and the phrase left sitting right after the
+# `;` — an adjacency the raw text never had. The strip does not merely fail to
+# help there, it manufactures the match. Measured: `origin/main`, which has no
+# strip at all, is silent on that input; this hook without the escape clause
+# exits 2 and blocks a harmless command. The realistic shape is a heredoc whose
+# body quotes this command in prose — which is the misfire recorded above as the
+# reason this hook exists, so the strip had reopened the hole it was written to
+# close. Found by the repo-22 gate probing shapes the fix's own tests did not.
+#
 # It strips per line, because the anchor is applied per line. A quoted span that
-# spans a newline is not stripped, and a command with an odd number of quotes
-# can strip the wrong side — both cost a match, not a false block, and neither
-# has been observed.
-bare="$(printf '%s' "$cmd" | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g")"
+# genuinely spans a newline is still not stripped; that costs a match, not a
+# false block.
+bare="$(printf '%s' "$cmd" | sed -E "s/\\\\.//g; s/'[^']*'//g; s/\"[^\"]*\"//g")"
 
 # Match only where the command is actually being INVOKED — at the start, or after
 # a shell operator. A plain substring test also fires on the string appearing

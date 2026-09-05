@@ -45,6 +45,15 @@
 # Advisory, never blocking. Most searches genuinely want the ignore rules, so
 # this fires on a correct command far more often than on a mistaken one and a
 # blocking exit 2 would be wrong. Filed and reasoned as repo-22.
+#
+# **Named limitation, measured and accepted:** a `grep -r` split across a
+# backslash-newline continuation is not detected, because the match is applied
+# per line and neither line carries the whole pattern. That costs a warning that
+# should have appeared, never a wrong one. Joining continuations first would
+# make the sibling hook's per-line boundary anchor span lines, and that hook
+# blocks — trading a missed advisory here for a possible false block there is
+# the wrong direction. Raised as a low by the repo-22 gate and declined on that
+# reasoning, not overlooked.
 set -uo pipefail
 
 # No `cd`: unlike the sibling hooks this reads nothing out of the tree.
@@ -53,9 +62,14 @@ cmd="$(jq -r '.tool_input.command // empty')"
 
 # Strip quoted spans before the boundary test, so a `grep -r ...` that is only
 # being *quoted* — in an echo, a message, a search pattern — is not read as one
-# being run. Why that matters, and the measurement behind this exact sed, is in
-# the sibling hook: .claude/hooks/check-pr-title.sh. Do not restate it here.
-bare="$(printf '%s' "$cmd" | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g")"
+# being run. Why that matters, why escaped quotes must be removed first, and the
+# measurement behind this exact sed, is in the sibling hook:
+# .claude/hooks/check-pr-title.sh. Do not restate it here.
+#
+# This half was a defect in new code rather than a regression: the file is new,
+# so there was no earlier behaviour to break. It also only ever warns, so the
+# same root cause costs noise here and a blocked command there.
+bare="$(printf '%s' "$cmd" | sed -E "s/\\\\.//g; s/'[^']*'//g; s/\"[^\"]*\"//g")"
 
 # Match `grep` only as the command word of a simple command — at the start or
 # after a shell operator. That is exactly when the bash function fires: under
