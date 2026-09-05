@@ -148,6 +148,36 @@ export interface EgressProxyOptions {
    * rejected in its favour.
    */
   onOtherConnectFailure?: ((host: string) => void) | undefined;
+  /**
+   * Called with the CONNECT target's host whenever a `CONNECT` to it
+   * **succeeded** — the tunnel opened, and in terminating mode only after this
+   * proxy verified the origin's certificate and issued a leaf for it.
+   *
+   * The third outcome, and dl-38 is why there is one. The two hooks above
+   * between them describe every way a `CONNECT` can *fail*, which is enough to
+   * spot two failing outcomes colliding on one host and is not enough to spot a
+   * failing one colliding with a working one. A load-balanced host with one
+   * broken backend and one healthy one produces exactly that: the broken
+   * backend's `CONNECT` is refused and recorded, the healthy backend's
+   * completes and is recorded nowhere, and the tier that used the healthy one
+   * inherits the other one's certificate verdict for an outcome it reached on
+   * its own terms. `TlsRejectionLog.recordSuccess` is what reads this.
+   *
+   * **Fires for a tunnelled `CONNECT` as well as a terminated one**, for the
+   * same reason `onOtherConnectFailure` does: this proxy reports what happened
+   * and `tls-rejections.ts` decides what it means. With interception off it is
+   * inert either way, because nothing records a certificate refusal there for
+   * it to conflict with.
+   *
+   * **Deliberately not fired for a plain-HTTP request.** The absolute-form
+   * handler above never reaches a certificate, so counting one as a success
+   * would suppress reattachment for the ordinary `http://host/` → `https://host/`
+   * redirect — a page fetched over plain HTTP and then genuinely cert-refused
+   * over TLS on the same host, which is a case dl-34 exists to name rather than
+   * one to fall silent on. `onOtherConnectFailure` leaves that handler alone
+   * for the same reason.
+   */
+  onConnectEstablished?: ((host: string) => void) | undefined;
 }
 
 export interface EgressProxy {
@@ -531,6 +561,10 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
         if (settled) return;
         if (intercept === null) {
           settled = true;
+          // Before the `200`, for the same reason `onCertificateRejected` fires
+          // before `fail`: the record has to already be there when whatever the
+          // client does next surfaces.
+          options.onConnectEstablished?.(host);
           establish(clientSocket, serverSocket, head);
           return;
         }
@@ -542,6 +576,12 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           intercept,
           onEstablished: () => {
             settled = true;
+            // `terminateTls` calls this only once the origin handshake has
+            // verified *and* a leaf has been issued, so it is the point at
+            // which "this proxy accepted this host's certificate" is true —
+            // which is the fact `TlsRejectionLog` needs, not merely "a socket
+            // opened".
+            options.onConnectEstablished?.(host);
           },
           // The reason phrase is not decoration. ffmpeg logs a proxy's status
           // line verbatim — `[httpproxy] HTTP error 502 <phrase>` — so this is

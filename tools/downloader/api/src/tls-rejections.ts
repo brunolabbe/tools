@@ -72,20 +72,42 @@
  * where outcome-tracking correctly enriches both because no non-certificate
  * refusal was ever recorded for that host at all.
  *
+ * ## The success this used to be blind to (dl-38)
+ *
+ * Until dl-38 the two maps above tracked *failures* only, and a load-balanced
+ * origin with one broken backend and one healthy one, probed concurrently, was
+ * not covered: the broken backend's `CONNECT` is refused and recorded as a
+ * certificate rejection, as intended, but the healthy backend's own connection
+ * completes cleanly and the tier can then legitimately return `NO_MEDIA_FOUND`
+ * on its own terms — no extractor for that page, nothing to do with
+ * certificates. With that success recorded nowhere, `since` saw only the
+ * genuine certificate rejection in the window and no conflicting outcome, and
+ * reattached `TLS_VERIFICATION_FAILED` onto a verdict that had nothing to do
+ * with TLS.
+ *
+ * `recordSuccess` closes it, and the rule it joins is the one already here
+ * rather than a new one: **more than one kind of outcome for a host inside a
+ * caller's window means this cannot tell which one was the caller's**, so it
+ * declines. A success is a kind of outcome.
+ *
+ * **Why that is not the "suppress on any concurrent request" rule rejected
+ * above.** That rule counts *requests*; this one counts outcomes that
+ * disagree. The common case dl-37 serves — one broken private-root origin,
+ * probed twice concurrently, both genuinely cert-refused — records two
+ * certificate refusals and nothing else, so both still enrich. The test named
+ * `"two genuine certificate refusals on one host, with no other outcome, both
+ * enrich"` is that case, and it is the guard on this file's whole design.
+ *
  * ## What this still does not close, named rather than assumed away
  *
- * `recordOtherFailure` tracks *failures*, never a success — and that is the one
- * residual left. A load-balanced origin with one broken backend and one healthy
- * one, probed concurrently, is not fully covered: the broken backend's `CONNECT`
- * is refused and recorded as a certificate rejection, as intended, but the
- * healthy backend's own connection can complete cleanly and the tier can then
- * legitimately return `NO_MEDIA_FOUND` on its own terms — no extractor for that
- * page, nothing to do with certificates. Since that success was never recorded
- * anywhere, `since` sees only the genuine certificate rejection in the window
- * and no conflicting outcome, and reattaches `TLS_VERIFICATION_FAILED` onto a
- * verdict that had nothing to do with TLS. Closing it would mean recording
- * successes too — a materially larger surface for a narrower edge case than the
- * one this file already closes precisely. See dl-38.
+ * **A host is keyed without its port**, so a healthy `:443` and a broken
+ * `:8443` on one hostname read as one host producing two outcomes, and a
+ * genuine refusal on the second is suppressed rather than reattached. Keying by
+ * port instead would need `resolvers.ts` to pass one, and `URL.port` is empty
+ * for a default port where a `CONNECT` authority always carries one — so the
+ * fix for a rarer case would risk never matching at all in the common one. This
+ * fails in the direction the header argues for throughout: a suppressed
+ * enrichment is the pre-dl-37 experience, a wrong one would be new.
  */
 
 /** How many hosts are remembered, per kind. Small on purpose — see `record`. */
@@ -136,6 +158,8 @@ export class TlsRejectionLog {
   readonly #certificates = new Map<string, { code: string; at: number }>();
   /** Latest non-certificate refusal per host — see `recordOtherFailure`. */
   readonly #otherFailures = new Map<string, number>();
+  /** Latest successful CONNECT per host — see `recordSuccess`. */
+  readonly #successes = new Map<string, number>();
   readonly #now: () => number;
   readonly #max: number;
 
@@ -168,6 +192,20 @@ export class TlsRejectionLog {
   }
 
   /**
+   * Files that this proxy **completed** a `CONNECT` to `host` — in terminating
+   * mode, that it verified the origin's certificate and issued a leaf for it.
+   *
+   * Exists for the same reason `recordOtherFailure` does and counts the same
+   * way: it is a second kind of outcome for a host, so a certificate refusal
+   * recorded beside it inside one caller's window is not attributable to that
+   * caller. See the header's dl-38 section for the load-balanced origin this
+   * closes, and for why counting outcomes is not the same as counting requests.
+   */
+  recordSuccess(host: string): void {
+    touch(this.#successes, host, this.#now(), this.#max);
+  }
+
+  /**
    * The verify code this proxy refused `host` with **during** the caller's own
    * attempt, or `undefined` — including when it will not guess.
    *
@@ -175,17 +213,22 @@ export class TlsRejectionLog {
    * certificate half self-expiring: there is no TTL to tune and no sweep to
    * run, because a record older than the call that is asking is by
    * construction not about it. The same rule is applied to
-   * `#otherFailures`: a non-certificate refusal recorded **inside** the same
-   * window means this host produced more than one outcome during it, which is
-   * exactly the case a real Chromium cannot tell apart from a certificate
-   * refusal on its own — so this returns `undefined` rather than reattach a
-   * code that might belong to the other outcome.
+   * `#otherFailures` and to `#successes`: an outcome of either kind recorded
+   * **inside** the same window means this host produced more than one outcome
+   * during it, which is exactly the case a real Chromium cannot tell apart from
+   * a certificate refusal on its own — so this returns `undefined` rather than
+   * reattach a code that might belong to the other outcome. A success from
+   * before the window is as irrelevant as a stale refusal, by the same rule and
+   * for the same reason.
    */
   since(host: string, at: number): string | undefined {
-    const entry = this.#certificates.get(key(host));
+    const name = key(host);
+    const entry = this.#certificates.get(name);
     if (entry === undefined || entry.at < at) return undefined;
-    const otherAt = this.#otherFailures.get(key(host));
+    const otherAt = this.#otherFailures.get(name);
     if (otherAt !== undefined && otherAt >= at) return undefined;
+    const successAt = this.#successes.get(name);
+    if (successAt !== undefined && successAt >= at) return undefined;
     return entry.code;
   }
 }

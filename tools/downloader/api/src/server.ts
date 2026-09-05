@@ -207,6 +207,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
           onOtherConnectFailure: (host: string) => {
             tierRejections.recordOtherFailure(host);
           },
+          // The third outcome, and dl-38's whole fix: a host that *worked* for
+          // one connection while a sibling connection to it was cert-refused is
+          // a host this log cannot attribute a certificate verdict on. Without
+          // it, a load-balanced origin's healthy backend hands its own
+          // `NO_MEDIA_FOUND` to a caller that gets told it was the certificate.
+          onConnectEstablished: (host: string) => {
+            tierRejections.recordSuccess(host);
+          },
         }),
   });
 

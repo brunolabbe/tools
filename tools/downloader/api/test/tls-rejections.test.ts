@@ -207,3 +207,108 @@ describe("what happens when the same host produced more than one outcome", () =>
     expect(log.since("cdn.example", startedAt)).toBe("DEPTH_ZERO_SELF_SIGNED_CERT");
   });
 });
+
+/**
+ * dl-38: the third outcome. `recordOtherFailure` above tracks the case where
+ * two *failing* outcomes collide on one host; a host that answered one
+ * connection cleanly while refusing another was recorded nowhere, so `since`
+ * saw a lone certificate refusal and reattached it to a caller whose own
+ * connection had worked.
+ *
+ * The load-balanced origin this is about: one hostname, two backends, one
+ * serving a broken certificate and one healthy. The healthy backend's caller
+ * reaches `NO_MEDIA_FOUND` on its own terms — no extractor for the page — and
+ * must keep that verdict.
+ *
+ * **Half of these tests assert that reattachment still happens**, and that is
+ * deliberate: recording successes moves this file measurably closer to
+ * "suppress whenever anything else touched the host", which the header rejects
+ * by name. A suite that only ever asserted `toBeUndefined()` would stay green
+ * for a `since` that had stopped answering at all.
+ */
+describe("a host that both worked and was refused inside one window (dl-38)", () => {
+  test("a successful CONNECT recorded in the caller's window blocks reattachment", () => {
+    // The ticket's scenario, at this file's own level: job A lands on the
+    // broken backend and is cert-refused; job B lands on the healthy one and
+    // its CONNECT completes. B's own window contains both, so B is told
+    // nothing rather than told it was the certificate.
+    const time = clock();
+    const log = new TlsRejectionLog({ now: time.now });
+
+    const startedAt = time.now();
+    time.advance(5);
+    log.record("cdn.example", "DEPTH_ZERO_SELF_SIGNED_CERT");
+    time.advance(5);
+    log.recordSuccess("cdn.example");
+
+    expect(log.since("cdn.example", startedAt)).toBeUndefined();
+  });
+
+  test("the order does not matter — success first still blocks it", () => {
+    const time = clock();
+    const log = new TlsRejectionLog({ now: time.now });
+
+    const startedAt = time.now();
+    time.advance(5);
+    log.recordSuccess("cdn.example");
+    time.advance(5);
+    log.record("cdn.example", "DEPTH_ZERO_SELF_SIGNED_CERT");
+
+    expect(log.since("cdn.example", startedAt)).toBeUndefined();
+  });
+
+  test("a success from before the caller started does not block it", () => {
+    // The staleness rule applied to the third map, and the first of the
+    // over-suppression guards: successes accumulate on a long-lived log, so
+    // without this every host that has ever worked would be permanently
+    // unenrichable — the whole feature, silently off.
+    const time = clock();
+    const log = new TlsRejectionLog({ now: time.now });
+
+    log.recordSuccess("cdn.example");
+    time.advance(600_000);
+    const startedAt = time.now();
+    log.record("cdn.example", "DEPTH_ZERO_SELF_SIGNED_CERT");
+
+    expect(log.since("cdn.example", startedAt)).toBe("DEPTH_ZERO_SELF_SIGNED_CERT");
+  });
+
+  test("a success on a different host does not block it", () => {
+    // A page loads its own origin fine and its media host is refused: the
+    // ordinary shape of what dl-34 exists to name, and it must stay named.
+    const time = clock();
+    const log = new TlsRejectionLog({ now: time.now });
+
+    const startedAt = time.now();
+    log.record("cdn.example", "DEPTH_ZERO_SELF_SIGNED_CERT");
+    log.recordSuccess("page.example");
+
+    expect(log.since("cdn.example", startedAt)).toBe("DEPTH_ZERO_SELF_SIGNED_CERT");
+  });
+
+  test("an evicted success entry stops blocking, same as any other cache", () => {
+    const log = new TlsRejectionLog({ max: 1 });
+    const startedAt = Date.now();
+    log.recordSuccess("cdn.example");
+    // Evicts cdn.example's success entry — the cap applies to this map
+    // independently, exactly as it does to the other two.
+    log.recordSuccess("filler.example");
+    log.record("cdn.example", "DEPTH_ZERO_SELF_SIGNED_CERT");
+
+    expect(log.since("cdn.example", startedAt)).toBe("DEPTH_ZERO_SELF_SIGNED_CERT");
+  });
+
+  test("the two spellings of an IPv6 host are the same host here too", () => {
+    // The proxy files a success from a CONNECT authority (`::1`) and the
+    // resolver asks with `URL.hostname` (`[::1]`). Unnormalised, this map
+    // would be the one place the suppression silently never fires.
+    const time = clock();
+    const log = new TlsRejectionLog({ now: time.now });
+
+    const startedAt = time.now();
+    log.record("::1", "DEPTH_ZERO_SELF_SIGNED_CERT");
+    log.recordSuccess("::1");
+
+    expect(log.since("[::1]", startedAt)).toBeUndefined();
+  });
+});
