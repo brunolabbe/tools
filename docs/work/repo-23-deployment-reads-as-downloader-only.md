@@ -3,7 +3,7 @@ id: repo-23
 tool: repo
 title: The deployment page reads as downloader-only for 286 lines before it is repo-wide
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -264,3 +264,43 @@ One low finding, no med or high. PASS per the rubric.
   `sed -n '1,286p;474,530p'` over `git show c37cab9:docs/02-DEPLOYMENT.md`, piped
   through `command grep -o downloader | wc -l` (19) and
   `command grep -o planner | wc -l` (12).
+
+- **2026-09-05** — Built. The signpost is four sentences inserted after the
+  intro paragraph and before the `---` rule that separates the intro from the
+  walkthrough, so it lands above `## Shape` without becoming part of it. Pure
+  addition: `git diff --numstat origin/main -- docs/02-DEPLOYMENT.md` is
+  `15 0`, and the heading list is byte-identical before and after (21 `^#`
+  lines, `diff` clean), so nothing was moved, renamed or split. 530 → 545
+  lines. Counts after the change: `planner` 32, `downloader` 24 — planner still
+  leads, and the margin widened rather than narrowed.
+- **2026-09-05** — **The Build's adr/004 link is written from the wrong file.**
+  Step 1 gives `[adr/004](../adr/004-one-compose-fragment-per-tool.md)`, which
+  is correct relative to this ticket in `docs/work/` and wrong relative to
+  `docs/02-DEPLOYMENT.md`, where it would resolve to `adr/` outside `docs/`.
+  Used `./adr/004-one-compose-fragment-per-tool.md`, matching the citation the
+  page already carries lower down (`docs/02-DEPLOYMENT.md:298` at `c37cab9`).
+  All 21 relative links and both new in-page anchors were resolved
+  mechanically against the filesystem and against the heading slugs; nothing in
+  `npm run check` validates either, so this was a hand check and is recorded as
+  one.
+- **2026-09-05** — **The page carries no `file:line` citations of its own** —
+  `node scripts/citations.mjs docs/02-DEPLOYMENT.md` reports `0 citations` —
+  so there was nothing on the page to re-resolve. Two other files cite _into_
+  it by line, and both now point 15 lines high:
+  `docs/work/repo-1-generated-status-tables.md:119` → `02-DEPLOYMENT.md:256`
+  (was the rate-limit note, now a blank line; the text moved to `:271`) and
+  `tools/downloader/docs/work/dl-32-the-job-list-has-no-caller.md:118` →
+  `02-DEPLOYMENT.md:141` (was the `01-ARCHITECTURE.md` link, now a blank line;
+  moved to `:156`). **`citations.mjs` cannot see this**: both are `unanchored`,
+  so it only checks the line exists, and its four counts are identical before
+  and after (23 citations / 7 unresolvable for repo-1, 38 / 0 for dl-32).
+  Deliberately not fixed — `Files:` says this file and nothing else, and both
+  are historical records describing the tree they reviewed, which is the same
+  convention this ticket applies to its own `## Why`. Raised to the
+  orchestrator rather than resolved here.
+- **2026-09-05** — Build step 2 honoured: the `## Shape` diagram is untouched,
+  and I agree with the reasoning. A second container box would have to show a
+  second subdomain, a second service and the shared `edge` network to be
+  truthful, which is `## Adding the second tool` redrawn 460 lines early; the
+  sentence above the diagram now tells the reader the box is an example, which
+  is the cheaper half of the same job.

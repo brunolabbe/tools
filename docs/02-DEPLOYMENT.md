@@ -8,6 +8,21 @@ cannot be a file in this repo — the hostname, the certificate, the login polic
 lives in the Cloudflare dashboard, and is written out below so it is reviewable
 even though it is not version controlled.
 
+**This page is repo-wide, and the downloader is its worked example rather than
+its subject** — the `downloader` in the diagram below, and in the commands that
+follow it, is the tool that happened to be first. The tunnel, the login policy
+and the version scheme are one story for whatever gets published, which is why
+deployment lives here rather than under a tool, and why
+[adr/004](./adr/004-one-compose-fragment-per-tool.md) gives each tool a compose
+fragment of its own instead of a deployment story of its own. The planner
+arrives later, and twice:
+[`## Grounding the planner`](#grounding-the-planner-a-routing-engine-and-a-geocoder)
+is what it takes to make its distances real, and
+[`## Adding the second tool`](#adding-the-second-tool) re-reads the walkthrough
+above as a delta — the tunnel does not change, and the Access policy must not be
+copied. A reader who stops before those two has read one tool's walkthrough, not
+the page.
+
 ---
 
 ## Shape
