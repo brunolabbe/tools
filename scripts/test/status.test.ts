@@ -14,6 +14,7 @@ import {
   readyTickets,
   renderMarkdown,
   reviewedButReady,
+  withheldFromReady,
 } from "../status.mjs";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
@@ -128,6 +129,22 @@ const DANGLING = `${atRepo("repo-9")}: depends_on "repo-404", which is not a tic
 
 /** repo-12's, asserted whole: the file, the status it disputes, and why. */
 const GATED = `${at("pl-29")}: status is "ready" but the ticket carries a ## Review gate record, which nothing unstarted has`;
+
+/**
+ * repo-19's, and the two shapes it comes in.
+ *
+ * Up here with the other two rather than beside the cases that use them,
+ * because `WITHHELD_REPO9` is read by the `test.each` table further down whose
+ * arguments are evaluated at module load — a `const` declared in the repo-19
+ * section below would be in its temporal dead zone by then.
+ *
+ * These are **not** `problems`: the board is in good health when a ticket says
+ * it is waiting on a human, so neither line ever moves `--json`'s exit code.
+ */
+const WITHHELD_DECISION = `${at("pl-2")}: withheld from --ready — status is "needs-decision", so it waits on a human answering it rather than on a builder`;
+
+/** The other half of the account — the withholding `--ready` has always done. */
+const WITHHELD_REPO9 = `${atRepo("repo-9")}: withheld from --ready — waits on repo-404`;
 
 // ---------------------------------------------------------------------------
 // The real tickets
@@ -741,18 +758,32 @@ test("--write and --check are gone, and say so rather than being ignored", () =>
 // enumeration is deliberate — the defect was not "a mode misbehaves", it was
 // "the command does not run" — so each mode asserts that its own payload
 // arrived on stdout *and* that the warning arrived on stderr beside it.
+//
+// The expected stderr is per row rather than one constant, which is repo-19's
+// doing: `--ready` now also accounts for what it withheld, and `repo-9` is
+// withheld precisely *because* its dependency dangles. Kept exact per mode
+// rather than softened to `toContain` — the enumeration is the point, and a
+// mode gaining a line it should not have is what this case is for.
 test.each([
-  ["the default view", [] as string[], "• pl-2"],
-  ["--ready", ["--ready"], "pl-2\tplanner"],
-  ["--markdown", ["--markdown"], "[pl-2](tools/planner/docs/work/pl-2-slug.md)"],
-  ["--tool, on a tool the malformed ticket is not in", ["--tool", "planner"], "• pl-2"],
-  ["--show, on an unrelated ticket", ["--show", "pl-3"], "tools/planner/docs/work/pl-3-slug.md"],
-])("%s still renders beside a dangling dependency, and exits 0", (_name, args, expected) => {
-  const { stdout, stderr, status } = run(args, repoWithADanglingDependency());
-  expect(status).toBe(0);
-  expect(stdout).toContain(expected);
-  expect(stderr.trimEnd().split("\n")).toEqual([DANGLING]);
-});
+  ["the default view", [] as string[], "• pl-2", [DANGLING]],
+  ["--ready", ["--ready"], "pl-2\tplanner", [WITHHELD_REPO9, DANGLING]],
+  ["--markdown", ["--markdown"], "[pl-2](tools/planner/docs/work/pl-2-slug.md)", [DANGLING]],
+  ["--tool, on a tool the malformed ticket is not in", ["--tool", "planner"], "• pl-2", [DANGLING]],
+  [
+    "--show, on an unrelated ticket",
+    ["--show", "pl-3"],
+    "tools/planner/docs/work/pl-3-slug.md",
+    [DANGLING],
+  ],
+])(
+  "%s still renders beside a dangling dependency, and exits 0",
+  (_name, args, expected, onStderr) => {
+    const { stdout, stderr, status } = run(args, repoWithADanglingDependency());
+    expect(status).toBe(0);
+    expect(stdout).toContain(expected);
+    expect(stderr.trimEnd().split("\n")).toEqual(onStderr);
+  },
+);
 
 // The negative half of "every other ticket still renders": the same tree minus
 // its one malformed ticket produces byte-identical stdout for the views that
@@ -993,6 +1024,179 @@ test("a dangling dependency and a gated ready ticket are both reported", () => {
     `${at("pl-29")}: depends_on "pl-404", which is not a ticket`,
     GATED,
   ]);
+});
+
+// ---------------------------------------------------------------------------
+// A ticket waiting on a human — repo-19
+// ---------------------------------------------------------------------------
+
+// `status: ready` carried two meanings — *unclaimed* and *dispatchable* — and
+// only the first was recorded anywhere, because `ready` was a ticket's first
+// state and there was nothing before it. Measured on `origin/main@7fe18af`,
+// six of the seven tickets `--ready` returned carried a heading naming a
+// decision their own page said must not be settled by whoever picked it up.
+// `needs-decision` is that missing first state, and two properties are what it
+// has to buy: `--ready` stops offering the work, and it says that it did.
+
+// Done when 1, at the unit: one startable ticket and one waiting on a decision,
+// in a fixture tree rather than against the real board — which moves under this
+// file, and moved twice while this ticket was open.
+test("a ticket waiting on a decision is not ready, and the one beside it still is", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1"),
+    [at("pl-2")]: pl("pl-2", { status: "needs-decision" }),
+  });
+  expect(readyTickets(readTickets(root)).map((t) => t.id)).toEqual(["pl-1"]);
+});
+
+// Done when 1 and 3 together, through the CLI, which is where the board is
+// actually read.
+test("--ready lists the startable ticket and says on stderr what it withheld and why", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1"),
+    [at("pl-2")]: pl("pl-2", { status: "needs-decision" }),
+  });
+  const { stdout, stderr, status } = run(["--ready"], root);
+  expect(status).toBe(0);
+  expect(stdout.trimEnd().split("\n")).toEqual(["pl-1\tplanner\tthe pl-1 thing"]);
+  expect(stderr.trimEnd().split("\n")).toEqual([WITHHELD_DECISION]);
+});
+
+// **The sharpest case, and the failure mode the notice exists for.** With every
+// candidate withheld, stdout falls back to `nothing is ready and unblocked` —
+// which is what an empty board says too. A reader told only that has been given
+// a quieter wrong answer than the one this ticket was filed about.
+test("--ready withholding everything still says why, rather than reading as an empty board", () => {
+  const root = repoWith({ [at("pl-2")]: pl("pl-2", { status: "needs-decision" }) });
+  const { stdout, stderr, status } = run(["--ready"], root);
+  expect(status).toBe(0);
+  expect(stdout.trimEnd()).toBe("nothing is ready and unblocked");
+  expect(stderr.trimEnd().split("\n")).toEqual([WITHHELD_DECISION]);
+});
+
+// The notice is the *whole* account of what `--ready` did not show, not just
+// the rows this ticket newly removed. One listing one of two reasons re-creates
+// the defect for the other, and a reader would take the list for complete.
+// `in-flight` is deliberately not in it: `--ready` has never offered picked-up
+// work and nobody reads its absence as a withholding.
+test("the withheld notice is the whole account, and in-flight work is not part of it", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1"),
+    [at("pl-2")]: pl("pl-2", { status: "needs-decision" }),
+    [at("pl-3")]: pl("pl-3", { depends_on: "[pl-2]" }),
+    [at("pl-4")]: pl("pl-4", { status: "in-flight" }),
+  });
+  expect(withheldFromReady(readTickets(root)).map((w) => [w.id, w.reason])).toEqual([
+    [
+      "pl-2",
+      'status is "needs-decision", so it waits on a human answering it rather than on a builder',
+    ],
+    ["pl-3", "waits on pl-2"],
+  ]);
+});
+
+// The priority rule `withheldFromReady` documents at its reason ternary,
+// exercised directly rather than only through `--show`'s closing line (which
+// covers the same combination one view over): a ticket can carry an unmet
+// decision *and* an unmet dependency, and the decision is the reason reported —
+// answering the dependency would still leave it unstartable, so it is the one a
+// reader acts on.
+test("withheldFromReady reports the decision, not the dependency, when a ticket carries both", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "needs-decision", depends_on: "[pl-2]" }),
+    [at("pl-2")]: pl("pl-2"),
+  });
+  expect(withheldFromReady(readTickets(root)).map((w) => [w.id, w.reason])).toEqual([
+    [
+      "pl-1",
+      'status is "needs-decision", so it waits on a human answering it rather than on a builder',
+    ],
+  ]);
+});
+
+// Done when 6, and the reason the notice cannot be a `problem`: a ticket
+// waiting on a decision is a board in good health saying so, not a board the
+// pipeline should refuse. `--json`'s exit code is the whole of `ci.yml`'s
+// ticket gate, so routing this through `problems` would fail every reader's
+// pipeline the moment somebody filed a question.
+test("a ticket waiting on a decision is a healthy board, so --json exits 0 and stays quiet", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1"),
+    [at("pl-2")]: pl("pl-2", { status: "needs-decision" }),
+  });
+  const { stdout, stderr, status } = run(["--json"], root);
+  expect(status).toBe(0);
+  expect(stderr).toBe("");
+  const payload = JSON.parse(stdout);
+  expect(payload.problems).toEqual([]);
+  expect(payload.tickets.map((t: { id: string; status: string }) => [t.id, t.status])).toEqual([
+    ["pl-1", "ready"],
+    ["pl-2", "needs-decision"],
+  ]);
+});
+
+// `--show` is the per-ticket view CLAUDE.md sends a reader to, and its closing
+// line is the verdict. `unblocked` there is the same lie `--ready` was telling:
+// nothing in `depends_on` is holding this ticket up, and it is still not
+// startable.
+test("--show on a ticket waiting on a decision does not call it unblocked", () => {
+  const root = repoWith({ [at("pl-2")]: pl("pl-2", { status: "needs-decision" }) });
+  const { stdout } = run(["--show", "pl-2"], root);
+  expect(stdout).toMatch(/status\s+needs-decision/);
+  expect(closingLine(stdout)).toBe(
+    "  waiting on a decision — not startable until someone answers it",
+  );
+  expect(stdout).not.toContain("unblocked");
+  expect(stdout).not.toContain("nothing to pick up");
+});
+
+// Both at once, because a ticket can carry a question *and* a dependency, and
+// a line naming only the question would read as startable once it is answered.
+test("--show says both when a decision and a dependency are outstanding", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "in-flight" }),
+    [at("pl-2")]: pl("pl-2", { status: "needs-decision", depends_on: "[pl-1]" }),
+  });
+  expect(closingLine(run(["--show", "pl-2"], root).stdout)).toBe(
+    "  waiting on a decision — not startable until someone answers it; also blocked by pl-1 (in-flight)",
+  );
+});
+
+// The default view's own mark, and a bug the new status walks straight into:
+// the blocked suffix joins `depends_on`, so a ticket held up by a decision and
+// by nothing else rendered as `(waits on )` with an empty list after it.
+test("the default view marks a ticket waiting on a decision, and never says `waits on` with nothing after it", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1"),
+    [at("pl-2")]: pl("pl-2", { status: "needs-decision" }),
+  });
+  const { stdout, status } = run([], root);
+  expect(status).toBe(0);
+  expect(stdout).toContain("• pl-1   the pl-1 thing");
+  expect(stdout).toContain("? pl-2   the pl-2 thing (waits on a decision)");
+  expect(stdout).not.toContain("(waits on )");
+});
+
+// It is open work, and it has not started. `milestones` read `started` off
+// "any status that is not `ready`", which would have called a milestone holding
+// one unanswered question `in progress` — the same conflation, one view over.
+test("a ticket waiting on a decision is open work, and its milestone has not started", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "needs-decision", milestone: "P1" }),
+    [at("pl-2")]: pl("pl-2", { status: "in-flight", milestone: "P2" }),
+  });
+  expect(milestones(readTickets(root))).toEqual([
+    { milestone: "P1", done: 0, open: 1, dropped: 0, state: "not started" },
+    { milestone: "P2", done: 0, open: 1, dropped: 0, state: "in progress" },
+  ]);
+});
+
+test("--markdown lists a ticket waiting on a decision as open, carrying its status", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { status: "needs-decision" }) });
+  const { stdout, status } = run(["--markdown", "--tool", "planner"], root);
+  expect(status).toBe(0);
+  expect(stdout).toContain("| needs-decision |");
+  expect(stdout).not.toContain("None. Every ticket this tool has is closed.");
 });
 
 // ---------------------------------------------------------------------------
