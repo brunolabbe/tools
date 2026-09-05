@@ -17,7 +17,7 @@ accepts. The Build section assumes an answer and says which.
 
 ## Why
 
-`parseScalar` (`scripts/status.mjs:115-118`) returns the raw remainder of the
+`parseScalar` (`scripts/status.mjs:115-119`) returns the raw remainder of the
 line:
 
 ```js
@@ -209,7 +209,7 @@ half.
 **Assumes Option B for both helpers.** If another option is chosen, steps 1, 2
 and 4 change and the `Done when` lines must be rewritten with them.
 
-1. `scripts/status.mjs:115-118` — `parseScalar` throws a named error when the
+1. `scripts/status.mjs:115-119` — `parseScalar` throws a named error when the
    trimmed value both starts and ends with `"`, or with `'`, and is at least two
    characters long. The message names the file, the line and the key, matching
    the shape of the errors already raised in `parseFrontmatter`
@@ -310,15 +310,16 @@ node scripts/status.mjs --root "$R" --json
 5. `grep -n quot docs/01-TICKETS.md` → exit 1 (no match). `grep -n literal docs/01-TICKETS.md` → exit 0, matches only `docs/01-TICKETS.md:173`, an unrelated sentence about a gate applying rules "literally." Both exactly as claimed — the self-caught defect is real and correctly recorded rather than quietly fixed.
 6. `node scripts/status.mjs --json > /dev/null; echo $?` → 0. `npm run check` → exit 0. Passes today, as claimed (regression guard).
 
-**Corroborating citations, all verified exact**: `dl-25`'s title is literally `A CDN hostname containing "srt" classifies the track as SubRip` (`tools/downloader/docs/work/dl-25-srt-row-matches-a-hostname.md:4`); repo-19's title is `ready does not mean startable, and the board cannot say which`. repo-22 was quoted at `693e7f2` and still quoted at `e605d54` (both `git show`n directly), reworded at `4f63e10` (unquoted, phrase changed), whose own Log there contains the quoted "workaround, not a fix" and "the parser still keeps quotes on any title that genuinely needs them" text verbatim. `parseScalar` is exactly `scripts/status.mjs:115-118`; `parseList` exactly `:121-129`; the call site handing `file`/`line` only to `parseList` is exactly `:106`; `EXIT_ON_PROBLEMS = ["json"]` is exactly `:610`; `ci.yml`'s board gate is exactly `:115`; `parseFrontmatter`'s only caller outside `status.mjs` is `scripts/test/status.test.ts`, confirmed by grep across `scripts/`, `.claude/hooks/`, `.github/`. `repoWith`/`ticket`/`run` are exactly at `scripts/test/status.test.ts:29/40/97`.
+**Corroborating citations, all verified exact except one (below)**: `dl-25`'s title is literally `A CDN hostname containing "srt" classifies the track as SubRip` (`tools/downloader/docs/work/dl-25-srt-row-matches-a-hostname.md:4`); repo-19's title is `ready does not mean startable, and the board cannot say which`. repo-22 was quoted at `693e7f2` and still quoted at `e605d54` (both `git show`n directly), reworded at `4f63e10` (unquoted, phrase changed), whose own Log there contains the quoted "workaround, not a fix" and "the parser still keeps quotes on any title that genuinely needs them" text verbatim. `parseScalar` is exactly `scripts/status.mjs:115-119`; `parseList` exactly `:121-129`; the call site handing `file`/`line` only to `parseList` is exactly `:106`; `EXIT_ON_PROBLEMS = ["json"]` is exactly `:610`; `ci.yml`'s board gate is exactly `:115`; `parseFrontmatter`'s only caller outside `status.mjs` is `scripts/test/status.test.ts`, confirmed by grep across `scripts/`, `.claude/hooks/`, `.github/`. `repoWith`/`ticket`/`run` are exactly at `scripts/test/status.test.ts:29/40/97`.
 
 **Id uniqueness**: checked `docs/work/repo-2[0-9]*` across every remote branch (`dl-32-remove-job-list-route`, `dl-34-classify-tls-failures`, `dl-37-tiers-onto-terminating-proxy`, `docs/record-2026-09-04-orchestration-batch`, `fix/dev-server-stale-contract`, `pl-17-image-closure`, `repo-18-citation-anchors`, `repo-19-needs-decision-status`, `repo-cleanup-orchestrate-skill`, `repo-file-grep-wrapper-ticket`, `worktree-pl-19-pin-through-the-browser`) plus `gh pr list --state all`. `repo-24` appears only on `repo-status-quoted-scalar-ticket`. `fix/dev-server-stale-contract` does carry `repo-25-citations-checker-misses-shorthand-references.md` — no collision, one above.
 
 **On the CLI-runs-not-tests substitution**: sound for a filing. `docs/01-TICKETS.md`'s "a ticket carries a decision or a reproduction" makes the reproduction itself the deliverable here, and I independently re-ran every one of those commands myself (not trusting the Log's numbers) against both scratch fixtures and the real board, getting identical results — the harder bar `unproven`/`verified` distinguishes.
 
+- **low** · The ticket's own citation `scripts/status.mjs:115-118` for `parseScalar` (`## Why` line 20, Build step 1 line 212 — two occurrences) stops one line short of the closing brace at 119; `parseList`'s adjacent citation `:121-129` includes its own closing brace, so the document used two conventions for the same kind of citation. Caught by the builder cross-checking this record before committing, not by my own defect hunt — I had certified `115-118` as resolving "exactly" without re-deriving the boundary myself. Corrected here to `:115-119`. Changes no acceptance row and no reproduction above; `scripts/citations.mjs` still reports `115-118` as `ok` because it only bounds-checks against EOF (`scripts/citations.mjs:222`), which is the tell, not a clean bill.
 - **dropped** — none.
-- **findings** · own defect hunt (full read, every `file:line`/quote/sha citation independently re-run against `0d78637`, both corrective claims reproduced from scratch, all six `Done when` lines run red/green as claimed, id-uniqueness swept across every remote branch) returned 0; 0 carried, 0 dropped.
-- NFR: security n/a (docs-only) · performance n/a · reliability n/a to this diff directly (it documents, correctly, a real reliability defect in `status.mjs` without fixing it, which is the right scope for a filing) · maintainability — strong; every citation checked resolves exactly, decision gives concrete costs per option, nothing left for a future builder to re-derive.
+- **findings** · own defect hunt (as described in the header) returned 0; the builder's cross-check of this record before committing surfaced 1 more (above); 1 carried, 0 dropped.
+- NFR: security n/a (docs-only) · performance n/a · reliability n/a to this diff directly (it documents, correctly, a real reliability defect in `status.mjs` without fixing it, which is the right scope for a filing) · maintainability — strong; every citation but one checked resolves exactly, decision gives concrete costs per option, nothing left for a future builder to re-derive.
 
 ## Log
 
@@ -369,24 +370,58 @@ node scripts/status.mjs --root "$R" --json
   answer you wanted for a reason you did not look at.
 - Not implemented, per the filing instruction.
 
-**2026-09-05 — gated PASS, zero findings**, by a Sonnet reviewer against this
-Opus build. Its record is above. One note the record does not carry, raised to
-the reviewer rather than edited into its text:
+**2026-09-05 — gated PASS**, by a Sonnet reviewer against this Opus build. Its
+record is above, carrying one `low` finding that came out of the exchange rather
+than out of its defect hunt.
 
-- **`scripts/status.mjs:115-118` cites `parseScalar` one line short of its
-  closing brace at `:119`**, while `parseList` is cited `:121-129`, JSDoc through
-  brace. Two conventions, and the code block quoted under `## Why` is `116-119` —
-  four lines including the brace — sitting under a citation that says `115-118`.
-  The number was kept anyway, deliberately: it is what the filing brief used and
-  what repo-22's Log on `repo-file-grep-wrapper-ticket` already says about the
-  same function, so a reader cross-referencing the two records finds one number
-  rather than two. **Whoever implements this should cite `:115-119` and fix
-  repo-22's Log in the same commit** — that is the cheap moment for it.
-- The wrinkle is worth recording because
+- **The citation `scripts/status.mjs:115-118` was wrong and is now `:115-119`.**
+  It stopped one line short of `parseScalar`'s closing brace at `:119`, while
+  `parseList` two lines below was cited `:121-129`, JSDoc through brace — two
+  conventions for the same kind of citation, in one document. The tell was
+  internal: the code block quoted under `## Why` is `116-119`, four lines
+  including the brace, sitting under a citation that said `115-118`. Corrected
+  in the body (two occurrences) and in one clause of the gate record, and
+  written up as a `low` finding rather than quietly patched, so the record says
+  what was found and by whom.
+- **Both directions of the review worked.** The builder caught the reviewer's
+  certification of `115-118` as "exact"; the reviewer then caught the builder's
+  claim that there were three occurrences to fix when there were two. Both
+  catches came from re-deriving the number rather than re-reading it — which is
+  also how the wrong number got in: it was transcribed from the filing brief,
+  which had explicitly said not to.
+- **`repo-22`'s Log on `repo-file-grep-wrapper-ticket` still says `115-118`.**
+  Not touched, because it is another branch. Worth a one-line fix whenever that
+  branch is next open.
+- **A citation checker did not catch this, and the one being built to catch
+  citation errors would not either.** Today,
   `node scripts/citations.mjs docs/work/repo-24-quoted-scalars-render-with-quotes.md`
-  reports **`14/14 resolve`, exit 0**, marking `115-118` `ok`: it validates only
-  that a range does not run past end of file (`scripts/citations.mjs:222`). That
-  is repo-18's thesis reproduced incidentally, and the same shape as both this
-  ticket's defect and the `Done when` 5 slip above — a check returning the
-  answer you wanted for a reason nobody looked at. Three instances in one filing
-  is the argument for repo-18.
+  reported **`14/14 resolve`, exit 0**, marking `115-118` `ok`: it bounds-checks
+  a range against end of file (`scripts/citations.mjs:222`) and nothing else.
+  repo-18 (PR #146) adds anchor checking, and **verified first-hand by reading
+  `scripts/citations.mjs` at `origin/repo-18-citation-anchors@02197ea`, not from
+  that ticket's description** — its rule, in the docblock above the verification
+  pass, is "Verified iff the anchor's text starts on a line inside
+  [start, end]", and the same paragraph says "The end is deliberately loose: an
+  anchor may run past the cited range." Line numbers on that branch are
+  deliberately not cited here: this file is checked against `main`, where those
+  same numbers land on unrelated text and `citations.mjs` reports them `ok`
+  regardless — which is this bullet's own point, met by accident while drafting
+  it. So an anchor drawn from line
+  116 verifies against `115-118`, `115-119` and `110-125` alike.
+  **Anchor checking proves the range contains the claim; it does not prove the
+  range is the claim.** A boundary one line short of a brace, or twenty lines
+  long, passes both the old tool and the new one.
+- **That is a limit of repo-18, not a defect in it, and it is not a reason to
+  reopen anything.** The looseness is deliberate and reasoned in that docblock:
+  requiring end-containment would make any wrapped anchor unverifiable unless the
+  author computed an end line from the anchor's length, which is the exact
+  authoring error repo-18 exists to stop. Start-in-range is the right predicate.
+  The limit simply has not been written down, and this is the first live
+  instance of it: a wrong range, in a gate record, certified by a reviewer,
+  surviving the tool built to catch wrong citations — on a branch whose subject
+  is a parser that silently accepts what it should reject. Worth carrying into
+  repo-25 and any repo-18 follow-on.
+- Three checks in this one filing returned the wanted answer for a reason nobody
+  had looked at: `Done when` 5's `grep -n literal`, `citations.mjs`'s `14/14`,
+  and repo-22's gate reading an exit code instead of stdout. That recurrence is
+  the ticket's real subject.
