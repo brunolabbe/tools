@@ -133,9 +133,10 @@ missing a file the branch adds, and flagging it unprompted. Nothing else would
 have: a reviewer measuring the base produces a fluent, correctly formatted gate
 that marks acceptance lines `unproven`, which is the silent failure that page
 already warns about arriving from the other direction. One clause in the prompt —
-*fetch, detach onto the sha, **then** farm and build* — costs nothing. **The
-durable fix is the agent definition's ordering, not this line**; this is the
-stopgap and the record of why.
+*fetch, detach onto the sha, **then** farm and build* — costs nothing. **This is a
+habit-dependent stopgap, and the durable fix is the agent definition's ordering**,
+filed as `repo-20`. When that lands, keep the measurement and drop the clause —
+a reminder for a bug that no longer exists is worse than no reminder.
 
 ### Send the findings in full; the builder writes the section down
 
