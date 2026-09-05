@@ -118,21 +118,76 @@ Not A, and not A+C. The three options were put to them with the costings below.
    execing `ugrep` under `--ignore-files --hidden -I --exclude-dir=…`; that the
    result honours ignore files and skips binaries with no warning and no exit
    code; the fixture numbers from **Why** (1 against 4); that the wrapper is not
-   exported, so scripts, hooks and CI see real GNU grep; and that `command grep`
-   is the spelling for an exhaustive search. Follow the shape of
-   `check-pr-title.sh`'s header.
+   exported, so scripts, hooks and CI see real GNU grep; that the two spellings
+   print different path shapes, so piping both into `comm` or `diff` reports
+   every line as divergent; and that `command grep` is the spelling for an
+   exhaustive search. Follow the shape of `check-pr-title.sh`'s header.
 3. Cite the two siblings and the `records.md` note by path, in the header.
    **Do not restate them** — a fact in two places is the defect `repo-21` exists
    to remove.
 4. **Advisory, never blocking**: warn on stderr, `exit 0`. This fires on a
    correct command far more often than on a mistaken one, so a blocking exit 2
    would be wrong.
-5. Match a tree-walking `grep` — `-r` or `-R` — only where it is being
-   **invoked**, and not when it is already `command grep` or a VCS grep. Use the
-   `(^|[;&|(]|&&|\|\|)` anchoring from `check-pr-title.sh`: that hook's header
-   records a plain substring test firing on the command name inside a heredoc
-   and blocking an unrelated command on its first live run. A hook about `grep`
-   that misfires on the word `grep` in a search pattern would repeat it exactly.
+5. Match a tree-walking `grep` only where it is being **invoked**, and not when
+   it is already `command grep` or a VCS grep. Start from the
+   `(^|[;&|(]|&&|\|\|)` anchoring in `check-pr-title.sh`, whose header records a
+   plain substring test firing on the command name inside a heredoc and blocking
+   an unrelated command on its first live run.
+
+   **`-r` and `-R` appear inside bundled short-flag clusters**, and every
+   example in **Done when** uses `-rl`. Match the cluster
+   (`[[:space:]]-[A-Za-z]*[rR]`), not a standalone `-r`; a builder told only
+   "`-r` or `-R`" can write `-r\b` and miss every real call site.
+
+6. **Read the open question below before writing the anchor.** The pattern in
+   step 5 has a measured hole, and which way it is closed is not yours to
+   assume.
+
+## Open question — the anchor's paren-adjacent misfire
+
+Raised by the filing gate on `5fed828`, reproduced independently here.
+**Unanswered; with the owner as of 2026-09-05. Do not settle it in a commit.**
+
+`check-pr-title.sh`'s anchor treats any raw `(`, `;`, `&` or `|` before the
+phrase as a command boundary, without checking it is a shell operator rather
+than a character inside a string. **This is a live defect in shipped code, not
+in this plan** — the hook rejects a harmless `printf` and exits 2:
+
+```bash
+a='gh pr '; b='create'
+jq -n --arg c "printf 'see ($a$b thing) for details'" '{tool_input:{command:$c}}' > /tmp/probe.json
+bash .claude/hooks/check-pr-title.sh < /tmp/probe.json; echo $?   # message, then 2
+```
+
+**Both quirks in that snippet are load-bearing; do not tidy them.** The phrase is
+split across `$a$b` so the literal never appears in the command text — spelled
+out, the live hook blocks the very call that builds its own test fixture, which
+is the defect demonstrating itself. And it uses `jq` rather than a `python3`
+heredoc because the worktree-isolation guard refuses the heredoc form outright.
+
+It fired against a real Bash call in this session before it was isolated. Reused
+verbatim for `-r`/`-R`, `echo "(grep -r x .) is risky"` misfires the same way,
+while `echo 'grep -rl x .'` does not — **so the quote-adjacent shape in
+Done when is the one the naive anchor already handles**, and the failing shape is
+untested. Measured with the step 5 pattern:
+
+| command                         | anchor matches |
+| ------------------------------- | -------------- |
+| `echo "(grep -r x .) is risky"` | yes — misfire  |
+| `echo 'grep -rl x .'`           | no             |
+| `grep -rl x .`                  | yes — correct  |
+| `cd /tmp && grep -r x .`        | yes — correct  |
+| `command grep -rl x .`          | no             |
+
+| Option                                                       | Cost                                                                                          |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| **(a) — accept it, named in the header as a limitation**     | cheap and honest; matches what `check-pr-title.sh` already ships. Leaves the misfire in place |
+| **(b) — tighten the anchor, add the paren `Done when` line** | closes the hole; real regex work, and the fix arguably belongs on `check-pr-title.sh` too     |
+
+**The gate leans (a); so does this ticket.** The reason it is not settled here is
+that the anchor is shipped and reaches every agent in the repo, not just the hook
+being specified — so (b) may be a separate ticket against `check-pr-title.sh`
+rather than a step in this one.
 
 ## Done when
 
@@ -160,6 +215,12 @@ Let `H=.claude/hooks/check-tree-grep.sh` throughout.
   code, not a failure.
 - **It is wired**: `node -e "const s=require('./.claude/settings.json'); console.log(JSON.stringify(s.hooks.PreToolUse))"`
   names both `check-pr-title.sh` and `check-tree-grep.sh` under a `Bash` matcher.
+- **The paren-adjacent shape is addressed, whichever way the open question was
+  answered** — this line does not presume one. `command grep -c 'paren' $H`
+  returns ≥ 1, naming it as an accepted limitation under (a) or as closed under
+  (b); and if (b) was chosen,
+  `printf '{"tool_input":{"command":"echo \"(grep -r x .) is risky\""}}' | bash $H`
+  prints nothing.
 - `npm run check` passes, `npm run format` leaves the tree clean, and
   `node scripts/status.mjs --json` exits `0`.
 
@@ -212,3 +273,28 @@ answer.
   `origin/repo-cleanup-orchestrate-skill` has no open PR. A live instance of the
   caveat that page already records; it prescribes `SendMessage`, which is how
   `repo-21` was in fact found.
+
+**2026-09-05 — filing gate returned CONCERNS: 3 findings, 0 dropped.** This is
+the builder's disposition of them. The gate record itself is the reviewer's text
+and is not in this commit — there is no ship authority on this branch yet, and
+it belongs above `## Log` under its own heading when there is.
+
+All three were reproduced here before being accepted; none was taken on the
+report alone.
+
+- **med — the anchor Build step 5 prescribes misfires.** Reproduced twice: the
+  live hook blocked the Bash call that was building the test fixture, and
+  offline it exits 2 on a harmless `printf`. Not settled — it is a defect in
+  shipped code reaching every agent, so it went to the owner as the **Open
+  question** above rather than into a commit. Build step 6 stops a builder
+  assuming an answer, and the new `Done when` line holds under either.
+- **low — "Path shapes differ" had no consumer.** Given a job rather than cut:
+  it is now in Build step 2's list of what the header must carry. It is a
+  measured failure mode that produced a wrong reading in this session, so
+  deleting it to satisfy the prose constraint would have traded the wrong thing.
+- **low — `-r`/`-R` inside a bundled short-flag cluster.** Confirmed a builder
+  could write `-r\b` and miss every `-rl` call site; step 5 now names the
+  cluster pattern.
+- The gate could not read `repo-20`'s and `repo-21`'s files — both are on
+  unmerged branches invisible from this worktree. A limit on what it could
+  check, not a defect.
