@@ -150,7 +150,12 @@ the misreading. Check them with `--rev c37cab9`.
    reports every citation resolved.
 
 **`grep` in this devcontainer is a bash function that silently honours ignore
-files** — every check above uses `command grep` for that reason. See repo-22.
+files** — every check above uses `command grep` for that reason. See repo-22,
+unmerged at filing time on branch `repo-file-grep-wrapper-ticket` (PR #150).
+Named in prose rather than in `depends_on`: this ticket does not need it to
+land first, and a `depends_on` on an id that is not on `main` makes
+`node scripts/status.mjs --json` exit non-zero, which is the whole board gate in
+CI.
 
 ## Log
 
@@ -177,3 +182,11 @@ files** — every check above uses `command grep` for that reason. See repo-22.
   reproduction is the deliverable. Recorded because the withdrawn framing is the
   more interesting half: the observation looked unfileable right up until the
   agent that made the mistake explained how it made it.
+- **2026-09-05** — **Do not quote this ticket's `title`, and do not reword it so
+  that it needs quoting.** It was first written starting with a backtick, which
+  needs `title: "…"`, and `scripts/status.mjs`'s `parseScalar` returns the
+  trimmed raw string without stripping quotes — so `--json` and every rendered
+  view carried literal `\"` around the title. Reworded to need no quotes, which
+  is a sidestep rather than a fix. The fix is repo-24, filed separately and
+  unmerged at filing time (PR #153); this ticket is one of its two independent
+  discoveries, and no `depends_on` links them because nothing here waits on it.
