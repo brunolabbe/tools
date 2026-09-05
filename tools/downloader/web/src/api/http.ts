@@ -7,7 +7,6 @@
 import {
   AppError,
   appErrorPayloadSchema,
-  jobListResponseSchema,
   jobResponseSchema,
   parseJobEvent,
   probeResponseSchema,
@@ -79,8 +78,6 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
       }),
 
     getJob: (id: string) => request(ROUTES.job(id), jobResponseSchema),
-
-    listJobs: () => request(ROUTES.jobs, jobListResponseSchema),
 
     cancelJob: (id: string) => request(ROUTES.cancelJob(id), jobResponseSchema, { method: "POST" }),
 

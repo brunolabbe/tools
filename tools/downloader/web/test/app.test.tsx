@@ -80,7 +80,6 @@ async function mountApp(usingMock: boolean, overrides: Partial<ApiClient> = {}):
     }),
     createJob: vi.fn(unused("INTERNAL")),
     getJob: vi.fn(unused("JOB_NOT_FOUND")),
-    listJobs: vi.fn(() => Promise.resolve({ jobs: [], total: 0 })),
     cancelJob: vi.fn(unused("JOB_NOT_FOUND")),
     openJobEvents: vi.fn(() => ({ close: vi.fn() })),
     // The job-stream cases below need a client that answers; the probe cases

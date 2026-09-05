@@ -244,7 +244,7 @@ describe("the routes", () => {
     }
   });
 
-  test("POST /api/jobs is limited, and reading jobs is not", async () => {
+  test("POST /api/jobs is limited, and reading a job is not", async () => {
     const harness = await createHarness({
       resolver: new StubResolver(probeResult()),
       config: { rateLimitJobsPerMinute: 1 },
@@ -258,14 +258,19 @@ describe("the routes", () => {
           payload: { url: SOURCE_URL },
         });
 
-      expect((await create()).statusCode).toBe(201);
+      const first = await create();
+      expect(first.statusCode).toBe(201);
       expect((await create()).statusCode).toBe(429);
 
       // A client that has spent its creation allowance must still be able to
-      // watch and cancel what it already started.
+      // watch and cancel what it already started. This read used to go through
+      // the job list; dl-32 removed it, and the single read is the more honest
+      // proof of the claim anyway — "what it already started" is one job, by id.
+      const { id } = (first.json() as JobResponse).job;
       for (let call = 0; call < 5; call++) {
-        const listed = await harness.app.server.inject({ method: "GET", url: ROUTES.jobs });
-        expect(listed.statusCode).toBe(200);
+        // oxlint-disable-next-line no-await-in-loop
+        const read = await harness.app.server.inject({ method: "GET", url: ROUTES.job(id) });
+        expect(read.statusCode).toBe(200);
       }
     } finally {
       await harness.dispose();

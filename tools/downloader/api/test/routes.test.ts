@@ -6,19 +6,8 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
-import {
-  AppError,
-  jobListResponseSchema,
-  jobResponseSchema,
-  parseJobEvent,
-  ROUTES,
-} from "@downloader/contract";
-import type {
-  JobListResponse,
-  JobResponse,
-  ProbeResponse,
-  ProbeResult,
-} from "@downloader/contract";
+import { AppError, jobResponseSchema, parseJobEvent, ROUTES } from "@downloader/contract";
+import type { JobResponse, ProbeResponse, ProbeResult } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { formatSseFrame } from "../src/routes/events.ts";
 import { contentDisposition, parseRange } from "../src/routes/files.ts";
@@ -423,23 +412,6 @@ describe("job routes", () => {
     expect(response.statusCode).toBe(400);
   });
 
-  test("listing returns newest first with a total", async () => {
-    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
-    for (let index = 0; index < 3; index++) {
-      // oxlint-disable-next-line no-await-in-loop
-      await harness.app.server.inject({
-        method: "POST",
-        url: ROUTES.jobs,
-        payload: { url: SOURCE_URL },
-      });
-    }
-    const response = await harness.app.server.inject({ method: "GET", url: ROUTES.jobs });
-    expect(response.statusCode).toBe(200);
-    const body = response.json() as { jobs: unknown[]; total: number };
-    expect(body.total).toBe(3);
-    expect(body.jobs).toHaveLength(3);
-  });
-
   test("an unknown job id is a 404", async () => {
     harness = await createHarness({ resolver: new StubResolver(probeResult()) });
     const response = await harness.app.server.inject({ method: "GET", url: ROUTES.job("nope") });
@@ -467,38 +439,68 @@ async function completed(current: Harness): Promise<{ id: string; token: string 
 }
 
 /**
- * The job list is unauthenticated and unfiltered by caller, so anything it
- * carries is world-readable to anyone who can reach the port.
+ * There is no job list, and that is the fix rather than a gap in the tests.
  *
- * `contract/src/job.ts` calls `downloadUrl` *"opaque, unguessable... never a
- * predictable id"*, and that is true — and beside the point once an endpoint
- * hands the whole set out. Unguessable stops a search; it does not stop a
- * listing. So the capability is stripped from the list and kept on the
- * single-job read, where reaching it already requires knowing the job id.
+ * dl-23 stripped `downloadUrl` from the list because an endpoint that hands the
+ * whole set out makes the token's entropy irrelevant — unguessable stops a
+ * search, not a listing. What was left after that was not a capability but a
+ * history: every page anyone pointed this service at, with a timestamp, a
+ * title-derived filename and a media URL the contract says routinely carries a
+ * signed credential. dl-32 answered who may read that with "nobody, because
+ * this service cannot tell one caller from another", and removed the route.
  *
- * That trade only holds because a job id is `randomUUID()` — 122 bits from a
- * CSPRNG (`routes/jobs.ts`, and the store never reassigns it). If job ids were
- * ever made sequential or timestamped, this mitigation would move the hole
- * rather than close it, and the list would need real authorisation instead.
+ * `GET /api/jobs/:id` stays, and the tests below are what keep that honest. The
+ * trade holds because a job id is `randomUUID()` — 122 bits from a CSPRNG
+ * (`routes/jobs.ts`, and the store never reassigns it) — and because that id
+ * already buys the download, so the history behind it is not a further step. If
+ * job ids were ever made sequential or timestamped, removing the list would have
+ * moved the hole rather than closed it, and the single read would need real
+ * authorisation.
  */
 describe("a job list does not hand out capabilities", () => {
-  test("the list carries no download token, with nothing supplied", async () => {
+  test("GET /api/jobs is a route miss, with nothing supplied", async () => {
     harness = await createHarness({ resolver: new StubResolver(probeResult()) });
-    const { token } = await completed(harness);
+    const { id, token } = await completed(harness);
     expect(token).toHaveLength(43);
 
-    // No id, no token, no credential of any kind — the enumeration case.
-    const response = await harness.app.server.inject({ method: "GET", url: ROUTES.jobs });
-    expect(response.statusCode).toBe(200);
-    expect(response.body).not.toContain(token);
-    expect(response.body).not.toContain(ROUTES.file(""));
+    // No id, no token, no credential of any kind — the enumeration case. The
+    // query string is here because the route that used to answer read `limit`
+    // and `offset`, so a handler left half-registered would answer one of these
+    // and not the other.
+    for (const url of [ROUTES.jobs, `${ROUTES.jobs}?limit=100&offset=0`]) {
+      // oxlint-disable-next-line no-await-in-loop
+      const response = await harness.app.server.inject({ method: "GET", url });
 
-    // The list is still worth having: everything else about the job survives,
-    // so this is a redaction and not an amputation.
-    const body = response.json() as JobListResponse;
-    expect(body.total).toBe(1);
-    expect(body.jobs[0]?.result).toMatchObject({ filename: "video.mp4", container: "mp4" });
-    expect(jobListResponseSchema.safeParse(body).success).toBe(true);
+      // `NOT_FOUND` from core, which means a URL that matched no route — not
+      // `JOB_NOT_FOUND`, which means a job the runner has no record of. There is
+      // no job in this request to be missing, and re-wording the domain code at
+      // the call site is the tell that it is the wrong one.
+      expect(response.statusCode, url).toBe(404);
+      expect(response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+
+      // Nothing about the store it refused to read reaches the body: not the
+      // capability, not the browsing history, not the media URL the contract
+      // says routinely carries a signed credential of its own.
+      expect(response.body, url).not.toContain(token);
+      expect(response.body, url).not.toContain(id);
+      expect(response.body, url).not.toContain(SOURCE_URL);
+      expect(response.body, url).not.toContain("cdn.example");
+      expect(response.body, url).not.toContain("video.mp4");
+    }
+  });
+
+  test("the method was removed, not the path: POST /api/jobs still creates", async () => {
+    // `ROUTES.jobs` carries the create route as well, so deleting the list is
+    // the one edit that could plausibly take intake with it.
+    harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    const response = await harness.app.server.inject({
+      method: "POST",
+      url: ROUTES.jobs,
+      payload: { url: SOURCE_URL },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect((response.json() as JobResponse).job.status).toBe("queued");
   });
 
   test("reading one job still carries it, because the app cannot work without it", async () => {
@@ -513,10 +515,22 @@ describe("a job list does not hand out capabilities", () => {
     const body = response.json() as JobResponse;
     expect(body.job.result?.downloadUrl).toBe(ROUTES.file(token));
     expect(jobResponseSchema.safeParse(body).success).toBe(true);
+
+    // And what makes the negative assertions in the first test mean something.
+    // Each of those strings is absent from a 404 body; here is the same job
+    // proving every one of them is a string this stack really does emit, so
+    // `not.toContain` is measuring a redaction rather than a typo.
+    expect(response.body).toContain(token);
+    expect(response.body).toContain(id);
+    expect(response.body).toContain(SOURCE_URL);
+    expect(response.body).toContain("cdn.example");
+    expect(response.body).toContain("video.mp4");
   });
 
   test("a job id is not guessable, which is what makes the trade sound", async () => {
-    // If this ever fails, the list-only mitigation above stops being enough.
+    // With the list gone the id is the whole of what stands in front of a job.
+    // If this ever fails, `GET /api/jobs/:id` needs real authorisation and the
+    // reasoning at the top of this block stops holding.
     harness = await createHarness({ resolver: new StubResolver(probeResult()) });
     const ids = new Set<string>();
     for (let index = 0; index < 5; index++) {

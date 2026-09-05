@@ -1,6 +1,5 @@
 import type {
   CreateJobRequest,
-  JobListResponse,
   JobResponse,
   ProbeRequest,
   ProbeResponse,
@@ -18,7 +17,6 @@ export interface ApiClient {
   probe(request: ProbeRequest): Promise<ProbeResponse>;
   createJob(request: CreateJobRequest): Promise<JobResponse>;
   getJob(id: string): Promise<JobResponse>;
-  listJobs(): Promise<JobListResponse>;
   cancelJob(id: string): Promise<JobResponse>;
   openJobEvents: EventStreamFactory;
 }

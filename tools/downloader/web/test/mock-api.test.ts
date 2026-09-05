@@ -7,7 +7,6 @@ import {
   canTransition,
   createJobRequestSchema,
   jobEventSchema,
-  jobListItemSchema,
   jobSchema,
   jobOptionsSchema,
   probeRequestSchema,
@@ -278,35 +277,18 @@ describe("job lifecycle", () => {
     expect(errors).toBe(1);
   });
 
-  test("listJobs reports what has been created", async () => {
-    await api.createJob({ url: scenarioUrl("") });
-    await api.createJob({ url: scenarioUrl("dlfail") });
-    const { jobs, total } = await api.listJobs();
-    expect(total).toBe(2);
-    // `jobListItemSchema`, not `jobSchema`: the list shape is the one without
-    // the capability, and validating against the wrong one would pass here for
-    // the accidental reason that these jobs have no result yet.
-    expect(jobs.every((entry) => jobListItemSchema.safeParse(entry).success)).toBe(true);
-  });
-  test("a completed job's link is on getJob and not in the list", async () => {
-    // The mirror of the API-side pair in `api/test/routes.test.ts`. The test
-    // above only ever sees queued jobs, so `result` is null and `downloadUrl`
-    // is never examined — the mock's stripping branch had compile-time cover
-    // and no runtime cover at all until this existed.
+  test("a completed job's link is on getJob, now the only way to reach one", async () => {
+    // What survives dl-32 from the pair this used to be. The mock carried a
+    // list method beside `getJob`, mirroring the API route both are gone with,
+    // so `getJob` is the whole of how the UI reaches a finished job. There is
+    // no assertion here that the list is absent: `ApiClient` no longer declares
+    // it, so a mock that grew one back would not compile.
     const { job } = await run(scenarioUrl(""));
 
     const served = (await api.getJob(job.id)).job;
     expect(served.status).toBe("completed");
     expect(served.result?.downloadUrl.startsWith(ROUTES.file(""))).toBe(true);
-
-    const { jobs } = await api.listJobs();
-    const listed = jobs.find((entry) => entry.id === job.id);
-    expect(listed?.result).not.toBeNull();
-    // Everything but the capability survives, exactly as the real route does.
-    expect(listed?.result?.filename).toBe(served.result?.filename);
-    expect(listed?.result).not.toHaveProperty("downloadUrl");
-    expect(JSON.stringify(jobs)).not.toContain(ROUTES.file(""));
-    expect(jobs.every((entry) => jobListItemSchema.safeParse(entry).success)).toBe(true);
+    expect(jobSchema.safeParse(served).success).toBe(true);
   });
 });
 

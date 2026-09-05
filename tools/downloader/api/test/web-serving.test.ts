@@ -89,6 +89,24 @@ describe("with WEB_DIR set", () => {
     expect(response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
   });
 
+  test("GET /api/jobs is a typed 404 here too, not the SPA page (dl-32)", async () => {
+    // The deployment the ticket is about is this one: the container sets
+    // `WEB_DIR`, so the removed list route now lands on the SPA fallback rather
+    // than on a bare 404 handler. `wantsHtml` excludes `/api/` for exactly this
+    // reason, and a browser pointed straight at the endpoint sends
+    // `Accept: text/html`.
+    const app = (await serving()).app;
+    const response = await app.server.inject({
+      method: "GET",
+      url: ROUTES.jobs,
+      headers: HTML,
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+    expect(response.body).not.toContain("<title>Downloader</title>");
+  });
+
   test("a fetch for JSON gets the error too, whatever the path", async () => {
     const app = (await serving()).app;
     const response = await app.server.inject({
