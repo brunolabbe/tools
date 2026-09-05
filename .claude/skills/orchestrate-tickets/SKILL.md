@@ -61,6 +61,13 @@ you are there.
      `grep -nE '^#{2,4} .*([Dd]ecision|[Oo]pen question)' <candidates>` — and when
      it holds, the question becomes **which slices**, not which tickets. See
      _Slice a blocked ticket_ in [reference/sizing.md](reference/sizing.md).
+     **Read the matches, do not count them.** Re-run against the 2026-09-04 board
+     of six, where five were genuinely blocked: the grep matched five files and
+     got two of the six wrong in opposite directions — one heading read
+     "answered … — not open", and one ticket's open decision was a **paragraph in
+     its Build section**, not a heading, so it was missed entirely. The two errors
+     cancelled and the total came out right, which is the worst way to be right.
+     The count is a prompt to open the file, not an answer.
    - **The seam-mapper does not remove the decision-reading cost, only the
      ticket-reading cost.** The same session paid **87,596 subagent tokens** for
      the map and then still read seven decision sections itself. That is not a
@@ -74,30 +81,37 @@ you are there.
    which carries it per ticket, and map it with the table in
    [`.claude/agents/builder.md`](../../agents/builder.md). Absent is the common
    case and means inherit. Never rate an unrated ticket yourself — you have not
-   read it, which is the whole point of step 2. See
+   read it, which is the whole point of step 2. **Then pass that model explicitly
+   rather than letting it inherit**, naming your own model where the table says
+   inherit. A backgrounded dispatch returns no `resolvedModel`, so inherit is the
+   one setting that leaves the builder's model unobservable to everyone afterwards
+   — including the builder, which on 2026-09-04 asserted its own model from a line
+   that turned out not to exist. One parameter, and step 4's comparison becomes
+   something you wrote down instead of something you infer. See
    [reference/dispatching.md](reference/dispatching.md).
 4. **Gate** each finished branch — `subagent_type: "ticket-reviewer"`. Builders
    never open a PR before a gate. **You spawn the reviewer, never the builder**,
    even though the builder is the one who then talks to it: the model-difference
-   rule is enforced by reading the builder's `resolvedModel`, and a builder that
+   rule is what is being enforced, and a builder that
    picks its own reviewer is the thing being checked choosing its checker. The
    builder has no `Agent` tool and is told not to spawn, and both of those are
-   this rule, not an oversight. **Check the model rather than assuming it** — and know
-   that you may not be able to. A **foreground** dispatch reports `resolvedModel`;
-   a **backgrounded** one returns an agent id and nothing else, and background is
-   how `reference/concurrency.md` tells you to dispatch a batch. Measured
-   2026-09-02: an orchestrator ran this whole loop without ever seeing a
-   `resolvedModel`. When you cannot read it, **say in the record that the gate's
-   model was inferred rather than checked**, and state what you inferred it from.
-   Do not report an inference as a check. The agent definition
-   defaults the gate to Sonnet, which is right when the builder ran Opus. If the
-   builder ran Sonnet, pass `model: "opus"` on the gate. **Since repo-17 this
-   check is load-bearing rather than a backstop** — a `mechanical` ticket puts a
-   Sonnet builder in a batch where every sibling is Opus, so the gate's model now
-   varies inside one batch and cannot be set once. Never `haiku`, never
-   `fable`. Say which model gated in the record — that is what makes the next
-   audit one command instead of an assumption. Measured before this line existed:
-   **11 tickets, 22 gates, none gated by a different model than built it.**
+   this rule, not an oversight. **Both halves are knowable if you make them so,
+   and neither needs `resolvedModel`** — which a backgrounded dispatch does not
+   return anyway, and background is how `reference/concurrency.md` tells you to
+   dispatch a batch. The gate's half was never in doubt:
+   [`.claude/agents/ticket-reviewer.md`](../../agents/ticket-reviewer.md) pins
+   `model: sonnet` in its frontmatter, so it is a file read. The builder's half is
+   the one step 3 tells you to write down at dispatch. Do both and the comparison
+   is a fact. Sonnet is right when the builder ran Opus or Haiku; pass
+   `model: "opus"` when the builder ran Sonnet, which happens when *you* are
+   Sonnet and the ticket inherits. Never `haiku`, never `fable`. **Since repo-17
+   the builder's model varies inside a batch** — a `mechanical` ticket dispatches
+   `haiku` where its siblings inherit — so check the pairing per ticket rather
+   than setting the gate once. Say which model gated in the record; and if you did
+   have to infer either, say so and **name the rule you inferred from precisely**,
+   because a citation given as fact is transcribed as fact. Measured before this
+   line existed: **11 tickets, 22 gates, none gated by a different model than
+   built it.**
 5. **The reviewer sends its findings to the builder itself**, as one batched
    message, **and sends the same findings to you in full** — not a status line
    saying it did. **Expect this to arrive as a summary anyway**: a subagent's
@@ -138,8 +152,12 @@ you are there.
    something outside nudged you, with "no completion signal to wait for".
    **2026-09-03 measured the opposite, six or more times**: every finishing
    subagent delivered a `<task-notification>` that woke the orchestrator
-   unprompted, and a reviewer's `SendMessage` to `main` arrived the same way. Both
-   sessions ran this skill in this repo. Whether the harness changed between them
+   unprompted, and a reviewer's `SendMessage` to `main` arrived the same way.
+   **2026-09-04 agreed with the later reading a third time** — every completion
+   woke the orchestrator, and sideways `SendMessage` worked throughout. All three
+   sessions ran this skill in this repo, so two-to-one is a tally rather than a
+   resolution: do not retire the earlier reading on it. Whether the harness
+   changed between them
    or the earlier reading was wrong cannot be settled from inside either, so
    **assume nothing and look**: `ListAgents` costs one call and says who is
    `running` against who is `completed`. Plan the batch so a missed wake is
@@ -151,10 +169,18 @@ you are there.
    builder that comes back "this does not reproduce" is asking a question only
    that reviewer can answer. See
    [reference/worktree-hygiene.md](reference/worktree-hygiene.md).
-   - **Watch for the failure this shape introduces**: a pair that agrees too
-     easily. Two agents that want to be done can converge on "addressed" without
-     either running anything. The defence is in the gate prompt — demand
+   - **Watch for the two failures this shape introduces.** One is a pair that
+     agrees too easily: two agents that want to be done converge on "addressed"
+     without either running anything. The defence is in the gate prompt — demand
      reproductions and a positive control — and in what they report next.
+   - **The other is a pair that agrees and then both stop**, each treating the
+     gate record as the other's next move. Nothing goes red — `npm run status`
+     reads `done`, the branch is pushed, both reports say the work is finished —
+     so a stalled exchange and a finished one are identical from your seat.
+     Measured 2026-09-04, caught only by looking at the remote for a heading that
+     was not there. The discriminator is one command per ticket:
+     `git show <branch>:<ticket-path> | grep '^## Review'`. Empty means the
+     exchange is still open, whatever either agent told you.
 7. **Both report to you when they are done**, separately, and that is the point of
    asking both: you get the builder's account and the reviewer's account of the
    same exchange, written by two models, and can hold one against the other.
@@ -162,9 +188,21 @@ you are there.
    pair decides when *they* are finished, you decide whether that is true. This is
    the only thing that catches a pair which agreed too easily, and it is four
    checks, not a re-review:
-   - **Does each report say what was run?** Commands and their results, not
-     "addressed" and not "confirmed". A finding closed with no command named is a
-     finding still open.
+   - **Does each report say what was run — and where a quote came from?**
+     Commands and their results, not "addressed" and not "confirmed"; a finding
+     closed with no command named is a finding still open. When a report *quotes*
+     something to settle a point, ask **where** it is, not just what it says:
+     "quotes something plausible" and "quotes something actually present" read
+     identically. Measured 2026-09-04, on the ticket whose whole subject is that
+     distinction — a builder that had measured every other claim on its branch
+     before writing it asserted its own model from a line in its own context,
+     propagated that to its reviewer and into a commit, and on being asked to
+     quote the line found there was none, and retracted in full. Its diagnosis is
+     the rule: *"the one claim I did not run a check against was the one about
+     myself, because it did not feel like a claim."* A statement about the speaker
+     does not present itself as needing evidence, so this is a category boundary
+     rather than weak rigour — which is why "be careful" is not the fix and asking
+     *where* is.
    - **Do the two accounts describe the same exchange?** They were written by
      different models and should not need to be reconciled. If one says a finding
      was reproduced and the other does not mention it, something is missing.
@@ -245,12 +283,31 @@ defect that ships today, an architectural choice two branches would both satisfy
 **or a branch about to file a ticket for work it could finish now** (see
 _Fold it in, or file it_ in [reference/sizing.md](reference/sizing.md)).
 
+**On a defect, say whether the branch itself introduces it.** That turns the
+question from tolerating an existing wart into shipping a new one, and it is the
+fact the user is deciding on. Measured 2026-09-04: framing a defect as one to
+*defer* without saying the file was one the branch itself adds cost two round
+trips on a single decision, and the correction reached the builder mid-revert.
+
 How to ask is the root `CLAUDE.md` rule and is not repeated here. What is specific
 to running a board is the rest of this section.
 
 **A subagent's report can carry a decision you have to forward.** Builders and
 reviewers are told to hand you open decisions as options rather than settling
 them. When one does, that is yours to put to the user — not to absorb.
+
+**And when the answer goes back down, send how it was taken, not only what it
+was.** A builder can say "the owner directed this" and a reviewer has no way to
+check that from inside its sandbox — measured 2026-09-04, where a gate correctly
+declined to extend its PASS over a commit whose only warrant was that claim. You
+are the only participant who can supply the warrant, so relay it: the question
+asked, the options, which was chosen, and **whose recommendation it went
+against**. That last field is not decoration. Both decisions that overrode a
+builder's own recommendation in that session exposed a real pre-existing defect
+that only implementing the overridden option could have found — a CLI parser that
+consumed a value for every flag, including the first one that takes none, and a
+contract declaring a field non-null that arrives `null` from a real binary. A
+recommendation is an argument, not a measurement.
 
 **Batch them.** Each question stalls the board. Hold them to a checkpoint unless one
 blocks a running agent.
@@ -317,6 +374,17 @@ was whether a fix should widen to a neighbouring row; the gate was asked to
 *measure* whether it could, came back with one failing test out of 732 — and that
 one the row already pinned as a defect — and the user decided on that rather than
 on two plausible arguments. The delay was one gate the branch was taking anyway.
+
+**A running builder can produce that measurement too, and the line to hold is
+committing, not measuring.** Measured 2026-09-04: a builder whose remedy was still
+an open owner decision ran the reproduction anyway — it was needed under *every*
+candidate answer, "do nothing" included, so running it was never a bet. Building
+the mechanism on top of it was the bet, and it paid, because it converted "we
+could fix this" into "the fix exists, measured and reviewer-validated", which is
+the fact that changed the owner's answer. What kept it safe was **committing and
+pushing nothing while either decision was open**, so the tree each party inspected
+was never ambiguous. Ask for the measurement freely; make that last condition
+explicit rather than assumed.
 
 **Ask whether to parallelise at intake, not after the collision.** [reference/concurrency.md](reference/concurrency.md)
 says never to run two tickets over one seam; the failure that costs is asking the
@@ -385,6 +453,18 @@ taught the next reader the opposite of the intended pattern. The builder
 reproduced it first, refuted it, applied nothing, and wrote the regression test the
 finding had actually been pointing at. Checking a finding's premises is not
 checking a finding; only running it is. Relay the premises **as premises**.
+
+**Its mirror is worse, because the outcome cannot catch it: a relay's *citation*
+can be wrong while its conclusion is right.** Measured 2026-09-04. An orchestrator
+told a gate that the builder's model was inferred off `builder.md`'s `hard`
+difficulty row. The ticket carried no `difficulty` at all — `hard` was a
+*sibling's*, in the same batch — and both rows resolve to the same model, so the
+error was invisible in the answer and reached a committed gate record. The
+reviewer transcribed it because it was given as fact, which was correct of it.
+**So check the rule you are about to cite, not only the answer it gives you**, and
+attribute the correction when one lands: the record has to show which link failed,
+or the next reader blames the gate. How to withdraw a claim that reached a record
+is in [reference/records.md](reference/records.md).
 
 ### Three clauses that turn a correction into a rule
 
