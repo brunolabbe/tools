@@ -284,6 +284,61 @@ Let `H=.claude/hooks/check-tree-grep.sh` throughout.
 - `npm run check` passes, `npm run format` leaves the tree clean, and
   `node scripts/status.mjs --json` exits `0`.
 
+## The gate on this filing
+
+**Gate: CONCERNS** — 2026-09-05 · reviewed at `5fed828` (`693e7f2`, `5fed828`, two commits) off `origin/main@c37cab9` · `origin/main...HEAD` · defect hunt run directly by the reviewer (no `code-review` delegate — this repo's skill reserves that delegation for the main session; the `ticket-reviewer` subagent runs its own hunt), medium depth, against a prose-only diff (one file, 214 insertions, no code)
+
+This gates a pull request that only _files_ repo-22 — no hook, no wiring exists yet. Recorded under this heading rather than `## Review` per `docs/01-TICKETS.md`'s review gate and the `dl-29` precedent, since `status: ready` plus a `## Review` heading is read as merged work by the board check.
+
+**Model:** builder ran Opus explicitly (`model: "opus"`). My own context carries, verbatim: "You are powered by the model named Sonnet 5. The exact model ID is claude-sonnet-5." Cross-model gate confirmed both directions.
+
+| Claim                                                                                                               | Verification                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fixture prints `grep: 1`, `command grep: 4`, `exit: 0`                                                              | **verified** — reproduced verbatim, twice (first paste refused by the worktree-isolation guard on the `.gitignore` line, identical second paste succeeded — matches the ticket's own disclosed flake)   |
+| Fixture is not self-contaminated                                                                                    | **verified** — `command grep -rl 'grep' /tmp/grep-wrapper-demo` → 0 matches                                                                                                                             |
+| "through a script 4" / `bash -c` 4                                                                                  | **verified** — independent probe script at `/tmp/grep-wrapper-probe.sh`, outside the fixture tree: script 4, `bash -c` 4                                                                                |
+| `BASH_FUNC_grep` absent from `export -p`                                                                            | **verified**                                                                                                                                                                                            |
+| Wiring line is falsifiable today, passes after build                                                                | **verified** — current `.claude/settings.json`'s only `PreToolUse`/`Bash` hook is `check-pr-title.sh`; the cited `node -e` line names only that today                                                   |
+| Build artifacts are committable                                                                                     | **verified** — `git check-ignore` on both `.claude/settings.json` and `.claude/hooks/check-tree-grep.sh` exits 1 (not ignored)                                                                          |
+| B's measurement (all `.claude/rules/` files key on `paths:` globs)                                                  | **verified** — exactly 5 files, all with `paths:` frontmatter, none keyed on command content                                                                                                            |
+| `records.md` / `concurrency.md` citations resolve                                                                   | **verified** — `records.md:156` "Measure that exit code without a pipe", `concurrency.md:143` the `grep -oE` line                                                                                       |
+| `repo-20`, `repo-21` sibling content                                                                                | **not independently checkable** — both live on unmerged branches (PR #148, `origin/repo-cleanup-orchestrate-skill`) not present in this tree; not a defect, just outside what this worktree can confirm |
+| Log's disclosure (premature "through a script 4" figure; the unrecorded contaminated first fixture) survives intact | **verified** — present, unsoftened                                                                                                                                                                      |
+| `npm run check`, `npm run format`, `node scripts/status.mjs --json`, `-- --show repo-22`                            | **verified** — all exit 0; ticket file already correctly formatted                                                                                                                                      |
+
+**med · Build step 5's guard against its own named failure mode is a gesture, not a closed one — reproduced live.** Step 5 says: "A hook about grep that misfires on the word grep in a search pattern would repeat [check-pr-title.sh's recorded misfire] exactly," and prescribes reusing check-pr-title.sh's `(^|[;&|(]|&&|\|\|)` anchor as the guard. I tested that exact anchor, in the exact script the ticket cites, against a shape one step harder than the one Done-when tests (`echo "grep -rl x ."`, safe because a quote — not an anchor character — precedes the phrase):
+
+```
+$ echo '{"tool_input":{"command":"printf '"'"'see (gh pr create thing) for details'"'"'"}}' | bash .claude/hooks/check-pr-title.sh
+gh pr create without an inspectable --title. ...
+exit: 2
+```
+
+A harmless `printf` that only _mentions_ `gh pr create` inside a quoted string, preceded by a stray `(`, is blocked — this fired live against my own Bash tool call in this very review session before I built the offline reproduction above, which confirms it against the script directly. The anchor treats any raw `(`, `;`, `&`, or `|` character preceding the phrase as a command boundary, without knowing whether it's really a shell operator or just a character sitting inside a string. Reusing it verbatim for `grep -r`/`-R` inherits the same hole: `echo "(grep -r x .) is dangerous"` would misfire the same way, and nothing in Done-when tests that shape — only the quote-adjacent one, which was never at risk. This is a decision with two defensible remedies, not a clean verdict:
+
+- **(a)** accept the residual risk as consistent with what the repo already ships in `check-pr-title.sh`, and say so explicitly in the header comment as a named, accepted limitation (cheap, consistent with precedent, leaves the hole documented rather than hidden).
+- **(b)** tighten Build step 5 to also require the paren-adjacent shape not misfire, and add a Done-when line for it (closes the hole, costs the future builder more regex work than "copy check-pr-title.sh's anchor").
+
+I recommend (a) — it costs one sentence and matches what the repo has already accepted for the identical mechanism — but this is the builder's/owner's call, not mine to settle.
+
+- **low · one Build/Done-when-unused fact under Why.** "Path shapes differ" (line 72-74 at `5fed828`; line 77 at the tip) isn't cited by any Build step or Done-when line — it's true and harmless, but it's exactly the kind of bullet the ticket's own Decision section says the owner asked to minimize ("the owner's standing constraint this session is less prose"). "Stdin is unaffected" earns its place (it justifies not touching `concurrency.md`'s sweep); this one doesn't.
+- **low · bundled short flags aren't spelled out.** Build step 5 says match `-r` or `-R` "where it is being invoked," but every Done-when example uses `-rl` (bundled with `-l`), never a bare `-r`. A future builder has to infer, rather than being told, that the match must also fire inside a combined short-option cluster (`-rl`, `-lr`, etc.), not just a standalone `-r` token. Costs one sentence to make explicit.
+- **findings** · 3 returned, 3 carried, 0 dropped.
+- NFR: security n/a (no code) · performance n/a · reliability n/a · maintainability — the two lows above; the med is a design-robustness question for the eventual build, not this filing.
+
+## The gate on this filing — follow-up at `23d4bc3`
+
+**Gate: PASS** — 2026-09-05 · re-verified at `23d4bc3` (four commits off `origin/main@c37cab9`) · all three findings above independently re-reproduced against the new tip and confirmed resolved, not accepted on the builder's report alone
+
+- **med resolved.** Decision two's "strip quoted spans (`sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g"`), then apply the boundary anchor" fix was re-run by me independently, shape by shape, not read off the table. All seven published shapes match exactly, including the trap case `gh pr create --title "feat(repo): x"` (stripped text is `gh pr create --title `, still matches — confirmed). The owner chose remedy (b) over my recommended (a); the reasoning given (propagation vs. sitting still) is sound and I have no argument with it.
+- Re-confirmed the _unfixed_ `check-pr-title.sh` still exhibits the original misfire today via the ticket's own jq-based, split-literal fixture (`a='gh pr '; b='create'; jq -n --arg c "printf 'see ($a$b thing) for details'" ...` → exit 2) — the fix is plan text only so far (`git diff --stat origin/main...HEAD` still shows just the one markdown file), consistent with this remaining a filing-only PR.
+- Low 1 (path-shapes bullet) — accepted as given a job in Build step 2 rather than cut; a reasonable resolution of the option I offered.
+- Low 2 (bundled short-flag clusters) — accepted as written (`[[:space:]]-[A-Za-z]*[rR]` in the renumbered Build step 7).
+- Frontmatter (`kind: fix`, `difficulty: hard`) confirmed via `node scripts/status.mjs --show repo-22`. Confirmed `fix` is **not** `hidden` in `release-please-config.json` (line 27) — the eventual PR does ship a changelog line, so title it with care.
+- `npm run check`, `npm run format`, `node scripts/status.mjs --json`, `-- --show repo-22` all still exit 0 at `23d4bc3`.
+
+**The exchange is closed on my side.** Nothing outstanding.
+
 ## Log
 
 **2026-09-05 — filed.** Every number above was re-measured in a fresh worktree
