@@ -254,8 +254,11 @@ and the missing carrier for an answered-but-undispatched decision, in the
 
 **The move under entry 4, and why it is this session's argument for two models.**
 Entry 4 read as a freak event while it was one incident. It was the first of
-**three on one ticket**, and repo-18's builder named the shape itself in
-`cfae096`'s Log: *"the model claim, the load-bearing reason with no test, and now
+**three on one ticket**, and repo-18's builder named the shape itself in the Log
+it committed at `cfae096` — quoting the **ticket file**,
+`docs/work/repo-18-citations-resolve-is-not-correct.md`, not that commit's
+*message*, which says the same thing in different words: *"the model claim, the
+load-bearing reason with no test, and now
 a status summary that skipped a state. All three were the same move: reading a
 result at a glance and reporting the reading as the measurement. The tooling this
 ticket adds catches it for citations only; nothing catches it for prose, which is

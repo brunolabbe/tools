@@ -202,6 +202,18 @@ discarded. So:
   `contract/src/brief.ts:505` — and the check becomes a confirmation instead of
   a rework.
 
+  **A bare sha is the same coin flip, and `citations.mjs` does not cover it.** A
+  commit names at least two texts — its **message** and its **tree** — and the
+  same author routinely writes the finding into both, in different words.
+  Measured 2026-09-04: a quote attributed to "`cfae096`'s Log" was verbatim from
+  the ticket file that commit adds to, and a reviewer checking it reached for
+  `git show -s --format=%B` instead, found three wording differences inside the
+  quotation marks, and reported a fabricated quote. **The finding did not
+  reproduce and the citation was still at fault**: it resolved to two texts and
+  did not say which. So write `<sha>:<path>` — or the words "the commit message
+  at `<sha>`" — whenever you quote from a commit. This one costs a reviewer a
+  finding and a builder a round, and neither party is wrong.
+
   It cannot judge two of the four modes, and says so: a citation whose *content*
   changed still resolves, and a citation that is a finding's own evidence must
   stay wrong. Those are yours. Run it as the genuinely last action before
