@@ -11,16 +11,20 @@ difficulty: hard
 
 # repo-21 — The orchestration skill has outgrown its loop
 
-**Packages:** `.claude/skills/orchestrate-tickets/` (`SKILL.md` and
-`reference/history.md`), `.github/workflows/ci.yml`.
+**Packages:** `.claude/skills/orchestrate-tickets/` (`SKILL.md`,
+`reference/history.md`, `reference/records.md`), `.github/workflows/ci.yml`.
 
 ## Read this first — three branches move these files before you start
 
 This ticket must not begin until `docs/record-2026-09-04-orchestration-batch`
-lands. That branch (tip `479b7b3`, **no PR as of filing**) rewrites `SKILL.md`,
+lands. That branch — **PR #148**, tip `87f93f3` — rewrites `SKILL.md`,
 `reference/records.md`, `reference/dispatching.md` and `reference/history.md`,
 and files `repo-20`. Starting before it merges guarantees a conflict across the
 whole page.
+
+**It moved twice while this ticket was being written** — `479b7b3` → `0d62b5e` →
+`87f93f3`, with the PR opening in between. Every measurement below was re-taken at
+`87f93f3`; re-take them again before you build.
 
 It is not in `depends_on` because `repo-20`'s file does not exist on `main`, and
 a `depends_on` naming a ticket the branch cannot see fails
@@ -29,13 +33,13 @@ purpose.
 
 Two more open branches change what this work has to do:
 
-| Branch / PR                                          | What it changes here                                                                                     |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `docs/record-2026-09-04-orchestration-batch` (no PR) | Rewrites `SKILL.md`. **Blocking.** Everything below is measured against its tip, not `main`              |
-| `repo-18-citation-anchors` (#146)                    | Ships `citations.mjs --require-anchors`. **Build step 1 cannot be done without it** — hence `depends_on` |
-| `repo-19-needs-decision-status` (#145)               | Adds a `needs-decision` status. Retires most of step 2's decision-grep bullet — see Build step 6         |
+| Branch / PR                                         | What it changes here                                                                                     |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `docs/record-2026-09-04-orchestration-batch` (#148) | Rewrites `SKILL.md`. **Blocking.** Everything below is measured against its tip, not `main`              |
+| `repo-18-citation-anchors` (#146)                   | Ships `citations.mjs --require-anchors`. **Build step 1 cannot be done without it** — hence `depends_on` |
+| `repo-19-needs-decision-status` (#145)              | Adds a `needs-decision` status. Retires most of step 2's decision-grep bullet — see Build step 6         |
 
-**Every line number in this ticket refers to `479b7b3`'s tree and will be wrong
+**Every line number in this ticket refers to `87f93f3`'s tree and will be wrong
 by the time you read it.** Locate provisions by their quoted opening phrase, not
 by number. The line numbers are given so the sizes can be re-derived, not so they
 can be followed.
@@ -59,24 +63,26 @@ $ wc -l .claude/skills/orchestrate-tickets/SKILL.md .claude/skills/orchestrate-t
   2121 total
 ```
 
-At `479b7b3` the same command gives **2555**, with `SKILL.md` at **570**. Inside
+At `87f93f3` the same command gives **2586**, with `SKILL.md` at **567**. Inside
 it, `## The loop` is 12 steps in 225 lines (34–258) and `## Decisions` is
-**259 lines (304–562) — larger than the loop it exists to serve**. Lines matching
+**259 lines (301–559) — larger than the loop it exists to serve**. Lines matching
 `grep -ciE 'measured|20[0-9]{2}-[0-9]{2}-[0-9]{2}'` went 21 → 31.
 
 **That growth is the evidence, not a complaint about it.** Every line
-`479b7b3` added is correct and was earned by a real failure; the branch is good
+`87f93f3` added is correct and was earned by a real failure; the branch is good
 work. The defect is that a page written this way has no mechanism by which a
 later session can tell a rule it must obey from a story explaining why the rule
 exists — so the only safe edit is to append, and the page grows monotonically
-whether or not it gets better. A 570-line instruction read in full by every
+whether or not it gets better. A 567-line instruction read in full by every
 orchestrator is also a direct cost on the one context the skill's own opening
 paragraph says must survive the batch.
 
-### The reproduction: three defects, all in the skill's own instructions
+### The reproduction: four defects, all in the skill's own instructions
 
-All three were found in one session (2026-09-04) by agents told to distrust the
-brief they were handed. Two are the class that only appending produces.
+The first three were found in one session (2026-09-04) by agents told to distrust
+the brief they were handed. The fourth surfaced while this ticket was being
+filed. Three are the class that only appending produces, and **the fourth is the
+one that proves the point, because #148's rewrite carries it forward.**
 
 **1. A claim about another file that stopped being true.** `SKILL.md` step 4 said
 a `mechanical` ticket puts a **Sonnet** builder in a batch, and drew from that the
@@ -116,21 +122,48 @@ to take — written by an orchestrator that had taken exactly that look, with on
 entirely inside the same branch. Premises true, conclusion false, and the page
 already documents that shape twice elsewhere.
 
-### What `479b7b3` already did, which this ticket must not redo
+**4. A false claim about the harness, which #148 rewrites without fixing.** On
+`main`, `SKILL.md` step 4 says a backgrounded dispatch _"returns an agent id and
+nothing else"_. **That is false.** A background `tool_response` also carries
+`status`, `description`, `prompt`, `outputFile` and — the field the whole
+paragraph is about — **`resolvedModel`**. It lacks only the usage, token and
+duration fields. What is true is narrower: the _dispatching model_ does not see
+it, because the parent receives only the subagent's final text result.
 
-Checked against that branch rather than assumed. **All three defects above are
-already handled there**, and two of the six changes below have partly landed:
+`#148` rewrote that paragraph and **the claim survived in a new spelling**,
+verified by me at `87f93f3`:
 
-| Already on `479b7b3`                                                                                                                            | Still open                                                                                                                    |
+```
+$ git show origin/docs/record-2026-09-04-orchestration-batch:.claude/skills/orchestrate-tickets/SKILL.md \
+    | grep -n 'resolvedModel'
+86:   inherit. A backgrounded dispatch returns no `resolvedModel`, so inherit is the
+99:   and neither needs `resolvedModel`** — which a backgrounded dispatch does not
+```
+
+Line 86 is the strong version — it concludes the builder's model is _"unobservable
+to everyone afterwards"_ — and three documented verification paths falsify it (see
+Build 4). **This is why the page needs a mechanism rather than another careful
+reader**: the branch whose PR title is _"correct ten skill defects"_ rewrote this
+exact sentence and reproduced its error, because rewriting prose does not
+re-check it. Fixing it is Build 4's job; if `#148` lands first it lands twice.
+
+### What `87f93f3` already did, which this ticket must not redo
+
+Checked against that branch rather than assumed. **Defects 1–3 are already handled
+there; defect 4 is not, and that branch carries it forward.** Two of the changes
+below have partly landed:
+
+| Already on `87f93f3`                                                                                                                            | Still open                                                                                                                    |
 | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Defect 1 — step 4 now says `haiku`, and `ticket-reviewer.md`'s pin is cited                                                                     | Neither claim is machine-checked; nothing stops the next drift (Build 1)                                                      |
 | Defect 2 — a _"Read the matches, do not count them"_ bullet with this measurement                                                               | The grep itself is unchanged, which is right; but it and its two bullets are 13 lines that `repo-19` mostly retires (Build 6) |
 | Defect 3 — `62cb999` reframes it as a division of labour and gives the `--json` command                                                         | —                                                                                                                             |
-| Build 4's rule — step 3 already says _"Then pass that model explicitly rather than letting it inherit"_                                         | The apparatus around it is still 24 lines explaining what a background dispatch does not return (Build 4)                     |
+| Build 4's rule — step 3 already says _"Then pass that model explicitly rather than letting it inherit"_                                         | The apparatus around it is still 24 lines, **two of them defect 4** (Build 4)                                                 |
+| — **defect 4 is not fixed there.** The branch rewrote the sentence and kept the error                                                           | Build 4 fixes it. If #148 lands first, it lands twice                                                                         |
 | Build 5 entirely — both failure modes are written, with the `grep '^## Review'` discriminator and the 2026-09-04 gate-declines-PASS measurement | They arrived as ~20 more lines inside the loop; the work left is placement and compression, not authorship (Build 5)          |
 
-So **this ticket is the structural cleanup, and only that.** Do not re-file, re-argue
-or re-measure any of the five rows above.
+So **this ticket is the structural cleanup, and only that.** Do not re-file,
+re-argue or re-measure the first five rows above. The sixth is work.
 
 ## Build
 
@@ -161,7 +194,7 @@ from a scratch copy, not from its documentation:
 
 Do:
 
-1. Convert `SKILL.md`'s cross-file _claims_ to anchored citations. At `479b7b3`
+1. Convert `SKILL.md`'s cross-file _claims_ to anchored citations. At `87f93f3`
    there are exactly two — the `builder.md` difficulty table in step 3 and the
    `ticket-reviewer.md` `model: sonnet` pin in step 4. **Pointers to
    `reference/*.md` siblings are not claims** and stay ordinary links; converting
@@ -216,7 +249,7 @@ from `git log` where the commit says, and demote them where it does not.
 `## Decisions` states one rule in many costumes. The page notices this once — _"All
 three failures are one mistake in different costumes: compressing something the
 receiving agent needed in full"_ — and applies the observation to three of them
-while leaving the rest standing. At `479b7b3` there are **eleven distinct failure
+while leaving the rest standing. At `87f93f3` there are **eleven distinct failure
 shapes** under that one rule, listed here by opening phrase so you can find them
 after the lines move:
 
@@ -244,32 +277,99 @@ neighbours rather than shapes of their own — keep them as the instruction the
 table's rows point at, not as rows. The long worked examples go to `history.md`
 under change 2.
 
-### 4. Retire the model-check apparatus, keeping the rule
+### 4. Retire the model-check apparatus, and correct defect 4
 
-The rule landed on `479b7b3`; only the scaffolding is left. Step 4 still spends
-24 lines establishing what is knowable, what a backgrounded dispatch does not
-return, and what to write in a record when you had to infer. **Passing `model`
-explicitly on every dispatch makes all of that unnecessary**: the resolution is
-fixed at dispatch time by the dispatcher, so there is nothing to observe
-afterwards and nothing to infer.
+The rule landed on `87f93f3`; the scaffolding around it is wrong as well as
+redundant. Step 4 still spends 24 lines establishing what is knowable and what to
+write in a record when you had to infer, and two of those lines are defect 4.
 
-- Step 3 already says to pass it for the builder. Say the same for the **gate**:
-  `ticket-reviewer.md` pins `model: sonnet`, so pass `model` explicitly there too,
-  including when Sonnet is what you wanted.
-- Delete the `resolvedModel` apparatus and the "say you inferred it" fallback.
-  Keep the one-line consequence — a dispatcher that names both models can state
-  the pairing as fact — and keep the _"11 tickets, 22 gates, none gated by a
-  different model than built it"_ measurement.
+**The open question this ticket was filed with is closed.** It asked whether a
+subagent can alter its own model or type after dispatch, which would defeat
+"fixed at dispatch time". It cannot. **Provenance, because none of it is
+verifiable from inside this repo:** the question was put to the
+`claude-code-guide` skill, which read Claude Code's own documentation rather than
+summaries of it; the verified/inferred split below is that guide's, preserved
+deliberately. **Nothing in this block was verified by the filer** — no network
+reaches this sandbox and these are facts about the harness, not about this tree.
+Treat them as relayed, and if implementing turns one up false, that is a finding
+worth more than the change.
 
-**One open question, deliberately not settled here, being checked separately:
-whether a subagent can alter its own model or agent type after dispatch.** If it
-can, "fixed at dispatch time" is false and this change needs the observation step
-back in some form. **Fold the answer in before implementing this step**; do not
-implement around the uncertainty and do not resolve it yourself.
+**Verified — the two facts the change rests on:**
+
+- A subagent cannot self-initiate a model change. The only model input is the
+  `model` parameter at dispatch; the events that switch a model are all host
+  actions (`/model`, the picker, `/config`, fast-mode, SDK `set_model`), none
+  reachable from a subagent's tool loop.
+- A subagent cannot change its type or widen its `tools:` list. `tools` is a hard
+  allowlist enforced before the turn runs, and an empty resolved set refuses to
+  launch rather than falling back.
+
+**Verified — three qualifications, which make this weaker than "knowable by
+construction". Write all three in; a rule stated without them is the
+overclaiming this page keeps producing:**
+
+- **The model can still move mid-run, at the harness's initiative and never the
+  agent's.** Fallback chains apply to subagents; on failover the subagent
+  continues on whichever fallback accepted the request.
+- **An explicit `model` parameter is not absolute.**
+  `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` makes Claude Code ignore every definition's
+  model field _and_ prevents passing one at dispatch; an `availableModels`
+  allowlist silently substitutes a permitted model; `fork` always inherits.
+- **The default subagent model is `CLAUDE_CODE_SUBAGENT_MODEL`, an environment
+  variable, not a settings key.** I did verify the repo-local half of this:
+  `.claude/settings.json` and `~/.claude/settings.json` contain no `env` block,
+  no `CLAUDE_CODE_SUBAGENT_MODEL` and no `availableModels`, and
+  `.claude/settings.local.json` does not exist. So a settings grep here proves
+  nothing either way — the variable can be set outside any settings file.
+
+**Inferred, not stated — and it is the finding that most changes the design.**
+`sub-agents.md` says a subagent receives "only this system prompt plus basic
+environment details… not the Claude Code system prompt", and the enumerated
+startup-content list contains no model-identity line. The guide marks the
+conclusion as inference from two adjacent documented facts. It explains the
+observation exactly: two subagents quoted the "You are powered by the model named
+X" line and a third searched and found none. **So asking an agent to quote that
+line is not a fallback verification path — it is unreliable by construction, and
+the skill must not offer it as one.**
+
+This repo already holds the same rule one field over, and citing it is better than
+restating it: `reference/dispatching.md` records that self-reported _tool_ lists
+are unreliable — a builder listing eight tools where its frontmatter grants
+thirteen — and concludes _"Ask an agent to **call** a tool, not to tell you
+whether it has one."_ Same principle, same failure, different field.
+
+So do:
+
+1. Step 3 already says to pass `model` explicitly for the builder. Say the same
+   for the **gate**: `ticket-reviewer.md` pins `model: sonnet`, so pass it
+   explicitly there too, including when Sonnet is what you wanted.
+2. **Fix defect 4.** Delete both `resolvedModel` sentences. Replace with the true,
+   narrower statement: a background dispatch's `tool_response` does carry
+   `resolvedModel`; the _dispatching model_ does not see it, because the parent
+   receives only the subagent's final text result.
+3. Name the three documented override paths in one sentence, so a dispatcher that
+   writes "gated by Sonnet" knows what could make that false.
+4. Give the verification paths that do work, rather than the apparatus that does
+   not: a **`PostToolUse` hook** on the `Agent` tool can read `resolvedModel` and
+   feed it back via `hookSpecificOutput.additionalContext`, and **`/tasks`** names
+   the model per subagent row. A per-subagent transcript exists at
+   `~/.claude/projects/{project}/{sessionId}/subagents/agent-{agentId}.jsonl` —
+   its existence is documented, but **whether it records the model per turn is
+   inferred, not verified**, so write it as the weakest of the three or leave it
+   out.
+5. **Do not offer "ask the agent what model it is" as a path**, and say in one
+   clause why, citing `dispatching.md`'s tool-list rule.
+6. Keep the _"11 tickets, 22 gates, none gated by a different model than built
+   it"_ measurement.
+
+**This step is now a rewrite with a factual claim in it, which is what earns this
+ticket its `hard` rating.** If you cannot verify a line here, say which and mark
+it — do not silently promote a relayed claim to a stated one on a page whose whole
+subject is that failure.
 
 ### 5. Give the two new failure modes their tests, and get them out of the loop
 
-Both were authored on `479b7b3` and neither needs writing again. What is missing
+Both were authored on `87f93f3` and neither needs writing again. What is missing
 is that each is prose inside a loop step rather than a named failure with a
 command:
 
@@ -301,8 +401,20 @@ sentence or two, each pointing into `reference/` for the part that needs
 explaining. Everything that explains _why_ a step is what it is moves down the
 page or out to `reference/`.
 
-Two specifics:
+Three specifics:
 
+- **Step 7 gains one clause, and must not gain a section.** The skill argues the
+  different-model gate as blind-spot coverage — two models are unlikely to eyeball
+  the same thing. True, and the weaker version. The stronger one, from #148's own
+  gate exchange: **describing _how_ you checked surfaces defects that describing
+  _what_ you concluded cannot.** Three phrases in that gate each carried a defect
+  the conclusion did not — _"only `repo-404` matched, 8 times"_ (an abridged
+  transcript), _"once I read it as the nine ticket files"_ (a count with no
+  denominator), _"I ran it against a `git archive` snapshot"_ (an incomplete
+  search tree). Two found errors in the builder's work; the third found one in the
+  reviewer's own. **None was framed as a finding; all three found something.** So
+  step 7 should ask both agents for their method, not only their verdict. One
+  clause. It is free, and it will be tempting to grow it.
 - Step 2's decision-grep bullets are 13 lines. **If `repo-19` (#145) has landed,
   `--ready` excludes `needs-decision` tickets and the grep is a fallback for
   unmigrated tickets, not the primary move** — verified on
@@ -312,10 +424,47 @@ Two specifics:
 - The `## Reference` table at the top already does the pointing. Do not build a
   second index; point at it.
 
-**Target: `SKILL.md` from 570 to roughly 180 lines.** This is a target for sizing
+**Target: `SKILL.md` from 567 to roughly 180 lines.** This is a target for sizing
 the work, **not an acceptance criterion** — a page that hits 180 by deleting
-measurements is worse than the 570 it replaced, and no `Done when` line below
+measurements is worse than the 567 it replaced, and no `Done when` line below
 mentions a count.
+
+### 7. One generalisation in `records.md`, replacing three warnings
+
+`reference/records.md` already carries one member of a family without naming it:
+_"Measure that exit code without a pipe: `$?` after `| tail` is"_ the pipe's
+status. Two more of the same shape surfaced in #148's gate, and both reproduce
+here:
+
+```
+$ grep -rlnE 'repo-(40|80|90|99|404|808|901|999)' scripts packages
+scripts/test/status.test.ts                  # reads as "all eight are there"
+$ grep -rhoE 'repo-(40|80|90|99|404|808|901|999)' scripts packages | sort -u
+repo-404                                     # only one of the eight matched
+
+$ grep -rlnE 'repo-(40|404)' scripts nosuchdir
+ugrep: warning: nosuchdir: No such file or directory      # stderr
+scripts/test/status.test.ts                               # stdout — real matches
+$ echo $?
+2
+```
+
+`-l` under an alternation cannot say _which_ alternative matched, and a missing
+search path still prints the matches from the paths that exist — so an incomplete
+search is indistinguishable from a complete one on stdout alone. In both cases
+**the flags and the exit code carry what the output cannot, and the habit of
+reading the matching line discards them.** Write that generalisation once and
+point the three instances at it, rather than adding a third warning.
+
+**Put it in `records.md`, not `defect-shapes.md`.** The existing `$?`-after-a-pipe
+member is already there; `defect-shapes.md` is about what a gate hunts for in
+_code_, while this is about an agent misreading its own command and writing the
+misreading down — which is what `records.md` governs. Splitting a three-member
+family across two files is precisely what this cleanup exists to stop.
+
+The `-l` instance has a full worked reproduction in `repo-20`'s Log at `87f93f3`,
+including why `sort -u` is load-bearing in the `-o` transcript. **Cite it; do not
+restate it.** The missing-path instance is the third comment on #148.
 
 ## Done when
 
@@ -341,31 +490,46 @@ mentions a count.
    extract each `20[0-9]{2}-[0-9]{2}-[0-9]{2}` occurrence with its sentence from
    the merge-base, and `grep` each in the new tree. **This is the line that
    protects against a cleanup that hits its size target by deleting evidence.**
-7. `SKILL.md` contains no `resolvedModel`, and both step 3 and step 4 instruct
-   passing `model` explicitly. The open question in Build 4 has been answered and
-   the answer is recorded in this ticket's Log.
-8. `npm run check`, `npm run format` (oxfmt formats markdown) and
-   `node scripts/status.mjs --json > /dev/null` all pass.
+7. **Defect 4 is gone and did not come back.**
+   `grep -n 'resolvedModel' SKILL.md` returns either nothing, or only lines that
+   say the field _is_ returned and is invisible to the dispatching model — never a
+   line saying a background dispatch does not return it. Both step 3 and step 4
+   instruct passing `model` explicitly, and the three override paths
+   (`CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, `availableModels`, `fork`) are each named
+   once. **Check this against `#148`'s merged text, not against `main`** — `#148`
+   rewrites the paragraph and reintroduces the claim in a new spelling.
+8. `SKILL.md` offers no verification path that consists of asking an agent what
+   model it is, and says in one clause why not.
+   `grep -in 'powered by the model' SKILL.md` returns nothing, or returns only the
+   clause explaining that the line is not guaranteed for subagents.
+9. `reference/records.md` contains one generalisation covering all three
+   reading-discards-information instances, and `grep -c` shows the `$?`-after-a-pipe
+   warning is no longer a standalone provision. `SKILL.md` step 7 asks for method
+   as well as verdict, in **one** clause — checkable by reading the step, which
+   `Done when` 5 already bounds to three lines.
+10. `npm run check`, `npm run format` (oxfmt formats markdown) and
+    `node scripts/status.mjs --json > /dev/null` all pass.
 
 ## Log
 
-- **2026-09-05 — filed.** Every number in this ticket was re-measured against
-  `origin/main@c37cab9` and `origin/docs/record-2026-09-04-orchestration-batch@479b7b3`
-  rather than taken from the filing brief. Four things came back different from
-  how they were briefed, and all four are in the text above:
+- **2026-09-05 — filed.** Every number was measured against `origin/main@c37cab9`
+  and the record branch rather than taken from the filing brief. The record branch
+  was at `479b7b3` for this pass and `87f93f3` by the second; **the figures quoted
+  below and above are the `87f93f3` ones**, re-taken, not the originals. Four
+  things came back different from how they were briefed:
 
-  1. **The baseline is 570, not 464.** The brief sized the work against `main`.
-     `479b7b3` is a blocking dependency and grows `SKILL.md` by 106 lines, so the
-     464 → ~180 target is really 570 → ~180. `## Decisions` grows 217 → 259 and
+  1. **The baseline is 567, not 464.** The brief sized the work against `main`.
+     `87f93f3` is a blocking dependency and grows `SKILL.md` by 106 lines, so the
+     464 → ~180 target is really 567 → ~180. `## Decisions` grows 217 → 259 and
      the loop 187 → 225.
   2. **Build 5 has already landed in full**, not partly. Both failure modes are on
-     `479b7b3` with the exact `grep '^## Review'` discriminator and the
+     `87f93f3` with the exact `grep '^## Review'` discriminator and the
      gate-declines-PASS measurement. The residual work is placement, so the step
      was rewritten from "add" to "give them tests and move them".
   3. **Build 4's rule has landed too** — step 3 on that branch already says to
      pass the model explicitly. What remains is deleting the apparatus the rule
      made redundant.
-  4. **Defect 2 is documented on `479b7b3` as well**, under _"Read the matches, do
+  4. **Defect 2 is documented on `87f93f3` as well**, under _"Read the matches, do
      not count them"_. The brief presented defects 1 and 3 as the ones being fixed
      there. All three are.
 
@@ -393,9 +557,56 @@ mentions a count.
   first draft of this bullet said `3/4` and was falsified by the commit that
   added it, which is the drift the skill's own records section warns about.
 
-- **`kind: chore`, not `fix`.** It carries a reproduction, but the deliverable is
-  a restructure of documentation rather than a corrected behaviour, and the three
-  defects it reproduces are already fixed on `479b7b3`.
+- **2026-09-05, second pass — the open question closed, and a fourth defect.** The
+  orchestrator put the subagent-model question to the `claude-code-guide` skill and
+  relayed the answer. It both confirms Build 4 and corrects a premise the ticket
+  had inherited, so Build 4 was rewritten rather than amended. **The relayed block
+  is marked as relayed and its verified/inferred split preserved** — no network
+  reaches this sandbox and none of it is checkable against this tree, so promoting
+  it to a stated fact would be the exact failure the ticket is about.
+
+  What I verified myself, and it is only this:
+
+  1. **#148 repeats the `resolvedModel` claim in a new spelling** — its step 3 says
+     a backgrounded dispatch "returns no `resolvedModel`" and its step 4 says it
+     "does not return" it. `main`'s wording was "returns an agent id and nothing
+     else". A branch titled _"correct ten skill defects"_ rewrote the sentence and
+     kept the error, which is now defect 4 and the sharpest argument in the Why.
+  2. **`reference/dispatching.md` already holds the same rule one field over** —
+     _"Ask an agent to **call** a tool, not to tell you whether it has one"_, with
+     its own measurement (a builder reporting eight tools against thirteen in its
+     frontmatter). Build 4 cites it rather than making a new claim.
+  3. **No `env` block, `CLAUDE_CODE_SUBAGENT_MODEL` or `availableModels`** in
+     `.claude/settings.json` or `~/.claude/settings.json`;
+     `.claude/settings.local.json` does not exist. So a settings grep proves
+     nothing here either way, and Build 4 says so rather than implying the
+     variable is unset.
+
+  I did **not** verify: fallback chains, `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`,
+  `PreModelSwitch`, `/tasks`, the `PostToolUse` hook path, the subagent transcript
+  path, or the `tool_response` field list. All are relayed.
+
+- **2026-09-05, second pass — two items carried from #148's gate**, at the
+  orchestrator's request and reproduced here before accepting: Build 7 (the
+  reading-discards-information generalisation) and Build 6's step-7 clause. Both
+  `grep` reproductions in Build 7 were run in this worktree, including the
+  missing-path case, which exits **2**, warns on stderr, and still prints real
+  matches to stdout — so with stderr discarded an incomplete search is
+  indistinguishable from a complete one. **Neither was left as an open decision.**
+  The one judgement call the orchestrator delegated — `records.md` or
+  `defect-shapes.md` — is answered in Build 7 with its reason, as asked.
+
+- **What I left out, and why.** Nothing. Both additions were kept: the family
+  generalisation because the cleanup is already rewriting `records.md` and a
+  fourth standalone warning is the disease, and the step-7 clause because it is one
+  sentence in a step this ticket is already rewriting. Neither is a defect in
+  `repo-21`; both are Build content it is the cheapest home for.
+
+- **`kind: chore`, not `fix`.** It carries reproductions, but the deliverable is a
+  restructure of documentation rather than a corrected behaviour. Defects 1–3 are
+  already fixed on `87f93f3`; defect 4 is a live correction this ticket makes, and
+  it is the one line that argues for `fix`. `chore` stands because the fix is two
+  sentences inside a rewrite of the whole page.
 
 - **`difficulty: hard`, rating the build and not the blockage.** There is no open
   decision in this ticket. The rating is for the work itself: deciding
@@ -413,8 +624,32 @@ mentions a count.
   on each of the seven remote branches returned only `repo-20`'s own file and the
   two `history.md`/`dispatching.md` lines naming it. `gh pr list --state all`
   names no `repo-2x` id in any title. The looser `repo-[0-9]+` sweep's higher hits
-  — `repo-40`, `repo-80`, `repo-90`, `repo-99`, `repo-404`, `repo-808`, `repo-901`,
-  `repo-999` — are all fixtures in `scripts/test/status.test.ts`.
+  are `repo-40`, `repo-80`, `repo-90`, `repo-99`, `repo-404`, `repo-808`,
+  `repo-901` and `repo-999`; **none is a filed ticket**, which is what matters.
+  `repo-404` is a fixture in `scripts/test/status.test.ts` and
+  `docs/01-TICKETS.md`'s dangling-`depends_on` example; **the other seven occur
+  only as example ids inside other tickets' prose** (`repo-3`, `repo-6`, `repo-8`
+  and others). The check that actually settles it:
+  `grep -rhoE '^id: repo-[0-9]+' docs/work/*.md | sort -u -t- -k2 -n` tops out at
+  `repo-19`.
+
+- **The sentence above was wrong when I first committed it, and I had transcribed
+  it.** The first wording said all eight ids "are all fixtures in
+  `scripts/test/status.test.ts`", which is false for seven of them. I took it from
+  `repo-20`'s Log — **which had already been corrected upstream** at `87f93f3`,
+  where the same sentence is quoted as the error and reproduced in full. I copied
+  a pre-correction wording, and the conclusion (`repo-21` is free) stayed true
+  while its stated evidence was false. That is the `SKILL.md` provision _"a relay's
+  citation can be wrong while its conclusion is right"_, committed by the filer
+  into a ticket about laundering. Caught by running `-o` in place of `-l` rather
+  than by re-reading, which is Build 7's whole point:
+
+  ```
+  $ grep -rlnE 'repo-(40|80|90|99|404|808|901|999)' scripts packages
+  scripts/test/status.test.ts
+  $ grep -rhoE 'repo-(40|80|90|99|404|808|901|999)' scripts packages | sort -u
+  repo-404
+  ```
 
 - **`depends_on: [repo-18]` only.** `repo-20` and the recording branch are
   sequencing, not dependency, and naming a ticket absent from this branch's tree
