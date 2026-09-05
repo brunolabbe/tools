@@ -2,17 +2,22 @@
 id: repo-22
 tool: repo
 title: "`grep` here is a wrapper that silently honours ignore files"
-kind: chore
+kind: fix
 status: ready
 milestone: null
 depends_on: []
-difficulty: standard
+difficulty: hard
 ---
 
 # repo-22 — `grep` here is a wrapper that silently honours ignore files
 
-**The Decision is answered — see below. This ticket is startable.** The hook is
-the only carrier, so its header comment has to hold the whole reasoning.
+**Files:** `.claude/hooks/check-tree-grep.sh` (new),
+`.claude/hooks/check-pr-title.sh`, `.claude/settings.json`.
+
+**Both decisions are answered. This ticket is startable.** The hook is the only
+carrier, so its header comment has to hold the whole reasoning — and **Decision
+two widened the ticket**: it also fixes a misfiring anchor in the shipped
+`check-pr-title.sh`, because this ticket's Build was about to copy it.
 
 ## Why
 
@@ -128,25 +133,30 @@ Not A, and not A+C. The three options were put to them with the costings below.
 4. **Advisory, never blocking**: warn on stderr, `exit 0`. This fires on a
    correct command far more often than on a mistaken one, so a blocking exit 2
    would be wrong.
-5. Match a tree-walking `grep` only where it is being **invoked**, and not when
-   it is already `command grep` or a VCS grep. Start from the
-   `(^|[;&|(]|&&|\|\|)` anchoring in `check-pr-title.sh`, whose header records a
-   plain substring test firing on the command name inside a heredoc and blocking
-   an unrelated command on its first live run.
+5. **Fix the anchor before using it — do not reuse it as-is.**
+   `check-pr-title.sh`'s `(^|[;&|(]|&&|\|\|)` treats a raw `(`, `;`, `&` or `|`
+   as a command boundary without checking it is a shell operator rather than a
+   character inside a string, and it misfires. See **Decision two**, which
+   carries the reproduction, the seven-shape table and a fix that measures
+   clean.
 
-   **`-r` and `-R` appear inside bundled short-flag clusters**, and every
-   example in **Done when** uses `-rl`. Match the cluster
-   (`[[:space:]]-[A-Za-z]*[rR]`), not a standalone `-r`; a builder told only
-   "`-r` or `-R`" can write `-r\b` and miss every real call site.
+6. **Fix `check-pr-title.sh` in the same change**, not only the new hook. That
+   is the shipped instance, it is the one that blocked a real command in this
+   session, and it is why this ticket widened. Mind the trap named in Decision
+   two: strip quoted spans for the boundary test only, never for the title
+   extraction.
 
-6. **Read the open question below before writing the anchor.** The pattern in
-   step 5 has a measured hole, and which way it is closed is not yours to
-   assume.
+7. Match a tree-walking `grep` only where it is being **invoked**, and not when
+   it is already `command grep` or a VCS grep. **`-r` and `-R` appear inside
+   bundled short-flag clusters**, and every example in **Done when** uses `-rl`.
+   Match the cluster (`[[:space:]]-[A-Za-z]*[rR]`), not a standalone `-r`; a
+   builder told only "`-r` or `-R`" can write `-r\b` and miss every real call
+   site.
 
-## Open question — the anchor's paren-adjacent misfire
+## Decision two — the anchor's paren-adjacent misfire, answered 2026-09-05
 
 Raised by the filing gate on `5fed828`, reproduced independently here.
-**Unanswered; with the owner as of 2026-09-05. Do not settle it in a commit.**
+**Answered: remedy (b) — fix the anchor, in this ticket. Not open.**
 
 `check-pr-title.sh`'s anchor treats any raw `(`, `;`, `&` or `|` before the
 phrase as a command boundary, without checking it is a shell operator rather
@@ -179,15 +189,59 @@ untested. Measured with the step 5 pattern:
 | `cd /tmp && grep -r x .`        | yes — correct  |
 | `command grep -rl x .`          | no             |
 
-| Option                                                       | Cost                                                                                          |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| **(a) — accept it, named in the header as a limitation**     | cheap and honest; matches what `check-pr-title.sh` already ships. Leaves the misfire in place |
-| **(b) — tighten the anchor, add the paren `Done when` line** | closes the hole; real regex work, and the fix arguably belongs on `check-pr-title.sh` too     |
+### The answer, and why it went against the recommendation
 
-**The gate leans (a); so does this ticket.** The reason it is not settled here is
-that the anchor is shipped and reaches every agent in the repo, not just the hook
-being specified — so (b) may be a separate ticket against `check-pr-title.sh`
-rather than a step in this one.
+Three options went to the owner: file it separately, fold it in, or accept it as
+a named limitation. **They chose folding it in.** Their reasoning: this ticket's
+Build already tells its builder to reuse this anchor, so the builder confronts it
+either way, and fixing it before anything copies it beats documenting it as
+accepted.
+
+**The gate recommended (a), and the recommendation was sound** — it was the
+cheaper option and consistent with what the repo already ships. The deciding fact
+was not that (a) was wrong but that **this ticket propagates the anchor rather
+than merely living beside it**. A limitation that is about to be copied is not
+the same as one sitting still.
+
+**The accepted cost, named so it does not read as drift:** this widens the ticket
+past the grep wrapper. One branch now carries two subjects and squash-merges
+under one changelog line. It also changes the type of the PR title that lands —
+`fix(repo):`, not `docs(repo):`, and `fix` is **not** `hidden` in
+`release-please-config.json`, so unlike the filing commit this one ships a
+changelog line. Check the title with
+`node scripts/commit-message.mjs --text "<title>"` before opening.
+
+### What actually surfaced this, which is the lesson
+
+The gate did not read the anchor and reason about it. **It ran the hook against a
+harder input than `Done when` tested**, and then noticed the same misfire had
+already fired against its own Bash call, live, minutes earlier. `Done when` only
+exercised the quote-adjacent shape — the one the naive anchor happens to handle.
+**A guard tested only on the shape it was written for is untested.** That applies
+to the hook this ticket adds, which is why the paren-adjacent case is now an
+acceptance line rather than a remark.
+
+### A fix that measures clean, offered as a starting point
+
+Strip quoted spans first, then apply the boundary anchor to what is left —
+`sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g"`. Verified against all seven shapes,
+both hooks:
+
+| command                                | naive | stripped | wanted |
+| -------------------------------------- | ----- | -------- | ------ |
+| `echo "(grep -r x .) is risky"`        | 1     | 0        | 0      |
+| `echo 'grep -rl x .'`                  | 0     | 0        | 0      |
+| `grep -rl x .`                         | 1     | 1        | 1      |
+| `cd /tmp && grep -r x .`               | 1     | 1        | 1      |
+| `command grep -rl x .`                 | 0     | 0        | 0      |
+| `printf 'see (gh pr create x) for …'`  | 1     | 0        | 0      |
+| `gh pr create --title "feat(repo): x"` | 1     | 1        | 1      |
+
+**The trap in implementing it:** strip only for the _boundary test_.
+`check-pr-title.sh` extracts the title from `$cmd` with a `sed` that reads the
+quoted span — substitute the stripped text for `$cmd` throughout and the title
+becomes unfindable, turning every real `gh pr create` into the "without an
+inspectable `--title`" rejection.
 
 ## Done when
 
@@ -215,12 +269,18 @@ Let `H=.claude/hooks/check-tree-grep.sh` throughout.
   code, not a failure.
 - **It is wired**: `node -e "const s=require('./.claude/settings.json'); console.log(JSON.stringify(s.hooks.PreToolUse))"`
   names both `check-pr-title.sh` and `check-tree-grep.sh` under a `Bash` matcher.
-- **The paren-adjacent shape is addressed, whichever way the open question was
-  answered** — this line does not presume one. `command grep -c 'paren' $H`
-  returns ≥ 1, naming it as an accepted limitation under (a) or as closed under
-  (b); and if (b) was chosen,
+- **The paren-adjacent shape is silent** — the gate's own reproduction, taken
+  verbatim rather than re-derived:
   `printf '{"tool_input":{"command":"echo \"(grep -r x .) is risky\""}}' | bash $H`
-  prints nothing.
+  prints nothing and exits `0`. This is the shape the naive anchor got wrong;
+  the quote-adjacent line above is the one it already handled.
+- **`check-pr-title.sh` is fixed too, and still does its job.** With
+  `a='gh pr '; b='create'`:
+  `jq -n --arg c "printf 'see ($a$b thing) for details'" '{tool_input:{command:$c}}' | bash .claude/hooks/check-pr-title.sh; echo $?`
+  prints nothing and exits `0`; while
+  `jq -n --arg c "$a$b --title 'nope'" '{tool_input:{command:$c}}' | bash .claude/hooks/check-pr-title.sh; echo $?`
+  still rejects and exits `2`. Both halves are required: the second is what
+  proves the fix did not simply disable the guard.
 - `npm run check` passes, `npm run format` leaves the tree clean, and
   `node scripts/status.mjs --json` exits `0`.
 
@@ -282,12 +342,11 @@ it belongs above `## Log` under its own heading when there is.
 All three were reproduced here before being accepted; none was taken on the
 report alone.
 
-- **med — the anchor Build step 5 prescribes misfires.** Reproduced twice: the
+- **med — the anchor Build step 5 prescribed misfires.** Reproduced twice: the
   live hook blocked the Bash call that was building the test fixture, and
-  offline it exits 2 on a harmless `printf`. Not settled — it is a defect in
-  shipped code reaching every agent, so it went to the owner as the **Open
-  question** above rather than into a commit. Build step 6 stops a builder
-  assuming an answer, and the new `Done when` line holds under either.
+  offline it exits 2 on a harmless `printf`. Escalated rather than settled, and
+  the owner answered **(b)** — see **Decision two**, which records that the
+  gate's own recommendation of (a) was sound and what outweighed it.
 - **low — "Path shapes differ" had no consumer.** Given a job rather than cut:
   it is now in Build step 2's list of what the header must carry. It is a
   measured failure mode that produced a wrong reading in this session, so
@@ -298,3 +357,19 @@ report alone.
 - The gate could not read `repo-20`'s and `repo-21`'s files — both are on
   unmerged branches invisible from this worktree. A limit on what it could
   check, not a defect.
+
+**2026-09-05 — Decision two answered: fold the anchor fix in.** Scope widened
+deliberately; the reasoning and the accepted cost are in **Decision two**, not
+here, because the next agent reads Build first.
+
+- `kind` moved `chore` → `fix` and `difficulty` `standard` → `hard`. The ticket
+  now edits a shipped guard that blocks real commands, and the fix turns on
+  distinguishing a shell operator from a character inside a string. That is a
+  judgement call with live blast radius, not prose.
+- The proposed fix — strip quoted spans, then anchor — was **measured before
+  being written down**, across all seven shapes and both hooks, and one of those
+  shapes (`gh pr create --title "feat(repo): x"`) is the one a careless strip
+  would break. The trap that would break it is named in Decision two.
+- Verified today that `check-pr-title.sh` still exits `2` on a genuinely bad
+  title, so the second half of that acceptance line can fail and is worth
+  asserting.
