@@ -60,9 +60,14 @@ discarded. So:
   careful does not fix it: writing the assertion changes the thing asserted. So
   **record what a named sha's runs did, never that "the branch is green"**, and
   say the tip is unobserved when it is. The only true form of that claim is one
-  look after the final commit and immediately before merge — which is the
-  **merger's** look, not a gate's, not a builder's, and not the `## After a merge`
-  look on `SKILL.md`, which happens afterwards and answers a different question.
+  look after the final commit and immediately before merge. **That look is
+  available — just not to you.** A gate stops before the merge and writes its
+  record earlier still; a builder stops before the PR and moves the sha by
+  recording the check. The orchestrator is the one participant alive at merge time
+  that is not writing to the branch, and `SKILL.md`'s `## After a merge` now
+  carries the command. Do not write "nobody can check this": that was this rule's
+  first wording, and it was refuted the same day by an orchestrator that simply
+  ran it.
 - **Re-resolve every `file:line` in the record as the genuinely last action before
   `git add`** — after the final `npm run format`, with nothing between. Verify
   programmatically (check that each cited line still contains what the record

@@ -288,10 +288,35 @@ that corrects a status claim invalidates the status claim"* — the builder wrot
 one, the correction became a commit, the commit moved the tip, and the corrected
 claim was stale on arrival. A record can never assert its own branch is green,
 because writing the assertion changes the branch. That is now a bullet in
-`records.md`, and it puts a hole in this page's parent: `## After a merge` says to
-look once *afterwards*, and the look *before* the merge is a different one that
-**nobody in the loop can take** — not the builder, not the gate, not the
-orchestrator. Only the merger, immediately before merging.
+`records.md`, and `SKILL.md`'s `## After a merge` carries the look it implies.
+
+**The first wording of that rule was too strong, and it was refuted within the
+hour by the orchestrator doing the thing it said nobody could do.** It read
+*"nobody in the loop can take the pre-merge look"*. The premises were true — a
+builder stops before the PR and moves the sha by recording the check; a gate stops
+before the merge and writes earlier still — and the conclusion was false, because
+the orchestrator is alive at merge time and is not writing to the branch. It ran
+one `gh run list --json` call and established #145 green at `fc9a4fb`. **The
+correct rule is a division of labour, not an impossibility**, which is the useful
+form: "nobody can" tells a future session to give up on something one command
+settles. This is the third time on this page that all-true premises carried a
+false conclusion, and the first where the person who wrote it refuted it himself.
+
+**Reproducing that refutation caught a second thing, and it is the rule eating its
+own messenger.** The relay carrying the correction also reported repo-18's tip as
+`cfae096` with `CI` still `in_progress`. Re-run rather than transcribed: the tip
+was already `02197ea`, where all three workflows are `completed`/`success`, and
+`cfae096`'s own `CI` is `completed`/`cancelled`, superseded by that push. **The
+status claim was true when taken and false when read** — inside the message
+teaching that status claims go stale. So the orchestrator's look decays exactly as
+a record's does; what makes it usable is not privilege but that it is *last*, and
+that it names a sha.
+
+**And this branch demonstrated the rule on the commit that added it.** Asked for
+its own CI state, it declined to assert it and said unobserved — on the grounds
+that writing "green at `a980d5e`" would itself produce the commit that falsifies
+`a980d5e`. Then it ran the call above, on someone else's branch, where it is
+sound.
 
 **What went right, and is worth copying.**
 
