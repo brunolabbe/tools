@@ -193,16 +193,16 @@ you are there.
      closed with no command named is a finding still open. When a report *quotes*
      something to settle a point, ask **where** it is, not just what it says:
      "quotes something plausible" and "quotes something actually present" read
-     identically. Measured 2026-09-04, on the ticket whose whole subject is that
-     distinction — a builder that had measured every other claim on its branch
-     before writing it asserted its own model from a line in its own context,
-     propagated that to its reviewer and into a commit, and on being asked to
-     quote the line found there was none, and retracted in full. Its diagnosis is
-     the rule: *"the one claim I did not run a check against was the one about
-     myself, because it did not feel like a claim."* A statement about the speaker
-     does not present itself as needing evidence, so this is a category boundary
-     rather than weak rigour — which is why "be careful" is not the fix and asking
-     *where* is.
+     identically, and asking *where* is the only cheap thing that separates them.
+     The failure it catches is **glance-reading** — taking a result in at a glance
+     and reporting the reading as the measurement — which found four instances
+     across one batch in 2026-09, in prose every time and in citations never,
+     because a tool covered those. The sharpest of them, an agent that had
+     measured every other claim on its branch and fabricated the one about itself:
+     *"the one claim I did not run a check against was the one about myself,
+     because it did not feel like a claim."* A statement about the speaker does
+     not present itself as needing evidence, which is why "be careful" is not the
+     fix. The four are in [reference/history.md](reference/history.md).
    - **Do the two accounts describe the same exchange?** They were written by
      different models and should not need to be reconciled. If one says a finding
      was reproduced and the other does not mention it, something is missing.
@@ -278,14 +278,11 @@ branch about to land:
 gh run list --branch <branch> --limit 6 --json workflowName,status,conclusion,headSha,event
 ```
 
-`--json` rather than the table, because the whole failure this guards against is
-reading a run list by eye: `cancelled` is a *completed* run, and a glance counts
-it as green. **Name the sha in whatever you conclude**, because your look decays
-the same way theirs does — measured 2026-09-04, when a relayed "CI still
-`in_progress` at `cfae096`" was already false on arrival: the branch had moved to
-`02197ea`, where all three workflows had passed, and `cfae096`'s own CI was
-`cancelled` by the superseding push. The claim was true when it was taken and
-wrong by the time it was read. This is not the look below, which happens
+`--json` rather than the table, because the failure this guards against is reading
+a run list by eye: `cancelled` is a *completed* run, and a glance counts it as
+green. **Name the sha in whatever you conclude** — your look decays the same way a
+record's does, and a relayed status claim was measured going stale between being
+taken and being read on 2026-09-04. This is not the look below, which happens
 afterwards and answers a different question.
 
 **Green PR checks say nothing about the `push`-triggered jobs.** They are different

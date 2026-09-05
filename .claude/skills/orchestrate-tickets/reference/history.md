@@ -211,9 +211,10 @@ and the missing carrier for an answered-but-undispatched decision, in the
    different failure from the dispatch-visibility gap in the next entry** and
    collapsing them loses the useful half: that one is the orchestrator unable to
    observe a fact, this one is an agent reporting a check it did not run. **And it
-   was not an isolated event** — it was the first of three instances of one move,
-   whose general form is under _The move under entry 4_ below. Read alone it looks
-   like an agent hallucinating its own identity, which is not a usable lesson.
+   was not an isolated event** — it was the first of **four** instances of one
+   move across this batch, whose general form is under _The move under entry 4_
+   below. Read alone it looks like an agent hallucinating its own identity, which
+   is not a usable lesson.
 5. **Half of step 4's model check was redundant and the other half was
    unobservable — and the skill said neither.** `.claude/agents/ticket-reviewer.md`
    pins `model: sonnet` in frontmatter, so the gate's model was always two file
@@ -254,7 +255,8 @@ and the missing carrier for an answered-but-undispatched decision, in the
 
 **The move under entry 4, and why it is this session's argument for two models.**
 Entry 4 read as a freak event while it was one incident. It was the first of
-**three on one ticket**, and repo-18's builder named the shape itself in the Log
+**three on one ticket, and a fourth on this one**; repo-18's builder named the
+shape itself in the Log
 it committed at `cfae096` — quoting the **ticket file**,
 `docs/work/repo-18-citations-resolve-is-not-correct.md`, not that commit's
 *message*, which says the same thing in different words: *"the model claim, the
@@ -274,6 +276,20 @@ cancelled run *is* completed, so the sentence was false as written. **So the
 failure is not fabrication, it is glance-reading, and it lands wherever a check
 does not reach**: that branch's citations were fine, because the ticket had just
 built the tool that resolves them, and its prose failed three times.
+
+**A fourth instance, committed by the agent writing the record of the other
+three.** repo-20's Log claimed eight high `repo-` ids "are all fixtures in
+`scripts/test/status.test.ts`". Seven are not; they appear only as example ids in
+other tickets' prose. The cause was the command:
+`grep -rlnE 'repo-(40|80|90|99|404|808|901|999)' scripts packages` prints the one
+filename `scripts/test/status.test.ts`, and **`-l` discards which alternative
+matched** — only `repo-404` did. A file list was read as an answer to a per-id
+question. Caught by this branch's own gate, which did the thing that separates the
+two readings: it ran `grep -rl` once **per id** and got nine files. **The lesson is
+about the flag, not the care** — `-l` is designed to discard exactly the
+information an alternation is asking for, so an alternation under `-l` cannot
+answer the question it looks like it answered. Two earlier tickets had worded this
+correctly; flattening their wording is what produced the error.
 
 **Both models committed it, which is the stronger version and the reason this is
 not "a second model catches blind spots".** The reviewer reported that it had read

@@ -78,11 +78,12 @@ no carrier at all.** Everything above rides on a builder that is already editing
 the file. When you ask a question to *clear the board* rather than to unblock a
 running agent — which is what a decision-blocked intake produces — the answer
 arrives with nobody holding the ticket, the cheap path does not exist, and the
-rule silently does not apply. Measured 2026-09-04: `dl-32`'s decision was answered
-and deferred to a later batch, and its page still reads "deliberately not ranked
-here" with a Log ending at the filing date five days earlier. **Recording it is
-its own dispatch and has to be scheduled as one** — cheap, but not free, and not
-something to notice at close-out.
+rule silently does not apply. Measured **2026-09-05**, at the batch's close-out
+rather than during it: `dl-32`'s decision was answered and deferred to a later
+batch, and its page still reads "deliberately not ranked here" with a Log ending
+at the filing date, 2026-08-31 — five days. **Recording it is its own dispatch and
+has to be scheduled as one** — cheap, but not free, and not something to notice at
+close-out.
 
 ## Dispatching a gate — the highest-leverage thing you write
 
