@@ -12,7 +12,8 @@ difficulty: hard
 # repo-21 — The orchestration skill has outgrown its loop
 
 **Packages:** `.claude/skills/orchestrate-tickets/` (`SKILL.md`,
-`reference/history.md`, `reference/records.md`), `.github/workflows/ci.yml`.
+`reference/history.md`, `reference/records.md`, `reference/dispatching.md`,
+`reference/defect-shapes.md`), `.github/workflows/ci.yml`.
 
 ## Read this first — three branches move these files before you start
 
@@ -46,7 +47,7 @@ by the time you read it.** Locate provisions by their quoted opening phrase, not
 by number. The line numbers are given so the sizes can be re-derived, not so they
 can be followed.
 
-**`node scripts/citations.mjs <this file>` exits 1 at `8/10 resolve`, and both
+**`node scripts/citations.mjs <this file>` exits 1 at `12/14 resolve`, and both
 failures are deliberate.** One is the illustrative test reference quoted verbatim
 from `SKILL.md` in Build 1.2, because it _is_ the false positive that step asks
 you to delete; the
@@ -321,6 +322,29 @@ _"the reasoning is gone"_ into a committed gate record, and shrank the section b
 reading the disposition. The instruction is one clause: **gate a disposition by
 measuring what it claims changed.**
 
+Add a fourteenth, and **hoist it rather than write it** — the rule already exists
+in the tree, in the wrong place and at the wrong scope:
+
+> **A claim an agent makes about itself — its tools, its model, its lifecycle — is
+> a self-report, and is checked from outside.**
+
+| Field                               | The one-call check                                     |
+| ----------------------------------- | ------------------------------------------------------ |
+| tools                               | ask it to _call_ the tool                              |
+| model                               | the `model` parameter you passed at dispatch (Build 4) |
+| lifecycle — running, held, released | `git worktree list`                                    |
+
+`reference/dispatching.md:196-199` states it today for **tool lists only**, on a
+page about dispatch mechanics. Wrong scope and wrong home: it bites at gate and
+report time too, which is how the lifecycle instance got past two agents here
+**who had just written the model version down.** Move the statement into this
+table, leave a pointer — the same shape as Build 7.
+
+**Disambiguate the term while you are in there.**
+`reference/defect-shapes.md:41,63` uses "self-report" for a builder's claim about
+its **work**, not about **itself**. One word doing two jobs is how a rule gets
+read as already-covered. Name them apart; do not merge them.
+
 Replace all of it with **one section and one table**: failure shape / one-line
 instance / date. Two of the eleven (_"So separate the outcome from the route…"_
 and _"So check the rule you are about to cite…"_) are remedies attached to their
@@ -356,10 +380,8 @@ The facts to write in, and nothing else from this block belongs on the page:
 **Write the three qualifications in.** A rule stated without them is the
 overclaiming this page keeps producing.
 
-**And write the last row as an application of a rule this repo already measured,
-not as a new claim**: `reference/dispatching.md` says _"Ask an agent to **call** a
-tool, not to tell you whether it has one"_, off a builder that listed eight tools
-where its frontmatter grants thirteen. Same failure, one field over.
+**The last row is not a new rule — it is the `model` case of Build 3's
+self-report row.** Write it as a pointer to that row, not as an argument.
 
 So do:
 
@@ -380,8 +402,8 @@ So do:
    its existence is documented, but **whether it records the model per turn is
    inferred, not verified**, so write it as the weakest of the three or leave it
    out.
-5. **Do not offer "ask the agent what model it is" as a path**, and say in one
-   clause why, citing `dispatching.md`'s tool-list rule.
+5. **Do not offer "ask the agent what model it is" as a path** — one clause
+   pointing at Build 3's self-report row, which is where the reason now lives.
 6. Keep the _"11 tickets, 22 gates, none gated by a different model than built
    it"_ measurement.
 
@@ -506,7 +528,7 @@ restate it.** The missing-path instance is the third comment on #148.
    covered by a citation on the same line.
 4. `grep -c` for `^#{3,4} ` inside `## Decisions` shows the laundering family
    reduced to **one** section, whose body contains a table with one row per
-   failure shape and a date in every row. The thirteen shapes listed in Build 3 each
+   failure shape and a date in every row. The fourteen shapes listed in Build 3 each
    appear as exactly one row; none has been dropped.
 5. `## The loop` contains twelve numbered steps and no paragraph longer than three
    lines. Checkable by `awk` over the span between `^## The loop` and the next
@@ -641,6 +663,11 @@ files, nothing reformatted), `status.mjs --json` and `--show repo-21` all exit 0
 `git check-ignore` exit 1; `citations.mjs` exit 1 at `8/10 resolve`. Gate 1's
 record untouched and verbatim.
 
+**All figures in this subsection are as measured at `3f9398f` and two have moved
+since**: Gate 3's amendment took `Done when` 4 to fourteen and the citation count
+to `12/14`. Left as measured rather than restated, because a verdict describes the
+sha it was taken on.
+
 **All seven findings settled: five fixed outright (1, 3, 4, 6, and 2 properly on
 the second attempt), one refuted and conceded by the reviewer on its own re-run
 (5), one corrected to an agreed number past both parties' arithmetic (7). No new
@@ -651,6 +678,47 @@ nothing re-verifies: **the reviewer re-ran `citations.mjs` redirected to a file
 rather than through a pipe, citing Build 7's own generalisation as the reason** —
 `$?` after `| tail` is the pipe's status. The ticket's proposed rule was applied
 against the ticket by its own gate, before it has been written into the skill.
+
+### Gate 3 — post-gate amendment on the owner's decision, and it did not net smaller
+
+**This is a correction to what the ticket asked for, not new scope.** The builder
+proposed a self-report rule as a third _instance_ and declined to add it, on the
+grounds that a third instance was not worth a re-gate. The owner questioned the
+**placement** instead of the count, and that changed the answer: the rule is real,
+**mis-homed and repeated**, in the ticket whose purpose is to stop exactly that.
+
+Measured before acting, all three confirmed:
+
+- `reference/dispatching.md:196-199` states it for **tool lists only**, on a page
+  about dispatch mechanics.
+- **`repo-21` restated it five times** — at the pre-amendment lines 361, 383, 589,
+  780, 796. A fourteenth row written as an instance would have been the sixth
+  mention in one ticket.
+- `reference/defect-shapes.md:41,63` uses "self-report" for a **different** thing:
+  a builder's claim about its _work_, not about _itself_. Genuine term collision.
+
+**Measured after, and it contradicts the expectation the amendment was given
+with.** The brief said the fix "should net the ticket smaller". It did not:
+
+|                    | before | after   |
+| ------------------ | ------ | ------- |
+| `## Build` section | 304    | **325** |
+| Build 3            | 42     | **65**  |
+| Build 4            | 62     | **60**  |
+
+**+21, not negative**, and the honest reason is that only **two** of the five
+restatements were cuttable. The other three sit in this gate record and in the
+Log, which are **history and must not be rewritten** — the repo's own rule. What
+replaced them is not a restatement but three instructions that did not exist
+anywhere: the family statement with a per-field check table, the hoist out of
+`dispatching.md`, and the `defect-shapes.md` disambiguation. A rule stated once at
+the right scope, plus two files to fix, is bigger than a rule mentioned twice in
+passing — and it is the thing the cleanup can act on.
+
+**Reported as measured rather than asserted, which is the thirteenth row applied
+to its own amendment.** If smaller matters more than complete here, the cut is the
+three-row check table (−5) and the disambiguation paragraph (−4); say so and I
+will take them out. I did not decide that quietly.
 
 ## Log
 
@@ -688,7 +756,7 @@ against the ticket by its own gate, before it has been written into the skill.
   attempt through `| tail` read `tail`'s status instead.
 
 - **This ticket fails its own citation run, on purpose.**
-  `node scripts/citations.mjs docs/work/repo-21-…md` reports `8/10 resolve`,
+  `node scripts/citations.mjs docs/work/repo-21-…md` reports `12/14 resolve`,
   exit 1, and **both failures are deliberate**. One is Build 1.2's verbatim
   quotation of `SKILL.md`'s illustrative test reference, kept as written because
   it _is_ the false positive Build 1.2 asks you to remove. The other is the
@@ -712,6 +780,17 @@ against the ticket by its own gate, before it has been written into the skill.
   is printed today and is not printed there, and both halves matter. Whoever
   builds this should re-read this bullet against the merged `citations.mjs` and
   correct the verb.
+
+- **2026-09-05, fifth pass — the self-report rule, on the owner's decision.** I
+  had surfaced it as an open question rather than deciding it, and recommended
+  leaving it out as a third instance of a rule already stated twice. **The owner
+  questioned the placement rather than the count**, which is what found the real
+  defect: the rule is mis-homed in `dispatching.md` at tool-list scope, restated
+  five times in this ticket, and colliding with a different sense of "self-report"
+  in `defect-shapes.md`. All three re-measured here before acting. The full
+  disposition, including the measurement that **contradicts** the amendment's
+  stated expectation of a net shrink, is under _Gate 3_ above. Two files were
+  added to `Packages`; `Done when` 4 goes thirteen → fourteen.
 
 - **2026-09-05 — gate settled at `3f9398f`.** Seven findings, seven closed, no
   disagreement escalated. The full verdict is in _Gate 2_ above. Two things this
