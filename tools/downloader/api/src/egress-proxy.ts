@@ -35,15 +35,18 @@
  * vetted with the same `SsrfGuard` the rest of the service uses and connected
  * through the same pinning `lookup` as `dispatcher.ts`.
  *
- * **Tunnelled by default, and terminating for ffmpeg only.** Without
- * `interceptTls` a `CONNECT` is piped byte-for-byte, certificates stay end to end
- * and no client needs a trust-store change — which is what dl-14 chose and what
- * Chromium and yt-dlp still get, because both verify their own connections
- * without help. With it the proxy verifies the origin itself and re-encrypts to
- * the client under a locally issued leaf, because **ffmpeg cannot verify its own
- * segment connections and no argument makes it** (dl-21 measured sixteen; the
- * propagation list is a compile-time array). See `tls-interception.ts` for the
- * mechanism and what it costs; dl-27 for the decision.
+ * **Tunnelled by default, terminating where `interceptTls` is set.** Without it
+ * a `CONNECT` is piped byte-for-byte and certificates stay end to end, which is
+ * what dl-14 chose. With it the proxy verifies the origin itself and re-encrypts
+ * to the client under a locally issued leaf.
+ *
+ * dl-27 set it for ffmpeg, because **ffmpeg cannot verify its own segment
+ * connections and no argument makes it** (dl-21 measured sixteen; the
+ * propagation list is a compile-time array). dl-37 set it for the resolver tiers
+ * as well, for a different reason: Chromium and yt-dlp verify perfectly well
+ * against trust stores **nothing in this repo can write to**, so a tunnel left
+ * `EGRESS_CA_FILE` unable to reach the two tiers that load the page. See
+ * `tls-interception.ts` for the mechanism and what each costs.
  *
  * **In proxy mode the client resolves nothing.** It connects to us and names a
  * host; we do the resolving. That is what closes hole 3 — there is no second
@@ -104,9 +107,31 @@ export interface EgressProxyOptions {
    * Terminate every `CONNECT` instead of tunnelling it, verifying the origin
    * here and re-encrypting to the client under a leaf this issues.
    *
-   * Set for ffmpeg's proxy and for nothing else. See `tls-interception.ts`.
+   * Set for ffmpeg's proxy since dl-27 and for the resolver tiers' since dl-37,
+   * on separate interceptions. See `tls-interception.ts`.
    */
   interceptTls?: TlsInterception | undefined;
+  /**
+   * Called with the CONNECT target's host and the OpenSSL verify code whenever
+   * this proxy refuses an origin certificate.
+   *
+   * **The one thing a subprocess cannot be told any other way, and dl-37 is what
+   * made that bite.** The reason phrase below reaches ffmpeg, which echoes a
+   * proxy's status line, and it reaches yt-dlp, which quotes it as
+   * `Tunnel connection failed: 502 …`. Chromium collapses every non-200 CONNECT
+   * response to `net::ERR_TUNNEL_CONNECTION_FAILED` and keeps nothing else —
+   * measured, so a refused certificate and a blocked target and a dead upstream
+   * are one string by the time the browser tier sees them. This callback is the
+   * side channel that puts the difference back, and `tls-rejections.ts` is what
+   * reads it.
+   *
+   * Deliberately not a general "something failed" hook. Widening it would
+   * re-open what the header note below says about attribution: one proxy serves
+   * every download and nothing in a request identifies the caller, so anything
+   * reported here can only be matched back by host, and only a certificate
+   * verdict is worth that.
+   */
+  onCertificateRejected?: ((host: string, code: string) => void) | undefined;
 }
 
 export interface EgressProxy {
@@ -507,12 +532,14 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           // as `TLS_VERIFICATION_FAILED` rather than as a dead link. Measured
           // in dl-27; it needs `-loglevel warning`, which is why `GLOBAL_ARGS`
           // now asks for one.
-          onRejected: (error) =>
-            fail(
-              error,
-              502,
-              `TLS certificate verification failed (${certificateRejectionCode(error)})`,
-            ),
+          onRejected: (error) => {
+            const code = certificateRejectionCode(error);
+            // Before `fail`, so the record is already there when the client's
+            // own failure surfaces — the browser tier reads it back
+            // synchronously off the navigation error.
+            options.onCertificateRejected?.(host, code);
+            fail(error, 502, `TLS certificate verification failed (${code})`);
+          },
           onFailed: (error) => {
             fail(error, 502, "Upstream connect failed");
           },

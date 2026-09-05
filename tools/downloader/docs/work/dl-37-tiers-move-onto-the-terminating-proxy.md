@@ -3,7 +3,7 @@ id: dl-37
 tool: downloader
 title: Move Chromium and yt-dlp onto the terminating egress proxy
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -123,6 +123,210 @@ operatorCa]`; the failure mode is that an operator root handed over on its
 5. `npm run check` and `npm test -- --project downloader` pass.
 
 ## Log
+
+- **2026-09-05** — **Built.** Branch `dl-37-tiers-onto-terminating-proxy`, off
+  `origin/main` at `c37cab9`. All four Build steps; both Build-step-1 questions
+  settled below with their reasons, and Build step 2's mechanism found by
+  measurement rather than assumed, which is what the ticket asked for.
+
+  **The `server.ts` citation the ticket carried is correct, re-resolved before
+  it was relied on.** At `c37cab9` the tunnel-versus-terminate comment runs
+  exactly 118–130 and line 96 is the dispatcher construction, as the filing entry
+  says. It has moved: the rewritten decline is `downloader/api/src/server.ts:109-174` on this
+  branch, and the paragraph that answers dl-27's objection in its own words is
+  120–138.
+
+  ### The two things Build step 1 left open, and what they were settled as
+
+  **The tiers get their own proxy and their own interception, not ffmpeg's.**
+  Sharing would have been two RSA keygens and one listener cheaper, and the
+  reason not to is a flag: `FFMPEG_ALLOW_UNVERIFIED_TLS` sets
+  `verifyOrigins: false` on the interception it is given, and it is named for
+  ffmpeg. One shared interception would have turned "stop checking the
+  certificates ffmpeg downloads video over" into "and also stop checking the
+  certificates behind every probe" — a widening of the last-resort setting that
+  nothing asked for and that would have regressed Done-when 2 in that
+  configuration. Two interceptions cost **237 ms for four RSA keygens** measured
+  here, so ~120 ms of extra boot, and only when a tier is registered: with both
+  tiers off there is nothing to hand the root to, so none is minted. That gate is
+  also why the ~90 API harness boots in this suite pay nothing.
+
+  **`FFMPEG_TLS_INTERCEPT=false` takes the tiers back to a tunnel too.** One
+  switch, because it selects one property — whether this process sits inside the
+  TLS — and an operator who turns interception off to stop a plaintext hop has
+  not asked to keep the larger of the two hops. The cost is that
+  `EGRESS_CA_FILE` stops reaching the tiers in that configuration, which is
+  dl-34's world exactly; the boot warning now has three states and says which one
+  it is in, and `TIER_TRUST_STORE_HINT` was reworded because dl-34 wrote it as a
+  flat denial that is now true of one configuration out of two. **What this
+  leaves unavailable**: an operator who wants ffmpeg tunnelled _and_ the tiers
+  terminated has no way to say so. A second knob was the alternative and was not
+  built — it is operator-facing configuration surface for a combination nobody
+  has asked for, and `config.ts` records that the name is now narrower than the
+  setting rather than renaming it on this branch.
+
+  ### Build step 2, measured rather than assumed
+
+  Both mechanisms were found by running the real clients. The ticket was right
+  that this was unproven, and right that it was the work rather than a detail —
+  the first two things tried do nothing at all and fail silently.
+
+  - **Chromium takes `--ignore-certificate-errors-spki-list=<base64 SHA-256 of
+the root's SPKI>`.** Measured with the pinned Chromium (Google Chrome for
+    Testing 151.0.7922.34) through a real terminating proxy: no flag →
+    `net::ERR_CERT_AUTHORITY_INVALID`; the **leaf's** SPKI listed → page loads;
+    the **root's** SPKI listed → page loads. Chromium matches against every SPKI
+    in the chain it built, and the proxy sends leaf-then-root. The root is what
+    ships, because `leafFor` shares one key across hosts as an issuing
+    optimisation and pinning that would break silently the day it stops.
+    dl-34's finding held: there is no trust store to write to here, and
+    `SSL_CERT_FILE` and `NODE_EXTRA_CA_CERTS` reach Chromium not at all.
+  - **yt-dlp takes `SSL_CERT_FILE` _and_ `--compat-options no-certifi`, and one
+    without the other does nothing.** Four states run against a self-signed
+    loopback origin with the real 2025.09.26 binary: `SSL_CERT_FILE` alone fails,
+    `REQUESTS_CA_BUNDLE` fails, `CURL_CA_BUNDLE` fails, and only the pair
+    verifies. The shipped binary is a PyInstaller ELF carrying its own `certifi`,
+    which it prefers over the system store, so OpenSSL loads the file and nothing
+    consults it. That is the failure mode this ticket exists to avoid repeating:
+    plumbing that looks applied and is not.
+  - **The bundle merges.** `SSL_CERT_FILE` replaces OpenSSL's default file
+    exactly as `-ca_file` replaces ffmpeg's store, so `trustBundlePath` is
+    `withSystemRoots(rootCaPem)` — dl-31's answer, reused, which is what
+    Done-when 3 points at.
+
+  ### What the ticket did not anticipate, and it is the largest thing here
+
+  **Moving the tiers behind a terminating proxy silently regresses dl-34, and
+  the ticket's Done-when 2 is the only place that shows.** After this change the
+  tier never meets an origin certificate — the proxy does — so the classifiers
+  dl-34 built cannot fire. dl-27's answer to that for ffmpeg was the `CONNECT`
+  status line, and it half works here: yt-dlp quotes it verbatim
+  (`Tunnel connection failed: 502 TLS certificate verification failed
+(DEPTH_ZERO_SELF_SIGNED_CERT)`, measured), and **Chromium collapses every
+  non-200 `CONNECT` response to `net::ERR_TUNNEL_CONNECTION_FAILED` and keeps
+  nothing else** (measured). A refused certificate, a blocked target and a dead
+  upstream are one string by the time the browser tier sees them.
+
+  Measured, with the real binaries, what that costs without a fix: the browser
+  tier returns `UNREACHABLE` — "The site could not be reached", **retryable** —
+  and yt-dlp returns `NO_MEDIA_FOUND` — "No downloadable video stream was found
+  on that page", the sentence dl-34's `## Why` calls the worst available one. So
+  dl-37 would have deleted dl-34's fix in the default configuration while leaving
+  every one of its tests green, because those tests exercise the classifiers and
+  the tunnelling arrangement.
+
+  The fix is `api/src/tls-rejections.ts`: the tiers' proxy files what it refused
+  by host, and `resolvers.ts` reattaches the verdict to a tier failure that
+  happened inside the same call's window. It is deliberately not a general
+  failure hook — `egress-proxy.ts`'s header already states that one proxy serves
+  every download and nothing in a request identifies the caller, so host-and-window
+  is all the attribution available, and only a certificate verdict is worth it.
+  Where it gives up is written down in that file: a page that redirects to
+  another host and is refused _there_ files under the second host and matches
+  nothing, so the tier keeps its own verdict. Under-matching, the same direction
+  `tls-verification.ts` argues for.
+
+  **Three alternatives were considered and are recorded so they are not
+  rediscovered.** (1) Add the proxy's own phrase to `YTDLP_CERTIFICATE_MARKERS` —
+  works for yt-dlp, does nothing for Chromium, and would have left the foundation
+  tier wrong. (2) Have the proxy complete the client handshake and answer the
+  inner request with a marked 502 — in-band for both tiers, and it breaks
+  `terminateTls`'s stated invariant that the origin handshake completes before
+  the client is told 200, and means serving content under a certificate for a
+  host whose real certificate was just refused. (3) Accept the new verdicts and
+  document them — that is shipping the regression.
+
+  ### What the brief and the ticket had wrong, or under-stated
+  - **"There is no terminating proxy at all in that configuration" is right, and
+    the ticket implies the tiers need a _third_ state.** They do not: with
+    interception off the tiers' proxy is the tunnel it always was, and the
+    answer is that the whole arrangement reverts. The question was worth asking
+    and the answer turned out to be one line of gating rather than a new mode.
+  - **Build step 2 says "the generated root", and Chromium never gets a root.**
+    It gets a hash of one, and the flag says "ignore certificate errors for
+    chains carrying this key" rather than "trust this root". The distinction is
+    what makes it safe — what bounds it is that the key is generated per process
+    and never written to disk, which `tls-interception.ts` now says next to the
+    field rather than leaving to a reader.
+  - **Done-when 3 names the merge trap and it does not apply to Chromium at
+    all**, which is worth saying because it looks like it should. The flag
+    replaces no store, so the failure mode dl-31 hit cannot occur there. It
+    applies squarely to yt-dlp's `SSL_CERT_FILE`, and that is where the merge
+    is. Both halves are asserted anyway.
+  - **The `Packages:` line omits `api/src/config.ts` and `api/src/context.ts`**,
+    both of which carried prose that this makes false, and
+    `resolvers/src/tls-verification.ts`, whose hint did too. Step 4's "the
+    documentation that this changes" turned out to include four docblocks as well
+    as the two files it names.
+
+  ### Red before green
+
+  Every acceptance line has a red partner in the same file rather than a claim.
+  Two mutations were also run against the tip and both went red as intended:
+  removing the `--ignore-certificate-errors-spki-list` push from
+  `pool.ts` failed Done-when 1's test, and making the verdict wrapper a no-op
+  failed Done-when 2's with `expected 'UNREACHABLE' to be
+'TLS_VERIFICATION_FAILED'` — the exact regression, named by the assertion.
+
+  ### What is not measured, stated as unmeasured
+  - **No private-root deployment and no container build.** Everything is
+    self-signed fixtures on loopback, and the image was not built, so nothing
+    here says the shipped `Dockerfile`'s yt-dlp is the same PyInstaller build
+    this container has. If it were a `pip` install without `certifi`,
+    `--compat-options no-certifi` would be unnecessary rather than wrong.
+  - **The yt-dlp version floor for `--compat-options no-certifi` is unknown.**
+    What _is_ measured is the failure shape if a binary does not know it: yt-dlp
+    exits on a usage error, `classifyFailure` returns `NO_MEDIA_FOUND`, and the
+    chain falls through to the browser tier — the roadmap's own rule that
+    removing yt-dlp must not remove coverage. Reproduced against a stand-in
+    emitting this container's verbatim `wrong OPTS for --compat-options` stderr.
+  - **Chromium's flag was exercised on one version only**, the pinned one.
+  - **The tiers were not run behind a _chained_ upstream proxy** with
+    interception on. `chainConnect` runs before `terminateTls` either way and
+    ffmpeg's proxy already covers that combination, but it is not exercised for
+    the tiers.
+
+  ### Found here, not fixed here, and not dl-37's
+
+  **`mapYtDlpInfo` throws a bare `TypeError` on `vcodec: null`, which the real
+  binary emits from its generic extractor.** `realCodec`
+  ([`ytdlp.ts:328`](../../resolvers/src/resolvers/ytdlp.ts)) filters `undefined`,
+  `""` and `"none"` but not `null`, so `null` survives as a "real" codec and
+  `lookup` calls `.trim()` on it. Reproduced twice: once through the whole stack
+  (real yt-dlp fetched a fixture page successfully and the probe then failed
+  `INTERNAL`, "Something went wrong on our end") and once directly on
+  `mapYtDlpInfo`. **Present at `origin/main`** — `git show
+origin/main:…/ytdlp.ts` has the identical three-value check — so it is not
+  something this branch caused. Not folded in: it is a defect, so the
+  reproduction is the deliverable and it earns its own ticket, and it has nothing
+  to do with trust anchors. It is also why Done-when 1's yt-dlp measurement below
+  is stated as "reached the origin" rather than "returned a probe".
+
+  ### The measurements behind each `Done when`
+  1. **Proven, both tiers.** Browser, real Chromium through the real proxy:
+     `api/test/tiers-on-the-terminating-proxy.test.ts:200`. yt-dlp, real binary,
+     not committable because no CI runner here installs one — through
+     `buildRegistry` against an operator-root origin the fixture served **1
+     request** to, where the same registry without the plumbing served 0 and
+     failed `TLS_VERIFICATION_FAILED` / `certificate_verify_failed`.
+  2. **Proven, both tiers.**
+     `api/test/tiers-on-the-terminating-proxy.test.ts:242` for the browser, with
+     its red at `:267`. yt-dlp measured with the real binary:
+     `TLS_VERIFICATION_FAILED` / `DEPTH_ZERO_SELF_SIGNED_CERT` wired, against
+     `NO_MEDIA_FOUND` bare. dl-34's own tests are untouched and green.
+  3. **Proven three ways.** The non-replacement property, in a test:
+     `api/test/tiers-on-the-terminating-proxy.test.ts:288`. The yt-dlp bundle's
+     merge: `api/test/tls-interception.test.ts:111`. And the literal line — a
+     real public HTTPS page, with the generated root's SPKI on the command line:
+     `https://registry.npmjs.org/` and `https://github.com/` both returned **200**
+     to a real Chromium. That one is a network call and stays a measurement here
+     rather than a test.
+  4. **Proven.** `downloader/api/test/logging.test.ts:451`, `:473` and `:494` cover the boot
+     line's three states; `.env.example` and `01-ARCHITECTURE.md` rewritten.
+  5. **Proven.** `npm run check` exit 0. `npm test -- --project downloader`:
+     **64 files / 999 tests**, from 62 / 979 at `origin/main` — +2 files
+     (`tls-rejections.test.ts`, `tiers-on-the-terminating-proxy.test.ts`) and +20
+     tests, counted against the `test(` blocks added rather than assumed.
 
 - **2026-09-04** — Filed on dl-34's branch as it closed, carrying dl-34's
   answered decision rather than re-opening it. dl-34 could not stay `ready` to

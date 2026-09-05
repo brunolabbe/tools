@@ -176,6 +176,58 @@ describe("the spawn path", () => {
     expect(probe.title).not.toContain("--proxy");
   });
 
+  /**
+   * dl-37: behind a proxy that terminates TLS, yt-dlp has to be told to trust
+   * the leaf that proxy mints, and doing so takes two things rather than one.
+   *
+   * Measured with the real 2025.09.26 binary against a self-signed loopback
+   * origin, all four states: `SSL_CERT_FILE` alone fails, `REQUESTS_CA_BUNDLE`
+   * fails, `CURL_CA_BUNDLE` fails, and only `SSL_CERT_FILE` **with**
+   * `--compat-options no-certifi` verifies — because the PyInstaller build
+   * carries its own `certifi` and prefers it. Half of this pair is the exact
+   * shape of a fix that looks applied and does nothing.
+   */
+  test("a terminating proxy's trust bundle reaches the process as both halves", async () => {
+    const resolver = new YtDlpResolver({
+      binaryPath: process.execPath,
+      binaryArgs: [FAKE_BINARY, "echo-args"],
+      proxyTrustBundlePath: "/tmp/egress-trust-bundle.pem",
+    });
+
+    const probe = await resolver.resolve(SOURCE, options({ proxyUrl: "http://127.0.0.1:45999" }));
+
+    expect(probe.title).toContain("--compat-options no-certifi");
+    expect(probe.title).toContain("SSL_CERT_FILE=/tmp/egress-trust-bundle.pem");
+  });
+
+  test("and not at all when there is no proxy to be trusting a leaf from", async () => {
+    // Without a proxy yt-dlp meets real origins, and replacing its trust store
+    // with a bundle whose point is one locally-minted root is a way to fail
+    // closed on everything. Both halves have to be absent, not just the flag.
+    const resolver = new YtDlpResolver({
+      binaryPath: process.execPath,
+      binaryArgs: [FAKE_BINARY, "echo-args"],
+      proxyTrustBundlePath: "/tmp/egress-trust-bundle.pem",
+    });
+
+    const probe = await resolver.resolve(SOURCE, options());
+
+    expect(probe.title).not.toContain("no-certifi");
+    // The fixture appends the variable unconditionally, so an empty tail is
+    // "the child inherited this process's environment and nothing was added".
+    expect(probe.title).toMatch(/SSL_CERT_FILE=$/u);
+  });
+
+  test("without the option nothing about the child's environment changes", async () => {
+    const probe = await fakeResolver("echo-args").resolve(
+      SOURCE,
+      options({ proxyUrl: "http://127.0.0.1:45999" }),
+    );
+
+    expect(probe.title).not.toContain("no-certifi");
+    expect(probe.title).toMatch(/SSL_CERT_FILE=$/u);
+  });
+
   test("an unsupported URL falls through with NO_MEDIA_FOUND", async () => {
     await expect(fakeResolver("unsupported").resolve(SOURCE, options())).rejects.toMatchObject({
       code: "NO_MEDIA_FOUND",

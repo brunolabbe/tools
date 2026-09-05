@@ -88,6 +88,34 @@ export interface BrowserPoolOptions {
   maxConcurrent?: number;
   headless?: boolean;
   extraArgs?: readonly string[];
+  /**
+   * Base64 SHA-256 of the SPKI of the root the egress proxy mints leaves from,
+   * when that proxy terminates TLS rather than tunnelling it (dl-37).
+   *
+   * **A launch flag, so it belongs here rather than on a per-request option**,
+   * and that is a constraint rather than a preference: this pool keys its
+   * shared browser on `proxyUrl` alone, so a trust anchor that could vary per
+   * lease would be silently ignored by every lease after the first. Chromium
+   * binds it per process for the same reason it binds `--proxy-server` per
+   * process.
+   *
+   * The mechanism is `--ignore-certificate-errors-spki-list`, and it was chosen
+   * by measurement rather than preference. Chromium on Linux takes its
+   * locally-added anchors from NSS, and dl-34 established this image has no
+   * reachable NSS store to write to without `certutil`, which it does not ship;
+   * `SSL_CERT_FILE` and `NODE_EXTRA_CA_CERTS` reach Chromium not at all.
+   * `ignoreHTTPSErrors` on the context is the other thing that would work and
+   * is strictly worse — it accepts *every* certificate, including in the
+   * configuration where this proxy tunnels and Chromium is meeting real
+   * origins.
+   *
+   * What it grants is bounded by the key, not by the origin: chains carrying
+   * that SPKI stop failing, everything else verifies exactly as before. The key
+   * is generated per API process and never leaves its memory, so nothing off
+   * this machine can present one. `api/src/tls-interception.ts` holds the other
+   * half of that argument.
+   */
+  proxyRootSpkiSha256?: string | undefined;
 }
 
 export interface BrowserPoolStats {
@@ -145,6 +173,9 @@ export class BrowserPool {
     this.#semaphore = new Semaphore(options.maxConcurrent ?? envMaxConcurrent());
     this.#headless = options.headless ?? true;
     this.#args = [...BASE_ARGS, ...(options.extraArgs ?? [])];
+    if (options.proxyRootSpkiSha256 !== undefined && options.proxyRootSpkiSha256 !== "") {
+      this.#args.push(`--ignore-certificate-errors-spki-list=${options.proxyRootSpkiSha256}`);
+    }
     // Containers without a user namespace need this; a developer laptop must not.
     if (process.env["BROWSER_NO_SANDBOX"] === "true") this.#args.push("--no-sandbox");
   }

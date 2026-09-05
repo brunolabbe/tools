@@ -38,9 +38,21 @@
  * that no trust anchor changes. `details.reason` carries the exact token for
  * whoever needs the distinction; this text does not have it and should not
  * claim to.
+ *
+ * **Conditional on a second thing since dl-37**, and it is the deployment
+ * setting rather than the certificate. The flat claim "EGRESS_CA_FILE does not
+ * reach this tier" was true of every configuration when dl-34 wrote it and is
+ * now true of one: with `FFMPEG_TLS_INTERCEPT` on — the default — both tiers sit
+ * behind a proxy that terminates their TLS, and that proxy is given the
+ * operator's root, so the anchor reaches them after all. Reaching this code at
+ * all in that configuration means the tier met an origin certificate directly,
+ * which is the tunnelling arrangement. This library cannot see the setting, so
+ * it names the condition instead of asserting either side of it — and `api`
+ * raises `PROXY_REFUSED_ORIGIN_HINT` instead for the failure that belongs to the
+ * other arrangement.
  */
 export const TIER_TRUST_STORE_HINT =
-  "EGRESS_CA_FILE does not reach this tier. It configures this process's own fetches, ffmpeg, and the egress proxy that verifies on ffmpeg's behalf — but Chromium and yt-dlp are handed a tunnelling proxy (dl-27) and verify against their own trust stores. If this is an origin chaining to a private root, EGRESS_CA_FILE will not fix it here even when set and correct; see details.reason for the exact cause, since some certificate failures are policy violations no trust setting changes. See tools/downloader/docs/work/dl-34-resolver-tiers-and-the-operator-ca.md.";
+  "This tier met the origin's own certificate, which means it is behind a tunnelling proxy: either FFMPEG_TLS_INTERCEPT is off, or the generated root it is normally given did not take. In that arrangement EGRESS_CA_FILE does not reach it — it configures this process's own fetches, ffmpeg, and the egress proxy that verifies on ffmpeg's behalf, while Chromium and yt-dlp verify against their own trust stores, which nothing here writes to. If this is an origin chaining to a private root, turning FFMPEG_TLS_INTERCEPT back on is what gives this tier that anchor (dl-37); setting EGRESS_CA_FILE alone will not fix it here. See details.reason for the exact cause, since some certificate failures are policy violations no trust setting changes. See tools/downloader/docs/work/dl-37-tiers-move-onto-the-terminating-proxy.md.";
 
 /**
  * Chromium names the cause in the message Playwright re-throws, and the whole

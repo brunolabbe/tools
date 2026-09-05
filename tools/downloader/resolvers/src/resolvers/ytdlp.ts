@@ -127,6 +127,27 @@ export interface YtDlpResolverOptions {
    * exactly as it did before: declared sizes, unsampled.
    */
   fetch?: typeof globalThis.fetch;
+  /**
+   * A CA bundle to hand the child as `SSL_CERT_FILE`, for when `proxyUrl` names
+   * a proxy that terminates TLS and yt-dlp has to trust the leaf it mints
+   * (dl-37).
+   *
+   * **It takes two things, not one, and dl-37 measured which.** yt-dlp ships as
+   * a PyInstaller build carrying its own `certifi`, and it prefers that bundle
+   * over the system store — so `SSL_CERT_FILE` alone is read by OpenSSL and
+   * then never consulted, and the same is true of `REQUESTS_CA_BUNDLE` and
+   * `CURL_CA_BUNDLE`. All four states were run against a self-signed loopback
+   * origin: only `SSL_CERT_FILE` **together with** `--compat-options
+   * no-certifi` — which is yt-dlp's own documented switch back to
+   * `ssl.load_default_certs()` — verified the certificate. The other three
+   * failed identically to setting nothing at all.
+   *
+   * Set at construction rather than per request because it is one half of a
+   * pair with `proxyUrl`, and the API keeps that pair in one place; and only
+   * applied when a proxy is actually in use, since replacing the store for a
+   * direct fetch is a change nothing here asked for.
+   */
+  proxyTrustBundlePath?: string;
 }
 
 export class YtDlpResolver implements Resolver {
@@ -138,12 +159,14 @@ export class YtDlpResolver implements Resolver {
   readonly #binaryPath: string | undefined;
   readonly #enabled: boolean;
   readonly #fetch: typeof globalThis.fetch | undefined;
+  readonly #proxyTrustBundlePath: string | undefined;
 
   constructor(options: YtDlpResolverOptions = {}) {
     const env = options.env ?? process.env;
     this.#enabled = options.enabled ?? env["ENABLE_YTDLP_RESOLVER"] !== "false";
     this.#binaryArgs = options.binaryArgs ?? [];
     this.#fetch = options.fetch;
+    this.#proxyTrustBundlePath = options.proxyTrustBundlePath;
     const requested = options.binaryPath ?? env["YTDLP_PATH"] ?? "yt-dlp";
     this.#binaryPath = this.#enabled ? findExecutable(requested) : undefined;
   }
@@ -177,8 +200,19 @@ export class YtDlpResolver implements Resolver {
     }
 
     const args = [...this.#binaryArgs, "--dump-single-json", "--no-warnings", "--no-playlist"];
-    if (options.proxyUrl !== undefined && options.proxyUrl !== "") {
-      args.push("--proxy", options.proxyUrl);
+    const proxyUrl = options.proxyUrl === "" ? undefined : options.proxyUrl;
+    if (proxyUrl !== undefined) {
+      args.push("--proxy", proxyUrl);
+    }
+    // Both halves or neither: `SSL_CERT_FILE` is loaded by OpenSSL and then
+    // ignored unless this option sends yt-dlp back to the system store. See
+    // `proxyTrustBundlePath`.
+    const trustBundle =
+      proxyUrl === undefined || this.#proxyTrustBundlePath === ""
+        ? undefined
+        : this.#proxyTrustBundlePath;
+    if (trustBundle !== undefined) {
+      args.push("--compat-options", "no-certifi");
     }
     if (options.cookieHeader !== undefined && options.cookieHeader !== "") {
       args.push("--add-header", `Cookie:${sanitiseHeaderValue(options.cookieHeader)}`);
@@ -188,7 +222,12 @@ export class YtDlpResolver implements Resolver {
     }
     args.push(url.href);
 
-    const result = await runProcess(binary, args, options.signal);
+    const result = await runProcess(
+      binary,
+      args,
+      options.signal,
+      trustBundle === undefined ? undefined : { SSL_CERT_FILE: trustBundle },
+    );
     if (result.code !== 0) throw classifyFailure(result.stderr, result.code, url);
 
     let parsed: unknown;
@@ -515,6 +554,7 @@ function runProcess(
   binary: string,
   args: readonly string[],
   signal: AbortSignal,
+  extraEnv?: NodeJS.ProcessEnv,
 ): Promise<ProcessResult> {
   return new Promise<ProcessResult>((resolve, reject) => {
     let child: ChildProcess;
@@ -523,6 +563,12 @@ function runProcess(
         // Never a shell: the URL and any operator-supplied cookie reach argv verbatim.
         shell: false,
         windowsHide: true,
+        // **Merged onto this process's environment, never replacing it.** The
+        // child needs `PATH`, `HOME` and whatever else the operator configured
+        // yt-dlp with; handing it `{ SSL_CERT_FILE }` alone would be a new bug
+        // wearing a trust fix's clothes. No `env` key at all when there is
+        // nothing to add, which is what it did before dl-37.
+        ...(extraEnv === undefined ? {} : { env: { ...process.env, ...extraEnv } }),
         // A process group on POSIX is what makes a tree kill possible below.
         detached: process.platform !== "win32",
         stdio: ["ignore", "pipe", "pipe"],

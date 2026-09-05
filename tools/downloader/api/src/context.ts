@@ -33,10 +33,14 @@ export interface AppContext {
   startedAt: Date;
   guard: SsrfGuard;
   /**
-   * The loopback proxy every subprocess egress goes through — ffmpeg, Chromium
-   * and yt-dlp alike. Runtime state rather than configuration: the port is
-   * ephemeral and chosen at boot, which is also why it must never be reported
-   * to a client. See `egress-proxy.ts` and dl-12.
+   * The loopback proxy the **resolver tiers** go through — Chromium and yt-dlp,
+   * and ffmpeg too when `FFMPEG_TLS_INTERCEPT` is off. Runtime state rather than
+   * configuration: the port is ephemeral and chosen at boot, which is also why
+   * it must never be reported to a client. See `egress-proxy.ts` and dl-12.
+   *
+   * Since dl-37 it terminates TLS as well, whenever a tier is registered to be
+   * given the root it mints from — so "the tiers' proxy" and "the tunnelling
+   * one" stopped being the same phrase.
    */
   egressProxyUrl: string;
   /**
