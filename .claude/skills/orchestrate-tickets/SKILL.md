@@ -262,13 +262,31 @@ demonstrated that its corrections can be wrong; do not make it the default.
 exists so nobody watches a run to completion; it does not license never checking
 what a merge did. Look once, afterwards.
 
-**There is a second look, before the merge, and only you can take it.** A branch
-cannot report its own state: any commit that corrects a status claim invalidates
-it, so a record's "green at the tip" is stale the moment it is written — see
-[reference/records.md](reference/records.md). A builder and a gate both stop
-before the merge, which means **nobody in the loop is positioned to check the
-final sha**. That look is yours, immediately before merging, and it is not the
-one below.
+**There is a second look, before the merge, and it is yours because of where you
+stand, not because it is impossible.** A branch cannot report its own state: any
+commit that corrects a status claim invalidates it, so a record's "green at the
+tip" is stale the moment it is written — see
+[reference/records.md](reference/records.md). That much is structural, and it
+rules out two of the three participants. A **builder** stops before the PR and
+writes to the branch, so the commit recording its check moves the sha the check
+was about. A **gate** stops before the merge and writes its record earlier still.
+**You are the only participant still alive at merge time who is not writing to the
+branch**, so take it as the last act before handing the merge over — one call per
+branch about to land:
+
+```
+gh run list --branch <branch> --limit 6 --json workflowName,status,conclusion,headSha,event
+```
+
+`--json` rather than the table, because the whole failure this guards against is
+reading a run list by eye: `cancelled` is a *completed* run, and a glance counts
+it as green. **Name the sha in whatever you conclude**, because your look decays
+the same way theirs does — measured 2026-09-04, when a relayed "CI still
+`in_progress` at `cfae096`" was already false on arrival: the branch had moved to
+`02197ea`, where all three workflows had passed, and `cfae096`'s own CI was
+`cancelled` by the superseding push. The claim was true when it was taken and
+wrong by the time it was read. This is not the look below, which happens
+afterwards and answers a different question.
 
 **Green PR checks say nothing about the `push`-triggered jobs.** They are different
 events with different jobs, and a job that only runs on `push` to `main` can fail
