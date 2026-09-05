@@ -9,7 +9,8 @@
   "scripts": {
     "build": "tsc --build",
     "clean": "tsc --build --clean",
-    "dev": "node --watch --import tsx src/main.ts",
+    "// dev": "Builds first. This package imports @downloader/contract through its package exports, which resolve to dist/ and not src/, so a dist left behind by an older branch starts the server against a stale contract — it fails at route registration with a bare TypeError naming whatever was added since, which is how dl-29's thumbnail route was found missing. tsc --build walks this package's project references, so one command covers core, contract, resolvers and engine. Two boundaries worth knowing: it runs once, so node --watch restarting this process does not rebuild a contract edited mid-session; and it cannot restore a dist deleted by hand, because tsc --build reads its own tsconfig.tsbuildinfo and the source hashes, never the emitted .js — a build it considers up to date rewrites the tsbuildinfo and emits nothing. Run npm run clean first for that.",
+    "dev": "npm run build && node --watch --import tsx src/main.ts",
     "start": "node dist/main.js"
   },
   "dependencies": {

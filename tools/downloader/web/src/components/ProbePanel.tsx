@@ -75,7 +75,9 @@ export function ProbePanel({
       <p className="muted">
         {probe.durationSec ? `${formatDuration(probe.durationSec)} · ` : ""}
         {probe.variants.length} rendition{probe.variants.length === 1 ? "" : "s"}
-        {probe.subtitles.length > 0 ? ` · ${probe.subtitles.length} subtitle tracks` : ""}
+        {probe.subtitles.length > 0
+          ? ` · ${probe.subtitles.length} subtitle track${probe.subtitles.length === 1 ? "" : "s"}`
+          : ""}
       </p>
 
       <VariantTable variants={probe.variants} selectedId={variantId} onSelect={setVariantId} />
