@@ -269,6 +269,57 @@ red run is the deliverable of a defect ticket.
    _Passes today._ It is a regression guard rather than an acceptance, and it is
    here because step 1 makes the parser throw on input it used to accept.
 
+## The gate on this filing
+
+**Gate: PASS** — 2026-09-05 · `origin/main...HEAD` (`0d78637029ffdcb277a11ce37de3ad628fe2a316`, base `c37cab9`) · Sonnet against an Opus build · own defect hunt, no `code-review` dispatch (subagent has no `Skill` tool)
+
+This diff adds only the ticket brief — no implementation, no test, confirmed by `git diff --stat c37cab9...0d78637` (one file, 319 insertions, no `scripts/` path touched). Gated on the filing's own actually-checkable acceptance rather than its ten future `Done when` lines, per the `dl-29` precedent this ticket itself follows.
+
+### This diff's own acceptance (what I gated)
+
+| Check                                                                        | Result                                                             |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Both claims that correct the filing brief reproduce                          | **proven** — see below, both reproduced directly                   |
+| The three-way field split (enum / free-text / `depends_on`) holds            | **proven** — reproduced directly                                   |
+| Every `Done when` command returns the red/green the ticket claims            | **proven** — all six reproduced, matching exactly                  |
+| Cited shas for repo-22's history are accurate                                | **proven** — `git show` at each sha                                |
+| `dl-25`'s `"srt"` example and repo-19's "ready"/"startable" framing are real | **proven**                                                         |
+| `repo-24` is unclaimed on any other branch or in any PR title                | **proven** — every remote branch checked, `gh pr list --state all` |
+| Decision surfaced as options with a recommendation, not resolved in prose    | **proven** — read directly                                         |
+| `npm run check`, `npm run format`, `npx vitest run scripts`                  | **proven** — all pass unchanged (126 tests, same as base)          |
+| `node scripts/status.mjs --json` / `-- --show repo-24`                       | **proven** — exit 0, `problems: []`, renders with no quote marks   |
+
+**Claim 1 (parseList reaches the exit code), reproduced against a scratch root** (`repo-90` sound, `repo-91` with `depends_on: ["repo-90"]`):
+
+```
+node scripts/status.mjs --root "$R" --json
+```
+
+→ `"dependency": "\"repo-90\""`, `"message": "docs/work/repo-91-slug.md: depends_on \"\"repo-90\"\", which is not a ticket"`, and the process itself exits 1. Confirms the brief's correction of your framing: this is not bounded to rendering.
+
+**Claim 2 (quoting was never required), reproduced**: a scratch ticket with `title: `` `grep`here is a wrapper... `` `` (unquoted, leading backtick) renders via`--show`, default and `--json` intact, exit 0 throughout.
+
+**Three-way split, reproduced**: a quoted `status: "ready"` throws `""ready"" is not a status. Use one of: ready, in-flight, done, dropped`, exit 1. A quoted `title`/`note` carries its quotes through `--show`, the default view, `--ready`, `--markdown` and `--json`, exit 0. A quoted `milestone: "m1"` groups separately from an unquoted `m1` — reproduced two distinct milestone rows for one milestone.
+
+**`Done when` lines, run against the real board and scratch fixtures, all six as claimed**:
+
+1. `parseFrontmatter` called directly on a quoted `title` — returns it unchanged (`"\"a quoted title\""`), does not throw. Fails today, as claimed.
+2. Quoted title carried through every rendering path (`--show`, default, `--ready`, `--markdown`, `--json`) — verified all five. Fails today, as claimed.
+3. `depends_on: ["repo-90"]` against a real `repo-90` — false `dangling-dependency`, `--json` exit 1. Fails today, as claimed.
+4. `note`/`milestone` both carry quotes; `milestone` splits into two rows. Fails today, as claimed.
+5. `grep -n quot docs/01-TICKETS.md` → exit 1 (no match). `grep -n literal docs/01-TICKETS.md` → exit 0, matches only `docs/01-TICKETS.md:173`, an unrelated sentence about a gate applying rules "literally." Both exactly as claimed — the self-caught defect is real and correctly recorded rather than quietly fixed.
+6. `node scripts/status.mjs --json > /dev/null; echo $?` → 0. `npm run check` → exit 0. Passes today, as claimed (regression guard).
+
+**Corroborating citations, all verified exact**: `dl-25`'s title is literally `A CDN hostname containing "srt" classifies the track as SubRip` (`tools/downloader/docs/work/dl-25-srt-row-matches-a-hostname.md:4`); repo-19's title is `ready does not mean startable, and the board cannot say which`. repo-22 was quoted at `693e7f2` and still quoted at `e605d54` (both `git show`n directly), reworded at `4f63e10` (unquoted, phrase changed), whose own Log there contains the quoted "workaround, not a fix" and "the parser still keeps quotes on any title that genuinely needs them" text verbatim. `parseScalar` is exactly `scripts/status.mjs:115-118`; `parseList` exactly `:121-129`; the call site handing `file`/`line` only to `parseList` is exactly `:106`; `EXIT_ON_PROBLEMS = ["json"]` is exactly `:610`; `ci.yml`'s board gate is exactly `:115`; `parseFrontmatter`'s only caller outside `status.mjs` is `scripts/test/status.test.ts`, confirmed by grep across `scripts/`, `.claude/hooks/`, `.github/`. `repoWith`/`ticket`/`run` are exactly at `scripts/test/status.test.ts:29/40/97`.
+
+**Id uniqueness**: checked `docs/work/repo-2[0-9]*` across every remote branch (`dl-32-remove-job-list-route`, `dl-34-classify-tls-failures`, `dl-37-tiers-onto-terminating-proxy`, `docs/record-2026-09-04-orchestration-batch`, `fix/dev-server-stale-contract`, `pl-17-image-closure`, `repo-18-citation-anchors`, `repo-19-needs-decision-status`, `repo-cleanup-orchestrate-skill`, `repo-file-grep-wrapper-ticket`, `worktree-pl-19-pin-through-the-browser`) plus `gh pr list --state all`. `repo-24` appears only on `repo-status-quoted-scalar-ticket`. `fix/dev-server-stale-contract` does carry `repo-25-citations-checker-misses-shorthand-references.md` — no collision, one above.
+
+**On the CLI-runs-not-tests substitution**: sound for a filing. `docs/01-TICKETS.md`'s "a ticket carries a decision or a reproduction" makes the reproduction itself the deliverable here, and I independently re-ran every one of those commands myself (not trusting the Log's numbers) against both scratch fixtures and the real board, getting identical results — the harder bar `unproven`/`verified` distinguishes.
+
+- **dropped** — none.
+- **findings** · own defect hunt (full read, every `file:line`/quote/sha citation independently re-run against `0d78637`, both corrective claims reproduced from scratch, all six `Done when` lines run red/green as claimed, id-uniqueness swept across every remote branch) returned 0; 0 carried, 0 dropped.
+- NFR: security n/a (docs-only) · performance n/a · reliability n/a to this diff directly (it documents, correctly, a real reliability defect in `status.mjs` without fixing it, which is the right scope for a filing) · maintainability — strong; every citation checked resolves exactly, decision gives concrete costs per option, nothing left for a future builder to re-derive.
+
 ## Log
 
 **2026-09-05 — filed.** Reproduced before anything was written, per the brief.
@@ -317,3 +368,25 @@ red run is the deliverable of a defect ticket.
   because it is the same failure this ticket is about: a check that returns the
   answer you wanted for a reason you did not look at.
 - Not implemented, per the filing instruction.
+
+**2026-09-05 — gated PASS, zero findings**, by a Sonnet reviewer against this
+Opus build. Its record is above. One note the record does not carry, raised to
+the reviewer rather than edited into its text:
+
+- **`scripts/status.mjs:115-118` cites `parseScalar` one line short of its
+  closing brace at `:119`**, while `parseList` is cited `:121-129`, JSDoc through
+  brace. Two conventions, and the code block quoted under `## Why` is `116-119` —
+  four lines including the brace — sitting under a citation that says `115-118`.
+  The number was kept anyway, deliberately: it is what the filing brief used and
+  what repo-22's Log on `repo-file-grep-wrapper-ticket` already says about the
+  same function, so a reader cross-referencing the two records finds one number
+  rather than two. **Whoever implements this should cite `:115-119` and fix
+  repo-22's Log in the same commit** — that is the cheap moment for it.
+- The wrinkle is worth recording because
+  `node scripts/citations.mjs docs/work/repo-24-quoted-scalars-render-with-quotes.md`
+  reports **`14/14 resolve`, exit 0**, marking `115-118` `ok`: it validates only
+  that a range does not run past end of file (`scripts/citations.mjs:222`). That
+  is repo-18's thesis reproduced incidentally, and the same shape as both this
+  ticket's defect and the `Done when` 5 slip above — a check returning the
+  answer you wanted for a reason nobody looked at. Three instances in one filing
+  is the argument for repo-18.
