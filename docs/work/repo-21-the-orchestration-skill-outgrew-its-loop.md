@@ -765,6 +765,25 @@ passage by its quoted opening instead of by number, which is what this ticket's 
 top-of-file rule already told me to do. `defect-shapes.md:41,63` was checked the
 same way and is byte-identical on both trees, so it keeps its numbers.
 
+**Verdict: settled at `319fe40`.** The reviewer re-derived every claim on a fresh
+checkout rather than accepting the report — both `grep` coordinates against both
+trees, Build 3's rewritten citation read in full, Gate 3's annotation confirmed as
+annotated-not-repointed, `defect-shapes.md` re-verified byte-identical, the
+citation count confirmed stated once with the historical `8/10` and `12/14`
+correctly left as measured-at-the-time, `citations.mjs` 14/16 exit 1 re-run
+redirected, and `npm run check` / `npm run format` / `status.mjs --json` /
+`git check-ignore` all re-run. It found nothing further and corrected one of its
+own earlier numbers in passing (it had said 226, from grepping a different anchor
+line; 225 is right).
+
+**This verdict's own commit moves the tip past the sha it certifies, and that is
+structural, not a defect.** The skill already says a record's "green at the tip" is
+stale the moment it is written — any commit that records a status claim invalidates
+the sha the claim was about. The resolution used throughout this ticket is the one
+the skill prescribes: **pin the verdict to the sha it was taken on and let the
+recording commit be the recording commit.** The orchestrator's pre-merge look is
+what covers the real tip, and it is the only participant positioned to take it.
+
 ## Log
 
 - **2026-09-05 — filed.** Every number was measured against `origin/main@c37cab9`
@@ -825,6 +844,14 @@ same way and is byte-identical on both trees, so it keeps its numbers.
   is printed today and is not printed there, and both halves matter. Whoever
   builds this should re-read this bullet against the merged `citations.mjs` and
   correct the verb.
+
+- **2026-09-05 — settled at `319fe40`, four gates, no disagreement escalated.**
+  Full tallies are in the four gate subsections above. What a future orchestrator
+  should take from the shape of it: **the two rounds that found the most cost the
+  least**, and both came from questioning the framing rather than re-reading the
+  work — "did this shrink" instead of "was this accepted" (gate 2), and "is this
+  rule in the right place" instead of "is it stated too often" (gate 3). Both were
+  one command to check and both changed the deliverable.
 
 - **2026-09-05, sixth pass — gate 4 settled the two delegated calls and found one
   more defect.** The −9 cut was not taken and my "+21 was unavoidable" defence was
