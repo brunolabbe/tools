@@ -14,15 +14,27 @@
  * mechanical, it must produce the same answer every time, and it was being
  * rebuilt ad hoc inside whichever builder happened to need it.
  *
- * It cannot tell you a citation is *semantically* right — for that it prints the
- * line so a reader can judge. It can tell you a citation cannot possibly be
- * right, which is the half that is checkable.
+ * A citation may carry **anchor text** — a fragment of what it points at,
+ * quoted straight after the location:
+ *
+ *     `tls-origin.ts:144-149` "Defence in depth"
+ *
+ * When it does, this checks the fragment is actually inside the cited range and
+ * says where it went when it is not. That is the only thing here that verifies
+ * the *claim* rather than the coordinates, so it is the only thing that reports
+ * `verified`. A citation with no anchor still resolves, and is reported as
+ * `unanchored` — never as verified, because nothing checked it.
+ *
+ * Hence there is no `N/N resolve` line any more. Four states are counted
+ * separately, because a total that cannot tell them apart is the defect
+ * (repo-18): a run over a record whose fix moved the cited lines printed
+ * `9/9 resolve` with three citations pointing at unrelated code.
  *
  * Plain `.mjs`, no dependencies, matching `status.mjs` and
  * `commit-message.mjs`.
  *
  * Usage:
- *   node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>]
+ *   node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors]
  *
  * `--rev` resolves against a commit rather than the working tree. Pinning the
  * record to the commit the gate actually reviewed is the cheaper answer to a fix
@@ -33,6 +45,15 @@
  * exactly first and then by prefix. A name that matches nothing, or that matches
  * more than one section, is an **error**: a quiet whole-file answer wearing the
  * label of a filtered one is the failure this flag was reported for.
+ *
+ * `--require-anchors` makes `unanchored` fatal, for a record that wants to hold
+ * itself to the stricter standard before the default gets there. **It changes
+ * the exit code and nothing else.** A citation's state is a fact about the
+ * record, so the same citation reports `unanchored` either way; whether that is
+ * a failure is the caller's policy, and a flag that repainted it `FAIL` would
+ * destroy the one property these states have. The default stays exit 0, because
+ * turning it on for everyone fails every run against all 965 citations already
+ * in the tree.
  */
 
 import { execFileSync } from "node:child_process";
@@ -42,12 +63,39 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 /**
+ * The anchor that may follow a location: a straight-double-quoted fragment,
+ * after an optional closing backtick and at most one space.
+ *
+ * Both spellings are accepted because reviewers here already write the first
+ * one — `` `rate-limit.test.ts:465` "refuses with a 429" `` — 13 times across
+ * six records before this script could read any of them, which is why the
+ * format is this and not a new one.
+ *
+ * **Straight quotes only, and no more than one space of separation.** Measured
+ * over every record in the tree: 13 matches, all of them genuine anchors, zero
+ * prose quotations caught; and zero citations followed by a typographic `“`, so
+ * accepting those would buy nothing and would start catching quoted prose.
+ */
+const ANCHOR = String.raw`(?:\x60?[ \t]?"(?<anchor>[^"\n]{1,200})")?`;
+
+/**
  * A path token that looks like a repo file. Deliberately narrow: it needs a
  * slash or a known extension, so prose like `10:30` or `PASS:1` is not a
  * citation.
  */
-const INLINE =
-  /(?<file>(?:[\w.@-]+\/)+[\w.@-]+\.\w+|[\w.@-]+\.(?:ts|tsx|mjs|js|json|md|yml|yaml|sh)):(?<start>\d+)(?:[-–](?<end>\d+))?/g;
+const INLINE = new RegExp(
+  String.raw`(?<file>(?:[\w.@-]+\/)+[\w.@-]+\.\w+|[\w.@-]+\.(?:ts|tsx|mjs|js|json|md|yml|yaml|sh)):(?<start>\d+)(?:[-–](?<end>\d+))?` +
+    ANCHOR,
+  "g",
+);
+
+/**
+ * The same rule inside a table's `line` cell, where the location is a bare
+ * number. One lexical rule in both places rather than a new `anchor` column: a
+ * cell may hold several citations (`465, 544`), and a column could only anchor
+ * the row.
+ */
+const TABLE_LINE = new RegExp(String.raw`\b(\d+)(?:[-–](\d+))?\b` + ANCHOR, "g");
 
 /** A `file` cell in a table row: the first backticked path-looking token. */
 const CELL_FILE =
@@ -61,7 +109,7 @@ const CELL_FILE =
  * column silently under-reports coverage. Two builders hit that independently.
  *
  * @param {string} markdown
- * @returns {{file: string, start: number, end: number, source: "inline" | "table", line: number}[]}
+ * @returns {{file: string, start: number, end: number, anchor: string | null, source: "inline" | "table", line: number}[]}
  */
 export function extractCitations(markdown) {
   const out = [];
@@ -91,11 +139,12 @@ export function extractCitations(markdown) {
         // cell text so a record that forgot the backticks still gets checked.
         const cellMatch = CELL_FILE.exec(cells[fileCol]);
         const file = cellMatch ? cellMatch[1] : cells[fileCol].replace(/`/g, "").trim();
-        for (const num of cells[lineCol].matchAll(/\b(\d+)(?:[-–](\d+))?\b/g)) {
+        for (const num of cells[lineCol].matchAll(TABLE_LINE)) {
           out.push({
             file,
             start: Number(num[1]),
             end: Number(num[2] ?? num[1]),
+            anchor: num.groups?.anchor ?? null,
             source: "table",
             line: lineNo,
           });
@@ -105,11 +154,14 @@ export function extractCitations(markdown) {
     }
 
     for (const m of text.matchAll(INLINE)) {
-      const g = /** @type {{file: string, start: string, end?: string}} */ (m.groups);
+      const g = /** @type {{file: string, start: string, end?: string, anchor?: string}} */ (
+        m.groups
+      );
       out.push({
         file: g.file,
         start: Number(g.start),
         end: Number(g.end ?? g.start),
+        anchor: g.anchor ?? null,
         source: "inline",
         line: lineNo,
       });
@@ -188,11 +240,113 @@ export function makeReader(repo, rev) {
   };
 }
 
+/** Collapse every run of whitespace, so an anchor copied out of indented code matches. */
+const normalize = (text) => text.replace(/\s+/g, " ").trim();
+
 /**
- * Resolve each citation. A citation fails only when it *cannot* be right — the
- * file is gone, or the line is past the end. Everything else is printed for a
- * reader to judge, because a citation whose content changed still resolves and
- * is not this script's to call wrong.
+ * An anchor is a *prefix* of what its author read, so a trailing ellipsis is a
+ * truncation mark and not part of the text. Two of the anchors already written
+ * by hand in this repo end in one (`"an existing row survives migration 3..."`),
+ * and treating the dots as literal would report both as moved.
+ */
+const normalizeAnchor = (anchor) =>
+  normalize(anchor)
+    .replace(/(\.{3}|…)$/, "")
+    .trim();
+
+/**
+ * Every line an anchor's text starts on, in a file.
+ *
+ * Matched against the file collapsed into **one** string rather than line by
+ * line, because the text worth anchoring wraps. The case that earned this is
+ * real: repo-7 cites `03-RELEASING.md:97-99` for `heads that release's
+ * ### Features`, which runs across lines 118 and 119 of the target and is on
+ * neither of them, so a line-by-line match reports it missing and is wrong.
+ * Blank lines are dropped rather than joined, so a paragraph break does not
+ * leave a double space in the middle of the haystack.
+ *
+ * **The lines are joined raw, so a comment's continuation marker stays in the
+ * haystack.** An anchor spanning `... a mutation` / `// run proved it` therefore
+ * does not match — there is a `//` in the middle of it. That is a known boundary
+ * with a test on it, not an oversight, and the reason it is narrow is better than
+ * the frequency count that first justified it: **because the marker stays in the
+ * haystack, an anchor produced by copy-paste keeps the marker too, and
+ * verifies.** `"not what fixes // the collision"` matches; only
+ * `"not what fixes the collision"` does not. So the failure needs an author
+ * retyping across the break while silently dropping the marker — a far narrower
+ * target than "anchors that cross a comment boundary", and the opposite of what
+ * *cite what you read* pushes anyone toward.
+ *
+ * That also inverts the case for stripping. Stripping the haystack alone would
+ * *break* the copy-paste case above, so the only coherent version is
+ * strip-both-sides, whose false-positive surface is real: `#` is a markdown
+ * heading, a shell comment and a CSS id; `*` is a bullet, a JSDoc continuation
+ * and a glob. Building that for zero observed consumers is what the root
+ * `CLAUDE.md` forbids. Frequency agrees — of the 13 anchors written by hand
+ * before this script could read one, exactly one needs the join and none needs a
+ * marker stripped — but frequency alone is only "we have not needed it yet".
+ *
+ * **Verified iff the anchor's text starts on a line inside `[start, end]`.** The
+ * end is deliberately loose: an anchor may run past the cited range. The
+ * dangerous direction is closed — text lying *entirely* outside the range cannot
+ * read as verified, because the match's start line must be in it — and requiring
+ * end-containment would make any wrapped anchor unverifiable unless the author
+ * widened the range by computing an end line from the anchor's length. That is
+ * the exact upstream error this ticket's Reproduction diagnoses (`143 = 149 − 6`)
+ * and that `records.md` answers with *cite what you read, never compute one
+ * citation from another*. Start-in-range is not a compromise; it is the only
+ * predicate compatible with the repo's own authoring rule.
+ *
+ * Not exported, and that is deliberate — see the note above `summarize`.
+ *
+ * @param {string[]} content
+ * @param {string} anchor
+ * @returns {number[]} line numbers, ascending
+ */
+function locateAnchor(content, anchor) {
+  const needle = normalizeAnchor(anchor);
+  if (needle === "") return [];
+
+  /** @type {{lineNo: number, at: number}[]} */
+  const starts = [];
+  let haystack = "";
+  content.forEach((text, index) => {
+    const normalized = normalize(text);
+    if (normalized === "") return;
+    if (haystack !== "") haystack += " ";
+    starts.push({ lineNo: index + 1, at: haystack.length });
+    haystack += normalized;
+  });
+
+  /** @type {number[]} */
+  const hits = [];
+  for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) {
+    // The last line beginning at or before the match is the line it starts on.
+    let lineNo = starts[0]?.lineNo ?? 1;
+    for (const start of starts) {
+      if (start.at > at) break;
+      lineNo = start.lineNo;
+    }
+    hits.push(lineNo);
+  }
+  return hits;
+}
+
+/** How a citation came out, worst first. There is no boolean here on purpose. */
+const STATES = /** @type {const} */ (["unresolvable", "moved", "unanchored", "verified"]);
+
+/**
+ * Resolve each citation, and where it carries anchor text, check the claim.
+ *
+ * Four states, because two of them were the defect. `unresolvable` is a citation
+ * that *cannot* be right — the file is gone, the line is past the end, the bare
+ * name matches several files. `moved` is a citation whose anchor does not
+ * *start* on a line inside the range it names — containment of the whole anchor
+ * is not required, and `locateAnchor` says why; the reason printed says where
+ * the anchor actually starts, which is the half a reader needs to repoint it. `unanchored` resolves and is
+ * printed for a reader to judge, exactly as everything did before this ticket —
+ * it is **not** verified, because nothing checked it. `verified` is the only
+ * state in which this script has an opinion about correctness.
  *
  * @param {ReturnType<typeof extractCitations>} citations
  * @param {(file: string) => string[] | null} read
@@ -201,30 +355,108 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
   const cache = new Map();
   return citations.map((c) => {
     const resolved = resolve(c.file);
-    if ("error" in resolved)
-      return { ...c, ok: false, reason: resolved.error, text: null, resolved: null };
+    const at = "error" in resolved ? null : resolved.path;
+    const bad = (reason) => ({
+      ...c,
+      state: "unresolvable",
+      reason,
+      text: null,
+      resolved: at,
+      foundAt: null,
+    });
+
+    if ("error" in resolved) return bad(resolved.error);
     if (!cache.has(resolved.path)) cache.set(resolved.path, read(resolved.path));
     const content = cache.get(resolved.path);
     c = { ...c, resolved: resolved.path };
-    if (content === null) return { ...c, ok: false, reason: "file not found", text: null };
+    if (content === null) return bad("file not found");
     if (c.start < 1 || c.start > content.length) {
-      return {
-        ...c,
-        ok: false,
-        reason: `line ${c.start} is past end of file (${content.length} lines)`,
-        text: null,
-      };
+      return bad(`line ${c.start} is past end of file (${content.length} lines)`);
     }
     if (c.end > content.length) {
+      return bad(`range ends at ${c.end}, past end of file (${content.length} lines)`);
+    }
+
+    const text = content[c.start - 1].trim();
+    const range = c.start === c.end ? `${c.start}` : `${c.start}-${c.end}`;
+    if (c.anchor === null || normalizeAnchor(c.anchor) === "") {
+      // Short on purpose. This repeats once per citation across a whole legacy
+      // record, and the sentence explaining how to fix it is worth reading once,
+      // so it is on stderr at the end instead.
       return {
         ...c,
-        ok: false,
-        reason: `range ends at ${c.end}, past end of file (${content.length} lines)`,
-        text: null,
+        state: "unanchored",
+        reason: "no anchor — nothing checked it",
+        text,
+        foundAt: null,
       };
     }
-    return { ...c, ok: true, reason: null, text: content[c.start - 1].trim() };
+
+    const hits = locateAnchor(content, c.anchor);
+    const inRange = hits.filter((n) => n >= c.start && n <= c.end);
+    if (inRange.length > 0)
+      return { ...c, state: "verified", reason: null, text, foundAt: inRange };
+
+    const shown = normalizeAnchor(c.anchor).slice(0, 60);
+    const elsewhere = `${hits.slice(0, 3).join(", ")}${hits.length > 3 ? ", …" : ""}`;
+    return {
+      ...c,
+      state: "moved",
+      reason:
+        hits.length > 0
+          ? `anchor "${shown}" is not in ${range} — it is at ${elsewhere}`
+          : `anchor "${shown}" is not in ${range}, and not anywhere in ${resolved.path}`,
+      text,
+      foundAt: hits,
+    };
   });
+}
+
+/**
+ * Count the states, and render the one line that replaces `N/N resolve`.
+ *
+ * Every bucket is printed even at zero. A summary that drops its empty buckets
+ * reads as a smaller claim than it is — `9 verified` alone does not tell you the
+ * script was capable of saying anything else — and the whole of repo-18 is a
+ * count that could not distinguish two states.
+ *
+ * **Deliberately not exported, along with `locateAnchor` and `STATES`.** This
+ * module's export list is byte-identical to the one before repo-18, so the suite
+ * that proves this ticket links against the *old* source and fails on an
+ * assertion — `expected undefined to be "moved"` — rather than on a missing
+ * export. A red reading `SyntaxError: does not provide an export named
+ * 'summarize'` proves the API changed and proves nothing about the behaviour,
+ * and repo-18 exists because a check that cannot fail informatively is worse
+ * than no check. Both are covered through `checkCitations` and the CLI's own
+ * output, which is the surface a reader actually reads.
+ *
+ * `requireAnchors` is applied here rather than at the exit, so the one function
+ * that knows the counts is also the one that says what they mean. It changes
+ * `failed` and appends to `line`; it does not touch a single citation's state,
+ * because whether an unchecked citation is tolerable is the caller's policy and
+ * not a fact about the record.
+ *
+ * @param {ReturnType<typeof checkCitations>} results
+ * @param {boolean} requireAnchors
+ */
+function summarize(results, requireAnchors) {
+  /** @type {Record<string, number>} */
+  const counts = Object.fromEntries(STATES.map((state) => [state, 0]));
+  for (const r of results) counts[r.state] += 1;
+  return {
+    ...counts,
+    total: results.length,
+    failed: counts.moved + counts.unresolvable + (requireAnchors ? counts.unanchored : 0),
+    // Deliberately never `N/N`: the pair that reads as "all fine" is the shape
+    // this script printed while three citations pointed at unrelated code. The
+    // suffix is on the same line as the counts so a CI log shows the policy that
+    // judged them next to the numbers it judged.
+    line:
+      `${counts.verified} verified, ${counts.moved} moved, ` +
+      `${counts.unanchored} unanchored, ${counts.unresolvable} unresolvable` +
+      ` — of ${results.length} citation${results.length === 1 ? "" : "s"}` +
+      (requireAnchors ? ", anchors required" : ""),
+  };
 }
 
 /**
@@ -324,10 +556,17 @@ export function selectSection(sections, name) {
   );
 }
 
-/** Every flag this CLI accepts, mapped to the option it sets. All take a value. */
+/**
+ * Every flag this CLI accepts, mapped to the option it sets and whether it takes
+ * a value. The arity is data rather than a branch in the parser because
+ * `--require-anchors` is the first flag here that takes none, and a parser that
+ * assumed otherwise would swallow the ticket file as its value — which is
+ * repo-14's defect, one flag over.
+ */
 export const FLAGS = new Map([
-  ["--rev", "rev"],
-  ["--section", "section"],
+  ["--rev", { option: "rev", takesValue: true }],
+  ["--section", { option: "section", takesValue: true }],
+  ["--require-anchors", { option: "requireAnchors", takesValue: false }],
 ]);
 
 /**
@@ -338,7 +577,7 @@ export const FLAGS = new Map([
  * repo-14's open question answered by an error message.
  */
 export const USAGE =
-  "usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>]";
+  "usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors]";
 
 /**
  * Parse argv into the ticket file and its options.
@@ -350,16 +589,20 @@ export const USAGE =
  * it is the same pass that can reject a flag it does not recognise — both
  * defects live on this one line of parsing, which is why they are one change.
  *
+ * A flag that takes no value must not consume the next argument, which is the
+ * same defect read from the other end — so the arity comes off `FLAGS` and the
+ * destination comes off the option name. Assigning by key rather than by an
+ * `if (option === "rev") … else …` chain is what keeps a fourth flag from
+ * needing a fourth arm here.
+ *
  * @param {string[]} argv
- * @returns {{file: string, rev: string | null, section: string | null}}
+ * @returns {{file: string, rev: string | null, section: string | null, requireAnchors: boolean}}
  */
 export function parseArgs(argv) {
   /** @type {string | null} */
   let file = null;
-  /** @type {string | null} */
-  let rev = null;
-  /** @type {string | null} */
-  let section = null;
+  /** @type {{rev: string | null, section: string | null, requireAnchors: boolean}} */
+  const options = { rev: null, section: null, requireAnchors: false };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -370,20 +613,23 @@ export function parseArgs(argv) {
       file = arg;
       continue;
     }
-    const option = FLAGS.get(arg);
-    if (option === undefined) throw new Error(`unknown option ${arg}\n${USAGE}`);
+    const flag = FLAGS.get(arg);
+    if (flag === undefined) throw new Error(`unknown option ${arg}\n${USAGE}`);
+    if (!flag.takesValue) {
+      options[flag.option] = true;
+      continue;
+    }
     const value = argv[++i];
     if (value === undefined) throw new Error(`${arg} needs a value\n${USAGE}`);
-    if (option === "rev") rev = value;
-    else section = value;
+    options[flag.option] = value;
   }
 
   if (file === null) throw new Error(USAGE);
-  return { file, rev, section };
+  return { file, ...options };
 }
 
 function main() {
-  const { file, rev, section } = parseArgs(process.argv.slice(2));
+  const { file, rev, section, requireAnchors } = parseArgs(process.argv.slice(2));
 
   const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   const markdown = fs.readFileSync(file, "utf8");
@@ -403,7 +649,7 @@ function main() {
     makeReader(repo, rev),
     makeResolver(candidateFiles(repo, rev)),
   );
-  const bad = results.filter((r) => !r.ok);
+  const summary = summarize(results, requireAnchors);
 
   const where = rev ? `against ${rev}` : "against the working tree";
   // The scope is named next to the count, so a filtered number can never be read
@@ -416,27 +662,76 @@ function main() {
   );
 
   for (const r of results) {
-    const mark = r.ok ? "ok  " : "FAIL";
+    // Upper case is always a failure. Lower case usually is not — but under
+    // `--require-anchors` a lowercase `unanchored` is a failure too, so the
+    // column is a fast read rather than the whole answer; the summary line and
+    // the exit code are. (This comment said "lower case is not" full stop until
+    // `--require-anchors` made that conditionally false and nothing re-read it,
+    // which is this branch's own thesis turning up inside the file arguing it.)
+    // `unanchored` sets the width; the rest are padded.
+    const mark = { verified: "ok", moved: "MOVED", unanchored: "unanchored", unresolvable: "FAIL" }[
+      r.state
+    ].padEnd(10);
     const range = r.start === r.end ? `${r.start}` : `${r.start}-${r.end}`;
-    const shown =
+    const located =
       r.resolved && r.resolved !== r.file
         ? `${r.file}:${range} -> ${r.resolved}`
         : `${r.file}:${range}`;
+    const shown = r.anchor === null ? located : `${located} "${r.anchor.slice(0, 60)}"`;
     process.stdout.write(`  ${mark} ${shown}  (record line ${r.line}, ${r.source})\n`);
-    if (r.ok) process.stdout.write(`       ${r.text.slice(0, 100)}\n`);
-    else process.stdout.write(`       ${r.reason}\n`);
+    // An unanchored citation prints both: the line, because a human judging it by
+    // hand is the only check it has, and the reason, because that is the part
+    // saying nobody has.
+    if (r.text !== null && r.state !== "moved") {
+      process.stdout.write(`             ${r.text.slice(0, 100)}\n`);
+    }
+    if (r.reason !== null) process.stdout.write(`             ${r.reason}\n`);
   }
 
-  process.stdout.write(`\n${results.length - bad.length}/${results.length} resolve\n`);
-  if (bad.length > 0) {
-    process.stderr.write(
-      `\n${bad.length} citation(s) cannot be right. Re-resolve them against the tree you are committing, or pin the\n` +
-        `record to the commit the gate reviewed with --rev and say so in the record.\n\n` +
-        `Two things this cannot judge, and you must: a citation whose *content* changed still resolves, and a\n` +
-        `citation that is a finding's own evidence ("the text is at :94-95, not :93-94") must stay as written.\n`,
+  process.stdout.write(`\n${summary.line}\n`);
+
+  // Unanchored is advice on stdout and a failure on stderr, and which one it is
+  // depends only on the flag. That keeps `stderr is empty` and `exit 0` meaning
+  // the same thing — an invariant the suite asserts, and the reason this is not
+  // simply always written to stderr.
+  if (summary.unanchored > 0 && !requireAnchors) {
+    process.stdout.write(
+      `\n${summary.unanchored} citation(s) carry no anchor text, so nothing here checked them — they are printed\n` +
+        `for you to judge by hand. Writing one as \`file.ts:120 "a fragment of the line"\` is what lets\n` +
+        `this script tell a moved citation from a correct one.\n`,
     );
-    process.exitCode = 1;
   }
+
+  // Ordered as the summary line orders them, so the numbers and their reasons
+  // can be read down the screen in the same sequence.
+  const advice = [];
+  if (summary.moved > 0) {
+    advice.push(
+      `${summary.moved} citation(s) do not point at what they say. Repoint them against the tree you are\n` +
+        `committing, or pin the record to the commit the gate reviewed with --rev and say so in the record.\n` +
+        `Where the reason says the anchor is nowhere in the file, neither of those is the fix — the anchor\n` +
+        `spans something the file has between its words, most often a comment's // or * continuation\n` +
+        `marker. Shorten it to one line's worth, or quote the marker as it appears.`,
+    );
+  }
+  if (summary.unanchored > 0 && requireAnchors) {
+    advice.push(
+      `${summary.unanchored} citation(s) carry no anchor text and --require-anchors is in force, so this run\n` +
+        `failed on them. Write each as \`file.ts:120 "a fragment of the line"\`, or drop the flag to get the\n` +
+        `default, which reports them and exits 0.`,
+    );
+  }
+  if (summary.unresolvable > 0) {
+    advice.push(
+      `${summary.unresolvable} citation(s) cannot be right at all: the file is gone, the line is past the end, or\n` +
+        `the bare name matches more than one file.`,
+    );
+  }
+  // The carve-out is still not checkable, and still yours: a citation that is a
+  // finding's own evidence ("the text is at :94-95, not :93-94") must stay as
+  // written even when this reports it moved.
+  if (advice.length > 0) process.stderr.write(`\n${advice.join("\n\n")}\n`);
+  if (summary.failed > 0) process.exitCode = 1;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
