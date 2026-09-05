@@ -130,7 +130,7 @@ statement about its own context.
 
 | Field | Value |
 | --- | --- |
-| `tickets` | **3** dispatched concurrently off `origin/main@c37cab9` — `dl-37`, `repo-18`, `repo-19` — plus this **unticketed** skill branch. PRs #146 (repo-18) and #145 (repo-19) open at close; `dl-37` still gating. **3** further tickets filed — `dl-38` and `dl-39` out of dl-37, and `repo-20` out of this row's own seventh entry. `dl-32`'s decision was reported answered by the owner and held for a later batch — **and as of this branch it is not written down**: the ticket's decision section still reads "deliberately not ranked here" and its Log ends 2026-08-31. That is `dispatching.md`'s _An answered decision has to be recorded even when you do not build it_, unapplied, on the one ticket that was answered but not dispatched. Flagged, not fixed here |
+| `tickets` | **3** dispatched concurrently off `origin/main@c37cab9` — `dl-37`, `repo-18`, `repo-19` — plus this **unticketed** skill branch. PRs #146 (repo-18) and #145 (repo-19) open at close; `dl-37` still gating. **3** further tickets filed — `dl-38` and `dl-39` out of dl-37, and `repo-20` out of this row's own seventh entry. `dl-32`'s decision was reported answered by the owner and held for a later batch — **and at `c37cab9`, the base this row is measured against, it was not written down**: the ticket's decision section still read "deliberately not ranked here" and its Log ended 2026-08-31. That is `dispatching.md`'s _An answered decision has to be recorded even when you do not build it_, unapplied, on the one ticket that was answered but not dispatched. Flagged, not fixed here — and **since fixed elsewhere**: `dl-32` landed via #152 (`5f6e92c`) while this branch sat open, and its decision section now reads "Answered 2026-09-05: option D" with `status: done`. The observation is pinned to the base, not to the tree this row lands in |
 | `agents` / `dispatches` | **9** agents — 1 seam-mapper, 4 builders (three tickets plus the one that wrote this row), 4 reviewers, one of which was an **Opus second opinion** on repo-18 — and **9 spawns**. The schema's second number is spawns *and wakes*, and **the wakes were not tallied**, so this row is short one figure rather than reporting 9 as the total; the rounds row below is the nearest available proxy and is larger |
 | `builder rounds` | **~15** — dl-37 ~4, repo-18 ~5, repo-19 ~5, this row 1 — counting each `SendMessage` resume that produced work. **Approximate and marked so by the orchestrator, which kept no strict tally**; it is the one number here that is an estimate rather than an observation. One round is attributable to the orchestrator by name: two round trips on a single dl-37 decision, caused by framing a defect as one to *defer* without saying the file was one dl-37 itself introduces (`api/src/tls-rejections.ts`, added by `8245721`). The correction reached the builder mid-revert; it stopped, reconstructed from backups rather than memory, re-ran its mutation checks and disclosed the reconstruction as the thing most worth independent scrutiny |
 | `gates` | **6 rounds across 4 reviewers** — dl-37 ×2, repo-18 ×3 (including the Opus second opinion), repo-19 ×1. **All returned findings.** Three are committed on the tree and were read here: repo-18's `## Review` and `### Gate 2`, both PASS, and repo-19's PASS; dl-37's is uncommitted, still gating at close, its `TlsRejectionLog` finding already folded in at `4f46415` |
@@ -139,13 +139,15 @@ statement about its own context.
 | `cost` | `not recorded` — never observed. At the 2026-09-02 rate of $0.0182/1k this would be ≈ $42, which is an arithmetic conversion of a floor and not a bill |
 
 **Board shape at intake, which the skill had already anticipated — and re-measured
-here, because this branch is cut from the same base.** `npm run status -- --ready`
-at `c37cab9` returns **six**, and **five carry an open decision their own page
-forbids a builder from settling** (`dl-32`, `repo-15`, `repo-16`, `repo-18`,
-`repo-19`; `dl-37`'s was answered on 2026-09-03). So the batch question was "which
-decisions to answer", not "which tickets to run", exactly as step 2's second
-bullet says. Recorded because the anticipation was written on one session's
-evidence — nine and eight, on 2026-09-03 — and this is the second.
+here, because this branch was cut from that same base** (it has since been rebased
+onto a later `main`, which is why the pin below is a sha and not "this branch").
+`npm run status -- --ready` at `c37cab9` returns **six**, and **five carry an open
+decision their own page forbids a builder from settling** (`dl-32`, `repo-15`,
+`repo-16`, `repo-18`, `repo-19`; `dl-37`'s was answered on 2026-09-03). So the
+batch question was "which decisions to answer", not "which tickets to run",
+exactly as step 2's second bullet says. Recorded because the anticipation was
+written on one session's evidence — nine and eight, on 2026-09-03 — and this is
+the second.
 
 **But step 2's own grep got two of the six wrong, in opposite directions, and the
 errors cancelled.** `grep -nE '^#{2,4} .*([Dd]ecision|[Oo]pen question)'` matched
