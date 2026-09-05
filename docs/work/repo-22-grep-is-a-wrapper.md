@@ -494,3 +494,65 @@ occurrences, written by the same hand on the same day, and neither the builder
 nor the reviewer saw it until the second one turned a slip into a pattern. The
 failure is _shorthand after a qualified reference_, not a forgotten filename —
 worth stating because the two want different fixes.
+
+**2026-09-05 — built.** Branch `repo-grep-wrapper-hook` off `origin/main@06d905b`.
+`.claude/hooks/check-tree-grep.sh` (new), `.claude/hooks/check-pr-title.sh`,
+`.claude/settings.json`, `scripts/test/hooks.test.ts` (new). Every **Done when**
+line was run as written, and every number below was measured here.
+
+- **The anchor's misfire was reproduced before it was fixed, not after.** The
+  shipped `check-pr-title.sh` exited `2` on Decision two's `printf` fixture; the
+  fixed one exits `0`, and still exits `2` on `--title 'nope'`. The reproduction
+  is now a test, and it was _watched going red_: stash only the hook fix, re-run
+  the file, and exactly one of its twelve tests fails with the other eleven
+  green. The same was done for the new hook — point its anchor back at the
+  unstripped command and exactly the paren-adjacent test fails, which is what
+  makes the strip load-bearing there rather than decorative.
+- **The ticket asked for hand-run acceptance, and a hand run does not survive.**
+  A suite is the fold-in. The shapes now run on every push in the `repo` vitest
+  project, which already includes `scripts/test/**` — so this cost no change to
+  `vitest.config.ts` and no entry in `scripts/test/tsconfig.json`, the file being
+  TypeScript rather than another `.mjs`. Nothing else in the repo reads a `.sh`;
+  `npm run check` does not.
+- **Two `Done when` lines cannot fail, and are recorded as weak rather than
+  passed quietly.** `git grep -l x` and `grep -l x file.txt` must both stay
+  quiet, but neither carries `-r`, so both stay quiet even against a hook whose
+  command-word rule is broken. `git grep -rl x` is the shape that _can_ fail, and
+  it is in the suite beside them.
+- **Build step 7's flag pattern misses the long forms.** `-[A-Za-z]*[rR]` is
+  right about the cluster and cannot match `--recursive` or
+  `--dereference-recursive`, because the character after the first `-` is another
+  `-`. Both are now matched explicitly. Folded in rather than left: it is the
+  same behaviour the step is about, and a miss is silent.
+- **The exclusion list is the boundary anchor, not a second rule.** The wrapper
+  is a bash _function_, so it applies only when `grep` sits in the command-word
+  slot; under `command grep`, `git grep`, `sudo grep` or `xargs grep` the real
+  binary runs. That is why an anchor is the right test rather than an
+  approximation of one, and why no separate exclusion pattern was written.
+- **Not measured: whether an advisory on stderr reaches the agent that typed the
+  command.** The hook does what step 4 prescribes and the acceptance pins it. But
+  `.claude/settings.json` is read at session start, so the new hook was not live
+  in the session that wrote it — a `grep -rl` typed here after the wiring landed
+  produced no warning, which is equally explained by "not loaded yet" and by
+  "`exit 0` stderr is not surfaced to the model". The two cannot be told apart
+  from inside this session. An open question for the first session that starts
+  with this merged, not a defect found here.
+- **The worktree-isolation guard refused several spellings, again.** A pipe into
+  `bash <hook>`, a `while` loop over the shapes, and a heredoc whose body
+  contained a `git grep` example were each refused; acceptance ran as
+  `bash <hook> < fixture.json` instead, and the test file was written with the
+  Write tool. Same class the ticket already records under **Why**; not filed
+  separately.
+- **`status` stays `ready`.** The gate has not run, and there is no ship
+  authority on this branch. It moves to `done` in the commit that lands the gate
+  record, which is also what keeps `reviewedButReady` empty
+  (`scripts/status.mjs:291`).
+- **Two stale citations in this file were found and deliberately left alone.**
+  `node scripts/citations.mjs docs/work/repo-22-grep-is-a-wrapper.md` exits `1`:
+  the gate record's `records.md:156` anchor is now at `:192`, and the Log's
+  `scripts/status.mjs:115-118` no longer holds `parseScalar`, which is at
+  `143-145`. Both were written against an earlier tip and moved when #148
+  merged; neither was introduced here, and `citations.mjs` runs in no workflow
+  and in no `package.json` script, so this is not a red pipeline. Not repointed
+  because one of them sits inside a reviewer's gate record, which is not this
+  builder's text to edit — raised to the orchestrator instead.
