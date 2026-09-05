@@ -440,11 +440,13 @@ here, because the next agent reads Build first.
   title, so the second half of that acceptance line can fail and is worth
   asserting.
 
-**2026-09-05 — the filing PR is `docs(repo):`, not `fix(repo):`.** Caught before
-opening. Having moved the ticket's `kind` to `fix`, this builder carried that
-into the _commit type_ and pre-checked a `fix(repo):` title — which would have
-shipped a changelog line announcing a hook that does not exist in the tree after
-the merge. `kind` describes the work; the commit type describes the commit, and
+**2026-09-05 — the filing PR is `docs(repo):`, not `fix(repo):`.** **Caught by
+the orchestrator, not by this builder** — recorded that way because "caught
+before opening" read as self-caught, and the reviewer corrected the attribution.
+Having moved the ticket's `kind` to `fix`, this builder carried that into the
+_commit type_, pre-checked a `fix(repo):` title, proposed it, and was told the
+type was wrong and why. It would have shipped a changelog line announcing a hook
+that does not exist in the tree after the merge. `kind` describes the work; the commit type describes the commit, and
 they diverge exactly here. Decision two now separates the two PRs so the
 `fix(repo):` note is not read as already spent. Measured: `docs` is `hidden` at
 `release-please-config.json:31`, `fix` is not at `:27`, and the two sibling
