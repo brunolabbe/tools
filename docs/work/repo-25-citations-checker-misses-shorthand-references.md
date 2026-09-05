@@ -83,6 +83,40 @@ any of these fixes it.
 be resolved, report what cannot. The tool already ends its output by naming two
 things it cannot judge, so it has a place to say so.
 
+## The carve-out is prose, and something is about to automate around it
+
+**A ticket whose citations must not resolve is not an edge case — three exist
+already.** This one (its reproduction sample and its own evidence), and
+`repo-21`, which states the same thing about itself: _"both failures are
+deliberate … repointing either would destroy the evidence it exists to carry —
+the carve-out `citations.mjs` names and cannot check. Do not 'fix' them."_
+
+That carve-out exists in exactly two places, and **a machine can read neither**:
+a sentence in the tool's own output footer, and a "do not fix these" warning in
+each ticket's prose.
+
+Two things now converge on it:
+
+- **repo-18 (#146) ships `--require-anchors`**, which folds `unanchored` into the
+  failure count (`summarize`, `scripts/citations.mjs`), so it exits non-zero on
+  citations that today only warn. It widens what counts as a failure.
+- **repo-21 proposes running `citations.mjs --require-anchors` in
+  `.github/workflows/ci.yml`** over `SKILL.md`. That would be the first thing to
+  run this checker automatically — at which point "this ticket must fail" stops
+  being a note to a human and becomes a red build.
+
+Not listed in `depends_on`: neither is a prerequisite for fixing the
+under-reporting, and `repo-21` does not exist on this branch, where a dangling
+id would make `scripts/status.mjs --json` exit non-zero — which _is_ the CI
+board gate.
+
+**So whatever lands here should give the carve-out a form a CI job can read** — a
+frontmatter field, or a marker on the citation itself — rather than adding a
+third prose warning. The three failure classes are not alike and should not
+collapse into one exit code: a citation that cannot be resolved, one that
+resolves to the wrong content, and one that is _deliberately_ unresolvable
+because it is the evidence.
+
 ## Build
 
 1. Land on top of #146 rather than beside it — both change `scripts/citations.mjs`.
@@ -102,6 +136,9 @@ things it cannot judge, so it has a place to say so.
 - A prose reference does not cause a false failure on ordinary ticket text —
   worth checking against the existing `docs/work/` corpus, which is full of
   sentences containing numbers.
+- A ticket that declares its citations deliberately unresolvable is
+  distinguishable from a broken one **by exit code**, not only by prose — so
+  that anything wiring this into CI can tell them apart.
 - `npm run check` and `npm test` pass.
 
 ## Log
