@@ -149,6 +149,48 @@ without the orchestrator's word, and that question is open in the Log below._
 - **findings** · 0 returned as defects; 1 `low` judged as a deliberate, defensible tradeoff rather than carried against the gate.
 - NFR: security ✓ (no shell, `execFileSync` with argument arrays throughout, no user-facing network surface) · performance n/a · reliability ✓ (ambiguous-file, past-end-of-file, missing-section and multi-match-section all covered) · maintainability ✓ (extensive docblocks tying every branch to the case that earned it).
 
+### Gate 2 — 2026-09-05 · `82ad6ab` folded in on the orchestrator's word · `origin/main...2de66cd` · defect hunt run directly (subagent, no `code-review` delegate), medium depth
+
+Scope resolved by the orchestrator, not by the builder or me: `--require-anchors`
+(`82ad6ab`) was owner-directed and is folded into this same ticket's round rather
+than treated as new scope, per Done-when 4's own instruction to record the
+open question's answer and reason. `2de66cd` adds only the Log entries above
+(87 insertions, one file, no source) — confirmed by `git diff --stat 82ad6ab..2de66cd`.
+
+Reviewed on **Sonnet** (this agent). Builder recorded as **Opus** per the
+orchestrator's original task assignment — **not confirmed via `resolvedModel`**,
+because the orchestrator dispatched the builder in the background, which returns
+no such field. The attribution rests on background builders inheriting the
+dispatching session's own model, and the orchestrator here runs Opus; it is an
+inference from dispatch practice, not a direct readout, and is recorded as such
+rather than left to read as a checked fact.
+
+_Builder's note, added at commit time: the inference above does not hold in this
+instance. This builder's own system context states directly, "You are powered by
+the model named Sonnet 5" — a self-report, not `resolvedModel`, but a more direct
+source than dispatch practice and one the reviewer had no way to obtain. The
+builder on this ticket is **Sonnet 5**, not Opus. Left uncorrected, this is
+exactly the class of unverified claim the rest of this ticket exists to catch;
+corrected here rather than transcribed, and flagged to the orchestrator
+separately since the skill's own dispatch table assumes "inherit → Opus, in
+practice" as close to certain, which this instance contradicts._
+
+| Check                                                                               | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The four original Done-when rows still hold with `82ad6ab` applied                  | **verified** — full suite re-run at `82ad6ab`/`2de66cd`: `npx vitest run scripts` 141 passed (up from 137; +4 for the new flag), `npm run check` exit 0, `npm run status -- --json` exit 0. No existing assertion was reworded to pass; the diff of `citations.test.ts` between `23d3b56` and `82ad6ab` only adds tests and a `marks` helper, confirmed by reading it.                                                                                                                                                 |
+| `parseArgs`'s restructuring (arity-as-data) does not regress `--rev` or `--section` | **verified**, not just read — ran `node scripts/citations.mjs docs/work/repo-18-....md --rev HEAD --section "Open question"` and the same flags reversed, both orders: identical output, exit 1 (the illustrative anchor in that section is itself `MOVED`, expected and unrelated to this check). `citations.test.ts:738-739 "toEqual(expected)"` covers both orders for `--rev` in the suite; `--section`'s own suite (`citations.test.ts` "section narrows the check…") is untouched by this diff and still passes. |
+| The naive `expect(status).not.toBe(0)` trap is real, not asserted                   | **verified directly** — restored `23d3b56`'s `citations.mjs`, ran `node … /tmp/legacy.md --require-anchors`: exit 1, empty stdout, stderr `unknown option --require-anchors`. A naive `not.toBe(0)` assertion is green on that. The suite's real assertion at `citations.test.ts:651` "expect(strict.stderr).not.toMatch(/unknown option/)" fails against that exact output (stderr does contain it) — confirmed by running it, not inferred.                                                                          |
+| The `/--[a-z]+/g` → `/--[a-z][a-z-]*/g` fix is real                                 | **verified** — ran both regexes against the CLI's own usage string: old regex yields `--require` for `--require-anchors` (stops at the hyphen), so it would have compared `--require` across docblock/USAGE/FLAGS and rubber-stamped a match without ever seeing the real flag; new regex at `citations.test.ts:719 "matchAll(/--[a-z][a-z-]*/g)"` yields `--require-anchors` intact.                                                                                                                                  |
+| No export was forced                                                                | **verified independently** — `diff <(git show origin/main:scripts/citations.mjs \| grep '^export ') <(grep '^export ' scripts/citations.mjs)` exits 0 at `82ad6ab`. `locateAnchor`/`summarize`/`STATES` stay unexported per `citations.mjs:400 "Deliberately not exported, along with"`; `FLAGS`/`parseArgs` were already exported, so nothing new appears in the diff.                                                                                                                                                |
+| Red count against `origin/main` is stronger, not weaker                             | **verified** — restored `origin/main`'s script at this tip and reran the suite: **23 of 37 failed, 14 passed**, all three new flag tests among the failures. Grepped the full log for `SyntaxError`/`does not provide an export`: zero hits. One of the 23 is a thrown `Error: unknown option --require-anchors` from `parseArgs` rather than a vitest `AssertionError` — still a behavioural/runtime failure, not a module-load failure, so the "none is a missing-export error" claim holds on an honest reading.    |
+
+- **The tool found two mistakes in my own draft before I sent it, and I am recording that it did rather than that the section is clean.** I ran `node scripts/citations.mjs` against Gate 1's `## Review` text before sending it to the builder. First pass: one anchor was silently truncated because it embedded a literal `"` (the anchor delimiter itself), and a bare mention of `grounding-fixtures.test.ts:29` without an anchor came back `unanchored` as a duplicate of an anchored citation two lines later. Both are exactly the class of mistake a human proofreading would also miss, and the tool caught both mechanically. Fixed, reran: `10 verified, 0 moved, 0 unanchored, 0 unresolvable`, exit 0, before it was sent.
+- **This ticket's own thesis, reproduced independently on this ticket's own gate record, not taken from the builder's Log.** Ran `origin/main`'s (pre-repo-18) `citations.mjs` against `docs/work/repo-18-....md --section Review` at the current tip: **10/10 resolve, exit 0** — including `ok` on `citations.mjs:413` (now pointing at `: "";`, not the summary template) and `citations.test.ts:599` (now pointing at a stray `*/`, not the `SAME_OVER_SAME` assertion). Ran the branch's own tool over the same section: **2 verified, 8 moved, 0 unanchored, 0 unresolvable**. Both counts match what the builder's Log at `2de66cd` reports; I did not take its word for either number.
+- **findings** · 0 returned as defects against the extended scope; nothing carried, nothing dropped.
+- NFR: security ✓ (new code paths are pure argument/string handling, no new shell or network surface) · performance n/a · reliability ✓ (the flag's own three new tests cover lenient/strict/all-clear) · maintainability ✓ (docblocks on `summarize`, `FLAGS` and `parseArgs` explain the arity change and why it was needed).
+
+**Gate: PASS**, extended to `82ad6ab`/`2de66cd`. Gate 1's PASS on `23d3b56` above is unchanged and not reissued; this entry only certifies that folding in `--require-anchors` did not disturb it and that the flag itself meets the same bar.
+
 ## Log
 
 - **2026-09-02** — Filed off `origin/main@7fe18af`. Found by a builder during an
@@ -469,3 +511,25 @@ moved, 0 unanchored, 0 unresolvable`.
   — and is recording the gap in the skill's reference, since the fix is that an
   owner decision must travel with its provenance and not only its content. The
   reviewer is re-running its reproduction set against the new tip.
+
+- **2026-09-05** — Gate extended: `abf27c3dcbe4fe477` folded `82ad6ab` into its
+  round on the orchestrator's instruction and returned **PASS** on
+  `82ad6ab`/`2de66cd`, committed above as `### Gate 2`, verbatim, immediately
+  after `### Gate 1`. Every check in it was run independently rather than read
+  off this Log — including, unprompted, running the pre-repo-18 tool against
+  this ticket's own `## Review` section a second time and getting the same
+  `10/10 resolve, exit 0` I had already reported, with the same two damning
+  lines (`citations.mjs:413`, `citations.test.ts:599`).
+
+  **One correction made at commit time, not by the reviewer's request.** Gate 2
+  records the builder as "Opus" by inference from dispatch practice, flagged by
+  the reviewer itself as unconfirmed. This builder's own system context states
+  directly that it is **Sonnet 5**, which the Gate 2 text now says, with the
+  correction marked as mine and the reviewer's original reasoning left intact
+  above it rather than silently replaced. Worth surfacing beyond this ticket: the
+  orchestrating skill's own dispatch table treats "difficulty absent → inherit,
+  Opus in practice" as close to certain, and this build is the case where that
+  did not hold.
+
+  Both gates are final. `npm run check`, `npx vitest run scripts` (141 passed)
+  and `npm run status -- --json` all pass at `2de66cd`. Opening the PR next.
