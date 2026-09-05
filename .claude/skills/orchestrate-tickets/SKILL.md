@@ -262,6 +262,14 @@ demonstrated that its corrections can be wrong; do not make it the default.
 exists so nobody watches a run to completion; it does not license never checking
 what a merge did. Look once, afterwards.
 
+**There is a second look, before the merge, and only you can take it.** A branch
+cannot report its own state: any commit that corrects a status claim invalidates
+it, so a record's "green at the tip" is stale the moment it is written — see
+[reference/records.md](reference/records.md). A builder and a gate both stop
+before the merge, which means **nobody in the loop is positioned to check the
+final sha**. That look is yours, immediately before merging, and it is not the
+one below.
+
 **Green PR checks say nothing about the `push`-triggered jobs.** They are different
 events with different jobs, and a job that only runs on `push` to `main` can fail
 on *every* merge while every pull request stays green — nobody sees the red,

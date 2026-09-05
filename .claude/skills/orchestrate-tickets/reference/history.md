@@ -210,7 +210,10 @@ and the missing carrier for an answered-but-undispatched decision, in the
    *what*** is — named as a data-quality rule by repo-18's reviewer. **This is a
    different failure from the dispatch-visibility gap in the next entry** and
    collapsing them loses the useful half: that one is the orchestrator unable to
-   observe a fact, this one is an agent reporting a check it did not run.
+   observe a fact, this one is an agent reporting a check it did not run. **And it
+   was not an isolated event** — it was the first of three instances of one move,
+   whose general form is under _The move under entry 4_ below. Read alone it looks
+   like an agent hallucinating its own identity, which is not a usable lesson.
 5. **Half of step 4's model check was redundant and the other half was
    unobservable — and the skill said neither.** `.claude/agents/ticket-reviewer.md`
    pins `model: sonnet` in frontmatter, so the gate's model was always two file
@@ -248,6 +251,47 @@ and the missing carrier for an answered-but-undispatched decision, in the
    own test. `repo-20` also carries the one remaining inconsistency entry 5
    introduced: `builder.md` still explains that a builder "inherit[s] the
    orchestrator's" model, which is now what step 3 tells you not to rely on.
+
+**The move under entry 4, and why it is this session's argument for two models.**
+Entry 4 read as a freak event while it was one incident. It was the first of
+**three on one ticket**, and repo-18's builder named the shape itself in
+`cfae096`'s Log: *"the model claim, the load-bearing reason with no test, and now
+a status summary that skipped a state. All three were the same move: reading a
+result at a glance and reporting the reading as the measurement. The tooling this
+ticket adds catches it for citations only; nothing catches it for prose, which is
+why the two reviewers did."*
+
+The other two: a copy-paste argument written into a docblock as the **reason** for
+a design decision, with no test behind it — *"a reason that cannot fail is a
+justification, not a measurement"* — which the second opinion mutated until it did
+fail, and which is now pinned by a test rather than asserted; and "every completed
+run on the branch is `success`", refuted by `--json status,conclusion` at **15
+runs: 13 `completed`/`success`, 1 `completed`/`cancelled`, 1 `in_progress`**. A
+cancelled run *is* completed, so the sentence was false as written. **So the
+failure is not fabrication, it is glance-reading, and it lands wherever a check
+does not reach**: that branch's citations were fine, because the ticket had just
+built the tool that resolves them, and its prose failed three times.
+
+**Both models committed it, which is the stronger version and the reason this is
+not "a second model catches blind spots".** The reviewer reported that it had read
+the same run table by eye and repeated `in_progress` and `cancelled` without
+tallying either — *"a pattern found twice, by two different models, each having
+half-committed it, is stronger evidence than one found by a clean observer"*
+(relayed from its message; unlike the builder's half this is committed nowhere,
+checked with `git grep` across that branch and `main`). The two-model split does
+not work because one party is a clean observer. It works because two models are
+unlikely to eyeball **the same thing**, and each measured what the other had
+glanced at.
+
+**One rule fell out of the third instance, and it is not about care.** *"Any commit
+that corrects a status claim invalidates the status claim"* — the builder wrote
+one, the correction became a commit, the commit moved the tip, and the corrected
+claim was stale on arrival. A record can never assert its own branch is green,
+because writing the assertion changes the branch. That is now a bullet in
+`records.md`, and it puts a hole in this page's parent: `## After a merge` says to
+look once *afterwards*, and the look *before* the merge is a different one that
+**nobody in the loop can take** — not the builder, not the gate, not the
+orchestrator. Only the merger, immediately before merging.
 
 **What went right, and is worth copying.**
 

@@ -49,6 +49,20 @@ discarded. So:
   the opposite with equal confidence. Swapping one unsupported claim for another is
   the same failure in different clothes, and it is the pull after a retraction.
 - Every finding is listed, including those needing no change.
+- **A record cannot assert that its own branch is green, and this is structural
+  rather than a lapse.** *"Any commit that corrects a status claim invalidates the
+  status claim"* — measured 2026-09-04: a Log said "every completed run on the
+  branch is `success`"; a second opinion tallied it with
+  `gh run list --json status,conclusion` and got **13 `completed`/`success`, 1
+  `completed`/`cancelled`, 1 `in_progress`** out of 15, so the sentence was false
+  as written, a cancelled run being completed. The correction became a commit, the
+  commit moved the tip, and the corrected claim was stale on arrival. Being more
+  careful does not fix it: writing the assertion changes the thing asserted. So
+  **record what a named sha's runs did, never that "the branch is green"**, and
+  say the tip is unobserved when it is. The only true form of that claim is one
+  look after the final commit and immediately before merge — which is the
+  **merger's** look, not a gate's, not a builder's, and not the `## After a merge`
+  look on `SKILL.md`, which happens afterwards and answers a different question.
 - **Re-resolve every `file:line` in the record as the genuinely last action before
   `git add`** — after the final `npm run format`, with nothing between. Verify
   programmatically (check that each cited line still contains what the record
