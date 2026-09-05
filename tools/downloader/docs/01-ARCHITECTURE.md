@@ -281,3 +281,26 @@ the root's SPKI>`. Not a trust store: Chromium on Linux reads NSS, which
   concurrency caps, disk quota check before starting.
 - **Rate limiting** — per-IP on `/probe` and `/jobs`; browser probes are
   expensive enough to be a trivial DoS vector otherwise.
+- **There is no caller, so there is nothing that lists.** This service has no
+  session, no user and no ownership column, and
+  [`dl-32`](./work/dl-32-the-job-list-has-no-caller.md) settled what follows from
+  that rather than leaving it: `GET /api/jobs` is **removed**, not scoped.
+  Unauthenticated and unfiltered, it answered anyone who could reach the port
+  with every job in the store — a browsing history, with a title-derived
+  filename and a `variant.url` the contract itself says routinely carries a
+  signed credential. Nothing in the UI ever called it, so the exposure is closed
+  by deletion rather than by inventing an identity model to filter it with.
+
+  **`GET /api/jobs/:id` deliberately stays**, and the reasoning is the trade
+  [`dl-23`](./work/dl-23-rate-limit-the-download-route.md) already accepted for
+  the capability: reaching it costs an attacker a `randomUUID()` job id, and
+  that id already buys the download, so the history behind it is not a further
+  step. This holds **only** while job ids are unguessable. Making them
+  sequential or timestamped turns the single read back into an enumeration, and
+  at that point it needs real authorisation — `routes.test.ts` asserts the id
+  shape for that reason.
+
+  **A list is not forbidden; it is unpaid for.** Restoring one means first
+  deciding who may read a history, which is a trust model this tool has never
+  had and a bigger change than the route. The three answers considered and
+  declined are recorded on the ticket.

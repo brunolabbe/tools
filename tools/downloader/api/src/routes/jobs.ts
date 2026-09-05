@@ -1,5 +1,15 @@
 /**
- * Job CRUD: create, list, read, cancel.
+ * Job CRUD: create, read, cancel.
+ *
+ * There is no list. `GET /api/jobs` was removed by
+ * [dl-32](../../../docs/work/dl-32-the-job-list-has-no-caller.md): it answered
+ * any caller who could reach the port with every job in the store, and this
+ * service has no session, no user and no notion of a caller to scope it by.
+ * Nothing in the UI ever called it, so the exposure is closed by deletion rather
+ * than by an ownership model the tool does not have. Reading one job still works,
+ * because reaching it costs an attacker a `randomUUID()` job id they do not have
+ * — and that id already buys the download, so the history behind it is not a
+ * further step. Restoring a list means deciding who may read one first.
  *
  * Creating a job does **not** resolve anything. It writes a `queued` row and
  * hands the id back immediately, because resolution takes 10–20 s and a client
@@ -9,23 +19,15 @@
 
 import { randomUUID } from "node:crypto";
 import { AppError, createJobRequestSchema, ROUTES } from "@downloader/contract";
-import type { Job, JobListItem, JobListResponse, JobResponse } from "@downloader/contract";
+import type { Job, JobResponse } from "@downloader/contract";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
 import { createRateLimitHook } from "../rate-limit.ts";
 
-const MAX_LIST_LIMIT = 100;
-
-function intParam(raw: unknown, fallback: number, max: number): number {
-  const value = Number(raw);
-  if (!Number.isFinite(value)) return fallback;
-  return Math.min(max, Math.max(0, Math.trunc(value)));
-}
-
 export function registerJobRoutes(app: FastifyInstance, context: AppContext): void {
-  // Only on creation. Reading, listing and cancelling are cheap, and rate
-  // limiting a cancel would leave a client unable to stop the very work that
-  // spent its allowance.
+  // Only on creation. Reading and cancelling are cheap, and rate limiting a
+  // cancel would leave a client unable to stop the very work that spent its
+  // allowance.
   const rateLimit = createRateLimitHook({
     limiter: context.rateLimits.jobs,
     logger: context.logger,
@@ -69,18 +71,9 @@ export function registerJobRoutes(app: FastifyInstance, context: AppContext): vo
     return await reply.code(201).send(body);
   });
 
-  // Unauthenticated and unfiltered by caller, so it is stripped — see
-  // `toListItem`. `GET /api/jobs/:id` below is not, because reaching it costs
-  // an attacker a job id they do not have.
-  app.get(ROUTES.jobs, async (request, reply) => {
-    const query = request.query as Record<string, unknown>;
-    const limit = intParam(query["limit"], 50, MAX_LIST_LIMIT) || 50;
-    const offset = intParam(query["offset"], 0, Number.MAX_SAFE_INTEGER);
-    const { jobs, total } = context.store.list({ limit, offset });
-    const body: JobListResponse = { jobs: jobs.map(toListItem), total };
-    return await reply.send(body);
-  });
-
+  // No `app.get(ROUTES.jobs, …)`: see the note at the top of this file. A GET
+  // here falls through to the not-found handler and answers `NOT_FOUND`, which
+  // is the truth — the path matches no route.
   app.get<{ Params: { id: string } }>(ROUTES.job(":id"), async (request, reply) => {
     const body: JobResponse = { job: context.store.get(request.params.id) };
     return await reply.send(body);
@@ -116,21 +109,6 @@ export function registerJobRoutes(app: FastifyInstance, context: AppContext): vo
     const body: JobResponse = { job: context.store.get(id) };
     return await reply.send(body);
   });
-}
-
-/**
- * Drops the capability from a job on its way into a list.
- *
- * The result is spelled out field by field rather than spread with
- * `downloadUrl` destructured away, and that is the point: a field added to
- * `JobResult` later will fail to compile here until someone decides whether the
- * list may carry it. A rest spread would have forwarded it silently, which for
- * a redaction boundary is the wrong default.
- */
-function toListItem(job: Job): JobListItem {
-  if (job.result === null) return { ...job, result: null };
-  const { filename, sizeBytes, container, durationSec, expiresAt } = job.result;
-  return { ...job, result: { filename, sizeBytes, container, durationSec, expiresAt } };
 }
 
 function isTerminal(job: Job): boolean {
