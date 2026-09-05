@@ -777,11 +777,27 @@ moved, 0 unanchored, 0 unresolvable`.
   context says, which it can check, kept apart from what the dispatcher says it
   did, which it cannot.
 
-  **CI, checked once rather than watched.** `gh run list --branch
-repo-18-citation-anchors` at this point: every completed run on the branch is
-  `success` across all three workflows — `CI`, `security` and `pr-title` — over
-  five pushes. The runs for the newest commit were still in flight when checked
-  and were not polled.
+  **CI, checked once rather than watched — and the first wording of this note was
+  wrong, caught by the second-opinion reviewer.** It read "every completed run on
+  the branch is `success`". Measured with `--json status,conclusion` rather than
+  eyeballed, across 15 runs: **13 `completed`/`success`, 1
+  `completed`/`cancelled`, 1 `in_progress`.** So the sentence was false as
+  written — a cancelled run _is_ completed. The cancelled one is `CI` at
+  `a273cbf`, superseded by the next push, which is ordinary concurrency and not a
+  failure; the accurate claim is **every completed, non-cancelled run is
+  success**.
+
+  The second half was worse, because it read as more than it was: **"green at the
+  tip" was never established.** At `24c6837`, `pr-title` and `security` are
+  `success` and `CI` is still `in_progress`. A Log-only commit will almost
+  certainly pass, and _almost certainly_ is the exact register this branch exists
+  to correct. One look before merge settles it; neither of us is polling it.
+
+  **That is three times in one ticket** — the model claim, the load-bearing
+  reason with no test, and now a status summary that skipped a state. All three
+  were the same move: reading a result at a glance and reporting the reading as
+  the measurement. The tooling this ticket adds catches it for citations only;
+  nothing catches it for prose, which is why the two reviewers did.
 
   **Ready to merge, and nothing on this ticket is open.** Three records, three
   pins, each naming its sha and the command that checks it: Gate 1 at `23d3b56`,
