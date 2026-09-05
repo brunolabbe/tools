@@ -117,24 +117,26 @@ not proven by its branches passing their gates**; it is proven by the merge.
 ## Eighth session — 2026-09-04/05
 
 **Written by a builder, not by the orchestrator that ran the batch**, on the
-orchestrator's dispatch and against the branches in the tree. Every field marked
-`not recorded` below is one only the dispatching session could see; they are left
-empty rather than estimated, per the schema. Everything else was re-verified here
-against commits, files and re-runs rather than transcribed — which is how three of
-the nine defects below were found, none of them reported by the session and none
-visible in any outcome. What could **not** be checked from a worktree is marked
-where it appears: token counts, another session's transcript, and any agent's
+orchestrator's dispatch and against the branches in the tree — so the table below
+has two provenances and says which is which. **Counts and token figures were
+supplied by the orchestrator and are observations, not measurements**: they are
+last-observed values from completion notifications, one of them still rising when
+it was read, and the rounds figure is explicitly an estimate. **Everything else
+was re-verified here** against commits, files and re-runs rather than transcribed,
+which is how three of the nine defects below were found — none reported by the
+session, and none visible in any outcome. What could not be checked from a
+worktree is marked where it appears: another session's transcript, and any agent's
 statement about its own context.
 
 | Field | Value |
 | --- | --- |
-| `tickets` | **3** dispatched concurrently off `origin/main@c37cab9` — `dl-37`, `repo-18`, `repo-19` — plus this **unticketed** skill branch. PRs #146 (repo-18) and #145 (repo-19) open at close; `dl-37` still gating. **2** further tickets filed out of dl-37 (`dl-38`, `dl-39`). `dl-32`'s decision was reported answered by the owner and held for a later batch — **and as of this branch it is not written down**: the ticket's decision section still reads "deliberately not ranked here" and its Log ends 2026-08-31. That is `dispatching.md`'s _An answered decision has to be recorded even when you do not build it_, unapplied, on the one ticket that was answered but not dispatched. Flagged, not fixed here |
-| `agents` / `dispatches` | `not recorded` |
-| `builder rounds` | `not recorded`. One is attributable to the orchestrator by name: two round trips on a single dl-37 decision, caused by framing a defect as one to *defer* without saying the file was one dl-37 itself introduces (`api/src/tls-rejections.ts`, added by `8245721`). The correction reached the builder mid-revert; it stopped, reconstructed from backups rather than memory, re-ran its mutation checks and disclosed the reconstruction as the thing most worth independent scrutiny |
-| `gates` | **≥4 rounds recorded on the tree**, all returning findings — repo-18 two (`## Review` and `### Gate 2`, both PASS), repo-19 one (PASS), dl-37 at least one (its `TlsRejectionLog` finding is committed at `4f46415`) and still gating at close. Spawn count `not recorded` |
+| `tickets` | **3** dispatched concurrently off `origin/main@c37cab9` — `dl-37`, `repo-18`, `repo-19` — plus this **unticketed** skill branch. PRs #146 (repo-18) and #145 (repo-19) open at close; `dl-37` still gating. **3** further tickets filed — `dl-38` and `dl-39` out of dl-37, and `repo-20` out of this row's own seventh entry. `dl-32`'s decision was reported answered by the owner and held for a later batch — **and as of this branch it is not written down**: the ticket's decision section still reads "deliberately not ranked here" and its Log ends 2026-08-31. That is `dispatching.md`'s _An answered decision has to be recorded even when you do not build it_, unapplied, on the one ticket that was answered but not dispatched. Flagged, not fixed here |
+| `agents` / `dispatches` | **9** agents — 1 seam-mapper, 4 builders (three tickets plus the one that wrote this row), 4 reviewers, one of which was an **Opus second opinion** on repo-18 — and **9 spawns**. The schema's second number is spawns *and wakes*, and **the wakes were not tallied**, so this row is short one figure rather than reporting 9 as the total; the rounds row below is the nearest available proxy and is larger |
+| `builder rounds` | **~15** — dl-37 ~4, repo-18 ~5, repo-19 ~5, this row 1 — counting each `SendMessage` resume that produced work. **Approximate and marked so by the orchestrator, which kept no strict tally**; it is the one number here that is an estimate rather than an observation. One round is attributable to the orchestrator by name: two round trips on a single dl-37 decision, caused by framing a defect as one to *defer* without saying the file was one dl-37 itself introduces (`api/src/tls-rejections.ts`, added by `8245721`). The correction reached the builder mid-revert; it stopped, reconstructed from backups rather than memory, re-ran its mutation checks and disclosed the reconstruction as the thing most worth independent scrutiny |
+| `gates` | **6 rounds across 4 reviewers** — dl-37 ×2, repo-18 ×3 (including the Opus second opinion), repo-19 ×1. **All returned findings.** Three are committed on the tree and were read here: repo-18's `## Review` and `### Gate 2`, both PASS, and repo-19's PASS; dl-37's is uncommitted, still gating at close, its `TlsRejectionLog` finding already folded in at `4f46415` |
 | `wrong findings` | **No gate finding was refuted this session**, and the schema's row does not fit what happened instead: the wrong claim ran **builder → gate**, not gate → builder, and it *did* reach a commit. See the fourth entry below |
-| `subagent tokens` | `not recorded` |
-| `cost` | `not recorded` |
+| `subagent tokens` | **≈ 2.30 M**, and these are **last-observed cumulative values from completion notifications, not a measurement** — dl-37's reviewer was still running when its figure was read, so its 232,573 is a floor and so is the total. Split: seam-mapper 66,698 · dl-37 builder 624,082 · dl-37 reviewer 232,573 (floor) · repo-18 builder 357,063 · repo-18 reviewer 325,032 · repo-18 second opinion 96,505 · repo-19 builder 213,666 · repo-19 reviewer 222,453 · this row 164,899 |
+| `cost` | `not recorded` — never observed. At the 2026-09-02 rate of $0.0182/1k this would be ≈ $42, which is an arithmetic conversion of a floor and not a bill |
 
 **Board shape at intake, which the skill had already anticipated — and re-measured
 here, because this branch is cut from the same base.** `npm run status -- --ready`
@@ -151,10 +153,17 @@ five files: it counted `dl-37`, whose heading reads *"answered 2026-09-03 — no
 open"*, and it missed `repo-16` entirely, because that ticket's open decision is a
 **paragraph in its Build section** — *"Nothing here is a code fix, and the
 deliverable is a decision. Do not settle…"* — under no matching heading. Five
-matched, five blocked, and the two are not the same five. This is the session's own
-theme arriving in the skill's own instruction: **the right total by a wrong
-route**, which nothing downstream can catch. The bullet now says to read the
-matches rather than count them.
+matched, five blocked, and the two are **not the same five**: one false positive
+and one false negative, cancelling into a correct total. **The count above is
+right by accident**, and an orchestrator that had trusted it would have carried
+`dl-37` into the "must answer this first" pile and left `repo-16` out of it, while
+the number it reported to the user was exactly right. This is the session's own
+theme arriving in the skill's own instruction — **the right answer for wrong
+reasons**, in the step whose entire job is to see the board, and nothing
+downstream can catch it because the output that would betray it is the output that
+matches. The bullet now says to read the matches rather than count them. Found by
+re-running the grep here, not reported by the session; the same is true of entry 6
+below.
 
 **what the skill got wrong** — nine, all fixed on this branch. Seven are numbered
 below; the other two are recorded where they were found — step 2's grep, above,
@@ -232,8 +241,13 @@ and the missing carrier for an answered-but-undispatched decision, in the
    `main`**, catching it only because `dist/` was missing a file the branch adds,
    and flagging it unprompted. Nothing downstream would have: that page already
    documents that a reviewer of the wrong tree produces a fluent gate marking every
-   acceptance line `unproven`. Recorded in `dispatching.md` as a gate-prompt clause;
-   **the durable fix is the agent definition's ordering and is not on this branch.**
+   acceptance line `unproven`. `dispatching.md` carries a gate-prompt clause as a
+   **habit-dependent stopgap**; the durable fix is the agent definition's ordering
+   and is **filed as `repo-20`** on this branch, on the owner's decision to file
+   rather than fold in — the reproduction is the deliverable, which is `CLAUDE.md`'s
+   own test. `repo-20` also carries the one remaining inconsistency entry 5
+   introduced: `builder.md` still explains that a builder "inherit[s] the
+   orchestrator's" model, which is now what step 3 tells you not to rely on.
 
 **What went right, and is worth copying.**
 
