@@ -83,11 +83,12 @@ you are there.
    case and means inherit. Never rate an unrated ticket yourself — you have not
    read it, which is the whole point of step 2. **Then pass that model explicitly
    rather than letting it inherit**, naming your own model where the table says
-   inherit. A backgrounded dispatch returns no `resolvedModel`, so inherit is the
-   one setting that leaves the builder's model unobservable to everyone afterwards
-   — including the builder, which on 2026-09-04 asserted its own model from a line
-   that turned out not to exist. One parameter, and step 4's comparison becomes
-   something you wrote down instead of something you infer. See
+   inherit. A backgrounded dispatch's `resolvedModel` never reaches **you** — the
+   parent sees only the subagent's final text — so inherit is the one setting that
+   leaves the builder's model unobservable from where the decision is made,
+   including by the builder, which on 2026-09-04 asserted its own model from a
+   line that turned out not to exist. One parameter, and step 4's comparison
+   becomes something you wrote down instead of something you infer. See
    [reference/dispatching.md](reference/dispatching.md).
 4. **Gate** each finished branch — `subagent_type: "ticket-reviewer"`. Builders
    never open a PR before a gate. **You spawn the reviewer, never the builder**,
@@ -96,9 +97,13 @@ you are there.
    picks its own reviewer is the thing being checked choosing its checker. The
    builder has no `Agent` tool and is told not to spawn, and both of those are
    this rule, not an oversight. **Both halves are knowable if you make them so,
-   and neither needs `resolvedModel`** — which a backgrounded dispatch does not
-   return anyway, and background is how `reference/concurrency.md` tells you to
-   dispatch a batch. The gate's half was never in doubt:
+   and neither needs `resolvedModel`** — which the backgrounded dispatch *does*
+   carry but never shows you, and background is how `reference/concurrency.md`
+   tells you to dispatch a batch. If you ever do need it read, two documented
+   routes exist — a `PostToolUse` hook on the `Agent` tool returning it through
+   `hookSpecificOutput.additionalContext`, and `/tasks` (v2.1.242+), which names
+   the model per row — **both relayed, neither verifiable from a sandbox with no
+   network.** The gate's half was never in doubt:
    [`.claude/agents/ticket-reviewer.md`](../../agents/ticket-reviewer.md) pins
    `model: sonnet` in its frontmatter, so it is a file read. The builder's half is
    the one step 3 tells you to write down at dispatch. Do both and the comparison
