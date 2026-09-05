@@ -268,12 +268,34 @@ const normalizeAnchor = (anchor) =>
  * **The lines are joined raw, so a comment's continuation marker stays in the
  * haystack.** An anchor spanning `... a mutation` / `// run proved it` therefore
  * does not match — there is a `//` in the middle of it. That is a known boundary
- * with a test on it, not an oversight: stripping `//`, `*` and `#` would be built
- * for a case nothing has asked for. Measured over every anchor written by hand in
- * this repo before the script could read one — 13 of them — exactly one needs the
- * join, and it is the markdown prose above; none needs a marker stripped. When it
- * does bite, the reason printed is `not anywhere in the file` and the fix is a
- * shorter anchor, which is what an anchor is for.
+ * with a test on it, not an oversight, and the reason it is narrow is better than
+ * the frequency count that first justified it: **because the marker stays in the
+ * haystack, an anchor produced by copy-paste keeps the marker too, and
+ * verifies.** `"not what fixes // the collision"` matches; only
+ * `"not what fixes the collision"` does not. So the failure needs an author
+ * retyping across the break while silently dropping the marker — a far narrower
+ * target than "anchors that cross a comment boundary", and the opposite of what
+ * *cite what you read* pushes anyone toward.
+ *
+ * That also inverts the case for stripping. Stripping the haystack alone would
+ * *break* the copy-paste case above, so the only coherent version is
+ * strip-both-sides, whose false-positive surface is real: `#` is a markdown
+ * heading, a shell comment and a CSS id; `*` is a bullet, a JSDoc continuation
+ * and a glob. Building that for zero observed consumers is what the root
+ * `CLAUDE.md` forbids. Frequency agrees — of the 13 anchors written by hand
+ * before this script could read one, exactly one needs the join and none needs a
+ * marker stripped — but frequency alone is only "we have not needed it yet".
+ *
+ * **Verified iff the anchor's text starts on a line inside `[start, end]`.** The
+ * end is deliberately loose: an anchor may run past the cited range. The
+ * dangerous direction is closed — text lying *entirely* outside the range cannot
+ * read as verified, because the match's start line must be in it — and requiring
+ * end-containment would make any wrapped anchor unverifiable unless the author
+ * widened the range by computing an end line from the anchor's length. That is
+ * the exact upstream error this ticket's Reproduction diagnoses (`143 = 149 − 6`)
+ * and that `records.md` answers with *cite what you read, never compute one
+ * citation from another*. Start-in-range is not a compromise; it is the only
+ * predicate compatible with the repo's own authoring rule.
  *
  * Not exported, and that is deliberate — see the note above `summarize`.
  *
@@ -318,9 +340,10 @@ const STATES = /** @type {const} */ (["unresolvable", "moved", "unanchored", "ve
  *
  * Four states, because two of them were the defect. `unresolvable` is a citation
  * that *cannot* be right — the file is gone, the line is past the end, the bare
- * name matches several files. `moved` is a citation whose anchor is not in the
- * range it names; the reason says where the anchor actually is, which is the
- * half a reader needs in order to repoint it. `unanchored` resolves and is
+ * name matches several files. `moved` is a citation whose anchor does not
+ * *start* on a line inside the range it names — containment of the whole anchor
+ * is not required, and `locateAnchor` says why; the reason printed says where
+ * the anchor actually starts, which is the half a reader needs to repoint it. `unanchored` resolves and is
  * printed for a reader to judge, exactly as everything did before this ticket —
  * it is **not** verified, because nothing checked it. `verified` is the only
  * state in which this script has an opinion about correctness.
@@ -639,8 +662,13 @@ function main() {
   );
 
   for (const r of results) {
-    // Upper case is a failure and lower case is not, so the column is readable
-    // before the words are. `unanchored` sets the width; the rest are padded.
+    // Upper case is always a failure. Lower case usually is not — but under
+    // `--require-anchors` a lowercase `unanchored` is a failure too, so the
+    // column is a fast read rather than the whole answer; the summary line and
+    // the exit code are. (This comment said "lower case is not" full stop until
+    // `--require-anchors` made that conditionally false and nothing re-read it,
+    // which is this branch's own thesis turning up inside the file arguing it.)
+    // `unanchored` sets the width; the rest are padded.
     const mark = { verified: "ok", moved: "MOVED", unanchored: "unanchored", unresolvable: "FAIL" }[
       r.state
     ].padEnd(10);
@@ -680,7 +708,10 @@ function main() {
   if (summary.moved > 0) {
     advice.push(
       `${summary.moved} citation(s) do not point at what they say. Repoint them against the tree you are\n` +
-        `committing, or pin the record to the commit the gate reviewed with --rev and say so in the record.`,
+        `committing, or pin the record to the commit the gate reviewed with --rev and say so in the record.\n` +
+        `Where the reason says the anchor is nowhere in the file, neither of those is the fix — the anchor\n` +
+        `spans something the file has between its words, most often a comment's // or * continuation\n` +
+        `marker. Shorten it to one line's worth, or quote the marker as it appears.`,
     );
   }
   if (summary.unanchored > 0 && requireAnchors) {

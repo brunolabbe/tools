@@ -165,6 +165,14 @@ dispatching session's own model, and the orchestrator here runs Opus; it is an
 inference from dispatch practice, not a direct readout, and is recorded as such
 rather than left to read as a checked fact.
 
+_Citations in this gate resolve against `2de66cd`, the sha it reviewed, and hold
+unchanged through `5251fd0`. They do **not** resolve against the branch tip: the
+judgment pass logged below found two `low`s in `citations.mjs`, and fixing them
+moved the lines this table cites. Check this section with
+`--rev 5251fd0`, which gives `4 verified, 0 moved, 3 unanchored, 0 unresolvable`.
+That the fix for a finding invalidates the record naming it is the exact failure
+this ticket is about, so it is pinned rather than quietly repointed._
+
 The paragraph above is the record's standing statement on the builder's model.
 The builder's note that briefly contradicted it is withdrawn; both it and the
 retraction are kept below, because a record should show that a claim was made and
@@ -598,3 +606,63 @@ moved, 0 unanchored, 0 unresolvable`.
   Corrected in documentation only; no source touched, no gate finding disturbed,
   and the empirical work above is unaffected. `npm run check`, `oxfmt` and
   `node scripts/status.mjs --json` all pass at this commit.
+
+- **2026-09-05** — Independent judgment pass (`ae123da90f9c1a838`, quoting
+  `"You are powered by the model named Opus 5 (1M context)"` from its own
+  context) over the four design calls at `5251fd0`. **All four upheld**, two
+  `low`s, one open decision. It ran five probes of its own rather than re-reading
+  the record; **I reproduced all five before accepting any of them**, plus a
+  sixth of my own it did not run.
+
+  **Both `low`s were real, and both are now fixed in `citations.mjs`:**
+
+  1. The stderr advice for a `moved` citation offered only "repoint, or pin with
+     `--rev`". Neither repairs a marker-boundary miss, which is the case where
+     the anchor is nowhere in the file. Reproduced — the wrong advice is printed
+     verbatim under probe P2. The advice now names the third remedy.
+  2. `Upper case is a failure and lower case is not` became conditionally false
+     the day `--require-anchors` landed: under the flag the failing line is
+     marked lowercase `unanchored`. Provenance checked, not assumed —
+     `git show 23d3b56:scripts/citations.mjs | grep -n "Upper case"` → line 608,
+     so the comment predates `82ad6ab` and nothing re-read it. **This is this
+     branch's own thesis found inside the file that argues it**: an assertion
+     that reads as checked and is not.
+
+  Also taken, because both are better arguments than the ones I recorded:
+
+  - **Why no marker stripping is narrower than I claimed.** I justified it by
+    frequency (1 of 13 anchors needs the join, 0 need stripping), which is only
+    "we have not needed it yet". The real reason, measured: because the lines
+    are joined **raw**, an anchor produced by copy-paste _keeps_ the marker and
+    verifies — `"not what fixes // the collision"` matches, only the retyped
+    `"not what fixes the collision"` does not. So the failure needs an author
+    retyping across a break while dropping the marker, and stripping the
+    haystack alone would _break_ the working case, leaving strip-both-sides as
+    the only coherent alternative — `#` and `*` being ambiguous enough in
+    markdown and JSDoc to make its false-positive surface worse than the miss.
+  - **Why start-in-range is the only defensible predicate**, rather than a
+    compromise. Requiring the whole anchor to be contained would make any
+    wrapped anchor unverifiable unless the author widened the range by computing
+    an end line from the anchor's length — which is precisely the upstream error
+    this ticket's own Reproduction diagnoses (`143 = 149 − 6`) and that
+    `records.md` answers with _cite what you read, never compute one citation
+    from another_.
+
+  Both are now in `locateAnchor`'s docblock, and both got a test rather than only
+  a comment: the copy-paste-keeps-the-marker case, and the safety property that
+  an anchor starting outside the cited range can never verify however far it
+  overlaps. 141 → 143 tests. **The second was mutation-checked** — weakening the
+  predicate to `hits.filter((n) => n >= 1)` fails 6 tests including the new one,
+  so it can fail.
+
+  **My own sixth probe, which the pass argued structurally and I wanted
+  measured:** an anchor lying entirely outside the cited range reports `MOVED`,
+  not `verified` (`"const d = 4;"` cited at `:1`, found at 4). Joining loosens
+  the end; it cannot reproduce the pre-repo-18 failure at the start.
+
+  **Open decision, escalated rather than settled** — `--require-anchors` passes
+  vacuously over a record with zero extracted citations
+  (`0 verified … of 0 citations, anchors required`, exit 0), while `selectSection`
+  errors on a name matching nothing for the stated reason that `0/0` with exit 0
+  is indistinguishable from a correct result. Two defensible answers; the pass
+  recommends leaving it and so do I, but neither of us may settle it.

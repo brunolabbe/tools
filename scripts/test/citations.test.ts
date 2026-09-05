@@ -325,6 +325,54 @@ test("an anchor spanning a comment's continuation marker does not match, and say
   expect(shorter[0]?.state).toBe("verified");
 });
 
+/**
+ * The other half of that boundary, and the reason it is narrow enough to leave
+ * alone. Because the lines are joined **raw**, the marker is still in the
+ * haystack — so an anchor produced the way `records.md` tells you to produce one,
+ * by copying what you read, carries the marker across the break and verifies.
+ * Only an author retyping the text and silently dropping the marker hits the
+ * failure above.
+ *
+ * Pinned because it is load-bearing for a decision: stripping the haystack alone
+ * would break *this* case, so the only coherent alternative is strip-both-sides,
+ * and `#`/`*` are ambiguous enough in markdown and JSDoc that its false-positive
+ * surface is worse than the miss it fixes.
+ */
+test("an anchor that keeps the comment marker it copied still matches across the break", () => {
+  const results = checkCitations(
+    [cite({ start: 2, end: 3, anchor: "what fixes the collision — a mutation // run proved it." })],
+    () => CITED_REGION,
+  );
+  expect(results[0]?.state).toBe("verified");
+});
+
+/**
+ * The end of a range is deliberately loose — an anchor may run past the line it
+ * cites — but the dangerous direction is closed: text lying *entirely* outside
+ * the cited range can never read as verified, because the match's start line
+ * must be inside it. That is what stops joining from reproducing the
+ * pre-repo-18 failure, where a citation landed on whatever had moved into its
+ * line number.
+ */
+test("an anchor starting outside the cited range is moved, however loose the end is", () => {
+  const file = ["const a = 1;", "const b = 2;", "const c = 3;", "const d = 4;"];
+
+  // Runs past the cited line, and verifies: the start is in range.
+  const past = checkCitations(
+    [cite({ start: 2, end: 2, anchor: "const b = 2; const c = 3; const d = 4;" })],
+    () => file,
+  );
+  expect(past[0]?.state).toBe("verified");
+
+  // Starts after the cited range, and cannot verify however much it overlaps.
+  const outside = checkCitations(
+    [cite({ start: 1, end: 2, anchor: "const c = 3; const d = 4;" })],
+    () => file,
+  );
+  expect(outside[0]?.state).toBe("moved");
+  expect(outside[0]?.reason).toMatch(/is not in 1-2 — it is at 3/);
+});
+
 test("an anchor that is nowhere in the file says so, rather than naming a line", () => {
   const results = checkCitations([cite({ start: 1, end: 1, anchor: "not in here" })], () => [
     "one",
