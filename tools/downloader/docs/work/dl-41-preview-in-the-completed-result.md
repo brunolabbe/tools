@@ -19,10 +19,10 @@ scope boundary.
 
 Asked for: show the preview thumbnail inside the green section of each completed
 download. That section is `CompletedResult`
-([`JobCard.tsx:171`](../../web/src/components/JobCard.tsx)), rendering
-`<div className="result">` ([`:185`](../../web/src/components/JobCard.tsx)) — the
+([`JobCard.tsx:177`](../../web/src/components/JobCard.tsx)), rendering
+`<div className="result">` ([`:197`](../../web/src/components/JobCard.tsx)) — the
 green comes from `border: 1px solid var(--ok)` and a 10%-tinted background at
-[`styles.css:620`](../../web/src/styles.css). It carries the filename, the size,
+[`styles.css:621`](../../web/src/styles.css). It carries the filename, the size,
 the container, the duration, the download button and the expiry countdown, and no
 image.
 
@@ -31,7 +31,7 @@ ticket rather than a one-line fold-in.
 
 ### The preview is already on the card, so this adds a second copy
 
-[`JobCard.tsx:63`](../../web/src/components/JobCard.tsx) already renders
+[`JobCard.tsx:69`](../../web/src/components/JobCard.tsx) already renders
 `<Preview path={job.thumbnailPath} size="card" />` in `job__head`, for every
 status including `completed`. Putting one in the result panel means the same
 image twice in one card, a few hundred pixels apart. **That is a design call, not
@@ -43,7 +43,7 @@ This is the part that decides whether the feature works at all.
 
 |                                             | lifetime                                                                                             |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| The downloaded file, and so the green panel | **6 hours** (`fileRetentionHours: 6`, [`downloader/api/src/config.ts:182`](../../api/src/config.ts)) |
+| The downloaded file, and so the green panel | **6 hours** (`fileRetentionHours: 6`, [`downloader/api/src/config.ts:192`](../../api/src/config.ts)) |
 | The thumbnail bytes the panel would show    | **10 minutes** (`THUMBNAIL_TTL_MS`, [`thumbnails.ts:91`](../../api/src/thumbnails.ts))               |
 
 `ThumbnailStore` is an in-memory `Map` ([`thumbnails.ts:124`](../../api/src/thumbnails.ts))
@@ -102,12 +102,12 @@ work.
 
 1. Take decision 1, and put `Preview` in `CompletedResult`.
 2. **Mind the layout.** `.result` is `display: flex` with
-   `justify-content: space-between` ([`styles.css:620`](../../web/src/styles.css)),
+   `justify-content: space-between` ([`styles.css:621`](../../web/src/styles.css)),
    holding `result__meta` and `result__actions`. A bare third child lands between
    them and pushes the filename into the middle of the row. This exact trap is
    already documented twice in this codebase — the grouping comments at
    [`ProbePanel.tsx:57-61`](../../web/src/components/ProbePanel.tsx) and
-   [`JobCard.tsx:59-61`](../../web/src/components/JobCard.tsx) — so group the
+   [`JobCard.tsx:65-67`](../../web/src/components/JobCard.tsx) — so group the
    image with `result__meta` rather than adding a sibling.
 3. `Preview` takes `size: "panel" | "card"` ([`Preview.tsx:12`](../../web/src/components/Preview.tsx)).
    Reuse `card` if it fits; add a third size only if it genuinely does not, and
@@ -182,10 +182,34 @@ work.
   `.card__headline, .job__headline` rule, whose comment already stated the
   invariant this needed.
 
-  **Nothing in the brief turned out to be wrong.** Every citation on this page
-  still resolves, including `Preview.tsx:39`, which reads as an absent-path guard
-  but really is the failed-load return too — `failed` is the last term of that
-  same condition.
+  **What the brief had wrong: one citation — and the first version of this entry
+  said it had none, which was the worse error.** The retention constant was cited
+  one screen off: the line the brief named holds `host: "127.0.0.1"`, and
+  `fileRetentionHours: 6` is at
+  [`downloader/api/src/config.ts:192`](../../api/src/config.ts). That one was
+  never right. Six further citations were right at filing and were moved by this
+  branch's own commit — the shared CSS rule gained a line and `JobCard` gained
+  six, so the head `Preview`, `CompletedResult`, the `.result` element, the
+  grouping comment and both `.result` style references all slid down. All seven
+  are repointed in the sections above; the superseded numbers are deliberately
+  not written here in `file:line` form, because `citations.mjs` would resolve
+  them against today's tree and a note about stale coordinates would become six
+  more of them.
+
+  **How the first version got it wrong is the part worth keeping.** It rested on
+  `node scripts/citations.mjs`, which reported `0 moved, 0 unresolvable` — read
+  as "every citation checks out". It is not: all of them were **unanchored**, so
+  the script had compared coordinates and not claims, and it says exactly that in
+  the two lines under its own count. A stale citation pointing at plausible
+  unrelated code resolves clean, which is the failure its docblock opens with.
+  The gate reviewer surfaced it by reading the constant itself and quoting the
+  right line without remarking on the difference. Cheap lesson: read the state
+  column, not the total.
+
+  The citation that _is_ right while looking wrong is
+  [`Preview.tsx:39`](../../web/src/components/Preview.tsx) — it reads as an
+  absent-path guard, but `failed` is the last term of that same condition, so it
+  is the failed-load return as well.
 
   Not done, deliberately: no e2e assertion that the panel's image renders under
   the CSP. `e2e/sniffer/mse-page.spec.ts` already proves exactly that for the
