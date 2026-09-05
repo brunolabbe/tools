@@ -258,8 +258,11 @@ red run is the deliverable of a defect ticket.
    _Fails today:_ both carry their quotes, and `milestone` additionally splits
    into two milestone rows.
 5. **`docs/01-TICKETS.md` states the quoting rule** in the Fields section.
-   `command grep -n literal docs/01-TICKETS.md` returns the sentence.
-   _Fails today:_ the document never mentions quoting.
+   `command grep -n quot docs/01-TICKETS.md` returns the sentence.
+   _Fails today:_ that grep matches nothing at all — the document never uses the
+   word "quote" in any form. Do not weaken this to a grep for `literal`, which
+   already matches an unrelated line at `docs/01-TICKETS.md:173` and so passes
+   today; see the Log.
 6. **The real board still parses and the CI gate stays green.**
    `node scripts/status.mjs --json > /dev/null; echo $?` prints `0`, and
    `npm run check` passes.
@@ -304,4 +307,13 @@ red run is the deliverable of a defect ticket.
   `repo-file-grep-wrapper-ticket`, and `repo-23` on `repo-deployment-doc-shape`,
   which has no remote branch and no PR yet. `gh pr list --state all` names
   nothing above `repo-22`.
+- **Every `Done when` line was run red before this was committed, and one of
+  them was wrong.** `Done when` 5 was first written as
+  `command grep -n literal docs/01-TICKETS.md`, which returns
+  `docs/01-TICKETS.md:173` — an unrelated sentence about a gate "applying them
+  literally". The acceptance passed today and would have passed after the fix
+  without proving anything. Replaced with a grep for `quot`, which matches
+  nothing in the file at all (exit 1). Recorded rather than quietly corrected,
+  because it is the same failure this ticket is about: a check that returns the
+  answer you wanted for a reason you did not look at.
 - Not implemented, per the filing instruction.
