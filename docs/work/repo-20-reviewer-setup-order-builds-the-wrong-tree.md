@@ -154,11 +154,25 @@ is a section move, a clause and a trim.
   **Corrected during this branch's gate, and the correction is worth more than the
   sentence.** The first wording said all eight "are all fixtures in
   `scripts/test/status.test.ts`", which is false for seven of them. The cause was
-  the command: `grep -rlnE 'repo-(40|80|90|99|404|808|901|999)' scripts packages`
-  returns the single line `scripts/test/status.test.ts`, and **`-l` discards which
-  of the eight alternatives matched** — only `repo-404` did. I read a file list as
-  an answer to a per-id question. Re-run per id with `grep -rl "<id>\b"`, the eight
-  ids resolve to nine different files. That is the fourth instance on this branch
+  the command, and both halves are here because the trap is invisible in the
+  output:
+
+  ```
+  $ grep -rlnE 'repo-(40|80|90|99|404|808|901|999)' scripts packages
+  scripts/test/status.test.ts
+
+  $ grep -roE 'repo-(40|80|90|99|404|808|901|999)' scripts packages
+  scripts/test/status.test.ts:repo-404
+  ```
+
+  **`-l` reports files rather than matches, so an alternation under `-l` cannot
+  answer the question it looks like it answered.** The first run is a truthful
+  answer to "which files contain any of these eight"; I read it as an answer to
+  "where does each of these eight live", and those differ by exactly the
+  information `-l` is defined to discard. Only `repo-404` ever matched. Re-run per
+  id — `grep -rl "<id>\b"` eight times — and they resolve to nine different files.
+  Nothing in the first output hints that seven ids are missing from it. That is
+  the fourth instance on this branch
   of the move it exists to record — reading a result at a glance and reporting the
   reading as the measurement — and the first committed by the agent writing the
   record of the other three. `repo-16` and `repo-19` had both got this right in

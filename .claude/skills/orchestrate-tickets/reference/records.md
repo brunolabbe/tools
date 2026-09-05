@@ -268,6 +268,18 @@ discarded. So:
   `--project repo` because that is what parses the ticket tree" is far more useful
   later than one that only lists conclusions.
 
+## When there is no ticket
+
+The mirror of the section below, and the skill's step 9 assumes it away: it says
+the builder commits the gate record **onto the ticket**, and an unticketed branch
+— a skill correction, a records pass, anything the loop produces about itself —
+has no ticket to commit it to. A ticket the branch merely *files* is not the
+answer: attributing a gate of the whole branch to work nobody has started makes
+the next reader think that ticket was built. **So the pull request thread is the
+record**, in full and verbatim, and the PR body says so in a sentence — a reader
+should never have to wonder whether a branch was gated. Measured 2026-09-04, on
+the branch that recorded this batch.
+
 ## When there is no pull request yet
 
 The skill's own default produces this state every time — builders stop before the
