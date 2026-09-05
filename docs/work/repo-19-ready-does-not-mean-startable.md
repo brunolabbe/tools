@@ -174,7 +174,9 @@ is a second value, not a re-reading of this one.
 
 **Gate: PASS** — 2026-09-05 · `origin/main...424be56` · defect hunt run directly in this session, medium depth (no `ticket-reviewer` subagent dispatched; this session performed the hunt itself in-context)
 
-Gated by Sonnet 5 (`claude-sonnet-5`). The builder ran Opus — **inferred, not checked**: it was dispatched in the background, which returns no `resolvedModel`, so this is read off the agent definition's "hard difficulty → never below default model" rule rather than off an observation of the actual model that ran.
+Gated by Sonnet 5 (`claude-sonnet-5`). The builder ran Opus — **inferred, not checked**: it was dispatched in the background, which returns no `resolvedModel`, so this is read off `.claude/agents/builder.md`'s **`absent` difficulty row** — repo-19 carries no `difficulty` field, confirmed as `null` in `npm run status -- --json` — which maps to inherit, Opus in practice. Not off an observation of the actual model that ran.
+
+> **Correction, 2026-09-05 — the orchestrator's error, not this gate's.** This line originally cited the `hard` row ("never below default model"). That is **dl-37's** rating, a different ticket in the same batch; repo-19 is unrated. The sentence was supplied to the reviewer as fact in its dispatch instruction and transcribed faithfully, so the gate did not get this wrong — the citation did. The conclusion is unchanged (Opus either way); only the rule cited was inapplicable. Recorded here rather than silently rewritten because it is an instance of exactly what `repo-18` is on the board to catch: a citation that resolves to real text while saying something the source does not support.
 
 | Done when                                                                                                                                                                      | Verdict · proof                                                                                                                                                                                                                                                                                                                                            |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -380,3 +382,35 @@ carries both`, and checked it is not tautological by inverting the ternary's
 
   Restored the correct code and reran: `137 passed (137)`. `npm run check` and
   `node scripts/status.mjs --json` still exit 0.
+
+- **2026-09-05** — Gate recorded (PASS), PR [#145](https://github.com/brunolabbe/tools/pull/145)
+  opened against `main`, and the reviewer's report posted to the thread. The
+  `## Review` section was committed **verbatim as sent** by the reviewer; the only
+  change on commit was `oxfmt` padding the acceptance table's columns, verified by
+  diffing the section afterwards.
+
+  **One correction to the gate record, and it is the orchestrator's error rather
+  than the gate's.** The model line cited `.claude/agents/builder.md`'s `hard`
+  difficulty row ("never below default model"). That row belongs to **`dl-37`**,
+  a different ticket in the same batch. repo-19 carries **no `difficulty` field**
+  — verified here, not relayed:
+
+  ```
+  $ node scripts/status.mjs --json | ... [(id, difficulty) for repo-19, dl-37]
+  [('dl-37', 'hard'), ('repo-19', None)]
+  ```
+
+  The applicable row is `absent → inherit (Opus, in practice)`. The conclusion is
+  unchanged — Opus under either row — so **no re-gate**: only the cited rule was
+  wrong, and the substance of the verdict is untouched.
+
+  **Attribution matters here and is deliberate.** The sentence was written by the
+  orchestrator into the reviewer's dispatch instruction and given as fact; the
+  reviewer transcribed it faithfully. A reader checking the record against the
+  frontmatter would have found them disagreeing and had no way to see which link
+  in the chain failed, so the correction is recorded inline in `## Review` as a
+  block quote rather than silently rewritten. **This is an instance of the defect
+  `repo-18` exists to catch** — a citation that resolves to real text while saying
+  something the source does not support — arriving in this repo's own gate record
+  while that ticket was in flight, which is worth the two lines it costs to
+  record.
