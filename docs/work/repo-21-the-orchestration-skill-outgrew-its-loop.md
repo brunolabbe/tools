@@ -17,14 +17,16 @@ difficulty: hard
 ## Read this first — three branches move these files before you start
 
 This ticket must not begin until `docs/record-2026-09-04-orchestration-batch`
-lands. That branch — **PR #148**, tip `87f93f3` — rewrites `SKILL.md`,
-`reference/records.md`, `reference/dispatching.md` and `reference/history.md`,
-and files `repo-20`. Starting before it merges guarantees a conflict across the
-whole page.
+lands. That branch — **PR #148** — rewrites `SKILL.md`, `reference/records.md`,
+`reference/dispatching.md` and `reference/history.md`, and files `repo-20`.
+Starting before it merges guarantees a conflict across the whole page.
 
-**It moved twice while this ticket was being written** — `479b7b3` → `0d62b5e` →
-`87f93f3`, with the PR opening in between. Every measurement below was re-taken at
-`87f93f3`; re-take them again before you build.
+**It moved four times while this ticket was being filed and gated** — `479b7b3` →
+`0d62b5e` → `87f93f3` → `69327da` → `7e1fbc1`, with the PR opening partway
+through. **Every measurement and reproduction below is pinned to `87f93f3` by
+sha, not to the branch name**, so a re-run answers the question that was asked.
+Two of them are known to have changed since; both say so where they appear. Re-run
+all of them against the merged text before you build.
 
 It is not in `depends_on` because `repo-20`'s file does not exist on `main`, and
 a `depends_on` naming a ticket the branch cannot see fails
@@ -82,7 +84,8 @@ paragraph says must survive the batch.
 The first three were found in one session (2026-09-04) by agents told to distrust
 the brief they were handed. The fourth surfaced while this ticket was being
 filed. Three are the class that only appending produces, and **the fourth is the
-one that proves the point, because #148's rewrite carries it forward.**
+one that proves the point: #148 rewrote the sentence, carried the error through
+the rewrite, and only fixed it when this filing pointed at it.**
 
 **1. A claim about another file that stopped being true.** `SKILL.md` step 4 said
 a `mechanical` ticket puts a **Sonnet** builder in a batch, and drew from that the
@@ -118,11 +121,12 @@ downstream check could catch it.
 **3. A rule the page falsified on the way in.** Commit `a980d5e` wrote into
 `SKILL.md` that the pre-merge CI look is one _"nobody in the loop is positioned"_
 to take — written by an orchestrator that had taken exactly that look, with one
-`gh run list`, twenty minutes earlier. Corrected two commits later by `62cb999`,
+`gh run list`, twenty minutes earlier. Corrected by the very next commit,
+`62cb999` (`git rev-list --count a980d5e..62cb999` = 1),
 entirely inside the same branch. Premises true, conclusion false, and the page
 already documents that shape twice elsewhere.
 
-**4. A false claim about the harness, which #148 rewrites without fixing.** On
+**4. A false claim about the harness, which #148 rewrote without fixing.** On
 `main`, `SKILL.md` step 4 says a backgrounded dispatch _"returns an agent id and
 nothing else"_. **That is false.** A background `tool_response` also carries
 `status`, `description`, `prompt`, `outputFile` and — the field the whole
@@ -130,22 +134,33 @@ paragraph is about — **`resolvedModel`**. It lacks only the usage, token and
 duration fields. What is true is narrower: the _dispatching model_ does not see
 it, because the parent receives only the subagent's final text result.
 
-`#148` rewrote that paragraph and **the claim survived in a new spelling**,
-verified by me at `87f93f3`:
+`#148` rewrote that paragraph and **the claim survived the rewrite in a new
+spelling** — pinned by sha, because the branch is moving and the command must not
+silently answer a different question when you run it:
 
 ```
-$ git show origin/docs/record-2026-09-04-orchestration-batch:.claude/skills/orchestrate-tickets/SKILL.md \
-    | grep -n 'resolvedModel'
+$ git show 87f93f3:.claude/skills/orchestrate-tickets/SKILL.md | grep -n 'resolvedModel'
 86:   inherit. A backgrounded dispatch returns no `resolvedModel`, so inherit is the
 99:   and neither needs `resolvedModel`** — which a backgrounded dispatch does not
 ```
 
-Line 86 is the strong version — it concludes the builder's model is _"unobservable
+Line 86 was the strong version — it concluded the builder's model is _"unobservable
 to everyone afterwards"_ — and three documented verification paths falsify it (see
 Build 4). **This is why the page needs a mechanism rather than another careful
 reader**: the branch whose PR title is _"correct ten skill defects"_ rewrote this
-exact sentence and reproduced its error, because rewriting prose does not
-re-check it. Fixing it is Build 4's job; if `#148` lands first it lands twice.
+exact sentence and reproduced its error, because rewriting prose does not re-check
+it.
+
+**Then it was fixed, which is the ending this defect wanted.** `69327da` — filed
+against the same branch, in reaction to this ticket, with a commit message saying
+so — replaced both lines with the true narrower statement. At the current tip the
+same file reads _"A backgrounded dispatch's `resolvedModel` never reaches **you**"_
+and _"which the backgrounded dispatch **does** carry but never shows you"_, which
+is what Build 4 step 2 asks for. **So expect defect 4 to be gone from `main` by the
+time you build, exactly as defects 1–3 are — verify it before doing Build 4 step 2,
+and if it is gone, say so in the Log and do only the compression.** The defect
+stays written here because the reproduction is the deliverable and because a
+sentence that was rewritten twice before being re-checked is the whole argument.
 
 ### What `87f93f3` already did, which this ticket must not redo
 
@@ -159,7 +174,7 @@ below have partly landed:
 | Defect 2 — a _"Read the matches, do not count them"_ bullet with this measurement                                                               | The grep itself is unchanged, which is right; but it and its two bullets are 13 lines that `repo-19` mostly retires (Build 6) |
 | Defect 3 — `62cb999` reframes it as a division of labour and gives the `--json` command                                                         | —                                                                                                                             |
 | Build 4's rule — step 3 already says _"Then pass that model explicitly rather than letting it inherit"_                                         | The apparatus around it is still 24 lines, **two of them defect 4** (Build 4)                                                 |
-| — **defect 4 is not fixed there.** The branch rewrote the sentence and kept the error                                                           | Build 4 fixes it. If #148 lands first, it lands twice                                                                         |
+| Defect 4 — fixed at `69327da`, **after** this ticket was filed and in reaction to it; not fixed at `87f93f3`                                    | **Re-verify before Build 4 step 2.** If it is gone from the merged text, do only the compression and say so in the Log        |
 | Build 5 entirely — both failure modes are written, with the `grep '^## Review'` discriminator and the 2026-09-04 gate-declines-PASS measurement | They arrived as ~20 more lines inside the loop; the work left is placement and compression, not authorship (Build 5)          |
 
 So **this ticket is the structural cleanup, and only that.** Do not re-file,
@@ -168,8 +183,14 @@ re-argue or re-measure the first five rows above. The sixth is work.
 ## Build
 
 Work against `main` **after** `docs/record-2026-09-04-orchestration-batch` has
-merged. Six changes. They are independent enough to commit separately and should
+merged. Seven changes. They are independent enough to commit separately and should
 be.
+
+**Every "already on the branch" claim above was true at `87f93f3` and the branch
+has moved three times since.** Re-run the reproductions against the merged text
+before starting any step. Where a step's premise has already been fixed, do the
+structural half and record the finding — do not re-fix it, and do not delete the
+step's reasoning, which is what the next reader needs.
 
 ### 1. Make `SKILL.md`'s cross-file claims machine-checkable
 
@@ -234,8 +255,20 @@ between them, which is why nothing can be removed. Give each provision:
   session re-litigating a settled rule, and it is the reason a bare instruction
   list would be worse than what exists now. **Do not delete the numbers.**
 - **Narrative** — the story of the session that found it. Moves to
-  `reference/history.md`, which already tells its reader _"read it only if you
-  are revising this skill"_ and is therefore the right home.
+  `reference/history.md`, which is already scoped for exactly this readership:
+  `.claude/skills/orchestrate-tickets/SKILL.md:17` sends the reader there with _"read it only if you are revising
+  this skill"_. (The sentence is in `SKILL.md`'s own preamble describing
+  `history.md`, not inside `history.md` — worth knowing before you go looking for
+  it there.)
+
+**And state the rule the three-way split is an instance of, once, because the
+cleanup applies it in three files and never says it:** an instruction lives in
+**exactly one file, and everywhere else is a pointer to it.** That is why
+narrative moves rather than being duplicated, why Build 7 puts one generalisation
+in `records.md` instead of a third warning beside two others, and why the
+`## Reference` table exists. Without it written down, the next session's honest
+move is to add the sentence where it is needed rather than link to it, which is
+how this page reached 567 lines.
 
 Note the four `measured` claims on `main` that carry **no date at all** —
 `SKILL.md`'s _"Measured before this line existed"_, _"Measured: a reviewer that
@@ -322,21 +355,20 @@ overclaiming this page keeps producing:**
   `.claude/settings.local.json` does not exist. So a settings grep here proves
   nothing either way — the variable can be set outside any settings file.
 
-**Inferred, not stated — and it is the finding that most changes the design.**
-`sub-agents.md` says a subagent receives "only this system prompt plus basic
-environment details… not the Claude Code system prompt", and the enumerated
-startup-content list contains no model-identity line. The guide marks the
-conclusion as inference from two adjacent documented facts. It explains the
-observation exactly: two subagents quoted the "You are powered by the model named
-X" line and a third searched and found none. **So asking an agent to quote that
-line is not a fallback verification path — it is unreliable by construction, and
-the skill must not offer it as one.**
+**Inferred, not stated — and it is the finding that most changes the design.** A
+subagent's "You are powered by the model named X" line **is not guaranteed to
+exist**, so asking an agent to quote it is not a verification path. Source:
+`sub-agents.md`'s statement that a subagent gets "only this system prompt plus
+basic environment details… not the Claude Code system prompt", plus a
+startup-content list containing no model-identity line — an inference from two
+documented facts, not a documented fact, and the guide marks it so. Observations
+to date: **three of four agents had the line, one searched and found none** (the
+fourth pair being this ticket's own builder and gate, both of which had it).
 
-This repo already holds the same rule one field over, and citing it is better than
-restating it: `reference/dispatching.md` records that self-reported _tool_ lists
-are unreliable — a builder listing eight tools where its frontmatter grants
-thirteen — and concludes _"Ask an agent to **call** a tool, not to tell you
-whether it has one."_ Same principle, same failure, different field.
+Write the rule as an application of one this repo already measured, not as a new
+claim: `reference/dispatching.md` says _"Ask an agent to **call** a tool, not to
+tell you whether it has one"_, off a builder that listed eight tools where its
+frontmatter grants thirteen. Same failure, one field over.
 
 So do:
 
@@ -415,7 +447,10 @@ Three specifics:
   reviewer's own. **None was framed as a finding; all three found something.** So
   step 7 should ask both agents for their method, not only their verdict. One
   clause. It is free, and it will be tempting to grow it.
-- Step 2's decision-grep bullets are 13 lines. **If `repo-19` (#145) has landed,
+- Step 2's decision-grep bullet is **16 lines** at `87f93f3` (55–70), and 22 with
+  the seam-mapper bullet that follows it (55–76). `main` is not the baseline here:
+  it lacks the _"Read the matches, do not count them"_ measurement entirely, which
+  arrives with the record branch. **If `repo-19` (#145) has landed,
   `--ready` excludes `needs-decision` tickets and the grep is a fallback for
   unmigrated tickets, not the primary move** — verified on
   `origin/repo-19-needs-decision-status`, which adds `needs-decision` to
@@ -510,6 +545,67 @@ restate it.** The missing-path instance is the third comment on #148.
 10. `npm run check`, `npm run format` (oxfmt formats markdown) and
     `node scripts/status.mjs --json > /dev/null` all pass.
 
+## The gate on this filing
+
+`## The gate on this filing` rather than `## Review`, on `dl-29`'s precedent and
+`repo-16`'s and `repo-20`'s: this diff files a ticket and builds nothing. The
+distinction is also mechanical — `scripts/status.mjs`'s `hasGateRecord` matches
+`/^##\s+Review\b/` only, so a `ready` ticket carrying this heading passes
+`status --json` where one carrying `## Review` would fail `reviewedButReady`.
+
+### Gate 1 — reviewer's record, verbatim as sent
+
+### Gate: CONCERNS — 2026-09-05 · `origin/main...HEAD` (`6c0ee2e`) · own defect hunt, no `code-review` dispatch (subagent has no `Skill` tool), Sonnet against an Opus build
+
+Checked out `6c0ee2e` via `git fetch origin && git checkout --detach 6c0ee2e`. `git log --oneline -1` matches; `git diff --stat origin/main...HEAD` shows one file, 658 insertions across two commits (`1cc2ca0`, `6c0ee2e`). This diff files a ticket only — no implementation exists. Gated on what it is: a dispatchable brief, per dl-29's precedent, not mechanically FAILed for ten unproven `Done when` lines. All ten are checkable by a named command or described mechanical process; the 567→~180 target is explicitly sizing, not acceptance, and no `Done when` line mentions a count.
+
+**What I verified**: `npm run check`/`npm run format`/`node scripts/status.mjs --json`/`-- --show repo-21` all exit 0 at `6c0ee2e`; `git check-ignore` on the ticket file exits 1 (commits fine); id-freedom (`grep -rhoE '^id: repo-[0-9]+' docs/work/*.md | sort -u -t- -k2 -n` tops at `repo-19` on main; all 10 remote branches and `gh pr list --state all` swept, only `repo-20` on the unmerged record branch); `depends_on` reasoning reproduced by making it fail first (a scratch `depends_on: [repo-18, repo-20]` ticket makes `status.mjs --json` exit 1, reverted); baseline numbers (567/2586/259/225/31) independently re-measured against `87f93f3` and matching exactly; `citations.mjs --require-anchors` behavior on `main`'s `SKILL.md` and both Build-1 probes reproduced exactly as described; the ticket's own deliberate `citations.mjs` failure (6 citations, 1 verified/1 moved/3 unanchored/1 unresolvable, exit 1) reproduced; all 11 laundering shapes plus the 12th ("glance-reading") located verbatim at `87f93f3`.
+
+#### Findings
+
+- **med** · The ticket's sharpest claim (defect 4) is going stale live. The record branch moved past the cited `87f93f3` to `69327da` ("a backgrounded resolvedModel exists, it just never reaches you") during this review; re-running the ticket's own reproduction (`git show origin/docs/record-2026-09-04-orchestration-batch:.claude/skills/orchestrate-tickets/SKILL.md | grep -n resolvedModel`) no longer returns the quoted lines — the branch already carries the corrected wording Build 4 step 2 asks a future builder to write, and its commit message says explicitly it is reacting to this ticket. Once the record branch merges (required before this ticket's Build begins), defect 4 will likely already be gone from `main`, same as defects 1-3, but the "Why" narrative and the "What 87f93f3 already did" table assert the opposite, with no re-verify caveat. Recommend pinning the reproduction to a sha and adding one sentence to re-check defect 4's existence before Build 4 step 2.
+- **med** · Build 4 (90 of the Build section's 301 lines, by far the largest of 7 steps) does not follow the ticket's own instruction/measurement/narrative split — much of the "Inferred, not stated" block is story rather than instruction+citation. Recommend compressing to a citation plus the resulting bullets.
+- **med** · No general "an instruction lives in exactly one file, everywhere else is a pointer" rule is stated, despite `Packages` now spanning three files and Build 7 relying on exactly that principle for its own placement. Recommend one sentence, most naturally in Build 2.
+- **low** · "Corrected two commits later by `62cb999`" — `git rev-list --count a980d5e..62cb999` = 1, the very next commit.
+- **low** · "`citations.mjs` prints the rule that covers this" — that sentence is a source comment (`scripts/citations.mjs:730-732`), never printed at runtime. Substance unaffected.
+- **low** · "`reference/history.md`, which already tells its reader..." — that sentence is in `SKILL.md`'s own Reference table, not inside `history.md`.
+- **low** · "Step 2's decision-grep bullets are 13 lines" — counted 15 (lines 55-69); flagged at low confidence in case a different span was meant.
+- **dropped** · none.
+- **findings** · own defect hunt returned 7; 7 carried, 0 dropped.
+
+NFRs: security n/a · performance n/a · reliability n/a directly, though the two structural `med` findings are instances of exactly the property this ticket argues for · maintainability — strong citation discipline, weak self-application in the two places named.
+
+### Gate 1 — builder's dispositions, each with the command that settled it
+
+Six accepted, one refuted, one corrected further than either of us had it. The
+reviewer also self-corrected its own last finding before I acted on it.
+
+| #   | Finding                              | Disposition                                  | Command that settled it                                                                                                                                                                                                                                                                                                                                           |
+| --- | ------------------------------------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | defect 4 going stale                 | **accepted**, remedy (a)                     | `git log --oneline 87f93f3..origin/docs/record-2026-09-04-orchestration-batch` → two more commits (`69327da`, `7e1fbc1`); `git show 87f93f3:…SKILL.md \| grep -n resolvedModel` still reproduces the defect                                                                                                                                                       |
+| 2   | Build 4 fails the ticket's own split | **accepted**                                 | `awk '/^### 4\. Retire/,/^### 5\./' \| wc -l` → 91 of 302                                                                                                                                                                                                                                                                                                         |
+| 3   | no general one-file rule             | **accepted**                                 | `grep -niE 'exactly one file\|single home\|everywhere else is a pointer'` → no match                                                                                                                                                                                                                                                                              |
+| 4   | "two commits later"                  | **accepted**                                 | `git rev-list --count a980d5e..62cb999` → 1                                                                                                                                                                                                                                                                                                                       |
+| 5   | "`citations.mjs` prints the rule"    | **refuted, and the finding improved anyway** | `sed -n '430,440p' scripts/citations.mjs` → the sentence is inside a `process.stderr.write`, and it is the tail of the ticket's own reproduced run. It **is** printed on `main`. It is a comment at `:730-732` in the **`repo-18`** version the reviewer read — which this ticket depends on, so the verb goes false when `#146` merges. Both halves now recorded |
+| 6   | `history.md` self-declaration        | **accepted**                                 | `grep -n "revising this skill"` → `.claude/skills/orchestrate-tickets/SKILL.md:17`, no hit in `history.md`                                                                                                                                                                                                                                                        |
+| 7   | "13 lines"                           | **accepted, and both counts were wrong**     | bullet 1 is `55–70` = **16** lines; `sed -n '71p'` is the next bullet's first line. Pair with the seam-mapper bullet = `55–76` = 22. The reviewer's self-correction that `main` lacks this content entirely is confirmed: `grep -n "Read the matches, do not count them" SKILL.md` exits 1 on `main`                                                              |
+
+**Two-sided model check.** The reviewer quoted _"You are powered by the model named
+Sonnet 5. The exact model ID is `claude-sonnet-5`."_ Mine reads **"You are powered
+by the model named Opus 5 (1M context). The exact model ID is
+`claude-opus-5[1m]`."** So the gate ran a different model from the build, checked
+from both sides rather than from the dispatch parameter alone. **This does not make
+self-report a verification path**, and Build 4 still forbids it: the claim it
+rests on is that the line is not _guaranteed_, and one prior agent found none.
+Two more observations of the line existing do not bear on whether a third will
+have it. Recorded in Build 4 as three of four.
+
+**Reviewer's collateral finding, checked and already closed.** `bb6b8f4` was
+indeed dangling; `git cat-file -t bb6b8f4` → `fatal: Not a valid object name`. The
+record branch's next commit, `7e1fbc1` _"a commit cannot cite its own sha"_,
+already turned it into a documented instance. No action, and nothing for the
+orchestrator to file.
+
 ## Log
 
 - **2026-09-05 — filed.** Every number was measured against `origin/main@c37cab9`
@@ -546,16 +642,40 @@ restate it.** The missing-path instance is the third comment on #148.
   attempt through `| tail` read `tail`'s status instead.
 
 - **This ticket fails its own citation run, on purpose.**
-  `node scripts/citations.mjs docs/work/repo-21-…md` reports `5/6 resolve`, exit 1.
-  The failing one is Build 1.2's verbatim quotation of `SKILL.md`'s illustrative
-  test reference, kept as written because it _is_ the false positive Build 1.2
-  asks you to remove. `citations.mjs` prints the rule that covers this: _"a
+  `node scripts/citations.mjs docs/work/repo-21-…md` reports `8/10 resolve`,
+  exit 1, and **both failures are deliberate**. One is Build 1.2's verbatim
+  quotation of `SKILL.md`'s illustrative test reference, kept as written because
+  it _is_ the false positive Build 1.2 asks you to remove. The other is the
+  reviewer's own citation into `citations.mjs`, inside its verbatim record above:
+  it must not be edited to make a checker happy, and it is the very citation the
+  dispositions table refutes, so repointing it would erase the finding it is
+  evidence for. **Both are the carve-out the tool names and cannot check.** `main`'s `citations.mjs` **prints** the rule that covers
+  this on the `unresolvable` path — `scripts/citations.mjs:435-436`, inside a
+  `process.stderr.write`, reproduced as the tail of the run above: _"a
   citation that is a finding's own evidence … must stay as written."_ The other
   five (`.claude/agents/builder.md:22` ×3 and `.claude/agents/ticket-reviewer.md:6`
   ×2) all verify against their anchors. Nothing in CI reads tickets with
   `citations.mjs` today, so no gate is red. **Re-run this before gating** — the
   first draft of this bullet said `3/4` and was falsified by the commit that
   added it, which is the drift the skill's own records section warns about.
+
+  **`repo-18` removes that printed trailer**, demoting the sentence to a source
+  comment on the `unresolvable` path, so this paragraph's "prints" becomes false
+  the day `#146` merges — which this ticket depends on. Surfaced by the gate,
+  which read the `repo-18` version and reported the sentence as never printed; it
+  is printed today and is not printed there, and both halves matter. Whoever
+  builds this should re-read this bullet against the merged `citations.mjs` and
+  correct the verb.
+
+- **2026-09-05, third pass — gate 1 answered.** Six of seven findings accepted,
+  one refuted with a reproduction, one corrected past both parties' numbers; the
+  record and the dispositions are above. Two things worth keeping out of the
+  table: the record branch moved **twice more** during the gate (`87f93f3` →
+  `69327da` → `7e1fbc1`), so every reproduction in this ticket is now pinned by
+  sha rather than by branch name; and defect 4 was **fixed on that branch in
+  reaction to this filing**, which is the outcome the ticket wanted and does not
+  retire it — Build 4's structural half stands either way, and the step now says
+  to re-verify before doing its step 2.
 
 - **2026-09-05, second pass — the open question closed, and a fourth defect.** The
   orchestrator put the subagent-model question to the `claude-code-guide` skill and
