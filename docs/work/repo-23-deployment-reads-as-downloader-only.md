@@ -402,3 +402,16 @@ bucket. The scope of` — inside the Cloudflare WAF bullet that ends by linking
   and `../adr/004-…` does not (there is no repo-root `adr/`), so the Build's
   link was wrong from the page and the correction was right. Rebased onto
   `origin/main` at `4a4cc4f`, which added only `vitest.config.ts`; no conflicts.
+- **2026-09-05** — **The `:271` figure was the orchestrator's error, not the
+  gate's, and this entry exists so the next reader does not misattribute it.**
+  The dispatch that authorised the citation fix stated that repo-1's referent had
+  moved to `docs/02-DEPLOYMENT.md:271`. The orchestrator has recorded that it
+  relayed that number from the previous builder's report without spending the one
+  command that would have checked it. The builder ran that command, found the
+  citation had been stale since long before this branch, and repointed to
+  `docs/02-DEPLOYMENT.md:278` instead; the gate then reproduced the whole thing
+  independently, so three measurements now agree. **The reviewer neither
+  introduced this nor missed it — it confirmed the correction.** The chain was
+  three links long and the second was the cheap place to break it: one
+  `sed -n '256p'` against the commit the citation was written at would have
+  settled it before any of this was dispatched.
