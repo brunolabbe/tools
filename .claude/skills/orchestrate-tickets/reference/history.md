@@ -123,7 +123,7 @@ supplied by the orchestrator and are observations, not measurements**: they are
 last-observed values from completion notifications, one of them still rising when
 it was read, and the rounds figure is explicitly an estimate. **Everything else
 was re-verified here** against commits, files and re-runs rather than transcribed,
-which is how three of the nine defects below were found — none reported by the
+which is how four of the ten defects below were found — none reported by the
 session, and none visible in any outcome. What could not be checked from a
 worktree is marked where it appears: another session's transcript, and any agent's
 statement about its own context.
@@ -165,10 +165,15 @@ matches. The bullet now says to read the matches rather than count them. Found b
 re-running the grep here, not reported by the session; the same is true of entry 6
 below.
 
-**what the skill got wrong** — nine, all fixed on this branch. Seven are numbered
-below; the other two are recorded where they were found — step 2's grep, above,
-and the missing carrier for an answered-but-undispatched decision, in the
-`tickets` row.
+**what the skill got wrong** — ten, all fixed on this branch. Seven are numbered
+below; the other three are recorded where they were found — step 2's grep, above;
+the missing carrier for an answered-but-undispatched decision, in the `tickets`
+row; and **step 9 assuming a ticket exists**, found by this branch not having one.
+Step 9 says the builder commits the gate record onto the ticket, and an unticketed
+branch has none — `repo-20` is something this branch *files*, not something it
+built, so putting a gate of the whole branch there would tell the next reader that
+ticket had been started. The pull request thread is the record instead, said out
+loud in the PR body; the rule is in `records.md`.
 
 1. **Step 6 covered a pair that agrees too easily and not its opposite: a pair
    that agrees and then both stop.** repo-19's builder and reviewer settled the
