@@ -139,8 +139,27 @@ is a section move, a clause and a trim.
   **Id.** `repo-20` confirmed free against both lists `docs/01-TICKETS.md`
   requires. `docs/work/` tops out at `repo-19`; a tree-wide grep for `repo-2[0-9]`
   across `docs/`, `tools/`, `scripts/` and `.claude/` returned nothing, and the
-  looser `repo-[0-9]+` sweep's only higher hits — `repo-40`, `repo-80`, `repo-90`,
-  `repo-99`, `repo-404`, `repo-808`, `repo-901`, `repo-999` — are all fixtures in
-  `scripts/test/status.test.ts`. The three open feature branches (`dl-37`,
-  `repo-18`, `repo-19`) name no `repo-2x` id in any Log or gate record, and no
-  pull request in any state names one.
+  looser `repo-[0-9]+` sweep's only higher hits are `repo-40`, `repo-80`,
+  `repo-90`, `repo-99`, `repo-404`, `repo-808`, `repo-901` and `repo-999`. **None
+  is a filed ticket**, which is the thing that matters here: `repo-404` is a
+  fixture in `scripts/test/status.test.ts` and `docs/01-TICKETS.md`'s
+  dangling-`depends_on` example, and the other seven appear **only as example ids
+  inside other tickets' own prose** — `repo-3`, `repo-6`, `repo-7`, `repo-8`,
+  `repo-15`, `repo-16`, `repo-17`, `repo-18` and `repo-19` — several of them
+  discussing this same sweep, and `repo-8` proposing a "-9xx band" convention that
+  was never implemented. The three open feature branches (`dl-37`, `repo-18`,
+  `repo-19`) name no `repo-2x` id in any Log or gate record, and no pull request
+  in any state names one.
+
+  **Corrected during this branch's gate, and the correction is worth more than the
+  sentence.** The first wording said all eight "are all fixtures in
+  `scripts/test/status.test.ts`", which is false for seven of them. The cause was
+  the command: `grep -rlnE 'repo-(40|80|90|99|404|808|901|999)' scripts packages`
+  returns the single line `scripts/test/status.test.ts`, and **`-l` discards which
+  of the eight alternatives matched** — only `repo-404` did. I read a file list as
+  an answer to a per-id question. Re-run per id with `grep -rl "<id>\b"`, the eight
+  ids resolve to nine different files. That is the fourth instance on this branch
+  of the move it exists to record — reading a result at a glance and reporting the
+  reading as the measurement — and the first committed by the agent writing the
+  record of the other three. `repo-16` and `repo-19` had both got this right in
+  their own filings; flattening their wording is what produced the error.
