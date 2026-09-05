@@ -88,10 +88,15 @@ second tool` is written as a _delta on steps already taken_ — it says "the
   tunnel does not change" and refers back to "step 1". Moved above step 1 it is
   incoherent, and it would rewrite line numbers across the whole file, which
   `scripts/citations.mjs` resolves against for every gate record that cites it.
-- **Split the planner section out (rejected, and self-defeating).** Removing the
-  187 planner lines would leave a file that is 20-to-0 downloader — it
-  _manufactures_ the misreading this ticket exists to fix. adr/004 also already
-  settled that the deployment story is one story for both tools.
+- **Split the planner section out (rejected, and self-defeating).** Removing
+  exactly the 187-line span leaves the file **19 downloader to 12 planner** — it
+  flips a page that is planner-led today (29 to 20) into a downloader-led one,
+  which _manufactures_ the misreading this ticket exists to fix. The surviving
+  planner mentions are all in `## Adding the second tool`, so the aggressive
+  version that takes that section out too reaches **14 to 0** and manufactures it
+  completely. Both endpoints reject the split, and the arithmetic is monotone
+  between them. adr/004 also already settled that the deployment story is one
+  story for both tools.
 
 **The file must not move to `tools/downloader/docs/`.** That is the conclusion
 this ticket exists to make unreachable, and the Build must leave the reason in
@@ -232,3 +237,30 @@ One low finding, no med or high. PASS per the rubric.
   is a sidestep rather than a fix. The fix is repo-24, filed separately and
   unmerged at filing time (PR #153); this ticket is one of its two independent
   discoveries, and no `depends_on` links them because nothing here waits on it.
+- **2026-09-05** — **The rejected "split" remedy carried a wrong number, and the
+  way it was wrong is the point.** It read "20-to-0 downloader". The gate flagged
+  that it does not reproduce; I accepted it and then decomposed the file, which
+  showed the figure matched neither reading. All counts lowercase, against
+  `c37cab9`:
+
+  | span                                 | `downloader` | `planner` |
+  | ------------------------------------ | ------------ | --------- |
+  | 1–286                                | 14           | 0         |
+  | 287–473, the planner section         | 1            | 17        |
+  | 474–530, `## Adding the second tool` | 5            | 12        |
+  | whole file                           | 20           | 29        |
+
+  14+1+5 = 20 and 0+17+12 = 29, so the decomposition reconciles. **The "20" was
+  the whole-file downloader count and the "0" was the lines-1–286 planner count
+  — two different denominators in one sentence.** Corrected above to the measured
+  19-to-12, with 14-to-0 named as the aggressive-split endpoint; the rejection
+  gets stronger, not weaker, since no split reaches the number originally
+  claimed. Recorded rather than quietly fixed because **this is the third
+  instance of one error shape on this ticket**: the brief that commissioned it
+  quoted 27 planner line-hits as occurrences, the dl-32 gate's retraction did the
+  same, and then the ticket did it in its own rebuttal. A page about a file that
+  teaches the wrong thing turns out to be easy to write wrongly in exactly its
+  own way. Reproduce with
+  `sed -n '1,286p;474,530p'` over `git show c37cab9:docs/02-DEPLOYMENT.md`, piped
+  through `command grep -o downloader | wc -l` (19) and
+  `command grep -o planner | wc -l` (12).
