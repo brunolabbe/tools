@@ -223,6 +223,47 @@ correction._
 
 **Gate: PASS**, extended to `82ad6ab`/`2de66cd`. Gate 1's PASS on `23d3b56` above is unchanged and not reissued; this entry only certifies that folding in `--require-anchors` did not disturb it and that the flag itself meets the same bar.
 
+### Second opinion — 2026-09-05 · `origin/main...65c12cb` · judgment pass on Opus, no `code-review` delegate
+
+Not a third gate and not a re-gate: a targeted re-examination of four design
+calls that Gates 1 and 2 accepted, commissioned because both earlier rounds had
+unresolved model provenance and the builder had demonstrated one category of
+claim it did not verify.
+
+**Reviewer model, established rather than inferred** — which is why it is written
+here at all, this being the one place in this batch where that is true. This
+reviewer's own system context states: "You are powered by the model named Opus 5
+(1M context). The exact model ID is `claude-opus-5[1m]`." That is a quotation, not
+a recollection. Separately, and on the dispatcher's word rather than this
+reviewer's own: the dispatch passed an explicit `model: "opus"`, overriding the
+`model: sonnet` pin in `.claude/agents/ticket-reviewer.md`. The two halves are
+recorded apart because only the first is checkable from inside this agent, and
+collapsing them is the move this ticket exists to catch.
+
+**No `Done when` row was re-derived here.** Gates 1 and 2 carry the acceptance
+table; this pass was scoped to judgment and deliberately did not re-run their
+measurements, so writing rows on their strength would have been this branch's own
+defect committed into its own record. Citations below resolve against `65c12cb`.
+
+| Design call re-examined                                                 | Verdict                                                                                    |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `locateAnchor` joins the file before matching, rather than line by line | **upheld** — start-in-range is the only predicate compatible with _cite what you read_     |
+| No `//`/`*`/`#` stripping, by deliberate choice                         | **upheld** — restraint, and for a better reason than the frequency count that justified it |
+| `--require-anchors` changes the exit code and no citation's state       | **upheld** — policy and fact are cleanly separated, not merely adjacent                    |
+| `ok: boolean` removed; unanchored note on stdout                        | **upheld**, both                                                                           |
+
+- **Why start-in-range is a necessity and not a loose end**, the argument neither earlier gate had. Verification requires the anchor to _start_ inside the cited range — `citations.mjs:396` "hits.filter((n) => n >= c.start && n <= c.end)" — and deliberately permits it to run past the end. Requiring end-containment instead would force an author whose anchor wraps to widen the range by computing an end line from the anchor's length: **the exact upstream error this ticket's own Reproduction diagnoses** (`143 = 149 − 6`, an end anchor minus a length) and that `records.md` answers with _cite what you read, never compute one citation from another_. The measurement that makes this concrete rather than theoretical: of the 13 anchors written by hand in this repo before the script could read one, **12 are single-line citations and exactly 1 is a range** — and that one range is repo-7's, the case that earned the join. So end-containment would have put the common shape in conflict with the repo's own authoring rule.
+- **The dangerous direction is closed, and is now measured rather than reasoned.** An anchor lying entirely outside the cited range cannot read as verified, because the match's start line must be inside it — so joining cannot reproduce the pre-repo-18 failure, where a citation landed on whatever had moved into its line number. Pinned at `citations.test.ts:372` "expect(outside[0]?.state).toBe(", with the loose-end companion at `citations.test.ts:365` "expect(past[0]?.state).toBe(". Mutation-checked independently by this reviewer: weakening the predicate to `(n) => n >= 1` fails 6 tests, that one among them.
+- **Not stripping comment markers is right, and the reason is stronger than the frequency count that first justified it.** Because the lines are joined raw, the marker stays in the haystack — so an anchor produced the way `records.md` says to produce one, by copying what you read, carries the `//` across the break and verifies. Only an author retyping the text while silently dropping the marker hits the miss. That is a far narrower target than "anchors that cross a comment boundary", and it inverts the case for stripping: stripping the haystack alone would _break_ the working authoring path, leaving strip-both-sides as the only coherent alternative, whose false-positive surface is real (`#` is a markdown heading, a shell comment and a CSS id; `*` is a bullet, a JSDoc continuation and a glob). Pinned at `citations.test.ts:346` "expect(results[0]?.state).toBe(", and confirmed by a second mutation run here: adding `text.replace(/^\s*(\/\/|\*|#)\s?/, "")` to the haystack fails exactly 2 tests, one of them the copy-paste case. The choice is now defended by a test that can fail rather than by a count of what has not yet been needed.
+- **low** (fixed in `65c12cb`) · `citations.mjs:665` "Upper case is always a failure" read "lower case is not" full stop until `--require-anchors` made that conditionally false and nothing re-read it. Provenance checked rather than inferred: `git show 23d3b56:scripts/citations.mjs | grep -n "Upper case"` → 608, so `82ad6ab` falsified a comment written one commit earlier. The seam itself is right and was not the finding — repainting `unanchored` under the flag would make the same record report different facts depending on argv.
+- **low** (fixed in `65c12cb`) · the `moved` advice steered every reader to "repoint, or pin with `--rev`", neither of which repairs a marker-boundary miss — the one failure the design knowingly accepts. It now names the third remedy for that case at `citations.mjs:712` "Where the reason says the anchor is nowhere in the file".
+- **sub-low** (fixed in `65c12cb`) · `citations.mjs:343` "is a citation whose anchor does not" previously read as a containment claim, one clause looser than the predicate that runs. It now says the anchor must _start_ inside the range.
+- **decided, not missed** · `--require-anchors` passes vacuously over a record the extractor finds nothing in: `0 verified, 0 moved, 0 unanchored, 0 unresolvable — of 0 citations, anchors required`, exit 0. The asymmetry a later reader needs: `selectSection` already closes this exact hazard for `--section`, on the stated reasoning that 0/0 with exit 0 is indistinguishable from a correct result, and the strict flag does not get the same treatment. Raised as an open decision with two options — leave it, or fail on zero extracted citations (~2 lines). **The owner chose to leave it**, matching the independent recommendation of both builder and reviewer: the denominator is on screen, the flag is opt-in per invocation, and the guard has no observed consumer.
+- **dropped** · two candidates, neither carried. No minimum anchor length is enforced, so a one-character anchor verifies trivially — an authoring hazard identical under line-by-line matching, so joining does not create it. Joining can in principle manufacture a match across a blank line or a line break — that needs a coincidental reproduction of a multi-word anchor, which is not a realistic risk.
+- **findings** · 3 raised (2 `low`, 1 sub-`low`); 3 carried, 0 dropped, all 3 fixed in `65c12cb` before this section was written. 2 further candidates examined and dropped as non-defects, above. 1 open decision raised and answered by the owner.
+- **Gate unchanged: PASS.** Nothing above `low` was raised, and this pass re-examined judgment rather than acceptance. Verified at `65c12cb` by this reviewer: `npx vitest run scripts` 143 passed (3 files), `npm run check` exit 0, `node scripts/status.mjs --json` exit 0.
+- NFR: security ✓ (the fixes are comment and message text plus two pure-function tests; no new shell, network or filesystem surface) · performance n/a · reliability ✓ (both boundary directions now have a test, and both were mutation-checked here) · maintainability ✓ (the two corrected comments now carry why they were wrong, which is the failure mode this branch exists to catch).
+
 ## Log
 
 - **2026-09-02** — Filed off `origin/main@7fe18af`. Found by a builder during an
@@ -666,3 +707,41 @@ moved, 0 unanchored, 0 unresolvable`.
   errors on a name matching nothing for the stated reason that `0/0` with exit 0
   is indistinguishable from a correct result. Two defensible answers; the pass
   recommends leaving it and so do I, but neither of us may settle it.
+
+- **2026-09-05** — Second opinion's section committed above, verbatim, as a third
+  subsection after Gate 2. It verified my fixes at `65c12cb` independently and
+  **ran a mutation I had not**: adding `text.replace(/^\s*(\/\/|\*|#)\s?/, "")`
+  to `locateAnchor`'s haystack. **I reproduced it before committing its claim** —
+  exactly 2 failures, exactly the two it named, "an anchor spanning a comment's
+  continuation marker does not match" and "an anchor that keeps the comment
+  marker it copied still matches across the break". Restored, 143 passing.
+
+  That mutation is the substantive part, and it is a standard I had not applied
+  to myself. I put the copy-paste argument into a docblock as the **reason** not
+  to strip markers, which makes it load-bearing for a design decision — and a
+  reason that cannot fail is a justification, not a measurement. It checked the
+  reason, not only the behaviour. Strip-haystack-only demonstrably breaks the
+  working authoring path, so it is now pinned by a test rather than asserted by
+  either of us.
+
+  Its own framing of the exchange, which I think is right and worth keeping: the
+  frequency count I had written was not wrong, it was the weaker of two available
+  reasons, and the stronger one was sitting in my own code unnoticed. That is a
+  second opinion working as intended rather than a lapse being caught.
+
+  **A superseded draft of that section was replaced before commit, not after.**
+  The reviewer sent a revision withdrawing two things: the P5 item still read
+  "escalated, not settled" after the owner had answered it, and the model
+  provenance lacked the exact ID and the dispatch override. Committing the first
+  version would have put a stale open question into the record — the failure
+  `docs/01-TICKETS.md` names — so only the revision is above.
+
+  **One provenance note I owe the record, since this ticket is what it is.** The
+  section states "the owner chose to leave it" for the P5 vacuous-pass decision.
+  **That answer reached me relayed through the reviewer, not from the
+  orchestrator directly**, unlike the `--require-anchors` decision earlier in
+  this Log, which came to me first-hand. I committed it verbatim because it is
+  the reviewer's section and a verdict is recorded as given, and I have asked the
+  orchestrator to confirm or correct it rather than treating a second-hand owner
+  decision as established. If it is wrong, the correction belongs here as a
+  marked retraction, in the shape the entry above this one already sets.
