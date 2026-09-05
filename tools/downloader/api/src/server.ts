@@ -204,16 +204,16 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
           // `TlsRejectionLog` names in its own header, where a non-certificate
           // refusal on the same host in the same window would otherwise be
           // indistinguishable from a certificate one to whoever asks.
-          onOtherConnectFailure: (host: string) => {
-            tierRejections.recordOtherFailure(host);
+          onOtherConnectFailure: (host: string, port: number) => {
+            tierRejections.recordOtherFailure(host, port);
           },
           // The third outcome, and dl-38's whole fix: a host that *worked* for
           // one connection while a sibling connection to it was cert-refused is
           // a host this log cannot attribute a certificate verdict on. Without
           // it, a load-balanced origin's healthy backend hands its own
           // `NO_MEDIA_FOUND` to a caller that gets told it was the certificate.
-          onConnectEstablished: (host: string) => {
-            tierRejections.recordSuccess(host);
+          onConnectEstablished: (host: string, port: number) => {
+            tierRejections.recordSuccess(host, port);
           },
         }),
   });

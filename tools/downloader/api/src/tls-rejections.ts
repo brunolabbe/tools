@@ -98,16 +98,35 @@
  * `"two genuine certificate refusals on one host, with no other outcome, both
  * enrich"` is that case, and it is the guard on this file's whole design.
  *
- * ## What this still does not close, named rather than assumed away
+ * ## Which outcomes are the same endpoint's, and why the three maps are not
+ * keyed alike
  *
- * **A host is keyed without its port**, so a healthy `:443` and a broken
- * `:8443` on one hostname read as one host producing two outcomes, and a
- * genuine refusal on the second is suppressed rather than reattached. Keying by
- * port instead would need `resolvers.ts` to pass one, and `URL.port` is empty
- * for a default port where a `CONNECT` authority always carries one — so the
- * fix for a rarer case would risk never matching at all in the common one. This
- * fails in the direction the header argues for throughout: a suppressed
- * enrichment is the pre-dl-37 experience, a wrong one would be new.
+ * The two conflict maps ask one question — **could this outcome have been the
+ * caller's own connection?** — and only an outcome that could have been counts
+ * as ambiguity. So they are keyed by `host` **and port**, while the certificate
+ * map stays keyed by host alone. That asymmetry is the design and not an
+ * oversight:
+ *
+ * - **A certificate refusal is evidence about a host's trust**, and carrying it
+ *   across ports is the direction this file spends its whole budget on. A page
+ *   on `:443` whose media is refused on `:8443` is a trust problem, and losing
+ *   dl-34's sentence for it would be the failure, not the fix.
+ * - **A success, or an unrelated failure, is evidence about the one endpoint
+ *   that produced it.** A connection to `:443` that worked cannot have been the
+ *   connection to `:8443` that was refused, so it creates no ambiguity about it
+ *   and must not suppress it.
+ *
+ * What that buys, stated as the property rather than as the mechanism:
+ * **`since` reattaches at least as often as it did before any of the conflict
+ * tracking existed.** Narrowing a conflict's key can only shrink the set of
+ * recorded outcomes that count against a reattachment, never grow it — so no
+ * verdict dl-34 or dl-37 delivers today stops being delivered, and the change
+ * is only ever fewer spurious suppressions.
+ *
+ * The port a resolver asks with is derived by `portFor`, because `URL.port` is
+ * empty for a default port where a `CONNECT` authority always carries one —
+ * the mismatch that made host-only keying look like the safe option until the
+ * asymmetry above made it unnecessary.
  */
 
 /** How many hosts are remembered, per kind. Small on purpose — see `record`. */
@@ -134,17 +153,44 @@ function key(host: string): string {
 }
 
 /**
- * Inserts-or-touches `host` in `map`, moving it to the most-recently-used end,
+ * One endpoint, for the two maps that are about endpoints rather than hosts.
+ *
+ * `|` rather than `:`, because a normalised IPv6 host is full of colons and
+ * `::1:443` reads as an address rather than as an address and a port. Nothing
+ * a `CONNECT` authority or a `URL.hostname` can produce contains a `|`, so the
+ * split is unambiguous even though nothing ever splits it.
+ */
+function endpoint(host: string, port: number): string {
+  return `${key(host)}|${String(port)}`;
+}
+
+/**
+ * The port a resolver's URL means, spelled the way a `CONNECT` authority spells
+ * it.
+ *
+ * `URL.port` is the empty string for a default port and `parseAuthority` always
+ * yields an explicit number, so without this the two sides never agree on an
+ * ordinary `https://host/` — which is the mismatch that made keying by port
+ * look unaffordable before the header's asymmetry made it cheap.
+ */
+export function portFor(url: URL): number {
+  if (url.port !== "") return Number(url.port);
+  return url.protocol === "https:" ? 443 : 80;
+}
+
+/**
+ * Inserts-or-touches `name` in `map`, moving it to the most-recently-used end,
  * and evicts the oldest once `max` is exceeded.
  *
- * Shared by both kinds of record `TlsRejectionLog` keeps, so the eviction
- * policy — and any future fix to it — cannot drift between them. Bounded
- * rather than swept on a timer because this is fed by a hostile page's own
- * subresource fetches — a page naming a thousand refused origins must cost a
- * thousand nothing, not a timer's worth of memory.
+ * Shared by all three kinds of record `TlsRejectionLog` keeps, so the eviction
+ * policy — and any future fix to it — cannot drift between them. It takes an
+ * already-computed key rather than a host, because the three do not agree on
+ * what a key is: see the header. Bounded rather than swept on a timer because
+ * this is fed by a hostile page's own subresource fetches — a page naming a
+ * thousand refused origins must cost a thousand nothing, not a timer's worth of
+ * memory.
  */
-function touch<V>(map: Map<string, V>, host: string, value: V, max: number): void {
-  const name = key(host);
+function touch<V>(map: Map<string, V>, name: string, value: V, max: number): void {
   map.delete(name);
   map.set(name, value);
   while (map.size > max) {
@@ -155,10 +201,11 @@ function touch<V>(map: Map<string, V>, host: string, value: V, max: number): voi
 }
 
 export class TlsRejectionLog {
+  /** Latest certificate refusal per **host** — see the header's asymmetry. */
   readonly #certificates = new Map<string, { code: string; at: number }>();
-  /** Latest non-certificate refusal per host — see `recordOtherFailure`. */
+  /** Latest non-certificate refusal per **endpoint** — see `recordOtherFailure`. */
   readonly #otherFailures = new Map<string, number>();
-  /** Latest successful CONNECT per host — see `recordSuccess`. */
+  /** Latest successful CONNECT per **endpoint** — see `recordSuccess`. */
   readonly #successes = new Map<string, number>();
   readonly #now: () => number;
   readonly #max: number;
@@ -171,11 +218,16 @@ export class TlsRejectionLog {
   /**
    * Files a certificate refusal against a host.
    *
-   * Re-recording a host moves it to the end of both maps' eviction order, so
+   * Re-recording a host moves it to the end of this map's eviction order, so
    * the hosts a run is actually failing on are the ones that survive.
+   *
+   * **Takes no port, and that is the header's asymmetry rather than an
+   * omission.** A refused certificate is a fact about the host's trust that is
+   * worth carrying to a caller asking about another of its ports; the two
+   * conflict maps below are the ones that must not.
    */
   record(host: string, code: string): void {
-    touch(this.#certificates, host, { code, at: this.#now() }, this.#max);
+    touch(this.#certificates, key(host), { code, at: this.#now() }, this.#max);
   }
 
   /**
@@ -185,10 +237,11 @@ export class TlsRejectionLog {
    *
    * Exists only to make `since` refuse to guess. See the header's "collision"
    * section for why a code recorded here has to count against reattachment
-   * even though this method never hands one back.
+   * even though this method never hands one back, and its "which outcomes are
+   * the same endpoint's" section for why `port` is part of the key.
    */
-  recordOtherFailure(host: string): void {
-    touch(this.#otherFailures, host, this.#now(), this.#max);
+  recordOtherFailure(host: string, port: number): void {
+    touch(this.#otherFailures, endpoint(host, port), this.#now(), this.#max);
   }
 
   /**
@@ -196,13 +249,14 @@ export class TlsRejectionLog {
    * mode, that it verified the origin's certificate and issued a leaf for it.
    *
    * Exists for the same reason `recordOtherFailure` does and counts the same
-   * way: it is a second kind of outcome for a host, so a certificate refusal
-   * recorded beside it inside one caller's window is not attributable to that
-   * caller. See the header's dl-38 section for the load-balanced origin this
-   * closes, and for why counting outcomes is not the same as counting requests.
+   * way: it is a second kind of outcome for **this endpoint**, so a certificate
+   * refusal recorded beside it inside one caller's window is not attributable
+   * to that caller. See the header's dl-38 section for the load-balanced origin
+   * this closes, why counting outcomes is not the same as counting requests,
+   * and why a success on `:443` says nothing about a refusal on `:8443`.
    */
-  recordSuccess(host: string): void {
-    touch(this.#successes, host, this.#now(), this.#max);
+  recordSuccess(host: string, port: number): void {
+    touch(this.#successes, endpoint(host, port), this.#now(), this.#max);
   }
 
   /**
@@ -214,20 +268,24 @@ export class TlsRejectionLog {
    * run, because a record older than the call that is asking is by
    * construction not about it. The same rule is applied to
    * `#otherFailures` and to `#successes`: an outcome of either kind recorded
-   * **inside** the same window means this host produced more than one outcome
-   * during it, which is exactly the case a real Chromium cannot tell apart from
-   * a certificate refusal on its own — so this returns `undefined` rather than
-   * reattach a code that might belong to the other outcome. A success from
-   * before the window is as irrelevant as a stale refusal, by the same rule and
-   * for the same reason.
+   * **inside** the same window means this endpoint produced more than one
+   * outcome during it, which is exactly the case a real Chromium cannot tell
+   * apart from a certificate refusal on its own — so this returns `undefined`
+   * rather than reattach a code that might belong to the other outcome. A
+   * success from before the window is as irrelevant as a stale refusal, by the
+   * same rule and for the same reason.
+   *
+   * `port` scopes the two conflict lookups and deliberately not the certificate
+   * one. `resolvers.ts` derives it with `portFor`; see the header for why the
+   * three maps are not keyed alike.
    */
-  since(host: string, at: number): string | undefined {
-    const name = key(host);
-    const entry = this.#certificates.get(name);
+  since(host: string, port: number, at: number): string | undefined {
+    const entry = this.#certificates.get(key(host));
     if (entry === undefined || entry.at < at) return undefined;
-    const otherAt = this.#otherFailures.get(name);
+    const here = endpoint(host, port);
+    const otherAt = this.#otherFailures.get(here);
     if (otherAt !== undefined && otherAt >= at) return undefined;
-    const successAt = this.#successes.get(name);
+    const successAt = this.#successes.get(here);
     if (successAt !== undefined && successAt >= at) return undefined;
     return entry.code;
   }

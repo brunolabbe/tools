@@ -177,7 +177,7 @@ describe("namingRefusedOrigins", () => {
         // concurrent probe produces: a rejection lands while this resolve()
         // is in flight, and so does an unrelated failure for the same host.
         rejections.record("cdn.example", "DEPTH_ZERO_SELF_SIGNED_CERT");
-        rejections.recordOtherFailure("cdn.example");
+        rejections.recordOtherFailure("cdn.example", 443);
         return Promise.reject(new AppError("UNREACHABLE"));
       },
     };
@@ -208,7 +208,7 @@ describe("namingRefusedOrigins", () => {
         // concurrent pair produces — and recorded from in here rather than
         // before, for the ordering reason this file's header gives.
         rejections.record("cdn.example", "DEPTH_ZERO_SELF_SIGNED_CERT");
-        rejections.recordSuccess("cdn.example");
+        rejections.recordSuccess("cdn.example", 443);
         return Promise.reject(new AppError("NO_MEDIA_FOUND"));
       },
     };
@@ -232,7 +232,7 @@ describe("namingRefusedOrigins", () => {
       canHandle: () => true,
       resolve: () => {
         rejections.record("cdn.example", "DEPTH_ZERO_SELF_SIGNED_CERT");
-        rejections.recordSuccess("page.example");
+        rejections.recordSuccess("page.example", 443);
         return Promise.reject(new AppError("NO_MEDIA_FOUND"));
       },
     };

@@ -873,10 +873,13 @@ function recordingConnectCallbacks(): {
   otherFailures: string[];
   established: string[];
   onCertificateRejected: (host: string, code: string) => void;
-  onOtherConnectFailure: (host: string) => void;
-  onConnectEstablished: (host: string) => void;
+  onOtherConnectFailure: (host: string, port: number) => void;
+  onConnectEstablished: (host: string, port: number) => void;
 } {
   const certificateRejections: Array<{ host: string; code: string }> = [];
+  // Recorded as the proxy hands them over — `host:port`, because the port is
+  // half of what `TlsRejectionLog` keys a conflict by and a hook that dropped
+  // it would look identical here otherwise.
   const otherFailures: string[] = [];
   const established: string[] = [];
   return {
@@ -886,11 +889,11 @@ function recordingConnectCallbacks(): {
     onCertificateRejected: (host, code) => {
       certificateRejections.push({ host, code });
     },
-    onOtherConnectFailure: (host) => {
-      otherFailures.push(host);
+    onOtherConnectFailure: (host, port) => {
+      otherFailures.push(`${host}:${String(port)}`);
     },
-    onConnectEstablished: (host) => {
-      established.push(host);
+    onConnectEstablished: (host, port) => {
+      established.push(`${host}:${String(port)}`);
     },
   };
 }
@@ -903,7 +906,7 @@ describe("onOtherConnectFailure (dl-37)", () => {
 
     await connectThrough(proxy.port, "segments.evil.test:443");
 
-    expect(callbacks.otherFailures).toEqual(["segments.evil.test"]);
+    expect(callbacks.otherFailures).toEqual(["segments.evil.test:443"]);
     expect(callbacks.certificateRejections).toEqual([]);
   });
 
@@ -917,9 +920,10 @@ describe("onOtherConnectFailure (dl-37)", () => {
       ...callbacks,
     });
 
-    await connectThrough(proxy.port, `unreachable.test:${await closedPort()}`);
+    const dead = await closedPort();
+    await connectThrough(proxy.port, `unreachable.test:${String(dead)}`);
 
-    expect(callbacks.otherFailures).toEqual(["unreachable.test"]);
+    expect(callbacks.otherFailures).toEqual([`unreachable.test:${String(dead)}`]);
     expect(callbacks.certificateRejections).toEqual([]);
   });
 
@@ -949,9 +953,9 @@ describe("onOtherConnectFailure (dl-37)", () => {
       ...callbacks,
     });
 
-    await connectThrough(proxy.port, `trusted.test:${origin.port}`);
+    await connectThrough(proxy.port, `trusted.test:${String(origin.port)}`);
 
-    expect(callbacks.otherFailures).toEqual(["trusted.test"]);
+    expect(callbacks.otherFailures).toEqual([`trusted.test:${String(origin.port)}`]);
     expect(callbacks.certificateRejections).toEqual([]);
     // The boundary dl-38's hook sits on: the *origin* handshake succeeded here
     // and only the leaf could not be issued, so this is the one path where
@@ -1016,9 +1020,9 @@ describe("onOtherConnectFailure (dl-37)", () => {
       ...callbacks,
     });
 
-    await connectThrough(proxy.port, `not-tls.test:${originPort}`);
+    await connectThrough(proxy.port, `not-tls.test:${String(originPort)}`);
 
-    expect(callbacks.otherFailures).toEqual(["not-tls.test"]);
+    expect(callbacks.otherFailures).toEqual([`not-tls.test:${String(originPort)}`]);
     expect(callbacks.certificateRejections).toEqual([]);
   });
 
@@ -1047,7 +1051,7 @@ describe("onOtherConnectFailure (dl-37)", () => {
 
     await connectThrough(proxy.port, "chained-refusal.test:443");
 
-    expect(callbacks.otherFailures).toEqual(["chained-refusal.test"]);
+    expect(callbacks.otherFailures).toEqual(["chained-refusal.test:443"]);
     expect(callbacks.certificateRejections).toEqual([]);
   });
 });
@@ -1091,7 +1095,7 @@ describe("onConnectEstablished (dl-38)", () => {
 
     // The tunnel really opened — not merely "the callback ran".
     expect(result.status).toBe(200);
-    expect(callbacks.established).toEqual(["trusted.test"]);
+    expect(callbacks.established).toEqual([`trusted.test:${String(origin.port)}`]);
     expect(callbacks.certificateRejections).toEqual([]);
     expect(callbacks.otherFailures).toEqual([]);
   });
@@ -1114,7 +1118,7 @@ describe("onConnectEstablished (dl-38)", () => {
     const result = await connectThrough(proxy.port, `allowed.test:${origin.port}`);
 
     expect(result.body).toBe("hello from the origin");
-    expect(callbacks.established).toEqual(["allowed.test"]);
+    expect(callbacks.established).toEqual([`allowed.test:${String(origin.port)}`]);
     expect(callbacks.otherFailures).toEqual([]);
   });
 
@@ -1149,7 +1153,7 @@ describe("onConnectEstablished (dl-38)", () => {
 
     await connectThrough(proxy.port, "segments.evil.test:443");
 
-    expect(callbacks.otherFailures).toEqual(["segments.evil.test"]);
+    expect(callbacks.otherFailures).toEqual(["segments.evil.test:443"]);
     expect(callbacks.established).toEqual([]);
   });
 });

@@ -30,6 +30,7 @@ import type { ProbeResult, ResolveOptions, Resolver } from "@downloader/contract
 import type { ApiConfig } from "./config.ts";
 import type { GuardedFetch } from "./guarded-fetch.ts";
 import type { AppLogger } from "./logger.ts";
+import { portFor } from "./tls-rejections.ts";
 import type { TlsRejectionLog } from "./tls-rejections.ts";
 
 export interface BuildRegistryOptions {
@@ -156,7 +157,10 @@ export function namingRefusedOrigins(resolver: Resolver, rejections: TlsRejectio
       } catch (cause) {
         const error = AppError.from(cause);
         if (!REATTACHABLE_CODES.has(error.code)) throw error;
-        const reason = rejections.since(url.hostname, startedAt);
+        // `portFor`, not `url.port`: that is the empty string for a default
+        // port and a `CONNECT` authority always carries an explicit one, so the
+        // two sides would never agree on an ordinary `https://host/`.
+        const reason = rejections.since(url.hostname, portFor(url), startedAt);
         if (reason === undefined) throw error;
         throw new AppError("TLS_VERIFICATION_FAILED", undefined, {
           cause,

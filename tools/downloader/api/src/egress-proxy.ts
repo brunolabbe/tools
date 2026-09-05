@@ -146,8 +146,14 @@ export interface EgressProxyOptions {
    * "collision that is not benign" section for the shape of that risk and why
    * a narrower fix (suppressing on any concurrent request to the host) was
    * rejected in its favour.
+   *
+   * **Carries the port as well as the host**, because what it reports is one
+   * endpoint's outcome rather than a fact about the host — a dead upstream on
+   * `:8443` says nothing about `:443`. `TlsRejectionLog` keys this and the
+   * success below by both, and the certificate hook above by host alone; its
+   * header carries the asymmetry.
    */
-  onOtherConnectFailure?: ((host: string) => void) | undefined;
+  onOtherConnectFailure?: ((host: string, port: number) => void) | undefined;
   /**
    * Called with the CONNECT target's host whenever a `CONNECT` to it
    * **succeeded** — the tunnel opened, and in terminating mode only after this
@@ -176,8 +182,12 @@ export interface EgressProxyOptions {
    * over TLS on the same host, which is a case dl-34 exists to name rather than
    * one to fall silent on. `onOtherConnectFailure` leaves that handler alone
    * for the same reason.
+   *
+   * **Carries the port for the same reason `onOtherConnectFailure` does:** a
+   * connection to `:443` that worked cannot have been the connection to
+   * `:8443` that was refused, so it must not be able to suppress it.
    */
-  onConnectEstablished?: ((host: string) => void) | undefined;
+  onConnectEstablished?: ((host: string, port: number) => void) | undefined;
 }
 
 export interface EgressProxy {
@@ -527,7 +537,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
         await guard.assertAllowed(`https://${target}`);
       } catch (error) {
         refused(target, error);
-        options.onOtherConnectFailure?.(host);
+        options.onOtherConnectFailure?.(host, port);
         refuse(clientSocket, 403, "Blocked by egress policy");
         return;
       }
@@ -553,7 +563,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
       };
 
       serverSocket.once("error", (error: unknown) => {
-        options.onOtherConnectFailure?.(host);
+        options.onOtherConnectFailure?.(host, port);
         fail(error, 502, "Upstream connect failed");
       });
 
@@ -564,7 +574,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           // Before the `200`, for the same reason `onCertificateRejected` fires
           // before `fail`: the record has to already be there when whatever the
           // client does next surfaces.
-          options.onConnectEstablished?.(host);
+          options.onConnectEstablished?.(host, port);
           establish(clientSocket, serverSocket, head);
           return;
         }
@@ -581,7 +591,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
             // which "this proxy accepted this host's certificate" is true —
             // which is the fact `TlsRejectionLog` needs, not merely "a socket
             // opened".
-            options.onConnectEstablished?.(host);
+            options.onConnectEstablished?.(host, port);
           },
           // The reason phrase is not decoration. ffmpeg logs a proxy's status
           // line verbatim — `[httpproxy] HTTP error 502 <phrase>` — so this is
@@ -599,7 +609,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
             fail(error, 502, `TLS certificate verification failed (${code})`);
           },
           onFailed: (error) => {
-            options.onOtherConnectFailure?.(host);
+            options.onOtherConnectFailure?.(host, port);
             fail(error, 502, "Upstream connect failed");
           },
           // **500, and not the 502 every other refusal here uses.** This
@@ -619,7 +629,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           // the job fails as itself rather than as a refused origin. Asserted,
           // because the phrase is the assertion.
           onUnavailable: (error) => {
-            options.onOtherConnectFailure?.(host);
+            options.onOtherConnectFailure?.(host, port);
             fail(error, 500, "Proxy could not issue a certificate");
           },
         });
@@ -637,7 +647,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
             if (settled) return;
             settled = true;
             upstreamRefused(target, error);
-            options.onOtherConnectFailure?.(host);
+            options.onOtherConnectFailure?.(host, port);
             refuse(clientSocket, 502, "Upstream proxy refused");
             serverSocket.destroy();
             return;
