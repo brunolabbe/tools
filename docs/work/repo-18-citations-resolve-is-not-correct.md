@@ -121,6 +121,34 @@ along here.
    down before any record is rewritten.
 5. `npm run check` and `npx vitest run scripts` pass.
 
+## Review
+
+**Gate: PASS** — 2026-09-05 · `origin/main...23d3b56` · defect hunt run directly (subagent, no `code-review` delegate), medium depth
+
+_Citations below resolve against `23d3b56`, the sha this gate reviewed, and were
+verified against it — not against this branch's tip. `82ad6ab`
+(`--require-anchors`) landed after this gate began, moved several of the cited
+lines, and is outside its scope: the reviewer declined to extend its round to it
+without the orchestrator's word, and that question is open in the Log below._
+
+| Done when                                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A citation whose referent moved is reported differently from one that still points at what it claims, proven by an insertion fixture | `citations.test.ts:274` "expect(after?.state).toBe(" ✓, end to end at `citations.test.ts:576` "expect(atTip.stdout).toMatch(summary(0, 1, 0, 0, 1))" ✓                                                                                                                                                                                                                                   |
+| That test failed before the change, shown with output                                                                                | **verified** — reran `npx vitest run scripts/test/citations.test.ts` against `origin/main:scripts/citations.mjs` restored into the worktree: 18 of 33 failed, 15 passed, and every failure is an `AssertionError` (`expected undefined to be 'moved'`, etc.) — none is a missing-export `SyntaxError`. Matches the Log's count exactly.                                                  |
+| The summary line cannot read `N/N` while any citation is in the moved state                                                          | `citations.mjs:413` "${counts.verified} verified, ${counts.moved} moved" ✓ (no `N/N` template anywhere in `summarize`), `citations.test.ts:599` "expect(result.stdout).not.toMatch(SAME_OVER_SAME)" ✓                                                                                                                                                                                    |
+| Open question recorded with answer and reason; migration story written before any record rewritten                                   | `repo-18-citations-resolve-is-not-correct.md:146` "The open question is answered: anchor text" ✓, `records.md:299` "Migration: nothing already committed is rewritten" ✓ — **verified** no record besides this ticket and `records.md` itself was touched: `git diff --name-only origin/main...23d3b56` names only `records.md`, this ticket file, `citations.mjs`, `citations.test.ts`. |
+| `npm run check` and `npx vitest run scripts` pass                                                                                    | **verified** — reran both after `worktree-farm.sh` + `npm run build`: `npm run check` exit 0, `npx vitest run scripts` 137 passed (3 files), matching the Log. `npm run status -- --json` also exit 0.                                                                                                                                                                                   |
+
+- **Reproduced the engineered red independently**, per the prompt's highest-priority ask: restored `origin/main:scripts/citations.mjs` into this worktree, ran the new suite against it, got 18/33 failed exactly as claimed, confirmed by grepping the failure log for `SyntaxError`/`does not provide an export` (zero hits) — every failure is an assertion. Branch version restored afterwards; worktree left clean (`git status --porcelain` empty).
+- **`13 anchored of 965 citations across 136 md files` reproduced exactly**, independent of the ticket's own throwaway sweep script: materialized `origin/main` with `git archive | tar -x`, concatenated every tracked `.md` file, ran `extractCitations` over the concatenation. Got `total=965 anchored=13`, `136` files via `find -name '*.md' | wc -l`, and traced all 13 anchors back to `dl-23`, `dl-29`, `pl-24`, `pl-25`, `repo-7` by grep — matches the Log's attribution.
+- **The live finding (pl-24's `grounding-fixtures.test.ts` anchor) reproduced exactly**: `node scripts/citations.mjs tools/planner/docs/work/pl-24-*.md` on this branch prints `MOVED …anchor … is not in 29 — it is at 53`, summary `3 verified, 1 moved, 2 unanchored, 1 unresolvable — of 7 citations`. Line 29 (`grounding-fixtures.test.ts:29 "As a candidate names one"`) is the doc comment; line 53 is the real `test(...)`. Running the same record through `origin/main:citations.mjs` prints `ok` for that same citation (`6/7 resolve`) — the old script really did call a doc comment resolved.
+- **The repo-7 joined-string case is real, and the boundary is pinned by a test.** `docs/03-RELEASING.md` has "heads that release's `### Features`" at lines 118–119, not the cited 97–99 — confirmed by direct `grep`/`sed`. Feeding the tool the _correct_ range (118-119) verifies successfully only because lines are joined into one string first (`citations.mjs:275-302 "haystack.indexOf(needle)"`, `locateAnchor`); a synthetic single-line-only matcher would report "not anywhere in the file" for this exact text. The comment-boundary limitation (an anchor spanning `//`) is pinned by `citations.test.ts:310 "spanning a comment's continuation marker does not match"`, not just described in a comment.
+- **`ok: boolean` removal checked for orphaned consumers** — `grep -rn "checkCitations"` across the tree finds only `citations.mjs` and its own test file as callers; the only other `.ok` usages in `scripts/` belong to the unrelated `commit-message.mjs`'s `validate()`/`check()`. Nothing else reads the removed field.
+- **low** · The unanchored-note-on-stdout-vs-stderr choice is a real tradeoff (keeps the pre-existing `stderr === ""` iff `exit 0` invariant that `citations.test.ts:195 "result.stderr).toBe("` already asserted before this ticket touched it), not a defect — recorded as a judged decision, not carried as a finding.
+- **dropped** · none — every finder-equivalent check (self-run defect hunt, no delegated `code-review`) reconciles into the bullets above; nothing surfaced and discarded.
+- **findings** · 0 returned as defects; 1 `low` judged as a deliberate, defensible tradeoff rather than carried against the gate.
+- NFR: security ✓ (no shell, `execFileSync` with argument arrays throughout, no user-facing network surface) · performance n/a · reliability ✓ (ambiguous-file, past-end-of-file, missing-section and multi-match-section all covered) · maintainability ✓ (extensive docblocks tying every branch to the case that earned it).
+
 ## Log
 
 - **2026-09-02** — Filed off `origin/main@7fe18af`. Found by a builder during an
@@ -382,3 +410,22 @@ citations`, every bucket printed even at zero. The test asserts the buckets by
   since a new commit moves the lines a gate record cites.
 
   `npm run check` and `npx vitest run scripts` pass — 141 tests.
+
+- **2026-09-05** — Gate on `23d3b56` came back from `abf27c3dcbe4fe477`: **PASS**,
+  every claim in the prior two entries independently reproduced by methods of its
+  own choosing (its own extraction script rather than mine, its own materialized
+  copy of the tree rather than a shared one), not by re-running mine. Committed
+  above as `## Review`, verbatim, with all ten of its own citations re-checked
+  against `23d3b56` with this ticket's own tool before commit — `10 verified, 0
+moved, 0 unanchored, 0 unresolvable`.
+
+  **Open, for the orchestrator, not settled here or by the reviewer:** the
+  reviewer's gate was scoped to `23d3b56`; `82ad6ab` (`--require-anchors`) landed
+  during its round. It declined to extend its own review to the new commit
+  without being told to, on two grounds it raised itself — extending scope
+  mid-gate is not its call, and it cannot verify from inside its sandbox that
+  "the owner directed this" is true rather than a relayed claim. Both are
+  reasonable; neither of us can close it. It has sent the orchestrator the same
+  choice: fold `82ad6ab` into this gate round, or let it land as its own
+  follow-on with its own gate before merge. I have not resolved this either way —
+  `82ad6ab` currently has no gate of its own.
