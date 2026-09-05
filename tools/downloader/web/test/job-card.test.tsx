@@ -724,11 +724,12 @@ test("each card is handed its own pipeline mark, looked up by job id", () => {
   ]);
 });
 
-test("a job with a preview shows it beside the title, from our path", () => {
-  const { container } = render(
+/** `mount` returns the spies; the preview tests need the container instead. */
+function renderCard(value: Job): { container: HTMLElement; unmount: () => void } {
+  const { container, unmount } = render(
     <ul>
       <JobCard
-        job={job("downloading", { thumbnailPath: "/api/thumbnail/xyz789" })}
+        job={value}
         streamState={undefined}
         watchedStep={undefined}
         onCancel={vi.fn()}
@@ -737,8 +738,16 @@ test("a job with a preview shows it beside the title, from our path", () => {
       />
     </ul>,
   );
+  return { container, unmount };
+}
 
-  const image = container.querySelector(".preview img");
+test("an active job shows its preview in the head, beside the title, from our path", () => {
+  const { container } = renderCard(job("downloading", { thumbnailPath: "/api/thumbnail/xyz789" }));
+
+  // Scoped to `job__head` since dl-41: the preview stays here for every status
+  // except `completed`, and a `.preview img` query alone would keep passing if
+  // the head's copy were dropped and only the result panel's remained.
+  const image = container.querySelector(".job__head .preview img");
   expect(image?.getAttribute("src")).toBe("/api/thumbnail/xyz789");
   expect(image?.getAttribute("alt")).toBe("");
   // The title is still the title: the preview is additive, not a replacement.
@@ -749,21 +758,81 @@ test("a job with no preview renders exactly as it did before dl-29", () => {
   // Both the pre-dl-29 records (no key at all) and a probe that found no image
   // (`null`) land here, and neither may change the card.
   for (const value of [undefined, null] as const) {
-    const { container, unmount } = render(
-      <ul>
-        <JobCard
-          job={job("downloading", value === undefined ? {} : { thumbnailPath: value })}
-          streamState={undefined}
-          watchedStep={undefined}
-          onCancel={vi.fn()}
-          onRemove={vi.fn()}
-          onRetry={vi.fn()}
-        />
-      </ul>,
+    const { container, unmount } = renderCard(
+      job("downloading", value === undefined ? {} : { thumbnailPath: value }),
     );
     expect(container.querySelectorAll("img")).toHaveLength(0);
     expect(screen.getByRole("heading", { name: "1080p · H.264 + AAC" })).toBeDefined();
     expect(screen.getByText(SOURCE_URL)).toBeDefined();
+    unmount();
+  }
+});
+
+/**
+ * dl-41 — the preview in the green result panel.
+ *
+ * **jsdom computes no layout**, so none of this can be asserted by measuring:
+ * every box here is 0x0 and `justify-content` is never applied. What the trap
+ * actually is, is structural — a bare third child of `.result`, which is
+ * `space-between`, lands between the meta and the actions and pushes the
+ * filename into the middle of the row — so the structure is what these assert.
+ * The e2e suite is where a rendered pixel would be checked, and it is not there.
+ */
+test("a completed job shows its preview inside the result panel, and only there", () => {
+  const { container } = renderCard(job("completed", { thumbnailPath: "/api/thumbnail/done123" }));
+
+  // One image on the card, not two: dl-41 *moves* the preview out of the head
+  // rather than adding a second copy a few hundred pixels above the first.
+  expect(container.querySelectorAll("img")).toHaveLength(1);
+  const image = container.querySelector(".result .preview img");
+  expect(image?.getAttribute("src")).toBe("/api/thumbnail/done123");
+  expect(image?.getAttribute("alt")).toBe("");
+  expect(container.querySelector(".job__head img")).toBeNull();
+  // The panel is the whole panel still, not one that lost something to fit it.
+  expect(screen.getByRole("link", { name: "Download file" })).toBeDefined();
+});
+
+test("the filename keeps the left of the result panel with the image present", () => {
+  const { container } = renderCard(job("completed", { thumbnailPath: "/api/thumbnail/done123" }));
+
+  const panel = container.querySelector(".result");
+  const children = Array.from(panel?.children ?? []);
+  // Two children, so `space-between` has exactly the two boxes it was written
+  // for. A third — the preview added as a sibling — is the regression.
+  expect(children).toHaveLength(2);
+  const [leading, trailing] = children;
+  // The filename travels in the *leading* child, grouped with the image, which
+  // is what keeps it at the left edge instead of centred between the two.
+  expect(leading?.querySelector(".result__filename")?.textContent).toBe("a-sample-recording.mp4");
+  expect(leading?.querySelector(".preview img")).not.toBeNull();
+  expect(trailing?.className).toBe("result__actions");
+});
+
+test("a completed job with no preview renders the result panel exactly as before", () => {
+  // The default for every job created before dl-29, and for every page with no
+  // `og:image` since. This is the case the feature must not cost anything.
+  for (const value of [undefined, null] as const) {
+    const { container, unmount } = renderCard(
+      job("completed", value === undefined ? {} : { thumbnailPath: value }),
+    );
+
+    expect(container.querySelectorAll("img")).toHaveLength(0);
+    // No reserved empty frame either. `.preview` is the element carrying the
+    // fixed 16:9 box, so a stray one would open a gap the panel never had.
+    expect(container.querySelectorAll(".preview")).toHaveLength(0);
+
+    const panel = container.querySelector(".result");
+    expect(Array.from(panel?.children ?? [])).toHaveLength(2);
+    // The group collapses to the meta alone, so the row is the two boxes it was
+    // before dl-41 and nothing shifts.
+    const headline = container.querySelector(".result__headline");
+    const grouped = Array.from(headline?.children ?? []);
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0]?.className).toBe("result__meta");
+
+    expect(screen.getByText("a-sample-recording.mp4")).toBeDefined();
+    expect(screen.getByText(/^399 MB · MP4 · 12:34$/u)).toBeDefined();
+    expect(screen.getByRole("link", { name: "Download file" })).toBeDefined();
     unmount();
   }
 });

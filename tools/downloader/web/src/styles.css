@@ -213,11 +213,12 @@ code {
   font-size: 1.05rem;
 }
 
-/* The preview and the title travel together, so `card__head`'s
-   `space-between` still has two children to separate. Both headline rules
-   collapse to nothing when `Preview` renders null. */
+/* The preview and the text it labels travel together, so the `space-between`
+   row around them still has exactly two children to separate. All three
+   headline rules collapse to just their text when `Preview` renders null. */
 .card__headline,
-.job__headline {
+.job__headline,
+.result__headline {
   display: flex;
   gap: 0.75rem;
   align-items: center;

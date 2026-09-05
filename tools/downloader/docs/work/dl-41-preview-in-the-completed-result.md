@@ -138,3 +138,56 @@ work.
   looks — and absent _silently_, because `Preview` degrades to nothing by design.
   The duplicate-image question was found in the same pass: the card head already
   renders this exact image for every status.
+
+- **2026-09-05 — built.** Both decisions were put to the owner and both came back
+  as this page's own recommendation, so nothing below overrides the brief.
+
+  **Decision 1 — A, move it.** The preview leaves `job__head` for the result
+  panel once a job is `completed`; every other status keeps it in the head
+  exactly as before. `JobCard` decides once, in `previewInResult`, using the same
+  expression the `CompletedResult` render is guarded by — so the image is in one
+  place or the other, never in both and never in neither. **One case the brief
+  does not mention:** a completed job whose file has expired renders `ErrorPanel`
+  instead of the panel, and so now shows no preview at all. That is unobservable
+  in production — an expired file is at least six hours old and the thumbnail
+  bytes live ten minutes — and it is noted at the branch rather than worked
+  around.
+
+  **Decision 2 — A, accept the ten minutes. The window, recorded as step 4 asks:
+  the preview is present for the first 10 minutes of the result panel's 6-hour
+  life and absent for the remaining 5 h 50 m, about 97% of it — and absent
+  silently, because `Preview` renders `null` on a failed load by design.** That
+  is this ticket's chosen behaviour and not a defect to report against it.
+  Option C, persisting the bytes beside the file, is filed as
+  [dl-44](./dl-44-persist-the-thumbnail-beside-the-file.md) and was not folded
+  in: it reaches into storage layout, the file-serving route and the retention
+  sweep, none of which this change goes near.
+
+  **The layout trap was real and the brief was right about it.** `.result` is
+  `display: flex` with `justify-content: space-between` over two children, so the
+  preview is grouped into a new `result__headline` wrapper alongside
+  `result__meta` rather than added as a third child. Verified by mutation rather
+  than by reading: restoring the trap — the preview as a bare child of `.result`,
+  with the head's copy left in place — turns
+  [`job-card.test.tsx:781`](../../web/test/job-card.test.tsx) "a completed job
+  shows its preview" and
+  [`job-card.test.tsx:795`](../../web/test/job-card.test.tsx) "the filename keeps
+  the left" red; a `.preview` frame reserved for a job with _no_ thumbnail turns
+  [`job-card.test.tsx:811`](../../web/test/job-card.test.tsx) "a completed job
+  with no preview" red as well. jsdom computes no layout, so all three assert the
+  structure the trap is about rather than measured geometry, and the tests say so.
+
+  `size="card"` was reused unchanged — no third size, and the fixed 16:9 frame is
+  untouched. The CSS is one selector added to the existing
+  `.card__headline, .job__headline` rule, whose comment already stated the
+  invariant this needed.
+
+  **Nothing in the brief turned out to be wrong.** Every citation on this page
+  still resolves, including `Preview.tsx:39`, which reads as an absent-path guard
+  but really is the failed-load return too — `failed` is the last term of that
+  same condition.
+
+  Not done, deliberately: no e2e assertion that the panel's image renders under
+  the CSP. `e2e/sniffer/mse-page.spec.ts` already proves exactly that for the
+  probe panel's copy of the same component on the same `/api/thumbnail/` path,
+  and the e2e suites were not run on this branch.
