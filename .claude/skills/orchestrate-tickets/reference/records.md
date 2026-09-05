@@ -238,20 +238,95 @@ on a gated-but-unopened branch on 2026-09-02:
   — `worktree-hygiene.md`'s test names the PR thread as the second location, and
   when there is none, the commit is the whole test.
 
-## `citations.mjs` reports resolution, not correctness
+## Anchor a citation, or nothing has checked it
 
-**A green run is not evidence a citation is right.** The script checks that a
-cited line *exists* at the rev, not that it says what the citation claims — so a
-citation whose referent moved lands on whatever is now at that number and is
-reported as resolved. Measured 2026-09-02: a fix inserted 28 lines, a cited
-comment moved from `144-149` to `170-175`, and the run reported **9/9 resolve**
-while three citations pointed at a function signature and an unrelated doc
-comment.
+**Write the fragment you read, next to the line number:**
 
-This is the **dominant** case for a gate record, not an edge: a record is always
-committed on a branch whose fix moved lines. So **judge the printed lines
-individually and never read the total** — comparing counts would have shown 9/9
-at every point in that work. And the rule the same session drew, which prevents
-the error upstream: **cite what you read, never compute one citation from
-another.** The off-by-one that started it was an end anchor minus a length,
-missing the `+1` an inclusive range needs.
+```md
+`tls-origin.ts:144-149` "Defence in depth, and **not** what fixes the collision"
+```
+
+`citations.mjs` then checks that text is actually inside the cited range, and
+says where it went when it is not — which is the only thing about a citation
+that can be verified mechanically. The number on its own cannot be: it says a
+line *exists*, and a line always exists.
+
+Both spellings work, and the quoting rule is tight on purpose: a straight
+double-quoted fragment, optionally after the closing backtick, with at most one
+space between. A quotation further along the sentence is prose, not an anchor.
+
+```md
+`file.ts:120` "a fragment"        the anchor outside the code span
+`file.ts:120 "a fragment"`        the anchor inside it
+| `file.ts` | 120 "a fragment" |  in a findings table, in the `line` cell
+```
+
+**Keep an anchor to one line's worth of text.** Lines are joined before matching,
+so an anchor that wraps across two lines of prose is fine; one that wraps across
+a comment's `//` or `*` markers is not, and reports `not anywhere in the file`.
+Shorten it — a shorter anchor is a *weaker* claim but never a wrong one.
+
+### What the run tells you now, and what it does not
+
+Four states, and no `N/N`:
+
+| | means |
+| --- | --- |
+| `ok` | the anchor is in the cited range. The only state anything verified |
+| `MOVED` | the anchor is not there. The reason says which line it is at now, or that it is nowhere in the file. **Exit 1** |
+| `unanchored` | the lines exist and nothing checked them. The cited line is printed for you to judge by hand, which is the only check it has |
+| `FAIL` | it cannot be right at all — file gone, line past the end, bare name matching several files. **Exit 1** |
+
+**An unanchored run is not a passing run, it is an unchecked one.** `0 verified,
+0 moved, 9 unanchored, 0 unresolvable` exits 0 and means nobody has looked.
+
+**`--require-anchors` makes that exit 1**, for a branch holding itself to the
+standard before the default gets there. It changes the exit code and nothing
+else: the states, the counts and the per-citation lines are identical with and
+without it, because whether an unchecked citation is tolerable is your policy and
+not a fact about the record. The summary says `, anchors required` when it is in
+force, so a CI log names the policy next to the numbers it judged.
+
+The summary prints every bucket even at zero, because the fraction it replaced is
+what this repo was measured getting wrong. Measured 2026-09-02: a fix inserted 28
+lines, a cited comment moved from `144-149` to `170-175`, and the run reported
+**9/9 resolve** while three citations pointed at a function signature and an
+unrelated doc comment. That is the **dominant** case for a gate record rather than
+an edge — a record is always committed on a branch whose fix moved lines.
+
+The rule that prevents it upstream, and still holds: **cite what you read, never
+compute one citation from another.** The off-by-one that started it was an end
+anchor minus a length, missing the `+1` an inclusive range needs.
+
+Two things it still cannot judge, and you must. A citation that is a finding's
+own evidence ("the text is at `:94-95`, not `:93-94`") must stay as written even
+when the run calls it moved. And an anchor is only as good as the fragment
+chosen: `"const"` is on every line of the file and verifies nothing.
+
+### Migration: nothing already committed is rewritten
+
+Anchors arrived with repo-18, on 2026-09-04. **The 965 citations already in the
+tree stay exactly as they are**, and this is the decision, not a deferral:
+
+- Re-deriving an anchor for a merged record means re-reading the code each
+  citation pointed at *at the rev it was written against* and deciding what it
+  claimed. That is re-judging finished work, not migrating a format, and it would
+  produce 965 unreviewed assertions in one commit.
+- The reader is two-format on purpose and permanently. An unanchored citation is
+  not an error and never becomes one by age; it is reported as `unanchored`, which
+  is what it always was and what the old `N/N resolve` was hiding.
+- **13 citations across six records were already anchored by hand**, in exactly
+  this format, before anything could read them — `dl-23`, `pl-24`, `pl-25`,
+  `dl-29`, `repo-7`. The format is theirs. Running the new script over them found
+  a real defect nobody had seen: `pl-24` cites
+  `grounding-fixtures.test.ts:29` for a test that is at line **53**, and the old
+  script called that resolved.
+
+**Anchor every citation in a record you are writing now.** That is the whole
+migration: the population that matters is the records still being read against
+live code, and they are the ones being written this week.
+
+Making it an error **by default** is still not settled, and still needs a ticket
+rather than a habit: turning it on for everyone today fails every gate run
+against all 965. What exists is the opt-in above, so a later ticket flipping the
+default finds the machinery built and tested rather than starting from nothing.
