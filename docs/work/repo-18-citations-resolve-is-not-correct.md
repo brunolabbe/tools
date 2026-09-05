@@ -717,12 +717,14 @@ moved, 0 unanchored, 0 unresolvable`.
   marker it copied still matches across the break". Restored, 143 passing.
 
   That mutation is the substantive part, and it is a standard I had not applied
-  to myself. I put the copy-paste argument into a docblock as the **reason** not
-  to strip markers, which makes it load-bearing for a design decision — and a
-  reason that cannot fail is a justification, not a measurement. It checked the
-  reason, not only the behaviour. Strip-haystack-only demonstrably breaks the
-  working authoring path, so it is now pinned by a test rather than asserted by
-  either of us.
+  to myself. **A reason that cannot fail is a justification, not a measurement.**
+  I put the copy-paste argument into a docblock as the **reason** not to strip
+  markers, which makes it load-bearing for a design decision — and a load-bearing
+  reason with no test is the exact shape this ticket exists to catch, sitting in
+  the file that argues against it. The second opinion mutated the _reason_ rather
+  than the behaviour, which is the move I had not thought to make.
+  Strip-haystack-only demonstrably breaks the working authoring path, so it is
+  now pinned by a test rather than asserted by either of us.
 
   Its own framing of the exchange, which I think is right and worth keeping: the
   frequency count I had written was not wrong, it was the weaker of two available
@@ -745,3 +747,47 @@ moved, 0 unanchored, 0 unresolvable`.
   orchestrator to confirm or correct it rather than treating a second-hand owner
   decision as established. If it is wrong, the correction belongs here as a
   marked retraction, in the shape the entry above this one already sets.
+
+- **2026-09-05** — **First-hand confirmation of that decision, so the record does
+  not rest on a relay.** The orchestrator confirms it put the vacuous-pass
+  question to the owner through `AskUserQuestion` as two costed options, and that
+  **the owner chose (a), leave it** — matching what this builder and the
+  second-opinion reviewer had each recommended independently. Nothing to retract;
+  the section as committed is correct.
+
+  The costs as they were actually put, worth keeping because the losing option
+  had the better-sounding argument. **(a) leave it:** the denominator is on
+  screen, the flag is opt-in per invocation, the default is unaffected, and
+  guarding for an unobserved consumer is what this repo's conventions forbid —
+  at the cost that the one mode meant to be stricter has a case where it is not,
+  and **a CI job pointed at a moved or renamed record would go green on
+  nothing**. **(b) fail on zero:** about two lines, and consistent with
+  `selectSection`, which already errors on a no-match name for the stated reason
+  that `0/0` with exit 0 is indistinguishable from a correct result — at the cost
+  of not being able to run the flag over a record with no citations yet.
+
+  **What this pair of relays established, and it is the useful part.** The
+  `--require-anchors` decision reached the reviewer through me and it refused to
+  act on my assertion of owner authority; this decision reached me through the
+  reviewer and I did the same. Neither of us can verify such a claim from inside;
+  only the orchestrator can, being the one who asked. The handling that worked
+  was neither blocking nor accepting: **commit it verbatim, log the provenance as
+  second-hand, and ask the one participant who can settle it.** The
+  second-opinion section applies the same split to its own model — what its
+  context says, which it can check, kept apart from what the dispatcher says it
+  did, which it cannot.
+
+  **CI, checked once rather than watched.** `gh run list --branch
+repo-18-citation-anchors` at this point: every completed run on the branch is
+  `success` across all three workflows — `CI`, `security` and `pr-title` — over
+  five pushes. The runs for the newest commit were still in flight when checked
+  and were not polled.
+
+  **Ready to merge, and nothing on this ticket is open.** Three records, three
+  pins, each naming its sha and the command that checks it: Gate 1 at `23d3b56`,
+  Gate 2 at `2de66cd`, second opinion at `65c12cb`. That is this ticket's own
+  thesis applied to its own gate record three separate times — a record that the
+  pre-repo-18 tool called `10/10 resolve`, caught drifting by the tool the record
+  gates. It is a better argument for the change than anything in the Why section
+  above, and it was not constructed as one; it happened because the branch kept
+  moving under its own reviews.
