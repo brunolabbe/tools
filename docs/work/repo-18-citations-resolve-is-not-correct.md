@@ -419,13 +419,53 @@ citations`, every bucket printed even at zero. The test asserts the buckets by
   against `23d3b56` with this ticket's own tool before commit — `10 verified, 0
 moved, 0 unanchored, 0 unresolvable`.
 
-  **Open, for the orchestrator, not settled here or by the reviewer:** the
-  reviewer's gate was scoped to `23d3b56`; `82ad6ab` (`--require-anchors`) landed
-  during its round. It declined to extend its own review to the new commit
-  without being told to, on two grounds it raised itself — extending scope
-  mid-gate is not its call, and it cannot verify from inside its sandbox that
-  "the owner directed this" is true rather than a relayed claim. Both are
-  reasonable; neither of us can close it. It has sent the orchestrator the same
-  choice: fold `82ad6ab` into this gate round, or let it land as its own
-  follow-on with its own gate before merge. I have not resolved this either way —
-  `82ad6ab` currently has no gate of its own.
+  **This ticket's thesis, demonstrated on this ticket's own gate record.** The
+  `## Review` section above is a record whose citations were resolved against
+  `23d3b56` and committed after `82ad6ab` had moved the lines. Run the branch's
+  own tool over it twice, from the tip (`951fb6f`):
+
+  ```
+  $ node scripts/citations.mjs docs/work/repo-18-citations-resolve-is-not-correct.md \
+      --section Review --rev 23d3b56
+  10 verified, 0 moved, 0 unanchored, 0 unresolvable — of 10 citations
+
+  $ node scripts/citations.mjs docs/work/repo-18-citations-resolve-is-not-correct.md \
+      --section Review
+  2 verified, 8 moved, 0 unanchored, 0 unresolvable — of 10 citations
+  ```
+
+  Every one of the eight, with where it went:
+
+  ```
+  "expect(after?.state).toBe("                            274 -> 277
+  "expect(atTip.stdout).toMatch(summary(0, 1, 0, 0, 1))"  576 -> 586
+  "${counts.verified} verified, ${counts.moved} moved"    413 -> 432
+  "expect(result.stdout).not.toMatch(SAME_OVER_SAME)"     599 -> 609
+  "The open question is answered: anchor text"            146 -> 139, 174
+  "Migration: nothing already committed is rewritten"     299 -> 306
+  "spanning a comment's continuation marker does not…"    310 -> 313
+  "result.stderr).toBe("                                  195 -> 198, 703
+  ```
+
+  **The old tool would have called this record `10/10 resolve` and exited 0.**
+  Every one of those ten line numbers still exists in its file; not one of them
+  dangles. Eight point at something else. That is the whole ticket, measured on
+  the artefact that gates the ticket — and it is why the pin line above the
+  reviewer's table is not bookkeeping. Two of the eight resolve to more than one
+  line (`139, 174` and `198, 703`) because the anchor text now appears in this Log
+  as well as at its referent; `locateAnchor` reports every occurrence rather than
+  the first, which is what makes that visible instead of arbitrary.
+
+  **Scope question, raised by the reviewer and now answered by the owner's side:
+  fold `82ad6ab` into this gate round.** The reviewer declined to extend its own
+  review to the new commit without being told to, on two grounds it raised itself
+  — extending scope mid-gate is not its call, and it could not verify from inside
+  its sandbox that "the owner directed this" was true rather than a relayed
+  claim. Both were right, and the second is a real structural gap: **a builder can
+  claim owner authority and a reviewer has no way to check it.** The orchestrator
+  has confirmed the provenance — put to the owner through `AskUserQuestion` with
+  three costed options, this ticket's recommendation to leave the flag advisory
+  quoted first with its objection intact, and the owner chose to build it anyway
+  — and is recording the gap in the skill's reference, since the fix is that an
+  owner decision must travel with its provenance and not only its content. The
+  reviewer is re-running its reproduction set against the new tip.
