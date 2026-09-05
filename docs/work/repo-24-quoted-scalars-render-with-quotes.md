@@ -444,3 +444,17 @@ than out of its defect hunt.
   is three places to go stale", with its historical figures left as
   measured-at-the-time rather than updated. This ticket needs no count at all,
   so it carries none.
+- **`citations.mjs --rev <sha>` does not check the ticket as it was at that
+  sha.** The ticket file is read from the working tree unconditionally
+  (`scripts/citations.mjs:389`); `rev` reaches only `makeReader` and
+  `candidateFiles` (`:403-404`), which resolve the citation _targets_. So
+  `--rev` answers "did these citations point at the right thing back then", not
+  "what did this document claim back then" — to get the second, extract the file
+  with `git show <sha>:<path>` and run against the extraction. Worth recording
+  because it is this ticket's own subject one level out: a flag that plainly
+  answers a different question than the one a reader assumes, with no error to
+  say so. Surfaced the wrong way round — the builder inferred a mechanism the
+  reviewer had never claimed and "corrected" it; the reviewer pointed out there
+  was no claim to correct, and the fact about the tool is true and useful
+  anyway. Reproduction beat inference in both directions, which is the only
+  reason it ended up right.
