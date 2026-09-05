@@ -1,7 +1,7 @@
 ---
 id: repo-22
 tool: repo
-title: "`grep` here is a wrapper that silently honours ignore files"
+title: The grep command here is a wrapper that silently honours ignore files
 kind: fix
 status: ready
 milestone: null
@@ -439,6 +439,25 @@ here, because the next agent reads Build first.
 - Verified today that `check-pr-title.sh` still exits `2` on a genuinely bad
   title, so the second half of that acceptance line can fail and is worth
   asserting.
+
+**2026-09-05 — the frontmatter `title` was reworded to dodge a parser defect,
+and this is a workaround, not a fix.** It is not a style choice. The title
+originally opened with a backticked `` `grep` ``, which YAML reserves as an
+indicator character, so it had to be quoted — and `parseScalar`
+(`scripts/status.mjs:115-118`) never strips quotes:
+
+```js
+const trimmed = value.trim();
+return trimmed === "null" || trimmed === "" ? null : trimmed;
+```
+
+So `npm run status` and `-- --show repo-22` rendered the title with literal `"`
+marks, alone among every ticket on the board. Dropping the leading backtick
+removes the need to quote and the symptom with it; **the parser still keeps
+quotes on any title that genuinely needs them.** Filed separately so this PR
+stays scoped, and this entry is the live reproduction that ticket cites.
+`repo-23`'s filer hit the same wall and sidestepped it the same way, which is
+how it was found.
 
 **2026-09-05 — the filing PR is `docs(repo):`, not `fix(repo):`.** **Caught by
 the orchestrator, not by this builder** — recorded that way because "caught
