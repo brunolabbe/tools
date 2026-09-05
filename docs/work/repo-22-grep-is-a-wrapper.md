@@ -213,7 +213,8 @@ filing PR builds no hook, so it is `docs(repo):`, which is `hidden` at
 `release-please-config.json:31` and ships no changelog line; a `fix(repo):` title
 on it would have announced behaviour that does not exist in the tree after it
 merges. **The PR that builds the hook is the `fix(repo):` one**, `fix` being not
-hidden at `:27`, and it is the one that ships a changelog line. Whoever builds
+hidden at `release-please-config.json:27`, and it is the one that ships a
+changelog line. Whoever builds
 the hook should not read this paragraph as already accounted for. Check either
 title with `node scripts/commit-message.mjs --text "<title>"` before opening.
 
@@ -459,6 +460,19 @@ stays scoped, and this entry is the live reproduction that ticket cites.
 `repo-23`'s filer hit the same wall and sidestepped it the same way, which is
 how it was found.
 
+**The parser defect has two independently attested instances, not one plus an
+anecdote**, and the second was verified rather than relayed.
+`docs/work/repo-23-deployment-reads-as-downloader-only.md` (on branch
+`repo-deployment-doc-shape`) carries
+`title: The deployment page reads as downloader-only for 286 lines before it is repo-wide`
+under an H1 of ``# repo-23 — `02-DEPLOYMENT.md` reads as downloader-only for 286 lines``
+— backticks kept in the heading, dropped in the frontmatter, reworded into a
+plain scalar, and both reworded titles even open with "The". Two filers who
+never spoke reached the identical workaround, which is the evidence that this is
+a parser defect rather than either one's style. **repo-23 is not the fix
+ticket** — it is about `docs/02-DEPLOYMENT.md` and is unrelated to the parser;
+it is credited here only with the independent discovery.
+
 **2026-09-05 — the filing PR is `docs(repo):`, not `fix(repo):`.** **Caught by
 the orchestrator, not by this builder** — recorded that way because "caught
 before opening" read as self-caught, and the reviewer corrected the attribution.
@@ -468,5 +482,15 @@ type was wrong and why. It would have shipped a changelog line announcing a hook
 that does not exist in the tree after the merge. `kind` describes the work; the commit type describes the commit, and
 they diverge exactly here. Decision two now separates the two PRs so the
 `fix(repo):` note is not read as already spent. Measured: `docs` is `hidden` at
-`release-please-config.json:31`, `fix` is not at `:27`, and the two sibling
-filing PRs (#148, #149) both use `docs(repo):`.
+`release-please-config.json:31`, `fix` is not at `release-please-config.json:27`,
+and the two sibling filing PRs (#148, #149) both use `docs(repo):`.
+
+Both of those were originally written as a bare `` `:27` `` — shorthand, after
+the same file had been named in full earlier in the sentence. **That is the
+shape that defeats `citations.mjs`**: it has no notion of a file established
+earlier in a sentence, so a bare `:27` is invisible to it, while a reader sees
+the qualified path once and reads the shorthand as inheriting it. Two
+occurrences, written by the same hand on the same day, and neither the builder
+nor the reviewer saw it until the second one turned a slip into a pattern. The
+failure is _shorthand after a qualified reference_, not a forgotten filename —
+worth stating because the two want different fixes.
