@@ -50,7 +50,23 @@ const FIELDS = {
 };
 
 const KINDS = ["work-package", "fix", "chore"];
-const STATUSES = ["ready", "in-flight", "done", "dropped"];
+// In lifecycle order, and `needs-decision` is first because a ticket's first
+// state used to be `ready` — which is the defect repo-19 fixes. Every other
+// status marks a transition somebody performs: `in-flight` when it is picked
+// up, `done` in the commit that earns it, `dropped` when it is rejected. Only
+// the first transition, from filed to buildable, had no state to move out of,
+// so a filing that deliberately poses a question sat in the same bucket as work
+// that is fully specified and waiting for a builder. `ready` was carrying two
+// meanings — *unclaimed* and *dispatchable* — and only the first was recorded.
+//
+// Named for **what the ticket waits on** rather than for what it lacks, which
+// is the trade the name makes: it reads false on a ticket that is merely
+// half-written, and `groomed` would have covered both at the cost of saying
+// less. `docs/01-TICKETS.md` is explicit that a ticket carries a decision *or* a
+// reproduction, so filing a question is a legitimate reason to file and this is
+// not a staging area for unfinished prose — it is the queue of decisions
+// waiting on a human, which nothing showed before.
+const STATUSES = ["needs-decision", "ready", "in-flight", "done", "dropped"];
 // Rated by how much judgement the work needs, never by how large the diff is:
 // a one-line change to a contract is `hard`, a forty-file mechanical rename is
 // not. `standard` and absent mean the same thing to a dispatcher; the value
@@ -59,7 +75,18 @@ const STATUSES = ["ready", "in-flight", "done", "dropped"];
 const DIFFICULTIES = ["mechanical", "standard", "hard"];
 
 /** Statuses that mean the ticket is still work. `dropped` is neither. */
-const OPEN = new Set(["ready", "in-flight"]);
+const OPEN = new Set(["needs-decision", "ready", "in-flight"]);
+
+/**
+ * Open work nobody has picked up yet — the two states before `in-flight`.
+ *
+ * `milestones` used to read "started" as "any status that is not `ready`",
+ * which was true while `ready` was the only first state. It stopped being true
+ * the moment a second one existed: a milestone holding nothing but unanswered
+ * questions would have reported `in progress`, which is the same conflation
+ * this status was added to remove, one view over.
+ */
+const UNSTARTED = new Set(["needs-decision", "ready"]);
 
 const DEFAULT_ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 
@@ -374,6 +401,13 @@ function ticketDirs(repoRoot) {
  * open is not work, it is a queue — so the two are separated here rather than
  * left for a reader to walk by eye.
  *
+ * `needs-decision` is the other half of the same separation and needs no code
+ * here: the filter is `status === "ready"`, so a ticket waiting on a human
+ * simply is not in this list. That is the property repo-19 wanted — `--ready`
+ * true by construction rather than by a check somebody has to keep passing.
+ * What it *does* need is `withheldFromReady` below, because a query that
+ * silently returns fewer rows is a different kind of wrong answer.
+ *
  * It still cannot see a branch. A ticket in review for four days reads as ready
  * until it merges, which is why CLAUDE.md says `gh pr list` first — `--prs`
  * folds that in.
@@ -383,6 +417,63 @@ function ticketDirs(repoRoot) {
 export function readyTickets(tickets) {
   const done = new Set(tickets.filter((t) => t.status === "done").map((t) => t.id));
   return tickets.filter((t) => t.status === "ready" && t.depends_on.every((id) => done.has(id)));
+}
+
+/**
+ * What `--ready` did not show, and why — the complete account, not a summary.
+ *
+ * A board that answers "what can I pick up" by returning fewer rows and saying
+ * nothing has replaced one wrong answer with a quieter one. The sharpest case
+ * is the empty one: with every candidate withheld, `--ready` falls back to
+ * `nothing is ready and unblocked`, which is also what a finished board says.
+ *
+ * **Both reasons, not just the new one.** `needs-decision` is what repo-19
+ * added, but `--ready` has always dropped a ticket whose `depends_on` is not
+ * `done` without mentioning it. A notice naming one of the two reasons would
+ * re-create the defect for the other, and a reader would take the list for
+ * complete — so the reason is per ticket and the list is exhaustive.
+ *
+ * **`in-flight` is deliberately not in it.** `--ready` has never offered
+ * picked-up work and nobody reads its absence as a withholding; listing it
+ * would bury the two rows that are actually being kept back. Same asymmetry
+ * `reviewedButReady` argues at length: what is reported is what a reader would
+ * otherwise be wrong about.
+ *
+ * **These are not `problems`.** A ticket that says it is waiting on a human is
+ * a board in good health, so this never reaches the `problems` list and never
+ * moves `--json`'s exit code — which is the whole of `ci.yml`'s ticket gate.
+ * Routing it there would fail every reader's pipeline the moment somebody filed
+ * a question, which is precisely the filing `docs/01-TICKETS.md` invites.
+ *
+ * No `kind` field, unlike the two problem shapes: theirs is there because
+ * `--json` emits `problems` and a consumer has to discriminate them. This list
+ * is never serialised, and `status` already says which of the two reasons
+ * applies, so a tag with no reader would just be a field to keep true.
+ *
+ * @param {ReturnType<typeof readTickets>} tickets
+ * @returns {Array<{file: string, id: string, status: string, reason: string, message: string}>}
+ */
+export function withheldFromReady(tickets) {
+  const done = new Set(tickets.filter((t) => t.status === "done").map((t) => t.id));
+  const offered = new Set(readyTickets(tickets).map((t) => t.id));
+  return tickets
+    .filter((t) => UNSTARTED.has(t.status) && !offered.has(t.id))
+    .map((ticket) => {
+      // The decision comes first when a ticket carries both: answering the
+      // dependency would still leave it unstartable, and the reverse is not
+      // true, so it is the reason a reader acts on.
+      const reason =
+        ticket.status === "needs-decision"
+          ? `status is "needs-decision", so it waits on a human answering it rather than on a builder`
+          : `waits on ${ticket.depends_on.filter((id) => !done.has(id)).join(", ")}`;
+      return {
+        file: ticket.file,
+        id: ticket.id,
+        status: ticket.status,
+        reason,
+        message: `${ticket.file}: withheld from --ready — ${reason}`,
+      };
+    });
 }
 
 /**
@@ -407,7 +498,7 @@ export function milestones(tickets) {
     const done = members.filter((t) => t.status === "done").length;
     const dropped = members.filter((t) => t.status === "dropped").length;
     const open = members.filter((t) => OPEN.has(t.status)).length;
-    const started = members.some((t) => t.status !== "ready");
+    const started = members.some((t) => !UNSTARTED.has(t.status));
     return {
       milestone,
       done,
@@ -681,6 +772,16 @@ function renderView(all, problems, flags, values, repoRoot) {
       process.stdout.write(`${ticket.id}\t${ticket.tool}\t${ticket.title}\n`);
     }
     if (ready.length === 0) process.stdout.write("nothing is ready and unblocked\n");
+    // stderr, and for the reason the problems below use it: stdout is the
+    // answer and something is piping it. `node scripts/status.mjs --ready |
+    // wc -l` is the measurement repo-19 was filed off, and the whole point of
+    // the fix is that the count means "startable" — prose on stdout would break
+    // the number this exists to make true. Narrowed by `--tool` along with the
+    // view, unlike `problems`: a reader who asked about one tool is being told
+    // what *that* question withheld, not handed a fact about the whole graph.
+    for (const withheld of withheldFromReady(selected)) {
+      process.stderr.write(`${withheld.message}\n`);
+    }
     return;
   }
 
@@ -698,9 +799,17 @@ function renderView(all, problems, flags, values, repoRoot) {
     if (open.length > 0) process.stdout.write("\n");
     const unblocked = new Set(readyTickets(mine).map((t) => t.id));
     for (const ticket of open) {
-      const mark = ticket.status === "in-flight" ? "»" : unblocked.has(ticket.id) ? "•" : "·";
-      const blocked =
-        unblocked.has(ticket.id) || ticket.status === "in-flight"
+      // `?` for a ticket waiting on a human, which is not `·`: a dot means the
+      // queue will clear it and this one will not. It also needs its own suffix
+      // — the blocked branch joins `depends_on`, so a ticket held up by a
+      // decision and by nothing else rendered as `(waits on )`, an empty list
+      // after the words that promise one.
+      const decision = ticket.status === "needs-decision";
+      const mark =
+        ticket.status === "in-flight" ? "»" : decision ? "?" : unblocked.has(ticket.id) ? "•" : "·";
+      const blocked = decision
+        ? " (waits on a decision)"
+        : unblocked.has(ticket.id) || ticket.status === "in-flight"
           ? ""
           : ` (waits on ${ticket.depends_on.join(", ")})`;
       process.stdout.write(`  ${mark} ${ticket.id.padEnd(6)} ${ticket.title}${blocked}\n`);
@@ -747,6 +856,19 @@ function printTicket({ ticket, blockers, missing }) {
     const why = ticket.status === "dropped" && ticket.note !== null ? ` (${ticket.note})` : "";
     const stale = holding.length === 0 ? "" : `; depends_on still lists ${holding.join(", ")}`;
     process.stdout.write(`\n  ${ticket.status} — nothing to pick up${why}${stale}\n\n`);
+    return;
+  }
+  // Before the pair below, because `unblocked` is exactly the lie `--ready` was
+  // telling: nothing in `depends_on` is holding a `needs-decision` ticket up,
+  // and it is still not startable. This is the per-ticket view CLAUDE.md sends a
+  // reader to, so its closing line is where an agent decides to build. The
+  // blockers stay on it — a ticket can carry a question *and* a dependency, and
+  // a line naming only the question reads as startable once it is answered.
+  if (ticket.status === "needs-decision") {
+    const also = holding.length === 0 ? "" : `; also blocked by ${holding.join(", ")}`;
+    process.stdout.write(
+      `\n  waiting on a decision — not startable until someone answers it${also}\n\n`,
+    );
     return;
   }
   process.stdout.write(

@@ -92,7 +92,7 @@ wrong in the brief. This is what a future reader actually needs.
 | `id`         | `<prefix>-<n>`, monotonic. `dl-` downloader, `pl-` planner, `repo-` repo-wide |
 | `tool`       | The directory name under `tools/`, or `repo`                                  |
 | `kind`       | `work-package` · `fix` · `chore`                                              |
-| `status`     | `ready` · `in-flight` · `done` · `dropped`                                    |
+| `status`     | `needs-decision` · `ready` · `in-flight` · `done` · `dropped`                 |
 | `milestone`  | A milestone from that tool's roadmap, or `null`                               |
 | `depends_on` | Ticket ids that must land first                                               |
 | `note`       | Optional. What the status view shows instead of the title                     |
@@ -106,6 +106,30 @@ directory _and_ the ids named in existing ticket Logs and gate records: an id ca
 be spoken for before its file exists — promised in another ticket's Log as the
 follow-up it filed — and reusing one silently attaches new work to an old
 conversation. Take the highest of both and add one.
+
+**`needs-decision` is a ticket's first state, and `ready` is the second.** It
+means the filing is complete and the work is not dispatchable, because the ticket
+poses a question its own page says must not be settled by whoever picks it up.
+Move it to `ready` in the commit that records the answer — the answer goes on the
+ticket, never into a builder's prompt alone, or the board says blocked while the
+file says otherwise.
+
+It exists because `ready` was carrying two meanings, _unclaimed_ and
+_dispatchable_, and only the first was recorded anywhere. Every other status
+marks a transition somebody performs; the first one, from filed to buildable,
+had no state to move out of, so a ticket deliberately posing a question sat in
+the same bucket as work waiting for a builder. Measured on `origin/main@7fe18af`,
+six of the seven tickets `--ready` returned could not be started, and each cost a
+full builder round to discover it. See
+[repo-19](./work/repo-19-ready-does-not-mean-startable.md).
+
+**It is not a draft state**, and the name is deliberate about that: it says what
+the ticket waits on rather than what it lacks, and so reads false on a filing
+that is merely half-written. A ticket carries a decision _or_ a reproduction, so
+**filing a question is a legitimate reason to file** — this is the queue of
+decisions waiting on a human, not a holding pen for unfinished prose. Rate
+`difficulty` for the work as it will be _once the decision is answered_; the two
+fields are orthogonal, and collapsing them destroys both.
 
 `note` is the one editorial field, and it should stay rare: a title that reads
 badly in a table column is usually a title worth fixing.
@@ -151,6 +175,12 @@ is softened, they are paid for by the pipeline rather than by every reader.
   picked it up — the two cannot both be true. `in-flight` is deliberately not
   flagged: a review never moves `status`, a FAIL is a report, and a ticket that
   lands as a partial has to have somewhere to sit.
+
+**`--ready`'s withheld notice is on stderr too, and it is neither of these.** A
+ticket saying it waits on a human is a board in good health, so that line never
+enters `problems` and never moves `--json`'s exit code — routing it there would
+fail every reader's pipeline the moment somebody filed a question, which is a
+filing this page invites.
 
 **`dropped` tickets stay.** A ticket that was considered and rejected is worth
 more than a deleted file: the next person to have the idea finds the reason it
@@ -304,7 +334,7 @@ a ticket worth filing.**
 
 ```bash
 npm run status                    # open tickets per tool, with what blocks each
-npm run status -- --ready         # ready, and nothing open in its depends_on
+npm run status -- --ready         # startable: `ready`, and nothing open in its depends_on
 npm run status -- --json          # the same data, structured
 npm run status -- --prs           # fold in `gh pr list`
 npm run status -- --tool planner  # narrow any of the above to one tool
@@ -321,9 +351,18 @@ on purpose ([repo-6](./work/repo-6-dangling-dependency-kills-the-view.md)). If
 you are asking what is next, the six above are the whole of it.
 
 Computed from the ticket files every time, so it cannot disagree with them.
-`--ready` is the one worth knowing: `status: ready` means nobody has picked a
-ticket up, which is not the same as it being startable — a ticket waiting on one
-that is still open is a queue, and only `--ready` separates the two.
+`--ready` is the one worth knowing, and it answers "what can I pick up" rather
+than "what is unclaimed" — the two used to be the same query and were not the
+same question. A ticket is withheld from it for either of two reasons: something
+in its `depends_on` is still open, or its `status` is `needs-decision` and it is
+waiting on a human. **Neither withholding is silent.** `--ready` names every
+ticket it kept back and why, on stderr beside the answer, because a query that
+quietly returns fewer rows is a different kind of wrong answer — and with
+everything withheld, stdout says `nothing is ready and unblocked`, which is also
+what a finished board says.
+
+The default view marks the same distinction: `•` startable, `·` queued behind a
+dependency, `?` waiting on a decision, `»` picked up.
 
 ## The agent preamble
 
