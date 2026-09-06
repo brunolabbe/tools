@@ -601,7 +601,8 @@ this filing"` resolves the anchor `ok` — `1 verified, 0 moved`. The Log's
   to another tree is not answerable by a run against this one. The pinned
   commands are in the record and the Log entry; do not "fix" the working-tree
   run by repointing.
-- **Every citation in this file is now anchored — `0 unanchored`, on the owner's
+- **Every citation in this file was anchored — `0 unanchored` as of that commit,
+  on the owner's
   instruction and against this builder's recommendation to defer.** The
   recommendation was to leave them: it edits citations inside two reviewers'
   records for drift this branch did not cause. The owner overrode that, and the
@@ -615,7 +616,8 @@ this filing"` resolves the anchor `ok` — `1 verified, 0 moved`. The Log's
   - `--rev 5fed828 --section "The gate on this filing"` → `3 verified, 0 moved,
 0 unanchored`, exit `0`.
   - `--section Log --rev 5fed828` → `5 verified, 1 moved`. The one that moves is
-    `scripts/status.mjs:291`, and that is correct: it was written by the "built"
+    `scripts/status.mjs:291` "export function reviewedButReady", and that is
+    correct: it was written by the "built"
     entry against the current tree, not the filing tree. **The Log genuinely
     cites two trees**, so no single run makes it clean, and that is a fact about
     the Log rather than a defect to fix. A default working-tree run verifies
@@ -666,12 +668,16 @@ branch that already carried two**, under one squash-merge line.
   backslash-escaped characters before the quote pairing runs, so a `\"` can no
   longer be counted as a real quote. All three reproductions go silent, the
   blast radius goes from **2 of 10 to 0 of 10**, and the 46-shape battery stays
-  at 0 unexpected. It fails in the safe direction for a blocking hook: any
-  residual error costs a missed warning, never a false block.
+  at 0 unexpected. **This entry originally claimed the clause "fails in the safe
+  direction … never a false block". That claim was false and is retracted** —
+  see the OPEN entry at the end of this Log, where the gate falsified it by
+  probing the fix instead of the bug.
 - **The three reproductions are now tests, and they were watched going red.**
   Removing only the new clause from both files fails exactly the three new tests
-  with the other twelve green: `scripts/test/hooks.test.ts:97`,
-  `scripts/test/hooks.test.ts:178` and `scripts/test/hooks.test.ts:189`. The
+  with the other twelve green:
+  `scripts/test/hooks.test.ts:97` "an escaped inner quote splits the phrase",
+  `scripts/test/hooks.test.ts:178` "does not block when an escaped inner quote"
+  and `scripts/test/hooks.test.ts:189` "a heredoc that quotes the phrase in prose". The
   heredoc one is the load-bearing case — it has a real command word in front, so
   unlike the gate's original it is a shape somebody would actually type.
 - **A claim in `check-pr-title.sh`'s header was measurably false and is gone.**
@@ -720,3 +726,40 @@ the same both times and it is not carelessness.
   the suite for that reason — it was found by asking "what does this hook exist
   to protect, and does the fix still protect it?", which is a different question
   from "is the bug gone?".
+
+**2026-09-06 — OPEN, not settled here: the fix for the strip has the same defect
+as the strip, and the rule above caught it one round later.** The gate applied
+this ticket's own new rule to the fix that the rule came from, and it worked.
+**The remedy is with the owner; nothing in this branch implements one, and
+`db83b6f` still has this behaviour.**
+
+- **The reproduction, confirmed here rather than taken on report.**
+  `true; \x gh pr create --web` exits `0` on `origin/main` and on `76e6a5b`, and
+  **exits `2` — blocks — on `db83b6f`**. `\x` is a backslash before an ordinary
+  letter, which bash treats as plain `x`, so that command runs a program named
+  `x` and never touches `gh` at all. `s/\\.//g` deletes _any_ escaped character,
+  not just an escaped quote, so it removes `\x` and moves `gh pr create` up
+  against the `;`. **Identical mechanism to the regression it was fixing:
+  deleting a span moves the survivors together.** Two instances now, the second
+  inside the fix for the first, which is the argument for treating the mechanism
+  as unresolved rather than the instance.
+- **It falsifies a claim this Log made, and that claim is retracted above.** The
+  "never a false block" sentence was written from the same evidence base the
+  rule warns about — shapes drawn from the bug. One correction to the gate's
+  wording: the claim lived **in this Log, not in either hook's header**; neither
+  `.sh` file contains it, so nothing false shipped in the code comments.
+- **A candidate remedy is measured and deliberately unshipped.** Narrowing the
+  clause to escaped quotes and backslashes only —
+  `s/\\[\\'"]//g` in place of `s/\\.//g` — leaves `\x` alone, so the adjacency is
+  never manufactured. Measured on that change: the new reproduction goes silent,
+  all three earlier reproductions stay silent, `--title 'nope'` still exits `2`,
+  `hooks.test.ts` stays 15/15, and the blast battery stays 0 of 10. Reverted
+  unshipped, because a measurement is not authority and the remedy is the
+  owner's call.
+- **What is NOT claimed:** that narrowing closes the mechanism. It removes the
+  one escape class that was measured to manufacture an adjacency; it is not a
+  proof that no other deletion can. Saying otherwise would repeat this entry's
+  own mistake a third time. Any future claim of safety here needs a test set
+  built by someone attacking the fix, and `check-tree-grep.sh` is exempt from
+  the blocking half of the concern only because it has no `exit 2` path at all —
+  a structural property, worth keeping structural.
