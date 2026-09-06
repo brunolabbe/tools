@@ -256,6 +256,33 @@ dispatched you — then put the decision in the report **as options with a
 recommendation**, labelled as an open decision, so the agent that can ask still
 can. Never convert it into a choice you made quietly.
 
+## Handing back
+
+**When the work is finished and nothing is waiting on you, end with `# Done` as a
+heading.** It is the other branch of the rule above: a turn closes either with a
+question carrying options or with `# Done`, and which one it is should be legible
+without reading a paragraph to its end. Whatever the user still owns goes _under_
+the heading — the pull request to merge, the branch to pull, the command to run.
+
+**A pull request left open for the owner to merge is still done.** Merging and
+releasing are denied on purpose and the gate workflow deliberately ends at "open
+the PR", so a branch waiting on a merge is the normal finished state here, not an
+unfinished one. What is not finished is anything still waiting on an _answer_.
+
+**Nothing else earns it.** Not a gate that named findings nobody has repaired, not
+a branch carrying an open decision, not a report that ends by offering to do more
+work — each of those ends in `AskUserQuestion`, because in each the next move is
+the user's to choose. A report of work not done already reads exactly like a
+report of work done, which is why
+[`review-ticket`](./.claude/skills/review-ticket/SKILL.md) step 8 has to say
+"nothing has been fixed" out loud; `# Done` over such a report says the opposite
+in larger type.
+
+**A subagent never writes it.** Your report goes to whoever dispatched you, and
+`# Done` there lands as a heading in the middle of someone else's transcript,
+claiming a batch is over that you cannot see the end of. Say what you finished —
+the session that talks to the user is the one that closes.
+
 ## Style
 
 TypeScript strict, ESM, `.ts` extensions in relative imports (NodeNext),

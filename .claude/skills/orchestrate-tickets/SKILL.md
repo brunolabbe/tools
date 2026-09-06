@@ -586,6 +586,13 @@ count, verdict, PR — and give merge order when branches are stacked or conflic
 When a batch runs long, say what the next batch should do differently. The numbers
 themselves are the table below, which is not conditional on the batch being long.
 
+**Close the batch with `# Done`** — CLAUDE.md's [Handing back](../../../CLAUDE.md)
+— once the table is written and nothing is waiting on the user's answer. Open pull
+requests waiting to be merged do not disqualify it; they are the batch's normal
+end, and they belong under the heading with their merge order. A batch still
+carrying an open decision, or one whose gates named repairs nobody has made, ends
+in the question instead.
+
 ### End every batch with a per-agent accounting table
 
 Unasked, and whatever the batch cost. The owner had to ask for this by hand on
