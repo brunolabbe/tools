@@ -569,5 +569,70 @@ Lead with what changed and what needs them. Name the finding that matters and wh
 would have bitten, not a list of everything found. Keep a board — ticket, gate
 count, verdict, PR — and give merge order when branches are stacked or conflict.
 
-When a batch runs long, report cost honestly: agents, tokens, gates, and what the
-next batch should do differently.
+When a batch runs long, say what the next batch should do differently. The numbers
+themselves are the table below, which is not conditional on the batch being long.
+
+### End every batch with a per-agent accounting table
+
+Unasked, and whatever the batch cost. The owner had to ask for this by hand on
+2026-09-05, which is the tell: "report cost honestly" is satisfiable by a
+sentence, and a sentence hides all three things a table makes plain.
+
+| PR | Status | Model | Agent | Task | Tokens |
+| --- | --- | --- | --- | --- | --- |
+
+**One row per agent, not per ticket** — an agent killed and replaced is two rows,
+which is the only place the duplicated work is visible at all.
+
+- **PR** — the pull request the agent's work landed in, or `—` for batch-wide work
+  like the seam map.
+- **Status** — the PR's state as you write, from
+  `gh pr list --json number,mergeable,statusCheckRollup`, not from memory of an
+  earlier look.
+- **Model** — `opus` / `sonnet` / `haiku` / `fable`, and **recorded fact, never
+  inference**. Both halves are already written down by the time you need them: the
+  builder's is what step 3 tells you to pass explicitly at dispatch, the gate's is
+  pinned in [`.claude/agents/ticket-reviewer.md`](../../agents/ticket-reviewer.md)'s
+  frontmatter and is a file read. If either had to be inferred, the row says so.
+- **Agent** — the `subagent_type`.
+- **Task** — one line, including how it ended where that matters: killed by an
+  interrupt, resumed, replaced.
+- **Tokens** — that agent's last-observed `subagent_tokens`.
+
+Three caveats, all measured 2026-09-05/06:
+
+- **`subagent_tokens` are cumulative per agent**, so a resume is folded into the
+  figure rather than added to it. Summing an agent's successive reports
+  double-counts it.
+- **Some agents never report a total.** An agent whose final turn ends in a
+  `SendMessage` rather than a completion delivers no usage block, and one killed by
+  a rate limit or an interrupt may deliver none either. Write `not reported` in the
+  cell — **do not omit the row and do not estimate the cell**, because an omitted
+  row makes the table read as complete when it is not. State the observed total
+  *and* the number of agents missing from it.
+- **This is not the bill.** [reference/sizing.md](reference/sizing.md) records what
+  fraction of the all-in volume `subagent_tokens` is once cache reads are counted.
+  The table compares agents against each other honestly and says nothing directly
+  about cost.
+
+What it shows that prose reliably hides, all three from the same batch:
+
+- **Where the cost actually went.** One branch — repo-22, PR #161 — took roughly a
+  third of that batch, and **its gate cost about what its own builder did**:
+  411,966 against 406,732, last-observed cumulative figures a 1.3% apart, which is
+  a tie and not a ranking. The comparison that carries weight is the other one —
+  that gate cost **roughly 60% more than the next most expensive builder in the
+  batch** (256,418). Either way it inverts `sizing.md`'s "builder round-trips cost
+  more than gates", which is true per *round* and stops being true when one branch
+  takes six gate rounds. A prose summary surfaces neither the inversion nor how
+  narrow the first margin is.
+- **Whether the model-difference rule held**, per branch rather than as a claim.
+  Step 4 exists because a builder that picks its own reviewer is the thing being
+  checked choosing its checker; a Model column turns compliance into something a
+  reader can audit at a glance.
+- **What an interruption cost.** A replaced agent sits in its own row beside its
+  replacement instead of vanishing into a total.
+
+It is also most of step 12's work: `reference/history.md`'s `subagent tokens` field
+wants exactly this split, so the history row becomes a transcription rather than a
+reconstruction from memory.
