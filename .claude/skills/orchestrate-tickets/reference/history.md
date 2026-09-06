@@ -105,7 +105,11 @@ capture it.
 **A twelfth, found after the batch closed and worth its own line.** The slice
 pattern above told builders to hold `status: ready` while committing a gate record.
 **That combination is forbidden by CI**, in two places — `reviewedButReady` sets a
-non-zero exit and `status.test.ts:180` asserts the set is empty — and the pull
+non-zero exit and `scripts/test/status.test.ts:197 "reviewedButReady(readTickets(REPO))"`
+asserts the set is empty (written as a bare filename and line 180, which the
+checker rejects as ambiguous — two tracked files carry that basename — and which
+the assertion has since moved off; re-resolved to the same assertion 2026-09-06)
+— and the pull
 request went red in the `check` job and the unit matrix on both platforms. The
 skill defect was written *and* deployed in the same session, and only a merge check
 caught it: no gate did, because each gate correctly reviewed the branch it was
@@ -404,3 +408,145 @@ sound.
 - **Upward wakes worked, every time** — every completion delivered a notification
   and sideways `SendMessage` worked throughout. That is three sessions to one on
   the disagreement `SKILL.md` records, which is a tally and not a resolution.
+
+## Ninth session — 2026-09-05/06
+
+**Written by a builder on the orchestrator's dispatch, from the orchestrator's
+own account plus what could be re-measured from the six branches in the tree.**
+The orchestrator marked its own hedges and asked that none be upgraded, so the
+table below says of every number whether it is a measurement made here, an
+observation relayed, or `not recorded`. **Four of the schema's seven fields were
+not supplied**, and only some were recoverable — see the gap note under the
+table, which is itself the kind of thing this page exists to keep.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **7** taken from `ready` to a gated branch, measured here as `ready`→`done` frontmatter transitions across the six branches: `repo-20` (#156), `repo-23` (#157), `dl-41` (#158), `dl-42` (#159), `dl-38` **and** `dl-39` (#160 — one branch, `dl-39` closed as decided-against), `repo-22` (#161). All six pull requests open against `main` at close, all gated PASS, **none merged** — merging is the owner's. **The orchestrator's account said nine, and nine does not reproduce**: the `dl-41` branch *files* `dl-44` (`status: ready`, not closed), and the `repo-23` branch amends two already-`done` tickets (`repo-1`, `dl-32`) with citation-line repairs. 7 closed + 2 amended = the 9 *touched*, which is the likeliest origin of the count. Twelve candidates were `ready` at intake (`dl-38`…`dl-43`, `repo-20`…`repo-25`); five were not started — `repo-21` and `dl-43` blocked behind branches in this same batch, `repo-24` and `repo-25` on owner decisions, `dl-40` on a sample URL the owner has not supplied |
+| `agents` / `dispatches` | distinct agents **`not recorded`** — the orchestrator reported one combined figure of **~17 dispatches-or-resumes** across seam-mapper, builders and gates, and did not split spawns from wakes. **That figure does not sit easily beside the gate records**, which carry 13 gate passes on their own (below); either several passes ran inside one wake, or the 17 is low. Recorded as the tension it is rather than reconciled |
+| `builder rounds` | **`not recorded`** as a count. What is recorded is the attribution, which is the half that improves: **two rounds were the orchestrator's own fault by its own account** — a builder-reported line number relayed without running the one command that checks it (and that citation was stale *before* the branch existed, so the "correction" it passed on was also wrong), and a claim about *delivery* rather than content, entry 1 below. **Three builders and two gates corrected the orchestrator this session**, every correction landing because the dispatch said reproduce rather than transcribe |
+| `gates` | **13 passes across 6 gate records**, measured here from the committed `## Review` sections: `repo-20` 1, `repo-23` 1, `dl-41` 2, `dl-42` 2, `dl-38` 2, `repo-22` 5. **All six records are committed and were read here**; all PASS. **Five of the six returned findings** — `repo-20`'s is the 0-finding one |
+| `wrong findings` | **at least 3, none reached a commit**, measured from the records rather than reported: `dl-41`'s gate raised a retention-hours caveat and **retracted it** after the builder pointed at a clamp that puts every reachable value at 6× the TTL; `repo-22`'s gate mis-framed its own round-1 finding as an inherited limitation and corrected it to *a regression the fix introduced*, after measuring `origin/main` silent on the repro; `repo-22`'s round 4 flagged a claimed third regression that **did not reproduce as branch-introduced** and turned out inherited from `origin/main`, correcting the Log's attribution rather than its count. Two *builder* Log claims were also wrong and were reproduced-and-corrected in place (`dl-38`'s "8 failures" and "five…page.example") — the builder→gate direction the eighth session's row noted has no home in this field |
+| `subagent tokens` | **floors, not a total, and deliberately not summed.** The values available are **cumulative per agent and only last-observed**; several agents' finals were never reported, because their last turn ended in a cross-session message rather than a completion. Largest first: `repo-22` builder ~320 k · `dl-38` builder ~256 k · `dl-42` builder ~219 k · `dl-41` builder ~166 k · `repo-22` gate ~146 k (an early value; its later passes are unmeasured) · seam-mapper ~142 k · `dl-41` gate ~124 k · `repo-23` builder ~122 k · `repo-23` gate ~111 k. **Do not add these up** — the set is incomplete and every entry is a floor |
+| `cost` | `not recorded` — never observed, and no conversion is offered here, because converting an incomplete set of floors produces a number that reads like a bill |
+
+**What the schema asked for and the dispatch did not supply**, recorded because
+the gap is itself a finding: distinct **agent count** and any **wake tally** (one
+combined ~17 instead), **builder rounds** as a number, **gate count** (recovered
+here), **wrong findings** as a count (recovered here), and **cost**. Two of those
+were recoverable from the tree and three were not. **The recoverable ones were
+recoverable because of step 9**: a gate record committed on the ticket is the only
+artifact of this loop that outlives the session's own bookkeeping, and it carried
+the two counts the orchestrator had lost.
+
+**what the skill got wrong** — nine from the orchestrator, plus the ticket-count
+discrepancy in the table above.
+
+1. **A relayed claim about *delivery* is laundering, and the page only warns about
+   content.** It is emphatic that a description of an artifact is not the artifact.
+   It does not say that *"the reviewer sent you the text"* is the same class of
+   claim. The orchestrator asserted exactly that to `dl-41`'s builder; the send had
+   in fact been cut by a rate limit, and the builder refused to reconstruct the
+   record and held — **the second time it held on the orchestrator over that family
+   of claim**. The rule needs extending: **you cannot relay that a message arrived;
+   only the recipient can confirm that.**
+2. **Echo-before-commit does not verify a committed record, and this batch measured
+   why twice, with different reasons.** `dl-42`'s gate asked its builder to echo the
+   record's heading and gate line before committing; the builder then found `oxfmt`
+   had rewritten the committed section anyway, and reported "format reflowed
+   nothing" off a `diff --stat`, **which structurally cannot show a whitespace-only
+   rewrite**. Its explanation was that oxfmt rewrites tables and leaves prose alone.
+   **`repo-22`'s builder falsified that reason**: on its branch oxfmt rewrote 12
+   table lines *and one prose line* (`*shared*` → `_shared_`). So the correct rule is
+   stronger than either builder stated — **compare the committed section against the
+   sent text after formatting, normalising only table padding and rule width. Prose
+   is not safe either.**
+3. **A structural gap in the review apparatus, found by `repo-22`'s gate and then
+   demonstrated by accident.** A session working in an isolated worktree resolves
+   `PreToolUse` hooks from the **shared** checkout's `.claude/settings.json`, not
+   from its own worktree copy. So a newly added *or newly fixed* hook is invisible
+   to every session, builder and reviewer alike, until the branch merges — not
+   "inconclusive, not loaded yet" but structurally unobservable pre-merge. It then
+   demonstrated itself: `repo-22`'s builder had its own commit message blocked
+   (exit 2) by the shared checkout's escape-blind copy of the very hook its branch
+   fixes, and reworded the message rather than working around the guard. **Any
+   ticket that ships or fixes a hook is in this position**, and the worktree-hygiene
+   page says nothing about it.
+4. **Rate-limit recovery is undocumented and better than it looks.** A session limit
+   killed five in-flight agents with HTTP 429, after which `ListAgents` showed **no
+   subagents at all** — and every one resumed successfully by `agentId`, with
+   nothing lost, because each branch had been pushed. **`ListAgents` returning empty
+   is not evidence an agent is gone**, which is the same shape as the standing rule
+   that `completed` is not a closed channel.
+5. **A killed builder can strand an unpushed commit carrying a finding nobody has
+   seen.** `repo-22`'s first builder pushed `e065878`, kept working, and was killed
+   holding `5cecf43` — a strict superset with nine extra Log lines recording a
+   citation finding it never got to report. Recovered by inspecting the worktree's
+   HEAD against the pushed tip. **Check a killed builder's worktree HEAD against its
+   remote branch before re-dispatching**, or you rebuild work that already exists
+   and lose a finding with it.
+6. **The decision-shape the skill is missing, and it changed this batch's best
+   outcome.** `repo-22` hit one defect mechanism three times — an anchor misfiring
+   because a text-shortening transformation moved survivors adjacent — and each fix
+   introduced the next instance. Its builder twice offered the owner a costed list
+   of options, and **every option in each list was a patch to the single shape most
+   recently found**. The owner declined to pick and required an *invariant* instead:
+   *no deletion may create an adjacency the raw text did not have*. The builder
+   implemented it as substitution rather than deletion, then built a 21-shape
+   battery aimed at the fix, which found **two more instances neither party had ever
+   observed**. The rule: ***an option list built from instances can only produce an
+   instance fix, however carefully it is costed.*** The tell is already on the page
+   — a mechanism recurring, with the fixes creating the recurrences. **When a defect
+   recurs, do not ask the owner to choose a patch; ask whether to close the class.**
+7. **The decision-grep at step 2 stays unreliable, in the direction the page
+   predicts.** Across twelve candidates it missed **two** (`dl-38`, `dl-39`) whose
+   open decisions lived as prose inside their Build sections, and flagged
+   `repo-21`'s gate-record heading as a decision when it was not. The seam-mapper
+   caught both misses when asked to report decision **locations** only. **Asking the
+   mapper for decision location — not content — is a good instrument; the grep alone
+   is not.** This is the third session running in which that grep is wrong in both
+   directions at once.
+8. **The instruction to reproduce rather than transcribe is doing the work the page
+   claims for it.** Five corrections of the orchestrator landed this session — three
+   from builders, two from gates — and by the orchestrator's own account every one
+   is attributable to that clause. Recorded as a measurement, not as praise: it is
+   the only clause on the page carrying a per-session count.
+9. **The best findings all came from one technique, and none from reading harder.**
+   `dl-42`'s silent-data-loss path (a regression that downloads video only and exits
+   0), `dl-38`'s unfalsifiable test, and `repo-22`'s two manufactured-block
+   regressions were **all** found by mutating a changed line and watching nothing go
+   red. `dl-42`'s most severe finding needed a *second* pass over the same diff with
+   a rule, having survived both the gate's sweep and the builder's. The builder's
+   own mechanism for why: some of its edit sites came from a failing test or a
+   compiler error and all of those were covered; the rest came from a `grep`, and
+   **nothing converts a grep hit into an obligation** — and every uncovered edit
+   carried a comment asserting why it was right. ***A comment is where a claim goes
+   to not be checked.*** (The relayed figures were "five of its eight edit sites"
+   from tests or the compiler and "four" from a grep, which do not add up against
+   eight; the counts are left out rather than picked between.)
+
+**Two one-line lessons from builders, kept because each names a shape rather than
+an incident.** `dl-41`'s builder, on why a clean tool report convinced it: ***a
+totals line that mixes "checked and fine" with "not checked" in one row is the
+shape to distrust*** — `citations.mjs` reported `0 moved, 0 unresolvable` while
+seven citations pointed at unrelated code, all of them `unanchored`. And `dl-38`'s
+builder, on why two of its Log claims were wrong: ***a number in a report is a
+claim and needs its own command***, and `| tail` is not that command.
+
+**What went right, and is worth copying.**
+
+- **An owner who refused a costed option list got the best outcome of the batch.**
+  Entry 6 is the sharpest thing this page has recorded about decisions: the skill
+  tells you to surface options with their costs, and here the *option format
+  itself* was the defect, because every option was drawn from the instance in front
+  of the builder. The invariant the owner demanded instead found two unobserved
+  instances.
+- **A builder held twice against the orchestrator** rather than reconstruct a
+  record it had not received, and was right both times.
+- **Every gate record in this batch is committed**, which is the only reason the
+  `gates` and `wrong findings` rows above could be recovered after the
+  orchestrator's own counts were lost.
+- **Cross-model gating held in both directions on every branch** — builders on
+  Opus, every reviewer on Sonnet, stated in each committed record. The reviewer
+  half is a file read rather than a report, since `ticket-reviewer.md` pins it in
+  frontmatter; the builder half is still each agent's statement about itself, which
+  the eighth session's entry 4 is about.
