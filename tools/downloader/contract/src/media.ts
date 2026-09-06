@@ -88,7 +88,21 @@ export interface MediaVariant {
   /** Separate audio rendition to mux in, when the video track is silent. */
   audioUrl?: string | undefined;
   hasVideo: boolean;
-  hasAudio: boolean;
+  /**
+   * `true` or `false` when a tier actually knows; **omitted when it does not**.
+   *
+   * `undefined` means "we did not look", and is deliberately distinct from
+   * `false`, which means "we looked and there is none". The direct tier reaches
+   * a plain file with one HEAD, and a HEAD carries `Content-Length` and
+   * `Content-Type` and nothing about streams in either direction — so it has
+   * nothing honest to put here (dl-42).
+   *
+   * Every consumer must branch on all three states rather than on truthiness.
+   * In particular the engine maps an unverified audio stream *optionally*
+   * (`-map 0:a:0?`), so ffmpeg keeps the track when it is there and does not
+   * abort with `Stream map '0:a:0' matches no streams` when it is not.
+   */
+  hasAudio?: boolean | undefined;
 
   container?: string | undefined;
   videoCodec?: string | undefined;

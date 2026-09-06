@@ -350,7 +350,10 @@ class Engine implements DownloadEngine {
         container: context.container,
         requestContext: request.requestContext,
         hasVideo: variant.hasVideo,
-        hasAudio: variant.hasAudio,
+        // Unverified (`undefined`) is treated as "try for it": both the
+        // manifest and the segment paths already map audio with a trailing
+        // `?`, so an absent track costs nothing and a present one is kept.
+        hasAudio: variant.hasAudio !== false,
         videoCodec: variant.videoCodec,
         audioCodec: variant.audioCodec,
         audioOnly: context.audioOnly,
@@ -478,8 +481,16 @@ class Engine implements DownloadEngine {
     if (context.media.audioPath === null) {
       const take: ("video" | "audio")[] = [];
       if (variant.hasVideo && !context.audioOnly) take.push("video");
-      if (variant.hasAudio) take.push("audio");
-      inputs.push({ path: context.media.videoPath, take: take.length > 0 ? take : ["audio"] });
+      // Three states, not two (dl-42). `false` is the only one that means
+      // "do not ask for audio"; `undefined` asks for it optionally, so a
+      // progressive file nobody inspected neither loses its sound nor kills
+      // the mux with `Stream map '0:a:0' matches no streams`.
+      if (variant.hasAudio !== false) take.push("audio");
+      inputs.push({
+        path: context.media.videoPath,
+        take: take.length > 0 ? take : ["audio"],
+        ...(variant.hasAudio === undefined ? { unverified: ["audio" as const] } : {}),
+      });
     } else {
       if (variant.hasVideo && !context.audioOnly) {
         inputs.push({ path: context.media.videoPath, take: ["video"] });

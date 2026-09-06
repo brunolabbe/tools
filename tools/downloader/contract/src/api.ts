@@ -109,7 +109,8 @@ export const mediaVariantSchema = z.object({
   url: z.string().min(1),
   audioUrl: z.string().optional(),
   hasVideo: z.boolean(),
-  hasAudio: z.boolean(),
+  // Optional on purpose: absent means unverified, not silent. See `MediaVariant`.
+  hasAudio: z.boolean().optional(),
   container: z.string().optional(),
   videoCodec: z.string().optional(),
   audioCodec: z.string().optional(),

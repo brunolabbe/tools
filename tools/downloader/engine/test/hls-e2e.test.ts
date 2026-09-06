@@ -204,6 +204,27 @@ async function topLevelBoxes(file: string): Promise<string[]> {
   return names;
 }
 
+/** Stream kinds ffmpeg reports for a file, in order. `-i` alone exits 1 by design. */
+async function streamKinds(file: string): Promise<string[]> {
+  const stderr = await new Promise<string>((resolve, reject) => {
+    const child = spawn(FFMPEG, ["-hide_banner", "-nostdin", "-i", file], {
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let buffer = "";
+    child.stderr?.setEncoding("utf8");
+    child.stderr?.on("data", (chunk: string) => {
+      buffer += chunk;
+    });
+    child.once("error", reject);
+    child.once("close", () => resolve(buffer));
+  });
+  return [...stderr.matchAll(/Stream #\d+:\d+.*?: (Video|Audio):/gu)].map((match) =>
+    (match[1] ?? "").toLowerCase(),
+  );
+}
+
 /** Re-reads the produced file with ffmpeg; a non-zero exit means unplayable. */
 async function assertDecodable(file: string): Promise<void> {
   await runFfmpeg([
@@ -298,6 +319,31 @@ describe("M1: HLS download end to end", () => {
     // Nothing is left behind for a failed job.
     await expect(fs.stat(path.join(storageDir, "out", "no-headers"))).rejects.toThrow();
     await expect(fs.stat(path.join(storageDir, "tmp", "no-headers"))).rejects.toThrow();
+  });
+
+  test("an unverified audio claim keeps the track rather than dropping it", async () => {
+    // dl-42's other direction, and the one that would fail quietly. Making
+    // `hasAudio` optional is only safe if `undefined` means "try for it": if the
+    // manifest arm read `=== true` instead of `!== false`, a variant nobody
+    // inspected would download **video only** and still exit 0, so the user gets
+    // a silent file and no error anywhere. The clip really has a 440 Hz tone.
+    const engine = createEngine({ storageDir, maxFileSizeBytes: 256 * 1024 * 1024 });
+    await engine.init();
+
+    const unverified = { ...variant(), hasAudio: undefined };
+    const outcome = await engine.download({
+      jobId: "unverified-audio",
+      variant: unverified,
+      requestContext: CONTEXT,
+      title: "unverified",
+      durationSec: CLIP_SECONDS,
+    });
+
+    // Read back out of the produced file, not off the arguments we sent.
+    const streams = await streamKinds(outcome.path);
+    expect(streams).toContain("audio");
+    expect(streams).toContain("video");
+    await assertDecodable(outcome.path);
   });
 
   test("a runtime size cap stops the download even when no estimate was possible", async () => {

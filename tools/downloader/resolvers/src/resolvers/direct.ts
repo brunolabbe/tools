@@ -257,7 +257,10 @@ export class DirectUrlResolver implements Resolver {
       protocol: "progressive",
       url: head.url === "" ? url.href : head.url,
       hasVideo,
-      hasAudio: true,
+      // `hasAudio` is deliberately absent: one HEAD says nothing about streams,
+      // so there is no honest value here and `undefined` is the contract's
+      // "we did not look" (dl-42). Claiming `true` sent ffmpeg after a track
+      // that may not exist; claiming `false` would be the same lie inverted.
       label: buildLabel({
         hasVideo,
         filesizeBytes,

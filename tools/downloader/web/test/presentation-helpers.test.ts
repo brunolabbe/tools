@@ -141,7 +141,9 @@ describe("variant rows", () => {
     const dash = rows[0]!;
     expect(dash.sizeIsEstimate).toBe(true);
     expect(dash.needsMux).toBe(true);
-    expect(dash.hasAudio).toBe(true);
+    // `hasAudio: false` on the variant, but a separate audio rendition to mux
+    // in — the row reports what the user will get, which is sound.
+    expect(dash.audio).toBe("present");
     expect(dash.videoCodec).toBe("HEVC");
     expect(rows[1]!.sizeIsEstimate).toBe(false);
     expect(rows[2]!.resolution).toBe("audio only");

@@ -49,6 +49,30 @@ describe("estimateVariantBytes", () => {
     expect(split.bytes ?? 0).toBeGreaterThan(muxed.bytes ?? 0);
   });
 
+  test("budgets the separate rendition for an unverified track too, not just a claimed one", () => {
+    // dl-42: `hasAudio` has three states, and this branch reads `!== false`
+    // rather than truthiness on purpose — over-estimating against a size limit
+    // is the safe direction, and refusing to budget for a track we are about to
+    // mux in would let a job past the cap and fail late.
+    const base = { bitrateBps: 1_000_000, durationSec: 60 } as const;
+    const audioBytes = Math.round(((128_000 * 60) / 8) * 1.02);
+
+    const claimed = estimateVariantBytes(
+      variant({ ...base, hasAudio: true, audioUrl: "https://cdn.example/audio.m3u8" }),
+    );
+    const unverified = estimateVariantBytes(
+      variant({ ...base, hasAudio: undefined, audioUrl: "https://cdn.example/audio.m3u8" }),
+    );
+    const silent = estimateVariantBytes(
+      variant({ ...base, hasAudio: false, audioUrl: "https://cdn.example/audio.m3u8" }),
+    );
+
+    // Unverified is budgeted exactly as a claimed track is...
+    expect(unverified.bytes).toBe(claimed.bytes);
+    // ...and only a verified silence is not, by exactly the assumed audio.
+    expect((claimed.bytes ?? 0) - (silent.bytes ?? 0)).toBe(audioBytes);
+  });
+
   test("uses a live duration limit instead of a stale DVR-window size", () => {
     const estimate = estimateVariantBytes(
       variant({ filesizeBytes: 900_000_000_000, bitrateBps: 4_000_000 }),

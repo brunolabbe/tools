@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  buildInputMaps,
   buildOutputArgs,
   containerSupports,
   formatMapArg,
@@ -43,6 +44,24 @@ describe("stream mapping", () => {
     expect(formatMapArg({ inputIndex: 2, kind: "subtitle", streamIndex: 1, optional: true })).toBe(
       "2:s:1?",
     );
+  });
+
+  test("an unverified stream is mapped optionally, a claimed one is not", () => {
+    // dl-42. `-map 0:a:0` against a file with no audio track is
+    // `Stream map '0:a:0' matches no streams` and exit 234, so a tier that
+    // never inspected the file must say so here and get the `?`.
+    const claimed = buildInputMaps({ path: "/tmp/media.mp4", take: ["video", "audio"] }, 0);
+    expect(claimed.map(formatMapArg)).toEqual(["0:v:0", "0:a:0"]);
+
+    const unverified = buildInputMaps(
+      { path: "/tmp/media.mp4", take: ["video", "audio"], unverified: ["audio"] },
+      0,
+    );
+    expect(unverified.map(formatMapArg)).toEqual(["0:v:0", "0:a:0?"]);
+
+    // Subtitles keep their `?` without being listed, as they always have.
+    const subtitles = buildInputMaps({ path: "/tmp/subs.vtt", take: ["subtitle"] }, 1);
+    expect(subtitles.map(formatMapArg)).toEqual(["1:s:0?"]);
   });
 });
 

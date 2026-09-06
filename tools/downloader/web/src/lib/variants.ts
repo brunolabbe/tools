@@ -3,11 +3,25 @@
 import type { MediaVariant, StreamProtocol } from "@downloader/contract";
 import { UNKNOWN, formatBitrate, formatBytes, formatResolution } from "./format.ts";
 
+/**
+ * What the picker knows about a rendition's sound. `"unverified"` is the tier
+ * that never looked (dl-42) and must not be collapsed into `"absent"`, which is
+ * the tier that looked and found nothing.
+ */
+export type RowAudio = "present" | "absent" | "unverified";
+
 export interface VariantRow {
   id: string;
   label: string;
   protocol: StreamProtocol;
   resolution: string;
+  /**
+   * What the Quality column shows: the resolution when there is one, and the
+   * variant's own label when there is not — a direct file has no dimensions but
+   * does have `Direct MP4 · 2.0 MB`, and a radio with no visible name is not a
+   * choice anyone can make (dl-42).
+   */
+  quality: string;
   fps: string;
   videoCodec: string;
   audioCodec: string;
@@ -16,7 +30,7 @@ export interface VariantRow {
   /** Derived from bitrate × duration rather than measured — must be marked as such. */
   sizeIsEstimate: boolean;
   hasVideo: boolean;
-  hasAudio: boolean;
+  audio: RowAudio;
   /** Audio lives at a separate URL and will be muxed in. */
   needsMux: boolean;
   height: number;
@@ -41,21 +55,36 @@ function shortCodec(codec: string | undefined): string {
   return known[family] ?? family;
 }
 
+function rowAudio(variant: MediaVariant, hasSeparateAudio: boolean): RowAudio {
+  // A separate audio rendition is audio we can see, whatever the flag says.
+  if (hasSeparateAudio || variant.hasAudio === true) return "present";
+  return variant.hasAudio === false ? "absent" : "unverified";
+}
+
 export function toVariantRow(variant: MediaVariant): VariantRow {
   const hasSeparateAudio = typeof variant.audioUrl === "string" && variant.audioUrl.length > 0;
+  const audio = rowAudio(variant, hasSeparateAudio);
+  const resolution = variant.hasVideo
+    ? formatResolution(variant.width, variant.height)
+    : "audio only";
   return {
     id: variant.id,
     label: variant.label,
     protocol: variant.protocol,
-    resolution: variant.hasVideo ? formatResolution(variant.width, variant.height) : "audio only",
+    resolution,
+    // The label is the fallback, but an empty one is not an improvement on the
+    // marker — a blank cell was the original complaint.
+    quality: resolution === UNKNOWN && variant.label !== "" ? variant.label : resolution,
     fps: variant.fps ? `${Math.round(variant.fps)} fps` : UNKNOWN,
     videoCodec: variant.hasVideo ? shortCodec(variant.videoCodec) : UNKNOWN,
-    audioCodec: variant.hasAudio || hasSeparateAudio ? shortCodec(variant.audioCodec) : UNKNOWN,
+    // Only a confirmed-silent variant is forced to `—`; an unverified one falls
+    // through to the codec it declared, which is itself usually unknown.
+    audioCodec: audio === "absent" ? UNKNOWN : shortCodec(variant.audioCodec),
     bitrate: formatBitrate(variant.bitrateBps),
     size: formatBytes(variant.filesizeBytes),
     sizeIsEstimate: variant.filesizeIsEstimate === true,
     hasVideo: variant.hasVideo,
-    hasAudio: variant.hasAudio || hasSeparateAudio,
+    audio,
     needsMux: hasSeparateAudio,
     height: variant.height ?? 0,
     bitrateBps: variant.bitrateBps ?? 0,
@@ -81,10 +110,14 @@ export function sortVariantRows(rows: readonly VariantRow[]): VariantRow[] {
 /**
  * Default selection: the highest-quality variant that already carries audio,
  * falling back to the highest-quality one overall.
+ *
+ * `"present"` only — a variant nobody inspected is not *preferred* as the
+ * default, but it is still reached by the `anyVideo` fallback below, which is
+ * what a lone direct file takes (dl-42).
  */
 export function pickDefaultVariantId(variants: readonly MediaVariant[]): string | null {
   const rows = sortVariantRows(toVariantRows(variants));
-  const withAudio = rows.find((row) => row.hasVideo && row.hasAudio && !row.needsMux);
+  const withAudio = rows.find((row) => row.hasVideo && row.audio === "present" && !row.needsMux);
   const anyVideo = rows.find((row) => row.hasVideo);
   return withAudio?.id ?? anyVideo?.id ?? rows[0]?.id ?? null;
 }

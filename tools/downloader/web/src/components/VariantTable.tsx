@@ -55,13 +55,19 @@ export function VariantTable({
                       checked={selected}
                       onChange={() => onSelect(row.id)}
                     />
-                    <span className="variants__res">{row.resolution}</span>
+                    <span className="variants__res">{row.quality}</span>
                     {row.hasVideo && row.fps !== "—" && <span className="muted">{row.fps}</span>}
                   </label>
                 </th>
                 <td>{row.videoCodec}</td>
-                <td>
-                  {row.hasAudio ? row.audioCodec : "none"}
+                <td
+                  {...(row.audio === "unverified"
+                    ? { title: "Not inspected — this tier only saw the response headers" }
+                    : {})}
+                >
+                  {/* Three states: `none` is a checked absence, `—` is silence
+                      about it. Collapsing them is the dl-42 defect. */}
+                  {row.audio === "absent" ? "none" : row.audioCodec}
                   {row.needsMux && (
                     <span className="tag" title="Audio is a separate stream and will be muxed in">
                       +mux

@@ -3,7 +3,7 @@ id: dl-42
 tool: downloader
 title: The direct tier claims audio it never checked, and the picker cannot name what it found
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -122,6 +122,28 @@ a second consumer of `hasAudio` needs to tell "no audio" from "we did not look".
   name in the Quality column rather than `—`.
 - `npm run check` and `npm test` pass.
 
+## Review
+
+**Gate: PASS** — 2026-09-05 · `origin/main...HEAD` (84b49ad) · defect hunt run directly (ticket-reviewer subagent, no code-review delegation) at medium depth, across two rounds against the same tip range
+
+| Done when                                                                                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A test drives a silent progressive variant through the engine into a container that forces a mux, and completes rather than failing on `-map 0:a`; fails on main | `api/test/silent-progressive-mux.test.ts:178-207` ✓ — reproduced the pre-fix failure directly: copied the test onto `origin/main`, ran it, got `AppError` with `code: 'MUX_FAILED', details: { exitCode: 234, stderr: "Stream map '0:a:0' matches no streams..." }`                                                                                                            |
+| A test asserts the direct resolver does not report a verified-sounding `hasAudio` for a response that never mentioned audio                                      | `api/test/silent-progressive-mux.test.ts:170` ✓                                                                                                                                                                                                                                                                                                                                |
+| A component test asserts a rendition with no width/height still renders a name in Quality, not `—`                                                               | `web/test/variant-table.test.tsx:163-177` ✓ — empty-label guard (`:184-193`) confirmed to fire by mutation                                                                                                                                                                                                                                                                     |
+| `npm run check` and `npm test` pass                                                                                                                              | verified — `npm run check` exit 0; `npm test` 128 files / 2060 tests; downloader project 68 files / 1045 tests; `node scripts/status.mjs --json` exit 0, `problems: []`; pre-fix `origin/main` was 65 files / 1029 tests, all green, so no existing test was weakened — read the diffs of every modified test file and each change reflects the new three-state model honestly |
+
+- **low** · `resolvers/test/browser/variants.test.ts:37` asserts `"hasAudio" in built === false` (key absence), which is stricter than the contract requires: `exactOptionalPropertyTypes` plus `hasAudio?: boolean | undefined` permits an explicit `hasAudio: undefined` as well as omission, no read-site in the codebase checks enumerability rather than value, and JSON erases the distinction at the wire boundary anyway. Recommend loosening to `toBeUndefined()`; not blocking.
+- **resolved, first round** · two `med` findings — `engine/src/estimate.ts`'s `hasAudio !== false` branch and `resolvers/src/browser/variants.ts`'s `progressiveVariants` fix were both changed-but-untested (reverting either to pre-fix truthiness left all 1039 tests green). Both now have dedicated tests (`estimate.test.ts`, `browser/variants.test.ts`) which I independently reproduced failing against their mutants after a rebuild.
+- **resolved, self-found** · a third, more severe gap the builder found applying the same method to its own diff: `engine/src/index.ts`'s manifest arm (`hasAudio: variant.hasAudio !== false`, passed into HLS/DASH downloads) was also changed-but-untested, and unlike the other two it fails silently — reverting it to `=== true` does not throw; it downloads video only and exits 0. Now covered by `engine/test/hls-e2e.test.ts:324-347`, which reads the produced file's stream table rather than checking arguments or exit status. I reproduced this one directly: `AssertionError: expected [ 'video' ] to include 'audio'` at `hls-e2e.test.ts:344`, with the download call itself resolving rather than rejecting.
+- **verified, reachability claim** · the ticket's Log distinguishes two mechanisms — `estimate.ts` and the manifest arm are branches no current resolver can reach (the two `hasAudio`-omitting producers are both `protocol: "progressive"` and neither sets `audioUrl`; every producer that sets `audioUrl` or that can reach the manifest arm writes a concrete boolean), while `browser/variants.ts` is fully reachable sniffer output uncovered only for lack of a test file. I checked this against the source myself (every `protocol:` assignment and `audioUrl` write in `resolvers/src`) rather than accepting the framing; it holds.
+- **verified, disclosure withdrawal** · the Log's withdrawal of the image-closure disclosure ("no new workspace dependency for the scan to miss") is correct: `git diff origin/main...HEAD -- tools/downloader/api/package.json` is empty, `@downloader/resolvers` is at `api/package.json:19` under `dependencies` on `origin/main` already, and `tools/downloader/Dockerfile` already carries it at lines 40 and 118-119.
+- **dropped** · none this round.
+- **findings** · this round's defect hunt (self, medium depth, over the full `origin/main...HEAD` diff at 84b49ad) returned 1 (the `low` above); 1 carried, 0 dropped. Combined with the first round: 3 findings total across both rounds, all 3 carried, all 3 now resolved or standing as the one `low`.
+- NFR: security n/a (no credential/URL handling touched) · performance n/a · reliability ✓ (strictly safer than main: unverified audio no longer aborts the mux, is budgeted for rather than under-estimated, and — as of this round — is no longer silently dropped on the manifest path either) · maintainability ✓ (the three previously-untested branches are now pinned by tests that fail against their own mutants, independently confirmed).
+
+No e2e run for this ticket (grepped the specs for Quality-column/`hasAudio` assertions and found none — a grep, not a run) and no container build (the image-closure question above is resolved by inspection, not by building the image) remain as disclosed gaps, unchanged from the first round and not blocking PASS.
+
 ## Log
 
 - **2026-09-05 — filed.** Found while answering a question about why the picker
@@ -133,3 +155,129 @@ a second consumer of `hasAudio` needs to tell "no audio" from "we did not look".
   reproduction. The reporter's own download succeeded, which is why the
   `needsMux` short-circuit is documented above rather than left to be
   rediscovered — it is the reason this has survived since the direct tier landed.
+- **2026-09-05 — built, option A.** The owner chose **A** over the brief's own
+  recommendation of B, so `hasAudio` is now `hasAudio?: boolean | undefined` in
+  the contract with `undefined` meaning "we did not look", distinct from `false`
+  meaning "we looked and there is none". What the brief had right, wrong, and
+  missing:
+
+  **Right.** All four proposed sites are exactly where it said they were. The
+  reproduction is real and the `needsMux` short-circuit is the reason it hid.
+
+  **Wrong in one detail, and it matters for grepping.** The failing argument is
+  `-map 0:a:0`, not `-map 0:a`: `mux()` always sets `streamIndex: 0`. ffmpeg
+  exits **234** with `Stream map '0:a:0' matches no streams. To ignore this, add
+a trailing '?' to the map.` — captured from the pre-fix run of the test below.
+
+  **Missing, and this is the substance of the ticket.** The brief lists four
+  sites; there are eight reads of `variant.hasAudio` across four packages, and
+  five of them needed a decision rather than a rename:
+
+  - `contract/src/api.ts` — the zod schema, unmentioned by the brief and the one
+    that would have failed loudest: `hasAudio: z.boolean()` rejects a variant
+    that omits the field, so a resolver honest about its ignorance could not have
+    crossed the wire at all. Now `.optional()`.
+  - `engine/src/index.ts` (the hls/dash arm, not the `take` line) — passes
+    `hasAudio` into the manifest download. Now `!== false`.
+  - `engine/src/estimate.ts` — adds an assumed audio bitrate for a separate
+    rendition. Now `!== false`: over-estimating a size limit is the safe side.
+  - `api/src/jobs/variant-selection.ts`, twice — `audioScore` is now three-way
+    (verified 2, unverified 1, silent 0) and the `audioOnly` filter keeps
+    anything not known-silent. Under truthiness, an unverified variant would have
+    been ranked below a confirmed-silent one and dropped from an audio-only
+    request, which is the "coerce to false" failure this option exists to stop.
+  - `web/src/lib/variants.ts` — `VariantRow.hasAudio: boolean` is now
+    `audio: "present" | "absent" | "unverified"`, so the picker cannot collapse
+    the states by accident and the Audio column distinguishes `none` (checked)
+    from `—` (not checked).
+
+  **Narrower than the brief implies.** `download/manifest.ts` and
+  `download/segments.ts` already emit their audio maps with `optional: true`, so
+  `mux()` was the only path that could ever have failed. The engine now maps
+  audio optionally _only_ when the claim is unverified, via a new
+  `MuxInputFile.unverified` — mapping it optionally unconditionally is the
+  brief's option B, and doing both would erase the distinction A was chosen for.
+
+  **Folded in.** `resolvers/src/browser/variants.ts` `progressiveVariants` makes
+  the identical unchecked claim from a network hit and produces `progressive`
+  variants that reach the identical mux. Fixing one and not the other would have
+  left the same download failing by the other route.
+
+  **The picker item, unchanged in substance.** `VariantTable.tsx` did render
+  `row.resolution` and never `row.label`, while `JobCard.tsx` uses
+  `variant.label`. `VariantRow` gains a `quality` field — the resolution when
+  there is one, the label when there is not, and the `—` marker when there is
+  neither, because an empty label is not an improvement on a marker.
+
+  **Where the tests live, and why.** The end-to-end proof drives the real direct
+  resolver into the real engine, so it needs both packages and lives in
+  `api/test/silent-progressive-mux.test.ts`; `engine` importing `resolvers` would
+  invert the tool's layering. Note that `@downloader/engine` resolves to `dist`,
+  so that file measures the **build**: a mutation checked without
+  `npm run build` first passes while proving nothing.
+
+  **The line numbers in _Why_ are pre-fix and are left as filed.** They describe
+  `4a4cc4f`, which is the state the reproduction was taken against, and
+  rewriting them would delete the record of where the defect was. On the fix
+  they read: the `take` line is `engine/src/index.ts:488`, the map optionality
+  is `engine/src/mux.ts:286` (inside the new `buildInputMaps`), the schema is
+  `contract/src/api.ts:113`, and `direct.ts:260` is now a comment saying why
+  nothing is written there. `scripts/citations.mjs` reports all thirteen as
+  unanchored rather than moved, because none of them carries anchor text.
+
+- **2026-09-05 — gate round, and the coverage gap it found.** The gate returned
+  CONCERNS on two changed-but-untested lines. I reproduced both — applied both
+  mutations at once, rebuilt, and watched all 1039 tests still pass, which
+  settles them jointly since a test catching either would have reddened that run
+  — and then applied the same reasoning to the rest of the diff and **found a
+  third the gate had missed**, `engine/src/index.ts`'s manifest arm.
+
+  **Why deliberate changes ended up unproven, which is the more useful note than
+  the fix.** The eight sites split by how I reached them. Five came from a
+  _failing test_ or from the _type checker_ refusing to compile — `direct.ts`,
+  `mux.ts`, the `take` line, the picker row, the zod schema — and all five have
+  tests, because the thing that took me there was itself a test. Four came from
+  a `grep`, and **nothing converts a grep hit into an obligation**. I wrote
+  tests for two of them (`variant-selection.ts`) because that was a task I set
+  myself, and none for the other three.
+
+  The sharper version: every one of the three uncovered edits has a comment
+  explaining why the branch is right — "over-estimating a size limit is the safe
+  direction", "same omission as the direct tier". **A comment is where a claim
+  goes to not be checked.** Grepping my own diff for comments that assert a
+  behaviour and asking "which test fails if this is wrong?" would have found all
+  three mechanically. `npm run check` passing is exactly the signal that a
+  `!== false` edit is _type-correct_, and I let type-correctness stand in for
+  coverage.
+
+  **Two different mechanisms, not one.** `estimate.ts` and `index.ts`'s manifest
+  arm are branches no current resolver can reach: the only two producers that
+  omit `hasAudio` both emit `protocol: "progressive"` and neither sets
+  `audioUrl`, while every producer that sets `audioUrl` (`hls.ts:472`,
+  `dash.ts:433`, `ytdlp.ts:516`) writes a boolean. They are defensive, and their
+  tests are unit tests over hand-built variants that say so.
+  `browser/variants.ts` is the opposite — fully reachable production output of
+  the sniffer, uncovered only because the module had no test file at all.
+
+  **The third one was the dangerous one.** `index.ts`'s manifest arm reading
+  `=== true` instead of `!== false` does not fail; it downloads **video only**
+  and exits 0, so the user gets a silent file and nothing reports it. The new
+  test reads the stream table back out of the produced file and catches it as
+  `expected [ 'video' ] to include 'audio'`. Making `hasAudio` optional is only
+  safe because `undefined` means "try for it" on every path.
+
+  Tests added: `engine/test/estimate.test.ts` (unverified budgeted exactly as
+  claimed, and only verified silence is not),
+  `resolvers/test/browser/variants.test.ts` (new file; also pins the deliberate
+  `opaqueManifestVariant` exclusion so it is not re-litigated), and
+  `engine/test/hls-e2e.test.ts` (audio survives an unverified claim, asserted
+  against the real output file). All three were confirmed to fail against their
+  mutants before being kept.
+
+  **One disclosure withdrawn.** My build report listed the image-closure
+  consequence of the new `api/test` → `@downloader/resolvers` import as an
+  unmeasured risk. It is not one: `git diff origin/main...HEAD --
+tools/downloader/api/package.json` is empty, `@downloader/resolvers` was
+  already at `api/package.json:19` under `dependencies`, and the `Dockerfile`
+  already carries it at lines 40 and 118–119. There is no new workspace
+  dependency for the scan to miss.

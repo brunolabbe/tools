@@ -125,13 +125,14 @@ test("a silent rendition says 'none', not the unknown marker", () => {
   // branch, and dropping the guard entirely left the suite green.
   //
   // **What the mutant actually renders is `—`, not a codec.** `toVariantRow`
-  // computes `audioCodec` and `hasAudio` from the same predicate
-  // (`variant.hasAudio || hasSeparateAudio`), so a row with no audio always has
-  // `audioCodec === UNKNOWN` and the stale-codec story is not reachable. This
-  // test is worth keeping for the smaller, true reason: `—` means "we do not
-  // know", and "we do not know whether this has sound" is a different claim
-  // from "this has no sound". Only one of them tells a user what they are
-  // about to download.
+  // forces `audioCodec` to the marker for exactly the rows it calls `absent`,
+  // so a row with no audio always has `audioCodec === UNKNOWN` and the
+  // stale-codec story is not reachable. This test is worth keeping for the
+  // smaller, true reason, which dl-42 turned into the whole point of the
+  // column: `—` means "we do not know", and "we do not know whether this has
+  // sound" is a different claim from "this has no sound". Only one of them
+  // tells a user what they are about to download — and the unverified row a
+  // few tests below is the other one.
   mount([
     variant({
       id: "v-silent",
@@ -159,14 +160,63 @@ test("a rendition whose audio is a separate stream is marked as needing a mux", 
   );
 });
 
-test("a variant with no resolution renders the unknown marker, not a blank cell", () => {
-  // Progressive downloads routinely arrive with no width or height at all.
-  mount([variant({ id: "v-plain", width: undefined, height: undefined, fps: undefined })]);
+test("a variant with no resolution is named by its label, not left as a dash", () => {
+  // dl-42: a direct file arrives with no width or height at all, and until this
+  // fallback landed the Quality cell was the em dash — so the radio a user is
+  // asked to choose had no visible name, while `JobCard` showed the very same
+  // `label` happily. The label is the only informative string the row holds.
+  mount([
+    variant({
+      id: "v-plain",
+      width: undefined,
+      height: undefined,
+      fps: undefined,
+      label: "Direct MP4 · 2.0 MB",
+    }),
+  ]);
 
   const row = within(screen.getByRole("table")).getAllByRole("row")[1];
-  expect(row?.textContent).toContain("—");
+  const quality = within(row as HTMLElement)
+    .getByRole("radio")
+    .closest("label") as HTMLElement;
+  expect(quality.textContent).toBe("Direct MP4 · 2.0 MB");
   expect(row?.textContent).not.toContain("undefined");
   expect(row?.textContent).not.toContain("0p");
+});
+
+test("a variant with neither a resolution nor a label falls back to the marker", () => {
+  // The fallback must not trade one blank cell for another.
+  mount([
+    variant({ id: "v-nameless", width: undefined, height: undefined, fps: undefined, label: "" }),
+  ]);
+
+  const quality = within(within(screen.getByRole("table")).getAllByRole("row")[1] as HTMLElement)
+    .getByRole("radio")
+    .closest("label") as HTMLElement;
+  expect(quality.textContent).toBe("—");
+});
+
+test("audio nobody checked reads as unknown, which is not the cell 'none' fills", () => {
+  // dl-42's third state, at the only place a user meets it. `hasAudio` omitted
+  // is "we did not look"; the test above pins `false` to "none", and the two
+  // must not render the same string.
+  mount([
+    variant({
+      id: "v-unverified",
+      hasAudio: undefined,
+      audioUrl: undefined,
+      audioCodec: undefined,
+      width: undefined,
+      height: undefined,
+      fps: undefined,
+      label: "Direct MP4 · 2.0 MB",
+    }),
+  ]);
+
+  const audioCell = within(screen.getByRole("table")).getAllByRole("row")[1]
+    ?.children[2] as HTMLElement;
+  expect(audioCell.textContent).toBe("—");
+  expect(audioCell.getAttribute("title")).toContain("Not inspected");
 });
 
 test("an estimated size is marked as an estimate", () => {
