@@ -195,6 +195,50 @@ test("check-pr-title does not block a heredoc that quotes the phrase in prose", 
   expect(isSilent(run(PR_TITLE, command))).toBe(true);
 });
 
+/**
+ * The strip SUBSTITUTES one `\x01` per removed span rather than deleting it,
+ * because a deletion moves its neighbours together and can build an adjacency
+ * the raw text never had. Two shipped false blocks came from that one
+ * mechanism. These are the shapes that break a *deleting* strip — chosen by
+ * attacking the fix, not by replaying the bugs it cured, which is the rule this
+ * ticket earned. Against the deleting version three of them fail; only one had
+ * ever been found by hand.
+ */
+const SENTINEL = "";
+
+test("check-pr-title does not block when an escape precedes the phrase", () => {
+  for (const gap of ["\\x", "\\\\", "\\;", 'a\\"b']) {
+    const command = `true; ${gap} ${PHRASE} --web`;
+    // `\x` is a no-op escape, so this runs a program named `x` — it never
+    // invokes the guarded command at all. origin/main is silent on every one.
+    expect(isSilent(run(PR_TITLE, command)), command).toBe(true);
+  }
+});
+
+test("check-pr-title does not forge a boundary out of one inside a quoted span", () => {
+  // A `;`, `&&` or `(` that exists only inside a string is not a shell
+  // operator. Deleting the span could leave the phrase against whatever
+  // preceded it; substituting cannot.
+  for (const span of ['"a;b"', '"a&&b"', '"a(b"']) {
+    const command = `foo ${span} ${PHRASE} --web`;
+    expect(isSilent(run(PR_TITLE, command)), command).toBe(true);
+  }
+});
+
+test("check-pr-title treats a literal sentinel in the command as inert", () => {
+  // The sentinel need not be absent from real input: it is not whitespace, not
+  // a boundary character and not part of the phrase, so one that someone
+  // actually types can neither forge a match nor break a real one.
+  expect(isSilent(run(PR_TITLE, `echo "a${SENTINEL}b"`))).toBe(true);
+  expect(run(PR_TITLE, `${PHRASE} --title 'nope'${SENTINEL}`).status).toBe(2);
+});
+
+test("check-tree-grep does not warn when an escape precedes the command word", () => {
+  // Same substitution, same reasoning; advisory here, so the cost of the bug
+  // was noise rather than a block.
+  expect(isSilent(run(TREE_GREP, "true; \\x grep -rl x ."))).toBe(true);
+});
+
 test("check-pr-title still reads a title out of a quoted span", () => {
   // The trap in the fix: strip for the boundary test only. Substitute the
   // stripped text into the extraction and the title becomes unfindable, turning

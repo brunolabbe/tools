@@ -62,14 +62,19 @@ cmd="$(jq -r '.tool_input.command // empty')"
 
 # Strip quoted spans before the boundary test, so a `grep -r ...` that is only
 # being *quoted* — in an echo, a message, a search pattern — is not read as one
-# being run. Why that matters, why escaped quotes must be removed first, and the
-# measurement behind this exact sed, is in the sibling hook:
-# .claude/hooks/check-pr-title.sh. Do not restate it here.
+# being run. Each span becomes one `\x01` rather than nothing: **substitute, do
+# not delete**, because a deletion moves its neighbours together and can build
+# an adjacency the raw text never had. Why that is the whole design, why `\x01`
+# and not some other character, and the two shipped false blocks that bought the
+# lesson, are in the sibling hook: .claude/hooks/check-pr-title.sh. Do not
+# restate them here.
 #
 # This half was a defect in new code rather than a regression: the file is new,
-# so there was no earlier behaviour to break. It also only ever warns, so the
-# same root cause costs noise here and a blocked command there.
-bare="$(printf '%s' "$cmd" | sed -E "s/\\\\.//g; s/'[^']*'//g; s/\"[^\"]*\"//g")"
+# so there was no earlier behaviour to break. It also only ever warns — there is
+# no `exit 2` anywhere below — so the same root cause costs noise here and a
+# blocked command there. Keep it that way: the asymmetry is structural, not a
+# convention.
+bare="$(printf '%s' "$cmd" | sed -E "s/\\\\./\x01/g; s/'[^']*'/\x01/g; s/\"[^\"]*\"/\x01/g")"
 
 # Match `grep` only as the command word of a simple command — at the start or
 # after a shell operator. That is exactly when the bash function fires: under

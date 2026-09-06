@@ -670,7 +670,7 @@ branch that already carried two**, under one squash-merge line.
   blast radius goes from **2 of 10 to 0 of 10**, and the 46-shape battery stays
   at 0 unexpected. **This entry originally claimed the clause "fails in the safe
   direction … never a false block". That claim was false and is retracted** —
-  see the OPEN entry at the end of this Log, where the gate falsified it by
+  see the final entry in this Log, where the gate falsified it by
   probing the fix instead of the bug.
 - **The three reproductions are now tests, and they were watched going red.**
   Removing only the new clause from both files fails exactly the three new tests
@@ -727,11 +727,14 @@ the same both times and it is not carelessness.
   to protect, and does the fix still protect it?", which is a different question
   from "is the bug gone?".
 
-**2026-09-06 — OPEN, not settled here: the fix for the strip has the same defect
-as the strip, and the rule above caught it one round later.** The gate applied
-this ticket's own new rule to the fix that the rule came from, and it worked.
-**The remedy is with the owner; nothing in this branch implements one, and
-`db83b6f` still has this behaviour.**
+**2026-09-06 — the fix for the strip had the same defect as the strip, and the
+owner closed the class rather than the instance.** The gate applied this
+ticket's own new rule to the fix the rule came from, and it worked. **The answer
+was none of the three options this builder offered.** All three patched the
+instance; the owner required an outcome instead — _no deletion may create an
+adjacency the raw text did not have_ — on the reasoning this ticket's own
+retrospective supplied: patching the instance had failed twice, and both times
+the patch passed its own tests.
 
 - **The reproduction, confirmed here rather than taken on report.**
   `true; \x gh pr create --web` exits `0` on `origin/main` and on `76e6a5b`, and
@@ -748,18 +751,69 @@ this ticket's own new rule to the fix that the rule came from, and it worked.
   rule warns about — shapes drawn from the bug. One correction to the gate's
   wording: the claim lived **in this Log, not in either hook's header**; neither
   `.sh` file contains it, so nothing false shipped in the code comments.
-- **A candidate remedy is measured and deliberately unshipped.** Narrowing the
-  clause to escaped quotes and backslashes only —
-  `s/\\[\\'"]//g` in place of `s/\\.//g` — leaves `\x` alone, so the adjacency is
-  never manufactured. Measured on that change: the new reproduction goes silent,
-  all three earlier reproductions stay silent, `--title 'nope'` still exits `2`,
-  `hooks.test.ts` stays 15/15, and the blast battery stays 0 of 10. Reverted
-  unshipped, because a measurement is not authority and the remedy is the
-  owner's call.
-- **What is NOT claimed:** that narrowing closes the mechanism. It removes the
-  one escape class that was measured to manufacture an adjacency; it is not a
-  proof that no other deletion can. Saying otherwise would repeat this entry's
-  own mistake a third time. Any future claim of safety here needs a test set
-  built by someone attacking the fix, and `check-tree-grep.sh` is exempt from
-  the blocking half of the concern only because it has no `exit 2` path at all —
-  a structural property, worth keeping structural.
+- **The shipped fix: substitute, do not delete.** Each stripped span becomes one
+  `\x01` instead of nothing, in both hooks. The anchor still cannot see inside a
+  string — the point of stripping — but a removal can no longer close a gap,
+  because nothing is removed. The narrowing this builder had recommended was
+  declined: it would have removed the one escape class that had been _measured_
+  to manufacture an adjacency, which is not a proof no other deletion can.
+- **`\x01` is chosen against the anchor, not for uniqueness.** It must be none
+  of the three things the anchor reacts to: whitespace (`[[:space:]]*` would
+  skip it), one of `; & | (` (it would forge the boundary it exists to block),
+  or a character of the phrase. **It deliberately need not be absent from real
+  input** — a stray `\x01` someone types is inert for those same three reasons,
+  so there is no sentinel-collision problem to solve. Not `\x00`, which would
+  truncate the pipeline.
+- **The property being bought, stated so it can be checked:** substitution
+  leaves one non-matching character where deletion left zero, so its match set
+  is a _subset_ of the deleting version's. A substitution can only ever prevent
+  a match, never create one. That is the invariant; the outcome the owner asked
+  for follows from it.
+- **The class was measured, not assumed — this is the evidence that it is a
+  class fix.** A 21-shape battery aimed at the _substitution_ (not at the bugs
+  it cured) runs 0 unexpected. The same battery against the deleting version
+  fails **3**: `\x`, `\\` and `\;` before the phrase. **Only one of those three
+  had ever been found by anyone**, which is the point — the two fixes before
+  this each closed the single shape that had been observed, and two more were
+  sitting there unobserved.
+- **Red-verified, and two of the new tests are recorded as weak rather than
+  passed quietly.** Reverting substitution to deletion fails exactly the two
+  escape tests. The boundary-forging and sentinel-inert tests pass against the
+  deleting version too, so they prove nothing about _this_ change — they are
+  regression guards for the next one, and saying so is cheaper than someone
+  later mistaking them for evidence.
+- **Not a regression, checked rather than assumed:** an unterminated quote
+  (`echo "unterminated; gh pr create`) exits `2` on `origin/main` and on this
+  branch alike. It is a bash syntax error that cannot run, and the behaviour is
+  identical to the tree this branch leaves, so it is a pre-existing limitation
+  rather than anything the strip introduced.
+- **`check-tree-grep.sh` is exempt from the blocking half only because it has no
+  `exit 2` path at all.** That is structural, and its header now says to keep it
+  structural rather than conventional.
+
+**2026-09-06 — the second lesson, and it is not the first one repeated.** The
+earlier entry says a guard's test set must contain shapes chosen by someone
+attacking the fix. True, and it was not enough: this builder wrote that rule
+down and then, one round later, offered three remedies that were all patches to
+the single shape the gate had just found. The rule was applied to the _bug_ and
+not to the _fix_, which is the exact failure the rule describes.
+
+- **What broke the loop was the owner refusing to pick from the options.** Three
+  options were put up, all of the form "make this input stop doing that"; the
+  answer named an _outcome_ instead — no deletion may create an adjacency the
+  raw text did not have — and let the implementation follow from it. **An option
+  list built from instances can only produce an instance fix, however carefully
+  it is costed.** The measurement that justified the outcome was already in this
+  Log: two instances, two clean-looking fixes, both passing their own tests.
+- **The tell was available and was not read.** By the time the third instance
+  landed, the same mechanism had produced three defects and every fix had been
+  local to one input shape. A repeat count of three, with the fixes themselves
+  supplying two of them, is the signal to stop patching and state the invariant.
+  This builder had all three data points and still offered a fourth patch.
+- **So the durable rule is about the shape of the answer, not the tests:** when a
+  mechanism recurs — and especially when a fix for it introduces the next
+  instance — stop proposing inputs to neutralise and write down the property
+  that must hold. Then test the property. `hooks.test.ts`'s new cases exist
+  because the invariant came first; under the old approach they would never have
+  been thought of, which is why two of the three shapes they cover had never
+  been observed by anyone.
