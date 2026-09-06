@@ -147,6 +147,17 @@ Once the decision is answered:
   assertion.
 - `npm run check` passes and `node scripts/status.mjs --json` exits `0`.
 
+## The gate on this filing
+
+**Gate: PASS** — 2026-09-06 · reviewed at `0803da9` · a filing only, no work performed on `repo-26` itself — per `docs/01-TICKETS.md`'s review gate and the `dl-29` precedent, recorded under this heading rather than `## Review` since `status: needs-decision` plus a `## Review` heading would read as work that merged without status reflecting it
+
+- **Carries both a reproduction and a decision, as required.** The reproduction is the CI elimination table (which `check-pr-title` cases reach `commit-message.mjs`, sorted by required outcome) plus the direct string measurement (`file://D:\a\...` vs `file:///D:/a/...`, unequal). The decision is three honestly-costed options for which entry points need a process-level test, with an explicit counter-argument recorded against the recommended one ("(a)... Risk: the set is not enforced anywhere... (b) is defensible on the grounds that the set in (a) is invisible and unenforced").
+- **`needs-decision` is the right status, and it is correctly withheld.** `node scripts/status.mjs -- --ready` does not list it; `node scripts/status.mjs --json` exits `0`; `--show repo-26` reports "waiting on a decision — not startable until someone answers it."
+- **The ticket explicitly declines to prejudge its own decision** by not sweeping `scripts/*.mjs` for other instances of the same guard shape first, and says so — the right restraint for a ticket whose Build step 3 already measures "exactly one occurrence existed repo-wide" as a side effect of fixing this one.
+- **Not settled here.** The three options and the recommendation are the owner's to weigh; I have not picked one.
+- **findings** · 0 returned, 0 carried, 0 dropped.
+- NFR: not applicable — no code in this filing.
+
 ## Log
 
 **2026-09-06 — filed out of repo-22, from a failure it hit rather than a review
