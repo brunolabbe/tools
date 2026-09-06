@@ -283,6 +283,22 @@ export function extractCitations(markdown) {
    * guess at all. A blank line is a real lexical boundary — not a tuned distance
    * — and inside one paragraph "the same file" is unambiguous English. Across
    * one, the author may have moved on in prose the scanner cannot read.
+   *
+   * **A paragraph is delimited by a blank line and nothing else, so a *tight*
+   * markdown list is one paragraph however many bullets it has.** Nobody derives
+   * that from the rule, so it is written here rather than left to be met: a
+   * shorthand in one bullet inherits the file from the bullet above it, counts as
+   * `nearby`, and is therefore fatal rather than downgraded. Loosen the list —
+   * put a blank line between the items — and the same two bullets stop sharing a
+   * file.
+   *
+   * The example is real and it is in this repository. repo-25's own gate record
+   * has a tight list whose second bullet quotes `` `:8443` `` while the first
+   * cites `scripts/citations.mjs`; the port is read as a line in that file and
+   * fails, which is why that record carries an evidence declaration for it. The
+   * reviewer writing that record hit this while reviewing the rule that causes
+   * it — the tool caught its own gate record, which is the case for trusting the
+   * rule rather than against it.
    */
   let paragraph = 0;
   let currentFileParagraph = /** @type {number | null} */ (null);
