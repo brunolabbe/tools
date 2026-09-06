@@ -940,3 +940,14 @@ manipulation is exactly the one that needed it.
 - **Nothing was weakened to go green.** No test was skipped, no platform
   conditional was added, and both guard assertions stand exactly as written. The
   fix makes them pass by repairing what they were correctly reporting as broken.
+- **CI is green at `af657c7`**, `windows-latest` included — the matrix that was
+  red at `eb345b8`. Confirmed by the only instrument that could confirm it,
+  which is the point of the platform note above.
+- **The gap that let it survive is filed as `repo-26`**, not fixed here:
+  `docs/work/repo-26-no-test-runs-a-script-as-a-process.md`. The Windows bug is
+  fixed on this branch; what is not fixed is that **no test in `scripts/test/`
+  runs a script as a process**, and an entry-point guard is the one line an
+  import can never reach. It carries this reproduction and an open decision
+  about which entry points need process-level tests. **Deliberately not swept:**
+  the other scripts were not audited here, because measuring that count is the
+  first step of `repo-26`'s work and would prejudge its decision.
