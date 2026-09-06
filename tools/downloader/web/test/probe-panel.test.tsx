@@ -118,17 +118,17 @@ test("the header names what was found and which resolver found it", () => {
 });
 
 test("the count over the table counts the rows the table shows (dl-40)", () => {
-  // Twenty declared, five rendered: "20 renditions" above five rows is the same
-  // defect as twenty identical rows, told from the other end. What was merged is
+  // Ten declared, five rendered: "10 renditions" above five rows is the same
+  // defect as ten identical rows, told from the other end. What was merged is
   // said out loud rather than silently dropped from the count.
-  mount(probe({ variants: parsedVariants("hls-master-redundant-cdns") }));
+  mount(probe({ variants: parsedVariants("manifests/hls-master-redundant-mirrors") }));
 
-  expect(screen.getByText(/5 renditions · 15 duplicate paths merged/u)).toBeDefined();
+  expect(screen.getByText(/5 renditions · 5 duplicate paths merged/u)).toBeDefined();
   expect(within(screen.getByRole("table")).getAllByRole("radio")).toHaveLength(5);
 });
 
 test("a ladder with nothing to merge says nothing about merging", () => {
-  mount(probe({ variants: parsedVariants("hls-master-multibitrate") }));
+  mount(probe({ variants: parsedVariants("manifests/hls-master-multibitrate") }));
 
   expect(screen.getByText(/12:34 · 5 renditions$/u)).toBeDefined();
 });

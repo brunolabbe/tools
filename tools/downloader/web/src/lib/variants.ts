@@ -176,10 +176,10 @@ export interface DisplayRows {
  * The rows the picker shows, with rows that differ only in something it cannot
  * render either made distinguishable or removed (dl-40).
  *
- * A manifest is free to declare twenty streams that this table renders as
- * twenty identical lines, and it happens for three unrelated reasons. Which one
- * is in front of the user is read off the variants rather than assumed, because
- * the answers pull in opposite directions:
+ * A manifest is free to declare a rung many times over and have this table
+ * render every one of them as the same line, and it happens for three unrelated
+ * reasons. Which one is in front of the user is read off the variants rather
+ * than assumed, because the answers pull in opposite directions:
  *
  *  - **the audio language differs** → surface it, as a column, for this probe
  *    only;
@@ -202,14 +202,27 @@ export function toDisplayRows(variants: readonly MediaVariant[]): DisplayRows {
 
   // Collapse-and-drop, and what is dropped is a real capability: rows still
   // identical here differ only in their `url`, and in HLS a rendition declared
-  // twice at two URLs is a failover path — the second server a player would try
-  // when the first one fails (RFC 8216 §6.2.4). They are discarded rather than
-  // kept because there is nowhere to keep them: `MediaVariant` carries a single
-  // `url` and the engine downloads from exactly that, so an alternate would be
-  // a field nothing reads. The survivor is the first one the manifest declared,
-  // which is its primary. Keeping the alternates and teaching the engine to fail
-  // over is a contract change and a follow-up ticket; dl-40 deliberately does
-  // not wait for it, and its Log carries which ticket that is.
+  // more than once at more than one host is a failover path — the next server a
+  // player would try when the first one fails (RFC 8216 §6.2.4). That is what
+  // the reported video turned out to be, established by probing it: within a
+  // rung the entries agreed on every attribute, on the scheme, on every path
+  // segment and on the query, and differed in the hostname alone.
+  //
+  // They are discarded rather than kept because there is nowhere to keep them:
+  // `MediaVariant` carries a single `url` and the engine downloads from exactly
+  // that, so an alternate would be a field nothing reads. **dl-45 is the ticket
+  // for keeping them** — alternates on the variant and the engine failing over —
+  // and dl-40 deliberately did not wait for it. The survivor is the first the
+  // manifest declared for that rung, which is its primary rather than a mirror.
+  //
+  // Nothing here assumes how many. The reported manifest mirrored every rung
+  // exactly twice; the fixture varies it from one to three precisely so that
+  // number cannot creep into this code.
+  //
+  // This is the *picker's* half. Exact duplicates — the same URL twice, which is
+  // what the reported video's other doubling was — are dropped a layer earlier,
+  // in the yt-dlp tier, because those are noise for every consumer and not just
+  // for the table.
   const kept = new Map<string, VariantRow>();
   for (const row of rows) {
     const key = displayKey(row, showLanguage);

@@ -1,6 +1,7 @@
 {
-  "provenance": "Generated, not written: parseHls() run over the manifest named below. The `derived variant fixtures` test in resolvers/test/hls.test.ts re-runs the parser and fails if this file ever stops matching it.",
-  "manifest": "hls-master-per-language-ladder.m3u8",
+  "provenance": "Generated, not written: the parser named in `producer` run over `source`. The `derived variant fixtures` tests in resolvers/test re-run it and fail if this file ever stops matching.",
+  "producer": "parseHls",
+  "source": "hls-master-per-language-ladder.m3u8",
   "baseUrl": "https://cdn.example.com/hls/2026/master.m3u8",
   "variants": [
     {

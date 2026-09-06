@@ -272,9 +272,9 @@ test("an empty rendition list still renders a table with only its header", () =>
 
 /**
  * dl-40, at the level a person sees: what the table does with renditions that
- * differ only in something it has no column for. The lists come from the real
- * parser over real master playlists (`parsedVariants`), not from the builders
- * above, because "twenty rows that look the same" is a property of manifests.
+ * differ only in something it has no column for. The lists come from real
+ * resolvers over real sources (`parsedVariants`), not from the builders above,
+ * because "rows that look the same" is a property of what sites publish.
  */
 function headers(): string[] {
   return within(screen.getByRole("table"))
@@ -282,9 +282,10 @@ function headers(): string[] {
     .map((cell) => cell.textContent ?? "");
 }
 
-test("a ladder declared once per CDN renders one row per rung", () => {
-  const list = parsedVariants("hls-master-redundant-cdns");
-  expect(list).toHaveLength(20);
+test("mirrors of a rendition render as one row per rung", () => {
+  const list = parsedVariants("manifests/hls-master-redundant-mirrors");
+  // Ten declared over five rungs, in unequal numbers: 3, 2, 2, 1, 2.
+  expect(list).toHaveLength(10);
 
   mount(list);
   expect(radios()).toHaveLength(5);
@@ -297,7 +298,7 @@ test("a ladder declared once per CDN renders one row per rung", () => {
 });
 
 test("a per-language ladder keeps its rows and grows the column that explains them", () => {
-  mount(parsedVariants("hls-master-per-language-ladder"));
+  mount(parsedVariants("manifests/hls-master-per-language-ladder"));
 
   expect(radios()).toHaveLength(4);
   expect(headers()).toEqual([
@@ -322,7 +323,7 @@ test("an ordinary ladder renders exactly the columns it always did", () => {
   // The regression that matters: a normal five-rung ladder must not gain a
   // column or lose a row. Two of these rungs are both 1920×1080 and differ only
   // in bitrate — which is visible, so both must survive.
-  mount(parsedVariants("hls-master-multibitrate"));
+  mount(parsedVariants("manifests/hls-master-multibitrate"));
 
   expect(radios()).toHaveLength(5);
   expect(headers()).toEqual(["Quality", "Video", "Audio", "Bitrate", "Size", "Delivery"]);

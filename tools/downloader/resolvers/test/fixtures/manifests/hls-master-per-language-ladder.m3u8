@@ -1,6 +1,6 @@
 #EXTM3U
-# The other dl-40 shape: one ladder per audio language, which repeats every rung
-# exactly as a redundant master does — but here the repeated rows are a real
+# A guard on dl-40's collapse: one ladder per audio language, which repeats every
+# rung exactly as a mirrored master does — but here the repeated rows are a real
 # choice, so they must be told apart rather than collapsed.
 #
 # ffmpeg 6.1.1 wrote every line below (its hlsenc muxer, unedited):
@@ -28,12 +28,14 @@
 # measuring the segments, so "identical" here follows from identical targets;
 # see the note in hls-master-redundant-cdns.m3u8.)
 #
-# One difference from the 2026-09-05 report worth knowing: these audio
-# renditions carry a URI, so every row also shows the `+mux` tag. The report's
-# rows showed no `+mux`, which is why a per-language ladder is the less likely
-# reading of it — see the ticket's Log. A language ladder with the audio muxed
-# into each variant (EXT-X-MEDIA with no URI) reaches the same code path here,
-# since `language` is read off the rendition either way.
+# **This is not the reported video's shape, and that is the point.** The live
+# probe on 2026-09-06 found its manifest carried no EXT-X-MEDIA at all, so no
+# variant had a language and a language ladder was never the cause. This fixture
+# exists because the collapse that fixes the reported video would eat a real
+# choice if it ever met one of these: two rows of a rung, identical on every
+# rendered column, that a person genuinely has to choose between. A language
+# ladder with the audio muxed into each variant (EXT-X-MEDIA with no URI) reaches
+# the same code path, since `language` is read off the rendition either way.
 #EXT-X-VERSION:3
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="group_aud_en",NAME="audio_4",DEFAULT=YES,LANGUAGE="eng",URI="English/index.m3u8"
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="group_aud_fr",NAME="audio_5",DEFAULT=NO,LANGUAGE="fra",URI="Francais/index.m3u8"

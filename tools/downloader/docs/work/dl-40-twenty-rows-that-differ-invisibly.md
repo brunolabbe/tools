@@ -3,7 +3,7 @@ id: dl-40
 tool: downloader
 title: The picker lists renditions that differ only in fields it does not show
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -11,9 +11,12 @@ difficulty: standard
 
 # dl-40 — twenty rows, five distinguishable, and the difference is off-screen
 
-**Packages:** `web` (`components/VariantTable.tsx`, `lib/variants.ts`) at minimum;
-`resolvers` (`manifest/hls.ts`) and `contract` only if the cause turns out to be
-redundancy — see the branch below.
+**Packages:** `web` (`components/VariantTable.tsx`, `components/ProbePanel.tsx`,
+`lib/variants.ts`) **and** `resolvers` (`resolvers/ytdlp.ts`). The second one is a
+deliberate widening, confirmed by the owner on 2026-09-06 once the cause was
+probed: the doubling happens at two layers and a web-only fix would leave the API
+emitting duplicate variants to every other consumer. No `contract` change — see
+the warning below and dl-45.
 
 ## Why
 
@@ -31,7 +34,25 @@ the table shows.
 one variant per `EXT-X-STREAM-INF`, keyed `hls-${stream.index}`
 ([`manifest/hls.ts:456`](../../resolvers/src/manifest/hls.ts)), and `streams.push` assigns
 `index: streams.length` ([`manifest/hls.ts:367`](../../resolvers/src/manifest/hls.ts)) —
-nothing multiplies. The master playlist really did declare twenty streams.
+nothing multiplies.
+
+**But the manifest did not declare twenty; it declared ten.** That sentence stood
+here until 2026-09-06 and was wrong — it was inferred from the picker's twenty
+rows, and the video was probed rather than reasoned about only later. The x4 per
+rung is two stacked doublings at two different layers, and only the first is in
+the manifest:
+
+- **x2 in the manifest — CDN mirrors.** Each rung is declared once per mirror
+  host. Genuine failover paths.
+- **x2 in the yt-dlp tier — a play-options balancer.** The site answers with a
+  small map of delivery options whose two values are the same URL, character for
+  character. yt-dlp walks both keys, fetches that one manifest twice, and emits a
+  ladder per key with the key's name prefixed onto each `format_id`: 20 formats,
+  20 distinct `format_id`, 10 distinct URLs, one `manifest_url`.
+
+The parser finding above still holds exactly as written — it is a statement about
+`EXT-X-STREAM-INF`, and the second doubling arrives at a layer this ticket did
+not originally consider.
 
 **The bug is that the picker cannot show what separates them.** Three candidate
 causes, all real-world, none of them rendered:
@@ -57,6 +78,13 @@ per language or per CDN. **Which one it is decides the fix, and they pull in
 opposite directions**: cause 1 wants the distinction _surfaced_ as a column,
 cause 2 wants the duplicates _collapsed_ to one row. Guessing wrong either hides
 a real choice or keeps the noise.
+
+**Answered on 2026-09-06 by probing the video, not by reasoning: cause 2, and the
+field that differed is the hostname.** Cause 1 is dead outright — the manifest
+declares no `EXT-X-MEDIA` at all, so no variant carries a language. The three
+candidates are left standing above because two of them turned out to be the
+shapes the fix must not break, which is a different job from being the cause; the
+Log has the evidence and the fixtures have the guards.
 
 ## Build
 
@@ -208,8 +236,9 @@ them — but it must be a decision, not a side effect. Two honest ways to take i
 - **2026-09-06 — folded in: the count above the table.** `ProbePanel` printed
   `probe.variants.length`, so the collapse would have left "20 renditions" over
   five rows — the same defect told from the other end. It now counts the rows the
-  table shows and says what was merged: `5 renditions · 15 duplicate paths
-merged`. Also routed `pickDefaultVariantId` through the same rows, so the
+  table shows and says what was merged — for the reported video,
+  `5 renditions · 5 duplicate paths merged`. Also routed `pickDefaultVariantId`
+  through the same rows, so the
   default selection can never name a variant that was collapsed away, which
   would have left the radio group with nothing checked.
 
@@ -218,7 +247,8 @@ merged`. Also routed `pickDefaultVariantId` through the same rows, so the
   follow-up ticket covers keeping them ("collapse and keep": alternates on the
   variant, the engine failing over to the next). **That ticket is `dl-45`**, held
   by this branch and filed when step 1 closes — the ticket asks for it to be
-  filed only if the cause makes it real, and the cause is still open.
+  filed only if the cause makes it real, and the cause is still open. _(Filed on
+  the same day, once the probe made it real: `dl-45-keep-the-failover-mirrors.md`.)_
 
 - **2026-09-06 — held, not decided.** Build step 3 (twenty rows is twenty arrow
   presses) is untouched: whether the collapse already solves it depends on which
@@ -226,3 +256,82 @@ merged`. Also routed `pickDefaultVariantId` through the same rows, so the
   doc comment missing from `MediaVariant.language` — the tell this ticket was
   filed on — is likewise not added yet, because it is a `contract` edit and the
   branch it belongs to is the one still open.
+
+- **2026-09-06 — step 1 is answered, by a live probe. The field that differed is
+  the hostname.** Within a rung the entries agree on every attribute
+  (`BANDWIDTH`, `CODECS`, `RESOLUTION`, `FRAME-RATE`), on the scheme, on all six
+  path segments and on the query key and its value; **only the host differs.**
+  Cause 2, CDN mirrors.
+
+  The probe was run by a peer session against the live network — the owner had
+  disabled the devcontainer firewall from the host, which is a condition of the
+  machine and not a change to this repo, so it may be gone by the time anyone
+  reads this. **What is written here I re-verified myself against the captured
+  artifacts**, which is the only part that will still be true later:
+
+  - the master carries **10** `EXT-X-STREAM-INF`, five rungs declared twice each,
+    and **zero** `EXT-X-MEDIA`. No audio groups exist, so `language` is
+    `undefined` on every variant and **cause 1 is dead outright** — a stronger
+    result than the `+mux` argument in the entry above, and it agrees with it;
+  - within a rung the two attribute lines are byte-identical, so cause 3 is dead
+    _within_ a rung. Profiles do differ _between_ rungs (Baseline, Main and High
+    down the ladder), which the resolution column already separates;
+  - `yt-dlp -J` returns 20 formats, 20 distinct `format_id`, **10 distinct URLs**
+    and one `manifest_url`; running this repo's own `mapYtDlpInfo` over that
+    capture produced 20 variants in which **`id` is the only field that differs**
+    inside a duplicated pair.
+
+  **One of my own earlier inferences is void, and it should be read as void:**
+  the "four `BANDWIDTH` values inside a 1 kbps window" argument assumed four
+  manifest entries per rung. There are two, and the pair is byte-identical —
+  nothing was rounding. The `+mux`/`language` elimination stands, by a stronger
+  route than the one it was argued on.
+
+  Nothing identifying the video, its site or its hosts is recorded here or in any
+  fixture, deliberately. The captured artifacts carry a signed URL, which this
+  repo treats as a credential, and are not committed.
+
+- **2026-09-06 — both fixes land here, on the owner's confirmed decision.** A
+  web-only collapse would have hidden the duplicates from the picker and left
+  them in the probe result for every other consumer, so:
+
+  - **`resolvers/src/resolvers/ytdlp.ts`** drops formats that map to the same
+    variant twice, keeping the first the extractor listed. Keyed on the whole
+    mapped variant except its `id` rather than on the URL alone — the two are the
+    same thing for this video, measured, but they part company on a format list
+    where a video-only and an audio-only entry share one manifest URL, and a
+    URL-keyed dedup would merge that pair and give the engine a silent file. A
+    test holds that case.
+  - **the picker** collapses what is left, which is the mirrors.
+
+  Both were run red first: without the tier dedup the fixture maps to 20 variants
+  instead of 10; without the picker collapse a mirrored ladder renders every
+  mirror. **Nothing was filed upstream** — the site really did offer the same
+  stream under two names and yt-dlp really did report what it was given, so the
+  deduplication is ours; the comment at the dedup site says so.
+
+- **2026-09-06 — the fixtures were rebuilt, because they encoded the old
+  premise.** The redundant-CDN fixture claimed a shape the manifest does not have
+  (one ladder four times). It is now `hls-master-redundant-mirrors.m3u8`: ten
+  streams over five rungs, **mirrored 3, 2, 2, 1, 2 times** — deliberately
+  unequal, and deliberately not the two the real manifest had, so that no
+  implementation can hardcode a count and stay green. A rung with a single mirror
+  is in there for the same reason. Hostnames are invented.
+
+  The yt-dlp layer has its own fixture, `ytdlp/balancer-duplicate-ladder.json`:
+  the reported capture's ladder, codecs, frame rate, bitrates, `format_id`
+  grammar and emission order, with every URL and identifying field regenerated.
+  It is **assembled from an allowlist of keys rather than by stripping a copy**,
+  so nothing identifying can survive by being forgotten. The other two manifests
+  are no longer candidate causes but guards, and their headers now say so: a
+  language ladder and a two-profile rung are what the collapse would eat if the
+  language and codec checks were ever removed.
+
+- **2026-09-06 — Build step 3 settled: not done, and the ticket's own condition
+  is why.** It says to handle the arrow-key distance "if the collapse does not
+  already solve it". It does: the reported video reached the picker as 20 rows
+  and now reaches it as **5** — ten formats deduped to ten variants, then five
+  rows. Five radios is not a list anyone needs paging for, and building paging
+  now would be building it for a case nobody has reported. If a video with a
+  genuinely long ladder turns up, that is a ticket with a reproduction rather
+  than a guess.

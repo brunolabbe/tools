@@ -1,6 +1,12 @@
 #EXTM3U
-# The third dl-40 shape, and the one that makes the collapse dangerous: two
+# The second guard on dl-40's collapse, and the one that makes it dangerous: two
 # renditions of the same rung that differ only in H.264 profile.
+#
+# Also not the reported video's shape. Its profiles did differ — Baseline, Main
+# and High across the ladder — but only *between* rungs, which the resolution
+# column already separates. Within a rung its two entries were byte-identical on
+# CODECS. This fixture is the case that would break, not the case that was
+# reported.
 #
 # ffmpeg 6.1.1 wrote every line below (hlsenc, unedited):
 #

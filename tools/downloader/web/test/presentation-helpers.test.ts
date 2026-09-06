@@ -170,20 +170,25 @@ describe("variant rows", () => {
 /**
  * dl-40: rows that read identically because what separates them is off-screen.
  *
- * Every list here is the output of the real HLS parser over a real master
- * playlist — see `parsedVariants` in `fixtures.ts` — because the defect is a
- * property of manifests, and a hand-built list of near-identical literals would
- * only prove that the author can write near-identical literals.
+ * Every list here is what a real resolver produced from a real source — see
+ * `parsedVariants` in `fixtures.ts` — because the defect is a property of what
+ * sites publish, and a hand-built list of near-identical literals would only
+ * prove that the author can write near-identical literals.
  *
- * The three shapes pull in different directions on purpose. Two of them must
- * *not* collapse: a language ladder and a two-profile rung are real choices
- * wearing identical rows, and losing one of those is a worse defect than the
- * one being fixed.
+ * The shapes pull in different directions on purpose. Two of them must *not*
+ * collapse: a language ladder and a two-profile rung are real choices wearing
+ * identical rows, and losing one of those is a worse defect than the one being
+ * fixed.
+ *
+ * The reported video reached the picker as twenty rows through two layers. The
+ * yt-dlp tier drops its half (`ytdlp.test.ts`); what is left here is the
+ * manifest's own — each rung declared once per CDN mirror, with the mirror
+ * count varied per rung so nothing can assume it.
  */
 describe("renditions that differ only in what the table cannot show (dl-40)", () => {
-  test("a ladder declared once per CDN collapses to one row per rung", () => {
-    const declared = parsedVariants("hls-master-redundant-cdns");
-    expect(declared).toHaveLength(20);
+  test("mirrors of a rendition collapse to one row, whatever the mirror count", () => {
+    const declared = parsedVariants("manifests/hls-master-redundant-mirrors");
+    expect(declared).toHaveLength(10);
 
     const { rows, collapsed, showLanguage } = toDisplayRows(declared);
     expect(rows.map((row) => row.quality)).toEqual([
@@ -193,14 +198,16 @@ describe("renditions that differ only in what the table cannot show (dl-40)", ()
       "424×240",
       "256×144",
     ]);
-    expect(collapsed).toBe(15);
+    // 3 + 2 + 2 + 1 + 2 declared, five rows kept. The rung with a single mirror
+    // has to survive untouched, and the one with three has to lose two.
+    expect(collapsed).toBe(5);
     // Nothing declared a language, so a column of five empty cells would be
     // worse than no column.
     expect(showLanguage).toBe(false);
   });
 
   test("the row that survives a collapse is one the manifest declared", () => {
-    const declared = parsedVariants("hls-master-redundant-cdns");
+    const declared = parsedVariants("manifests/hls-master-redundant-mirrors");
     const byId = new Map(declared.map((item) => [item.id, item]));
     const { rows } = toDisplayRows(declared);
 
@@ -209,19 +216,51 @@ describe("renditions that differ only in what the table cannot show (dl-40)", ()
     const urls = rows.map((row) => byId.get(row.id)?.url);
     expect(urls.every((url) => url !== undefined)).toBe(true);
     expect(new Set(urls).size).toBe(rows.length);
-    // And specifically the first one declared, which in a redundant master is
-    // the primary origin rather than one of its failover mirrors.
-    expect(urls.map((url) => new URL(url ?? "").host)).toEqual([
-      "vod-pri.cdn.example",
-      "vod-pri.cdn.example",
-      "vod-pri.cdn.example",
-      "vod-pri.cdn.example",
-      "vod-pri.cdn.example",
+    // And specifically the first the manifest declared for that rung, which is
+    // its primary rather than one of the mirrors — asserted against the
+    // fixture's own text so it cannot agree with a bug in the parser.
+    const first = new Map<number, string>();
+    for (const item of declared) {
+      if (!first.has(item.height ?? 0)) first.set(item.height ?? 0, item.url);
+    }
+    for (const row of rows) expect(byId.get(row.id)?.url).toBe(first.get(row.height));
+    // Which in that fixture is the first host, on every rung including the one
+    // that has no mirror at all.
+    expect(urls.map((url) => new URL(url ?? "").host)).toEqual(
+      Array.from({ length: 5 }, () => "vod-a.cdn.example"),
+    );
+  });
+
+  test("the picker's collapse and the tier's dedup are different jobs", () => {
+    // The reported video needed both. This is the tier's output — duplicates
+    // already dropped, mirrors still present — and it is still ten rows' worth
+    // of variants until the picker collapses them to five.
+    const fromTier = parsedVariants("ytdlp/balancer-duplicate-ladder");
+    expect(fromTier).toHaveLength(10);
+
+    const { rows, collapsed } = toDisplayRows(fromTier);
+    expect(rows).toHaveLength(5);
+    expect(collapsed).toBe(5);
+    expect(rows.map((row) => row.quality)).toEqual([
+      "1280×720",
+      "848×480",
+      "640×360",
+      "424×240",
+      "256×144",
+    ]);
+    // The reported video's own ladder, so the bitrates are the ones in the
+    // screenshot that opened this ticket.
+    expect(rows.map((row) => row.bitrate)).toEqual([
+      "1.3 Mbps",
+      "678 kbps",
+      "557 kbps",
+      "353 kbps",
+      "209 kbps",
     ]);
   });
 
   test("the default selection is never a row that was collapsed away", () => {
-    const declared = parsedVariants("hls-master-redundant-cdns");
+    const declared = parsedVariants("manifests/hls-master-redundant-mirrors");
     const { rows } = toDisplayRows(declared);
     const chosen = pickDefaultVariantId(declared);
 
@@ -230,7 +269,7 @@ describe("renditions that differ only in what the table cannot show (dl-40)", ()
   });
 
   test("a per-language ladder keeps every row and says which is which", () => {
-    const declared = parsedVariants("hls-master-per-language-ladder");
+    const declared = parsedVariants("manifests/hls-master-per-language-ladder");
     const { rows, collapsed, showLanguage } = toDisplayRows(declared);
 
     expect(collapsed).toBe(0);
@@ -244,7 +283,7 @@ describe("renditions that differ only in what the table cannot show (dl-40)", ()
   });
 
   test("two profiles of one rung stop rendering as the same H.264", () => {
-    const declared = parsedVariants("hls-master-two-profiles");
+    const declared = parsedVariants("manifests/hls-master-two-profiles");
     const { rows, collapsed } = toDisplayRows(declared);
 
     // Both rows survive, and the codec cell is what tells them apart. Without
@@ -264,7 +303,7 @@ describe("renditions that differ only in what the table cannot show (dl-40)", ()
     // implementation that collapsed everything, so this is a real five-rung
     // ladder — Apple's, with two 1080p rungs that differ only in bitrate and
     // must therefore both survive.
-    const declared = parsedVariants("hls-master-multibitrate");
+    const declared = parsedVariants("manifests/hls-master-multibitrate");
     const { rows, collapsed, showLanguage } = toDisplayRows(declared);
 
     expect(collapsed).toBe(0);

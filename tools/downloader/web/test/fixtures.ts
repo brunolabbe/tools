@@ -104,26 +104,28 @@ export function variants(): MediaVariant[] {
 }
 
 /**
- * The variants a **real** master playlist actually produced, for the dl-40 rows
- * that differ only in a field the table cannot show.
+ * The variants a resolver really produced from a real source, named by the
+ * fixture's path under the resolvers suite — `manifests/…` for something
+ * `parseHls` read, `ytdlp/…` for something `mapYtDlpInfo` mapped. For the dl-40
+ * rows that differ only in a field the table cannot show.
  *
  * Everything else in this file is built here, and for those shapes that is
  * right — a builder says what the test is about. It is wrong for this one: the
- * claim under test is "twenty rows the manifest really did declare", and a
- * hand-written list of twenty near-identical literals is the author agreeing
- * with themselves. So the manifests live in the resolvers suite, beside the
- * ffmpeg command that emitted them, and this reads what `parseHls` made of one.
+ * claim under test is "the rows a real source really produced", and a
+ * hand-written list of near-identical literals is the author agreeing with
+ * themselves. So the sources live in the resolvers suite beside the command that
+ * produced each one, and this reads what a resolver made of them.
  *
- * The `.variants.json` is generated, and `resolvers/test/hls.test.ts` fails if
- * it ever stops matching the parser — so it cannot drift into being a
- * hand-written fixture with extra steps. It is read rather than imported
- * because importing `@downloader/resolvers` into a jsdom test would pull
- * playwright in behind it.
+ * The `.variants.json` files are generated, and the resolvers suite fails if one
+ * stops matching its producer — so they cannot drift into being hand-written
+ * fixtures with extra steps. They are read rather than imported because
+ * importing `@downloader/resolvers` into a jsdom test would pull playwright in
+ * behind it.
  *
  * Still parsed through `mediaVariantSchema`, like every builder above.
  */
-export function parsedVariants(manifest: string): MediaVariant[] {
-  const file = join(manifestFixtureDir(), `${manifest}.variants.json`);
+export function parsedVariants(fixture: string): MediaVariant[] {
+  const file = join(resolverFixtureDir(), `${fixture}.variants.json`);
   const record: unknown = JSON.parse(readFileSync(file, "utf8"));
   return z.object({ variants: z.array(mediaVariantSchema) }).parse(record).variants;
 }
@@ -135,8 +137,8 @@ export function parsedVariants(manifest: string): MediaVariant[] {
  * resolves to an absolute path that does not exist, and the same helper works
  * in one test file and fails in another for no visible reason.
  */
-function manifestFixtureDir(): string {
-  const suffix = join("tools", "downloader", "resolvers", "test", "fixtures", "manifests");
+function resolverFixtureDir(): string {
+  const suffix = join("tools", "downloader", "resolvers", "test", "fixtures");
   let dir = process.cwd();
   for (;;) {
     const candidate = join(dir, suffix);
