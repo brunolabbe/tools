@@ -13,6 +13,7 @@ import {
   FLAGS,
   makeResolver,
   parseArgs,
+  recordDrift,
   selectSection,
   USAGE,
 } from "../citations.mjs";
@@ -1231,4 +1232,125 @@ test("--section filters evidence declarations by the same span as the citations"
   expect(whole.stdout).toMatch(summary(0, 0, 0, 0, 2, 0, 2));
 
   cleanup();
+});
+
+/**
+ * **Done when 6**, the `--rev` fold-in. Folded in on the owner's instruction and
+ * against the builder's recommendation to file it, so it carries its own
+ * acceptance rather than arriving as a behaviour change nobody wrote down.
+ *
+ * A record whose citation list grew *after* the pinned sha has the new citation
+ * checked against the old tree, and reported against the record as though the
+ * record had claimed it then. Reproduced before fixing, and this is that
+ * reproduction: commit 1 has one citation into a 7-line file, commit 2 grows the
+ * file and adds `src/tls.ts:99`, and `--rev <commit 1>` fails on a citation the
+ * record did not contain at commit 1.
+ *
+ * The fix is deliberately **not** "read the ticket from the rev". A gate record
+ * is written after the commit it reviews, so it does not exist at the sha it
+ * pins to — the assertion below pins that, because it is the reason the obvious
+ * fix is the wrong one.
+ */
+function withGrowingRecord(): { dir: string; record: string; before: string; cleanup: () => void } {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-rev-")));
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+    return result.stdout.trim();
+  };
+
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "citations@example.test");
+  git("config", "user.name", "citations test");
+  fs.mkdirSync(path.join(dir, "src"));
+
+  const record = path.join(dir, "drift.md");
+  fs.writeFileSync(
+    path.join(dir, "src", "tls.ts"),
+    `${["a", "b", "c", "d", "e", "f", "g"].join("\n")}\n`,
+  );
+  fs.writeFileSync(record, "## Review\n\nThe guard at `src/tls.ts:2`.\n");
+  git("add", "-A");
+  git("commit", "-qm", "the tree the record was written against");
+  const before = git("rev-parse", "HEAD");
+
+  const grown = Array.from({ length: 120 }, (_, i) => `line ${i + 1}`);
+  fs.writeFileSync(path.join(dir, "src", "tls.ts"), `${grown.join("\n")}\n`);
+  fs.writeFileSync(
+    record,
+    "## Review\n\nThe guard at `src/tls.ts:2`.\n\nAnd later, at `src/tls.ts:99`.\n",
+  );
+  git("add", "-A");
+  git("commit", "-qm", "the file grew, and the record gained a citation");
+
+  return { dir, record, before, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("--rev names which record it read, and says when that record cited something else", () => {
+  const { dir, record, before, cleanup } = withGrowingRecord();
+  const at = (...argv: string[]) =>
+    spawnSync("node", [CLI, record, ...argv], { cwd: dir, encoding: "utf8" });
+
+  // Both sides named. Naming only the rev was the defect: a reader who passed a
+  // sha and got a verdict had no way to see which document produced it.
+  const tip = at("--rev", "HEAD");
+  expect(tip.stdout).toMatch(/read from the working tree and resolved against HEAD/);
+  // At the tip the record and the tree agree, so there is nothing to report.
+  expect(tip.stdout).not.toMatch(/cited something different/);
+  expect(tip.status).toBe(0);
+
+  const pinned = at("--rev", before);
+  // The reproduction: `src/tls.ts:99` fails against the old tree, and the record
+  // did not contain it at that sha.
+  expect(pinned.status).toBe(EXIT.unresolvable);
+  expect(pinned.stdout).toMatch(/line 99 is past end of file \(8 lines\)/);
+  // ...and now the run says so, rather than leaving the reader to infer it.
+  expect(pinned.stdout).toMatch(
+    /This record exists at that rev and cited something different there/,
+  );
+  expect(pinned.stdout).toMatch(/2 reference\(s\)\nnow, 1 then — 1 it did not have then/);
+  expect(pinned.stdout).toMatch(/git show .*:drift\.md/);
+  // Advice, not a verdict: it does not move the exit code and does not reach
+  // stderr, so `stderr is empty` and `exit 0` still mean the same thing.
+  expect(pinned.stderr).not.toMatch(/cited something different/);
+
+  cleanup();
+});
+
+/**
+ * Why the obvious fix is the wrong one, pinned rather than left in a comment. A
+ * gate record is committed *after* the sha it reviews, so reading the record
+ * from the rev would fail the flag's main use outright — there is nothing there
+ * to read. The silence is then the correct output.
+ */
+test("a record that does not exist at the rev reports no drift, because there is nothing to compare", () => {
+  const { dir, before, cleanup } = withGrowingRecord();
+
+  const late = path.join(dir, "gate.md");
+  fs.writeFileSync(late, "## Review\n\nThe guard at `src/tls.ts:2`.\n");
+  const gate = spawnSync("node", [CLI, late, "--rev", before], { cwd: dir, encoding: "utf8" });
+
+  expect(spawnSync("git", ["-C", dir, "show", `${before}:gate.md`]).status).not.toBe(0);
+  expect(gate.status).toBe(0);
+  expect(gate.stdout).toMatch(/read from the working tree and resolved against/);
+  expect(gate.stdout).not.toMatch(/cited something different/);
+
+  cleanup();
+});
+
+/** The comparison is on the reference list, not on the bytes — a Log entry is not drift. */
+test("recordDrift ignores prose that changed and reports a reference that did", () => {
+  const then = "## Review\n\nAt `src/a.ts:12`.\n";
+  expect(recordDrift(`${then}\n## Log\n\nRewritten prose, no citations.\n`, then)).toBe(null);
+
+  const added = recordDrift(`${then}\nAlso \`src/b.ts:3\`.\n`, then);
+  expect(added?.now).toBe(2);
+  // `atRev`, not `then`: an object with a `then` property is a thenable, and
+  // oxlint's `no-thenable` refused the obvious name for a real reason.
+  expect(added?.atRev).toBe(1);
+  expect(added?.added.map((c) => `${c.file}:${c.start}`)).toEqual(["src/b.ts:3"]);
+  expect(added?.removed).toEqual([]);
+
+  const dropped = recordDrift("## Review\n\nNothing cited.\n", then);
+  expect(dropped?.removed.map((c) => `${c.file}:${c.start}`)).toEqual(["src/a.ts:12"]);
 });

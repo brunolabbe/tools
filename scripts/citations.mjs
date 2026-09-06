@@ -71,9 +71,23 @@
  * Usage:
  *   node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors]
  *
- * `--rev` resolves against a commit rather than the working tree. Pinning the
- * record to the commit the gate actually reviewed is the cheaper answer to a fix
- * that moved the very lines the record cites — cheaper than remapping them.
+ * `--rev` resolves the citation **targets** against a commit rather than the
+ * working tree. Pinning the record to the commit the gate actually reviewed is
+ * the cheaper answer to a fix that moved the very lines the record cites —
+ * cheaper than remapping them.
+ *
+ * **The record itself is always read from the working tree, and that is correct
+ * rather than an oversight**: a gate record is written *after* the commit it
+ * reviews, so it does not exist at the sha it pins to and reading it from there
+ * would fail every run of the flag's main use. What was wrong (repo-24, folded
+ * in here) is that nothing said so. `--rev` answers "do these citations point at
+ * the right thing at that sha", not "what did this document claim at that sha",
+ * and a reader who assumed the second got no error — so the header line now
+ * names both sides, and where the record *does* exist at the rev and cited
+ * something different, the run says which references it has that the record did
+ * not have then. Reproduced before fixing: a record that gained a citation after
+ * the pinned sha has that citation reported `unresolvable` against the old tree,
+ * blaming the record for a claim it never made.
  *
  * `--section` narrows the check to one heading's span — `--section Review` on a
  * gate record with four `##` sections. The name is matched case-insensitively,
@@ -940,6 +954,38 @@ export function selectSection(sections, name) {
 }
 
 /**
+ * What this record cites now that it did not cite at `--rev`, and the reverse.
+ *
+ * Only meaningful when the record exists at the rev at all, which for a gate
+ * record it usually does not — and that silence is the right output, not a gap.
+ * Compared on the **reference list** rather than on the bytes, because a record
+ * gains a Log entry constantly and almost none of that changes what a run
+ * checked. The list changing is the only thing that changes the answer.
+ *
+ * Returns `null` when nothing moved, so the caller has one thing to test.
+ *
+ * The count at the rev is `atRev` and **not** `then`, which is what it was
+ * called until oxlint's `no-thenable` refused it: an object carrying a `then`
+ * property is a thenable, and one that reached an `await` would be unwrapped as
+ * a promise instead of returned. A lint rule caught a defect here, so the name
+ * is load-bearing rather than a style preference.
+ *
+ * @param {string} now The record as it stands, which is what was checked.
+ * @param {string} before The same path's content at the rev.
+ */
+export function recordDrift(now, before) {
+  const here = extractCitations(now);
+  const there = extractCitations(before);
+  const at = (c) => key(c.file, c.start, c.end);
+  const thereKeys = new Set(there.map(at));
+  const hereKeys = new Set(here.map(at));
+  const added = here.filter((c) => !thereKeys.has(at(c)));
+  const removed = there.filter((c) => !hereKeys.has(at(c)));
+  if (added.length === 0 && removed.length === 0) return null;
+  return { now: here.length, atRev: there.length, added, removed };
+}
+
+/**
  * Every flag this CLI accepts, mapped to the option it sets and whether it takes
  * a value. The arity is data rather than a branch in the parser because
  * `--require-anchors` is the first flag here that takes none, and a parser that
@@ -1016,6 +1062,13 @@ function main() {
 
   const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   const markdown = fs.readFileSync(file, "utf8");
+  const relative = path.relative(repo, path.resolve(file));
+
+  // The record at the rev, when there is one. `makeReader` already returns null
+  // for a path a commit does not have, which is the ordinary case for a gate
+  // record and needs no branch of its own.
+  const before = rev === null ? null : makeReader(repo, rev)(relative);
+  const drift = before === null ? null : recordDrift(markdown, before.join("\n"));
 
   // Selected by line span rather than by re-extracting from a slice of the
   // markdown. `extractCitations` carries state across lines — a table's header
@@ -1037,15 +1090,17 @@ function main() {
   );
   const summary = summarize(results, requireAnchors, stale);
 
-  const where = rev ? `against ${rev}` : "against the working tree";
+  // Both sides named, because naming one was the whole defect: a reader who
+  // passed a sha and got a verdict had no way to see which document produced it.
+  const where = rev
+    ? `read from the working tree and resolved against ${rev}`
+    : "resolved against the working tree";
   // The scope is named next to the count, so a filtered number can never be read
   // against the wrong denominator without the denominator being on screen.
   const scope = chosen
     ? ` under "${chosen.title}" (record lines ${chosen.start}-${chosen.end})`
     : "";
-  process.stdout.write(
-    `${citations.length} references in ${path.relative(repo, path.resolve(file))}${scope}, resolved ${where}\n\n`,
-  );
+  process.stdout.write(`${citations.length} references in ${relative}${scope}, ${where}\n\n`);
 
   for (const r of results) {
     // Upper case is always a failure. Lower case usually is not — but under
@@ -1092,6 +1147,20 @@ function main() {
   // depends only on the flag. That keeps `stderr is empty` and `exit 0` meaning
   // the same thing — an invariant the suite asserts, and the reason this is not
   // simply always written to stderr.
+  if (drift !== null) {
+    const moved = [
+      drift.added.length > 0 ? `${drift.added.length} it did not have then` : null,
+      drift.removed.length > 0 ? `${drift.removed.length} it has since dropped` : null,
+    ].filter(Boolean);
+    process.stdout.write(
+      `\nThis record exists at that rev and cited something different there: ${drift.now} reference(s)\n` +
+        `now, ${drift.atRev} then — ${moved.join(", ")}.\n` +
+        `Every reference above is the one this record carries NOW, checked against that tree, so a\n` +
+        `citation the record did not have then can still be reported against it. That is what --rev\n` +
+        `is for. To ask what the document claimed then, run against a copy extracted with\n` +
+        `\`git show ${rev}:${relative}\` instead.\n`,
+    );
+  }
   if (summary.unchecked > 0) {
     process.stdout.write(
       `\n${summary.unchecked} reference(s) name a line without naming a file, in a shape nothing here can\n` +

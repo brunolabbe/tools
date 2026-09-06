@@ -137,6 +137,15 @@ because it is the evidence.
 4. **Do not make a bare basename resolve by guessing.** `index.ts:440` matching
    ten tracked files must keep failing; ambiguity is a real answer and the
    current behaviour there is correct.
+5. **Folded in 2026-09-06, on the owner's instruction and against the builder's
+   recommendation to file it as a ticket of its own.** `--rev <sha>` reads the
+   _record_ from the working tree while resolving its targets at `<sha>`, and
+   says so nowhere — repo-24's Log, one level out from this ticket's own subject:
+   a flag that plainly answers a different question than the one a reader
+   assumes, with no error to say so. Name both sides in the output, and where the
+   record exists at the rev and cited something different, say that too. **Do not
+   read the record from the rev**: a gate record is written after the commit it
+   reviews, so it is not there.
 
 ## Done when
 
@@ -149,11 +158,16 @@ because it is the evidence.
 - A ticket that declares its citations deliberately unresolvable is
   distinguishable from a broken one **by exit code**, not only by prose — so
   that anything wiring this into CI can tell them apart.
+- `--rev <sha>` names which record it read, and a record that exists at `<sha>`
+  and cited something different there is told so — so a citation the record did
+  not have then cannot fail a run without explanation. (Build 5, folded in; its
+  own acceptance because it is a second behaviour change and one arriving without
+  one was the objection to folding it in at all.)
 - `npm run check` and `npm test` pass.
 
 ## Log
 
-<!-- citations: evidence hls.ts:367, index.ts:440, file.ts:120, other.ts:9 -->
+<!-- citations: evidence hls.ts:367, index.ts:440, file.ts:120, other.ts:9, src/tls.ts:2, src/tls.ts:99 -->
 
 - **2026-09-05 — filed.** Found while path-qualifying six ambiguous citations
   across dl-40..dl-43 on PR #151, and independently hit the same day by the
@@ -256,3 +270,61 @@ of 11 references`. Six rather than two, because the shorthand and prose rules
   old sha checks today's citations against an old tree. That one is a genuine
   defect with a reproduction, in this file, and it is not this ticket's Build —
   it wants filing rather than folding.
+
+- **2026-09-06 — the `--rev` fold-in, and a correction against myself.**
+
+  **Folded in against my own recommendation, and the reproduction narrowed the
+  fix.** I reported this as a candidate ticket and recommended filing it; the
+  owner chose to fold it in and took the widening cost knowingly, with two
+  conditions — that the reviewer heard the scope before the tree moved, and that
+  the fold-in carried its own `Done when` line. Both are honoured (`Done when` 5,
+  Build 5). My framing to the owner was looser than the evidence: I described it
+  as "`--rev` checks today's citations against an old tree", which invites the
+  fix "read the record from the rev too". That fix is wrong. **A gate record is
+  written after the commit it reviews, so it does not exist at the sha it pins
+  to**, and reading it from there would fail the flag's main use outright; there
+  is a test pinning exactly that, because it is the reason the obvious answer is
+  the wrong one. repo-24's own framing was the right one all along — _a flag that
+  plainly answers a different question than the one a reader assumes, with no
+  error to say so_ — so what changed is what the run says, not what it resolves.
+
+  Reproduced before fixing, in a throwaway repo: commit 1 has a record citing
+  `src/tls.ts:2` against a 7-line file; commit 2 grows the file and the record
+  gains `src/tls.ts:99`. `--rev <commit 1>` reported `1 unresolvable` and exited
+  1, blaming a citation **the record did not contain at that sha**, with nothing
+  saying which document it had read. Now the header reads `read from the working
+tree and resolved against <sha>`, and the run adds `2 reference(s) now, 1 then
+— 1 it did not have then`. Advice on stdout, so `stderr empty ⟺ exit 0` holds.
+
+  **The quiet wrong-file shorthand is real, and my last report understated it.**
+  I wrote that the three wrong-file inheritances in the corpus "all surfaced
+  loudly as `past end of file`" and that the quiet variant was possible but
+  uneliminated. That was true of the three I had found — by looking at failures,
+  which is the wrong place to look for a silent one. Audited properly, on the
+  owner's instruction: of 259 shorthands that resolve, 73 have another file named
+  between the citation they inherited from and the line they sit on, and
+  **`repo-23-deployment-reads-as-downloader-only.md:181` is a confirmed quiet
+  miss**. It writes `` `:141` `` meaning `docs/02-DEPLOYMENT.md`; the tool
+  inherits `docs/adr/004-one-compose-fragment-per-tool.md` from record line 111,
+  70 lines and a section boundary away. The ADR has 178 lines, so 141 exists — it
+  reports `unanchored`, prints the ADR's line 141 as though it were the cited
+  one, and exits 0.
+
+  **The rule is unchanged anyway, and that is a measurement rather than a
+  shrug.** Resetting the inherited file at a heading is the obvious guard and I
+  measured it: 70 of the 259 resolutions cross a heading, and nearly all are
+  right — `repo-6`'s record is about `scripts/test/status.test.ts` throughout, so
+  fifty-odd of them inherit correctly across its `##` boundaries. Refusing 70
+  mostly-correct resolutions to catch one known-wrong one is the worse trade, and
+  it is the same trade the ticket's own Build step 4 refuses in the other
+  direction. What does answer it is the display, and the confirmed case shows it
+  working: the run prints `:141 in docs/adr/004-… (named at record line 111)`
+  against a shorthand on line 181, and 111-against-181 is visible on the line
+  without cross-referencing anything. **It is visible, not fatal, and I am saying
+  so rather than claiming the hazard is closed.**
+
+  **`.claude/skills/orchestrate-tickets/reference/records.md` was edited on this
+  branch** — the carve-out section, which now documents the declaration instead
+  of warning in prose. Recorded here because **repo-21 rewrites that same page**
+  and is not in this batch, so it will rebase over this; whoever builds it should
+  find these edits rather than discover them as a conflict.
