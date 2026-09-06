@@ -772,10 +772,37 @@ the patch passed its own tests.
 - **The class was measured, not assumed — this is the evidence that it is a
   class fix.** A 21-shape battery aimed at the _substitution_ (not at the bugs
   it cured) runs 0 unexpected. The same battery against the deleting version
-  fails **3**: `\x`, `\\` and `\;` before the phrase. **Only one of those three
-  had ever been found by anyone**, which is the point — the two fixes before
-  this each closed the single shape that had been observed, and two more were
-  sitting there unobserved.
+  fails **3**: `\x`, `\\` and `\;` before the phrase. Of those, **two are
+  regressions this branch introduced** — `origin/main` is silent on `\x` and
+  `\\` — and **only `\x` had ever been found by anyone**. That is the point: the
+  two fixes before this each closed the one shape that had been observed while
+  another sat beside it, unobserved.
+- **The third, `\;`, is not a branch regression, and an earlier draft of this
+  entry implied it was.** Corrected on the gate's challenge: it could not
+  reproduce the claim and said so rather than accepting a number on this
+  builder's say-so. Measured three ways with
+  `true; \; gh pr create --web` — `origin/main` **2**, deleting **2**,
+  substituting **0**. The deleting version does fail it, so the count of 3
+  stands, but it **inherits** that failure rather than causing it.
+  `origin/main`'s anchor has no escape-awareness at all, so it reads the `;` in
+  `\;` as a shell operator. The gate's cleaner isolation — `true \; gh pr create
+--web`, with no real `;` in front — gives `origin/main` **2** and the deleting
+  version **0**, which exhibits the pre-existing defect on its own with no
+  stripping involved at all.
+- **So the substitution also fixes a defect this ticket did not create.**
+  `true \; gh pr create --web` passes `;` as a literal argument to `true` and
+  never invokes the guarded command, and `origin/main` blocks it today —
+  **measured live, on the commit that records this.** The first draft of that
+  commit message quoted the shape in prose, and the `PreToolUse` hook rejected
+  it with `exit 2`. The hook that fired was the **shared checkout's** copy,
+  which is `origin/main`'s escape-blind version, because a session resolves
+  hooks from `/workspaces/tools` and not from its own worktree — the gate's
+  structural finding, demonstrating itself. Two things follow: the defect is
+  real enough to block ordinary work today, and the fix on this branch is
+  invisible to any session until it merges. The message was reworded rather than
+  the guard worked around. Closing
+  the class closed that too, as a side effect — which is what a class fix is for,
+  and which none of the three patch options would have done.
 - **Red-verified, and two of the new tests are recorded as weak rather than
   passed quietly.** Reverting substitution to deletion fails exactly the two
   escape tests. The boundary-forging and sentinel-inert tests pass against the

@@ -210,9 +210,17 @@ test("check-pr-title does not block when an escape precedes the phrase", () => {
   for (const gap of ["\\x", "\\\\", "\\;", 'a\\"b']) {
     const command = `true; ${gap} ${PHRASE} --web`;
     // `\x` is a no-op escape, so this runs a program named `x` — it never
-    // invokes the guarded command at all. origin/main is silent on every one.
+    // invokes the guarded command at all. origin/main is silent on `\x` and
+    // `\\`; on `\;` it blocks, for its own reasons — see below.
     expect(isSilent(run(PR_TITLE, command)), command).toBe(true);
   }
+
+  // Not evidence for the substitution — a deleting strip passes this too. It
+  // pins a defect this branch fixes in passing: `\;` escapes the semicolon, so
+  // this passes `;` as a literal argument to `true` and never invokes the
+  // guarded command, yet origin/main's escape-blind anchor blocks it. Isolated
+  // by the repo-22 gate when it refused to reproduce a count taken on trust.
+  expect(isSilent(run(PR_TITLE, `true \\; ${PHRASE} --web`))).toBe(true);
 });
 
 test("check-pr-title does not forge a boundary out of one inside a quoted span", () => {
