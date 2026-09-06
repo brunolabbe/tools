@@ -3,7 +3,7 @@ id: dl-38
 tool: downloader
 title: The tiers' TLS-rejection correlation cannot see a concurrent success, only a concurrent failure
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -112,7 +112,343 @@ enrich"`, stays green — a fix here must not regress the case dl-37 built the
   outcome-kind split to protect.
 - `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+**Gate: PASS** — 2026-09-06 · `2bdde22...cad1d56` (tip `cad1d56`, superseding the
+draft pinned to `2bdde22`) · self-run defect hunt at medium depth (reviewer
+subagent, no `code-review` delegate)
+
+Reviewed on `sonnet`; builder ran `opus` — different models, per the skill.
+
+This is the port-keying follow-up requested by the owner after the `2bdde22`
+PASS, against the builder's own recommendation to leave the residual
+documented. The two low findings from the `2bdde22` pass (Log's "8 failures" and
+"five...page.example" claims) were both independently reproduced by the builder
+and corrected in the Log with "this entry first said X, which was wrong because
+Y" — settled, not carried forward as open findings here.
+
+Three `file:line` citations below were re-resolved against tip `cad1d56` by the
+builder before this record was committed and corrected there: the Done-when
+reproduction row (`resolvers.test.ts:222` → `:191`, where `:222` is the
+adjacent over-suppression guard rather than the reproduction), `portFor`
+(`tls-rejections.ts:174` → `:176`), and the query site (`resolvers.ts:159` →
+`:163`). Nothing else was altered. See the Log entry below for the commands.
+
+### dl-38 — Done when (re-verified at cad1d56)
+
+| Done when                                                                            | Proof                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chosen remedy recorded with reasoning in the Log                                     | proven — Log entries for both the original option-2 build and this port-keying follow-up                                                                                                                               |
+| A test reproduces the load-balanced-origin scenario, red before the fix, green after | proven — `resolvers.test.ts:191` (renumbered from the prior pass); mechanism unchanged and still green                                                                                                                 |
+| Existing suite, including the two-genuine-refusals guard, stays green                | proven — ran directly, passing at tip                                                                                                                                                                                  |
+| `npm run check` and `npm test -- --project downloader` pass                          | verified — `npm run check` exit 0; `npm test -- --project downloader` **1050/1050** across 65 files, up from 1041 at the prior tip (+9: 5 port-keying tests + 4 `portFor` tests), matching the builder's count exactly |
+
+### The safety property (angle 1) — attacked, not just read
+
+Builder's claim: narrowing a conflict's key from host to endpoint can only
+shrink the set of recorded outcomes counting against a reattachment, never grow
+it, so `since` reattaches at least as often as before any conflict tracking
+existed.
+
+**Proved by construction, independently of the builder's own framing.** For any
+query `(host=H, port=P, at)`: the new code blocks iff an other-failure or
+success event was recorded at the _exact_ endpoint `(H,P)` inside the window.
+The old (`2bdde22`) code blocked iff such an event was recorded for host `H` at
+_any_ port inside the window (it never distinguished ports at all). Since
+"host=H and port=P" is a strictly narrower condition than "host=H", every event
+that satisfies the new code's block condition also satisfies the old code's — so
+new-blocks ⟹ old-would-have-blocked, and by contraposition, old-reattaches ⟹
+new-reattaches. There is no assignment of events under which the new code
+suppresses a reattachment the old code delivered. This holds independent of the
+LRU eviction policy too: an endpoint-keyed entry can only be evicted _sooner_
+than a host-keyed one would have (more distinct keys sharing the same `max`),
+and an evicted conflict entry only ever removes a suppression, which is the safe
+direction, not a new one.
+
+I did not find a counterexample, and the proof above is why I stopped looking
+for one rather than exhausting a fuzz search.
+
+### Angles 2-8
+
+2. **Cross-port certificate distrust.** Confirmed by reading `record()`/`since()`:
+   the certificate map's key is `key(host)`, untouched by this change, and
+   `since()` looks it up before either conflict check runs.
+   `"a certificate refusal is still carried across ports"`
+   (`tls-rejections.test.ts:386`) passes at tip, and I traced the assertion, not
+   just the name: it records once on the default port and queries both `HTTPS`
+   and `ALT`, both returning the code.
+3. **`portFor` and the default-port case.** `url.hostname` still never carries a
+   port (WHATWG, unchanged from the prior pass). `portFor`
+   (`tls-rejections.ts:176`, exported) returns `Number(url.port)` when explicit,
+   else `443`/`80` by scheme. Both `record*` call sites (`egress-proxy.ts`, via
+   `parseAuthority`, which always yields an explicit numeric port) and the query
+   site (`resolvers.ts:163`, via `portFor`) end up with the identical number for
+   an ordinary default-port URL — confirmed by the four `portFor` unit tests
+   (`tls-rejections.test.ts:429,433,437,444`) and by the "a success on :443 still
+   suppresses it for the caller that asked about :443" test, which only passes if
+   both sides agree.
+4. **The rewritten "two ports are two entries" test.** Confirmed it is
+   falsifiable and not vacuous: reproduced the described mutation
+   (`endpoint→key`) and this exact test fails (`tls-rejections.test.ts:403`,
+   `expected undefined to be 'DEPTH_ZERO_SELF_SIGNED_CERT'`) — under the old
+   host-keyed behavior, `max:1` would leave one shared entry for both ports and
+   both queries would be suppressed, which is a _different_ wrong answer than
+   what the mutation actually produces, but still proves the test can fail. Good
+   replacement.
+5. **Mutation reproduced exactly.** 3/5 new port tests fail with `key(host)`
+   substituted for `endpoint(host,port)` (signatures intact); the other 2 pass in
+   both states, confirmed by name and by output — see my message to the builder
+   for the full transcript.
+6. **`|` vs `:` separator.** Agree with the choice — see message to builder. Not
+   over-engineering: one function (`endpoint`) is the sole constructor on both
+   the recording and query sides, so no ambiguity is reachable today, and the
+   separator only matters if these keys are ever surfaced for humans later, at
+   which point `|` avoids the IPv6-colon collision for free.
+7. **Repo invariants.** No new logging, no new `AppError` codes, no shell
+   invocation. `redactUrl`/`AppError` usages in the touched files are all
+   pre-existing and untouched by this diff.
+   `vitest.config.ts`/`version.txt`/`CHANGELOG.md`/`.release-please-manifest.json`
+   untouched (`git diff --name-only 2bdde22...cad1d56`: only the four `src`
+   files, three `test` files, and the ticket `.md`).
+8. **Positive control.** The `endpoint→key` mutation above is a real positive
+   control: it produces exactly the 3 failures the builder predicted, in the
+   exact assertion shape predicted, confirming the harness catches the
+   regression this change exists to prevent.
+
+### Disclosed gaps, left as disclosures (not findings)
+
+No test drives two genuinely concurrent probes through a real load-balanced
+origin, and none drives one hostname on two real ports end-to-end through a
+tier — both port cases are proven at `TlsRejectionLog` and the proxy hooks, not
+through a live browser. Consistent with the same limitation already accepted for
+the base dl-38 change and for dl-37 before it.
+
+### Findings
+
+- **findings** · self-run hunt at medium depth returned 0 new findings at this
+  tip; the 2 low findings from the `2bdde22` pass are settled (reproduced and
+  corrected by the builder) and are not carried forward.
+
+NFR sweep: security ✓ (no new logging or credential-bearing data) · performance
+n/a (same O(1) map operations, one more derived string) · reliability ✓ (the
+safety property is the whole point and is proven, not just asserted) ·
+maintainability ✓ (the header's new "asymmetry" section is clear about which map
+answers which question).
+
 ## Log
+
+- **2026-09-06** — Gate record committed and `status` moved to `done`. The gate
+  is `## Review` above; it passed at `cad1d56` and supersedes its own draft
+  pinned to `2bdde22`, so there is one subsection rather than two.
+
+  **Three of its eight `file:line` citations did not resolve against the tip and
+  were corrected before committing**, per this repo's rule that a gate record's
+  citations are re-resolved rather than trusted — the record is committed
+  verbatim in every other respect, and the corrections are named in it rather
+  than made silently:
+
+  | cited                   | resolves to at `cad1d56`                                            | corrected to |
+  | ----------------------- | ------------------------------------------------------------------- | ------------ |
+  | `resolvers.test.ts:222` | `"a success on another host leaves the reattachment alone (dl-38)"` | `:191`       |
+  | `tls-rejections.ts:174` | a line of header prose                                              | `:176`       |
+  | `resolvers.ts:159`      | `if (!REATTACHABLE_CODES.has(error.code)) throw error;`             | `:163`       |
+
+  The first is the one that mattered: it sits in the Done-when row for the
+  load-balanced reproduction, and `:222` is the **adjacent over-suppression
+  guard** rather than the reproduction — so the row would have cited a real
+  passing test that does not prove the line it was filed against. The other two
+  are drift of two and four lines, the latter exactly the import plus
+  three-line comment this branch added above the call. Settled by
+  `sed -n 222p`, `sed -n 174p`, `sed -n 159p` against the tip and by
+  `grep -n` for each intended target; the reviewer was told the numbers and the
+  commands.
+
+  Two further claims in the reviewer's covering message, neither of which
+  reached the record: its file-scope check
+  (`git diff --name-only 2bdde22 cad1d56` → four `src`, three `test`, one `.md`)
+  reproduces exactly, and its "the only removed lines are template-literal
+  formatting" does not — the diff removes the old hook signatures, the old
+  bare-host assertions and the old two-argument calls. Every one of them is
+  replaced rather than dropped, so the conclusion it was drawn for (no coverage
+  silently deleted) holds; only the sentence is wider than what it checked.
+
+- **2026-09-05** — Port-keying follow-up, after the gate passed and the owner
+  read the residual the entry above disclosed. **The owner chose to fix it here
+  rather than file it or leave it recorded**, against the builder's own
+  recommendation. Recorded as a decision that went the other way, because the
+  reasoning that lost is the part a future reader needs.
+
+  **The objection that was on the record, and that the gate independently
+  confirmed:** `key()` never touches port, `parseAuthority` strips the port
+  before every callback fires, and `resolvers.ts` queries with `url.hostname`,
+  which never carries a port in the WHATWG model — so the port genuinely is not
+  available at the query site, and `URL.port` is the empty string for a default
+  port where a `CONNECT` authority always carries an explicit one. Keying
+  everything by `host:port` would have fixed `:443`-good/`:8443`-bad by
+  **losing** the page-on-`:443`/media-refused-on-`:8443` reattachment, which is
+  dl-34's own sentence. That objection was right about uniform keying and wrong
+  to conclude the fix was unaffordable.
+
+  **What the objection missed, and what shipped instead.** The three maps do not
+  answer the same question, so they should not share a key. The conflict maps
+  ask _could this outcome have been the caller's own connection?_ — and a
+  connection to `:443` that worked cannot have been the connection to `:8443`
+  that was refused. The certificate map asks _is this host's trust broken?_,
+  which is worth carrying across ports. So:
+
+  - `#otherFailures` and `#successes` are keyed by `host|port`;
+    `recordOtherFailure` and `recordSuccess` take a port, and
+    `EgressProxyOptions.onOtherConnectFailure` / `onConnectEstablished` carry
+    one to all seven call sites.
+  - `#certificates` keeps its host-only key and `record` keeps its signature.
+  - `since(host, port, at)` scopes only the two conflict lookups by port.
+  - A new exported `portFor(url)` does the derivation `resolvers.ts` needs, so
+    the two sides agree on an ordinary `https://host/`.
+
+  **The property that makes this safe to land after a PASS, stated rather than
+  implied:** narrowing a conflict's key can only shrink the set of recorded
+  outcomes that count against a reattachment, never grow it. So `since`
+  reattaches **at least as often as it did before any conflict tracking
+  existed** — no verdict dl-34 or dl-37 delivers today stops being delivered,
+  and every behaviour change is a spurious suppression removed.
+  `"a certificate refusal is still carried across ports"` is that property as a
+  test.
+
+  **Red before, green after, mutated at the decision rather than at the API.**
+  Replacing `endpoint(host, port)` with `key(host)` — every signature intact, so
+  the failures are behavioural and not `TypeError`s — fails 3 of the 5 new
+  port tests: the two that encode the owner's requirement, each with
+  `expected undefined to be 'DEPTH_ZERO_SELF_SIGNED_CERT'`, plus the eviction
+  one. The other two pass in both states **on purpose** — they are the guards
+  that must hold either way (dl-38's own suppression for the caller that asked
+  about `:443`, and the certificate carried across ports). Restored: 81/81
+  across the three files.
+
+  One test was rewritten mid-flight for being unfalsifiable:
+  `"the two ports are two entries"` originally used `max: 2` and asserted both
+  callers suppressed, which is true under host-keying too. It now uses `max: 1`
+  and asserts the `:443` caller gets its reattachment **back** after the `:8443`
+  entry evicts it — which host-keying cannot produce. Caught by running the
+  mutation, not by reading it.
+
+  **Why the two Log claims the gate corrected travelled uncounted when the rest
+  of this branch did not**, since it is the transferable part: every claim I
+  measured deliberately, I measured with a command whose whole output was the
+  answer — a named test read off `--reporter=verbose`, a mutation run to a
+  single assertion. The two wrong claims were the two I wrote from **memory of a
+  command's tail** rather than from its tally: the failure count came from a
+  two-file run I later described as if it had been the three-file one, and the
+  "all read TypeError" shape came from the last screenful of a scrolling log.
+  Neither was a claim I set out to verify, which is exactly why neither got
+  verified. The rule that would have caught both: **a number in a report is a
+  claim and needs its own command**, and `| tail` is not that command.
+
+  **Still not measured:** no test drives two genuinely concurrent probes through
+  a real load-balanced origin, and none drives one hostname answering on two
+  real ports end to end through a tier. Both port cases are proven at
+  `TlsRejectionLog` and at the proxy hooks that feed it, not through a live
+  browser.
+
+- **2026-09-05** — Built. **Option 2, chosen by the repo owner** after all three
+  were put to them with their costs; not a formality, since option 1 (do
+  nothing) is what dl-37 had already done by documenting the gap and was the
+  cheap answer available. Recorded here as the ticket's Build section asks.
+
+  **What shipped.** A third outcome, not a third failure kind.
+  `TlsRejectionLog.recordSuccess` and a `#successes` map beside the other two,
+  fed by a new `EgressProxyOptions.onConnectEstablished` hook that
+  `egress-proxy.ts` fires at both points a `CONNECT` can succeed — the
+  tunnelling `establish()` and `terminateTls`'s `onEstablished`, which is the
+  route the ticket proposed and which the call sites bore out. `since` now
+  declines when an outcome of **any** of the three kinds other than the
+  certificate refusal itself landed in the caller's window. `server.ts` wires
+  the hook into `tierRejections` beside the two that were already there.
+
+  **Two things the brief left to the builder, decided here.**
+
+  - **`terminateTls`'s `onEstablished` is the right moment, not the socket
+    opening.** It runs only after the origin handshake verified _and_ a leaf was
+    issued, so it means "this proxy accepted this host's certificate" rather
+    than "a socket opened". The `onUnavailable` path — origin verified, leaf
+    could not be issued — is the one place those two come apart, and it is a
+    failure; `egress-proxy.test.ts`'s existing leaf test now asserts the success
+    hook stays silent there.
+  - **A successful plain-HTTP request is deliberately _not_ a success.** The
+    ticket did not raise it and the naive reading of "record successes" would
+    include it. It must not: the absolute-form handler never meets a
+    certificate, so counting it would suppress reattachment for the ordinary
+    `http://host/` → `https://host/` redirect that is then genuinely
+    cert-refused — reopening the exact sentence dl-34 exists to have deleted.
+    `onOtherConnectFailure` already leaves that handler alone for the same
+    reason, so this is the existing shape rather than a new asymmetry.
+
+  **Why this is not the "suppress on any concurrent request" rule dl-37
+  rejected**, which is the whole risk the Build section names. That rule counts
+  _requests_; this one counts outcomes that disagree. dl-37's common case — one
+  broken private-root origin probed twice concurrently — records two
+  certificate refusals and nothing else, so both still enrich.
+  `"two genuine certificate refusals on one host, with no other outcome, both
+enrich"` is that case and was run green, by name, with its output read
+  (`tls-rejections.test.ts` 35/35).
+
+  **Red before, green after, and one honest note about the first red.** Running
+  the new tests against base `4a4cc4f`'s source, with the tip's tests kept,
+  gives **10 failures in three shapes** — 6 `TypeError: log.recordSuccess is not
+a function` in `tls-rejections.test.ts`, 2 in `resolvers.test.ts` surfacing as
+  `AppError { code: 'INTERNAL' }` because the wrapper catches and wraps the same
+  TypeError, and 2 plain assertion mismatches in `egress-proxy.test.ts`
+  (`expected [] to deeply equal [ 'trusted.test:<port>' ]`) with no TypeError at
+  all, base `egress-proxy.ts` predating the option entirely. Whatever the
+  shapes, it is still a red that proves only that a surface was absent. **This
+  entry first said "8 failures that all read `TypeError`", which was wrong twice
+  over** — that count came from a two-file run that never included
+  `egress-proxy.test.ts`, and the shape came from reading the tail of a
+  scrolling log instead of tallying it. The gate caught both and the numbers
+  above are a re-run of its exact command. The red that proves the _defect_ was
+  taken separately, by
+  keeping the plumbing and deleting only the two lines in `since` that consult
+  `#successes`: `resolvers.test.ts`'s
+  `"a concurrent success on the same host blocks reattachment (dl-38)"` then
+  fails with `expected AppError: TLS_VERIFICATION_FAILED to match object
+{ code: 'NO_MEDIA_FOUND' }`, which is the ticket's scenario stated as an
+  assertion. Both runs are in the gate record. The new `onConnectEstablished`
+  proxy test was checked the same way — deleting the hook call in the terminate
+  path fails it with `expected [] to deeply equal [ 'trusted.test' ]`.
+
+  **Over-suppression guards, because a test that suppresses too much is still
+  green if it only asserts "did not reattach".** **Four** of the new tests
+  assert reattachment **still happens**: three directly against
+  `TlsRejectionLog` — a success before the caller's window (without which every
+  host that has ever worked would become permanently unenrichable, the feature
+  silently off), a success on a different host, and an evicted success entry —
+  and one through `namingRefusedOrigins`,
+  `"a success on another host leaves the reattachment alone (dl-38)"`. **This
+  entry first said five, "the two `page.example` cases through
+  `namingRefusedOrigins`"**; only one of the two `page.example` tests goes
+  through that wrapper, the other exercises `TlsRejectionLog` directly, so the
+  count was one too high and one of the two was filed under the wrong layer.
+  The gate caught it; `grep -n "page.example" tools/downloader/api/test/*.test.ts`
+  returns exactly two lines and settles it.
+
+  **What the brief had wrong, or rather did not know:** nothing material. The
+  proposed mechanism survived contact with the code; the `establish()` /
+  `onEstablished` call sites are where it said they were. Option 3 was not
+  taken and `REATTACHABLE_CODES` in `resolvers.ts` is untouched, so dl-34's
+  yt-dlp case is unaffected.
+
+  **What this first shipped knowingly leaving open, in the safe direction.** A
+  host was keyed without its port, so a healthy `:443` and a broken `:8443` on
+  one hostname read as one host with two outcomes and the genuine refusal on the
+  second was suppressed rather than reattached. It was disclosed here and in
+  `tls-rejections.ts`'s header with a recommendation to leave it documented.
+  **The owner chose to fix it on this branch instead — see the entry below.**
+
+  **Not measured here:** no test drives two genuinely concurrent probes through
+  a real load-balanced origin. The reproduction is at the two seams that own the
+  decision (`TlsRejectionLog` and `namingRefusedOrigins`) plus the proxy hook
+  that feeds them; a real load balancer alternating backends is not something
+  this suite can build, and dl-37's own coverage of the sibling case has the
+  same shape.
 
 - **2026-09-05** — Filed from dl-37's gate exchange. The reviewer
   (`a2250d43499fa92f1`) named the success/`NO_MEDIA_FOUND` variant of the

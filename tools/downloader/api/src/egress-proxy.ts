@@ -146,8 +146,48 @@ export interface EgressProxyOptions {
    * "collision that is not benign" section for the shape of that risk and why
    * a narrower fix (suppressing on any concurrent request to the host) was
    * rejected in its favour.
+   *
+   * **Carries the port as well as the host**, because what it reports is one
+   * endpoint's outcome rather than a fact about the host — a dead upstream on
+   * `:8443` says nothing about `:443`. `TlsRejectionLog` keys this and the
+   * success below by both, and the certificate hook above by host alone; its
+   * header carries the asymmetry.
    */
-  onOtherConnectFailure?: ((host: string) => void) | undefined;
+  onOtherConnectFailure?: ((host: string, port: number) => void) | undefined;
+  /**
+   * Called with the CONNECT target's host whenever a `CONNECT` to it
+   * **succeeded** — the tunnel opened, and in terminating mode only after this
+   * proxy verified the origin's certificate and issued a leaf for it.
+   *
+   * The third outcome, and dl-38 is why there is one. The two hooks above
+   * between them describe every way a `CONNECT` can *fail*, which is enough to
+   * spot two failing outcomes colliding on one host and is not enough to spot a
+   * failing one colliding with a working one. A load-balanced host with one
+   * broken backend and one healthy one produces exactly that: the broken
+   * backend's `CONNECT` is refused and recorded, the healthy backend's
+   * completes and is recorded nowhere, and the tier that used the healthy one
+   * inherits the other one's certificate verdict for an outcome it reached on
+   * its own terms. `TlsRejectionLog.recordSuccess` is what reads this.
+   *
+   * **Fires for a tunnelled `CONNECT` as well as a terminated one**, for the
+   * same reason `onOtherConnectFailure` does: this proxy reports what happened
+   * and `tls-rejections.ts` decides what it means. With interception off it is
+   * inert either way, because nothing records a certificate refusal there for
+   * it to conflict with.
+   *
+   * **Deliberately not fired for a plain-HTTP request.** The absolute-form
+   * handler above never reaches a certificate, so counting one as a success
+   * would suppress reattachment for the ordinary `http://host/` → `https://host/`
+   * redirect — a page fetched over plain HTTP and then genuinely cert-refused
+   * over TLS on the same host, which is a case dl-34 exists to name rather than
+   * one to fall silent on. `onOtherConnectFailure` leaves that handler alone
+   * for the same reason.
+   *
+   * **Carries the port for the same reason `onOtherConnectFailure` does:** a
+   * connection to `:443` that worked cannot have been the connection to
+   * `:8443` that was refused, so it must not be able to suppress it.
+   */
+  onConnectEstablished?: ((host: string, port: number) => void) | undefined;
 }
 
 export interface EgressProxy {
@@ -497,7 +537,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
         await guard.assertAllowed(`https://${target}`);
       } catch (error) {
         refused(target, error);
-        options.onOtherConnectFailure?.(host);
+        options.onOtherConnectFailure?.(host, port);
         refuse(clientSocket, 403, "Blocked by egress policy");
         return;
       }
@@ -523,7 +563,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
       };
 
       serverSocket.once("error", (error: unknown) => {
-        options.onOtherConnectFailure?.(host);
+        options.onOtherConnectFailure?.(host, port);
         fail(error, 502, "Upstream connect failed");
       });
 
@@ -531,6 +571,10 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
         if (settled) return;
         if (intercept === null) {
           settled = true;
+          // Before the `200`, for the same reason `onCertificateRejected` fires
+          // before `fail`: the record has to already be there when whatever the
+          // client does next surfaces.
+          options.onConnectEstablished?.(host, port);
           establish(clientSocket, serverSocket, head);
           return;
         }
@@ -542,6 +586,12 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           intercept,
           onEstablished: () => {
             settled = true;
+            // `terminateTls` calls this only once the origin handshake has
+            // verified *and* a leaf has been issued, so it is the point at
+            // which "this proxy accepted this host's certificate" is true —
+            // which is the fact `TlsRejectionLog` needs, not merely "a socket
+            // opened".
+            options.onConnectEstablished?.(host, port);
           },
           // The reason phrase is not decoration. ffmpeg logs a proxy's status
           // line verbatim — `[httpproxy] HTTP error 502 <phrase>` — so this is
@@ -559,7 +609,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
             fail(error, 502, `TLS certificate verification failed (${code})`);
           },
           onFailed: (error) => {
-            options.onOtherConnectFailure?.(host);
+            options.onOtherConnectFailure?.(host, port);
             fail(error, 502, "Upstream connect failed");
           },
           // **500, and not the 502 every other refusal here uses.** This
@@ -579,7 +629,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
           // the job fails as itself rather than as a refused origin. Asserted,
           // because the phrase is the assertion.
           onUnavailable: (error) => {
-            options.onOtherConnectFailure?.(host);
+            options.onOtherConnectFailure?.(host, port);
             fail(error, 500, "Proxy could not issue a certificate");
           },
         });
@@ -597,7 +647,7 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
             if (settled) return;
             settled = true;
             upstreamRefused(target, error);
-            options.onOtherConnectFailure?.(host);
+            options.onOtherConnectFailure?.(host, port);
             refuse(clientSocket, 502, "Upstream proxy refused");
             serverSocket.destroy();
             return;

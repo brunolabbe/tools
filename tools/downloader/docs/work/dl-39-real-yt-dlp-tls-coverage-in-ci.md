@@ -3,7 +3,7 @@ id: dl-39
 tool: downloader
 title: No gate in this repo proves the real yt-dlp binary trusts the terminating proxy's leaf
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -106,11 +106,94 @@ and the PyInstaller/`certifi` reason `SSL_CERT_FILE` alone does not work.
 
 ## Done when
 
-Depends on which option is chosen — this ticket's Build section is the
-decision, so its own `Done when` cannot be written until that decision is
-recorded in the Log.
+Written once the decision was taken, as this section said it would be. Option 3
+was chosen, so there is one line and it is met:
+
+- The decision is recorded in the Log with the costs that drove it, **and** with
+  the flag combination and the PyInstaller/`certifi` reason carried across from
+  `## Why` — because closing this ticket is what would otherwise leave that
+  knowledge with nowhere to live. No code, no workflow and no spec changes.
 
 ## Log
+
+- **2026-09-05** — **Closed as option 3: neither a CI job nor an e2e spec.** The
+  decision is the repo owner's, taken on the costs this ticket's own
+  `## What this ticket does not pre-judge` section named rather than on a
+  re-derivation of them. Recorded here because the ticket's Build section asks
+  for exactly this — _"say so in the Log and close this rather than leaving it
+  `ready` indefinitely"_ — and because closing it is what would otherwise make
+  the knowledge below homeless.
+
+  **The costs that decided it**, all three from the ticket:
+
+  - **A yt-dlp version floor maintained by hand in a commit.** `YTDLP_VERSION`
+    in the `Dockerfile` pins `2025.09.26`, the only version any of this was
+    measured against, and a gate that asserts a flag combination still works
+    only means anything against a pin somebody keeps current. That is recurring
+    manual work on a tier the repo calls optional.
+  - **A container build per run that wants the coverage.** `INSTALL_YTDLP=true`
+    is a build-arg, so there is no cheaper way in than building the image —
+    either on every run or behind another path filter in
+    `.github/workflows/downloader.yml`.
+  - **An outbound network path to `github.com/yt-dlp/yt-dlp/releases` from
+    inside the build.** The ticket flagged the CI runner's policy as unchecked
+    and it stays unchecked: nothing here measured it, and a gate whose failure
+    mode is "the release download was blocked" is a flaky gate rather than a
+    coverage gain.
+
+  **Against which:** the roadmap already states it —
+  `tools/downloader/docs/02-ROADMAP.md:59` "- **yt-dlp is never a dependency.**"
+  — the [`Dockerfile`](../../Dockerfile) says the same at lines 90-93 in the
+  place the image is built ("yt-dlp is a latency optimisation, never a
+  dependency"), and
+  `.github/workflows/downloader.yml:143` "build-args: INSTALL_YTDLP=false"
+  already sets it off deliberately rather than by omission. All three
+  re-resolved against this branch's tip before this entry
+  was committed; the `Dockerfile` range is prose because that filename carries
+  no extension for `scripts/citations.mjs` to recognise. dl-37's scope note was
+  judged sufficient to carry the residual.
+
+  **What is being given up, stated plainly so nobody later reads this as free.**
+  The `SSL_CERT_FILE` + `--compat-options no-certifi` combination stays
+  **unproven by any automated gate in this repo**, and closing this ticket does
+  not make it proven — it decides not to prove it. Carried here from this
+  ticket's `## Why` so it survives the close:
+
+  - **Both flags are required, not either.** `SSL_CERT_FILE` must point at a
+    bundle carrying the generated root **and** `--compat-options no-certifi`
+    must be passed.
+  - **Why `SSL_CERT_FILE` alone does not work.** The shipped yt-dlp binary is a
+    PyInstaller build carrying its own `certifi` bundle, which it prefers over
+    the system store — so `SSL_CERT_FILE` is read and then never consulted.
+    `--compat-options no-certifi` is what makes it consult the system store at
+    all.
+  - **What was measured, once, by hand**, against the real 2025.09.26 binary and
+    a self-signed loopback origin: `SSL_CERT_FILE` alone failed,
+    `REQUESTS_CA_BUNDLE` failed, `CURL_CA_BUNDLE` failed, and only the pair
+    verified.
+  - **The blast radius if it silently stops holding.** An unrecognised compat
+    option is a yt-dlp usage error, `classifyFailure` returns `NO_MEDIA_FOUND`,
+    and the chain falls through to the browser tier — so a version mismatch
+    degrades rather than crashes. That is what makes this affordable to leave
+    ungated, and it is the reason to revisit rather than a reason not to: the
+    degradation is silent.
+
+  **What would reopen this**, so the decision has a trigger rather than being
+  permanent by default: the yt-dlp tier ceasing to be optional, or a
+  `YTDLP_VERSION` bump landing without anyone re-running the manual measurement
+  above. Neither is true today.
+
+  **Not measured here.** Nothing in this session ran yt-dlp, built the image
+  with `INSTALL_YTDLP=true`, or tested the CI runner's outbound policy — this
+  ticket is closed on cost, not on new evidence, and the two open questions in
+  `## What was not established` (the version floor for
+  `--compat-options no-certifi`, and whether CI can reach the releases host)
+  remain unanswered. They are recorded as unanswered rather than resolved.
+
+  Closed on the branch that built
+  [dl-38](./dl-38-tls-rejection-log-does-not-track-successes.md), as its own
+  commit — the two are unrelated beyond sharing a filing moment, and a separate
+  dispatch and pull request for one frontmatter field was not worth it.
 
 - **2026-09-05** — Filed from dl-37's gate exchange, and its own attribution is
   corrected in place rather than left as first drafted — worth the line because

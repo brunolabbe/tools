@@ -871,19 +871,29 @@ describe("what Chromium reports for a refused CONNECT (dl-37)", () => {
 function recordingConnectCallbacks(): {
   certificateRejections: Array<{ host: string; code: string }>;
   otherFailures: string[];
+  established: string[];
   onCertificateRejected: (host: string, code: string) => void;
-  onOtherConnectFailure: (host: string) => void;
+  onOtherConnectFailure: (host: string, port: number) => void;
+  onConnectEstablished: (host: string, port: number) => void;
 } {
   const certificateRejections: Array<{ host: string; code: string }> = [];
+  // Recorded as the proxy hands them over — `host:port`, because the port is
+  // half of what `TlsRejectionLog` keys a conflict by and a hook that dropped
+  // it would look identical here otherwise.
   const otherFailures: string[] = [];
+  const established: string[] = [];
   return {
     certificateRejections,
     otherFailures,
+    established,
     onCertificateRejected: (host, code) => {
       certificateRejections.push({ host, code });
     },
-    onOtherConnectFailure: (host) => {
-      otherFailures.push(host);
+    onOtherConnectFailure: (host, port) => {
+      otherFailures.push(`${host}:${String(port)}`);
+    },
+    onConnectEstablished: (host, port) => {
+      established.push(`${host}:${String(port)}`);
     },
   };
 }
@@ -896,7 +906,7 @@ describe("onOtherConnectFailure (dl-37)", () => {
 
     await connectThrough(proxy.port, "segments.evil.test:443");
 
-    expect(callbacks.otherFailures).toEqual(["segments.evil.test"]);
+    expect(callbacks.otherFailures).toEqual(["segments.evil.test:443"]);
     expect(callbacks.certificateRejections).toEqual([]);
   });
 
@@ -910,9 +920,10 @@ describe("onOtherConnectFailure (dl-37)", () => {
       ...callbacks,
     });
 
-    await connectThrough(proxy.port, `unreachable.test:${await closedPort()}`);
+    const dead = await closedPort();
+    await connectThrough(proxy.port, `unreachable.test:${String(dead)}`);
 
-    expect(callbacks.otherFailures).toEqual(["unreachable.test"]);
+    expect(callbacks.otherFailures).toEqual([`unreachable.test:${String(dead)}`]);
     expect(callbacks.certificateRejections).toEqual([]);
   });
 
@@ -942,10 +953,15 @@ describe("onOtherConnectFailure (dl-37)", () => {
       ...callbacks,
     });
 
-    await connectThrough(proxy.port, `trusted.test:${origin.port}`);
+    await connectThrough(proxy.port, `trusted.test:${String(origin.port)}`);
 
-    expect(callbacks.otherFailures).toEqual(["trusted.test"]);
+    expect(callbacks.otherFailures).toEqual([`trusted.test:${String(origin.port)}`]);
     expect(callbacks.certificateRejections).toEqual([]);
+    // The boundary dl-38's hook sits on: the *origin* handshake succeeded here
+    // and only the leaf could not be issued, so this is the one path where
+    // "verified the certificate" and "the CONNECT worked" come apart. It is a
+    // failure, and `terminateTls` must not have called `onEstablished` for it.
+    expect(callbacks.established).toEqual([]);
   });
 
   test("a genuine certificate rejection fires onCertificateRejected ONLY", async () => {
@@ -974,6 +990,10 @@ describe("onOtherConnectFailure (dl-37)", () => {
       { host: "untrusted.test", code: "DEPTH_ZERO_SELF_SIGNED_CERT" },
     ]);
     expect(callbacks.otherFailures).toEqual([]);
+    // dl-38 made "ONLY" a claim about three hooks rather than two, and this is
+    // the same self-poisoning shape one map further along: a refusal that also
+    // recorded a success would suppress its own reattachment forever.
+    expect(callbacks.established).toEqual([]);
   });
 
   test("a non-certificate TLS handshake failure fires it too, via terminateTls's onFailed", async () => {
@@ -1000,9 +1020,9 @@ describe("onOtherConnectFailure (dl-37)", () => {
       ...callbacks,
     });
 
-    await connectThrough(proxy.port, `not-tls.test:${originPort}`);
+    await connectThrough(proxy.port, `not-tls.test:${String(originPort)}`);
 
-    expect(callbacks.otherFailures).toEqual(["not-tls.test"]);
+    expect(callbacks.otherFailures).toEqual([`not-tls.test:${String(originPort)}`]);
     expect(callbacks.certificateRejections).toEqual([]);
   });
 
@@ -1031,7 +1051,109 @@ describe("onOtherConnectFailure (dl-37)", () => {
 
     await connectThrough(proxy.port, "chained-refusal.test:443");
 
-    expect(callbacks.otherFailures).toEqual(["chained-refusal.test"]);
+    expect(callbacks.otherFailures).toEqual(["chained-refusal.test:443"]);
     expect(callbacks.certificateRejections).toEqual([]);
+  });
+});
+
+/**
+ * dl-38: the third outcome. The two hooks above describe every way a `CONNECT`
+ * can fail, which lets `TlsRejectionLog` spot two *failures* colliding on one
+ * host and leaves it blind to a failure colliding with a success — the
+ * load-balanced origin with one broken backend and one healthy one, where the
+ * healthy one's caller inherits the broken one's certificate verdict.
+ *
+ * Every test here drives a real socket to a real loopback origin, and the
+ * positive ones cannot pass by *not* reaching it: a blocked network gives no
+ * `200` and no `onConnectEstablished`, so it would fail rather than pass
+ * vacuously.
+ */
+describe("onConnectEstablished (dl-38)", () => {
+  test("a terminated CONNECT that verified the origin fires it, with the target's host", async () => {
+    const callbacks = recordingConnectCallbacks();
+    const certificate = await createFixtureCertificate({
+      ipAddresses: ["127.0.0.1"],
+      dnsNames: ["trusted.test"],
+      commonName: "dl38-egress-origin",
+    });
+    cleanups.push(() => certificate.cleanup());
+    const origin = await startTlsOrigin(certificate, (_request, response) => {
+      response.writeHead(200).end("the media");
+    });
+    cleanups.push(() => origin.close());
+    const proxy = await startProxy({
+      guard: createSsrfGuard({ allowHosts: ["trusted.test"] }),
+      logger: NOOP_LOGGER,
+      resolve: resolverFor([v4("127.0.0.1")]),
+      // Holding the fixture's own root, so this origin genuinely verifies
+      // rather than verification being switched off.
+      interceptTls: await interception(certificate.ca),
+      ...callbacks,
+    });
+
+    const result = await connectThrough(proxy.port, `trusted.test:${origin.port}`);
+
+    // The tunnel really opened — not merely "the callback ran".
+    expect(result.status).toBe(200);
+    expect(callbacks.established).toEqual([`trusted.test:${String(origin.port)}`]);
+    expect(callbacks.certificateRejections).toEqual([]);
+    expect(callbacks.otherFailures).toEqual([]);
+  });
+
+  test("a tunnelled CONNECT fires it too", async () => {
+    // Symmetric with `onOtherConnectFailure`, which already fires with
+    // interception off: this proxy reports what happened and
+    // `tls-rejections.ts` decides what it means. Inert in this mode in
+    // practice, because nothing records a certificate refusal here for it to
+    // conflict with — but the hook must not depend on which mode it is in.
+    const callbacks = recordingConnectCallbacks();
+    const origin = await startEcho("hello from the origin");
+    const proxy = await startProxy({
+      guard: createSsrfGuard({ allowHosts: ["allowed.test"] }),
+      logger: NOOP_LOGGER,
+      resolve: resolverFor([v4("127.0.0.1")]),
+      ...callbacks,
+    });
+
+    const result = await connectThrough(proxy.port, `allowed.test:${origin.port}`);
+
+    expect(result.body).toBe("hello from the origin");
+    expect(callbacks.established).toEqual([`allowed.test:${String(origin.port)}`]);
+    expect(callbacks.otherFailures).toEqual([]);
+  });
+
+  test("a plain-HTTP request that succeeds does not fire it", async () => {
+    // The deliberate exclusion, and the over-suppression it prevents: an
+    // `http://host/` fetch never meets a certificate, so counting it as a
+    // success would silence the reattachment for the ordinary redirect to
+    // `https://host/` that is then genuinely cert-refused — which is the exact
+    // sentence dl-34 exists to have deleted.
+    const callbacks = recordingConnectCallbacks();
+    const origin = await startOrigin((_request, response) => {
+      response.writeHead(200, { "content-type": "text/plain" }).end("#EXTM3U");
+    });
+    const proxy = await startProxy({
+      guard: createSsrfGuard({ allowHosts: ["allowed.test"] }),
+      logger: NOOP_LOGGER,
+      resolve: resolverFor([v4("127.0.0.1")]),
+      ...callbacks,
+    });
+
+    const result = await getThrough(proxy.port, `http://allowed.test:${origin.port}/master.m3u8`);
+
+    expect(result.status).toBe(200);
+    expect(result.body).toBe("#EXTM3U");
+    expect(callbacks.established).toEqual([]);
+  });
+
+  test("a policy-blocked CONNECT does not fire it", async () => {
+    const callbacks = recordingConnectCallbacks();
+    const guard = guardResolving({ "segments.evil.test": ["169.254.169.254"] });
+    const proxy = await startProxy({ guard, logger: NOOP_LOGGER, ...callbacks });
+
+    await connectThrough(proxy.port, "segments.evil.test:443");
+
+    expect(callbacks.otherFailures).toEqual(["segments.evil.test:443"]);
+    expect(callbacks.established).toEqual([]);
   });
 });

@@ -177,7 +177,7 @@ describe("namingRefusedOrigins", () => {
         // concurrent probe produces: a rejection lands while this resolve()
         // is in flight, and so does an unrelated failure for the same host.
         rejections.record("cdn.example", "DEPTH_ZERO_SELF_SIGNED_CERT");
-        rejections.recordOtherFailure("cdn.example");
+        rejections.recordOtherFailure("cdn.example", 443);
         return Promise.reject(new AppError("UNREACHABLE"));
       },
     };
@@ -185,6 +185,63 @@ describe("namingRefusedOrigins", () => {
 
     await expect(wrapped.resolve(URL_UNDER_TEST, options())).rejects.toMatchObject({
       code: "UNREACHABLE",
+    });
+  });
+
+  test("a concurrent success on the same host blocks reattachment (dl-38)", async () => {
+    // dl-38's load-balanced origin, driven through the wrapper that actually
+    // reattaches: one hostname, two backends. A sibling probe lands on the
+    // broken one and is cert-refused; this resolver's own connection lands on
+    // the healthy one, completes, and the tier then concludes `NO_MEDIA_FOUND`
+    // for a reason of its own — no extractor for the page. That verdict is a
+    // fact about the page and must survive.
+    //
+    // Red before the fix: `since` had no third map, saw one lone certificate
+    // rejection in the window, and this came back `TLS_VERIFICATION_FAILED`.
+    const rejections = new TlsRejectionLog();
+    const resolver: Resolver = {
+      name: "fake",
+      priority: 20,
+      canHandle: () => true,
+      resolve: () => {
+        // Both inside this call's own window, which is the shape a real
+        // concurrent pair produces — and recorded from in here rather than
+        // before, for the ordering reason this file's header gives.
+        rejections.record("cdn.example", "DEPTH_ZERO_SELF_SIGNED_CERT");
+        rejections.recordSuccess("cdn.example", 443);
+        return Promise.reject(new AppError("NO_MEDIA_FOUND"));
+      },
+    };
+    const wrapped = namingRefusedOrigins(resolver, rejections);
+
+    await expect(wrapped.resolve(URL_UNDER_TEST, options())).rejects.toMatchObject({
+      code: "NO_MEDIA_FOUND",
+    });
+  });
+
+  test("a success on another host leaves the reattachment alone (dl-38)", async () => {
+    // The over-suppression guard for the same change, through the same
+    // wrapper: dl-38 must not turn into "suppress whenever the proxy did
+    // anything", which the header of `tls-rejections.ts` rejects by name. A
+    // page host that loaded fine says nothing about the media host that was
+    // refused, and dl-34's verdict has to keep arriving.
+    const rejections = new TlsRejectionLog();
+    const resolver: Resolver = {
+      name: "fake",
+      priority: 20,
+      canHandle: () => true,
+      resolve: () => {
+        rejections.record("cdn.example", "DEPTH_ZERO_SELF_SIGNED_CERT");
+        rejections.recordSuccess("page.example", 443);
+        return Promise.reject(new AppError("NO_MEDIA_FOUND"));
+      },
+    };
+    const wrapped = namingRefusedOrigins(resolver, rejections);
+
+    await expect(wrapped.resolve(URL_UNDER_TEST, options())).rejects.toMatchObject({
+      code: "TLS_VERIFICATION_FAILED",
+      retryable: false,
+      details: { reason: "DEPTH_ZERO_SELF_SIGNED_CERT" },
     });
   });
 
