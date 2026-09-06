@@ -205,14 +205,16 @@ citations`. The _shape_ of the claim held exactly — four failures, all of them
   are ordinary sentences about a fixture, a diff or quoted output, so a guess
   would manufacture the exact defect this script exists to catch. `unchecked`
   therefore sets no exit bit. The corpus test asserts prose stays under an eighth
-  of all references (56 of 760 when written, about 1 in 14); loosening `PROSE` to
-  a bare number takes it to 122,728 of 17,150 and fails, which is how it was
-  checked that the assertion can fail at all.
+  of all references. **The figures this paragraph first carried were measured
+  over a sixth of the corpus** — see the 2026-09-06 correction below — and the
+  measured ones are 99 prose references of 1915, about 1 in 19. Loosening `PROSE`
+  to a bare number fails the assertion, which is how it was checked that it can
+  fail at all.
 
   **Shorthand resolution is a heuristic, and the output now says so.** Measured
-  over the 301 shorthands in the work records: 44 sit after a citation on their
-  own line, 89 more inside the same paragraph, 156 inherit from further up, and
-  12 have nothing above them at all. Three of the 156 inherit the _wrong_ file —
+  over the shorthands in the work records — **again first measured over a sixth
+  of the corpus**; the real figures are in the 2026-09-06 correction below. Some
+  inherit the _wrong_ file —
   a Log passage that had drifted onto another document — and all three surfaced
   as a loud `past end of file`, not as a quiet pass. The residual risk is the
   quiet one: a wrong file whose line number happens to exist reads `unanchored`
@@ -253,13 +255,16 @@ citations`. The _shape_ of the claim held exactly — four failures, all of them
   of those tests now pins the bit _and_ the printed sentence, so the number can
   never drift from what it means.
 
-  **This file now exits 0 and its two deliberate citations are byte-identical**:
-  `0 verified, 0 moved, 3 unanchored, 0 unresolvable, 2 unchecked, 6 evidence —
-of 11 references`. Six rather than two, because the shorthand and prose rules
-  read the reproduction sample and the options table as well, and every one of
-  those is a quotation of a shape rather than a pointer. Nothing in CI runs this
-  checker yet; when repo-21 wires it in, this record passes and a genuinely
-  broken one does not.
+  **This file now exits 0 and its two deliberate citations are byte-identical.**
+  More than two are declared, because the shorthand and prose rules read the
+  reproduction sample and the options table as well, and every one of those is a
+  quotation of a shape rather than a pointer. **The counts are deliberately not
+  quoted here.** The number this file reports changes every time this Log gains a
+  paragraph, and quoting it inside the entry that grows it is exactly how the
+  "2/4 resolve" line above went stale — a reviewer caught this entry doing it
+  again, one paragraph after the passage complaining about it. Run the command;
+  `exit 0` is the claim. Nothing in CI runs this checker yet; when repo-21 wires
+  it in, this record passes and a genuinely broken one does not.
 
   **Not folded in, and both are real.** repo-24's Log flags that a citation
   ending one line short of a closing brace still reports `ok` because the script
@@ -328,3 +333,86 @@ tree and resolved against <sha>`, and the run adds `2 reference(s) now, 1 then
   of warning in prose. Recorded here because **repo-21 rewrites that same page**
   and is not in this batch, so it will rebase over this; whoever builds it should
   find these edits rather than discover them as a conflict.
+
+- **2026-09-06 — gate round 2: a fix for the port collision, and every corpus
+  figure in this Log restated.**
+
+  **The numbers first, because they undercut the reasoning above them.** Every
+  corpus measurement in the two entries above was taken over **26 of 107**
+  records. The scripts asked git for `docs/work` and `tools/*/docs/work`, and
+  `git ls-files 'tools/*/docs/work'` matches **zero** — a git pathspec does not
+  glob a path segment that way, and it fails by matching nothing rather than by
+  erroring. So the combined pathspec silently returned `docs/work` alone. What
+  was restated, and it is the justifications rather than the conclusions:
+
+  | figure                                | as first written | measured over all 107 |
+  | ------------------------------------- | ---------------- | --------------------- |
+  | records / references                  | 26 / 764         | **107 / 1915**        |
+  | records this change newly fails       | 4                | **11**                |
+  | shorthands resolving to a file        | 259              | **465**               |
+  | of those, inheriting across a heading | 70               | **94**                |
+  | prose share of all references         | 1 in 14          | **1 in 19**           |
+
+  **The conclusions survived re-derivation** — 94 cross-heading resolutions to
+  buy one known-wrong one is the same bad trade 70 was — and **the shipped corpus
+  test was never affected**, because it walks the tree with `readdirSync` and
+  always saw all 107. The damage was confined to the numbers this Log offered as
+  its evidence, which is the damage worth writing down: a conclusion asserted on
+  a sixth of the evidence and _called a measurement_ is not a smaller measurement,
+  it is a different kind of claim.
+
+  **What made it invisible, which is the part worth carrying.** The discrepancy
+  was printed in my own terminal and I explained it away. Loosening `PROSE` to a
+  bare number to prove the corpus test could fail returned `expected 122728 to be
+less than 17150` — a **17,150**-reference corpus, against the 764 I was
+  quoting two paragraphs later. I read that line as "the loose regex explodes",
+  attributing the whole difference to the variable I was manipulating and never
+  looking at the constant. `npm run status` had also printed `downloader — 3 open
+of 44` and `planner — 1 open of 37` earlier in the same session; 44 + 37 + 26 is
+  107, and I had every term on screen. And no `dl-` or `pl-` ticket ever appeared
+  in a list captioned "records that newly fail", which is a silence that should
+  have been louder than any number. **A denominator that disagrees by 22× is not
+  a detail of the effect you are measuring.**
+
+  **The port collision, found by the reviewer and fixed here on the owner's
+  instruction.** `dl-38` writes `` `:443` `` and `` `:8443` `` in a paragraph
+  about TLS ports; the shorthand rule reads them as line numbers, inherits
+  whatever file was named above, and fails. Eleven such in `dl-38`, two more in
+  `dl-21`. **This branch introduced that on already-merged, already-gated
+  tickets**, and repo-21 proposes wiring this script into CI, at which point
+  advisory becomes a red build — which is why it is fixed here rather than filed.
+
+  There is no lexical rule separating a port from a line, so the fix is not a
+  regex. It is a principle: **a verdict derived from a guess may not be fatal.** A
+  shorthand supplies the number and the _inheritance_ supplies the file, so "line
+  443 is past the end of this file" is a claim about the pairing — the guessed
+  half — and nothing here can tell a stale citation from something that was never
+  one. It reports `unchecked`: counted, printed with the guessed file and the
+  record line that named it, fatal to nothing. **Ambiguity deliberately does not
+  route through it**, because that is a fact about the _name_, which the record
+  wrote out in the qualified citation above; that citation still fails ambiguous
+  on its own, so Build step 4 holds and no record loses a real failure. Measured
+  over all 107: newly-failing records **11 → 4**, and the four that remain are all
+  the orphan-shorthand case the brief requires to stay an error.
+
+  **Considered and declined: a `crossed` state for a shorthand inheriting across
+  a heading**, raised by the owner during the gate. It would cost heading
+  tracking inside `extractCitations`, a dimension orthogonal to `STATES`, and a
+  summary-line format change — and 94 of the 465 resolutions cross a heading with
+  nearly all of them correct, so it would annotate ninety-four to flag one. The
+  provenance already on each line is the cheaper answer. Declined with the number
+  that declined it rather than left unwritten.
+
+  **Two things the reviewer corrected in this file's own claims, both reproduced
+  before accepting.** The `summarize` docblock said the suite could no longer be
+  run against older source because a missing named export is a link error — **it
+  is not, under vitest**: the 58-test suite against `b93e345` gives `3 failed |
+55 passed` with no `SyntaxError`, because vite degrades an absent export to
+  `undefined`. Two of those three fail behaviourally and only the direct-call unit
+  test degrades to `TypeError`, so **repo-18's red-run property is largely
+  preserved rather than given up** — a better outcome than either of us first
+  stated, and predicted by repo-18's own docblock, which I was editing without
+  reading back. And the count of new exports is **four** (`EXIT`,
+  `applyDeclarations`, `extractDeclarations`, `recordDrift`), not five; I had
+  counted from memory instead of from the file, which is the same error as the
+  pathspec one wearing different clothes.

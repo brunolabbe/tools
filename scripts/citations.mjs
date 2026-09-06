@@ -37,16 +37,26 @@
  * rather than in the verdict. So two more shapes are read:
  *
  *   - **shorthand**, a bare `` `:27` ``, resolved against the nearest preceding
- *     qualified citation. This is not a hypothetical form: 568 of them are
- *     already written across the work records, against 0 before this could read
- *     one. A shorthand with nothing before it is `unresolvable`, never a skip.
+ *     qualified citation. This is not a hypothetical form: 564 of them are
+ *     written across the 107 work records, against 0 before this could read one.
+ *     A shorthand with nothing before it is `unresolvable`, never a skip.
  *   - **prose**, a `line 367` phrase, reported `unchecked` and never resolved.
  *     Resolving it against the current file would guess — "line 3" in a
  *     paragraph about a fixture is not a pointer — so it is counted, printed and
  *     left for a human, which is the whole of the complaint answered.
  *
- * `unchecked` is never fatal, for the same reason: 95 such phrases sit in the
- * existing records and most of them are ordinary sentences containing a number.
+ * `unchecked` is never fatal, for the same reason: 99 such phrases sit in the
+ * existing records, one reference in 19, and most are ordinary sentences
+ * containing a number.
+ *
+ * **Neither rule is exact, and the inexactness is in opposite directions.** A
+ * shorthand's file is a guess — see `extractCitations` — and the syntax collides
+ * with a backticked port: `` `:443` `` in a paragraph about TLS reads as a line,
+ * inherits whatever file was named above, and fails loudly against a file with
+ * fewer lines. Thirteen such sit in `dl-38` and `dl-21`. That is a false failure,
+ * it is visible rather than silent, and the declaration mechanism below suppresses
+ * it where a record wants it suppressed; there is no lexical rule that separates a
+ * port from a line, so a narrower regex cannot fix it.
  *
  * **A record can declare a citation deliberately unresolvable**, which is the one
  * thing the carve-out below could not say to a machine:
@@ -243,12 +253,20 @@ const CELL_FILE =
  *
  * A shorthand also carries `from`, the record line its file was named on, and
  * that is not decoration. Nearest-preceding is a **heuristic**: measured over the
- * 301 shorthands in the work records, 44 sit after a citation on their own line
- * and 89 more inside the same paragraph, but 156 inherit from further up, and
- * three of those inherit the wrong file — a Log passage that had drifted onto a
- * different document since the citation above it. So the file is a guess, and a
- * guess a reader cannot see is the rubber stamp this whole script refuses. Both
- * ends are printed: the shorthand as written and the line the file came from.
+ * 564 shorthands in the 107 work records, 180 sit after a citation on their own
+ * line and 151 more within five lines of one, but 213 inherit from further up and
+ * 20 have nothing above them at all. At least one of the 213 inherits the **wrong**
+ * file and resolves anyway: `repo-23`'s record writes `` `:141` `` meaning
+ * `docs/02-DEPLOYMENT.md`, inherits an ADR named 70 lines earlier, and prints that
+ * ADR's line 141 as the cited text with exit 0. So the file is a guess, and a guess
+ * a reader cannot see is the rubber stamp this whole script refuses. Both ends are
+ * printed: the shorthand as written and the line the file came from.
+ *
+ * Resetting the inherited file at a heading is the obvious guard and the numbers
+ * refuse it: 94 of the 465 shorthands that resolve inherit across one, and nearly
+ * all are right — `repo-6`'s record is about `status.test.ts` throughout. Ninety-four
+ * refusals to catch one is the worse trade, so the answer here is provenance, not a
+ * verdict.
  *
  * @param {string} markdown
  * @returns {{file: string | null, start: number, end: number, anchor: string | null, source: "inline" | "table" | "shorthand" | "prose", line: number, from: number | null}[]}
@@ -669,16 +687,45 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
       foundAt: null,
     });
 
+    /**
+     * **A verdict derived from a guess may not be fatal.**
+     *
+     * A shorthand supplies the number; the inheritance supplies the file. "Line
+     * 443 is past the end of this file" is a claim about the *pairing*, and the
+     * pairing is the guessed half — so the tool cannot tell a genuinely stale
+     * citation from something that was never a citation at all. `` `:443` `` in a
+     * paragraph about TLS ports is the case that proved it: thirteen of those sit
+     * in `dl-38` and `dl-21`, and reading them as lines into whatever file was
+     * named above turned two already-merged, already-gated tickets red.
+     *
+     * So it is reported `unchecked` — counted, printed with the file it guessed
+     * and the line that named it, and fails nothing. **Ambiguity is deliberately
+     * not routed here**: that is a fact about the *name*, which the record wrote
+     * out in the qualified citation above, and that citation fails ambiguous on
+     * its own. Nothing is lost and the record still fails for a real reason.
+     */
+    const guessed = (reason) => ({
+      ...c,
+      state: c.source === "shorthand" ? "unchecked" : "unresolvable",
+      reason:
+        c.source === "shorthand"
+          ? `${reason} — and this file was inherited, not written, so nothing here can tell a stale citation from something that was never one`
+          : reason,
+      text: null,
+      resolved: at,
+      foundAt: null,
+    });
+
     if ("error" in resolved) return bad(resolved.error);
     if (!cache.has(resolved.path)) cache.set(resolved.path, read(resolved.path));
     const content = cache.get(resolved.path);
     c = { ...c, resolved: resolved.path };
     if (content === null) return bad("file not found");
     if (c.start < 1 || c.start > content.length) {
-      return bad(`line ${c.start} is past end of file (${content.length} lines)`);
+      return guessed(`line ${c.start} is past end of file (${content.length} lines)`);
     }
     if (c.end > content.length) {
-      return bad(`range ends at ${c.end}, past end of file (${content.length} lines)`);
+      return guessed(`range ends at ${c.end}, past end of file (${content.length} lines)`);
     }
 
     const text = content[c.start - 1].trim();
@@ -793,16 +840,25 @@ export function applyDeclarations(results, declarations) {
  * export — a red reading `SyntaxError: does not provide an export named
  * 'summarize'` proves the API changed and proves nothing about the behaviour.
  *
- * **repo-25 gave that up in part, and it is worth knowing which part.**
- * `extractDeclarations`, `applyDeclarations` and `EXIT` are exported, so the
- * suite as a whole no longer links against the pre-repo-25 source. What replaces
- * it is that every acceptance repo-25 claims is *also* asserted through the CLI,
- * by spawning it — the reproduction's five references, the declared-evidence exit
- * code, the stale declaration — and those assertions were run against the old
- * script by hand before this landed: `3 citations` where the reproduction has
- * five, `exit 1` on a record that declares its evidence, and `0 citations` on a
- * record that is nothing but prose references. `summarize` itself stays private
- * for repo-18's reason.
+ * **repo-25 added four exports — `extractDeclarations`, `applyDeclarations`,
+ * `EXIT` and `recordDrift` — and the property survives them.** That was not
+ * obvious and it was asserted wrongly first: this docblock claimed the suite
+ * could no longer link against older source, on the reasoning that a missing
+ * named export is an ESM link error. **Under vitest it is not.** The reviewer
+ * measured it and it reproduces — the current 58-test suite run against
+ * `b93e345` gives `3 failed | 55 passed`, no `SyntaxError`, because vite's
+ * transform degrades an absent named export to `undefined` instead of refusing
+ * to link. Two of the three fail on behaviour (`expected … to match /read from
+ * the working tree…/`); only the third, which calls `recordDrift` directly,
+ * fails as `TypeError: recordDrift is not a function`.
+ *
+ * So repo-18's standard still holds for the acceptances that matter, and the
+ * remaining care is to keep asserting them through the CLI as well — the
+ * reproduction's five references, the declared-evidence exit code, the stale
+ * declaration. Those were also run against the pre-repo-25 script by hand:
+ * `3 citations` where the reproduction has five, `exit 1` on a record that
+ * declares its evidence, and `0 citations` on a record that is nothing but prose
+ * references. `summarize` itself stays private for repo-18's reason.
  *
  * `requireAnchors` is applied here rather than at the exit, so the one function
  * that knows the counts is also the one that says what they mean. It changes

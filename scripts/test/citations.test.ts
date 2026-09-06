@@ -1046,8 +1046,8 @@ test("a number inside a citation's anchor text is not read as a prose reference"
  * **Done when 3**, over the corpus the acceptance names. Two claims, and the
  * second is the one with teeth: prose is detected often enough that the rule is
  * doing work, and rarely enough that it is signal rather than noise. Measured
- * when written: 56 prose references of 760 total, about 1 in 14. Loosening
- * `PROSE` to a bare number takes it past 1 in 2 and fails here.
+ * when written: 99 prose references of 1915 across the 107 work records, about
+ * 1 in 19. Loosening `PROSE` to a bare number takes it past 1 in 2 and fails here.
  *
  * And no prose reference may ever set an exit bit, which is what "does not cause
  * a false failure on ordinary ticket text" means operationally.
