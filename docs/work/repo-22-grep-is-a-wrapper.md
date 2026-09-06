@@ -3,7 +3,7 @@ id: repo-22
 tool: repo
 title: The grep command here is a wrapper that silently honours ignore files
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -210,10 +210,10 @@ one changelog line.
 **That cost lands on the implementation PR, not on the one that filed this
 ticket** — and the two are easy to conflate, so they are separated here. The
 filing PR builds no hook, so it is `docs(repo):`, which is `hidden` at
-`release-please-config.json:31` and ships no changelog line; a `fix(repo):` title
+`release-please-config.json:31` "Documentation" and ships no changelog line; a `fix(repo):` title
 on it would have announced behaviour that does not exist in the tree after it
 merges. **The PR that builds the hook is the `fix(repo):` one**, `fix` being not
-hidden at `release-please-config.json:27`, and it is the one that ships a
+hidden at `release-please-config.json:27` "Fixes", and it is the one that ships a
 changelog line. Whoever builds
 the hook should not read this paragraph as already accounted for. Check either
 title with `node scripts/commit-message.mjs --text "<title>"` before opening.
@@ -304,6 +304,15 @@ This gates a pull request that only _files_ repo-22 — no hook, no wiring exist
 
 **Model:** builder ran Opus explicitly (`model: "opus"`). My own context carries, verbatim: "You are powered by the model named Sonnet 5. The exact model ID is claude-sonnet-5." Cross-model gate confirmed both directions.
 
+**This record's citations are pinned to `5fed828`, the sha it reviewed** — added by repo-22's builder on 2026-09-05, and nothing the reviewer wrote was changed. `.claude/skills/orchestrate-tickets/reference/records.md` grew when #148 merged, so the `records.md:156` "Measure that exit code without a pipe" citation below has moved in the working tree and a working-tree run reports it. That run is the wrong run for a record about another tree; this is the right one, and it passes:
+
+```
+node scripts/citations.mjs docs/work/repo-22-grep-is-a-wrapper.md \
+  --rev 5fed828 --section "The gate on this filing"
+```
+
+→ exit `0`, `0 moved`, `0 unanchored`: every citation in this record now carries anchor text and every one of them resolves. **Do not quote that run's absolute totals here.** Every `path:line` written in this paragraph is itself a citation the run counts, so a count pasted into the prose that produced it is stale the moment it lands — measured twice while writing this line. `0 moved` is safe to state because it does not vary with how many times the record is mentioned. Pinned rather than repointed on purpose: repointing would rewrite a reviewer's evidence to match a tree it never saw, and `citations.mjs`'s own failure text prescribes the pin for exactly this case.
+
 | Claim                                                                                                               | Verification                                                                                                                                                                                            |
 | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Fixture prints `grep: 1`, `command grep: 4`, `exit: 0`                                                              | **verified** — reproduced verbatim, twice (first paste refused by the worktree-isolation guard on the `.gitignore` line, identical second paste succeeded — matches the ticket's own disclosed flake)   |
@@ -313,7 +322,7 @@ This gates a pull request that only _files_ repo-22 — no hook, no wiring exist
 | Wiring line is falsifiable today, passes after build                                                                | **verified** — current `.claude/settings.json`'s only `PreToolUse`/`Bash` hook is `check-pr-title.sh`; the cited `node -e` line names only that today                                                   |
 | Build artifacts are committable                                                                                     | **verified** — `git check-ignore` on both `.claude/settings.json` and `.claude/hooks/check-tree-grep.sh` exits 1 (not ignored)                                                                          |
 | B's measurement (all `.claude/rules/` files key on `paths:` globs)                                                  | **verified** — exactly 5 files, all with `paths:` frontmatter, none keyed on command content                                                                                                            |
-| `records.md` / `concurrency.md` citations resolve                                                                   | **verified** — `records.md:156` "Measure that exit code without a pipe", `concurrency.md:143` the `grep -oE` line                                                                                       |
+| `records.md` / `concurrency.md` citations resolve                                                                   | **verified** — `records.md:156` "Measure that exit code without a pipe", `concurrency.md:143` "sort -u -t- -k2 -n" the `grep -oE` line                                                                  |
 | `repo-20`, `repo-21` sibling content                                                                                | **not independently checkable** — both live on unmerged branches (PR #148, `origin/repo-cleanup-orchestrate-skill`) not present in this tree; not a defect, just outside what this worktree can confirm |
 | Log's disclosure (premature "through a script 4" figure; the unrecorded contaminated first fixture) survives intact | **verified** — present, unsoftened                                                                                                                                                                      |
 | `npm run check`, `npm run format`, `node scripts/status.mjs --json`, `-- --show repo-22`                            | **verified** — all exit 0; ticket file already correctly formatted                                                                                                                                      |
@@ -350,6 +359,62 @@ I recommend (a) — it costs one sentence and matches what the repo has already 
 - `npm run check`, `npm run format`, `node scripts/status.mjs --json`, `-- --show repo-22` all still exit 0 at `23d4bc3`.
 
 **The exchange is closed on my side.** Nothing outstanding.
+
+## Review
+
+**Gate: PASS** — 2026-09-06 · reviewed at `11ac0d9` (`origin/main@4a4cc4f...11ac0d9`, six commits: `ccde4c8`, `76e6a5b`, `db83b6f`, `3340a26`, `4e6581a`, `11ac0d9`) · defect hunt run directly by the reviewer (no `code-review` delegate — this repo's skill reserves that for the main session; the `ticket-reviewer` subagent runs its own hunt), medium depth, across five passes as the branch moved
+
+**Model:** both builders ran Opus explicitly. I ran on Sonnet (pinned in my frontmatter). Cross-model gate confirmed both directions, every pass.
+
+Setup: `bash .claude/scripts/worktree-farm.sh` then `npm run build`, both clean, before measuring, at every tip reviewed.
+
+| Done when                                                                 | Proof                                                                                                                                                        |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Fenced block under **Why** prints `grep: 1`, `command grep: 4`, `exit: 0` | **verified** — reproduced by hand on a fresh fixture                                                                                                         |
+| Hook fires, does not block                                                | `scripts/test/hooks.test.ts:47` ✓                                                                                                                            |
+| Stays quiet on the four already-correct spellings                         | `scripts/test/hooks.test.ts:72` ✓                                                                                                                            |
+| Fires after a shell operator, not only at the start                       | `scripts/test/hooks.test.ts:53` ✓                                                                                                                            |
+| Header carries the reasoning                                              | `scripts/test/hooks.test.ts:106` ✓                                                                                                                           |
+| Siblings cited, not copied                                                | `scripts/test/hooks.test.ts:115` ✓                                                                                                                           |
+| Wired into `.claude/settings.json`                                        | `scripts/test/hooks.test.ts:134` ✓ — `deny`/`allow`/`ask` byte-identical to `origin/main` at every tip reviewed; only delta anywhere is the added hook entry |
+| Paren-adjacent shape is silent                                            | `scripts/test/hooks.test.ts:89` ✓                                                                                                                            |
+| `check-pr-title.sh` fixed, still does its job (both halves)               | `scripts/test/hooks.test.ts:155,164,172,250` ✓                                                                                                               |
+| `npm run check`, `npm run format`, `status.mjs --json`                    | **verified** — all exit 0 at `11ac0d9`, tree clean after format                                                                                              |
+
+All ten rows proven or verified. `npx vitest run --project repo` → 173 passed (166 → 169 → 173 across the branch's fix commits, unchanged from `4e6581a` since the final commit added an assertion to an existing test rather than a new one) — reproduced myself at every tip, not read off the Log.
+
+**History across five passes, condensed — each item independently reproduced, not accepted on report:**
+
+1. **Round 1 — a quote-parity misfire, mis-framed by me and corrected.** I found the shared quote-stripping sed (`s/'[^']*'//g; s/\"[^\"]*\"//g`) could be defeated by an escaped inner quote, and initially called the `check-pr-title.sh` half "the same class of defect Decision Two fixed" — implying an inherited limitation. Wrong: `origin/main` has no stripping at all (`grep -c "s/'"` → 0) and is correctly silent on the repro; the branch's own strip is what manufactures the false adjacency. **A regression the fix introduced, not a wart it tolerated.** Fixed at `db83b6f`.
+
+2. **Round 2 — probing the fix instead of the bug found a second instance of the same mechanism.** `true; \x gh pr create --web` (`\x` — a no-op escape of an ordinary letter, so the command never actually invokes `gh`) was silent on `origin/main` and `76e6a5b`, but blocked (exit 2) on `db83b6f` — the new `s/\\.//g` clause deleted the escaped char and manufactured the same kind of adjacency as round 1, this time from inside the fix for round 1.
+
+3. **Round 3 — the owner declined to patch the instance a third time and required an invariant instead: no deletion may create an adjacency the raw text did not have.** The shipped fix substitutes one `\x01` per stripped span rather than deleting it, in both hooks. Verified: the invariant holds by inspection (`\x01` is excluded from all three categories the anchor's regex needs — whitespace, boundary-operator, phrase-literal — so a sentinel can only ever break a would-be match, never complete one); both known regressions (`\x`, `\\`) are silent on the shipped hooks; mutation (reverting substitution to deletion) fails exactly two tests, 17 others green; the guard is still armed (`--title 'nope'` → exit 2) and the extraction trap still avoided (`--title "feat(repo): x"` → silent); an unterminated-quote shape behaves identically to `origin/main` (pre-existing, not introduced).
+
+4. **Round 4 — I flagged that a third claimed regression (`\;`) did not reproduce as a branch-introduced defect in my hands, and asked for the exact repro rather than asserting either way.** Confirmed by the builder: `\;` **does** fail on the deleting version (`true; \; gh pr create --web` → 2), but it **inherits** the failure from `origin/main` (also 2) rather than causing it — `origin/main`'s anchor has no escape-awareness at all and reads a literal `;` as an operator regardless of the backslash in front of it. My cleaner isolation (`true \; gh pr create --web`, no redundant leading `;`) is now in the record as the instrument that separates the two: `origin/main` **2**, deleting **0**, substituting **0**. The Log's count is corrected from "2 branch regressions, 1 already known" to "2 branch regressions (`\x`, `\\`), 1 inherited pre-existing defect (`\;`) that the substitution also happens to fix."
+
+5. **Round 5 (this pass) — the inherited defect is not academic; it blocked the builder's own commit, live.** The first draft of the commit message recording this correction quoted the `\;` shape in prose and was rejected (exit 2) by the `PreToolUse` hook — the **shared checkout's** copy, i.e. `origin/main`'s escape-blind version, because a session resolves hooks from `/workspaces/tools`, not from its own worktree. This is my structural finding demonstrating itself, live, on the commit documenting the defect it demonstrates. The builder reworded the message rather than working around the guard. Confirmed the final line numbers moved again: `hooks.test.ts:250` (was `:242`) for "still reads a title out of a quoted span," and `:244` (was `:236`) for the tree-grep escape test — both re-resolved against `11ac0d9` and correct now.
+
+**Two things accepted by the builder without re-measurement across the rounds, flagged so they don't read as independently verified more than once:** my structural finding about worktree hook resolution (though it has since been independently, if accidentally, reconfirmed by round 5's live block), and my re-run of 20 of the original 46 probed shapes.
+
+**Structural finding, restated precisely for the record — now doubly confirmed, once by me deliberately and once by the builder's own workflow hitting it live:** a session working in an isolated `git worktree` checkout of a branch cannot observe a newly-added or newly-fixed `PreToolUse` hook take effect, pre-merge — not "inconclusive, hook not loaded yet" but structurally impossible under how this harness resolves hooks. The hook runner for a session reads `.claude/settings.json` (and the hook files it points to) from the _shared_ main checkout, not from the worktree's own copy, however current. A fact about the repo's review and build apparatus generally: any ticket that ships or fixes a hook is invisible to every session, including the one that wrote it, until the branch merges.
+
+- **findings** · across all passes: 2 med (round 1's quote-parity misfire, round 2's escape misfire) — both fixed and independently confirmed fixed, the second via a class-level invariant rather than a third instance patch; 1 low (round 1, the backslash-newline continuation false negative — accepted, declined, named in the header, direction agreed); 1 low (round 2, the "0 unanchored" citations claim not holding against the working tree — fixed, confirmed fixed); 1 low (round 4, the `\;` retrospective-count discrepancy — resolved: the count was right, the attribution was wrong, now corrected and credited in the Log). 0 dropped. 5 findings raised, 5 carried, 5 resolved, 0 open.
+- NFR: security — n/a, local dev-tooling hook, not a service boundary. performance — n/a. reliability — the mechanism that produced two live-blocking regressions across two rounds is closed by an invariant rather than a third patch, and the fix additionally closes a pre-existing `origin/main` defect that blocked real work during this very review. maintainability — the ticket's own retrospective on why patching instances (twice) reproduced the exact failure it was trying to stop, why an option list built from instances can only produce an instance fix, and why a reviewer's refusal to accept a number on trust corrected the record rather than propagating it, is the strongest content in this ticket.
+
+**Gate: PASS (delta)** — 2026-09-06 · reviewed `11ac0d9...0803da9` (three commits: `eb345b8`, `af657c7`, `0803da9`) · defect hunt run directly by the reviewer, medium depth, scoped to the delta per the orchestrator's instruction — the five earlier rounds are not re-derived here
+
+This is a narrow pass over what changed after the PASS gate above: a real Windows defect found by CI, its fix, and a new ticket filed from the gap that let it hide.
+
+- **The fix is correct, and it does not move Linux behaviour.** `scripts/commit-message.mjs`'s entry-point guard now compares `import.meta.url` against `pathToFileURL(process.argv[1]).href` instead of string-concatenating `` `file://${process.argv[1]}` ``. Confirmed by inspection and by running the script directly both ways (reject / accept) that a POSIX path produces the identical URL string either way — no behaviour changed on the platform this branch's other four rounds were reviewed on.
+- **Mutation-verified rather than accepted.** `if (false)` in place of the guard's condition fails exactly `scripts/test/commit-message.test.ts:304` ("run as a process, a bad message is rejected"), with the other 26 tests in that file green. Restored, clean, 27/27.
+- **The accepting-direction weakness is real, not a hedge.** The paired test at `scripts/test/commit-message.test.ts:312` stays green even against the same dead-entry-point mutation — a dead guard exits 0, which an accepting assertion cannot distinguish from a live one accepting valid input. Confirmed directly; the label on that test is honest.
+- **The platform limit is stated, not papered over, in both the repo-22 Log and repo-26.** Neither claims a red-green reproduction of the Windows trigger on this platform — both say plainly that the evidence is a string measurement plus CI elimination, and that the broken form is correct on Linux and cannot be run red here.
+- **The symlink trap is recorded as a trap, not the reproduction.** Reproduced it independently (`ln -sf` to the fixed `commit-message.mjs`, ran with a bad message): exit 0, silent, even after this fix — confirming it's a distinct mechanism (realpath resolution) that `pathToFileURL` does not and should not need to address, and that the record does not conflate the two.
+- **Nothing weakened.** No test skipped, no `.only`, no platform conditional anywhere in the touched files; `scripts/test/hooks.test.ts` and both `.claude/hooks/*.sh` files are untouched in this diff (confirmed by `git diff --stat`), so the guard assertions from the PASS gate above stand exactly as reviewed.
+- **CI confirmed green at `0803da9`** (run `34005682316`): `check`, `changes`, `test (ubuntu-latest)`, `test (windows-latest)` all succeeded. One correction to the framing this pass was given: the unit matrix ran (not skipped) for this docs-only commit, because the `changes` job gates on the PR's cumulative diff against `main`, not the single commit — the PR as a whole ships real code, so the full matrix correctly executed regardless, and passed. Not a defect.
+- **findings** · 0 returned, 0 carried, 0 dropped.
+- NFR: security — n/a. performance — n/a. reliability — this closes a defect that silently disabled two commit-message guards on Windows, a real reliability gain, and does so without weakening either guard's assertions. maintainability — the two new tests are honestly labelled for what they can and cannot detect, which is the exact property this ticket's earlier rounds kept re-learning the hard way.
 
 ## Log
 
@@ -445,7 +510,8 @@ here, because the next agent reads Build first.
 and this is a workaround, not a fix.** It is not a style choice. The title
 originally opened with a backticked `` `grep` ``, which YAML reserves as an
 indicator character, so it had to be quoted — and `parseScalar`
-(`scripts/status.mjs:115-118`) never strips quotes:
+(`scripts/status.mjs:115-118` "const trimmed = value.trim();", **pinned to `23d4bc3`**, the sha this entry was
+written against; #148 has since moved it) never strips quotes:
 
 ```js
 const trimmed = value.trim();
@@ -482,7 +548,7 @@ type was wrong and why. It would have shipped a changelog line announcing a hook
 that does not exist in the tree after the merge. `kind` describes the work; the commit type describes the commit, and
 they diverge exactly here. Decision two now separates the two PRs so the
 `fix(repo):` note is not read as already spent. Measured: `docs` is `hidden` at
-`release-please-config.json:31`, `fix` is not at `release-please-config.json:27`,
+`release-please-config.json:31` "Documentation", `fix` is not at `release-please-config.json:27` "Fixes",
 and the two sibling filing PRs (#148, #149) both use `docs(repo):`.
 
 Both of those were originally written as a bare `` `:27` `` — shorthand, after
@@ -494,3 +560,408 @@ occurrences, written by the same hand on the same day, and neither the builder
 nor the reviewer saw it until the second one turned a slip into a pattern. The
 failure is _shorthand after a qualified reference_, not a forgotten filename —
 worth stating because the two want different fixes.
+
+**2026-09-05 — built.** Branch `repo-grep-wrapper-hook` off `origin/main@06d905b`.
+`.claude/hooks/check-tree-grep.sh` (new), `.claude/hooks/check-pr-title.sh`,
+`.claude/settings.json`, `scripts/test/hooks.test.ts` (new). Every **Done when**
+line was run as written, and every number below was measured here.
+
+- **The anchor's misfire was reproduced before it was fixed, not after.** The
+  shipped `check-pr-title.sh` exited `2` on Decision two's `printf` fixture; the
+  fixed one exits `0`, and still exits `2` on `--title 'nope'`. The reproduction
+  is now a test, and it was _watched going red_: stash only the hook fix, re-run
+  the file, and exactly one of its twelve tests fails with the other eleven
+  green. The same was done for the new hook — point its anchor back at the
+  unstripped command and exactly the paren-adjacent test fails, which is what
+  makes the strip load-bearing there rather than decorative.
+- **The ticket asked for hand-run acceptance, and a hand run does not survive.**
+  A suite is the fold-in. The shapes now run on every push in the `repo` vitest
+  project, which already includes `scripts/test/**` — so this cost no change to
+  `vitest.config.ts` and no entry in `scripts/test/tsconfig.json`, the file being
+  TypeScript rather than another `.mjs`. Nothing else in the repo reads a `.sh`;
+  `npm run check` does not.
+- **Two `Done when` lines cannot fail, and are recorded as weak rather than
+  passed quietly.** `git grep -l x` and `grep -l x file.txt` must both stay
+  quiet, but neither carries `-r`, so both stay quiet even against a hook whose
+  command-word rule is broken. `git grep -rl x` is the shape that _can_ fail, and
+  it is in the suite beside them.
+- **Build step 7's flag pattern misses the long forms.** `-[A-Za-z]*[rR]` is
+  right about the cluster and cannot match `--recursive` or
+  `--dereference-recursive`, because the character after the first `-` is another
+  `-`. Both are now matched explicitly. Folded in rather than left: it is the
+  same behaviour the step is about, and a miss is silent.
+- **The exclusion list is the boundary anchor, not a second rule.** The wrapper
+  is a bash _function_, so it applies only when `grep` sits in the command-word
+  slot; under `command grep`, `git grep`, `sudo grep` or `xargs grep` the real
+  binary runs. That is why an anchor is the right test rather than an
+  approximation of one, and why no separate exclusion pattern was written.
+- **Not measured: whether an advisory on stderr reaches the agent that typed the
+  command.** The hook does what step 4 prescribes and the acceptance pins it. But
+  `.claude/settings.json` is read at session start, so the new hook was not live
+  in the session that wrote it — a `grep -rl` typed here after the wiring landed
+  produced no warning, which is equally explained by "not loaded yet" and by
+  "`exit 0` stderr is not surfaced to the model". The two cannot be told apart
+  from inside this session. An open question for the first session that starts
+  with this merged, not a defect found here.
+- **The worktree-isolation guard refused several spellings, again.** A pipe into
+  `bash <hook>`, a `while` loop over the shapes, and a heredoc whose body
+  contained a `git grep` example were each refused; acceptance ran as
+  `bash <hook> < fixture.json` instead, and the test file was written with the
+  Write tool. Same class the ticket already records under **Why**; not filed
+  separately.
+- **`status` stays `ready`.** The gate has not run, and there is no ship
+  authority on this branch. It moves to `done` in the commit that lands the gate
+  record, which is also what keeps `reviewedButReady` empty
+  (`scripts/status.mjs:291` "export function reviewedButReady").
+- **Two stale citations in this file were found and deliberately left alone.**
+  `node scripts/citations.mjs docs/work/repo-22-grep-is-a-wrapper.md` exits `1`:
+  the gate record's `records.md:156` "Measure that exit code without a pipe"
+  anchor has moved, and the Log's
+  `scripts/status.mjs:115-118` "const trimmed = value.trim();"
+  no longer holds `parseScalar`. Both were written
+  against an earlier tip and moved when #148 merged; neither was introduced
+  here, and `citations.mjs` runs in no workflow and in no `package.json` script,
+  so this is not a red pipeline. Not repointed because one of them sits inside a
+  reviewer's gate record, which is not this builder's text to edit — raised to
+  the orchestrator instead.
+
+**2026-09-05 — recovered after the builder above was killed mid-flight, and the
+two stale citations were pinned rather than repointed.** The branch had two
+sibling commits on one parent: a pushed one, and an unpushed one identical to it
+but for the nine Log lines recording the citation finding. Verified by diffing
+the pair — the only delta was those lines — then rebased onto `origin/main` at
+the tip that added the repo suite's spawn timeout, which merged in the meantime.
+
+- **The finding above was reproduced before being acted on, and it is right
+  about the disposition and wrong about one mechanism.** Only the gate record's
+  `records.md` citation is what makes the checker exit `1` — it is reported
+  `MOVED`, because it carries an anchor. The Log's `status.mjs` citation is
+  reported `unanchored`: the checker never resolves it either way, so it
+  contributes nothing to the exit code and was found by reading, not by the
+  tool. The distinction matters because it is the difference between a citation
+  the tool can keep honest and one only a human can.
+- **Both are pinned, neither is repointed.** The owner's call, and it is what
+  `citations.mjs`'s own failure text prescribes: "pin the record to the commit
+  the gate reviewed with `--rev` and say so in the record." Repointing would
+  rewrite a reviewer's evidence to match a tree it never reviewed. The gate
+  record now names `5fed828` and carries the `--section`-scoped command that
+  passes against it; the Log entry above names `23d4bc3`.
+- **The pin was measured, not assumed.** `--rev 5fed828 --section "The gate on
+this filing"` resolves the anchor `ok` — `1 verified, 0 moved`. The Log's
+  citation cannot be confirmed by the tool at all, being unanchored, so it was
+  confirmed by hand with `git show 23d4bc3:scripts/status.mjs`: lines `115-118`
+  there are `parseScalar`'s doc comment, its signature and the two body lines
+  the entry quotes, with the closing brace at `119`. That last detail is the one
+  `repo-24`'s gate independently recorded, which is a second attestation.
+- **A whole-file working-tree run still exits `1`, by design.** A record pinned
+  to another tree is not answerable by a run against this one. The pinned
+  commands are in the record and the Log entry; do not "fix" the working-tree
+  run by repointing.
+- **Every citation in this file was anchored — `0 unanchored` as of that commit,
+  on the owner's
+  instruction and against this builder's recommendation to defer.** The
+  recommendation was to leave them: it edits citations inside two reviewers'
+  records for drift this branch did not cause. The owner overrode that, and the
+  override is the better call — an unanchored citation is one the checker prints
+  and verifies nothing about, so the two `--rev` pins were resting on hand
+  reading. They are now self-checking, which is the durable half. Only anchor
+  text was appended; no reviewer's wording was altered.
+- **The pinned runs, both measured without a pipe** — `$?` after a pipe is the
+  pipe's, which is the footgun `records.md` already records and which caught
+  this builder once while writing this entry:
+  - `--rev 5fed828 --section "The gate on this filing"` → `3 verified, 0 moved,
+0 unanchored`, exit `0`.
+  - `--section Log --rev 5fed828` → `5 verified, 1 moved`. The one that moves is
+    `scripts/status.mjs:291` "export function reviewedButReady", and that is
+    correct: it was written by the "built"
+    entry against the current tree, not the filing tree. **The Log genuinely
+    cites two trees**, so no single run makes it clean, and that is a fact about
+    the Log rather than a defect to fix. A default working-tree run verifies
+    that citation and reports the five pinned ones.
+- **Anchor text must not wrap.** The anchor pattern forbids a newline, so an
+  anchor broken across two lines silently stops being an anchor. One was
+  introduced and caught here; `npm run format` was then re-run to confirm oxfmt
+  does not re-wrap the surviving ones. Worth knowing before adding an anchor to
+  a long prose line.
+- **Not measured: whether the pinned `--section` name stays unique.** The flag
+  errors when a name matches more than one section, and this file has a second
+  heading beginning "The gate on this filing". The exact match wins today and
+  the run above proves it, but a third gate heading sharing that prefix would
+  need the name rechecked.
+
+**2026-09-05 — the quote strip introduced a blocking regression, and it is now
+fixed in both hooks.** Raised by the gate, reproduced independently by the
+orchestrator and again by this builder, then answered by the owner: fix both
+halves here, rather than the narrower "fix the blocker, file the noise" the
+orchestrator recommended. One root cause in two places, and splitting it would
+leave the same bug half-fixed in the tree. **Accepted cost: a third subject on a
+branch that already carried two**, under one squash-merge line.
+
+- **It is branch-introduced, not inherited.** `origin/main`'s hook has no strip
+  at all, and on both reproductions the real `origin/main` file exits `0`
+  (silent) while this branch's exits `2` (blocks). The strip removes the words
+  between a shell operator and the phrase, manufacturing an adjacency the raw
+  text never had. The gate first framed this as a shared limitation and then
+  withdrew that framing on the orchestrator's measurement; the withdrawal is
+  right.
+- **The realistic shape is a heredoc, which is this hook's own origin case.**
+  The gate's reproduction needed a lone quoted string in command position — a
+  word bash would try to execute, so nothing anyone types. This builder then
+  found a shape with a real command word in front of it: writing a markdown file
+  with `cat > f.md <<'EOF'` whose body quotes the command in prose with an
+  escaped inner quote is blocked, and `origin/main` does not block it. The hook
+  exists **because** of a heredoc misfire — its own header says so — so this is
+  the fix reopening the hole it was written to close, not a new edge.
+- **Measured blast radius: 2 of 10** realistic escaped-quote shapes block, and
+  both are the lone-quoted-string form; every shape with a real command word in
+  front (`echo`, `git commit -m`, `node -e`, `printf`, `npm run`, `jq`) is
+  silent. The heredoc case is additional to those ten.
+- **The two halves are independent** — separate files, each with its own copy of
+  the `sed`. Only `check-pr-title.sh` blocks (`exit 2`); `check-tree-grep.sh`
+  fires spuriously but exits `0`, so that half is noise, not a block, and it has
+  no `main` baseline to regress from because the file is new.
+- **The fix is one `sed` clause per file**: `s/\\.//g` first, removing
+  backslash-escaped characters before the quote pairing runs, so a `\"` can no
+  longer be counted as a real quote. All three reproductions go silent, the
+  blast radius goes from **2 of 10 to 0 of 10**, and the 46-shape battery stays
+  at 0 unexpected. **This entry originally claimed the clause "fails in the safe
+  direction … never a false block". That claim was false and is retracted** —
+  see the final entry in this Log, where the gate falsified it by
+  probing the fix instead of the bug.
+- **The three reproductions are now tests, and they were watched going red.**
+  Removing only the new clause from both files fails exactly the three new tests
+  with the other twelve green:
+  `scripts/test/hooks.test.ts:97` "an escaped inner quote splits the phrase",
+  `scripts/test/hooks.test.ts:178` "does not block when an escaped inner quote"
+  and `scripts/test/hooks.test.ts:189` "a heredoc that quotes the phrase in prose". The
+  heredoc one is the load-bearing case — it has a real command word in front, so
+  unlike the gate's original it is a shape somebody would actually type.
+- **A claim in `check-pr-title.sh`'s header was measurably false and is gone.**
+  It said an odd quote count or an unstripped span "both cost a match, not a
+  false block, and neither has been observed". A false block had been observed
+  by then. The header now carries the mechanism instead.
+- **The gate's `low` was declined, not overlooked.** A `grep -r` split across a
+  backslash-newline continuation is still undetected — confirmed here, exit `0`
+  and silent. Joining continuations before matching would make the sibling
+  hook's per-line boundary anchor span lines, and that hook blocks; trading a
+  missed advisory warning for a possible false block is the wrong direction. Now
+  a named limitation in `check-tree-grep.sh`'s header.
+
+**2026-09-05 — why the strip looked correct when it was written, which is the
+part worth keeping.** This is the second time on this ticket that a guard passed
+its own acceptance and misfired on a shape nobody had listed. The mechanism is
+the same both times and it is not carelessness.
+
+- **The seven-shape table was derived from the defect it was fixing.** Decision
+  two's fix was measured against seven commands, and every one of them was
+  reached by asking "how does the paren-adjacent bug show up?" A test set built
+  that way proves the fix closes the case that motivated it. It cannot prove the
+  fix opens nothing, because nothing in it was chosen by anyone asking what the
+  _fix_ might break. The table showed `stripped` beating `naive` in every row —
+  which is exactly what a table drawn from the bug's own family would show even
+  if the strip were much worse in general.
+- **The two failure modes are not symmetric, and only one was imagined.** The
+  header reasoned about the strip removing _too much_ — that was the recorded
+  trap, that substituting the stripped text into the title extraction would
+  break every real invocation, and it was guarded with a test. Nobody asked what
+  removing text does to _adjacency_. Deleting a span does not only hide things;
+  it moves the survivors together. `x; "note \"…\" done"` has no adjacency in the
+  raw text and acquires one only because the strip removed the word in between.
+  A transformation that shortens a string can manufacture a match, and the whole
+  design treated stripping as monotonically safe.
+- **`origin/main` was the available control and was never run.** The one cheap
+  question — "does the version without this fix also do this?" — would have
+  labelled it a regression immediately. The first gate did not ask it either.
+  Both of us reasoned about the anchor; neither diffed the behaviour against the
+  tree the change was leaving.
+- **What actually caught it, twice, was the same technique:** running the guard
+  against inputs invented independently of the guard. The gate found the paren
+  case that way, and the quote-parity case that way. **So the rule this ticket
+  earns is: a guard's test set must contain shapes chosen by someone trying to
+  break the fix, not only shapes drawn from the bug.** The heredoc case is in
+  the suite for that reason — it was found by asking "what does this hook exist
+  to protect, and does the fix still protect it?", which is a different question
+  from "is the bug gone?".
+
+**2026-09-06 — the fix for the strip had the same defect as the strip, and the
+owner closed the class rather than the instance.** The gate applied this
+ticket's own new rule to the fix the rule came from, and it worked. **The answer
+was none of the three options this builder offered.** All three patched the
+instance; the owner required an outcome instead — _no deletion may create an
+adjacency the raw text did not have_ — on the reasoning this ticket's own
+retrospective supplied: patching the instance had failed twice, and both times
+the patch passed its own tests.
+
+- **The reproduction, confirmed here rather than taken on report.**
+  `true; \x gh pr create --web` exits `0` on `origin/main` and on `76e6a5b`, and
+  **exits `2` — blocks — on `db83b6f`**. `\x` is a backslash before an ordinary
+  letter, which bash treats as plain `x`, so that command runs a program named
+  `x` and never touches `gh` at all. `s/\\.//g` deletes _any_ escaped character,
+  not just an escaped quote, so it removes `\x` and moves `gh pr create` up
+  against the `;`. **Identical mechanism to the regression it was fixing:
+  deleting a span moves the survivors together.** Two instances now, the second
+  inside the fix for the first, which is the argument for treating the mechanism
+  as unresolved rather than the instance.
+- **It falsifies a claim this Log made, and that claim is retracted above.** The
+  "never a false block" sentence was written from the same evidence base the
+  rule warns about — shapes drawn from the bug. One correction to the gate's
+  wording: the claim lived **in this Log, not in either hook's header**; neither
+  `.sh` file contains it, so nothing false shipped in the code comments.
+- **The shipped fix: substitute, do not delete.** Each stripped span becomes one
+  `\x01` instead of nothing, in both hooks. The anchor still cannot see inside a
+  string — the point of stripping — but a removal can no longer close a gap,
+  because nothing is removed. The narrowing this builder had recommended was
+  declined: it would have removed the one escape class that had been _measured_
+  to manufacture an adjacency, which is not a proof no other deletion can.
+- **`\x01` is chosen against the anchor, not for uniqueness.** It must be none
+  of the three things the anchor reacts to: whitespace (`[[:space:]]*` would
+  skip it), one of `; & | (` (it would forge the boundary it exists to block),
+  or a character of the phrase. **It deliberately need not be absent from real
+  input** — a stray `\x01` someone types is inert for those same three reasons,
+  so there is no sentinel-collision problem to solve. Not `\x00`, which would
+  truncate the pipeline.
+- **The property being bought, stated so it can be checked:** substitution
+  leaves one non-matching character where deletion left zero, so its match set
+  is a _subset_ of the deleting version's. A substitution can only ever prevent
+  a match, never create one. That is the invariant; the outcome the owner asked
+  for follows from it.
+- **The class was measured, not assumed — this is the evidence that it is a
+  class fix.** A 21-shape battery aimed at the _substitution_ (not at the bugs
+  it cured) runs 0 unexpected. The same battery against the deleting version
+  fails **3**: `\x`, `\\` and `\;` before the phrase. Of those, **two are
+  regressions this branch introduced** — `origin/main` is silent on `\x` and
+  `\\` — and **only `\x` had ever been found by anyone**. That is the point: the
+  two fixes before this each closed the one shape that had been observed while
+  another sat beside it, unobserved.
+- **The third, `\;`, is not a branch regression, and an earlier draft of this
+  entry implied it was.** Corrected on the gate's challenge: it could not
+  reproduce the claim and said so rather than accepting a number on this
+  builder's say-so. Measured three ways with
+  `true; \; gh pr create --web` — `origin/main` **2**, deleting **2**,
+  substituting **0**. The deleting version does fail it, so the count of 3
+  stands, but it **inherits** that failure rather than causing it.
+  `origin/main`'s anchor has no escape-awareness at all, so it reads the `;` in
+  `\;` as a shell operator. The gate's cleaner isolation — `true \; gh pr create
+--web`, with no real `;` in front — gives `origin/main` **2** and the deleting
+  version **0**, which exhibits the pre-existing defect on its own with no
+  stripping involved at all.
+- **So the substitution also fixes a defect this ticket did not create.**
+  `true \; gh pr create --web` passes `;` as a literal argument to `true` and
+  never invokes the guarded command, and `origin/main` blocks it today —
+  **measured live, on the commit that records this.** The first draft of that
+  commit message quoted the shape in prose, and the `PreToolUse` hook rejected
+  it with `exit 2`. The hook that fired was the **shared checkout's** copy,
+  which is `origin/main`'s escape-blind version, because a session resolves
+  hooks from `/workspaces/tools` and not from its own worktree — the gate's
+  structural finding, demonstrating itself. Two things follow: the defect is
+  real enough to block ordinary work today, and the fix on this branch is
+  invisible to any session until it merges. The message was reworded rather than
+  the guard worked around. Closing
+  the class closed that too, as a side effect — which is what a class fix is for,
+  and which none of the three patch options would have done.
+- **Red-verified, and two of the new tests are recorded as weak rather than
+  passed quietly.** Reverting substitution to deletion fails exactly the two
+  escape tests. The boundary-forging and sentinel-inert tests pass against the
+  deleting version too, so they prove nothing about _this_ change — they are
+  regression guards for the next one, and saying so is cheaper than someone
+  later mistaking them for evidence.
+- **Not a regression, checked rather than assumed:** an unterminated quote
+  (`echo "unterminated; gh pr create`) exits `2` on `origin/main` and on this
+  branch alike. It is a bash syntax error that cannot run, and the behaviour is
+  identical to the tree this branch leaves, so it is a pre-existing limitation
+  rather than anything the strip introduced.
+- **`check-tree-grep.sh` is exempt from the blocking half only because it has no
+  `exit 2` path at all.** That is structural, and its header now says to keep it
+  structural rather than conventional.
+
+**2026-09-06 — the second lesson, and it is not the first one repeated.** The
+earlier entry says a guard's test set must contain shapes chosen by someone
+attacking the fix. True, and it was not enough: this builder wrote that rule
+down and then, one round later, offered three remedies that were all patches to
+the single shape the gate had just found. The rule was applied to the _bug_ and
+not to the _fix_, which is the exact failure the rule describes.
+
+- **What broke the loop was the owner refusing to pick from the options.** Three
+  options were put up, all of the form "make this input stop doing that"; the
+  answer named an _outcome_ instead — no deletion may create an adjacency the
+  raw text did not have — and let the implementation follow from it. **An option
+  list built from instances can only produce an instance fix, however carefully
+  it is costed.** The measurement that justified the outcome was already in this
+  Log: two instances, two clean-looking fixes, both passing their own tests.
+- **The tell was available and was not read.** By the time the third instance
+  landed, the same mechanism had produced three defects and every fix had been
+  local to one input shape. A repeat count of three, with the fixes themselves
+  supplying two of them, is the signal to stop patching and state the invariant.
+  This builder had all three data points and still offered a fourth patch.
+- **So the durable rule is about the shape of the answer, not the tests:** when a
+  mechanism recurs — and especially when a fix for it introduces the next
+  instance — stop proposing inputs to neutralise and write down the property
+  that must hold. Then test the property. `hooks.test.ts`'s new cases exist
+  because the invariant came first; under the old approach they would never have
+  been thought of, which is why two of the three shapes they cover had never
+  been observed by anyone.
+
+**2026-09-06 — Windows CI went red after the PR opened, and the cause was not in
+this ticket's hooks at all.** `test (windows-latest)` failed two of nineteen in
+`scripts/test/hooks.test.ts`; `check` and `test (ubuntu-latest)` passed. The
+local runs reported here were accurate — the gap is that **this repo's Windows
+matrix is unreachable from the container**, which is the same class as the
+gate's finding that a worktree cannot observe its own hook: a guarantee nobody
+in the loop can measure from where they sit. The branch shipping shell-text
+manipulation is exactly the one that needed it.
+
+- **Diagnosed by elimination from the failure shape, not by guessing.** Both
+  failures were `check-pr-title`, both **empty stderr and exit 0** where a block
+  was required. Empty stderr rules out both earlier exits — a failed `cd` or a
+  missing title would each have printed something. Sorting the four
+  `check-pr-title` cases by whether they reach `commit-message.mjs` settles it:
+  `--fill` exits before it and passed; `--title "feat(repo): x"` reaches it and
+  must be _accepted_, and passed; the two that reach it and must be **rejected**
+  both failed. So the script was exiting 0 on a message it must reject.
+- **The defect: an entry-point guard that is wrong on Windows.**
+  `scripts/commit-message.mjs` gated `main()` on
+  `import.meta.url === ` `` `file://${process.argv[1]}` ``. Concatenating a path
+  into a URL is correct only when the path starts with `/`. On Windows `argv[1]`
+  is `D:\a\...`, giving `file://D:\a\...` against an `import.meta.url` of
+  `file:///D:/a/...`. Measured directly: the two strings are unequal for a
+  Windows path and equal for a POSIX one. So `main()` never ran and the script
+  **exited 0 for every message**.
+- **Two guards were dead on Windows, and neither is this ticket's.**
+  `.githooks/commit-msg` and `.claude/hooks/check-pr-title.sh` both shell out to
+  that script, so on Windows both accepted anything. Pre-existing on
+  `origin/main`; this branch is merely the first thing that asserted a bad title
+  is **rejected** rather than that a good one is accepted.
+- **Why it survived: every existing test imports `validate`; none ran the file
+  as a process.** The entry-point guard is the one line an import can never
+  reach. Two tests now run it as a process, and the pair is deliberately
+  asymmetric — the accepting direction is recorded as **weak**, because a dead
+  entry point also exits 0, so only the rejecting direction can see this class.
+  That is the same asymmetry this ticket keeps rediscovering.
+- **Red-verified as far as this platform allows, and no further.** Killing the
+  guard (`if (false)`) fails exactly the rejecting test with the other 26 green,
+  which proves the test detects a dead entry point. **It cannot be run red
+  against the real Windows trigger from here**: on Linux the broken form is
+  correct, because the path starts with `/`. The Windows half rests on the
+  string measurement and the CI elimination above, and that limit is stated
+  rather than papered over.
+- **A conflation caught in passing, worth recording because it is this ticket's
+  own recurring error.** A symlink reproduces the _symptom_ — exit 0, silent —
+  and was briefly taken for a local reproduction of the cause. It is not: a
+  symlink breaks the comparison through realpath resolution, not through
+  path-to-URL formatting, and `pathToFileURL` does not fix it. Two mechanisms,
+  one symptom. The fix addresses the Windows one; the symlink behaviour is
+  unchanged and is arguably correct.
+- **Nothing was weakened to go green.** No test was skipped, no platform
+  conditional was added, and both guard assertions stand exactly as written. The
+  fix makes them pass by repairing what they were correctly reporting as broken.
+- **CI is green at `af657c7`**, `windows-latest` included — the matrix that was
+  red at `eb345b8`. Confirmed by the only instrument that could confirm it,
+  which is the point of the platform note above.
+- **The gap that let it survive is filed as `repo-26`**, not fixed here:
+  `docs/work/repo-26-no-test-runs-a-script-as-a-process.md`. The Windows bug is
+  fixed on this branch; what is not fixed is that **no test in `scripts/test/`
+  runs a script as a process**, and an entry-point guard is the one line an
+  import can never reach. It carries this reproduction and an open decision
+  about which entry points need process-level tests. **Deliberately not swept:**
+  the other scripts were not audited here, because measuring that count is the
+  first step of `repo-26`'s work and would prejudge its decision.

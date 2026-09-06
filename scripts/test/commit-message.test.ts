@@ -1,6 +1,8 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import process from "node:process";
 import { expect, test } from "vitest";
 import { releasingTypes, TYPES, validate } from "../commit-message.mjs";
 
@@ -276,4 +278,42 @@ test("scope validation is skipped when the tool list cannot be read", () => {
   // `toolScopes()` returns [] outside the repo; an unknown scope must not then
   // block every commit on a bad guess about where it is running.
   expect(validate("feat(whatever): a thing", { scopes: [] }).ok).toBe(true);
+});
+
+/**
+ * Everything above imports `validate`. Nothing above runs this file as a
+ * process — and the entry-point guard is the one line an import can never
+ * reach, so it went unexercised until repo-22's Windows CI caught it.
+ *
+ * The guard compared `import.meta.url` against `` `file://${process.argv[1]}` ``.
+ * That concatenation is only correct for a path beginning with `/`: on Windows
+ * `argv[1]` is `D:\a\...`, giving `file://D:\a\...` against an
+ * `import.meta.url` of `file:///D:/a/...`. They never matched, `main()` never
+ * ran, and the script exited 0 for **every** message — silently disabling both
+ * `.githooks/commit-msg` and `.claude/hooks/check-pr-title.sh` on Windows.
+ */
+const SCRIPT = path.resolve(import.meta.dirname, "../commit-message.mjs");
+
+function runScript(text: string) {
+  return spawnSync(process.execPath, [SCRIPT, "--text", text], {
+    encoding: "utf8",
+    shell: false,
+  });
+}
+
+test("run as a process, a bad message is rejected", () => {
+  // The direction that catches a dead entry point. A guard that never runs
+  // cannot reject anything, so this is the assertion that fails when it breaks.
+  const result = runScript("nope");
+  expect(result.stderr).toContain("not a conventional commit");
+  expect(result.status).toBe(1);
+});
+
+test("run as a process, a good message is accepted", () => {
+  // Recorded as weak on purpose: a dead entry point also exits 0, so this pairs
+  // with the test above rather than standing in for it. Asserting only that
+  // valid input passes is exactly how the Windows defect stayed invisible.
+  const result = runScript("fix(repo): a real subject (repo-22)");
+  expect(result.stderr).toBe("");
+  expect(result.status).toBe(0);
 });
