@@ -108,7 +108,34 @@ patient.
 parsing it and weighing a rendition all happen after the last narration line has
 been shown, which is part of why the wait feels open-ended at the end.
 
-## The open decision the builder must not resolve quietly
+## Decision — answered 2026-09-06, not open
+
+**The question was:** analyse's tiers are a fallback chain where exactly one
+succeeds, so a gated bar there would report degradation as progress. What shape
+should the two progress widgets take — two different widgets (A), one gated bar
+with analyse's gates drawn as alternatives (B), or one gated bar for both drawn
+identically (C)?
+
+**The answer, from the owner, relayed through the orchestrator: option A.** It
+was this ticket's own recommendation, so it overrode nobody. Recorded here from
+the dl-40 branch on 2026-09-06; **nothing below has been built.**
+
+**Carry the cost with the answer**, or the next builder rediscovers the
+objection from scratch:
+
+- **A takes every row of the stage table above at full resolution and claims no
+  total it does not have.** It also fixes defects 1 and 2 for free: replacing the
+  stage line _is_ a content mutation, so the polite live region starts working
+  with no extra machinery.
+- **B was not rejected as wrong.** It is the most informative option and it keeps
+  one visual language. It costs real design work, and there is no stock component
+  for it.
+- **C stays rejected**, for the reason already recorded below: it reads as
+  progress when it is degradation, and it would have to either hide most of the
+  stage table or invent a denominator.
+
+The reasoning that produced the question stands, and is kept because it is what
+makes the answer legible:
 
 **Gates imply a known total, and analyse does not have one.** Two independent
 reasons, and they pull against the request for a gated bar:
@@ -125,9 +152,10 @@ reasons, and they pull against the request for a gated bar:
   `measureVariantSizes` only if there is something to weigh.
 
 So "more real stages" and "a gated bar" are both good and are in tension. Three
-ways out:
+ways out — **A is the answer; B and C are kept so neither is re-proposed as
+new:**
 
-- **A. Two widgets (recommended).** Gated bar for the download, where gates are a
+- **A. Two widgets — chosen.** Gated bar for the download, where gates are a
   genuine pipeline and the total is fixed at five. For analyse, an indeterminate
   bar — properly animated per defect 3 — with the current real stage as a single
   line beneath it, replaced as it advances. Takes every row of the table above at
@@ -137,7 +165,8 @@ ways out:
 - **B. Gated bar for both, analyse gates drawn as alternatives** — three doors,
   struck through as each is ruled out, with the fine-grained stages as the label
   inside the open one. Most informative and keeps one visual language. Needs real
-  design work; there is no stock component for it.
+  design work; there is no stock component for it. **Not chosen, and not wrong:**
+  the cost was the reason, not the idea.
 - **C. Gated bar for both, drawn identically.** Cheapest, most consistent
   looking. Rejected: it reads as progress when it is degradation, and it would
   have to either hide most of the table above or invent a denominator. Recorded
@@ -162,10 +191,15 @@ ways out:
    One rule serves both today, so every visual change below would otherwise land
    on the download pipeline as a side effect.
 5. Gated bar for the download, preserving the back-edge behaviour above.
-6. Apply the chosen analyse shape.
+6. Apply the chosen analyse shape. **Settled by the decision above: option A** —
+   an indeterminate bar with the current real stage as a single line beneath it,
+   replaced as it advances. Left as written rather than rewritten into a new
+   brief; that is the builder's job with the code in front of it.
 7. Animate the indeterminate bar — a travelling band — and give
    `@media (prefers-reduced-motion: reduce)` something to say about it. The still
    fallback must remain visibly different from a determinate bar at 0%.
+   **Settled by the same answer:** this is the animation option A requires, not
+   an independent nicety, so it is no longer conditional on step 6's shape.
 8. Visual pass over the download card's bar, speed and ETA line in every state it
    reaches: `percent: null` live capture, a re-probing job, a failure.
    [`web/src/api/scenarios.ts`](../../web/src/api/scenarios.ts) drives the mock
@@ -211,3 +245,16 @@ fast one and it is tempting to test only the slow one.
   than merely missing. The tension between "more real stages" and "a gated bar"
   is recorded under the open decision rather than resolved, because it is a
   design call: gates need a denominator that analyse genuinely does not have.
+- **2026-09-06 — the decision was answered by the owner: option A.** Two widgets
+  — a gated bar for the download, an indeterminate animated bar for analyse with
+  the current real stage as a single line replaced as it advances. It was this
+  ticket's own recommendation, so it overrode nobody; B was declined on the cost
+  of the design work rather than on the idea, and C stays rejected. The section
+  above is now `## Decision — answered 2026-09-06, not open`, and Build steps 6
+  and 7 are marked as settled by it.
+
+  **Recorded, not built.** This entry was written from the dl-40 branch by that
+  ticket's builder, because a downloader worktree was already open and moving a
+  few lines did not earn a dispatch of its own. Nothing in `src` was touched for
+  dl-43 and `status` stays `ready`: the next reader should treat this as a brief
+  whose last open question is closed, not as work in progress.
