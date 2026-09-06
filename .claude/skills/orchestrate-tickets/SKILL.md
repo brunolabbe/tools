@@ -118,9 +118,12 @@ you are there.
    repo history names any other model — 480 across all refs — and that is the
    inheritance, not evidence Opus built them. Sonnet is right when the builder ran Opus or Haiku; pass
    `model: "opus"` when the builder ran Sonnet, which happens when *you* are
-   Sonnet and the ticket inherits. Never `haiku`, never `fable`. **Since repo-17
+   Sonnet and the ticket inherits — **never on a `hard` ticket**, which since
+   repo-27 pins `opus` rather than inheriting, so the one category defined by its
+   reach cannot be built below the default. Never `haiku`, never `fable`. **Since repo-17
    the builder's model varies inside a batch** — a `mechanical` ticket dispatches
-   `haiku` where its siblings inherit — so check the pairing per ticket rather
+   `haiku` and, since repo-27, a `hard` one dispatches `opus`, where their
+   siblings inherit — so check the pairing per ticket rather
    than setting the gate once. Say which model gated in the record; and if you did
    have to infer either, say so and **name the rule you inferred from precisely**,
    because a citation given as fact is transcribed as fact. Measured before this
