@@ -25,10 +25,45 @@
  * `verified`. A citation with no anchor still resolves, and is reported as
  * `unanchored` — never as verified, because nothing checked it.
  *
- * Hence there is no `N/N resolve` line any more. Four states are counted
+ * Hence there is no `N/N resolve` line any more. Six states are counted
  * separately, because a total that cannot tell them apart is the defect
  * (repo-18): a run over a record whose fix moved the cited lines printed
  * `9/9 resolve` with three citations pointing at unrelated code.
+ *
+ * **A reference this cannot check is still counted** (repo-25). Detecting a
+ * citation only in the `file.ts:12` shape meant a record carrying five
+ * references and three citations reported three, and read as full coverage — the
+ * same could-not-tell-them-apart failure one layer earlier, in the denominator
+ * rather than in the verdict. So two more shapes are read:
+ *
+ *   - **shorthand**, a bare `` `:27` ``, resolved against the nearest preceding
+ *     qualified citation. This is not a hypothetical form: 568 of them are
+ *     already written across the work records, against 0 before this could read
+ *     one. A shorthand with nothing before it is `unresolvable`, never a skip.
+ *   - **prose**, a `line 367` phrase, reported `unchecked` and never resolved.
+ *     Resolving it against the current file would guess — "line 3" in a
+ *     paragraph about a fixture is not a pointer — so it is counted, printed and
+ *     left for a human, which is the whole of the complaint answered.
+ *
+ * `unchecked` is never fatal, for the same reason: 95 such phrases sit in the
+ * existing records and most of them are ordinary sentences containing a number.
+ *
+ * **A record can declare a citation deliberately unresolvable**, which is the one
+ * thing the carve-out below could not say to a machine:
+ *
+ *     <!-- citations: evidence index.ts:440, hls.ts:367 -->
+ *
+ * Those are reported `evidence` and do not fail the run, so a record whose
+ * citations are its own evidence is distinguishable *by exit code* from a broken
+ * one. A declaration that matches no failing citation is itself an error —
+ * otherwise the marker is a rubber stamp, which is the failure mode every other
+ * refusal in this file exists to prevent.
+ *
+ * **A declaration names a qualified location**, `file.ts:120`, and a shorthand is
+ * named by the file it inherited. So the one thing that cannot be declared is a
+ * reference this could not attach to a file at all — which is the rule, not a
+ * gap: you may only excuse a citation you can name, and a shorthand with nothing
+ * above it is fixed by qualifying it, not by waiving it.
  *
  * Plain `.mjs`, no dependencies, matching `status.mjs` and
  * `commit-message.mjs`.
@@ -54,6 +89,14 @@
  * destroy the one property these states have. The default stays exit 0, because
  * turning it on for everyone fails every run against all 965 citations already
  * in the tree.
+ *
+ * **The exit code is a bitmask** (`EXIT`), because the failure classes are not
+ * alike and one code cannot say which happened — a citation that cannot be
+ * resolved, one that resolves to the wrong content, one nothing checked under
+ * `--require-anchors`, and a record whose own evidence declaration is wrong. A
+ * record whose failures are all declared evidence exits 0. The code and the
+ * names of the bits set are printed under the summary, so a CI log says what the
+ * number meant next to the number.
  */
 
 import { execFileSync } from "node:child_process";
@@ -97,27 +140,122 @@ const INLINE = new RegExp(
  */
 const TABLE_LINE = new RegExp(String.raw`\b(\d+)(?:[-–](\d+))?\b` + ANCHOR, "g");
 
+/**
+ * A **shorthand**: a location with no filename, meaning "the same file as the
+ * last one I named". `` `:27` ``, `` `:121-129` ``.
+ *
+ * The backticks are required on both sides and that is the whole of the
+ * false-positive defence. Every one of the 568 already written in the records
+ * has them, and dropping the requirement would start reading `:80` out of a
+ * port, a time, or a YAML value.
+ *
+ * Both anchor spellings, as `INLINE` accepts them, spelled out rather than
+ * reusing `ANCHOR` because the closing backtick sits *between* the two
+ * positions the anchor may occupy and there is no way to say that with one
+ * optional group. Duplicate group names are avoided on purpose: they are ES2025
+ * and this has to run on the pinned Node.
+ */
+const SHORTHAND = new RegExp(
+  String.raw`\x60:(?<start>\d+)(?:[-–](?<end>\d+))?` +
+    String.raw`(?:[ \t]?"(?<inner>[^"\n]{1,200})")?\x60` +
+    String.raw`(?:[ \t]?"(?<outer>[^"\n]{1,200})")?`,
+  "g",
+);
+
+/**
+ * A **prose** reference: `line 367`, `lines 118-119`.
+ *
+ * Detected so it can be *counted*, never resolved. The nearest preceding file
+ * would often be right and sometimes not — "line 3" turns up in paragraphs about
+ * fixtures, diffs and quoted output — and a guess that lands on a real line of
+ * the wrong file is the exact failure this script exists to catch, manufactured
+ * by the script. So it is reported `unchecked` and left for a human, which is
+ * what makes the gap visible without inventing a verdict.
+ *
+ * No backticks required, because the whole point is that this shape is written
+ * as ordinary prose.
+ */
+const PROSE = /\blines?[ \t]+(\d+)(?:[ \t]*[-–][ \t]*(\d+))?\b/gi;
+
+/**
+ * A record declaring, in a form a CI job can read, that a citation's failure is
+ * deliberate: `<!-- citations: evidence index.ts:440, hls.ts:367 -->`.
+ *
+ * An HTML comment rather than a frontmatter field or a marker on the citation
+ * itself, and both alternatives were live. Frontmatter is parsed strictly by
+ * `status.mjs`, so a new key there costs a change to two more files for a fact
+ * that is about one record's citations and nothing else. A marker on the
+ * citation edits the citation — and the citations that need this are *quotations
+ * of a defect*, including ones inside a reproduction block whose text is the
+ * evidence. This touches neither: the declaration sits beside them and names
+ * them.
+ */
+const DECLARATION =
+  /^[ \t]*<!--[ \t]*citations:[ \t]*evidence[ \t]+(?<list>[^>]*?)[ \t]*-->[ \t]*$/;
+
+/** A location as a declaration writes it: a qualified `file:line`, no shorthand. */
+const DECLARED_LOCATION = /^(?<file>[\w.@/-]+\.\w+):(?<start>\d+)(?:[-–](?<end>\d+))?$/;
+
 /** A `file` cell in a table row: the first backticked path-looking token. */
 const CELL_FILE =
   /`((?:[\w.@-]+\/)+[\w.@-]+\.\w+|[\w.@-]+\.(?:ts|tsx|mjs|js|json|md|yml|yaml|sh))`/;
 
 /**
- * Extract every citation from a record.
+ * Extract every reference from a record.
  *
- * Two forms, and the second is the one naive regexes miss: a findings table with
- * a `line` column carries bare numbers that are citations too, and skipping the
- * column silently under-reports coverage. Two builders hit that independently.
+ * Four forms now, and every one of them was found by something being missed:
+ *
+ *  1. `file.ts:12` inline — the shape a naive regex gets right.
+ *  2. A findings table with a `line` column, whose bare numbers are citations
+ *     too. Skipping the column silently under-reports coverage; two builders hit
+ *     that independently.
+ *  3. `` `:27` `` shorthand, resolved against the last file named above it.
+ *  4. `line 367` prose, counted and never resolved.
+ *
+ * The last two are repo-25, and the ordering is the mechanism: **matches are
+ * processed in document order, left to right within a line**, because a
+ * shorthand's file comes from the nearest *preceding* qualified citation and a
+ * shorthand can sit on the same line as one. Scanning shape by shape instead
+ * would resolve `` `:27` `` against a citation written after it.
+ *
+ * A shorthand or prose match falling inside a qualified match's span is dropped:
+ * an anchor is quoted text, and `` `a.ts:12` "the line 44 guard" `` must not
+ * report a reference to line 44.
+ *
+ * `file` is `null` for a reference this could not attach to one — a shorthand
+ * with nothing before it, or any prose reference. That is not a skip: the caller
+ * turns the first into `unresolvable` and the second into `unchecked`, and both
+ * are in the count.
+ *
+ * A shorthand also carries `from`, the record line its file was named on, and
+ * that is not decoration. Nearest-preceding is a **heuristic**: measured over the
+ * 301 shorthands in the work records, 44 sit after a citation on their own line
+ * and 89 more inside the same paragraph, but 156 inherit from further up, and
+ * three of those inherit the wrong file — a Log passage that had drifted onto a
+ * different document since the citation above it. So the file is a guess, and a
+ * guess a reader cannot see is the rubber stamp this whole script refuses. Both
+ * ends are printed: the shorthand as written and the line the file came from.
  *
  * @param {string} markdown
- * @returns {{file: string, start: number, end: number, anchor: string | null, source: "inline" | "table", line: number}[]}
+ * @returns {{file: string | null, start: number, end: number, anchor: string | null, source: "inline" | "table" | "shorthand" | "prose", line: number, from: number | null}[]}
  */
 export function extractCitations(markdown) {
   const out = [];
   const lines = markdown.split("\n");
+  /** The last file named outright, which is what a shorthand below it means. */
+  let currentFile = /** @type {string | null} */ (null);
+  /** And the record line it was named on, so the inheritance can be audited. */
+  let currentFileLine = /** @type {number | null} */ (null);
 
   let headers = /** @type {string[]} */ ([]);
   lines.forEach((text, index) => {
     const lineNo = index + 1;
+
+    // A declaration is metadata about the citations, not one of them. Skipping
+    // the whole line keeps the locations it names out of the count and out of
+    // the shorthand's notion of the current file — a declaration that inflated
+    // the denominator it exists to explain would be its own defect.
+    if (DECLARATION.test(text)) return;
 
     // A table header resets the column map; a separator row is skipped.
     if (text.trim().startsWith("|")) {
@@ -139,6 +277,8 @@ export function extractCitations(markdown) {
         // cell text so a record that forgot the backticks still gets checked.
         const cellMatch = CELL_FILE.exec(cells[fileCol]);
         const file = cellMatch ? cellMatch[1] : cells[fileCol].replace(/`/g, "").trim();
+        currentFile = file;
+        currentFileLine = lineNo;
         for (const num of cells[lineCol].matchAll(TABLE_LINE)) {
           out.push({
             file,
@@ -147,22 +287,125 @@ export function extractCitations(markdown) {
             anchor: num.groups?.anchor ?? null,
             source: "table",
             line: lineNo,
+            from: null,
           });
         }
         return;
       }
     }
 
+    /** @type {{at: number, until: number, make: () => (typeof out)[number]}[]} */
+    const found = [];
+
     for (const m of text.matchAll(INLINE)) {
       const g = /** @type {{file: string, start: string, end?: string, anchor?: string}} */ (
         m.groups
       );
+      found.push({
+        at: m.index,
+        until: m.index + m[0].length,
+        make: () => {
+          currentFile = g.file;
+          currentFileLine = lineNo;
+          return {
+            file: g.file,
+            start: Number(g.start),
+            end: Number(g.end ?? g.start),
+            anchor: g.anchor ?? null,
+            source: "inline",
+            line: lineNo,
+            from: null,
+          };
+        },
+      });
+    }
+
+    const inQualified = (at) => found.some((f) => at >= f.at && at < f.until);
+
+    for (const m of text.matchAll(SHORTHAND)) {
+      if (inQualified(m.index)) continue;
+      const g = /** @type {{start: string, end?: string, inner?: string, outer?: string}} */ (
+        m.groups
+      );
+      found.push({
+        at: m.index,
+        until: m.index + m[0].length,
+        make: () => ({
+          file: currentFile,
+          start: Number(g.start),
+          end: Number(g.end ?? g.start),
+          anchor: g.inner ?? g.outer ?? null,
+          source: "shorthand",
+          line: lineNo,
+          from: currentFileLine,
+        }),
+      });
+    }
+
+    for (const m of text.matchAll(PROSE)) {
+      if (inQualified(m.index)) continue;
+      found.push({
+        at: m.index,
+        until: m.index + m[0].length,
+        make: () => ({
+          file: null,
+          start: Number(m[1]),
+          end: Number(m[2] ?? m[1]),
+          anchor: null,
+          source: "prose",
+          line: lineNo,
+          from: null,
+        }),
+      });
+    }
+
+    // Document order, so `make` sees the current file as a reader would.
+    for (const f of found.toSorted((a, b) => a.at - b.at)) out.push(f.make());
+  });
+  return out;
+}
+
+/**
+ * Read a record's evidence declarations, and refuse a malformed one.
+ *
+ * A declaration says "these citations fail on purpose". It is the only thing
+ * here that can *suppress* a failure, so it is parsed strictly: a location that
+ * is not a qualified `file:line` is an error rather than an entry that silently
+ * matches nothing. A waiver nobody can read is the state this replaces.
+ *
+ * @param {string} markdown
+ * @returns {{file: string, start: number, end: number, text: string, line: number}[]}
+ */
+export function extractDeclarations(markdown) {
+  /** Tagged so the CLI can exit on the declaration bit rather than a generic 1. */
+  const refuse = (message) =>
+    Object.assign(new Error(message), { exit: /** @type {number} */ (EXIT.declaration) });
+  const out = [];
+  markdown.split("\n").forEach((text, index) => {
+    const declaration = DECLARATION.exec(text);
+    if (declaration?.groups === undefined) return;
+    const lineNo = index + 1;
+    const entries = declaration.groups.list
+      .split(",")
+      .map((entry) => entry.replaceAll("`", "").trim())
+      .filter((entry) => entry !== "");
+    if (entries.length === 0) {
+      throw refuse(`${lineNo}: an evidence declaration names no citation:\n  ${text.trim()}`);
+    }
+    for (const entry of entries) {
+      const location = DECLARED_LOCATION.exec(entry);
+      if (location?.groups === undefined) {
+        throw refuse(
+          `${lineNo}: "${entry}" is not a citation an evidence declaration can name.\n` +
+            `Write each one exactly as the record cites it, qualified: file.ts:120 or file.ts:120-130.`,
+        );
+      }
+      const { file, start, end } = location.groups;
       out.push({
-        file: g.file,
-        start: Number(g.start),
-        end: Number(g.end ?? g.start),
-        anchor: g.anchor ?? null,
-        source: "inline",
+        file,
+        start: Number(start),
+        end: Number(end ?? start),
+        text: entry,
         line: lineNo,
       });
     }
@@ -333,7 +576,31 @@ function locateAnchor(content, anchor) {
 }
 
 /** How a citation came out, worst first. There is no boolean here on purpose. */
-const STATES = /** @type {const} */ (["unresolvable", "moved", "unanchored", "verified"]);
+const STATES = /** @type {const} */ ([
+  "unresolvable",
+  "moved",
+  "unchecked",
+  "unanchored",
+  "evidence",
+  "verified",
+]);
+
+/**
+ * Which bit of the exit code each failure class sets.
+ *
+ * A bitmask rather than a ranking, because the classes co-occur and a ranking
+ * collapses them exactly when there is most to say. The names are printed with
+ * the number, so nobody has to hold this table in their head to read a CI log.
+ *
+ * `evidence` is deliberately absent: a declared citation is not a failure, and
+ * exit 0 is the whole point of declaring one.
+ */
+export const EXIT = /** @type {const} */ ({
+  unresolvable: 1,
+  moved: 2,
+  unanchored: 4,
+  declaration: 8,
+});
 
 /**
  * Resolve each citation, and where it carries anchor text, check the claim.
@@ -350,10 +617,33 @@ const STATES = /** @type {const} */ (["unresolvable", "moved", "unanchored", "ve
  *
  * @param {ReturnType<typeof extractCitations>} citations
  * @param {(file: string) => string[] | null} read
+ * @param {(file: string) => {path: string} | {error: string}} [resolve] Annotated
+ *   rather than inferred from the default, which typed the parameter as one that
+ *   can only succeed — so `makeResolver`, the one implementation that exists, was
+ *   not assignable to it and a test passing it failed to compile.
  */
 export function checkCitations(citations, read, resolve = (f) => ({ path: f })) {
   const cache = new Map();
   return citations.map((c) => {
+    // A reference with no file is still a reference, and which of the two
+    // no-file cases it is decides everything. A shorthand *claims* a file — the
+    // one above it — so a shorthand with nothing above it cannot be right, and
+    // that is `unresolvable` by the same definition the rest of this uses. Prose
+    // claims nothing, so the honest verdict is that nobody checked it.
+    if (c.file === null) {
+      const shorthand = c.source === "shorthand";
+      return {
+        ...c,
+        state: shorthand ? "unresolvable" : "unchecked",
+        reason: shorthand
+          ? `shorthand :${c.start} has no qualified citation before it to take a file from`
+          : "prose reference — no file named, so nothing here checked it",
+        text: null,
+        resolved: null,
+        foundAt: null,
+      };
+    }
+
     const resolved = resolve(c.file);
     const at = "error" in resolved ? null : resolved.path;
     const bad = (reason) => ({
@@ -412,6 +702,69 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
   });
 }
 
+/** The states a declaration may excuse — the ones that would otherwise fail. */
+const FAILING = new Set(["unresolvable", "moved", "unchecked"]);
+
+/** A location as both a citation and a declaration spell it, for matching. */
+const key = (file, start, end) => `${file}:${start}${end === start ? "" : `-${end}`}`;
+
+/**
+ * Apply a record's evidence declarations, and report the ones that are wrong.
+ *
+ * A declaration excuses a citation that failed. It does **not** excuse one that
+ * passed, and it does not excuse a citation the record does not contain: either
+ * of those means the declaration has gone stale — the citation was repointed,
+ * renamed or deleted and the waiver outlived it — and a waiver nobody has to
+ * keep true is a rubber stamp, which is the failure `makeResolver` refuses for
+ * an ambiguous filename and `selectSection` refuses for a missing heading.
+ *
+ * So a stale declaration is an error with its own bit in the exit code. Three
+ * failure classes stay three: a citation that cannot be resolved, one that
+ * resolves to the wrong content, and one that is deliberately unresolvable —
+ * plus a fourth for the record lying about which is which.
+ *
+ * Matching is on the citation **as written**, `file:start[-end]`, so a
+ * declaration names exactly what a reader sees in the record. `unchecked` is
+ * excusable too: a prose reference is one of the shapes a reproduction is made
+ * of, and it fails no run, but declaring it is how a record says it meant it.
+ *
+ * @param {ReturnType<typeof checkCitations>} results
+ * @param {ReturnType<typeof extractDeclarations>} declarations
+ */
+export function applyDeclarations(results, declarations) {
+  const excused = new Set(declarations.map((d) => key(d.file, d.start, d.end)));
+  const used = new Set();
+
+  const applied = results.map((r) => {
+    if (r.file === null) return r;
+    const at = key(r.file, r.start, r.end);
+    if (!excused.has(at)) return r;
+    if (!FAILING.has(r.state)) return r;
+    used.add(at);
+    return {
+      ...r,
+      state: "evidence",
+      reason: `declared evidence — ${r.reason ?? "no reason given"}`,
+    };
+  });
+
+  const stale = declarations
+    .filter((d) => !used.has(key(d.file, d.start, d.end)))
+    .map((d) => {
+      const cited = results.some(
+        (r) => r.file !== null && key(r.file, r.start, r.end) === key(d.file, d.start, d.end),
+      );
+      return {
+        ...d,
+        reason: cited
+          ? `record line ${d.line}: "${d.text}" is declared evidence, but it does not fail — drop the declaration`
+          : `record line ${d.line}: "${d.text}" is declared evidence, but this record does not cite it`,
+      };
+    });
+
+  return { results: applied, stale };
+}
+
 /**
  * Count the states, and render the one line that replaces `N/N resolve`.
  *
@@ -420,42 +773,72 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
  * script was capable of saying anything else — and the whole of repo-18 is a
  * count that could not distinguish two states.
  *
- * **Deliberately not exported, along with `locateAnchor` and `STATES`.** This
- * module's export list is byte-identical to the one before repo-18, so the suite
- * that proves this ticket links against the *old* source and fails on an
- * assertion — `expected undefined to be "moved"` — rather than on a missing
- * export. A red reading `SyntaxError: does not provide an export named
- * 'summarize'` proves the API changed and proves nothing about the behaviour,
- * and repo-18 exists because a check that cannot fail informatively is worse
- * than no check. Both are covered through `checkCitations` and the CLI's own
- * output, which is the surface a reader actually reads.
+ * **Deliberately not exported, along with `locateAnchor` and `STATES`.** repo-18
+ * kept this module's whole export list byte-identical so that its suite, run
+ * against the *old* source, failed on an assertion rather than on a missing
+ * export — a red reading `SyntaxError: does not provide an export named
+ * 'summarize'` proves the API changed and proves nothing about the behaviour.
+ *
+ * **repo-25 gave that up in part, and it is worth knowing which part.**
+ * `extractDeclarations`, `applyDeclarations` and `EXIT` are exported, so the
+ * suite as a whole no longer links against the pre-repo-25 source. What replaces
+ * it is that every acceptance repo-25 claims is *also* asserted through the CLI,
+ * by spawning it — the reproduction's five references, the declared-evidence exit
+ * code, the stale declaration — and those assertions were run against the old
+ * script by hand before this landed: `3 citations` where the reproduction has
+ * five, `exit 1` on a record that declares its evidence, and `0 citations` on a
+ * record that is nothing but prose references. `summarize` itself stays private
+ * for repo-18's reason.
  *
  * `requireAnchors` is applied here rather than at the exit, so the one function
  * that knows the counts is also the one that says what they mean. It changes
- * `failed` and appends to `line`; it does not touch a single citation's state,
- * because whether an unchecked citation is tolerable is the caller's policy and
- * not a fact about the record.
+ * `failed`, sets `EXIT.unanchored` and appends to `line`; it does not touch a
+ * single citation's state, because whether an *unanchored* citation is tolerable
+ * is the caller's policy and not a fact about the record.
  *
  * @param {ReturnType<typeof checkCitations>} results
  * @param {boolean} requireAnchors
+ * @param {{reason: string}[]} stale
  */
-function summarize(results, requireAnchors) {
+function summarize(results, requireAnchors, stale = []) {
   /** @type {Record<string, number>} */
   const counts = Object.fromEntries(STATES.map((state) => [state, 0]));
   for (const r of results) counts[r.state] += 1;
+
+  // Each class sets its own bit, so a run with two of them says two. The names
+  // are carried alongside because the number alone is the thing this file spent
+  // repo-18 arguing against.
+  /** @type {string[]} */
+  const because = [];
+  let exit = 0;
+  const set = (bit, name) => {
+    exit |= EXIT[bit];
+    because.push(name);
+  };
+  if (counts.unresolvable > 0) set("unresolvable", `${counts.unresolvable} unresolvable`);
+  if (counts.moved > 0) set("moved", `${counts.moved} moved`);
+  if (requireAnchors && counts.unanchored > 0) set("unanchored", `${counts.unanchored} unanchored`);
+  if (stale.length > 0) set("declaration", `${stale.length} stale evidence declaration`);
+
   return {
     ...counts,
     total: results.length,
     failed: counts.moved + counts.unresolvable + (requireAnchors ? counts.unanchored : 0),
+    exit,
     // Deliberately never `N/N`: the pair that reads as "all fine" is the shape
     // this script printed while three citations pointed at unrelated code. The
     // suffix is on the same line as the counts so a CI log shows the policy that
     // judged them next to the numbers it judged.
     line:
       `${counts.verified} verified, ${counts.moved} moved, ` +
-      `${counts.unanchored} unanchored, ${counts.unresolvable} unresolvable` +
-      ` — of ${results.length} citation${results.length === 1 ? "" : "s"}` +
+      `${counts.unanchored} unanchored, ${counts.unresolvable} unresolvable, ` +
+      `${counts.unchecked} unchecked, ${counts.evidence} evidence` +
+      ` — of ${results.length} reference${results.length === 1 ? "" : "s"}` +
       (requireAnchors ? ", anchors required" : ""),
+    // The number and what it meant, on one line. `exit 3` in a CI log is not
+    // readable and `exit 0` is the claim a record makes about its own evidence,
+    // so both get words next to them.
+    exitLine: `exit ${exit} — ${because.length > 0 ? because.join(", ") : "nothing to fix"}`,
   };
 }
 
@@ -640,16 +1023,19 @@ function main() {
   // that began below a header would under-report the table silently. Filtering
   // afterwards leaves the extraction seeing exactly the document it always saw.
   const chosen = section === null ? null : selectSection(extractSections(markdown), section);
-  const citations = extractCitations(markdown).filter(
-    (c) => chosen === null || (c.line >= chosen.start && c.line <= chosen.end),
-  );
+  const inScope = (line) => chosen === null || (line >= chosen.start && line <= chosen.end);
+  const citations = extractCitations(markdown).filter((c) => inScope(c.line));
 
-  const results = checkCitations(
-    citations,
-    makeReader(repo, rev),
-    makeResolver(candidateFiles(repo, rev)),
+  // Declarations are filtered by the same span as the citations they excuse, so
+  // `--section Review` cannot be failed by a stale declaration under `## Log`
+  // — nor excused by one, since the citation it names is out of scope too.
+  const declarations = extractDeclarations(markdown).filter((d) => inScope(d.line));
+
+  const { results, stale } = applyDeclarations(
+    checkCitations(citations, makeReader(repo, rev), makeResolver(candidateFiles(repo, rev))),
+    declarations,
   );
-  const summary = summarize(results, requireAnchors);
+  const summary = summarize(results, requireAnchors, stale);
 
   const where = rev ? `against ${rev}` : "against the working tree";
   // The scope is named next to the count, so a filtered number can never be read
@@ -658,7 +1044,7 @@ function main() {
     ? ` under "${chosen.title}" (record lines ${chosen.start}-${chosen.end})`
     : "";
   process.stdout.write(
-    `${citations.length} citations in ${path.relative(repo, path.resolve(file))}${scope}, resolved ${where}\n\n`,
+    `${citations.length} references in ${path.relative(repo, path.resolve(file))}${scope}, resolved ${where}\n\n`,
   );
 
   for (const r of results) {
@@ -669,14 +1055,26 @@ function main() {
     // `--require-anchors` made that conditionally false and nothing re-read it,
     // which is this branch's own thesis turning up inside the file arguing it.)
     // `unanchored` sets the width; the rest are padded.
-    const mark = { verified: "ok", moved: "MOVED", unanchored: "unanchored", unresolvable: "FAIL" }[
-      r.state
-    ].padEnd(10);
+    const mark = {
+      verified: "ok",
+      moved: "MOVED",
+      unanchored: "unanchored",
+      unresolvable: "FAIL",
+      unchecked: "unchecked",
+      evidence: "evidence",
+    }[r.state].padEnd(10);
     const range = r.start === r.end ? `${r.start}` : `${r.start}-${r.end}`;
+    // A reference is printed as the record wrote it — `line 367`, `:27` — so the
+    // line a reader has to go and fix is the line they see. A shorthand prints
+    // both ends: what it says, and the file it inherited with the record line
+    // that named it, because that file is a guess and a guess has to be audible.
+    const resolvedTo = r.resolved && r.resolved !== r.file ? ` -> ${r.resolved}` : "";
     const located =
-      r.resolved && r.resolved !== r.file
-        ? `${r.file}:${range} -> ${r.resolved}`
-        : `${r.file}:${range}`;
+      r.file === null
+        ? `${r.source === "prose" ? "line " : ":"}${range}`
+        : r.source === "shorthand"
+          ? `:${range} in ${r.file}${resolvedTo} (named at record line ${r.from})`
+          : `${r.file}:${range}${resolvedTo}`;
     const shown = r.anchor === null ? located : `${located} "${r.anchor.slice(0, 60)}"`;
     process.stdout.write(`  ${mark} ${shown}  (record line ${r.line}, ${r.source})\n`);
     // An unanchored citation prints both: the line, because a human judging it by
@@ -688,12 +1086,25 @@ function main() {
     if (r.reason !== null) process.stdout.write(`             ${r.reason}\n`);
   }
 
-  process.stdout.write(`\n${summary.line}\n`);
+  process.stdout.write(`\n${summary.line}\n${summary.exitLine}\n`);
 
   // Unanchored is advice on stdout and a failure on stderr, and which one it is
   // depends only on the flag. That keeps `stderr is empty` and `exit 0` meaning
   // the same thing — an invariant the suite asserts, and the reason this is not
   // simply always written to stderr.
+  if (summary.unchecked > 0) {
+    process.stdout.write(
+      `\n${summary.unchecked} reference(s) name a line without naming a file, in a shape nothing here can\n` +
+        `resolve — a prose "line 367". They are counted so they are not invisible, and they fail nothing.\n` +
+        `Qualify one as \`file.ts:367\`, or as \`:367\` after a citation that names the file, to have it checked.\n`,
+    );
+  }
+  if (summary.evidence > 0) {
+    process.stdout.write(
+      `\n${summary.evidence} citation(s) are declared evidence by this record, so their failure is deliberate and\n` +
+        `does not set an exit bit. Each is still printed with the reason it would have failed for.\n`,
+    );
+  }
   if (summary.unanchored > 0 && !requireAnchors) {
     process.stdout.write(
       `\n${summary.unanchored} citation(s) carry no anchor text, so nothing here checked them — they are printed\n` +
@@ -727,18 +1138,31 @@ function main() {
         `the bare name matches more than one file.`,
     );
   }
-  // The carve-out is still not checkable, and still yours: a citation that is a
-  // finding's own evidence ("the text is at :94-95, not :93-94") must stay as
-  // written even when this reports it moved.
+  if (stale.length > 0) {
+    advice.push(
+      `${stale.length} evidence declaration(s) in this record are wrong, which is a failure of its own:\n` +
+        `${stale.map((s) => `  ${s.reason}`).join("\n")}\n` +
+        `A declaration excuses a citation that fails. One that excuses nothing is a rubber stamp, and a\n` +
+        `citation whose failure was fixed should lose its declaration in the same edit.`,
+    );
+  }
+  // The carve-out the footer used to describe in prose is a declaration now:
+  // `<!-- citations: evidence file.ts:120 -->`. What still cannot be checked is
+  // whether the record deserves one — a citation that is a finding's own
+  // evidence must stay as written, and only a reader can say that it is one.
   if (advice.length > 0) process.stderr.write(`\n${advice.join("\n\n")}\n`);
-  if (summary.failed > 0) process.exitCode = 1;
+  if (summary.exit !== 0) process.exitCode = summary.exit;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     main();
   } catch (error) {
-    process.stderr.write(`${/** @type {Error} */ (error).message}\n`);
-    process.exitCode = 1;
+    const failure = /** @type {Error & {exit?: number}} */ (error);
+    process.stderr.write(`${failure.message}\n`);
+    // A malformed declaration is the record lying about its own citations, so it
+    // carries the same bit as a stale one rather than collapsing into the
+    // generic 1 that argument errors use.
+    process.exitCode = failure.exit ?? 1;
   }
 }
