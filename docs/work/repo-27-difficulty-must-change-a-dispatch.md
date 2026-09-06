@@ -130,7 +130,17 @@ Two specific things a trial has to settle, neither of which is guessable:
    either for a change that has not happened. **Add a line to this ticket's Log
    naming both sites**, so the trial's implementer finds them without a grep.
 
-5. **The trial, and it is a second branch, not this one.** Its protocol is
+5. **Folded in: `SKILL.md` step 4's `resolvedModel` claim is wrong.** Step 4 says
+   a backgrounded dispatch's `resolvedModel` _"never reaches **you**"_ and names
+   two routes to recover it, both flagged as relayed and unverified. A third
+   route exists and is measurable from inside this sandbox: the **task output
+   file** whose path a backgrounded `Agent` result returns carries
+   `/message/model` on every assistant record, and `cache_read_input_tokens` per
+   request besides. Correct both sentences, keep the two relayed routes labelled
+   as relayed, and say what was measured. This is folded in rather than filed
+   because the branch already edits that paragraph — see _Log_.
+
+6. **The trial, and it is a second branch, not this one.** Its protocol is
    repo-17's, and deviating from it costs the comparison:
 
    - One `standard` ticket, dispatched twice, **identical prompts**, one model
@@ -155,9 +165,12 @@ Two specific things a trial has to settle, neither of which is guessable:
    a `standard` builder runs Sonnet.
 4. This ticket records the decision, both halves, with the reason the second half
    waits.
-5. `npm run check` passes and `npm run format` has been run over every changed
+5. `SKILL.md` step 4 no longer claims a backgrounded `resolvedModel` never
+   reaches the parent, names the task-output-file route, and distinguishes the
+   one route measured here from the two that are relayed.
+6. `npm run check` passes and `npm run format` has been run over every changed
    `.md`.
-6. `npm run status -- --show repo-27` parses and `npm run status -- --json`
+7. `npm run status -- --show repo-27` parses and `npm run status -- --json`
    exits 0.
 
 ## Log
@@ -183,6 +196,20 @@ Two specific things a trial has to settle, neither of which is guessable:
   `scripts/status.mjs:72 "absent mean the same thing to a dispatcher"`. Both are
   true today and both become false the day `standard` maps
   to `sonnet`. Deliberately not pre-edited.
+
+  **Folded in, and why it was free.** Step 4's claim that a backgrounded
+  dispatch's `resolvedModel` _"never reaches **you**"_ is wrong, and the branch
+  was already editing that paragraph. Measured 2026-09-06 while checking whether
+  the trial under _Build_ could price itself honestly: the task output file a
+  backgrounded `Agent` result names carries `/message/model` on every assistant
+  record — 182 records for the gate on this branch, one distinct value,
+  `claude-sonnet-5`, against a dispatch that passed `model: "sonnet"`. It carries
+  `cache_read_input_tokens` too, which is the field repo-17 needed and did not
+  have when it reported "an 8% saving" that was wrong by an order of magnitude.
+  The two routes step 4 already named stay labelled relayed; only this one is
+  measured here. **The gate on this branch was dispatched before this was folded
+  in**, so it reviewed the narrower scope; the delta was sent to it separately
+  rather than left unreviewed.
 
   **Not folded in:** no ticket was rated, and no existing `standard` rating was
   re-read. The 11 that carry it were rated when the value was a free statement

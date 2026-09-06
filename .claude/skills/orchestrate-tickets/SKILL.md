@@ -83,9 +83,10 @@ you are there.
    case and means inherit. Never rate an unrated ticket yourself — you have not
    read it, which is the whole point of step 2. **Then pass that model explicitly
    rather than letting it inherit**, naming your own model where the table says
-   inherit. A backgrounded dispatch's `resolvedModel` never reaches **you** — the
-   parent sees only the subagent's final text — so inherit is the one setting that
-   leaves the builder's model unobservable from where the decision is made,
+   inherit. A backgrounded dispatch's `resolvedModel` does not reach **you** in
+   the tool result — the parent sees only the subagent's final text — so inherit
+   is the one setting that leaves the builder's model unstated where the decision
+   is made,
    including by the builder, which on 2026-09-04 asserted its own model from a
    line that turned out not to exist. One parameter, and step 4's comparison
    becomes something you wrote down instead of something you infer. See
@@ -98,13 +99,20 @@ you are there.
    builder has no `Agent` tool and is told not to spawn, and both of those are
    this rule, not an oversight. **Both halves are knowable if you make them so,
    and neither needs `resolvedModel`** — which the backgrounded dispatch *does*
-   carry but never shows you, and background is how `reference/concurrency.md`
-   tells you to dispatch a batch. If you ever do need it read, two documented
-   routes exist: a `PostToolUse` hook on the `Agent` tool returning it through
-   `hookSpecificOutput.additionalContext`, and `/tasks` (v2.1.242+), which names
-   the model per row. **Every claim in this paragraph about what a dispatch
-   carries is relayed and unverified here** — Claude Code's behaviour, not this
-   tree's, read from a sandbox with no network. The gate's half was never in doubt:
+   carry but does not put in the tool result, and background is how
+   `reference/concurrency.md` tells you to dispatch a batch. If you ever do need
+   it read, three routes exist, and **only the third is measured in this tree**: a
+   `PostToolUse` hook on the `Agent` tool returning it through
+   `hookSpecificOutput.additionalContext`; `/tasks` (v2.1.242+), which names the
+   model per row; and the **task output file** whose path a backgrounded `Agent`
+   result hands you, which carries `/message/model` on every assistant record.
+   Measured 2026-09-06 against a `ticket-reviewer` dispatched `model: "sonnet"`:
+   182 records, one distinct value, `claude-sonnet-5`. **Read it with a script
+   that prints aggregates** — it is the full subagent transcript, and the tool
+   result's "do not read this" is a warning about your context, not a seal. That
+   same file carries `cache_read_input_tokens` per request, which is the half
+   `subagent_tokens` omits and ~94% of the bill. The first two routes remain
+   relayed and unverified here — Claude Code's behaviour, not this tree's. The gate's half was never in doubt:
    [`.claude/agents/ticket-reviewer.md`](../../agents/ticket-reviewer.md) pins
    `model: sonnet` in its frontmatter, so it is a file read. The builder's half is
    the one step 3 tells you to write down at dispatch. Do both and the comparison
