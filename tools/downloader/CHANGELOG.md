@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/brunolabbe/tools/compare/downloader-v0.3.0...downloader-v0.4.0) (2026-09-06)
+
+
+### Features
+
+* **downloader:** show the preview in a completed download's result panel (dl-41) ([#158](https://github.com/brunolabbe/tools/issues/158)) ([b228efb](https://github.com/brunolabbe/tools/commit/b228efb0660dac9a20286e85142e5d2c35e67949))
+
+
+### Fixes
+
+* **downloader:** scope the TLS-rejection correlation to endpoints, not hosts (dl-38) ([#160](https://github.com/brunolabbe/tools/issues/160)) ([d6d201e](https://github.com/brunolabbe/tools/commit/d6d201e7e74aafe8af138fcd3eeaa9e2be412f14))
+* **downloader:** stop the direct tier claiming audio it never checked (dl-42) ([#159](https://github.com/brunolabbe/tools/issues/159)) ([53b57ad](https://github.com/brunolabbe/tools/commit/53b57adafdccf92b9871daac428c2abf0c532f31))
+
 ## [0.3.0](https://github.com/brunolabbe/tools/compare/downloader-v0.2.0...downloader-v0.3.0) (2026-09-05)
 
 
