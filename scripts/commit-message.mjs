@@ -18,7 +18,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /**
  * The types release-please understands, plus the ones that describe work it
@@ -302,6 +302,18 @@ function main() {
 }
 
 // Only when run directly: importing this file — the tests do — must not exit.
-if (process.argv[1] !== undefined && import.meta.url === `file://${process.argv[1]}`) {
+//
+// **Use `pathToFileURL`, never `file://` + the path.** String-concatenating a
+// path into a URL is correct only when the path starts with `/`. On Windows
+// `process.argv[1]` is `D:\a\...`, so the concatenation yields
+// `file://D:\a\...` while `import.meta.url` is `file:///D:/a/...`; they never
+// match, `main()` never runs, and this script **exits 0 for every message**.
+// That silently disabled two guards on Windows — `.githooks/commit-msg` and
+// `.claude/hooks/check-pr-title.sh` both shell out to this file, and both
+// accepted anything there. Found by repo-22's Windows CI, which was the first
+// thing in the repo to assert that a bad title is *rejected* rather than that a
+// good one is accepted; a test that only checks the accepting direction cannot
+// see this. The same mismatch is reproducible on Linux through a symlink.
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main();
 }

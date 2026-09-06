@@ -886,3 +886,57 @@ not to the _fix_, which is the exact failure the rule describes.
   because the invariant came first; under the old approach they would never have
   been thought of, which is why two of the three shapes they cover had never
   been observed by anyone.
+
+**2026-09-06 — Windows CI went red after the PR opened, and the cause was not in
+this ticket's hooks at all.** `test (windows-latest)` failed two of nineteen in
+`scripts/test/hooks.test.ts`; `check` and `test (ubuntu-latest)` passed. The
+local runs reported here were accurate — the gap is that **this repo's Windows
+matrix is unreachable from the container**, which is the same class as the
+gate's finding that a worktree cannot observe its own hook: a guarantee nobody
+in the loop can measure from where they sit. The branch shipping shell-text
+manipulation is exactly the one that needed it.
+
+- **Diagnosed by elimination from the failure shape, not by guessing.** Both
+  failures were `check-pr-title`, both **empty stderr and exit 0** where a block
+  was required. Empty stderr rules out both earlier exits — a failed `cd` or a
+  missing title would each have printed something. Sorting the four
+  `check-pr-title` cases by whether they reach `commit-message.mjs` settles it:
+  `--fill` exits before it and passed; `--title "feat(repo): x"` reaches it and
+  must be _accepted_, and passed; the two that reach it and must be **rejected**
+  both failed. So the script was exiting 0 on a message it must reject.
+- **The defect: an entry-point guard that is wrong on Windows.**
+  `scripts/commit-message.mjs` gated `main()` on
+  `import.meta.url === ` `` `file://${process.argv[1]}` ``. Concatenating a path
+  into a URL is correct only when the path starts with `/`. On Windows `argv[1]`
+  is `D:\a\...`, giving `file://D:\a\...` against an `import.meta.url` of
+  `file:///D:/a/...`. Measured directly: the two strings are unequal for a
+  Windows path and equal for a POSIX one. So `main()` never ran and the script
+  **exited 0 for every message**.
+- **Two guards were dead on Windows, and neither is this ticket's.**
+  `.githooks/commit-msg` and `.claude/hooks/check-pr-title.sh` both shell out to
+  that script, so on Windows both accepted anything. Pre-existing on
+  `origin/main`; this branch is merely the first thing that asserted a bad title
+  is **rejected** rather than that a good one is accepted.
+- **Why it survived: every existing test imports `validate`; none ran the file
+  as a process.** The entry-point guard is the one line an import can never
+  reach. Two tests now run it as a process, and the pair is deliberately
+  asymmetric — the accepting direction is recorded as **weak**, because a dead
+  entry point also exits 0, so only the rejecting direction can see this class.
+  That is the same asymmetry this ticket keeps rediscovering.
+- **Red-verified as far as this platform allows, and no further.** Killing the
+  guard (`if (false)`) fails exactly the rejecting test with the other 26 green,
+  which proves the test detects a dead entry point. **It cannot be run red
+  against the real Windows trigger from here**: on Linux the broken form is
+  correct, because the path starts with `/`. The Windows half rests on the
+  string measurement and the CI elimination above, and that limit is stated
+  rather than papered over.
+- **A conflation caught in passing, worth recording because it is this ticket's
+  own recurring error.** A symlink reproduces the _symptom_ — exit 0, silent —
+  and was briefly taken for a local reproduction of the cause. It is not: a
+  symlink breaks the comparison through realpath resolution, not through
+  path-to-URL formatting, and `pathToFileURL` does not fix it. Two mechanisms,
+  one symptom. The fix addresses the Windows one; the symlink behaviour is
+  unchanged and is arguably correct.
+- **Nothing was weakened to go green.** No test was skipped, no platform
+  conditional was added, and both guard assertions stand exactly as written. The
+  fix makes them pass by repairing what they were correctly reporting as broken.
