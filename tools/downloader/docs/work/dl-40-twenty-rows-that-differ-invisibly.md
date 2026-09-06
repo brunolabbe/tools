@@ -244,6 +244,15 @@ human — `3 verified, 0 moved, 0 unresolvable`.
 > line 24). Nothing turns on it: both citations were stale either way, which is
 > the finding. It is recorded because a coordinate in a gate record is read as
 > evidence by whoever comes next.
+>
+> **Settled, not left as a discrepancy.** The reviewer re-derived it rather than
+> take the correction on report, and named the cause: it had read a multi-line
+> `sed -n '105,110p'` block and attributed line 105's content to 107 — the same
+> off-by-two on `web/src/lib/variants.ts`, where line 24's content was attributed
+> to 26. Its own re-check used `sed -n '107p'` and `sed -n '26p'` directly. Both
+> accounts of this exchange agree; the anchored citations are what stop the class
+> of mistake, since a coordinate carrying its own line's text can no longer be
+> quoted as something it is not.
 
 **Acceptance — every `Done when` line, none unproven.**
 
