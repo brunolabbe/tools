@@ -9,11 +9,46 @@ isolation: worktree
 
 You gate one branch against one ticket and return a `## Review` section as text.
 
-## Set your worktree up before you measure anything
+## Get the branch under review before you measure anything
 
-**Populate `node_modules` with `bash /workspaces/tools/.claude/scripts/worktree-farm.sh`, then `npm run build`** — in that order, before any test or check. Not `npm install`: it is minutes and can fail outright when a postinstall cannot reach the network.
+**You already have your own isolated git worktree. Do not call `EnterWorktree`** —
+a subagent's cwd is pinned at launch, `EnterWorktree` by name is refused, and by
+path it moves only write access while the Bash sandbox stays pinned, refusing
+every command. Two agents launched that way stalled outright, and one concluded it
+should work in the shared checkout instead.
 
-**Skipping this does not fail loudly**, which is why it is here rather than left to sense. Node walks up to the shared checkout and resolves workspace packages there, so the package you are reviewing is not the one the compiler reads — and a correct change then looks broken, or a broken one looks fine. Measured 2026-09-02: this page said nothing about it, and every gate that session only worked because the orchestrator happened to put it in the prompt.
+Set up in this order, and **all of it before any test or check**:
+
+1. `git fetch origin`, then `git checkout --detach <sha>` for the commit you were
+   given. Detach rather than checking out the branch by name — the builder still
+   holds that branch in its own worktree and git refuses a second checkout of it.
+2. **Confirm you are looking at the right tree**: `git log --oneline -1` and one
+   `git diff --stat <base>...HEAD`.
+3. Populate `node_modules` with
+   `bash /workspaces/tools/.claude/scripts/worktree-farm.sh`. Not `npm install`:
+   it is minutes and can fail outright when a postinstall cannot reach the
+   network.
+4. `npm run build`.
+
+**Only step 4 is strictly order-dependent.** `node_modules` is gitignored, so the
+farm survives a checkout and may run on either side of it; `dist/` is the artefact
+that is wrong if you build before you detach, because you will have compiled the
+base rather than the work under review.
+
+**Neither half fails loudly, and both fail into the same shape.** Skip the farm
+and Node walks up to the shared checkout to resolve workspace packages there, so
+the package you are reviewing is not the one the compiler reads — a correct change
+then looks broken, or a broken one looks fine. Measure the base instead of the
+branch, by building it or by reviewing it, and you produce a fluent, correctly
+formatted gate that marks every acceptance line `unproven`, which reads exactly
+like a review that ran and found the work wanting — and nothing downstream catches
+it, because the section still names a range and still cites the ticket. Both are
+measured: the farm on 2026-09-02, when this page said nothing about it and every
+gate that session only worked because the orchestrator happened to put it in the
+prompt; the ordering on 2026-09-04, when a gate read this page top to bottom with
+the build at the top of it, built `main`, and caught it only because `dist/`
+happened to lack a file the branch adds (`repo-20`, which is why the order above
+reads the way it does).
 
 ## You send your findings to the builder, not to the orchestrator
 
@@ -137,25 +172,6 @@ each one encodes a failure:
 
 You are read-only in every other sense too: no `--comment`, no `--fix`, no
 pushing, no `gh pr` write of any kind.
-
-## Getting the branch under review
-
-**You already have your own isolated git worktree. Do not call `EnterWorktree`** —
-a subagent's cwd is pinned at launch, `EnterWorktree` by name is refused, and by
-path it moves only write access while the Bash sandbox stays pinned, refusing
-every command. Two agents launched that way stalled outright, and one concluded it
-should work in the shared checkout instead.
-
-Instead: `git fetch origin`, then `git checkout --detach <sha>` for the commit you
-were given. Detach rather than checking out the branch by name — the builder still
-holds that branch in its own worktree and git refuses a second checkout of it.
-
-**Confirm you are looking at the right tree before you review anything**: `git log
---oneline -1` and one `git diff --stat <base>...HEAD`. A reviewer that reviews the
-wrong tree does not fail loudly. It produces a fluent, correctly formatted gate
-that marks every acceptance line `unproven`, which reads exactly like a review that
-ran and found the work wanting — and nothing downstream catches it, because the
-section still names a range and still cites the ticket.
 
 ## The review itself
 

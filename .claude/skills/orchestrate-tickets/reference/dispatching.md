@@ -124,20 +124,23 @@ than assumed, and it worked out which *tier* of the suite guards that ordering.
 **Gate yield tracks prompt specificity, not runtime**, and this is the cleanest
 measurement of that on the page: same branch, same model, two prompts.
 
-### And say the checkout comes before the build
+### The checkout comes before the build — a measurement, not a clause to write
 
-`ticket-reviewer.md` gives the setup order as farm, then `npm run build`, in a
-section that sits well above the one telling the reviewer to `git checkout
---detach <sha>`. A gate read it top to bottom on 2026-09-04 and **built `main`** —
-grading a tree that was not the branch — catching it only because `dist/` was
-missing a file the branch adds, and flagging it unprompted. Nothing else would
-have: a reviewer measuring the base produces a fluent, correctly formatted gate
-that marks acceptance lines `unproven`, which is the silent failure that page
-already warns about arriving from the other direction. One clause in the prompt —
-*fetch, detach onto the sha, **then** farm and build* — costs nothing. **This is a
-habit-dependent stopgap, and the durable fix is the agent definition's ordering**,
-filed as `repo-20`. When that lands, keep the measurement and drop the clause —
-a reminder for a bug that no longer exists is worse than no reminder.
+**Nothing about this belongs in a gate prompt any more.** `ticket-reviewer.md`
+used to give the setup order as farm, then `npm run build`, in a section that sat
+well above the one telling the reviewer to `git checkout --detach <sha>`. A gate
+read it top to bottom on 2026-09-04 and **built `main`** — grading a tree that was
+not the branch — catching it only because `dist/` was missing a file the branch
+adds, and flagging it unprompted. Nothing else would have: a reviewer measuring
+the base produces a fluent, correctly formatted gate that marks acceptance lines
+`unproven`, which is the silent failure that page already warns about arriving
+from the other direction.
+
+`repo-20` reordered that page to fetch → detach → farm → build, so the instruction
+now loads itself into every reviewer for free. The clause that used to sit here
+was habit-dependent and cost a sentence per gate; **a reminder for a bug that no
+longer exists is worse than no reminder**, so do not re-add one. The measurement
+stays because the failure mode is silent.
 
 ### Send the findings in full; the builder writes the section down
 

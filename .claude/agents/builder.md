@@ -13,7 +13,9 @@ a gate. You do not open the pull request and you do not review your own work.
 The other two agents this skill dispatches pin one; you inherit the
 orchestrator's, and that is now a choice rather than an omission. **A ticket
 rates its own work** in its optional `difficulty` frontmatter field, and the
-caller maps it here:
+caller maps it here — reading *inherit* as **the orchestrator's own model, passed
+to you explicitly**, which is how `orchestrate-tickets` step 3 has dispatched
+since 2026-09-04:
 
 | `difficulty` | Builder runs on | Because |
 | --- | --- | --- |

@@ -3,7 +3,7 @@ id: repo-20
 tool: repo
 title: The reviewer's setup order builds the wrong tree
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -117,6 +117,30 @@ is a section move, a clause and a trim.
    `.claude/` is in `.oxfmtrc.json`'s `ignorePatterns` — so the structure of every
    edited page must be proofread by eye rather than trusted to the formatter.)
 
+## Review
+
+**Gate: PASS** — 2026-09-05 · `origin/main...9389612` (06d905b base, same diff at current tip 4a4cc4f) · defect hunt run myself, medium depth (no code-review dispatch — running as ticket-reviewer subagent)
+
+| Done when                                                                                      | Proof                                                                                                           |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 1. fetch→detach→farm→build→measure, single reading order, cannot build before checkout         | `ticket-reviewer.md:20-31` — verified by reading; single ordered list under one heading                         |
+| 2. explicit statement that only `npm run build` is order-dependent                             | `ticket-reviewer.md:33-36` — verified by reading                                                                |
+| 3. both existing warnings survive the move, attached to their steps                            | `ticket-reviewer.md:38-51` — verified by reading; merged into one sequence per Build step 2's own instruction   |
+| 4. dispatching.md's stopgap clause retired, cites repo-20                                      | `dispatching.md:127-143` — verified by reading + grep sweep, no dangling anchor references anywhere in the tree |
+| 5. builder.md reconciles "inherit" with explicit-model dispatch, one clause, no restated table | `builder.md:16-18` — verified by reading; premise (`SKILL.md:84-86`) checked and holds                          |
+| 6. `npm run check` exits 0                                                                     | verified — ran it on the committed tree, exit 0                                                                 |
+
+- **Citations checked, not just trusted.** Every line the builder cited (`ticket-reviewer.md:22,25,27,31,33-36,38-52`; `dispatching.md:127,129,139`; `builder.md:16-18`) was opened and matches the claim made about it. `:25` cites the "confirm tree" step rather than literally "detach", but it sits correctly between detach and farm in the reading order, so the citation supports the claim it's attached to.
+- **Heading-rename collision (repo-21 risk).** Re-ran and widened the builder's grep: `grep -rn "checkout comes before the build"`, `grep -rni "and-say-the-checkout"`, `grep -rn "dispatching.md#"` across all `.md` — zero dangling references under any spelling, no anchor links into the file at all. Confirmed clean.
+- **Section-move judgment (angle 3) — I agree it's a wording call, not a decision.** Pushing the old top section down vs. pulling the bottom section up produces an identical reading order for the four numbered steps; the acceptance lines don't depend on which section sits physically first. Nothing contract-adjacent, no scope widening. Not escalating.
+- **Brief's false parenthetical (Done-when 6) — reproduced and confirmed true.** Positive control: corrupted the ticket file's frontmatter fence, `npx oxfmt --check` on it → exit 1 (docs/ is checked); same corruption on a `.claude/` file → oxfmt refuses with "no target files" (exit 2, ignored). Builder's Log correction is accurate. Does not affect the outcome since `npm run check` exits 0 on the tree as committed regardless.
+- **Positive control (angle 5):** the two `oxfmt --check` corruptions above — confirmed the check tooling can fail before trusting it passed clean.
+- **Diff scope matches the brief** — read the full `git diff 06d905b...HEAD` for all three `.claude/` files: a section merge/move, one clause in `builder.md`, and the `dispatching.md` trim. Nothing wider.
+- **Commit message** `docs(repo): reorder the reviewer's setup so the checkout precedes the build (repo-20)` passes `node scripts/commit-message.mjs --text "..."` (exit 0).
+- **Unverified, flagged rather than skipped:** no live sub-reviewer was dispatched against the new `ticket-reviewer.md` text before this gate (builder's Log discloses the same gap — "Not run"). This gate is the first actual exercise of the new file's setup section, by virtue of my following it myself, and it worked as written.
+- **findings** · defect hunt at medium depth returned 0; 0 carried, 0 dropped.
+- NFR: security n/a · performance n/a · reliability ✓ (this is the ticket's whole point, improved) · maintainability ✓ (single source of truth, duplicate stopgap removed).
+
 ## Log
 
 - **2026-09-05** — Filed from the 2026-09-04 orchestration batch's close-out,
@@ -187,3 +211,45 @@ is a section move, a clause and a trim.
   reading as the measurement — and the first committed by the agent writing the
   record of the other three. `repo-16` and `repo-19` had both got this right in
   their own filings; flattening their wording is what produced the error.
+
+- **2026-09-05** — Built. `ticket-reviewer.md`'s two setup sections are now one,
+  at the top of the file, in the order fetch → detach → confirm → farm → build;
+  `dispatching.md`'s stopgap is a measurement that tells the next orchestrator not
+  to re-add the clause; `builder.md` defines _inherit_ in the clause that
+  introduces the table.
+
+  **Which direction the section moved was left open by the brief, and both
+  readings satisfy it.** Build step 1 gives the order to reach, not whether to
+  push the setup paragraphs down to _Getting the branch under review_ or pull that
+  section up to the top. I pulled it up and merged the two, which leaves one setup
+  section instead of two and keeps the file's first instruction the reader's first
+  action — pushing the setup down would have opened the page on _You send your
+  findings to the builder_, a reporting rule, which is worse for the audience the
+  ticket names. Recorded rather than escalated: the ticket fixes a reading order
+  and both options produce the required one, so this is a wording call, not a
+  decision with two different outcomes.
+
+  **The trim in step 3 was pre-specified by the file itself**, which is worth
+  knowing before anyone re-argues it: the section already ended "When that lands,
+  keep the measurement and drop the clause — a reminder for a bug that no longer
+  exists is worse than no reminder." The edit is that instruction carried out, not
+  a judgement about how far to cut.
+
+  **Step 4's premise was verified rather than transcribed.**
+  `.claude/skills/orchestrate-tickets/SKILL.md` step 3 does say "pass that model
+  explicitly rather than letting it inherit, naming your own model where the table
+  says inherit", with the backgrounded-`resolvedModel` reasoning attached. So the
+  clause added to `builder.md` defines the table's word and cites the step; the
+  reasoning stays where `repo-17` put it.
+
+  **What the brief had wrong, in one place.** `Done when` 6 says `npm run format`
+  "will not touch any of these files — `.claude/` is in `.oxfmtrc.json`'s
+  `ignorePatterns`". That is true of the three edited pages and false of the
+  fourth file this branch edits: `docs/` is not ignored, so this ticket is
+  formatted by oxfmt and `npm run format` has to run before `npm run check` will
+  pass. Read as written — "no formatting on this branch" — it breaks the check it
+  appears in.
+
+  **Not run:** no reviewer was dispatched from this branch's copy of
+  `ticket-reviewer.md`, so the new ordering is proofread rather than exercised.
+  The gate on this branch reads the merged `main` version, which is the old one.
