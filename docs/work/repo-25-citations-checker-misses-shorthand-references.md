@@ -178,6 +178,33 @@ because it is the evidence.
   in; its own acceptance for the same reason Build 5 has one.)
 - `npm run check` and `npm test` pass.
 
+## Review
+
+**Gate: PASS** — 2026-09-06 · `origin/main...c983c28` · defect hunt run directly (subagent, no `code-review` delegate), medium depth
+
+| Done when                                                                                                                                                 | Proof                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A ticket containing a shorthand reference either resolves it or reports it as unchecked, and in neither case is it silently absent from the count.        | `scripts/test/citations.test.ts:914` ✓, `:931` ✓                                                                                                                                                                                                                                                                                       |
+| A test proves the reproduction above accounts for every reference in it.                                                                                  | `scripts/test/citations.test.ts:914-923` ✓                                                                                                                                                                                                                                                                                             |
+| A prose reference does not cause a false failure on ordinary ticket text — worth checking against the existing `docs/work/` corpus.                       | `scripts/test/citations.test.ts:1072` ✓ — deliberate-break reproduced independently (loosened `PROSE` to a bare number, got `expected 123200 to be less than 17212`, same failure shape claimed)                                                                                                                                       |
+| A ticket that declares its citations deliberately unresolvable is distinguishable from a broken one by exit code.                                         | `scripts/test/citations.test.ts:1107`, `:1116`, `:1135`, `:1140` ✓                                                                                                                                                                                                                                                                     |
+| `--rev <sha>` names which record it read, and a record that exists at `<sha>` and cited something different there is told so. (Build 5)                   | new tests in the `--rev` fold-in, reproduced independently in a throwaway repo — both CLI behaviors matched exactly                                                                                                                                                                                                                    |
+| A shorthand whose inherited file cannot hold the line it names is counted rather than failed, and the leniency stops at the paragraph boundary. (Build 6) | `scripts/test/citations.test.ts` — `"a stale shorthand fails in its own paragraph and is only excused across one"`, `"the downgrade reaches neither a written file nor an ambiguous name"`, `"extractCitations marks a shorthand nearby only inside its own paragraph"` ✓ — both boundary sides verified independently by hand as well |
+| `npm run check` and `npm test` pass.                                                                                                                      | **verified** at `c983c28`: `npm run check` exit 0; `npx vitest run scripts/test/citations.test.ts` 62/62; `npx vitest run scripts/` 198/198 — all run directly, not read from the Log                                                                                                                                                  |
+
+- **low** · the guessed-verdict fix's first version (landed at `97c7303`) shipped with no test and no `Done when` line covering it, and was materially broader than its own justification: it excused every shorthand regardless of inheritance confidence, silently downgrading a genuinely-stale same-line or same-paragraph citation (over half the corpus, by the builder's own measurement) to non-fatal. Reproduced (`` `scripts/citations.mjs:5` to `:99999` after the refactor. `` → `unchecked`, exit 0, where before the branch it correctly failed). **Fixed during review** at `c983c28`: the leniency now applies only across a paragraph boundary (`nearby`, a lexical fact rather than a tuned distance), with four new tests pinning both sides of the boundary, and its own `Done when` (the 7th bullet) and Build step. Verified independently that both my repro cases now fail correctly again and that the actual port-collision target (`dl-38`) still passes.
+- **low** · `dl-38`'s backticked port numbers (`` `:443` ``/`` `:8443` ``) were misread as shorthand line citations, causing a loud false failure on an already-merged, already-gated ticket (11 occurrences, confirmed by direct reproduction). **Fixed during review**, same commit as above.
+- **low** · the `summarize` docblock's claim about the property it gives up (byte-identical export list vs. pre-repo-18) went stale across two commits, first omitting `recordDrift` from the list of new exports and miscounting 5 where the actual count is 4. It also originally overstated the cost — claiming a missing named export forces a `SyntaxError` at import — which I found false under vitest by direct reproduction (58-test suite against `b93e345`'s script: 55 passed, 3 failed, no `SyntaxError`, because vite's transform degrades a missing export to `undefined`). **Fixed during review**: docblock now names all four exports, states the correct count, and records the vitest mechanism, concluding — correctly, on my independent check — that repo-18's red-run property is largely preserved rather than given up.
+- **low** · a Log entry states "`dl-38` and `dl-21` both still exit 0." I ran it: `dl-21` exits 1, for a pre-existing, unrelated reason (`server.ts`/`logging.test.ts` ambiguous between `downloader` and `planner`, present even at `origin/main` before this branch). Confirmed this branch does add 3 new failures to `dl-21` (orphan shorthand plus two ambiguous-name shorthands, both deliberate per the brief), so "untouched" would also overstate it — "not newly broken, but not untouched either" is the accurate framing. **Fixed during review** in the Log-only commit that carries this section.
+- **dropped** · a wrong-file shorthand inheritance reads `unanchored` with unrelated content underneath, and I confirmed this is reachable on the live corpus (`docs/work/repo-23-...md:181`, independently reproduced). Not a defect: the ticket's own brief anticipated this heuristic's imprecision, the builder's measurement (94 of 465 cross-heading resolutions, nearly all correct) makes a heading-reset a worse trade, and the per-citation provenance (`named at record line N`) is a genuine, auditable mitigation. Accepted as shipped.
+- **dropped** · the exit-code bitmask splits `unresolvable`/`moved`/`unanchored`/`declaration` into four separate bits, which is wider than the literal `Done when` line (declared-evidence distinguishable from broken) and touches three of repo-18's already-gated `--require-anchors` assertions. Justified by the brief's own "three failure classes... should not collapse into one exit code" language for three of the four bits; the fourth (`--require-anchors`'s own bit) goes further than even that, disclosed prominently rather than discovered, well-tested (all four changed assertions pin both the bit and the printed sentence). Accepted as shipped — reverting would be pure churn with no coverage gain.
+- **findings** · defect hunt returned 7; 2 carried-and-fixed-during-review as low (guessed-verdict scope, port false positive — noted separately above though they share one underlying incident), 1 carried-and-fixed as low (docblock staleness), 1 carried-and-fixed as low (dl-21 Log accuracy), 2 dropped as accepted product decisions, plus the standing gates-pass bullet. Reconciles to the five bullets above.
+- NFR: security — n/a, no new user-facing surface, no shell/network/credential handling touched. performance — n/a, a markdown-scanning CLI tool. reliability — the guessed-verdict boundary (once narrowed) and the `--rev` absent-record case are both now asserted at both edges, closing the two gaps this round found. maintainability — docblocks tie every branch to the case that earned it, consistently; the two self-correction paragraphs in the Log (corpus pathspec bug, export count) are a maintainability asset, not a defect, since they explain what a future reader would otherwise have to re-derive.
+
+<!-- citations: evidence scripts/citations.mjs:99999, scripts/citations.mjs:8443, docs/work/repo-23-...md:181 -->
+
+**Transcription note, by the builder.** The section above is the reviewer's text, committed as sent. Two changes, both authorised by it in the message carrying the text: the Gate line's range stays at `c983c28`, and the fourth `low` bullet's "pending the builder's promised follow-up commit" is resolved to "**Fixed during review** in the Log-only commit that carries this section", which is the commit you are reading. Nothing else was altered. A third addition, disclosed because it is an edit to a section committed verbatim: the declaration comment above this note. The reviewer's text quotes two locations that are shapes rather than pointers — a backticked port in the second bullet, and an ellipsis-elided record path in the fifth — and both fail, the first under exactly the paragraph rule this ticket added. Declaring them is the mechanism this ticket exists to provide, and it is the only option that leaves a reviewer's cited coordinates byte-identical. Editing either would have been the thing every gate here forbids. A fourth thing, not an edit and not a finding of the reviewer's: I re-resolved every coordinate in the table above against this tip, which is what `records.md` asks of whoever commits a gate record. Six of the eight land where they claim. Two land on filler inside the right test — the first is a blank line in `"prose references are found across the work records without becoming the corpus"`, which starts at `scripts/test/citations.test.ts:1065`, and the second is a docblock opener above `"an evidence declaration that excuses nothing fails, on a bit of its own"` at `:1146`. Every disposition they support is true and the tests exist; the numbers are a line or two out. They are left exactly as the reviewer wrote them, with the working coordinates here instead, because a gate record is committed verbatim and a builder silently improving a reviewer's citations is the failure this whole ticket is about. On the range: the reviewer asked for it updated to the sha of this commit, and a commit cannot cite its own sha. `c983c28` is the tip it actually gated and the last commit that changed any code — this one is Log-only — so `records.md`'s rule that a gate record pins to the sha it reviewed settles it, and that is what the Gate line names.
+
 ## Log
 
 <!-- citations: evidence hls.ts:367, index.ts:440, file.ts:120, other.ts:9, src/tls.ts:2, src/tls.ts:99, scripts/citations.mjs:99999 -->
@@ -483,3 +510,60 @@ of 44` and `planner — 1 open of 37` earlier in the same session; 44 + 37 + 26 
   asserted a leniency over every shorthand to fix the far ones. The tell is the
   same in both — a justification that names a narrow case and an implementation
   that names none.
+
+- **2026-09-06 — gate round 4: `dl-21` was never a port-collision case, and this
+  Log said it twice.**
+
+  Two claims in the entries above are wrong, both about `dl-21`, and the reviewer
+  found them by running the thing rather than reading it:
+
+  - **"eleven such in `dl-38`, two more in `dl-21`"** implied thirteen
+    port-collision false failures split across two tickets. The count is
+    **eleven, all in `dl-38`**. `dl-21`'s `` `:8443` `` and `` `:8444` `` fail as
+    **ambiguous** — `server.ts` matches both `tools/downloader/api/src/server.ts`
+    and `tools/planner/api/src/server.ts` — never as past-end-of-file. Ambiguity
+    was deliberately never routed through the guessed-verdict rule, so those two
+    were not in play for it under either version.
+  - **"`dl-38` and `dl-21` both still exit 0"** is true of `dl-38` and false of
+    `dl-21`, which exits **1**.
+
+  **And the part that is more precise than "unrelated", because it cuts the other
+  way.** `dl-21` exits 1 on `origin/main` as well, with four failures, so this
+  branch did not newly break it and it correctly never appeared in the
+  newly-failing list. But this branch does take it from **four failures to
+  seven**: an orphan shorthand `` `:8443` `` at record line 34 with nothing above
+  it, and the two shorthands at 261 and 263 inheriting the ambiguous `server.ts`.
+  Both classes are deliberate and required — an orphan shorthand is "an error, not
+  a skip", and ambiguity is Build step 4 — so _not newly broken_ is right while
+  _untouched_ would not be. What `dl-21` actually has is a pre-existing ambiguous
+  bare-filename problem, which qualifying `server.ts` and `logging.test.ts` would
+  fix and which is nothing to do with this ticket.
+
+  **Why a Log-only round was worth taking rather than noting for later.** Every
+  correction in this ticket's history — the "2/4 resolve" line, the corpus figures
+  measured over a sixth of the records, the export count taken from memory, the
+  self-quoted citation count that went stale inside the entry that grew it — is
+  the same failure: a number or a claim asserted from reading rather than from
+  running. Leaving a fresh instance of it in the record that documents the others
+  would be the ticket failing its own subject on the last page.
+
+  **Three self-corrections on one branch, and they are two shapes rather than
+  one.** Forcing them together would be tidier and would be the same error again,
+  so:
+
+  - **A claim whose scope quietly exceeded a real measurement.** The corpus
+    figures (a script that measured 26 records while the sentence said "the work
+    records"), this `dl-21` claim (`dl-38` was run, `dl-21` was carried along by
+    the conjunction), and the guessed-verdict rule itself (one port case
+    motivating a rule with no boundary). In every one there **was** a command,
+    and it covered less than the sentence next to it did. That is the dangerous
+    version: an unmeasured claim feels risky and gets checked, while a claim with
+    a real command beside it feels settled.
+  - **A claim with no measurement at all, where familiarity stood in for one.**
+    The export count — five, from memory, in a file whose exports I had just
+    written. Nothing was over-extended; nothing was run.
+
+  What they share is only "I did not run the specific thing I claimed", which is
+  close enough to a tautology to be useless as a check. The two separate rules
+  are usable: **scope the sentence to the command, not to the topic**, and
+  **familiarity with code is not a measurement of it**.
