@@ -355,3 +355,41 @@ them — but it must be a decision, not a side effect. Two honest ways to take i
   now would be building it for a case nobody has reported. If a video with a
   genuinely long ladder turns up, that is a ticket with a reproduction rather
   than a guess.
+
+- **2026-09-06 — which mutant each fixture rung actually defends, because the
+  obvious answer was wrong.** The mirror counts are 3, 2, 2, 1, 2, and the
+  question worth asking of any varied fixture is whether the variation is
+  reached or merely present. Two mutants, run rather than reasoned:
+
+  - _assumes mirrors come in pairs_ (keep the first and third of each group) —
+    **3 tests red**, and what catches it is the **three**-mirror rung leaving a
+    second `1280×720` row;
+  - _only collapses a group it saw more than once_ — **7 tests red**, including
+    `pickDefaultVariantId` returning `null`, and what catches it is the
+    **one**-mirror rung.
+
+  Two ends, two different mutants, neither interchangeable. Each now has an
+  assertion naming the case it defends, so a later reader does not have to
+  rediscover which rung is load-bearing for what.
+
+- **2026-09-06 — a note on the leak sweep, since the reasoning matters more than
+  the sentence.** Nothing identifying the video, its site or its hosts is in this
+  branch: a sweep of 34 needles — both hosts, every path segment over six
+  characters, the query string, and every identifying top-level field of the
+  capture — over every tracked file, the whole branch diff and its commit
+  messages returns 0. The sweep also carries a coarse tripwire for the names of
+  the signed URL's query parameters, and **that tripwire fired on this Log**: an
+  earlier draft of the entry above named those parameters while explaining where
+  the credential sits. Nothing had leaked, and the sentence was rewritten anyway
+  to describe them instead. A detector that reports true because of the prose
+  documenting it is a detector the next person ignores.
+
+- **2026-09-06 — one limit of the language column, stated rather than fixed.**
+  `showLanguage` compares the strings the source wrote, and nothing normalises
+  them: `Intl.getCanonicalLocales("eng")` returns `["en"]`, but this code does
+  not do that mapping. So a manifest that spelled one language both ways would
+  show a Language column separating `en` from `eng`. That is noise rather than
+  loss — the rows are still distinct and nothing is discarded — and no such
+  manifest has been observed, here or in the reported capture. Fixing it on
+  speculation would mean picking a normalisation for a case nobody has seen; the
+  caveat is recorded on the contract field instead.

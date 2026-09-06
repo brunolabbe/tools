@@ -124,10 +124,15 @@ export interface MediaVariant {
    * or yt-dlp's `language` on the format. Absent otherwise, which is the common
    * case: a manifest with no audio groups declares no language at all.
    *
-   * **Spelled as the source spelled it, and the two spellings are not
-   * normalised.** `LANGUAGE` is RFC 5646, so `en` and `eng` are both legal and
-   * both occur; nothing here maps one onto the other, and a consumer comparing
-   * two variants is comparing what two packagers wrote.
+   * **Spelled as the source spelled it, and not normalised anywhere.** Both a
+   * two-letter and a three-letter spelling reach this field — measured, not
+   * assumed: the manifest fixtures in `resolvers/test/fixtures/manifests/`
+   * carry `LANGUAGE="en"` and `LANGUAGE="fr"`, and the per-language ladder
+   * ffmpeg's own hlsenc wrote for dl-40 carries `LANGUAGE="eng"` and
+   * `LANGUAGE="fra"`. They are the same languages: `Intl.getCanonicalLocales("eng")`
+   * returns `["en"]` on this runtime. Nothing here does that mapping, so as
+   * strings they are unequal, and a consumer comparing two variants is comparing
+   * what two producers wrote rather than what they meant.
    *
    * The picker renders it **only when two variants disagree on it** (dl-40).
    * That is not cosmetic: a ladder declared once per audio language is otherwise
