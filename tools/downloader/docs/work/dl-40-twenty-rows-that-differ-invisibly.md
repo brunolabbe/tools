@@ -213,6 +213,13 @@ merged`. Also routed `pickDefaultVariantId` through the same rows, so the
   default selection can never name a variant that was collapsed away, which
   would have left the radio group with nothing checked.
 
+- **2026-09-06 — the follow-up id is reserved, not yet filed.** The collapse site
+  in `web/src/lib/variants.ts` says the alternates are dropped and that a
+  follow-up ticket covers keeping them ("collapse and keep": alternates on the
+  variant, the engine failing over to the next). **That ticket is `dl-45`**, held
+  by this branch and filed when step 1 closes — the ticket asks for it to be
+  filed only if the cause makes it real, and the cause is still open.
+
 - **2026-09-06 — held, not decided.** Build step 3 (twenty rows is twenty arrow
   presses) is untouched: whether the collapse already solves it depends on which
   shape the reported manifest turns out to be, so it waits on the same URL. The
