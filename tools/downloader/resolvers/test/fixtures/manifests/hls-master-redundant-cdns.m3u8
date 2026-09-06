@@ -1,0 +1,87 @@
+#EXTM3U
+# The dl-40 shape: one ladder, declared four times, distinguishable only by URI.
+#
+# The five EXT-X-STREAM-INF attribute lines below are ffmpeg 6.1.1's own output,
+# byte for byte — its hlsenc muxer wrote them, not a person:
+#
+#   ffmpeg -f lavfi -i "testsrc2=size=1280x720:rate=30:duration=6" \
+#          -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=6" \
+#          -filter_complex "[0:v]split=5[a][b][c][d][e];[a]scale=1280:720[v0];\
+#            [b]scale=848:480[v1];[c]scale=640:360[v2];[d]scale=424:240[v3];\
+#            [e]scale=256:144[v4]" \
+#          -map "[v0]" -map 1:a -map "[v1]" -map 1:a -map "[v2]" -map 1:a \
+#          -map "[v3]" -map 1:a -map "[v4]" -map 1:a \
+#          -c:v libx264 -profile:v main -pix_fmt yuv420p -c:a aac -b:a 64k \
+#          -b:v:0 1300k -b:v:1 680k -b:v:2 560k -b:v:3 350k -b:v:4 210k \
+#          -var_stream_map "v:0,a:0 v:1,a:1 v:2,a:2 v:3,a:3 v:4,a:4" \
+#          -f hls -hls_time 2 -hls_playlist_type vod \
+#          -hls_segment_filename "%v/seg%d.ts" -master_pl_name master.m3u8 \
+#          "%v/index.m3u8"
+#
+# That matters, and it is worth being exact about how much. The CODECS strings
+# are real: `avc1.4d401f` down to `avc1.4d400d` are the profile and level x264
+# actually chose for each rung, which is why they differ down the ladder. The
+# BANDWIDTH values are ffmpeg's own arithmetic rather than a measurement off the
+# segments — checked against all five rungs, hlsenc writes
+# round(1.1 * (video target + audio target)). So these are a packager's numbers
+# and not a person's, but nothing here is claiming they are what the encoder
+# emitted. No test depends on that: the fixture is about the master playlist's
+# shape. What it buys over four copies of one hand-typed line is that the rungs
+# differ from one another the way a real ladder's do, so a collapse test written
+# against it cannot pass by collapsing everything.
+#
+# Each rung is then repeated across four hostnames, which is the one thing
+# ffmpeg cannot emit: a redundant master is composed by the origin, not by the
+# packager, by re-pointing the same ladder at each CDN (RFC 8216 section 6.2.4).
+# The attribute lines are identical across the four because the segments really
+# are the same bytes on four servers — which is exactly why the picker rendered
+# twenty indistinguishable rows in the 2026-09-05 report.
+#
+# The reported manifest also carried FRAME-RATE=30; ffmpeg's hlsenc writes that
+# attribute at no setting, so these rows show "—" for fps. The normal-ladder
+# fixture (hls-master-multibitrate.m3u8) carries it and covers that column.
+#EXT-X-VERSION:3
+
+#EXT-X-STREAM-INF:BANDWIDTH=1500400,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-pri.cdn.example/0/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=818400,RESOLUTION=848x480,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-pri.cdn.example/1/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=686400,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"
+https://vod-pri.cdn.example/2/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=455400,RESOLUTION=424x240,CODECS="avc1.4d4015,mp4a.40.2"
+https://vod-pri.cdn.example/3/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=301400,RESOLUTION=256x144,CODECS="avc1.4d400d,mp4a.40.2"
+https://vod-pri.cdn.example/4/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=1500400,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-b1.cdn.example/0/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=818400,RESOLUTION=848x480,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-b1.cdn.example/1/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=686400,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"
+https://vod-b1.cdn.example/2/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=455400,RESOLUTION=424x240,CODECS="avc1.4d4015,mp4a.40.2"
+https://vod-b1.cdn.example/3/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=301400,RESOLUTION=256x144,CODECS="avc1.4d400d,mp4a.40.2"
+https://vod-b1.cdn.example/4/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=1500400,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-b2.cdn.example/0/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=818400,RESOLUTION=848x480,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-b2.cdn.example/1/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=686400,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"
+https://vod-b2.cdn.example/2/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=455400,RESOLUTION=424x240,CODECS="avc1.4d4015,mp4a.40.2"
+https://vod-b2.cdn.example/3/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=301400,RESOLUTION=256x144,CODECS="avc1.4d400d,mp4a.40.2"
+https://vod-b2.cdn.example/4/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=1500400,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-b3.example-mirror.net/0/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=818400,RESOLUTION=848x480,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-b3.example-mirror.net/1/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=686400,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"
+https://vod-b3.example-mirror.net/2/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=455400,RESOLUTION=424x240,CODECS="avc1.4d4015,mp4a.40.2"
+https://vod-b3.example-mirror.net/3/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=301400,RESOLUTION=256x144,CODECS="avc1.4d400d,mp4a.40.2"
+https://vod-b3.example-mirror.net/4/index.m3u8

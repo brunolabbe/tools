@@ -127,3 +127,95 @@ them — but it must be a decision, not a side effect. Two honest ways to take i
   or removes rows, and those are opposite changes. `MediaVariant.language` being
   populated by the parser and read by nothing in the UI was found in the same
   pass and is a strong candidate on its own.
+
+- **2026-09-06 — step 1 could not be run, and is still open.** Build step 1 says
+  "probe the reported video". There is no video to probe: **the URL was never
+  recorded anywhere.** The filing session (`3996cd46`, 2026-09-05 16:42:58Z) has
+  the owner's screenshot pasted as an image and the sentence "20 renditions for
+  this video, but many seems identical" — and no URL, because it was typed into
+  the running web UI, not into the session. Searched every transcript in this
+  project for a non-infrastructure `http(s)` URL in September: four hits, all
+  unrelated (`https://evil/track.gif`, two cloud pricing pages, an
+  `example.com` image). No probe artifact survives on disk either — no
+  `storage/`, no job record, no `.m3u8` outside test fixtures. And the container
+  cannot reach one: `curl` to `devstreaming-cdn.apple.com` and
+  `test-streams.mux.dev` both hang until timeout (DNS resolves, TCP is dropped),
+  and `.devcontainer/allowed-domains.txt` lists no media host at all.
+
+  **The owner is supplying the URL, so this entry deliberately does not name a
+  cause.** What follows narrows it and is explicitly _not_ the determination the
+  first `Done when` line asks for — do not close step 1 with it:
+
+  - Cause 3 is out. Four different codec profiles per rung across five rungs, at
+    identical bitrates, is not a real ladder.
+  - Cause 1 is out **in its ordinary form**. Not one of the twenty rows in the
+    screenshot carries the `+mux` tag, and that tag renders exactly when
+    `variant.audioUrl` is set (`web/src/lib/variants.ts` `needsMux` →
+    `VariantTable.tsx`), which is exactly when the audio group's rendition has a
+    `URI`. A per-language ladder done the usual way — one audio playlist per
+    language — would have shown `+mux` on every row. It survives only in the
+    unusual form where four audio groups each hold a `URI`-less rendition, i.e.
+    the video bytes are duplicated per language.
+  - Weaker, same direction: `formatBitrate`
+    (`web/src/lib/format.ts:111` "Math.round(bitrateBps / 1000)") rounds
+    to whole kbps below 1 Mbps, so "678 kbps" on four rows means four `BANDWIDTH`
+    values inside a 1 kbps window, and that holds in all five rungs.
+
+  That chain reaches maybe 85%, which is why it is written here as a narrowing
+  and not as an answer. **The next agent's job is one probe, not this reasoning
+  again**: fetch the reported master playlist and compare `language`, `url` and
+  `videoCodec` across one rung, then write the field's name here.
+
+- **2026-09-06 — the three branches are not alternatives, and that is a
+  correction to the Build section.** The brief reads as "find the cause, take the
+  matching branch". Measured otherwise: the language check and the codec check
+  are _preconditions of the collapse_, not sibling options. A collapse keyed only
+  on what the table renders destroys real renditions —
+
+  - with the codec pass removed, `hls-master-two-profiles.m3u8` loses a
+    rendition (`collapsed` is 1): an H.264 Baseline and an H.264 High rung both
+    render as `H.264` at the same bitrate, and one is discarded;
+  - with the language flag forced off, `hls-master-per-language-ladder.m3u8`
+    loses two of its four rows.
+
+  Both were run red before the guards went in, not argued. So the picker now
+  disambiguates on whatever the variants actually disagree about — language into
+  a column when two disagree, the declared codec string when two collide, and a
+  collapse only for what is left. Which cause the reported video turns out to be
+  no longer changes the code; it still has to be written down, because the
+  ticket's own reasoning about _why_ twenty rows appeared belongs in this file.
+
+- **2026-09-06 — fixtures, and why they are not hand-written.** Three real master
+  playlists under `resolvers/test/fixtures/manifests/`, each carrying the ffmpeg
+  command that emitted it in a comment at the top: `hls-master-redundant-cdns`
+  (the reported shape — one five-rung ladder declared across four hostnames, 20
+  streams), `hls-master-per-language-ladder`, and `hls-master-two-profiles`. The
+  regression fixture is the existing `hls-master-multibitrate.m3u8`, Apple's real
+  five-rung ladder, whose two 1080p rungs differ only in bitrate and must both
+  survive. One honest limit on all three: hlsenc computes `BANDWIDTH` as
+  `round(1.1 * (video target + audio target))` rather than measuring the
+  segments — verified against all seven rungs — so those numbers are a
+  packager's arithmetic, not a measurement. Nothing here depends on them being
+  physically accurate; what they buy is rungs that differ from one another the
+  way a real ladder's do, so a collapse test cannot pass by collapsing
+  everything.
+
+  The web suite cannot run the HLS parser (importing `@downloader/resolvers`
+  into a jsdom test pulls playwright in behind it), so each manifest has a
+  generated `.variants.json` beside it and `hls.test.ts` fails if one ever stops
+  matching `parseHls`.
+
+- **2026-09-06 — folded in: the count above the table.** `ProbePanel` printed
+  `probe.variants.length`, so the collapse would have left "20 renditions" over
+  five rows — the same defect told from the other end. It now counts the rows the
+  table shows and says what was merged: `5 renditions · 15 duplicate paths
+merged`. Also routed `pickDefaultVariantId` through the same rows, so the
+  default selection can never name a variant that was collapsed away, which
+  would have left the radio group with nothing checked.
+
+- **2026-09-06 — held, not decided.** Build step 3 (twenty rows is twenty arrow
+  presses) is untouched: whether the collapse already solves it depends on which
+  shape the reported manifest turns out to be, so it waits on the same URL. The
+  doc comment missing from `MediaVariant.language` — the tell this ticket was
+  filed on — is likewise not added yet, because it is a `contract` edit and the
+  branch it belongs to is the one still open.

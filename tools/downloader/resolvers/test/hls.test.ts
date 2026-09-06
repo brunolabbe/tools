@@ -248,3 +248,102 @@ describe("malformed input", () => {
     expect(parsed.isLive).toBe(false);
   });
 });
+
+/**
+ * The two shapes dl-40 is about, and the claim each fixture makes.
+ *
+ * Both were emitted by ffmpeg rather than typed here, and the header comment in
+ * each `.m3u8` carries the command that produced it. That is the difference
+ * between a fixture and an assumption: a hand-written playlist holding four
+ * copies of one invented line would pass against an implementation that
+ * collapsed any two rows at all, and would prove nothing about a real ladder.
+ */
+describe("renditions that differ only in what the picker cannot show (dl-40)", () => {
+  const redundant = parseHls(
+    fixture("hls-master-redundant-cdns.m3u8"),
+    "https://vod-pri.cdn.example/master.m3u8",
+  );
+
+  test("a redundant master declares the whole ladder once per CDN", () => {
+    expect(redundant.variants).toHaveLength(20);
+    expect(new Set(redundant.variants.map((variant) => variant.height))).toEqual(
+      new Set([720, 480, 360, 240, 144]),
+    );
+    expect(new Set(redundant.variants.map((variant) => variant.url)).size).toBe(20);
+  });
+
+  test("inside one rung the URL is the only field that differs at all", () => {
+    const rung = redundant.variants.filter((variant) => variant.height === 720);
+    expect(rung).toHaveLength(4);
+
+    // Compared as whole objects minus the two fields expected to differ, so a
+    // field added to MediaVariant later is covered here without anyone
+    // remembering to list it.
+    const shapes = rung.map(({ id: _id, url: _url, ...rest }) => JSON.stringify(rest));
+    expect(new Set(shapes).size).toBe(1);
+    expect(rung.map((variant) => new URL(variant.url).host)).toEqual([
+      "vod-pri.cdn.example",
+      "vod-b1.cdn.example",
+      "vod-b2.cdn.example",
+      "vod-b3.example-mirror.net",
+    ]);
+    // Nothing in that rung carries a language, which is what makes it the
+    // *other* branch of dl-40 from the fixture below.
+    expect(rung.every((variant) => variant.language === undefined)).toBe(true);
+  });
+
+  test("two profiles of one rung differ in the codec string and nowhere else", () => {
+    const parsed = parseHls(fixture("hls-master-two-profiles.m3u8"), MASTER_BASE);
+    const rung = parsed.variants.filter((variant) => variant.height === 720);
+    expect(rung).toHaveLength(2);
+    // High and Baseline. `shortCodec` renders both as "H.264", which is what
+    // makes this the shape a rendered-columns-only collapse would destroy.
+    expect(rung.map((variant) => variant.videoCodec)).toEqual(["avc1.64001f", "avc1.42c01f"]);
+    expect(new Set(rung.map((variant) => variant.bitrateBps)).size).toBe(1);
+    expect(rung.every((variant) => variant.language === undefined)).toBe(true);
+  });
+
+  test("a per-language ladder repeats the same rungs but disagrees on language", () => {
+    const parsed = parseHls(fixture("hls-master-per-language-ladder.m3u8"), MASTER_BASE);
+    expect(parsed.variants).toHaveLength(4);
+
+    const rung = parsed.variants.filter((variant) => variant.height === 720);
+    expect(rung).toHaveLength(2);
+    expect(rung.map((variant) => variant.language)).toEqual(["eng", "fra"]);
+    expect(new Set(rung.map((variant) => variant.bitrateBps)).size).toBe(1);
+    expect(new Set(rung.map((variant) => variant.videoCodec)).size).toBe(1);
+  });
+});
+
+/**
+ * The `.variants.json` beside each manifest is the web picker's fixture: that
+ * suite cannot run this parser — importing `@downloader/resolvers` from a jsdom
+ * test would drag playwright in — so it reads what the parser produced rather
+ * than hand-building variants that would drift from it.
+ *
+ * This test is what stops the drift. Regenerate a file from the parser when it
+ * fails; never edit the JSON to match a new expectation, which would quietly
+ * re-point the web suite at something no manifest yields.
+ */
+describe("derived variant fixtures (dl-40)", () => {
+  const derived = [
+    "hls-master-redundant-cdns",
+    "hls-master-per-language-ladder",
+    "hls-master-two-profiles",
+    "hls-master-multibitrate",
+  ];
+
+  for (const name of derived) {
+    test(`${name}.variants.json is what parseHls returns today`, () => {
+      const record = JSON.parse(fixture(`${name}.variants.json`)) as {
+        manifest: string;
+        baseUrl: string;
+        variants: unknown;
+      };
+      // The manifest and the base URL come out of the file itself, so the guard
+      // can never be checking a different playlist than the one it names.
+      expect(record.manifest).toBe(`${name}.m3u8`);
+      expect(parseHls(fixture(record.manifest), record.baseUrl).variants).toEqual(record.variants);
+    });
+  }
+});

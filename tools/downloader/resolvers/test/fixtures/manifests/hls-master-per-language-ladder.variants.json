@@ -1,0 +1,67 @@
+{
+  "provenance": "Generated, not written: parseHls() run over the manifest named below. The `derived variant fixtures` test in resolvers/test/hls.test.ts re-runs the parser and fails if this file ever stops matching it.",
+  "manifest": "hls-master-per-language-ladder.m3u8",
+  "baseUrl": "https://cdn.example.com/hls/2026/master.m3u8",
+  "variants": [
+    {
+      "id": "hls-0",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/0/index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "720p · H.264 + AAC",
+      "audioUrl": "https://cdn.example.com/hls/2026/English/index.m3u8",
+      "videoCodec": "avc1.4d401f",
+      "audioCodec": "mp4a.40.2",
+      "width": 1280,
+      "height": 720,
+      "bitrateBps": 1425600,
+      "language": "eng"
+    },
+    {
+      "id": "hls-2",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/2/index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "720p · H.264 + AAC",
+      "audioUrl": "https://cdn.example.com/hls/2026/Francais/index.m3u8",
+      "videoCodec": "avc1.4d401f",
+      "audioCodec": "mp4a.40.2",
+      "width": 1280,
+      "height": 720,
+      "bitrateBps": 1425600,
+      "language": "fra"
+    },
+    {
+      "id": "hls-1",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/1/index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "360p · H.264 + AAC",
+      "audioUrl": "https://cdn.example.com/hls/2026/English/index.m3u8",
+      "videoCodec": "avc1.4d401e",
+      "audioCodec": "mp4a.40.2",
+      "width": 640,
+      "height": 360,
+      "bitrateBps": 765600,
+      "language": "eng"
+    },
+    {
+      "id": "hls-3",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/3/index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "360p · H.264 + AAC",
+      "audioUrl": "https://cdn.example.com/hls/2026/Francais/index.m3u8",
+      "videoCodec": "avc1.4d401e",
+      "audioCodec": "mp4a.40.2",
+      "width": 640,
+      "height": 360,
+      "bitrateBps": 765600,
+      "language": "fra"
+    }
+  ]
+}

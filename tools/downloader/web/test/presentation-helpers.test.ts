@@ -12,7 +12,13 @@ import {
   formatSpeed,
 } from "../src/lib/format.ts";
 
-import { pickDefaultVariantId, sortVariantRows, toVariantRows } from "../src/lib/variants.ts";
+import {
+  pickDefaultVariantId,
+  sortVariantRows,
+  toDisplayRows,
+  toVariantRows,
+} from "../src/lib/variants.ts";
+import { parsedVariants } from "./fixtures.ts";
 
 const variants: MediaVariant[] = [
   {
@@ -158,6 +164,119 @@ describe("variant rows", () => {
     // 2160p is higher quality but needs a mux; 1080p60 is the safer default.
     expect(pickDefaultVariantId(variants)).toBe("hls-1080p");
     expect(pickDefaultVariantId([])).toBeNull();
+  });
+});
+
+/**
+ * dl-40: rows that read identically because what separates them is off-screen.
+ *
+ * Every list here is the output of the real HLS parser over a real master
+ * playlist — see `parsedVariants` in `fixtures.ts` — because the defect is a
+ * property of manifests, and a hand-built list of near-identical literals would
+ * only prove that the author can write near-identical literals.
+ *
+ * The three shapes pull in different directions on purpose. Two of them must
+ * *not* collapse: a language ladder and a two-profile rung are real choices
+ * wearing identical rows, and losing one of those is a worse defect than the
+ * one being fixed.
+ */
+describe("renditions that differ only in what the table cannot show (dl-40)", () => {
+  test("a ladder declared once per CDN collapses to one row per rung", () => {
+    const declared = parsedVariants("hls-master-redundant-cdns");
+    expect(declared).toHaveLength(20);
+
+    const { rows, collapsed, showLanguage } = toDisplayRows(declared);
+    expect(rows.map((row) => row.quality)).toEqual([
+      "1280×720",
+      "848×480",
+      "640×360",
+      "424×240",
+      "256×144",
+    ]);
+    expect(collapsed).toBe(15);
+    // Nothing declared a language, so a column of five empty cells would be
+    // worse than no column.
+    expect(showLanguage).toBe(false);
+  });
+
+  test("the row that survives a collapse is one the manifest declared", () => {
+    const declared = parsedVariants("hls-master-redundant-cdns");
+    const byId = new Map(declared.map((item) => [item.id, item]));
+    const { rows } = toDisplayRows(declared);
+
+    // Each surviving row still names a real variant — the download would
+    // otherwise be pointed at an id nothing in the probe answers to.
+    const urls = rows.map((row) => byId.get(row.id)?.url);
+    expect(urls.every((url) => url !== undefined)).toBe(true);
+    expect(new Set(urls).size).toBe(rows.length);
+    // And specifically the first one declared, which in a redundant master is
+    // the primary origin rather than one of its failover mirrors.
+    expect(urls.map((url) => new URL(url ?? "").host)).toEqual([
+      "vod-pri.cdn.example",
+      "vod-pri.cdn.example",
+      "vod-pri.cdn.example",
+      "vod-pri.cdn.example",
+      "vod-pri.cdn.example",
+    ]);
+  });
+
+  test("the default selection is never a row that was collapsed away", () => {
+    const declared = parsedVariants("hls-master-redundant-cdns");
+    const { rows } = toDisplayRows(declared);
+    const chosen = pickDefaultVariantId(declared);
+
+    expect(chosen).not.toBeNull();
+    expect(rows.map((row) => row.id)).toContain(chosen);
+  });
+
+  test("a per-language ladder keeps every row and says which is which", () => {
+    const declared = parsedVariants("hls-master-per-language-ladder");
+    const { rows, collapsed, showLanguage } = toDisplayRows(declared);
+
+    expect(collapsed).toBe(0);
+    expect(showLanguage).toBe(true);
+    expect(rows.map((row) => [row.quality, row.language])).toEqual([
+      ["1280×720", "eng"],
+      ["1280×720", "fra"],
+      ["640×360", "eng"],
+      ["640×360", "fra"],
+    ]);
+  });
+
+  test("two profiles of one rung stop rendering as the same H.264", () => {
+    const declared = parsedVariants("hls-master-two-profiles");
+    const { rows, collapsed } = toDisplayRows(declared);
+
+    // Both rows survive, and the codec cell is what tells them apart. Without
+    // this, the pair is indistinguishable and the collapse would eat a real
+    // rendition — which is why the codec check is a precondition of collapsing
+    // at all, not a separate nicety.
+    expect(collapsed).toBe(0);
+    expect(rows.map((row) => [row.quality, row.videoCodec])).toEqual([
+      ["1280×720", "avc1.64001f"],
+      ["1280×720", "avc1.42c01f"],
+      ["640×360", "H.264"],
+    ]);
+  });
+
+  test("an ordinary ladder renders exactly as it did before any of this", () => {
+    // The regression that matters. A one-variant fixture would pass against an
+    // implementation that collapsed everything, so this is a real five-rung
+    // ladder — Apple's, with two 1080p rungs that differ only in bitrate and
+    // must therefore both survive.
+    const declared = parsedVariants("hls-master-multibitrate");
+    const { rows, collapsed, showLanguage } = toDisplayRows(declared);
+
+    expect(collapsed).toBe(0);
+    expect(showLanguage).toBe(false);
+    expect(rows).toEqual(sortVariantRows(toVariantRows(declared)));
+    expect(rows.map((row) => [row.quality, row.videoCodec, row.bitrate])).toEqual([
+      ["1920×1080", "H.264", "7.7 Mbps"],
+      ["1920×1080", "H.264", "6.0 Mbps"],
+      ["960×540", "H.264", "2.2 Mbps"],
+      ["640×360", "H.264", "1.3 Mbps"],
+      ["480×270", "H.264", "901 kbps"],
+    ]);
   });
 });
 
