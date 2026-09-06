@@ -474,8 +474,10 @@ files: `scripts/status.mjs`, `scripts/test/status.test.ts`,
 the Decision" header replaced with the answer, because the answer arrived in a
 prompt and `docs/01-TICKETS.md` says it belongs on the ticket instead.
 
-- **Run red first, and it was.** All fifteen new cases were written and run
-  before a line of `status.mjs` moved: **11 failed, 179 passed of 190**
+- **Run red first, and it was.** All fifteen new cases were written and run with
+  **nothing in the tree changed but the test file** — `status.mjs` untouched and
+  the `docs/01-TICKETS.md` sentence not yet written: **11 failed, 179 passed of
+  190**
   (`npx vitest run scripts`). The four that passed red are the ones asserting
   the sound path — a quote mark at one end only, a title carrying quote marks of
   its own, a backtick title, the same dependency unquoted — and they are there
@@ -494,9 +496,14 @@ prompt and `docs/01-TICKETS.md` says it belongs on the ticket instead.
   was correct in every case; only the coordinates were not, so nothing had to be
   redesigned. **The tell is the one the gate record above predicted:**
   `node scripts/citations.mjs docs/work/repo-24-…md` still reports **exit 0**,
-  because all 23 citations in this file are unanchored and the tool prints them
-  for a human rather than checking them. A range that is wrong by 28 lines
-  passes exactly as cleanly as one wrong by one.
+  because every citation in this file is unanchored and the tool prints them for
+  a human rather than checking them. A range that is wrong by 28 lines passes
+  exactly as cleanly as one wrong by one. **No count is given, and the first
+  draft of this bullet gave one** — it said "all 23", which the gate below
+  measured as 27 within the hour, because appending to this ticket adds
+  citations to the file the count counts. That is the failure named three
+  bullets above this one in the 2026-09-05 entry, committed by the author
+  quoting it. The claim needs no number.
 - **The brief was a field short.** It said `parseScalar` "needs `file` and
   `line` as `parseList` already does". It needs `key` as well, or the message
   cannot name which field is quoted — and naming it is `Done when` 1. The
@@ -558,17 +565,76 @@ prompt and `docs/01-TICKETS.md` says it belongs on the ticket instead.
   dependencies resolve" (`scripts/test/status.test.ts`) already runs the real
   board through the real parser on every run, and is the regression guard that
   line asks for. Adding a second would have been a copy to keep true.
-- **Nothing was folded in, and there was one candidate.** The agent preamble in
-  `docs/01-TICKETS.md` still tells an agent to run `npm install` in a fresh
-  worktree, which is minutes and can fail outright when `ffmpeg-static`'s
-  postinstall cannot reach the network; the farm script is the way. Left alone:
-  the preamble is copied verbatim into prompts, the replacement lives under
-  `.claude/scripts/`, which is only partly tracked, and choosing what an agent
-  is told to run is a decision rather than a typo. It belongs in a ticket of its
-  own and is surfaced to the orchestrator rather than taken here.
+- **One fold-in, taken against the builder's recommendation, and the objection
+  is answered rather than dropped.** The agent preamble in `docs/01-TICKETS.md`
+  told an agent to run `npm install` in a fresh worktree — minutes, and it can
+  fail outright when `ffmpeg-static`'s postinstall cannot reach the network,
+  leaving no `node_modules` at all. It now names
+  `bash .claude/scripts/worktree-farm.sh`. I recommended filing it instead, on
+  the grounds that the preamble is pasted verbatim into prompts and that
+  `.claude/` is only partly tracked, so citing a path under it might not be
+  safe. The owner heard that and took the cost; the objection was not wrong, so
+  it is settled here in writing rather than silently. **Measured, not assumed:**
+  `git check-ignore .claude/scripts/worktree-farm.sh` exits **1**, so the script
+  is tracked and safe to cite, and it has been since `ab909c9`. The doc now
+  carries that command as the way to answer the same question for any other
+  `.claude/` path, because `.claude/*` is gitignored except for a named
+  allowlist that grows — which is exactly why the question was worth asking
+  before the answer turned out to be yes.
 - **A cross-reference for whoever holds repo-25**, carried out of the gate
   record above and not touched here: `scripts/citations.mjs` bounds-checks a
   range against end of file and nothing else, so a range wrong by 28 lines —
   this ticket's own, measured today — reports `ok`. Anchor checking proves the
   range _contains_ the claim, not that it _is_ the claim. `scripts/citations.mjs`
   was deliberately not opened on this branch.
+
+**2026-09-06 — gated CONCERNS, and the med finding closed.** By a Sonnet
+reviewer in its own detached worktree at `faa65ee`; its record is above. One
+`med`, two `low`, no acceptance line left unproven.
+
+- **The med reproduced, and it is the error message that was the defect.**
+  `rejectQuoted` cannot tell a wrapped value from one whose first and last
+  characters merely happen to be quote marks, so
+  `title: "downloaded" is not "verified"` throws — reproduced first-hand in both
+  quote kinds before accepting it, six cases through `parseFrontmatter`. That
+  much is the cost Option B was chosen knowing about. What was not accepted with
+  it is that the message said **"write it unquoted"**, which for this shape is
+  advice that corrupts the value: Option A's hazard reappearing inside Option B,
+  delivered by a human following bad instructions instead of by a strip. The
+  message now ends `— unwrap it. If these marks are not wrapping and the value
+genuinely starts and ends with one, write those terms in backticks instead.`
+- **"Permanently unwritable" was the one clause of the finding that did not
+  survive the repro**, and the difference matters because it is the difference
+  between a loss and an inconvenience: `` `downloaded` is not `verified` ``
+  parses untouched — measured — and backticks are already how this repo writes a
+  code-ish term in a title. Pinned as a case, so the way out cannot be removed
+  without the suite saying so.
+- **The rule was deliberately not narrowed, and this is the boundary and why.**
+  The obvious narrowing — reject only when the interior holds no quote of the
+  same kind — separates the two cases cleanly and was rejected: it would let
+  `title: "the \"srt\" host"` parse and render its backslashes. That trades a
+  loud false positive for a silent wrong render, and a silent wrong render is
+  the defect this ticket exists to remove. Recorded in `rejectQuoted`'s docblock
+  and in `docs/01-TICKETS.md`, not only here, because the next reader of that
+  function will have the same idea.
+- **The doc sentence overstated and the reviewer was right about it.**
+  "containing quote marks of its own, parses exactly as written" is true only
+  when the marks are not at both boundaries. Split in two: one paragraph for
+  what parses, with `dl-25`'s real title as the example, and one naming the
+  positional rule, the rejected shape and the backtick way out.
+- **Its first `low` was a difference in revert scope, not a discrepancy, and its
+  account is the correct one.** It reverted `scripts/status.mjs` alone and got
+  10 failed / 180 passed; reverting `docs/01-TICKETS.md` as well reproduced 11 /
+  179 exactly. My red run predated my own docs edit. The bullet above now says
+  which files were unchanged rather than only which one was, so a re-runner does
+  not have to derive it.
+- **Its second `low` caught this Log committing the failure this Log had just
+  named.** The citation bullet said "all 23 citations"; the reviewer measured 27
+  within the hour, because appending to this ticket adds citations to the file
+  the count counts — the exact mechanism recorded in the 2026-09-05 entry, three
+  bullets above the one that broke it. Number dropped, claim kept.
+- **Both directions worked again.** The reviewer found a message whose advice
+  corrupted the value it was about; re-running its own case found that the value
+  was writable all along. Neither of us would have got to "fix the message and
+  pin the escape hatch" alone, and the patch either of us would have written
+  alone — document the loss, or narrow the rule — would have been worse.

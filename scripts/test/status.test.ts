@@ -353,8 +353,40 @@ test("a quoted title is a named failure, and the name carries the file, the line
 
 test("the error says why, so the author unquotes rather than reaching for an escape", () => {
   expect(() => parseFrontmatter(pl("pl-1", { title: '"the pl-1 thing"' }), "t.md")).toThrow(
-    /runs to the end of the line and is taken literally, so quotes are neither required nor permitted/,
+    /taken literally, so wrapping quotes are neither required nor permitted/,
   );
+});
+
+// The cost Option B was chosen knowing about, pinned so it is visible rather
+// than merely accepted in prose: the rule cannot tell a wrapped value from one
+// whose first and last characters happen both to be quote marks, and a title
+// contrasting two quoted terms is exactly that shape. Narrowing it to "the
+// interior holds no quote of the same kind" would separate the two, at the
+// price of parsing `"the \"srt\" host"` and rendering its backslashes — a
+// silent wrong render traded for a loud wrong rejection, which is backwards for
+// a parser whose whole documented virtue is being loud.
+test("a value whose two ends are quoted by two different words is rejected too, and that is the accepted cost", () => {
+  for (const title of ['"downloaded" is not "verified"', "'ready' does not mean 'startable'"]) {
+    expect(() => parseFrontmatter(pl("pl-1", { title }), "t.md"), title).toThrow(
+      /^t\.md:4: "title" is quoted/,
+    );
+  }
+});
+
+// ...which is only an acceptable cost because it is not a loss. The message
+// names this way out, and it is the spelling the repo already uses for a
+// code-ish term in a title.
+test("the way out of that is backticks, which parse untouched — so no title is unwriteable", () => {
+  const title = "`downloaded` is not `verified`";
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { title }) });
+  expect(readTickets(root)[0]?.title).toBe(title);
+  expect(() => parseFrontmatter(pl("pl-1", { title }), "t.md")).not.toThrow();
+});
+
+test("the error names backticks, so following it literally cannot corrupt the value", () => {
+  expect(() =>
+    parseFrontmatter(pl("pl-1", { title: '"downloaded" is not "verified"' }), "t.md"),
+  ).toThrow(/write those terms in backticks instead/);
 });
 
 test("single quotes are rejected the same as double, since YAML habit reaches for both", () => {

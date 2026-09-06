@@ -157,6 +157,16 @@ export function parseFrontmatter(text, file) {
  * only: a value that merely contains a quote mark, or is quoted at one end, is
  * ordinary text.
  *
+ * **The rule cannot tell a wrapped value from one whose first and last
+ * characters happen both to be quote marks** — `"downloaded" is not "verified"`
+ * is rejected, and that is the loss Option B was chosen knowing about. It is
+ * not narrowed to "the interior holds no quote of the same kind", which would
+ * separate the two cases, because that trades this loud false positive for a
+ * silent false negative: `title: "the \"srt\" host"` would then parse and
+ * render its backslashes, which is the defect this exists to remove. So the
+ * message names the way out instead — those terms go in backticks, which is
+ * how this repo writes them anyway, and which parses untouched.
+ *
  * @param {string} value Already trimmed.
  * @param {string} what How the message names it, e.g. `"title"`.
  * @param {string} file Repo-relative path, for the error message.
@@ -168,7 +178,9 @@ function rejectQuoted(value, what, file, line) {
   if (!value.endsWith(quote)) return;
   throw new Error(
     `${file}:${line}: ${what} is quoted (${value}). A value runs to the end of the line and is ` +
-      `taken literally, so quotes are neither required nor permitted — write it unquoted.`,
+      `taken literally, so wrapping quotes are neither required nor permitted — unwrap it. If ` +
+      `these marks are not wrapping and the value genuinely starts and ends with one, write ` +
+      `those terms in backticks instead.`,
   );
 }
 
