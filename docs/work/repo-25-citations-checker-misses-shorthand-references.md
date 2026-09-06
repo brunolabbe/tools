@@ -127,7 +127,7 @@ because it is the evidence.
 
 ## Build
 
-<!-- citations: evidence index.ts:440 -->
+<!-- citations: evidence index.ts:440, index.ts:443 -->
 
 1. Land on top of #146 rather than beside it — both change `scripts/citations.mjs`.
 2. Take the decision above.
@@ -146,6 +146,12 @@ because it is the evidence.
    record exists at the rev and cited something different, say that too. **Do not
    read the record from the rev**: a gate record is written after the commit it
    reviews, so it is not there.
+6. **Folded in 2026-09-06, second gate round.** The shorthand rule reads a
+   backticked port — `` `:443` `` — as a line number and inherits whatever file
+   was named above, which turned `dl-38` and `dl-21` red on this branch. No
+   lexical rule separates a port from a line, so do not try to write one. Make a
+   verdict that rests on the **inherited** half non-fatal, and stop the leniency
+   at the paragraph boundary, where the inheritance stops being a guess.
 
 ## Done when
 
@@ -163,11 +169,18 @@ because it is the evidence.
   not have then cannot fail a run without explanation. (Build 5, folded in; its
   own acceptance because it is a second behaviour change and one arriving without
   one was the objection to folding it in at all.)
+- A shorthand whose **inherited** file cannot hold the line it names is counted
+  rather than failed — a backticked port read as a line must not turn a record
+  red — **and the leniency stops at the paragraph**: a shorthand in the same
+  paragraph as the citation it inherits from is not a guess, so a number past the
+  end of that file still fails. Both sides tested, because a leniency with no
+  asserted boundary is how the first version of this shipped. (Build 6, folded
+  in; its own acceptance for the same reason Build 5 has one.)
 - `npm run check` and `npm test` pass.
 
 ## Log
 
-<!-- citations: evidence hls.ts:367, index.ts:440, file.ts:120, other.ts:9, src/tls.ts:2, src/tls.ts:99 -->
+<!-- citations: evidence hls.ts:367, index.ts:440, file.ts:120, other.ts:9, src/tls.ts:2, src/tls.ts:99, scripts/citations.mjs:99999 -->
 
 - **2026-09-05 — filed.** Found while path-qualifying six ambiguous citations
   across dl-40..dl-43 on PR #151, and independently hit the same day by the
@@ -416,3 +429,57 @@ of 44` and `planner — 1 open of 37` earlier in the same session; 44 + 37 + 26 
   `applyDeclarations`, `extractDeclarations`, `recordDrift`), not five; I had
   counted from memory instead of from the file, which is the same error as the
   pathspec one wearing different clothes.
+
+- **2026-09-06 — gate round 3: the guessed-verdict rule was broader than its own
+  justification, and a reviewer broke it.**
+
+  I asked the reviewer to try to construct a record where a genuinely wrong
+  shorthand now passes silently, and said that if it succeeded the finding would
+  outrank everything else in the range. **It succeeded on the first try**, with a
+  case I should have written myself:
+
+  ```md
+  The guard moved from `scripts/citations.mjs:5` to `:99999` after the refactor.
+  ```
+
+  Not a port and not ambiguous — a citation that simply went stale. Under the
+  first version of the rule that reported `unchecked` and exited 0, where before
+  the rule it failed loud and correctly. **The rule keyed on `source ===
+"shorthand"` alone**, so it excused every shorthand at every distance, including
+  the ones where nothing is guessed at all. Of 465 resolving shorthands, 180 sit
+  on the same line as the citation they inherit from and 151 more within five
+  lines; the unconditional version gave up detection across that majority to fix
+  a minority.
+
+  **The remedy is a boundary, and the boundary is lexical rather than tuned.** The
+  leniency now applies only when the file was inherited **across a paragraph
+  break**. A blank line is a fact about the document; a distance threshold would
+  have been a number chosen to fit the data. Inside one paragraph "the same file"
+  is unambiguous English and a line past the end of that file is a stale
+  citation, so it stays fatal.
+
+  **It cost nothing to narrow, which is why this is a correction and not a
+  trade.** Re-measured over all 107 records: the records this branch newly fails
+  are the same **4** either way — `repo-3`, `pl-20`, `pl-31`, `pl-32`, all pure
+  orphan-shorthand — while ten citations return to failing loud (`unresolvable`
+  221 rather than 211). The case the rule exists for is untouched: `dl-38`'s port
+  citations at record line 287 inherit from line 254, four paragraph breaks away,
+  and `dl-38` and `dl-21` both still exit 0. So the owner never had to choose
+  between the port fix and the stale-citation signal; the first version had simply
+  claimed a wider licence than its evidence.
+
+  **The fix had no test and no acceptance line, and both were the reviewer's
+  finding too.** The test diff for that commit was four lines, none of them
+  touching the new behaviour — so nothing pinned that a shorthand past EOF is
+  downgraded, that ambiguity is not, or that a qualified citation past EOF still
+  fails. The reviewer verified all three by hand because the suite could not. They
+  are now asserted, both sides of the boundary included, and the fix carries
+  `Done when` 6 and Build 6 of its own — the same requirement the `--rev` fold-in
+  was held to, which I applied to that fold-in and then did not apply to this one.
+
+  **The general shape, since this is the second time in one branch.** Both defects
+  here were a rule doing more than the evidence that motivated it: the corpus
+  figures asserted a conclusion over a sixth of the records, and this rule
+  asserted a leniency over every shorthand to fix the far ones. The tell is the
+  same in both — a justification that names a narrow case and an implementation
+  that names none.

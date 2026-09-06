@@ -269,7 +269,7 @@ const CELL_FILE =
  * verdict.
  *
  * @param {string} markdown
- * @returns {{file: string | null, start: number, end: number, anchor: string | null, source: "inline" | "table" | "shorthand" | "prose", line: number, from: number | null}[]}
+ * @returns {{file: string | null, start: number, end: number, anchor: string | null, source: "inline" | "table" | "shorthand" | "prose", line: number, from: number | null, nearby: boolean}[]}
  */
 export function extractCitations(markdown) {
   const out = [];
@@ -278,10 +278,20 @@ export function extractCitations(markdown) {
   let currentFile = /** @type {string | null} */ (null);
   /** And the record line it was named on, so the inheritance can be audited. */
   let currentFileLine = /** @type {number | null} */ (null);
+  /**
+   * Which paragraph it was named in, which decides whether the inheritance is a
+   * guess at all. A blank line is a real lexical boundary — not a tuned distance
+   * — and inside one paragraph "the same file" is unambiguous English. Across
+   * one, the author may have moved on in prose the scanner cannot read.
+   */
+  let paragraph = 0;
+  let currentFileParagraph = /** @type {number | null} */ (null);
 
   let headers = /** @type {string[]} */ ([]);
   lines.forEach((text, index) => {
     const lineNo = index + 1;
+
+    if (text.trim() === "") paragraph += 1;
 
     // A declaration is metadata about the citations, not one of them. Skipping
     // the whole line keeps the locations it names out of the count and out of
@@ -311,6 +321,7 @@ export function extractCitations(markdown) {
         const file = cellMatch ? cellMatch[1] : cells[fileCol].replace(/`/g, "").trim();
         currentFile = file;
         currentFileLine = lineNo;
+        currentFileParagraph = paragraph;
         for (const num of cells[lineCol].matchAll(TABLE_LINE)) {
           out.push({
             file,
@@ -320,6 +331,7 @@ export function extractCitations(markdown) {
             source: "table",
             line: lineNo,
             from: null,
+            nearby: false,
           });
         }
         return;
@@ -339,6 +351,7 @@ export function extractCitations(markdown) {
         make: () => {
           currentFile = g.file;
           currentFileLine = lineNo;
+          currentFileParagraph = paragraph;
           return {
             file: g.file,
             start: Number(g.start),
@@ -347,6 +360,7 @@ export function extractCitations(markdown) {
             source: "inline",
             line: lineNo,
             from: null,
+            nearby: false,
           };
         },
       });
@@ -370,6 +384,7 @@ export function extractCitations(markdown) {
           source: "shorthand",
           line: lineNo,
           from: currentFileLine,
+          nearby: currentFileParagraph === paragraph,
         }),
       });
     }
@@ -387,6 +402,7 @@ export function extractCitations(markdown) {
           source: "prose",
           line: lineNo,
           from: null,
+          nearby: false,
         }),
       });
     }
@@ -688,29 +704,40 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
     });
 
     /**
-     * **A verdict derived from a guess may not be fatal.**
+     * **A verdict derived from a guess may not be fatal — but only where the file
+     * really was guessed.**
      *
      * A shorthand supplies the number; the inheritance supplies the file. "Line
-     * 443 is past the end of this file" is a claim about the *pairing*, and the
-     * pairing is the guessed half — so the tool cannot tell a genuinely stale
-     * citation from something that was never a citation at all. `` `:443` `` in a
+     * 443 is past the end of this file" is a claim about the *pairing*, and where
+     * the pairing is guesswork the tool cannot tell a genuinely stale citation
+     * from something that was never a citation at all. `` `:443` `` in a
      * paragraph about TLS ports is the case that proved it: thirteen of those sit
      * in `dl-38` and `dl-21`, and reading them as lines into whatever file was
      * named above turned two already-merged, already-gated tickets red.
      *
-     * So it is reported `unchecked` — counted, printed with the file it guessed
-     * and the line that named it, and fails nothing. **Ambiguity is deliberately
-     * not routed here**: that is a fact about the *name*, which the record wrote
-     * out in the qualified citation above, and that citation fails ambiguous on
-     * its own. Nothing is lost and the record still fails for a real reason.
+     * **`nearby` is what keeps this from swallowing real failures**, and it was
+     * missing from the first version of this rule. Written unconditionally, the
+     * downgrade also excused a shorthand sitting in the *same paragraph* as the
+     * citation it inherits from — where there is no guesswork at all, and a
+     * number past the end of the file is simply a stale citation. A reviewer
+     * built the case that proved it: ``from `citations.mjs:5` to `:99999` `` on
+     * one line went from a hard failure to exit 0. So the downgrade applies only
+     * across a paragraph boundary, which is a lexical fact about the document
+     * rather than a tuned distance.
+     *
+     * Downgraded, it is `unchecked` — counted, printed with the file it guessed
+     * and the line that named it, and fatal to nothing. **Ambiguity is
+     * deliberately not routed here at all**: that is a fact about the *name*,
+     * which the record wrote out in the qualified citation above, and that
+     * citation fails ambiguous on its own.
      */
+    const isGuess = c.source === "shorthand" && !c.nearby;
     const guessed = (reason) => ({
       ...c,
-      state: c.source === "shorthand" ? "unchecked" : "unresolvable",
-      reason:
-        c.source === "shorthand"
-          ? `${reason} — and this file was inherited, not written, so nothing here can tell a stale citation from something that was never one`
-          : reason,
+      state: isGuess ? "unchecked" : "unresolvable",
+      reason: isGuess
+        ? `${reason} — and this file was inherited from another paragraph, not written here, so nothing can tell a stale citation from something that was never one`
+        : reason,
       text: null,
       resolved: at,
       foundAt: null,

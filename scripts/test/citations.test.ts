@@ -30,6 +30,7 @@ const cite = (over: Partial<ReturnType<typeof extractCitations>[number]> = {}) =
   source: "inline" as const,
   line: 1,
   from: null as number | null,
+  nearby: false,
   ...over,
 });
 
@@ -66,7 +67,16 @@ const marks = (out: string) => out.split("\n").filter((line) => /^ {2}\S/.test(l
 test("finds an inline file:line citation", () => {
   const found = extractCitations("The guard is wrong at `src/a.ts:12`.");
   expect(found).toEqual([
-    { file: "src/a.ts", start: 12, end: 12, anchor: null, source: "inline", line: 1, from: null },
+    {
+      file: "src/a.ts",
+      start: 12,
+      end: 12,
+      anchor: null,
+      source: "inline",
+      line: 1,
+      from: null,
+      nearby: false,
+    },
   ]);
 });
 
@@ -1353,4 +1363,122 @@ test("recordDrift ignores prose that changed and reports a reference that did", 
 
   const dropped = recordDrift("## Review\n\nNothing cited.\n", then);
   expect(dropped?.removed.map((c) => `${c.file}:${c.start}`)).toEqual(["src/a.ts:12"]);
+});
+
+/**
+ * **Done when 7**, and the boundary is the whole of it.
+ *
+ * A shorthand's file is inherited, so a "past end of file" verdict on one is a
+ * claim about a pairing the record did not write. Where the file was named in
+ * another paragraph that is a guess and must not be fatal — `` `:443` `` in a
+ * paragraph about TLS ports read as a line into whatever file was named above,
+ * which is how this branch turned `dl-38` and `dl-21` red.
+ *
+ * **Where it was named in the same paragraph it is not a guess at all**, and a
+ * number past the end of the file is simply a stale citation. The first version
+ * of this rule missed that and excused both; a reviewer built the case below and
+ * it went from a hard failure to exit 0. Over half the corpus's shorthands sit in
+ * that tier — 180 same-line and 151 more within five lines, of 465 — so the
+ * unconditional version gave up detection on the majority to fix the minority.
+ *
+ * Both sides are pinned here, because a leniency with no asserted boundary is
+ * how the first version shipped.
+ */
+test("a stale shorthand fails in its own paragraph and is only excused across one", () => {
+  const { record, cleanup } = withRecord(
+    [
+      "## Review",
+      "",
+      "The guard moved from `scripts/citations.mjs:5` to `:99999` after the refactor.",
+      "",
+      "A later paragraph, no longer naming a file, mentions `:88888`.",
+      "",
+    ].join("\n"),
+  );
+
+  const result = run(record);
+  // Same line as the citation it inherits from: no guesswork, so a number past
+  // the end of the file is a stale citation and still fatal.
+  expect(result.stdout).toMatch(/^ {2}FAIL {7}:99999 in scripts\/citations\.mjs/m);
+  // A paragraph later, the file is inherited across a boundary the scanner
+  // cannot read past, so the same shape is reported and fails nothing.
+  expect(result.stdout).toMatch(/^ {2}unchecked {2}:88888 in scripts\/citations\.mjs/m);
+  expect(result.stdout).toMatch(/inherited from another paragraph/);
+  // One fatal, one not — so the boundary, not the shape, is what decided it.
+  expect(result.status).toBe(EXIT.unresolvable);
+
+  cleanup();
+});
+
+/**
+ * The case the rule exists for, end to end: a backticked port in a paragraph
+ * about TLS, far below the last file anyone named. `dl-38` carries eleven of
+ * these and `dl-21` two, and this branch made them fatal on two already-merged,
+ * already-gated tickets before the rule existed.
+ */
+test("a backticked port far below the last named file is counted, not failed", () => {
+  const { record, cleanup } = withRecord(
+    [
+      "## Review",
+      "",
+      "The config is `release-please-config.json:5`.",
+      "",
+      "Several paragraphs of prose about something else entirely.",
+      "",
+      "The origin answers on `:443`-good and `:8443`-bad, which are ports.",
+      "",
+    ].join("\n"),
+  );
+
+  const result = run(record);
+  expect(result.status).toBe(0);
+  expect(result.stdout).toMatch(summary(0, 0, 1, 0, 3, 2, 0));
+  expect(result.stdout).toMatch(/^ {2}unchecked {2}:443 in release-please-config\.json/m);
+  expect(result.stdout).toMatch(/^ {2}unchecked {2}:8443 in release-please-config\.json/m);
+  cleanup();
+});
+
+/**
+ * The two things the downgrade must never reach, asserted because nothing else
+ * in the suite pinned them and a reviewer had to check them by hand.
+ *
+ * A **qualified** citation past the end of its file is untouched: the record
+ * wrote that file out, so nothing was guessed. And **ambiguity never routes
+ * through the downgrade at all**, even for a shorthand — that is a fact about
+ * the name, which the qualified citation above wrote out, and which fails on its
+ * own. Routing it would have made this ticket's own `hls.ts:27` declaration
+ * excuse nothing and flip the record to `exit 8`.
+ */
+test("the downgrade reaches neither a written file nor an ambiguous name", () => {
+  const written = checkCitations([cite({ file: "a.ts", start: 99, end: 99 })], () => ["one"]);
+  expect(written[0]?.state).toBe("unresolvable");
+
+  const ambiguous = extractCitations("At `status.test.ts:12`, and again at `:9999`.");
+  const results = checkCitations(
+    ambiguous,
+    () => ["one"],
+    makeResolver(["scripts/test/status.test.ts", "tools/downloader/web/test/status.test.ts"]),
+  );
+  // The shorthand is same-paragraph *and* the name is ambiguous; either alone
+  // keeps it fatal, and the reason is about the name rather than the pairing.
+  expect(results.map((r) => r.state)).toEqual(["unresolvable", "unresolvable"]);
+  expect(results[1]?.reason).toMatch(/ambiguous — 2 tracked files/);
+});
+
+/** `nearby` is a fact about paragraphs, so a blank line is what changes it. */
+test("extractCitations marks a shorthand nearby only inside its own paragraph", () => {
+  const found = extractCitations(
+    [
+      "At `a/one.ts:5` and `:6`.",
+      "Still the same paragraph, `:7`.",
+      "",
+      "New paragraph, `:8`.",
+    ].join("\n"),
+  );
+  expect(found.map((c) => `${c.source}:${c.start}=${c.nearby}`)).toEqual([
+    "inline:5=false",
+    "shorthand:6=true",
+    "shorthand:7=true",
+    "shorthand:8=false",
+  ]);
 });
