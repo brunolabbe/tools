@@ -130,7 +130,8 @@ export function parseFrontmatter(text, file) {
       );
     }
     if (key in fields) throw new Error(`${file}:${i + 1}: "${key}" is set twice`);
-    fields[key] = key === "depends_on" ? parseList(value, file, i + 1) : parseScalar(value);
+    fields[key] =
+      key === "depends_on" ? parseList(value, file, i + 1) : parseScalar(value, key, file, i + 1);
   }
 
   for (const [key, { required }] of Object.entries(FIELDS)) {
@@ -139,9 +140,42 @@ export function parseFrontmatter(text, file) {
   return fields;
 }
 
-/** @param {string} value @returns {string | null} */
-function parseScalar(value) {
+/**
+ * Refuse a value the author quoted the way YAML would (repo-24).
+ *
+ * The grammar takes the rest of the line, so a quoted value used to carry its
+ * quotation marks into every render — and, through `parseList`, into a dangling
+ * dependency naming a ticket that exists, which failed CI's board gate on sound
+ * work. That silent third behaviour is the one thing the docblock above says
+ * this parser does not do, so it is named rather than repaired: stripping the
+ * quotes would corrupt a legitimate value, and `dl-25`'s title is one keystroke
+ * from that shape.
+ *
+ * The error is the whole remedy because **no value here ever needs quoting** —
+ * not even a title opening with a backtick, which is the character that sent
+ * repo-22 reaching for YAML in the first place. Matched surrounding quotes
+ * only: a value that merely contains a quote mark, or is quoted at one end, is
+ * ordinary text.
+ *
+ * @param {string} value Already trimmed.
+ * @param {string} what How the message names it, e.g. `"title"`.
+ * @param {string} file Repo-relative path, for the error message.
+ * @param {number} line
+ */
+function rejectQuoted(value, what, file, line) {
+  const quote = value[0];
+  if (value.length < 2 || (quote !== '"' && quote !== "'")) return;
+  if (!value.endsWith(quote)) return;
+  throw new Error(
+    `${file}:${line}: ${what} is quoted (${value}). A value runs to the end of the line and is ` +
+      `taken literally, so quotes are neither required nor permitted — write it unquoted.`,
+  );
+}
+
+/** @param {string} value @param {string} key @param {string} file @param {number} line @returns {string | null} */
+function parseScalar(value, key, file, line) {
   const trimmed = value.trim();
+  rejectQuoted(trimmed, `"${key}"`, file, line);
   return trimmed === "null" || trimmed === "" ? null : trimmed;
 }
 
@@ -152,7 +186,16 @@ function parseList(value, file, line) {
     throw new Error(`${file}:${line}: depends_on must be an inline list, "[]" when there is none`);
   }
   const inner = trimmed.slice(1, -1).trim();
-  return inner === "" ? [] : inner.split(",").map((entry) => entry.trim());
+  if (inner === "") return [];
+  return inner.split(",").map((entry) => {
+    const id = entry.trim();
+    // Named per entry rather than for the line, and echoed once: the report
+    // this replaces wrapped a corrupted id in quotes of its own and said
+    // `depends_on ""repo-90"", which is not a ticket` about a ticket that was
+    // right there.
+    rejectQuoted(id, "a depends_on entry", file, line);
+    return id;
+  });
 }
 
 /**

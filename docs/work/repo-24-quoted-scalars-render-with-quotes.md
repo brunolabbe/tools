@@ -3,7 +3,7 @@ id: repo-24
 tool: repo
 title: status.mjs renders a quoted frontmatter scalar with its quotes
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -11,9 +11,12 @@ difficulty: standard
 
 # repo-24 — status.mjs renders a quoted frontmatter scalar with its quotes
 
-**Blocked on the Decision below.** Do not start until it is answered: the three
-options produce different parsers, and two of them change what the ticket format
-accepts. The Build section assumes an answer and says which.
+**The Decision below is answered: Option B, for `parseScalar` and for
+`parseList` both** — 2026-09-06, by the owner, taking the ticket's own
+recommendation. It was written as "blocked on the Decision below", which is what
+this paragraph used to say; the answer is recorded here rather than left in a
+builder's prompt, per `docs/01-TICKETS.md`. Built on
+`repo-24-reject-quoted-frontmatter-scalars`.
 
 ## Why
 
@@ -142,6 +145,11 @@ exit 0. Verified. The quotes in repo-22 were YAML habit, not a requirement of
 viable rather than a dead end, and `docs/01-TICKETS.md` never says either way.
 
 ## Decision
+
+**Answered 2026-09-06 — Option B, for `parseScalar` and for `parseList` both.**
+The second, smaller decision is answered the same way: `parseList` follows. The
+options and their costs are left below as filed, because the costs B accepts are
+real and a future reader needs to see what was traded, not only what was picked.
 
 `docs/01-TICKETS.md` documents the fields but **never mentions quoting**, and its
 worked example (`docs/01-TICKETS.md:51`) shows an unquoted title. `status.mjs`'s
@@ -458,3 +466,109 @@ than out of its defect hunt.
   was no claim to correct, and the fact about the tool is true and useful
   anyway. Reproduction beat inference in both directions, which is the only
   reason it ended up right.
+
+**2026-09-06 — built, Option B.** Branch
+`repo-24-reject-quoted-frontmatter-scalars`, off `origin/main@cf433aa`. Three
+files: `scripts/status.mjs`, `scripts/test/status.test.ts`,
+`docs/01-TICKETS.md`. `status` moved to `done` here, and the stale "blocked on
+the Decision" header replaced with the answer, because the answer arrived in a
+prompt and `docs/01-TICKETS.md` says it belongs on the ticket instead.
+
+- **Run red first, and it was.** All fifteen new cases were written and run
+  before a line of `status.mjs` moved: **11 failed, 179 passed of 190**
+  (`npx vitest run scripts`). The four that passed red are the ones asserting
+  the sound path — a quote mark at one end only, a title carrying quote marks of
+  its own, a backtick title, the same dependency unquoted — and they are there
+  so that "no rendering path emits a quote mark" cannot be satisfied by a parser
+  that emits nothing at all. Green after: **190 passed of 190**. Nothing was
+  substituted for a required check; every command in `Done when` was run as
+  written.
+- **Every line number in the brief was already stale on `main`, and none of them
+  were off by a little.** `parseScalar` was cited `scripts/status.mjs:115-119`
+  and was at `:143-146` on `cf433aa`; `parseList` was cited `:121-129` and was
+  at `:148-156`; the call site was cited `:106` and was at `:133`;
+  `EXIT_ON_PROBLEMS` was cited `:610` and was at `:727`. The whole file had
+  moved down by roughly 28 lines since the filing, and `scripts/status.mjs:115`
+  now resolves to `if (end === -1) throw ...` — a real line of the same
+  function, which is why nothing complained. The mechanism the brief described
+  was correct in every case; only the coordinates were not, so nothing had to be
+  redesigned. **The tell is the one the gate record above predicted:**
+  `node scripts/citations.mjs docs/work/repo-24-…md` still reports **exit 0**,
+  because all 23 citations in this file are unanchored and the tool prints them
+  for a human rather than checking them. A range that is wrong by 28 lines
+  passes exactly as cleanly as one wrong by one.
+- **The brief was a field short.** It said `parseScalar` "needs `file` and
+  `line` as `parseList` already does". It needs `key` as well, or the message
+  cannot name which field is quoted — and naming it is `Done when` 1. The
+  signature is now `parseScalar(value, key, file, line)`.
+- **The rule is one helper, not two copies.** `rejectQuoted` is shared by both
+  parsers so the two messages cannot drift, and it takes how the message should
+  name the thing (`"title"`, or `a depends_on entry`) rather than deriving it.
+  Matched surrounding quotes only, length two or more, `"` and `'` both:
+  `"srt" in a hostname` and `a hostname can contain "srt"` are ordinary values
+  and stay ordinary, and so does `"mismatched at the other end'`. Each is a
+  case.
+- **The message echoes the offending value once.** `depends_on` reads
+  `a depends_on entry is quoted ("repo-90").` — not the doubling that
+  `danglingDependencies` produced when it wrapped a corrupted id in quotes of
+  its own and said `depends_on ""repo-90"", which is not a ticket` about a
+  ticket that was right there. There is a case asserting the message does not
+  contain a doubled quote.
+- **Build step 5 held: the false dangling dependency disappeared on its own.**
+  `danglingDependencies` and `EXIT_ON_PROBLEMS` are untouched, confirmed by the
+  diff. The parse fails first, so the problem is never raised —
+  `--json` on the `repo-90`/`repo-91` fixture now exits 1 naming the quoting,
+  with `dangling-dependency` appearing on neither stream. **That changes the
+  shape of `Done when` 3 and it is worth saying plainly**: the line asks that
+  `--json`'s `problems` array carry no `dangling-dependency`, and under B there
+  is no `problems` array to read, because there is no JSON. The case asserts the
+  absence on both streams and asserts the parse error instead, and a second case
+  runs the same fixture with the dependency unquoted to show the board is
+  otherwise sound and exits 0 with `problems: []`. Without that second case the
+  first would pass against a parser that refused everything.
+- **The live case is dead on every path.** repo-22's real bytes from `693e7f2`
+  in a scratch root, the recipe under **Run it**: `--show`, the default view,
+  `--ready`, `--markdown` and `--json` each now print
+  `docs/work/repo-22-grep-is-a-wrapper.md:4: "title" is quoted (…)` and exit 1,
+  where all five used to render the quotes and four of them exited 0.
+- **No branch anywhere is broken by this.** Every ticket file on all **28**
+  remote branches was extracted and its frontmatter scanned for a matched-quoted
+  value and for a quoted `depends_on` entry: **zero hits**. So the strict parse
+  cannot redden a board on merge, and repo-22 in particular is safe — it was
+  reworded at `4f63e10` before this landed.
+- **This ticket should have been filed `needs-decision`, and was filed `ready`.**
+  Its own opening paragraph said "do not start until it is answered" while its
+  frontmatter said startable, which is the exact divergence `needs-decision`
+  exists to remove — and the status this ticket is about is a parser that
+  accepts what it should reject, one level down. Recorded rather than fixed,
+  since it goes to `done` in this commit either way.
+- **This edit moved a citation in the Log above, and the number is left as it
+  was measured.** `docs/01-TICKETS.md:173` was cited as the unrelated sentence
+  about a gate "applying them literally"; the nine lines inserted for the
+  quoting rule pushed it to `:212`. Following the precedent this ticket already
+  quotes from repo-21 — historical figures stay as measured at the time — the
+  earlier bullet is not rewritten. The claim it makes still holds, and the new
+  location is here.
+- **`Done when` 5's grep is now satisfied by a test, not only by a grep.**
+  `command grep -n quot docs/01-TICKETS.md` returns four lines (101, 103, 105, 108) where it returned nothing at all. A case in `scripts/test/status.test.ts`
+  asserts the same thing, so the sentence cannot be deleted without the suite
+  saying so — which the grep alone could not do. The rule is stated once, in the
+  Fields section, and the wording matches the parser's error on purpose.
+- **`Done when` 6 needed no new test.** "Every ticket in the repo parses, and its
+  dependencies resolve" (`scripts/test/status.test.ts`) already runs the real
+  board through the real parser on every run, and is the regression guard that
+  line asks for. Adding a second would have been a copy to keep true.
+- **Nothing was folded in, and there was one candidate.** The agent preamble in
+  `docs/01-TICKETS.md` still tells an agent to run `npm install` in a fresh
+  worktree, which is minutes and can fail outright when `ffmpeg-static`'s
+  postinstall cannot reach the network; the farm script is the way. Left alone:
+  the preamble is copied verbatim into prompts, the replacement lives under
+  `.claude/scripts/`, which is only partly tracked, and choosing what an agent
+  is told to run is a decision rather than a typo. It belongs in a ticket of its
+  own and is surfaced to the orchestrator rather than taken here.
+- **A cross-reference for whoever holds repo-25**, carried out of the gate
+  record above and not touched here: `scripts/citations.mjs` bounds-checks a
+  range against end of file and nothing else, so a range wrong by 28 lines —
+  this ticket's own, measured today — reports `ok`. Anchor checking proves the
+  range _contains_ the claim, not that it _is_ the claim. `scripts/citations.mjs`
+  was deliberately not opened on this branch.

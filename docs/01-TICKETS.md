@@ -98,6 +98,15 @@ wrong in the brief. This is what a future reader actually needs.
 | `note`       | Optional. What the status view shows instead of the title                     |
 | `difficulty` | Optional. `mechanical` · `standard` · `hard` — how much judgement it needs    |
 
+**A value runs to the end of its line and is taken literally, so quoting one is
+neither required nor permitted.** This is not YAML. A title opening with a
+backtick, or containing quote marks of its own, parses exactly as written; a
+value wrapped in matched `"` or `'` is a named parse error, not a value with
+quotation in it. `status.mjs` used to carry those marks into every render, and
+through `depends_on` into a dangling dependency naming a ticket that exists —
+which failed the board's own CI gate on sound work
+([repo-24](./work/repo-24-quoted-scalars-render-with-quotes.md)).
+
 The id prefix exists so `dl-8` means something in a commit message and in
 conversation, where the directory is not there to disambiguate it.
 
