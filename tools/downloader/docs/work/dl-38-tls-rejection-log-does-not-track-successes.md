@@ -3,7 +3,7 @@ id: dl-38
 tool: downloader
 title: The tiers' TLS-rejection correlation cannot see a concurrent success, only a concurrent failure
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -112,7 +112,165 @@ enrich"`, stays green — a fix here must not regress the case dl-37 built the
   outcome-kind split to protect.
 - `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+**Gate: PASS** — 2026-09-06 · `2bdde22...cad1d56` (tip `cad1d56`, superseding the
+draft pinned to `2bdde22`) · self-run defect hunt at medium depth (reviewer
+subagent, no `code-review` delegate)
+
+Reviewed on `sonnet`; builder ran `opus` — different models, per the skill.
+
+This is the port-keying follow-up requested by the owner after the `2bdde22`
+PASS, against the builder's own recommendation to leave the residual
+documented. The two low findings from the `2bdde22` pass (Log's "8 failures" and
+"five...page.example" claims) were both independently reproduced by the builder
+and corrected in the Log with "this entry first said X, which was wrong because
+Y" — settled, not carried forward as open findings here.
+
+Three `file:line` citations below were re-resolved against tip `cad1d56` by the
+builder before this record was committed and corrected there: the Done-when
+reproduction row (`resolvers.test.ts:222` → `:191`, where `:222` is the
+adjacent over-suppression guard rather than the reproduction), `portFor`
+(`tls-rejections.ts:174` → `:176`), and the query site (`resolvers.ts:159` →
+`:163`). Nothing else was altered. See the Log entry below for the commands.
+
+### dl-38 — Done when (re-verified at cad1d56)
+
+| Done when                                                                            | Proof                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chosen remedy recorded with reasoning in the Log                                     | proven — Log entries for both the original option-2 build and this port-keying follow-up                                                                                                                               |
+| A test reproduces the load-balanced-origin scenario, red before the fix, green after | proven — `resolvers.test.ts:191` (renumbered from the prior pass); mechanism unchanged and still green                                                                                                                 |
+| Existing suite, including the two-genuine-refusals guard, stays green                | proven — ran directly, passing at tip                                                                                                                                                                                  |
+| `npm run check` and `npm test -- --project downloader` pass                          | verified — `npm run check` exit 0; `npm test -- --project downloader` **1050/1050** across 65 files, up from 1041 at the prior tip (+9: 5 port-keying tests + 4 `portFor` tests), matching the builder's count exactly |
+
+### The safety property (angle 1) — attacked, not just read
+
+Builder's claim: narrowing a conflict's key from host to endpoint can only
+shrink the set of recorded outcomes counting against a reattachment, never grow
+it, so `since` reattaches at least as often as before any conflict tracking
+existed.
+
+**Proved by construction, independently of the builder's own framing.** For any
+query `(host=H, port=P, at)`: the new code blocks iff an other-failure or
+success event was recorded at the _exact_ endpoint `(H,P)` inside the window.
+The old (`2bdde22`) code blocked iff such an event was recorded for host `H` at
+_any_ port inside the window (it never distinguished ports at all). Since
+"host=H and port=P" is a strictly narrower condition than "host=H", every event
+that satisfies the new code's block condition also satisfies the old code's — so
+new-blocks ⟹ old-would-have-blocked, and by contraposition, old-reattaches ⟹
+new-reattaches. There is no assignment of events under which the new code
+suppresses a reattachment the old code delivered. This holds independent of the
+LRU eviction policy too: an endpoint-keyed entry can only be evicted _sooner_
+than a host-keyed one would have (more distinct keys sharing the same `max`),
+and an evicted conflict entry only ever removes a suppression, which is the safe
+direction, not a new one.
+
+I did not find a counterexample, and the proof above is why I stopped looking
+for one rather than exhausting a fuzz search.
+
+### Angles 2-8
+
+2. **Cross-port certificate distrust.** Confirmed by reading `record()`/`since()`:
+   the certificate map's key is `key(host)`, untouched by this change, and
+   `since()` looks it up before either conflict check runs.
+   `"a certificate refusal is still carried across ports"`
+   (`tls-rejections.test.ts:386`) passes at tip, and I traced the assertion, not
+   just the name: it records once on the default port and queries both `HTTPS`
+   and `ALT`, both returning the code.
+3. **`portFor` and the default-port case.** `url.hostname` still never carries a
+   port (WHATWG, unchanged from the prior pass). `portFor`
+   (`tls-rejections.ts:176`, exported) returns `Number(url.port)` when explicit,
+   else `443`/`80` by scheme. Both `record*` call sites (`egress-proxy.ts`, via
+   `parseAuthority`, which always yields an explicit numeric port) and the query
+   site (`resolvers.ts:163`, via `portFor`) end up with the identical number for
+   an ordinary default-port URL — confirmed by the four `portFor` unit tests
+   (`tls-rejections.test.ts:429,433,437,444`) and by the "a success on :443 still
+   suppresses it for the caller that asked about :443" test, which only passes if
+   both sides agree.
+4. **The rewritten "two ports are two entries" test.** Confirmed it is
+   falsifiable and not vacuous: reproduced the described mutation
+   (`endpoint→key`) and this exact test fails (`tls-rejections.test.ts:403`,
+   `expected undefined to be 'DEPTH_ZERO_SELF_SIGNED_CERT'`) — under the old
+   host-keyed behavior, `max:1` would leave one shared entry for both ports and
+   both queries would be suppressed, which is a _different_ wrong answer than
+   what the mutation actually produces, but still proves the test can fail. Good
+   replacement.
+5. **Mutation reproduced exactly.** 3/5 new port tests fail with `key(host)`
+   substituted for `endpoint(host,port)` (signatures intact); the other 2 pass in
+   both states, confirmed by name and by output — see my message to the builder
+   for the full transcript.
+6. **`|` vs `:` separator.** Agree with the choice — see message to builder. Not
+   over-engineering: one function (`endpoint`) is the sole constructor on both
+   the recording and query sides, so no ambiguity is reachable today, and the
+   separator only matters if these keys are ever surfaced for humans later, at
+   which point `|` avoids the IPv6-colon collision for free.
+7. **Repo invariants.** No new logging, no new `AppError` codes, no shell
+   invocation. `redactUrl`/`AppError` usages in the touched files are all
+   pre-existing and untouched by this diff.
+   `vitest.config.ts`/`version.txt`/`CHANGELOG.md`/`.release-please-manifest.json`
+   untouched (`git diff --name-only 2bdde22...cad1d56`: only the four `src`
+   files, three `test` files, and the ticket `.md`).
+8. **Positive control.** The `endpoint→key` mutation above is a real positive
+   control: it produces exactly the 3 failures the builder predicted, in the
+   exact assertion shape predicted, confirming the harness catches the
+   regression this change exists to prevent.
+
+### Disclosed gaps, left as disclosures (not findings)
+
+No test drives two genuinely concurrent probes through a real load-balanced
+origin, and none drives one hostname on two real ports end-to-end through a
+tier — both port cases are proven at `TlsRejectionLog` and the proxy hooks, not
+through a live browser. Consistent with the same limitation already accepted for
+the base dl-38 change and for dl-37 before it.
+
+### Findings
+
+- **findings** · self-run hunt at medium depth returned 0 new findings at this
+  tip; the 2 low findings from the `2bdde22` pass are settled (reproduced and
+  corrected by the builder) and are not carried forward.
+
+NFR sweep: security ✓ (no new logging or credential-bearing data) · performance
+n/a (same O(1) map operations, one more derived string) · reliability ✓ (the
+safety property is the whole point and is proven, not just asserted) ·
+maintainability ✓ (the header's new "asymmetry" section is clear about which map
+answers which question).
+
 ## Log
+
+- **2026-09-06** — Gate record committed and `status` moved to `done`. The gate
+  is `## Review` above; it passed at `cad1d56` and supersedes its own draft
+  pinned to `2bdde22`, so there is one subsection rather than two.
+
+  **Three of its eight `file:line` citations did not resolve against the tip and
+  were corrected before committing**, per this repo's rule that a gate record's
+  citations are re-resolved rather than trusted — the record is committed
+  verbatim in every other respect, and the corrections are named in it rather
+  than made silently:
+
+  | cited                   | resolves to at `cad1d56`                                            | corrected to |
+  | ----------------------- | ------------------------------------------------------------------- | ------------ |
+  | `resolvers.test.ts:222` | `"a success on another host leaves the reattachment alone (dl-38)"` | `:191`       |
+  | `tls-rejections.ts:174` | a line of header prose                                              | `:176`       |
+  | `resolvers.ts:159`      | `if (!REATTACHABLE_CODES.has(error.code)) throw error;`             | `:163`       |
+
+  The first is the one that mattered: it sits in the Done-when row for the
+  load-balanced reproduction, and `:222` is the **adjacent over-suppression
+  guard** rather than the reproduction — so the row would have cited a real
+  passing test that does not prove the line it was filed against. The other two
+  are drift of two and four lines, the latter exactly the import plus
+  three-line comment this branch added above the call. Settled by
+  `sed -n 222p`, `sed -n 174p`, `sed -n 159p` against the tip and by
+  `grep -n` for each intended target; the reviewer was told the numbers and the
+  commands.
+
+  Two further claims in the reviewer's covering message, neither of which
+  reached the record: its file-scope check
+  (`git diff --name-only 2bdde22 cad1d56` → four `src`, three `test`, one `.md`)
+  reproduces exactly, and its "the only removed lines are template-literal
+  formatting" does not — the diff removes the old hook signatures, the old
+  bare-host assertions and the old two-argument calls. Every one of them is
+  replaced rather than dropped, so the conclusion it was drawn for (no coverage
+  silently deleted) holds; only the sentence is wider than what it checked.
 
 - **2026-09-05** — Port-keying follow-up, after the gate passed and the owner
   read the residual the entry above disclosed. **The owner chose to fix it here
