@@ -61,7 +61,7 @@ causes, all real-world, none of them rendered:
    `AUDIO` group and picks a rendition from it
    ([`manifest/hls.ts:436-439`](../../resolvers/src/manifest/hls.ts)), then puts its
    language on the variant. `MediaVariant.language` exists in the contract
-   ([`media.ts:107`](../../contract/src/media.ts)) — **and nothing in `web/src`
+   (`contract/src/media.ts:142` "language?: string | undefined;") — **and nothing in `web/src`
    ever reads it.** The only `.language` in the UI is for subtitle tracks. It is
    also the one field in that contract block carrying no doc comment, which is
    the tell: it was added and never wired to anything.
@@ -69,7 +69,7 @@ causes, all real-world, none of them rendered:
    `EXT-X-STREAM-INF` entries with identical attributes and a different URI. Only
    `url` differs, and `url` is never shown.
 3. **Different codec profiles.** `shortCodec`
-   ([`web/src/lib/variants.ts:26`](../../web/src/lib/variants.ts)) maps on the
+   (`web/src/lib/variants.ts:53` "function shortCodec") maps on the
    family prefix, so `avc1.4d401f` (Main) and `avc1.64001f` (High) both render as
    `H.264`.
 
@@ -144,6 +144,126 @@ them — but it must be a decision, not a side effect. Two honest ways to take i
   manifest actually declared, and the comment explaining what happened to the
   others is in the code.
 - `npm run check` and `npm test -- --project downloader` pass.
+
+## Review
+
+### Gate: PASS — 2026-09-06 · `6061bc6` (read as the full `7bb3b62 → effeb02 → 6061bc6` sequence, not restarted) · Sonnet reviewer against an Opus build · own defect hunt, no `code-review` dispatch
+
+**No high or med findings. Two low findings, both pre-existing, neither blocking.**
+
+**What it ran, independently of the builder's numbers.**
+`worktree-farm.sh` then `npm run build` at `6061bc6`, clean. `npm run check` exit 0,
+"verified by reading the tsc --build output, not just the exit code".
+`npx vitest run --project downloader` — **68 files / 1093 tests / 0 failures**,
+matching the builder's number exactly. `node scripts/status.mjs --json` exit 0,
+with the JSON parsed by hand to confirm `dl-45.depends_on = ["dl-40"]` resolves
+and dl-40 is `done` — not dangling.
+
+**Positive controls — it built its own mutants rather than running the builder's,
+and reproduced all four red-run claims plus both rung-mutant claims.**
+
+1. Tier dedup reverted to `unsorted` → 3 red in `ytdlp.test.ts` (39/42 pass), the
+   exact tests asserting 10 URLs / 10 variants.
+2. Codec pass replaced with a no-op → `two profiles of one rung stop rendering as
+the same H.264` fails with `collapsed` reading 1 instead of 0. "Matches
+   'Baseline eaten by High' exactly."
+3. `showLanguage` forced false → the per-language test fails with `collapsed` 2
+   instead of 0, and the DOM test drops from 4 radios to 2. "Matches 'loses half
+   its rows' exactly."
+4. Both rung mutants, **written independently and not textually identical to the
+   builder's**: "assumes pairs" implemented as _collapse only if
+   `group.length === 2`_ → **exactly 3 failures**, all attributable to the
+   three-mirror rung not collapsing; "only collapses what it saw more than once"
+   implemented as _drop any group of length 1_ → **exactly 7 failures**,
+   including `pickDefaultVariantId` returning `null` for the ordinary-ladder
+   fixture. Both counts match the Log entry. Its conclusion: "strong independent
+   confirmation the varying-mirror-count fixture (3,2,2,1,2) really does exercise
+   both extremes, not just one."
+
+All temporary edits reverted, `git status --short` clean before each next check.
+
+**Security sweep, from a needle list it built itself.** It read the peer's
+artifacts directly (read-only, nothing written there, nothing quoted) and
+extracted **28 needles of its own** — both hostnames, the video id, title,
+uploader and uploader id, five path tokens, a segment name, the shared numeric
+id, the signed-URL values, five content hashes and five hex path tokens. Swept
+every tracked file at `6061bc6`, the full `main...6061bc6` diff, and every commit
+subject and body: **0 hits**. It confirmed independently that the `expire=`
+remaining in the tree is in `youtube-like.json`, untouched by this branch and
+carrying an invented host. It also checked `balancer-duplicate-ladder.json`'s
+field set against the real capture's — 8 top-level and 13 format keys against
+dozens — and found that "consistent with your allowlist claim rather than a
+stripped copy". Net: "I agree with your 0-hit result, from a differently-built
+needle list."
+
+**The doc-comment correction.** Both empirical claims re-run: the fixture
+`LANGUAGE` counts (`en`×5, `fr`×2, `eng`×1, `fra`×1) by its own `grep -rn` and
+hand count, and `Intl.getCanonicalLocales("eng")` → `['en']` on this container.
+Both match. On the `showLanguage` raw-string caveat the builder flagged for
+attack: "a documented, reasoned trade rather than a defect — no fixture or the
+reported capture exercises it, normalizing on spec would mean picking a mapping
+nobody asked for, and the failure mode is 'extra column' not 'lost rendition'…
+it's a caveat correctly labeled as a caveat." Not carried as a finding.
+
+**The dedup key, attacked as invited — no finding.** It enumerated all 17
+`MediaVariant` fields and reasoned that a key of "whole variant except `id`"
+includes `url`, so it is **strictly more conservative** than a URL-only key: it
+"can never merge two things a URL-only dedup wouldn't already have merged", and
+it refuses the video-only/audio-only-sharing-a-URL case (test verified). It then
+hunted the one false-negative that key could have — two formats that are the same
+stream but disagree on another mapped field, `label` being the candidate since it
+falls back to `format_id` — and closed it by reading `buildLabel`: that fallback
+fires only with no height, no codecs, no duration and no bitrate or filesize,
+which does not happen for HLS renditions carrying `RESOLUTION`/`CODECS`, and does
+not happen in the fixture (checked entry by entry). Verdict: "implementing the
+owner's 'dedup exact duplicates' instruction at a stricter, safer granularity,
+not narrowing it — a URL key and this key produce identical output on every
+fixture in this branch, and they diverge only in the direction that protects
+data".
+
+**Finding 1 (low) — `media.ts:107` in the Why prose does not point at
+`MediaVariant.language`.** Established as **already stale on `main`**
+(`git show main:…/media.ts | grep language` → 121), so not broken by this branch;
+but the branch's own +21-line edit to that file pushed the true location further
+away, and fixing it was one line free while already there.
+
+**Finding 2 (low) — `web/src/lib/variants.ts:26` does not point at
+`shortCodec`.** Same situation: already wrong on `main` (line 40 there), pushed
+further by this branch's `VariantRow` field additions. Neither finding was made a
+condition of PASS; both flagged "so the record is accurate".
+
+**Both accepted and fixed** at `media.ts:142` and `web/src/lib/variants.ts:53`, and both now
+carry anchor text so `citations.mjs` checks them instead of printing them for a
+human — `3 verified, 0 moved, 0 unresolvable`.
+
+> **Builder's note on the two coordinates, added rather than silently corrected.**
+> The findings are right and the fix is theirs. The _quoted resolutions_ did not
+> reproduce here: at `6061bc6` — and at `effeb02` and at `main` — `media.ts:107`
+> is `container?: string | undefined;`, not `hasAudio?: boolean | undefined;`,
+> and `web/src/lib/variants.ts:26` is `videoCodec: string;`, not `quality: string;` (which is
+> line 24). Nothing turns on it: both citations were stale either way, which is
+> the finding. It is recorded because a coordinate in a gate record is read as
+> evidence by whoever comes next.
+
+**Acceptance — every `Done when` line, none unproven.**
+
+| Done when                                                    | Verdict      | Proof                                                                                                                                                                                                                     |
+| ------------------------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Log names the differing field                                | **verified** | The "step 1 is answered" entry — the field is the hostname. Cross-checked against the fixture headers and the yt-dlp fixture design, both consistent.                                                                     |
+| Indistinguishable rows, real master-playlist fixture         | **proven**   | `resolvers/test/hls.test.ts` (mirror fixture, ffmpeg-emitted) + `web/test/presentation-helpers.test.ts` "mirrors of a rendition collapse to one row, whatever the mirror count" + `ytdlp.test.ts` for the two-tier shape. |
+| Single-language non-redundant video renders as it does today | **proven**   | "an ordinary ladder renders exactly as it did before any of this" over Apple's real five-rung ladder, plus the DOM-level equivalent in `variant-table.test.tsx`.                                                          |
+| Chosen row's `url` was declared, and the comment is in code  | **proven**   | "the row that survives a collapse is one the manifest declared", asserted against the fixture's own declared order; comment block at the collapse site in `lib/variants.ts`.                                              |
+| `npm run check` and `npm test -- --project downloader` pass  | **verified** | Both re-run by the reviewer at `6061bc6`: exit 0, and 68 files / 1093 tests / 0 failures.                                                                                                                                 |
+
+**Siblings.** dl-43: recorded not implemented — `status: ready`, no `## Review`,
+and no path under any package's `src/` in its diff. dl-45: `work-package`,
+`ready`, `depends_on: [dl-40]`, `hard`, non-dangling.
+
+**Nothing escalated.** The one place the two accounts first differed was the
+"assumes pairs" mutant — the reviewer's first pass reported 5 failures across 3
+files against the builder's 3, and narrowing to `presentation-helpers.test.ts`
+alone made the counts agree exactly. Recorded as an artifact of test selection,
+not a disagreement.
 
 ## Log
 
@@ -393,3 +513,30 @@ them — but it must be a decision, not a side effect. Two honest ways to take i
   manifest has been observed, here or in the reported capture. Fixing it on
   speculation would mean picking a normalisation for a case nobody has seen; the
   caveat is recorded on the contract field instead.
+
+- **2026-09-06 — where the answer came from, both halves.** Step 1 was answered
+  by a **peer session's live probe** of the reported video, not by anything run
+  in this worktree — the owner had opened the container's egress from the host,
+  and the peer captured the master playlist and a `yt-dlp -J` dump. **Every claim
+  in this ticket was then re-derived here from those artifacts rather than
+  transcribed**: the stream and rendition counts, the per-rung attribute
+  identity, the URL decomposition, and the format/URL multiplicity, all with
+  scripts that print derived facts only so no host or URL reached a terminal.
+  The strongest of them is one the peer did not run — this repo's own
+  `mapYtDlpInfo` over the capture, which is what established that `id` is the
+  only field differing inside a duplicated pair, and which is what the dedup key
+  was chosen on. A reader deciding how much to trust the cause should know both
+  halves: the evidence came from outside this worktree, and none of it is taken
+  on report.
+
+- **2026-09-06 — two citations in the Why prose were stale, and are corrected
+  here.** `media.ts:107` and `web/src/lib/variants.ts:26` pointed at
+  `MediaVariant.language` and `shortCodec`. **Both were already wrong on `main`
+  before this branch existed** — on `main` the field was at `media.ts:121` and
+  `shortCodec` at `web/src/lib/variants.ts:40` — so this is not something the branch broke.
+  It is something the branch made worse: the diff edits both of those files and
+  pushed the true locations further away (to `media.ts:142` and
+  `web/src/lib/variants.ts:53`), and leaving a pointer into a file this branch moved is a
+  cost to the next reader. Both are repointed and now carry anchor text, so
+  `node scripts/citations.mjs` checks them rather than printing them for a human
+  to judge — which is what stops the same silent drift next time.
