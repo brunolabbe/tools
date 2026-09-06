@@ -52,6 +52,12 @@ export function JobCard({
   // the `downloading → probing` back-edge exists. See `statusHighWaterMark`.
   const currentStep = statusIndex(job.status);
   const furthestStep = statusHighWaterMark(job, watchedStep ?? 0);
+  // dl-41: once a job is completed the preview leaves the head for the result
+  // panel, so a finished card shows the image once, beside the filename it now
+  // labels. This is the same expression the `CompletedResult` render below is
+  // guarded by, so the preview is in one place or the other — never in both,
+  // and never in neither.
+  const previewInResult = job.status === "completed" && job.result !== null;
 
   return (
     <li className={`job job--${job.status}`}>
@@ -60,7 +66,7 @@ export function JobCard({
             `space-between`, and this must be additive — a job from before dl-29,
             or one whose probe found no image, renders exactly as it did. */}
         <div className="job__headline">
-          <Preview path={job.thumbnailPath} size="card" />
+          {!previewInResult && <Preview path={job.thumbnailPath} size="card" />}
           <div className="job__titles">
             <h3 className="job__title">{title}</h3>
             <p className="muted url-echo">{job.sourceUrl}</p>
@@ -145,7 +151,7 @@ export function JobCard({
       )}
 
       {job.status === "completed" && job.result && (
-        <CompletedResult result={job.result} now={now} />
+        <CompletedResult result={job.result} thumbnailPath={job.thumbnailPath} now={now} />
       )}
 
       {job.status === "failed" && job.error && (
@@ -170,25 +176,40 @@ export function JobCard({
 
 function CompletedResult({
   result,
+  thumbnailPath,
   now,
 }: {
   result: NonNullable<Job["result"]>;
+  /** Required, not optional — `undefined` is a job recorded before dl-29. */
+  thumbnailPath: string | null | undefined;
   now: number;
 }): React.JSX.Element {
   const expiry = formatExpiry(result.expiresAt, now);
 
   if (expiry.expired) {
+    // No preview on this branch, and it costs nothing: an expired file is at
+    // least six hours old, the thumbnail's bytes live ten minutes, so `Preview`
+    // would render null here in every real case anyway.
     return <ErrorPanel error={localErrorPayload("FILE_EXPIRED")} />;
   }
 
   return (
     <div className="result">
-      <div className="result__meta">
-        <p className="result__filename">{result.filename}</p>
-        <p className="muted">
-          {formatBytes(result.sizeBytes)} · {result.container.toUpperCase()}
-          {result.durationSec !== null ? ` · ${formatDuration(result.durationSec)}` : ""}
-        </p>
+      {/* Grouped with the meta rather than added as a third child of `.result`,
+          which is `space-between` — a bare child would land between the meta and
+          the actions and push the filename into the middle of the row. Same
+          reason as `card__headline` and `job__headline`. `result__headline`
+          collapses to just the meta when `Preview` renders null, so the panel of
+          a job with no `og:image` is exactly what it was. */}
+      <div className="result__headline">
+        <Preview path={thumbnailPath} size="card" />
+        <div className="result__meta">
+          <p className="result__filename">{result.filename}</p>
+          <p className="muted">
+            {formatBytes(result.sizeBytes)} · {result.container.toUpperCase()}
+            {result.durationSec !== null ? ` · ${formatDuration(result.durationSec)}` : ""}
+          </p>
+        </div>
       </div>
       <div className="result__actions">
         <a className="button button--primary" href={result.downloadUrl} download={result.filename}>
