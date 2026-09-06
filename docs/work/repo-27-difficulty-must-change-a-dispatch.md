@@ -3,7 +3,7 @@ id: repo-27
 tool: repo
 title: A difficulty rating changes no dispatch, and hard cannot keep its own promise
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -172,6 +172,57 @@ Two specific things a trial has to settle, neither of which is guessable:
    `.md`.
 7. `npm run status -- --show repo-27` parses and `npm run status -- --json`
    exits 0.
+
+## Review
+
+Gated 2026-09-06 by `ticket-reviewer` on **Sonnet 5**, against `58d8047`
+(`origin/main...58d8047`, both commits). Built by an **Opus 5** orchestrator
+working directly rather than through a dispatched builder, so the
+model-difference rule held. Verdict **CONCERNS**, both carried findings fixed in
+the commit that carries this record.
+
+| #   | Done when                                                                                            | Test                                                                                                                            |
+| --- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `hard` maps to `opus`, and the file says why                                                         | `.claude/agents/builder.md:25 "Pinned rather than inherited"`, and the paragraph at `:39`                                       |
+| 2   | step 4 no longer implies a `hard` ticket is built on Sonnet                                          | `.claude/skills/orchestrate-tickets/SKILL.md:133 "never on a"` — the new exclusion clause                                       |
+| 3   | `standard` and `absent` unchanged, nothing claims a `standard` builder runs Sonnet                   | `git diff 48e9479..58d8047 -- .claude/agents/builder.md` empty; repo-wide grep for a standard/sonnet pairing empty              |
+| 4   | the decision recorded, both halves, with the reason the second waits                                 | this ticket, _The decision, and its answer_                                                                                     |
+| 5   | step 4's `resolvedModel` claim corrected, task-file route named, measured distinguished from relayed | `.claude/skills/orchestrate-tickets/SKILL.md:86 "does not reach"` and the routes passage at `:114`                              |
+| 6   | `npm run check` passes, `npm run format` run over changed `.md`                                      | exit 0; `.claude/` is oxfmt-ignored repo-wide, so `npx oxfmt --check docs/work/repo-27-*.md` is the formattable half and passes |
+| 7   | `--show repo-27` parses, `--json` exits 0                                                            | both exit 0                                                                                                                     |
+
+**Findings, 3 raised, 2 carried, 1 dropped.**
+
+- **med — the ticket said `status: ready` while every Done-when line was already
+  satisfied by the commit under review. Fixed.** The consequence was live, not
+  paperwork: `npm run status -- --ready | grep repo-27` listed this ticket as
+  unclaimed work, so another builder could have picked it up and rebuilt it. The
+  convention it broke is CLAUDE.md's _"Move a ticket to `done` by editing the
+  ticket, in the commit that earns it"_, and the gate cited three precedents that
+  do exactly that in their landing commit (`36be01b`, `d6d201e`). **Reproduced
+  before fixing**: the `--ready` line and `git show 36be01b -- 'docs/work/repo-22*.md'`
+  showing `-status: ready` / `+status: done`.
+
+- **low — "~94% of the bill" read as freshly measured. Fixed.** It sat one
+  sentence after a `Measured 2026-09-06` claim with no citation of its own, and
+  the figure is repo-17's, measured 2026-09-01. Now attributed inline.
+  **Reproduced**: the string exists in `repo-17`'s Log and now carries its attribution at `.claude/skills/orchestrate-tickets/SKILL.md:114 "repo-17 measured on 2026-09-01"`, and
+  nothing on this branch re-measured it.
+
+- **dropped — bold-vs-italic in a quotation.** `builder.md` renders SKILL.md's
+  `*you*` as `**you**` inside a quote that is itself italicised, where nesting a
+  single asterisk is not representable. The words match exactly. The gate raised
+  it and dropped it itself, correctly.
+
+**What the gate could not verify, stated rather than glossed.** It confirmed the
+model half of the `resolvedModel` measurement by reporting its own identity as
+`claude-sonnet-5`, matching a dispatch that passed `model: "sonnet"`. It could
+not reproduce the 182-record count: a subagent has no `Agent` tool to nest a
+dispatch, and when it went looking for its own transcript under
+`~/.claude/projects/` it found a different conversation entirely. **That failure
+is itself the useful result** — it establishes the task-output-file route belongs
+to the dispatcher and not to the agent being measured, which is now stated in
+`SKILL.md` rather than left for the next reader to rediscover.
 
 ## Log
 

@@ -111,7 +111,11 @@ you are there.
    that prints aggregates** — it is the full subagent transcript, and the tool
    result's "do not read this" is a warning about your context, not a seal. That
    same file carries `cache_read_input_tokens` per request, which is the half
-   `subagent_tokens` omits and ~94% of the bill. The first two routes remain
+   `subagent_tokens` omits — and which repo-17 measured on 2026-09-01 at ~94% of
+   the bill, not a figure re-measured here. **It is the dispatcher's route, not
+   the subagent's**: a subagent cannot read its own, and the file named for its
+   session id under `~/.claude/projects/` is a different conversation
+   altogether — found the hard way by this branch's own gate, which went looking. The first two routes remain
    relayed and unverified here — Claude Code's behaviour, not this tree's. The gate's half was never in doubt:
    [`.claude/agents/ticket-reviewer.md`](../../agents/ticket-reviewer.md) pins
    `model: sonnet` in its frontmatter, so it is a file read. The builder's half is
