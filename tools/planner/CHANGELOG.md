@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0](https://github.com/brunolabbe/tools/compare/planner-v0.4.0...planner-v0.5.0) (2026-09-06)
+
+
+### Features
+
+* **planner:** find what is worth stopping for along a leg (pl-29) ([#102](https://github.com/brunolabbe/tools/issues/102)) ([98b5e61](https://github.com/brunolabbe/tools/commit/98b5e61ee698e3a80508a393bec9f358d49b20cf))
+
+
+### Fixes
+
+* **planner:** attribute geocoded places, and take provenance off the model (pl-36) ([#121](https://github.com/brunolabbe/tools/issues/121)) ([25ee1c7](https://github.com/brunolabbe/tools/commit/25ee1c7ec05b4d7c08c5d60599908c98e6ba7e18))
+* **planner:** capture a real Overpass payload, and wire up notability (pl-33) ([#119](https://github.com/brunolabbe/tools/issues/119)) ([80bfc64](https://github.com/brunolabbe/tools/commit/80bfc64b08343096fc13b87f4fc6de6c889331eb))
+* **planner:** choose among the geocoder's results instead of trusting the first (pl-34) ([#117](https://github.com/brunolabbe/tools/issues/117)) ([7a12b8b](https://github.com/brunolabbe/tools/commit/7a12b8bb49778e78d4db5da21049ce6c247a4117))
+* **planner:** ground a place against the trip it belongs to (pl-37) ([#127](https://github.com/brunolabbe/tools/issues/127)) ([f5d5a0e](https://github.com/brunolabbe/tools/commit/f5d5a0ef236f1f43fc7874516a07227bdf34f5e9))
+* **planner:** hold locate to a real Nominatim payload, closing pl-28 and pl-30 ([#104](https://github.com/brunolabbe/tools/issues/104)) ([1357007](https://github.com/brunolabbe/tools/commit/135700775675062c9ad4a93d5ee4fce4c5c80587))
+
 ## [0.4.0](https://github.com/brunolabbe/tools/compare/planner-v0.3.0...planner-v0.4.0) (2026-08-23)
 
 
