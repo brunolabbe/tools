@@ -118,6 +118,22 @@ export interface MediaVariant {
   /** True when `filesizeBytes` was derived from bitrate × duration rather than measured. */
   filesizeIsEstimate?: boolean | undefined;
 
+  /**
+   * The language of the audio this rendition carries, when the source named one
+   * — the `LANGUAGE` of the `EXT-X-MEDIA` rendition its `AUDIO` group points at,
+   * or yt-dlp's `language` on the format. Absent otherwise, which is the common
+   * case: a manifest with no audio groups declares no language at all.
+   *
+   * **Spelled as the source spelled it, and the two spellings are not
+   * normalised.** `LANGUAGE` is RFC 5646, so `en` and `eng` are both legal and
+   * both occur; nothing here maps one onto the other, and a consumer comparing
+   * two variants is comparing what two packagers wrote.
+   *
+   * The picker renders it **only when two variants disagree on it** (dl-40).
+   * That is not cosmetic: a ladder declared once per audio language is otherwise
+   * several identical rows per rung, and a single-language video given a
+   * Language column is a column of identical cells.
+   */
   language?: string | undefined;
   /** Presentation string for the picker, e.g. "1080p60 · H.264 + AAC · ~420 MB". */
   label: string;

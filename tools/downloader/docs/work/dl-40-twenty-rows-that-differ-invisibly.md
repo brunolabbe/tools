@@ -255,7 +255,12 @@ them — but it must be a decision, not a side effect. Two honest ways to take i
   shape the reported manifest turns out to be, so it waits on the same URL. The
   doc comment missing from `MediaVariant.language` — the tell this ticket was
   filed on — is likewise not added yet, because it is a `contract` edit and the
-  branch it belongs to is the one still open.
+  branch it belongs to is the one still open. _(Both settled later the same day:
+  step 3 below, and the doc comment written once the picker actually read the
+  field — this branch is what wired it up, so documenting it is work this branch
+  made free rather than a deferral. It says what the field means, that `en` and
+  `eng` are both legal and are not normalised, and that the picker shows it only
+  when two variants disagree.)_
 
 - **2026-09-06 — step 1 is answered, by a live probe. The field that differed is
   the hostname.** Within a rung the entries agree on every attribute
@@ -288,8 +293,23 @@ them — but it must be a decision, not a side effect. Two honest ways to take i
   route than the one it was argued on.
 
   Nothing identifying the video, its site or its hosts is recorded here or in any
-  fixture, deliberately. The captured artifacts carry a signed URL, which this
-  repo treats as a credential, and are not committed.
+  fixture, deliberately. The captured artifacts are not committed: **the
+  `yt-dlp -J` capture carries a signed URL**, whose credential and expiry sit
+  in its query string, which this repo treats as being as sensitive as a cookie. Where that credential sits was relayed to me
+  as "the master playlist carries it", and it does not — the master's stream URIs
+  carry a single, ordinary query key. Both files are handled the same way, so
+  nothing turned on it; it is corrected here because a premise like that survives
+  by never being re-derived. A sweep over every tracked file, the whole branch
+  diff and its commit messages, for both hosts, every path segment and every
+  identifying field of the capture, returns nothing.
+
+  **I did not re-probe, and so I cannot say whether the network is still open.**
+  The artifacts answered every question and a second live fetch would only have
+  made another copy of a credential. A later reader wanting to know whether
+  egress was available when this landed should read this as "it was not needed",
+  not as a yes that has since gone stale. I also did not check whether the
+  balancer returns the same mirror hosts on repeated calls: nothing here depends
+  on it, which is exactly why the fixture varies the mirror count.
 
 - **2026-09-06 — both fixes land here, on the owner's confirmed decision.** A
   web-only collapse would have hidden the duplicates from the picker and left

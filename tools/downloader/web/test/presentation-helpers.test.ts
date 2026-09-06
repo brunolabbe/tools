@@ -201,6 +201,17 @@ describe("renditions that differ only in what the table cannot show (dl-40)", ()
     // 3 + 2 + 2 + 1 + 2 declared, five rows kept. The rung with a single mirror
     // has to survive untouched, and the one with three has to lose two.
     expect(collapsed).toBe(5);
+
+    // And the single-mirror rung is *reached*, not merely present in the
+    // fixture: it is the one rung the collapse must leave completely alone, and
+    // the row it produces has to be that exact variant.
+    const lonely = declared.filter((item) => item.height === 240);
+    expect(lonely).toHaveLength(1);
+    expect(rows.find((row) => row.height === 240)?.id).toBe(lonely[0]?.id);
+
+    // The three-mirror rung is the other end of the same claim.
+    expect(declared.filter((item) => item.height === 720)).toHaveLength(3);
+    expect(rows.filter((row) => row.height === 720)).toHaveLength(1);
     // Nothing declared a language, so a column of five empty cells would be
     // worse than no column.
     expect(showLanguage).toBe(false);
