@@ -113,14 +113,14 @@ the pointer — **could not falsify** the claim that nothing was lost. Generated
 regions byte-identical, markers intact, `--check` verified in both directions,
 1168 tests confirmed correct for the base, line counts exact.
 
-| #   | Finding                                                                                | Disposition                                                                                       |
-| --- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| 1   | The ffmpeg-TLS gap survived only in **closed** `dl-14`, so nothing open tracked it     | **Fixed** — [dl-19](../../tools/downloader/docs/work/dl-19-ffmpeg-verifies-tls.md) filed, `ready` |
-| 2   | `docs/02-DEPLOYMENT.md:256` still cited the page for the limiter's scope               | **Fixed** — consequence inline, links `dl-6`'s Log                                                |
-| 3   | `dispatcher.ts` / `guarded-fetch.ts` cited `docs/work/dl-*`, which resolves to nothing | **Fixed** — repo-root-relative                                                                    |
-| 4   | ADR 003 said two facts had no other home; three did                                    | **Fixed** — third row added, `01-ARCHITECTURE.md`                                                 |
-| 5   | ADR 003 **replaced** its "roughly eight" estimate instead of annotating it             | **Fixed** — estimate restored verbatim, outcome annotated beneath                                 |
-| 6   | The planner's page hand-wrote "thirty-seven commits"; it was 39                        | **Fixed** — number removed, not corrected                                                         |
+| #   | Finding                                                                                                            | Disposition                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| 1   | The ffmpeg-TLS gap survived only in **closed** `dl-14`, so nothing open tracked it                                 | **Fixed** — [dl-19](../../tools/downloader/docs/work/dl-19-ffmpeg-verifies-tls.md) filed, `ready` |
+| 2   | `docs/02-DEPLOYMENT.md:278` "The scope of that, and the shared store" still cited the page for the limiter's scope | **Fixed** — consequence inline, links `dl-6`'s Log                                                |
+| 3   | `dispatcher.ts` / `guarded-fetch.ts` cited `docs/work/dl-*`, which resolves to nothing                             | **Fixed** — repo-root-relative                                                                    |
+| 4   | ADR 003 said two facts had no other home; three did                                                                | **Fixed** — third row added, `01-ARCHITECTURE.md`                                                 |
+| 5   | ADR 003 **replaced** its "roughly eight" estimate instead of annotating it                                         | **Fixed** — estimate restored verbatim, outcome annotated beneath                                 |
+| 6   | The planner's page hand-wrote "thirty-seven commits"; it was 39                                                    | **Fixed** — number removed, not corrected                                                         |
 
 One deleted token had no home and stays that way: Phase 0's evidence commit
 `5ab843f`, covered by `02-ROADMAP.md`'s Phase 0 section.

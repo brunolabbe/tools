@@ -3,7 +3,7 @@ id: repo-23
 tool: repo
 title: The deployment page reads as downloader-only for 286 lines before it is repo-wide
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -11,7 +11,8 @@ difficulty: standard
 
 # repo-23 — `02-DEPLOYMENT.md` reads as downloader-only for 286 lines
 
-**Files:** `docs/02-DEPLOYMENT.md`, and nothing else.
+**Files:** `docs/02-DEPLOYMENT.md`, and nothing else. **This constraint was
+widened after filing, by the repo owner and not by a builder — see the Log.**
 
 **Startable — no open decision.** There is one sensible remedy and it is named
 below; the two alternatives were considered and are wrong, with reasons, so that
@@ -204,6 +205,30 @@ Reviewer: Sonnet 5 (`claude-sonnet-5`), verbatim from my system prompt. Builder 
 
 One low finding, no med or high. PASS per the rubric.
 
+## Review
+
+**Gate: PASS** — 2026-09-05 · `origin/main...HEAD` (`4a4cc4f...c642d25`) · own defect hunt at medium depth (ticket-reviewer has no `code-review`/`Skill` tool)
+
+Reviewer: Sonnet 5 (`claude-sonnet-5`). Builder ran Opus (explicit `model: "opus"`, per dispatch). Different models, confirmed.
+
+| Done when                                               | Proof                                                                                                                                                                                        |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Signpost lands before `## Shape`                     | **verified** — `awk '/^## Shape/{exit} /worked example/{f=1} END{exit !f}' docs/02-DEPLOYMENT.md` exits 0 at c642d25, exits 1 at origin/main (positive control)                              |
+| 2. Points forward to the two-tool section (≥2 mentions) | **verified** — `command grep -c 'Adding the second tool' docs/02-DEPLOYMENT.md` → 2                                                                                                          |
+| 3. Nothing moved or split (no removed heading)          | **verified** — `git diff origin/main...HEAD -- docs/02-DEPLOYMENT.md \| command grep '^-## '` prints nothing, exits 1                                                                        |
+| 4. Still repo-root, still repo-wide                     | **verified** — `test -f docs/02-DEPLOYMENT.md && test ! -e tools/downloader/docs/02-DEPLOYMENT.md` exits 0; `command grep -c '^## Grounding the planner' docs/02-DEPLOYMENT.md` → 1          |
+| 5. Planner still leads                                  | **verified** — planner 32, downloader 24 (`command grep -oi planner\|downloader docs/02-DEPLOYMENT.md \| wc -l`), matches Log exactly                                                        |
+| 6. `npm run check`/`format`/`status.mjs` clean          | **verified** — `check` exit 0, `format` leaves `git status --porcelain` empty, `status.mjs --json` → `problems: []`, `repo-23` at `status: done`                                             |
+| 7. This ticket's own citations resolve at `c37cab9`     | **verified** — `node scripts/citations.mjs docs/work/repo-23-*.md --rev c37cab9` → 0 moved, 0 unresolvable, exit 0 (25 unanchored — expected, that section carries no anchor text by design) |
+
+- **verified** · the two repointed, now-anchored citations (repo-1 → `docs/02-DEPLOYMENT.md:278`, dl-32 → `:155`) actually catch drift, not just pass today: injecting one line at the top of `docs/02-DEPLOYMENT.md` turns both `ok` → `MOVED`; restoring turns both back. Reproduces the builder's own disclosed probe.
+- **verified** · the `:271`/`:278` correction to the orchestrator's brief is right: `git show 022dfff:docs/02-DEPLOYMENT.md | sed -n '256p'` and `sed -n '278p'` on this branch are byte-identical; `origin/main`'s own line 256 was already the unrelated scrub-bar-drag sentence, matching this branch's line 271. The builder corrected the orchestrator, not the reverse.
+- **verified** · scope is clean: `docs/02-DEPLOYMENT.md` is a pure `15 0` insertion (`git diff --numstat`), heading list byte-identical before/after; the branch touches exactly 4 files total, none of them `vitest.config.ts`, `version.txt`, `CHANGELOG.md` or `.release-please-manifest.json`; merge-base with `origin/main` is `4a4cc4f`, which itself only touches `vitest.config.ts` (18 lines) — the rebase claim in the Log holds.
+- **verified** · changelog risk is accurately disclosed: `release-please-config.json` marks `docs` `"hidden": true`; per `docs/03-RELEASING.md`'s own worked example, a releasing-type title (e.g. `fix(repo):`) would route by path and cut a downloader release off this branch's one-line `tools/downloader/docs/work/dl-32-*.md` touch. Live only against the not-yet-opened PR's title — not a defect in this diff.
+- **verified** · both hand-checks (heading-anchor slugs, markdown link resolution) are accurately disclosed as hand checks — `npm run check` is lint+format:check+typecheck and validates neither. Left as disclosed, not upgraded to a gate.
+- **findings** · own defect hunt at medium depth, full diff (`4a4cc4f...c642d25`): 0 returned, 0 carried, 0 dropped.
+- NFR: security n/a (docs-only) · performance n/a · reliability — the changelog contingency above is real but external to this diff, flagged not fixed · maintainability — strong; anchored citations make the next drift machine-detectable instead of silent, matching this ticket's own stated goal.
+
 ## Log
 
 - **2026-09-05** — Filed. Provenance, four parties, and the claim only died when
@@ -264,3 +289,129 @@ One low finding, no med or high. PASS per the rubric.
   `sed -n '1,286p;474,530p'` over `git show c37cab9:docs/02-DEPLOYMENT.md`, piped
   through `command grep -o downloader | wc -l` (19) and
   `command grep -o planner | wc -l` (12).
+
+- **2026-09-05** — Built. The signpost is four sentences inserted after the
+  intro paragraph and before the `---` rule that separates the intro from the
+  walkthrough, so it lands above `## Shape` without becoming part of it. Pure
+  addition: `git diff --numstat origin/main -- docs/02-DEPLOYMENT.md` is
+  `15 0`, and the heading list is byte-identical before and after (21 `^#`
+  lines, `diff` clean), so nothing was moved, renamed or split. 530 → 545
+  lines. Counts after the change: `planner` 32, `downloader` 24 — planner still
+  leads, and the margin widened rather than narrowed.
+- **2026-09-05** — **The Build's adr/004 link is written from the wrong file.**
+  Step 1 gives `[adr/004](../adr/004-one-compose-fragment-per-tool.md)`, which
+  is correct relative to this ticket in `docs/work/` and wrong relative to
+  `docs/02-DEPLOYMENT.md`, where it would resolve to `adr/` outside `docs/`.
+  Used `./adr/004-one-compose-fragment-per-tool.md`, matching the citation the
+  page already carries lower down (`docs/02-DEPLOYMENT.md:298` at `c37cab9`).
+  All 21 relative links and both new in-page anchors were resolved
+  mechanically against the filesystem and against the heading slugs; nothing in
+  `npm run check` validates either, so this was a hand check and is recorded as
+  one.
+- **2026-09-05** — **The page carries no `file:line` citations of its own** —
+  `node scripts/citations.mjs docs/02-DEPLOYMENT.md` reports `0 citations` —
+  so there was nothing on the page to re-resolve. Two other files cite _into_
+  it by line, and both now point 15 lines high:
+  `docs/work/repo-1-generated-status-tables.md:119` → `02-DEPLOYMENT.md:256`
+  (was the rate-limit note, now a blank line; the text moved to `:271`) and
+  `tools/downloader/docs/work/dl-32-the-job-list-has-no-caller.md:118` →
+  `02-DEPLOYMENT.md:141` (was the `01-ARCHITECTURE.md` link, now a blank line;
+  moved to `:156`). **`citations.mjs` cannot see this**: both are `unanchored`,
+  so it only checks the line exists, and its four counts are identical before
+  and after (23 citations / 7 unresolvable for repo-1, 38 / 0 for dl-32).
+  Deliberately not fixed — `Files:` says this file and nothing else, and both
+  are historical records describing the tree they reviewed, which is the same
+  convention this ticket applies to its own `## Why`. Raised to the
+  orchestrator rather than resolved here.
+- **2026-09-05** — Build step 2 honoured: the `## Shape` diagram is untouched,
+  and I agree with the reasoning. A second container box would have to show a
+  second subdomain, a second service and the shared `edge` network to be
+  truthful, which is `## Adding the second tool` redrawn 460 lines early; the
+  sentence above the diagram now tells the reader the box is an example, which
+  is the cheaper half of the same job.
+- **2026-09-05** — **The `Files:` constraint above was widened, by the repo
+  owner, against the previous builder's recommendation. No builder took this on
+  its own authority.** The builder that added the signpost found that two files
+  cite into `02-DEPLOYMENT.md` by line, that its 15 inserted lines pushed both
+  citations 15 lines high, and that nothing catches it; it recorded that in the
+  entry above and recommended leaving them, because `Files:` says this file and
+  nothing else. The orchestrator put three options to the owner — leave them,
+  file a follow-up to anchor them, or fix them here — and the owner chose to fix
+  them here. So this branch also touches
+  `docs/work/repo-1-generated-status-tables.md` and
+  `tools/downloader/docs/work/dl-32-the-job-list-has-no-caller.md`, one line
+  each. The previous builder's refusal was correct on the authority it had; this
+  entry is the authority it did not have.
+- **2026-09-05** — **The authorising brief was wrong about which text the
+  repo-1 citation refers to, and repointing it as instructed would have
+  enshrined a drift that predates this branch.** The brief said
+  `docs/work/repo-1-generated-status-tables.md:119` cites the rate-limit note
+  and that the note moved to `docs/02-DEPLOYMENT.md:271`. Measured instead: that
+  citation was written at `022dfff`, when `02-DEPLOYMENT.md` was 336 lines and
+  its line 256 read `replicas grant two allowances and a redeploy resets every
+bucket. The scope of` — inside the Cloudflare WAF bullet that ends by linking
+  `dl-6`'s Log, which is exactly what the finding says ("still cited the page
+  for the limiter's scope", "links `dl-6`'s Log"). The file then grew to 530
+  lines on `main` and that bullet moved to 260–265, so by `origin/main` line 256
+  had already become an unrelated sentence about `RATE_LIMIT_FILES_PER_MINUTE`
+  and scrub-bar drags. **The citation was stale before this branch existed; the
+  15 inserted lines only moved it from a wrong line onto a blank one.** `:271`
+  is where that wrong occupant went, not where the cited claim went. Repointed
+  to `docs/02-DEPLOYMENT.md:278`, the line the cited claim now occupies.
+  Reproduce with `git show 022dfff:docs/02-DEPLOYMENT.md | sed -n '256p'`
+  against `sed -n '278p' docs/02-DEPLOYMENT.md`.
+- **2026-09-05** — **Both citations now carry anchor text, which is the durable
+  half: the next drift is machine-detectable instead of silent.** The
+  `citations.mjs` inline form takes a quoted fragment straight after the
+  location, so both were anchorable and neither needed a new format. repo-1's
+  is anchored on `The scope of that, and the shared store`; dl-32's, repointed
+  from 141 to `docs/02-DEPLOYMENT.md:155`, on `see the security posture in`.
+  Both report `verified` today. **Verified able to fail, not just to pass**:
+  injecting one line at the top of `02-DEPLOYMENT.md` turns both to `MOVED`,
+  and restoring turns both back. A first attempt cited repo-1 as a 275–280
+  range and that probe stayed green — a range wide enough to absorb the shift
+  reports `ok` while being wrong — so both were narrowed to the single start
+  line, which is the idiom `citations.mjs` documents ("the end is deliberately
+  loose: an anchor may run past the cited range").
+- **2026-09-05** — **The claim that no gate catches this drift is confirmed, and
+  it is stronger than reported.** `citations.mjs` output is byte-identical
+  either side of the signpost for both files — 23 citations / 16 unanchored / 7
+  unresolvable for repo-1, 38 / 38 unanchored for dl-32 — and the exit codes are
+  unchanged too, so even a wired-up run would not have flagged it. Beyond that,
+  `citations.mjs` is not wired into anything: it appears in no workflow and no
+  `package.json` script, only in `scripts/test/tsconfig.json`'s `include` so
+  that `tsc` typechecks it. It is invoked by hand or by an agent, never by CI.
+- **2026-09-05** — **The branch now touches a path under `tools/`, and that does
+  not change the changelog, because of the type and not the scope.**
+  release-please routes by path, so
+  `tools/downloader/docs/work/dl-32-the-job-list-has-no-caller.md` falls inside
+  the `tools/downloader` package. Read off `release-please-config.json` rather
+  than assumed: `docs` carries `"hidden": true` in `changelog-sections`, and per
+  `docs/03-RELEASING.md` release-please renders the entry first and skips the
+  release when it comes out empty. **This holds only if the squash-merge title
+  stays a `docs` type** — the title is what lands, so a `fix(repo):` title on
+  this branch would cut a downloader release off one `.md` file.
+- **2026-09-05** — Re-verified the previous builder's unrun gate, since its own
+  gate was interrupted. `npm run check` exit 0; `npm run format` leaves the tree
+  clean; `node scripts/status.mjs --json` exit 0 with `problems: []`;
+  `node scripts/citations.mjs docs/work/repo-23-deployment-reads-as-downloader-only.md --rev c37cab9`
+  reports 21 citations, 0 moved, 0 unresolvable, exit 0. Both in-page anchors
+  resolve against the real heading slugs, and all 23 links in the page resolve
+  on disk — checked with a script, since **nothing in `npm run check` validates
+  either**, exactly as the previous builder disclosed. `./adr/004-…` resolves
+  and `../adr/004-…` does not (there is no repo-root `adr/`), so the Build's
+  link was wrong from the page and the correction was right. Rebased onto
+  `origin/main` at `4a4cc4f`, which added only `vitest.config.ts`; no conflicts.
+- **2026-09-05** — **The `:271` figure was the orchestrator's error, not the
+  gate's, and this entry exists so the next reader does not misattribute it.**
+  The dispatch that authorised the citation fix stated that repo-1's referent had
+  moved to `docs/02-DEPLOYMENT.md:271`. The orchestrator has recorded that it
+  relayed that number from the previous builder's report without spending the one
+  command that would have checked it. The builder ran that command, found the
+  citation had been stale since long before this branch, and repointed to
+  `docs/02-DEPLOYMENT.md:278` instead; the gate then reproduced the whole thing
+  independently, so three measurements now agree. **The reviewer neither
+  introduced this nor missed it — it confirmed the correction.** The chain was
+  three links long and the second was the cheap place to break it: one
+  `sed -n '256p'` against the commit the citation was written at would have
+  settled it before any of this was dispatched.

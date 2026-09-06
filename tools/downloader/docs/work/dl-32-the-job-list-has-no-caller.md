@@ -115,8 +115,9 @@ Filing it as an ADR would put a downloader fact in the repo-wide directory, whic
 is the fusion the layout rules exist to prevent.
 
 The architecture doc is the right second home rather than an optional extra:
-`docs/02-DEPLOYMENT.md:141` already sends a reader to that section for the
-security posture, so the answer is on the page an operator is already pointed at.
+`docs/02-DEPLOYMENT.md:155` "see the security posture in" already sends a
+reader to that section, so the answer is on the page an operator is already
+pointed at.
 
 ### The single read was reconsidered and kept
 
