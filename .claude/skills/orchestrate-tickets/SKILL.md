@@ -618,10 +618,14 @@ Three caveats, all measured 2026-09-05/06:
 What it shows that prose reliably hides, all three from the same batch:
 
 - **Where the cost actually went.** One branch — repo-22, PR #161 — took roughly a
-  third of that batch, and **its gate was its most expensive agent, ahead of every
-  builder**, which inverts `sizing.md`'s "builder round-trips cost more than
-  gates". That rule is true per *round* and stops being true when one branch takes
-  six gate rounds. A prose summary does not surface the inversion.
+  third of that batch, and **its gate cost about what its own builder did**:
+  411,966 against 406,732, last-observed cumulative figures a 1.3% apart, which is
+  a tie and not a ranking. The comparison that carries weight is the other one —
+  that gate cost **roughly 60% more than the next most expensive builder in the
+  batch** (256,418). Either way it inverts `sizing.md`'s "builder round-trips cost
+  more than gates", which is true per *round* and stops being true when one branch
+  takes six gate rounds. A prose summary surfaces neither the inversion nor how
+  narrow the first margin is.
 - **Whether the model-difference rule held**, per branch rather than as a claim.
   Step 4 exists because a builder that picks its own reviewer is the thing being
   checked choosing its checker; a Model column turns compliance into something a
