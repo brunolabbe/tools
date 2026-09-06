@@ -156,6 +156,16 @@ explicit ship authority, and then commit the gate record above `## Log` — one
 subsection per gate, never overwriting an earlier one — and post the reviewer's
 report to the PR thread.
 
+**Name your own model and your reviewer's in the PR body.** Nothing else in the
+branch records either. The `Co-Authored-By` trailer is built once per session
+tree from the *orchestrator's* model and inherited by every subagent, so your
+commits are signed with its model whatever you were dispatched on — measured
+2026-09-06, a Haiku 4.5 subagent's commit came out signed `Claude Opus 5 (1M
+context)`. The `Generated with Claude Code` footer names no model at all, and
+`attribution.pr` in `settings.json` is a literal string with no placeholder for
+one. If your prompt did not tell you which model you are, say so rather than
+guessing — a model named wrongly is worse than one left blank.
+
 **Do not spawn subagents.** Orchestration belongs to whoever dispatched you.
 
 ## Reporting

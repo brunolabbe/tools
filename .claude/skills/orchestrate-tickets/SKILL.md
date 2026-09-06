@@ -108,7 +108,15 @@ you are there.
    [`.claude/agents/ticket-reviewer.md`](../../agents/ticket-reviewer.md) pins
    `model: sonnet` in its frontmatter, so it is a file read. The builder's half is
    the one step 3 tells you to write down at dispatch. Do both and the comparison
-   is a fact. Sonnet is right when the builder ran Opus or Haiku; pass
+   is a fact. **The commit trailer cannot stand in for either half.** It is built
+   once per session tree from *your* model and inherited by every subagent, so a
+   `mechanical` ticket built on Haiku lands a commit signed `Claude Opus 5`.
+   Measured 2026-09-06, against the binary and then by hand: the trailer is
+   appended to the Bash tool description rather than the system prompt, and a
+   Haiku 4.5 subagent told to commit in a throwaway repo produced
+   `Co-Authored-By: Claude Opus 5 (1M context)`. No trailer anywhere in this
+   repo history names any other model — 480 across all refs — and that is the
+   inheritance, not evidence Opus built them. Sonnet is right when the builder ran Opus or Haiku; pass
    `model: "opus"` when the builder ran Sonnet, which happens when *you* are
    Sonnet and the ticket inherits. Never `haiku`, never `fable`. **Since repo-17
    the builder's model varies inside a batch** — a `mechanical` ticket dispatches
@@ -228,7 +236,13 @@ you are there.
    so plainly and move on; an acceptance step that always finds something is a
    relay wearing a different hat.
 9. **Builder opens the PR**, commits the gate record, and posts the reviewer's
-   report to the PR thread.
+   report to the PR thread. **The PR body names both models — which built and
+   which gated**, because nothing else in the artefact does: the trailer records
+   the session tree's root rather than the builder (step 4), and the
+   `Generated with Claude Code` footer names no model at all. Settings cannot
+   supply it either — `attribution.pr` in `settings.json` takes a literal
+   string with no placeholder, while the builder's model varies per ticket
+   inside one batch. So the builder writes it, or it is not recorded.
 10. **Hold every worktree — the reviewer's as well as the builder's — until the
    ticket is finished.** The reviewer's used to come down earlier, once its record
    was pushed and its exchange with the builder had ended. **That condition cannot
