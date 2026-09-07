@@ -1522,3 +1522,188 @@ covers it.**
 - **Every agent's token figure arrived.** Seven of seven, against 7 of 9, 12 of 13
   and unrecorded totals in the three entries above. Whatever produced that is
   worth finding and repeating; the account does not say what it was.
+
+## Thirteenth session — 2026-09-07
+
+**Written by a builder (Opus 5 (1M context), dispatched explicitly) from the
+orchestrator's own account of a batch it ran, as a records-only dispatch scoped
+to this file — no ticket, no code, and no `ticket-reviewer` gate on this
+branch.** Everything checkable from a worktree was re-run here against
+`origin/main@4fad5f8` and the batch's five branches; everything else is marked
+as supplied. **The third batch to run on 2026-09-07**, and the numbering is taken
+from this file's own sequence rather than from the dispatch, per the entry above.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **5 pull requests, none merged**, every one branched off `origin/main@4fad5f8` — re-confirmed with `git merge-base` per branch, all five returning that sha — and with **zero file overlap**, measured with `git diff --name-only origin/main...<branch>` on all five (3, 4, 15, 22 and 1 paths, no path in two of them). #186 `repo-33`, filed **and** built in one branch. #187 `repo-31`, option D. #188 `dl-46`. #189 `dl-45`. #190 `repo-29`, records-only and ungated. **Board at intake, re-measured at the base**: `npm run status -- --ready` returns exactly 3 — `dl-45`, `dl-46`, `repo-29` — with `repo-31` and `repo-32` withheld as `needs-decision`. **The batch took all three, answered one of the two withheld, and filed a fifth ticket it then built**, which is a complete sweep of the board in one round. Around them: `repo-34` and `dl-47` filed new (`status: ready`, on #187's and #189's branches), and `repo-32` moved `needs-decision` → `ready` on #187's — that one was **answered, not filed**, and existed at the base. Every id and status read out of `git show` on the branch rather than from the account |
+| `agents` / `dispatches` | **10** agents — 1 seam-mapper, 5 builders, 4 reviewers — / total dispatches-and-wakes `not recorded` beyond the 10 spawns |
+| `builder rounds` | **Not given as a count**, and the account supplies reviewer rounds instead. What is derivable from the committed records: `repo-33` **4** gate rounds over 6 commits, `dl-45` **3** passes over 3 tips plus a separate docs-only gate on its decision record, `repo-31` recorded across 3 tips, `dl-46` **1**, `repo-29` none. **Orchestrator's fault: the account attributes none, and one is legible in the tree** — `repo-33`'s round four exists only to correct a relayed claim that the Windows runner's drive layout varies between runs, and its own record says so. It produced a strictly better test anyway; see below |
+| `gates` | **4 reviewers over 5 branches**, #190 ungated by the orchestrator's own authorisation as records-only. **Every verdict PASS**, all five records read out of `git show` rather than from the account. Findings: `repo-33` 1 in round one and 1 in round three, both resolved, 0 in round four; `repo-31` 2, both **dropped** as already fixed in a later commit on the same branch before the record was written; `dl-46` 4 returned, 2 carried and 2 dropped; `dl-45` 1 carried — the finding that narrowed the branch — plus 0 on its decision-record gate |
+| `wrong findings` | **Five, across four links, and none reached `main` because nothing merged.** Two are the orchestrator's relayed claims, refuted by a builder each. One is a gate's reading of `citations.mjs`'s exit codes, refuted by the builder committing its record. One is a stale count inside a gate record, caught by the gate itself. One is advice that a builder disproved by building it — see the two lists below |
+| `subagent tokens` | **2,019,787 across all 10 agents, none missing** — last-observed cumulative, so every figure is a floor and the total is a floor. `dl-45` builder 412,457 · `repo-33` builder 276,856 · `repo-31` reviewer 213,774 · `dl-46` reviewer 206,179 · `dl-45` reviewer 199,585 · `repo-31` builder 194,572 · `dl-46` builder 193,356 · `repo-33` reviewer 165,138 · `repo-29` builder 103,556 · seam-mapper 54,314. Re-added here; the supplied total is exact. Split: builders 1,180,797 (**58.5%**) · gates 784,676 (**38.8%**) · intake 54,314 (**2.7%**). By model: Opus 1,235,111, Sonnet 784,676. **It is a floor for a second reason the account states plainly** — several agents kept working after their last usage report, and a final turn that ends in a `SendMessage` delivers no usage block at all |
+| `cost` | **≈ $36.76** at the 2026-09-02 rate of $0.0182/1k, recomputed here from the total above. An arithmetic conversion of floors with cache reads excluded, so a floor and not a bill — the same caveat the four rows above carry |
+
+**Every model claim in this row is on the artefact, which is new.** The account
+calls each model a recorded dispatch parameter; that is checkable here without
+trusting it, because all five pull request bodies name both models in their own
+words — #186 *"Built on Claude Opus 5 (1M context). Gated on Claude Sonnet, four
+rounds, verdict PASS"*, #187, #188 and #189 the same shape, and #190 *"Built by
+Claude Opus 5 (1M context) as a records-only dispatch. No reviewer gate"*. Each
+also says why it has to be written down: the `Co-Authored-By` trailer is built
+once per session tree from the orchestrator's model. **This is the first batch
+whose pairing can be audited after the fact from the pull requests alone**, and
+it is what makes the next paragraph a checkable correction rather than an
+argument.
+
+**The supplied "no `standard`-rated ticket appeared" does not survive the
+branches, and the correction is narrow.** `repo-33`'s frontmatter reads
+`difficulty: standard` on its own branch, and `repo-34` is filed `standard` too.
+The claim holds *at intake* — neither existed when the board was read — and the
+outcome was fine: `repo-33` was built on Opus, which is above what
+`.claude/agents/builder.md:23` "Its gate is" asks for. What the claim hides is
+that its gate was **Sonnet**, where that row pairs a `standard` ticket with an
+Opus gate. **A ticket filed and built in the same dispatch cannot be governed by
+the rating it is given**, because the rating is written after the model is
+chosen; the pairing rule is unenforceable on exactly the tickets a batch creates
+for itself. Nothing went wrong here, and the general case is not safe: had the
+build inherited Sonnet, the pair would have been Sonnet-on-Sonnet with a
+`standard` label on it and nothing to catch it.
+
+**what the skill got wrong** — seven, none fixed on this branch, which is scoped
+to this file alone.
+
+1. **The orchestrator relayed two claims it had not measured, and a builder
+   caught both.** The first: that the Windows runner's workspace drive layout
+   varies between runs, inferred from a single error string without reading the
+   second run's checkout step. `repo-33`'s reviewer checked the two cited runs
+   itself rather than accepting the correction — both log
+   `Working directory is 'D:\a\tools\tools'`. The second: an instruction to run
+   `node scripts/next-id.mjs downloader`, when the script takes a **prefix**.
+   Re-run here, that is worse than an error — `node scripts/next-id.mjs
+   downloader` prints `next free: downloader-1` and **exits 0**, a confident
+   answer to a question nobody asked, and
+   `scripts/next-id.mjs:29` "export const USAGE =" is the one line that says so.
+   Both were one command
+   from being right. **The `repo-33` builder refused to record the first**, on
+   the reasoning that an unmeasured "flaky" line would sit in the one ticket
+   whose whole subject is a claim that went unchecked for eleven runs — and the
+   round it cost produced a strictly better test than the one it replaced, three
+   real observed path pairs pulled out of the failing runs' own logs in place of
+   one real and one invented. That is the fifth or sixth consecutive session in
+   which a builder is the link that caught the orchestrator.
+2. **"Assert the property, not the platform's spelling" was wrong advice, and
+   the builder disproved it by building it.** With the surviving assertion
+   already pinning `locateRecord`'s result to `path.relative`'s output, every
+   further claim about that output's shape is a claim about `path.relative`. The
+   proposed replacement was written and found unable to fail. The assertion was
+   **deleted, not repaired**, and the reviewer reproduced the remaining one's
+   falsifiability directly rather than agreeing. A test that cannot fail is the
+   defect this page keeps naming; the new instance is that a *repair* can be one,
+   and a repair arrives with a reason to trust it.
+3. **Stale numbers were this batch's defect shape, and both sides had them.**
+   Four instances, three re-verified here. The two relayed claims above. A
+   builder reporting a suite pass as a `check` pass while `npm run check` was
+   failing on two `no-shadow` errors — its own Log's correction says it: *"a
+   suite passing is not `npm run check` passing"*. A gate record's `32 of these
+   39 references`, caught by its own gate and re-run to `34 of 41`. And a
+   `10 unanchored ... of 12` that **nobody caught until #190 re-ran it at the
+   commit that wrote it** and got 11 of 13. None of these is bad judgement: every
+   one is a real measurement carried forward instead of re-run. The reusable
+   line is #190's — a record that counts its own references changes what it is
+   counting, so run the command **after** writing the sentence that quotes it.
+4. **The step-8 stall check earned itself, on a batch that had every reason to
+   think it would not.** `git show` of the ticket on the branch, piped to
+   `grep '^## Review'`, returned empty on `repo-33` while both agents considered
+   the exchange closed and reported finished. Verified from the tree: at
+   `a1c2a83`, the branch's first commit, that grep matches nothing. It is the
+   same discriminator the entry two above records catching the same shape,
+   holding unaltered for the second consecutive session —
+   `.claude/skills/orchestrate-tickets/SKILL.md:157` "Empty means the exchange is still open".
+5. **A gate record's own citations are this batch's most-measured defect, and
+   the one anchored round is the only round in which the mechanism caught
+   anything.** #190 exists to record it. On `repo-33`'s record the checker
+   reports `7 verified, 0 moved, 29 unanchored, 0 unresolvable — of 39` at
+   **exit 0**, with two distinct failures sitting inside that clean result: a
+   citation onto a blank line, and five coordinates that had drifted onto
+   unrelated content when a later round edited the middle of the same test file.
+   Running that record at its tip and again with `--rev` gives the **identical**
+   answer for a set of coordinates that is right in one tree and wrong in the
+   other. Round four was the first written with anchors, four of them quoting
+   lines that contain double quotes — and the parser takes straight quotes only,
+   so each anchor terminated at its escape. That run was `3 verified, 4 moved`,
+   **exit 2**: the record's first non-zero exit in four rounds, failing loudly
+   inside a single run, on the one round where the mechanism was switched on.
+   **Operationally: an anchor fragment cannot contain a double quote at all** —
+   pick a quote-free substring rather than escaping one. The coordinates were
+   right both times; only the anchor text was malformed.
+6. **A peer subagent overwrote another agent's scratch file** — `dl-46`'s
+   content inside `repo-33`'s draft pull request body. The session scratchpad is
+   shared and nothing partitions it by agent. Nothing was published and the
+   builder rebuilt from the pull request's own body. **Supplied and not
+   verifiable from a worktree**, which is exactly the property that makes it
+   worth writing down: a scratch collision leaves no trace in git.
+7. **`skipped` still reads as green, one session after this page recorded that
+   it does — and this batch's own records-only branch is the third
+   reproduction.** #190's CI run reads `conclusion: success` while
+   `gh run view --json jobs` reads `test  skipped`, because the branch is
+   markdown-only and `ci.yml`'s `changes` job gates the matrix off. The entry
+   above already argued that a defect stopping at the history entry has not been
+   fixed, and named the glance-reading row at
+   `.claude/skills/orchestrate-tickets/SKILL.md:261` "and a glance counts it as green"
+   as still saying only `cancelled`. It still
+   does. **The new datum is the third instance in three consecutive sessions**,
+   which retires the reading that the first two were coincidence.
+
+**Folding in unscoped work paid, and was still right to revert — both halves
+belong in the record.** The owner's decision to fold the yt-dlp tier's mirror
+grouping into `dl-45` is what surfaced two things nothing else would have: that
+`dl-40`'s picker collapse shipped with its code and **no fixture exercising it**,
+and a silent cross-language merge — reproduced, not hypothesised, against
+`mapYtDlpInfo` with an untagged English/French audio pair whose technical
+metadata coincided, which returned one variant with the French URL demoted into
+`alternateUrls`. A host failure on the first would then have downloaded the other
+track's content under the label the user picked. The gate carried that finding
+rather than dropping it, the owner reversed the fold-in on it, and it is now
+`dl-47` with its tradeoff left open. **The fold-in was not wasted and the revert
+was not a retraction**: the work bought a defect found before a shared grouping
+key reached `main`, which is precisely what it cost.
+
+**Pre-merge CI, read by job rather than by run.** #186 is **fully green
+including `test (windows-latest)`** at `d0869fd` — all four jobs `success` — and
+it carries the fix for the `citations.test.ts` path-separator regression the
+entry above recorded as an inherited red baseline. #188 and #189 are red at
+their tips on **that same single assertion**, read from `--log-failed` rather
+than from the run table: `expected '2 references in ..\..\..\..\..\RUNNER…' to
+match`. So the batch built its own fix and its own siblings still inherit the
+defect, because nothing merges without the owner. #187 is the deliberate case —
+run conclusion `success` with `test (windows-latest, informational): failure`
+inside it, which is option D working exactly as filed and **verified live**, not
+reasoned.
+
+**What went right, and is worth copying.**
+
+- **Every agent's token figure arrived again**, 10 of 10, for the second
+  consecutive session after 7 of 7 — and this time the account says what the
+  earlier one could not: the figures are *last observed*, several agents kept
+  working past their last report, and a turn ending in `SendMessage` delivers no
+  usage block. That caveat is worth more than the total.
+- **A gate that was refuted before its own record was committed.** `repo-31`'s
+  reviewer anticipated that inserting its record would move a cited line and
+  judged the shift harmless, on the reading that `citations.mjs` only turns
+  non-zero on `unresolvable`. The builder measured instead: `EXIT` maps `moved`
+  to bit 2, and the same file had already exited `2 — 8 moved` earlier on that
+  very branch. The coordinate was re-resolved rather than left.
+- **Two reviewers ran controls nobody asked for.** `repo-31`'s instrumented
+  `killProcessTree` with a scratch-file write to prove the Windows branch is
+  genuinely reached, then reverted and confirmed a clean `git status`; `dl-45`'s
+  red-checked its own SSRF claim by stubbing the `alternateUrls` loop to an empty
+  array and watching the new test fail, and red-checked the TLS claim by removing
+  `TLS_VERIFICATION_FAILED` from `HOST_FAILURE_CODES` and watching two tests
+  fail. Neither claim was accepted from a diff.
+- **The records-only dispatch is cheap and it worked.** #190 cost 103,556
+  tokens, the smallest agent in the batch after intake, and it is the only
+  participant that re-derived the batch's citation figures from the branches
+  instead of transcribing them — finding three places where the relay and the
+  script disagreed, including the `10 of 12` nobody else caught. An
+  evidence-recording dispatch with no gate is not a lesser dispatch; it was the
+  one that measured.
