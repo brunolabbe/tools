@@ -48,8 +48,22 @@ export const DONE_GRACE_MS = 5_000;
 
 /**
  * Global cap on live channels. The probe endpoint is rate-limited per IP and
- * gated globally, so probes cannot outrun this; the SSE endpoint is neither, so
- * this is what stops an unauthenticated client from opening channels forever.
+ * gated globally, so probes cannot outrun this.
+ *
+ * **The cap alone is not a defence, and an earlier draft of this comment said it
+ * was.** The SSE endpoint carries no limiter, and subscribing creates a channel
+ * — so 64 requests that connect and disconnect immediately used to occupy every
+ * slot for a full `CHANNEL_TTL_MS`, with no socket held and nothing to reclaim
+ * them. Measured at 64/64, with a subsequent real probe refused a channel. That
+ * is what `Channel.claimed` exists to close.
+ *
+ * What remains, stated rather than hidden: 64 *concurrently held* connections
+ * still fill the cap, and the effect is that other users' analyses run
+ * unnarrated — the analysis itself is unaffected, since `probeStages.open()`
+ * returning false only drops the narration. A per-IP limiter on this endpoint is
+ * the obvious next step and is deliberately not decided here; it is a policy call
+ * about `rateLimits`, whose buckets are chosen in `config.ts` alongside the two
+ * that protect real work.
  */
 export const MAX_CHANNELS = 64;
 
@@ -67,6 +81,16 @@ interface Channel {
    * after `done` would otherwise buy a finished probe another full TTL.
    */
   ended: boolean;
+  /**
+   * A probe opened this, rather than a subscriber having merely named it.
+   *
+   * An unclaimed channel is a promise nobody has kept: someone asked to watch an
+   * analysis that has not been started and may never be. It is reclaimed the
+   * moment its last listener goes, instead of waiting out `CHANNEL_TTL_MS` — see
+   * `MAX_CHANNELS`. A claimed one is not, because there its listeners leaving is
+   * ordinary (a tab closed mid-probe) and the probe still has stages to publish.
+   */
+  claimed: boolean;
   expiresAt: number;
 }
 
@@ -118,6 +142,10 @@ export class ProbeStageHub {
       const current = this.#channels.get(probeId);
       if (current === undefined) return;
       current.listeners.delete(listener);
+      // A channel nobody ever probed against, with nobody left watching it, is
+      // reclaimed now rather than at its deadline. Leaving it was what let a
+      // handful of one-shot GETs deny narration to everyone for three minutes.
+      if (!current.claimed && current.listeners.size === 0) this.#channels.delete(probeId);
     };
   }
 
@@ -128,7 +156,13 @@ export class ProbeStageHub {
    */
   open(probeId: string): boolean {
     this.#sweep();
-    return this.#open(probeId) !== null;
+    const channel = this.#open(probeId);
+    if (channel === null) return false;
+    // From here the channel outlives its subscribers: there is a probe behind it
+    // now, and a tab closed mid-analysis must not take the stream down for a
+    // second one watching the same id.
+    channel.claimed = true;
+    return true;
   }
 
   stage(probeId: string, event: ProbeStageEvent): void {
@@ -189,6 +223,7 @@ export class ProbeStageHub {
       buffer: [],
       replayed: false,
       ended: false,
+      claimed: false,
       expiresAt: this.#clock().getTime() + CHANNEL_TTL_MS,
     };
     this.#channels.set(probeId, channel);

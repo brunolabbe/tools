@@ -14,11 +14,16 @@ import {
   jobEventSchema,
   jobSchema,
   parseJobEvent,
+  parseProbeEvent,
+  PROBE_STAGES,
+  probeEventSchema,
+  probeIdSchema,
   probeResultSchema,
 } from "../src/index.ts";
-import type { Job, JobEvent, JobProgress, ProbeResult } from "../src/index.ts";
+import type { Job, JobEvent, JobProgress, ProbeEvent, ProbeResult } from "../src/index.ts";
 
 const AT = "2026-08-06T10:00:00.000Z";
+const PROBE_ID = "0123456789abcdef0123456789abcdef";
 
 function progress(): JobProgress {
   return {
@@ -221,5 +226,88 @@ describe("parseJobEvent", () => {
     ).toBeNull();
     // Heartbeats carry no jobId, but they do carry a timestamp.
     expect(parseJobEvent(JSON.stringify({ type: "heartbeat" }))).toBeNull();
+  });
+});
+
+describe("probeEventSchema", () => {
+  const events: ProbeEvent[] = [
+    { type: "stage", probeId: PROBE_ID, stage: "resolver-start", resolver: "direct", at: AT },
+    { type: "stage", probeId: PROBE_ID, stage: "browser-slot", resolver: "browser", at: AT },
+    { type: "done", probeId: PROBE_ID, at: AT },
+    { type: "heartbeat", at: AT },
+  ];
+
+  test("round-trips every frame in the union", () => {
+    for (const event of events) {
+      expect(probeEventSchema.safeParse(event).success).toBe(true);
+      expect(parseProbeEvent(JSON.stringify(event))).toEqual(event);
+    }
+  });
+
+  test("the union covers every ProbeEvent variant", () => {
+    const covered = new Set(events.map((event) => event.type));
+    expect([...covered].toSorted()).toEqual(["done", "heartbeat", "stage"]);
+  });
+
+  test("`stage` is a closed vocabulary, so a server one version ahead gets silence", () => {
+    // The panel renders whatever the last frame said, straight into a live
+    // region. An unrecognised stage must be dropped by the transport rather
+    // than announced as an empty line — which is what makes `PROBE_STAGES`
+    // being an enum here load-bearing rather than decorative.
+    expect(
+      parseProbeEvent(
+        JSON.stringify({
+          type: "stage",
+          probeId: PROBE_ID,
+          stage: "inventing-a-phase",
+          resolver: "browser",
+          at: AT,
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  test("every stage the contract declares is one this schema accepts", () => {
+    // The two would otherwise be free to drift: a stage added to `PROBE_STAGES`
+    // and emitted by a resolver, but absent from the enum here, would be
+    // discarded by every client for the shape's sake.
+    for (const stage of PROBE_STAGES) {
+      const frame = { type: "stage", probeId: PROBE_ID, stage, resolver: "browser", at: AT };
+      expect(probeEventSchema.safeParse(frame).success).toBe(true);
+    }
+  });
+});
+
+describe("parseProbeEvent", () => {
+  test("returns null rather than throwing on the junk an SSE channel can deliver", () => {
+    expect(parseProbeEvent("{")).toBeNull();
+    expect(parseProbeEvent("")).toBeNull();
+    expect(parseProbeEvent("null")).toBeNull();
+    expect(parseProbeEvent(JSON.stringify({ type: "nope", at: AT }))).toBeNull();
+    // Right type, missing the resolver that names the tier being reported.
+    expect(
+      parseProbeEvent(
+        JSON.stringify({ type: "stage", probeId: PROBE_ID, stage: "page-load", at: AT }),
+      ),
+    ).toBeNull();
+    expect(parseProbeEvent(JSON.stringify({ type: "done" }))).toBeNull();
+  });
+});
+
+describe("probeIdSchema", () => {
+  test("accepts an opaque token and refuses one short enough to guess", () => {
+    // 128 bits as hex is what `mintProbeId` produces. The floor matters because
+    // the id is the only thing standing between a channel and a stranger.
+    expect(probeIdSchema.safeParse(PROBE_ID).success).toBe(true);
+    expect(probeIdSchema.safeParse("0123456789abcde").success).toBe(false);
+    expect(probeIdSchema.safeParse("a".repeat(65)).success).toBe(false);
+  });
+
+  test("refuses anything that could change the shape of the route it names", () => {
+    // It is interpolated into `ROUTES.probeEvents`, so the character class is
+    // not cosmetic — a slash or a dot segment would name a different path.
+    for (const hostile of ["../../etc/passwd", "abcdef0123456789/../x", "abcdef0123456789?a=b"]) {
+      expect(probeIdSchema.safeParse(hostile).success).toBe(false);
+    }
   });
 });

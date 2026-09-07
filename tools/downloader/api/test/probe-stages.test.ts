@@ -124,6 +124,51 @@ describe("ProbeStageHub", () => {
     expect(hub.subscribe("one-too-many", () => {})).toBeNull();
   });
 
+  test("a subscriber that leaves without a probe frees its channel immediately", () => {
+    // The gate's finding, and it reproduced worse than it was reported: the
+    // sockets never had to be held. `subscribe` creates a channel, its
+    // unsubscribe used to drop only the listener, and nothing but the 180 s
+    // sweep reclaimed the rest — so 64 requests that connected and hung up at
+    // once denied narration to everybody until the deadline. Measured at 64/64
+    // before the fix, with the next real probe refused a channel.
+    const hub = new ProbeStageHub();
+    for (let index = 0; index < MAX_CHANNELS; index++) {
+      hub.subscribe(`squat-${index}`, () => {})?.();
+    }
+    expect(hub.channelCount).toBe(0);
+    expect(hub.open("a-real-probe")).toBe(true);
+  });
+
+  test("a channel a probe opened survives its subscribers leaving", () => {
+    // The other half, and why the flag is not just "delete on empty": a tab
+    // closed mid-analysis must not take down a stream a second tab is watching,
+    // and the probe still has stages to publish into the buffer.
+    const hub = new ProbeStageHub();
+    hub.open(PROBE_ID);
+    hub.subscribe(PROBE_ID, () => {})?.();
+    expect(hub.channelCount).toBe(1);
+
+    const late: ProbeEvent[] = [];
+    hub.stage(PROBE_ID, { stage: "page-load", resolver: "browser" });
+    hub.subscribe(PROBE_ID, (event) => late.push(event));
+    hub.stage(PROBE_ID, { stage: "network-quiet", resolver: "browser" });
+    expect(late.map((event) => event.type)).toEqual(["stage"]);
+  });
+
+  test("the subscribe-then-POST order still works, which is the whole client flow", () => {
+    // The browser opens its EventSource and POSTs without waiting, so the
+    // unclaimed channel created by `subscribe` is the normal case, not the
+    // attack. Reclaiming on empty must not break it.
+    const hub = new ProbeStageHub();
+    const seen: ProbeEvent[] = [];
+    const off = hub.subscribe(PROBE_ID, (event) => seen.push(event));
+    expect(hub.open(PROBE_ID)).toBe(true);
+    hub.stage(PROBE_ID, { stage: "resolver-start", resolver: "direct" });
+    hub.done(PROBE_ID);
+    expect(seen.map((event) => event.type)).toEqual(["stage", "done"]);
+    off?.();
+  });
+
   test("publishing to a channel nobody opened is a no-op, not a leak", () => {
     const hub = new ProbeStageHub();
     hub.stage("never-opened", { stage: "page-load", resolver: "browser" });

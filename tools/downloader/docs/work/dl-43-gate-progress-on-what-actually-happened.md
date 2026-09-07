@@ -303,7 +303,7 @@ fast one and it is tempting to test only the slow one.
   channel's deadline unconditionally, so a client attaching after `done` bought a
   finished probe another full TTL — caught by
   `api/test/probe-stages.test.ts:89 "reaches a subscriber that only arrives
-afterwards"`, fixed at `api/src/probe-stages.ts:183 "if (!existing.ended)"`. (2) `.progress::-webkit-progress-bar` sets
+afterwards"`, fixed at `api/src/probe-stages.ts:217 "if (!existing.ended)"`. (2) `.progress::-webkit-progress-bar` sets
   an opaque background and that pseudo-element paints _above_ the element's own,
   so in Chromium the static barber-pole this ticket was replacing had been
   invisible all along — the animated background would have been too. Only the
@@ -354,3 +354,49 @@ Ready` (and `→ Failed` on `dlfail`) at a **constant 828 px** with five gate
   that ticket's work in the wrong branch; the four citations _this entry_ writes
   carry anchors, because an unanchored one is a claim nothing checks and these are
   claims about work that just moved.
+
+- **2026-09-07 — the gate's two low-severity findings, one of them repaired.**
+  Second commit on the same branch, after `ticket-reviewer` passed the first.
+
+  **The SSE endpoint's channel cap was not the defence its own comment claimed.**
+  The finding arrived as "64 bare GETs with no POST can hold every slot"; it
+  reproduced **worse than that**, and both of us measured it independently before
+  anything was changed. `subscribe` creates a channel, and its unsubscribe
+  dropped only the listener — nothing but the 180 s sweep reclaimed the channel
+  itself. So the connections never had to be held: 64 requests that connect and
+  hang up immediately left `channelCount` at 64, and the next real probe was
+  refused a channel. Cost to an attacker was 64 one-shot requests every three
+  minutes, not 64 concurrent sockets.
+
+  Fixed with `Channel.claimed`, set only by `open()` — that is, only by the probe
+  route. An unclaimed channel whose last listener leaves is deleted at once; a
+  claimed one is not, because there a listener leaving is ordinary (a tab closed
+  mid-probe) and the probe still has stages to publish. The normal client order,
+  subscribe-then-POST, is unaffected: all three cases are pinned at
+  `api/test/probe-stages.test.ts:127 "frees its channel immediately"`, and the
+  first of them was run red against the unfixed hub (`expected 64 to be +0`).
+
+  **What is left, and why it is not decided here.** 64 _concurrently held_
+  connections still fill the cap, bounded by the server's own connection limits;
+  the effect is that other users' analyses run unnarrated, never that an analysis
+  fails. A per-IP limiter on `/api/probe/:id/events` is the obvious next step and
+  is a policy call about `rateLimits`, whose buckets sit in `config.ts` beside the
+  two that protect real work — so it is raised to the orchestrator as an open
+  decision (add it now, or file a follow-up) rather than settled in this commit.
+  `MAX_CHANNELS`'s docblock now states the residual instead of the claim it used
+  to make.
+
+  **The contract's new schemas had no direct test**, unlike every sibling in
+  `contract/test/contract-schemas.test.ts`. `probeEventSchema`, `parseProbeEvent`
+  and `probeIdSchema` now get one block each, matching what `jobEventSchema` and
+  `parseJobEvent` already had. Two of them earn their keep rather than restating
+  the compiler: `stage` being an enum is what makes an older bundle drop a stage
+  it has never heard of instead of announcing an empty line into a live region,
+  and `probeIdSchema`'s character class is what stops an id interpolated into
+  `ROUTES.probeEvents` from naming a different path. Both were run red — against
+  `z.string()` and against a bare `.min(1)` — and three tests failed.
+
+  **Corrected from the first entry:** the back-edge acceptance is carried by
+  `job-card.test.tsx:339 "a re-probe keeps Downloading marked done"`, which
+  asserts the step-list high-water mark. `:288` covers the carried bytes and the
+  label only, and citing it alongside overstated what it proves.
