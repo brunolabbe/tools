@@ -227,6 +227,34 @@ jobs:
   #
   # The one filter it does carry is markdown, via `changes` above — the same
   # rule the workflow trigger used to apply to every job at once.
+  #
+  # **`windows-latest` runs and reports; it does not gate the merge** — repo-31,
+  # answered by the owner as option D over the brief's own preference for
+  # narrowing the leg to the diverging suites. The measurement that decided it,
+  # re-run at build time (2026-09-07, ~21:55Z): of the last 30 runs of this
+  # workflow, 11 failed, and `test (windows-latest)` was the only failing job in
+  # every one of the 11. All of them failed on the *same* assertion, in this
+  # repository's own `scripts/citations.mjs` checker making a POSIX path
+  # assumption — not eleven Windows problems, one unfixed tooling regression
+  # (repo-33) holding a veto over every unrelated merge. So the leg keeps the
+  # signal and loses the veto.
+  #
+  # Two things this deliberately is not. It is **not** removal: the paragraph
+  # above is the reason, and it survives — the cancellation test is real
+  # Windows-only proof and nothing else in the repository buys it. And it is
+  # **not** a narrowing to a hand-kept list of Windows-worthy suites: that list
+  # rots, and repo-31's own draft of it is the demonstration, since it named the
+  # engine's `ffmpeg-*` and `storage` suites and omitted the `hls-e2e` case that
+  # is the entire justification above.
+  #
+  # `continue-on-error` rather than a second, informational workflow, because a
+  # separate workflow would duplicate every setup step here — checkout, node,
+  # `npm ci`, `npm run build`, the Playwright cache and install — plus its own
+  # copy of the `changes` gate, and two copies drift. The cost of this shape is
+  # that a red Windows leg no longer announces itself by failing the run, which
+  # is repo-31's own recorded objection to option D and is answered, as far as
+  # it can be answered without a gate, by the job's name saying `informational`
+  # in the checks list and by the summary step at the end of this job.
   test:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -235,6 +263,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # Safe to rename on the ruleset read recorded at the top of this file
+    # (2026-08-23): `main` carries no `required_status_checks`, so no check is
+    # required by name. Worth the rename because the checks list is where
+    # somebody decides whether a red X blocks them, and `test (windows-latest)`
+    # sitting red under a green run is otherwise indistinguishable from a
+    # broken gate.
+    name: test (${{ matrix.os }}${{ matrix.os == 'windows-latest' && ', informational' || '' }})
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -289,8 +325,36 @@ jobs:
           sudo apt-get install -y --no-install-recommends ffmpeg
           echo "FFMPEG_PATH=/usr/bin/ffmpeg" >> "$GITHUB_ENV"
       - run: npm test
+      # The other half of "informational, not invisible". `continue-on-error`
+      # takes the run's conclusion green, so without this a Windows failure is
+      # one collapsed job in a list of green ones. The run summary is the page
+      # anyone opening the run lands on, it costs nothing when the leg passes,
+      # and it is a notice rather than a gate — which is the whole point of the
+      # option this implements.
+      #
+      # `if: failure()` still fires under a job-level `continue-on-error`: that
+      # setting changes the run's conclusion, not the step context, and steps
+      # after a failed one are skipped unless they say otherwise. `shell: bash`
+      # because this job's default shell on this runner is PowerShell.
+      - if: failure() && runner.os == 'Windows'
+        name: Say so in the run summary
+        shell: bash
+        run: |
+          {
+            echo "### :warning: the \`windows-latest\` leg failed"
+            echo
+            echo "It is **informational** and did not gate this run (repo-31)."
+            echo
+            echo "Two things it is usually not worth confusing: a real Windows"
+            echo "defect in the product, and this repository's own tooling"
+            echo "making a POSIX assumption. Both deserve a ticket. Neither"
+            echo "blocks the merge, and nothing else will remind anybody."
+          } >> "$GITHUB_STEP_SUMMARY"
 
-  # The slow, downloader-specific gates — end-to-end, the container, and the
-  # Windows suite — live in `downloader.yml`, which only runs when that tool or
-  # the packages beneath it change. Nothing here should grow tool-specific: this
-  # workflow is what every tool in the repo pays on every change.
+  # The slow, downloader-specific gates — end-to-end and the container — live in
+  # `downloader.yml`, which only runs when that tool or the packages beneath it
+  # change. Nothing here should grow tool-specific: this workflow is what every
+  # tool in the repo pays on every change. This used to read "and the Windows
+  # suite"; there is no Windows job there and `git log -S windows` over that
+  # file finds no revision in which there was. `windows-latest` appears in this
+  # repository exactly once, in the matrix above.

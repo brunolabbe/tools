@@ -3,7 +3,7 @@ id: repo-31
 tool: repo
 title: The CI matrix's windows-latest leg is almost all the red, and whether to keep it is unanswered
 kind: chore
-status: needs-decision
+status: done
 milestone: null
 depends_on: []
 ---
@@ -13,7 +13,7 @@ depends_on: []
 ## Why
 
 `.github/workflows/ci.yml` runs the unit-test matrix over
-`` `.github/workflows/ci.yml:215` "os: [ubuntu-latest, windows-latest]" ``, gated
+`` `.github/workflows/ci.yml:264` "os: [ubuntu-latest, windows-latest]" ``, gated
 by a `changes` job rather than an event filter — a documentation-only push still
 skips the matrix, on both `push` and `pull_request` alike. The repo's owner asked
 directly whether the Windows leg is worth keeping. This ticket is where that
@@ -135,6 +135,15 @@ elsewhere matches.
 
 ### 4. What the runner actually proves — the load-bearing measurement
 
+> **Corrected at build time, 2026-09-07.** One claim below is wrong, and it is
+> the one this section calls its flagship: `killProcessTree`'s Windows branch
+> **is** exercised by a test, on `windows-latest`, and has been all along. The
+> paragraph beginning "**`killProcessTree`'s real Windows branch**" is left
+> standing rather than rewritten, so the error is visible to whoever inherits
+> this page; read it with the correction, which is in this ticket's Log and in
+> [repo-34](./repo-34-the-windows-only-code-paths-nothing-asserts.md). The
+> section's other findings were checked and hold.
+
 This needed working out, not quoting, and the answer is more specific than "the
 divergent logic is already unit-testable":
 
@@ -167,9 +176,9 @@ for keeping the leg is currently unbacked by any test, on either OS.
 **A second, undeduplicated implementation does get exercised for real, and it is
 this ticket's actual evidence for "the runner earns something."**
 `tools/downloader/resolvers/src/resolvers/ytdlp.ts` has its own `killTree`
-(`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:732` "if (process.platform ===" ``,
+(`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:734` "if (process.platform ===" ``,
 spawning
-`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:733` "const killer = spawn(" ``
+`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:735` "const killer = spawn(" ``
 via a bare `"taskkill"` resolved off `PATH`, not the absolute path `kill.ts`
 resolves), and `tools/downloader/resolvers/test/ytdlp.test.ts`'s
 `` `tools/downloader/resolvers/test/ytdlp.test.ts:392` "an abort kills the process instead of hanging" ``
@@ -180,9 +189,9 @@ test cannot buy: whether `spawn("taskkill", [...], { shell: false })` resolved
 off `PATH` on a real Windows host does what the code assumes.
 
 **`findExecutable`'s `PATHEXT` branch is untested on any platform** —
-`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:820` "const isWindows = process.platform ===" ``
+`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:822` "const isWindows = process.platform ===" ``
 /
-`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:822` "const extensions = isWindows" ``
+`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:824` "const extensions = isWindows" ``
 — and unlike `taskkillPath`, it reads `process.platform` and `process.env`
 directly rather than accepting them as parameters, so making it testable
 cross-platform is a small refactor away, not free today.
@@ -262,8 +271,8 @@ Four `gh run view` calls, as asked:
   regression reported green on `main`'s own push trigger, having never run the
   matrix.
 - The `changes` gate is real, not a guess:
-  `` `.github/workflows/ci.yml:146` "changes:" `` /
-  `` `.github/workflows/ci.yml:211` "if: needs.changes.outputs.code == 'true'" ``.
+  `` `.github/workflows/ci.yml:167` "changes:" `` /
+  `` `.github/workflows/ci.yml:260` "if: needs.changes.outputs.code == 'true'" ``.
 - Only the unfiltered `schedule` trigger ran the matrix against the regression
   and went red — run `34127289168`, 13:25 UTC, the first of the four
   citations-only failures in measurement 1's table. Everything between 11:39
@@ -287,7 +296,7 @@ mutually exclusive.
 ### A. Remove `windows-latest` from the matrix
 
 Cheapest. Deletes one array entry at
-`` `.github/workflows/ci.yml:215` "os: [ubuntu-latest, windows-latest]" ``.
+`` `.github/workflows/ci.yml:264` "os: [ubuntu-latest, windows-latest]" ``.
 
 - Ends the dominant source of red immediately — 7 of 8 failures counted here
   disappear outright, and the 8th's Windows half with them.
@@ -363,10 +372,26 @@ option list.
 
 ## Build
 
-**Not startable.** The build is whichever option is chosen; writing it before
-the decision would be writing four briefs and discarding three. When the
-decision is recorded on this page, replace this section with the steps for the
-chosen option and move `status` to `ready` in the same commit.
+**Answered: option D — keep `windows-latest`, run it, report it, do not gate
+merges on it.** The reasoning, the rejected options and what each cost are in
+the Log entry below. The steps, all in `.github/workflows/ci.yml`:
+
+1. `continue-on-error: ${{ matrix.os == 'windows-latest' }}` on the `test` job,
+   rather than a second informational workflow. Both were on the table; the
+   second workflow would duplicate checkout, node, `npm ci`, `npm run build` and
+   the Playwright cache and install, plus its own copy of the `changes` gate,
+   and two copies drift.
+2. Rename the leg so the checks list says what it is:
+   `name: test (${{ matrix.os }}${{ ... ', informational' ... }})`. Safe because
+   `main` carries no `required_status_checks` — the ruleset read this file
+   records at the top, 2026-08-23, unre-checkable from the development container
+   since `gh api` is denied there.
+3. A final step, `if: failure() && runner.os == 'Windows'`, appending to
+   `$GITHUB_STEP_SUMMARY`. This is the answer to this ticket's own objection to
+   D, and it is a notice rather than a gate.
+4. Record the decision in the workflow's own comments, with the re-run
+   measurement, since that comment block is what the next person to consider
+   deleting the leg will read.
 
 ## Done when
 
@@ -396,3 +421,128 @@ Written against the decision rather than an implementation.
   the moment this session first queried it, and completed with the same
   failure a minute later) and the ffmpeg-static 504 in measurement 5, which had
   cleared by the time this session checked it.
+
+- **2026-09-07** — **Answered: D, and built.** Base `origin/main` at `4fad5f8`,
+  branch `repo-31-windows-leg-non-blocking`.
+
+  **The answer, and the shape of it.** The owner was given all four options with
+  **C listed first**, as the option this ticket's own brief had leaned toward,
+  and **chose D over it**. That order matters to the record: D is not the
+  obvious answer here and this entry should not read as though it were. The
+  costs that ruled the others out, as put to the owner:
+
+  - **A, remove the leg** — loses the one real Windows-only proof this ticket
+    found. Cheapest, and the only option that gives something up permanently.
+  - **B, status quo** — leaves in place the thing that actually failed: nobody
+    owns scheduled red, and B does not change that. The measurement below is B's
+    cost, still accruing.
+  - **C, narrow to the diverging suites** — buys a rule for which suites qualify
+    for the Windows leg, and that rule rots. This ticket said so about a
+    hypothetical future test; the correction below shows it rotting **in the
+    ticket's own draft of the list**, before anyone had implemented it.
+
+  **This ticket's objection to D stands, and is carried rather than dropped.**
+  D "removes the one mechanism (a failing gate) that would force the question"
+  and adds none to replace it. That is true and the owner chose D knowing it.
+  What the build does about it is not a replacement: the leg is renamed
+  `test (windows-latest, informational)` so the checks list distinguishes a red
+  that does not gate from a broken gate, and a failing Windows leg writes a
+  notice to the run summary saying it failed, that it did not gate, and that it
+  deserves a ticket. **Both are visibility, neither is a forcing function.**
+  Nothing here makes anybody look.
+
+  **The measurement, re-run rather than transcribed** (2026-09-07, ~21:55Z,
+  `gh run list --workflow=ci.yml --limit 30 --json databaseId,conclusion` then
+  `gh run view <id> --json jobs` on each failure): 30 runs — 4 success, 15
+  cancelled, **11 failure**. In all 11, `test (windows-latest)` was the _only_
+  failing job; the window has moved since filing and the concentration went from
+  7-of-8 to **11-of-11**. `gh run view 34155754193 --log-failed` on the newest
+  shows the same single assertion the filing found —
+  `citations.test.ts > --rev names which record it read…`,
+  `expected '2 references in ..\..\..\..\..\RUNNER…' to match /This record
+exists at that rev and ci…/` — at 19:32Z, roughly eight hours after it merged.
+  One regression, not eleven Windows problems.
+
+  **Measurement 4's flagship claim is wrong, and the correction changes what
+  `Done when` 4 asks for.** This ticket said `killProcessTree`'s Windows branch
+  "is exercised by no test, on any platform", having read
+  `tools/downloader/engine/test/ffmpeg-runner.test.ts` and found no abort or
+  cancel case there. True of that file; the test is in
+  `tools/downloader/engine/test/hls-e2e.test.ts` — "cancelling kills the process
+  tree and leaves no artifacts", no `skipIf` — which `.github/workflows/ci.yml`
+  names in its own matrix comment as the reason the matrix exists. The ticket
+  contradicted the workflow it was about, and neither the filing nor its gate
+  caught it.
+
+  Not taken on reading. `killProcessTree` was temporarily edited to append its
+  `pid` and `process.platform` to a scratch file, and
+  `npx vitest run tools/downloader/engine/test/hls-e2e.test.ts -t "cancelling
+kills the process tree"` was run: 1 passed, and the marker file contained
+  exactly `killProcessTree 26858 linux`. So a real abort of a real ffmpeg
+  reaches the call; on `windows-latest` the same call takes `IS_WINDOWS` into
+  `killTreeWindows` and the real `taskkill.exe`, and the two `fs.stat`
+  rejections after it are the `EBUSY`-avoidance proof `kill.ts`'s docblock
+  argues from. The instrumentation was reverted; `git status` was clean before
+  the first real edit, and no `tools/` path is in this branch.
+
+  Two consequences. **The leg is worth more than this ticket credited it with**,
+  which supports keeping it and is consistent with the owner's answer. And **C
+  would have deleted that proof**: C's suite list named the engine's `ffmpeg-*`
+  and `storage` suites and `resolvers/ytdlp.ts`, and omitted `hls-e2e.test.ts`.
+  The rot C was warned about is in the draft of C itself.
+
+  **Verdicts on `Done when`.**
+
+  1. **Met** — D recorded above with the rejected options and their costs, and
+     `status` is `done` in this commit, since the implementation is in it.
+  2. **Met by reference, not by this branch.** The `citations.mjs` Windows
+     regression is being filed as **repo-33** by another builder on a branch not
+     yet pushed. Deliberately not filed here and not edited here: two writers on
+     one id collide. This branch names it in `ci.yml`'s comment and nowhere
+     claims to fix it — the regression is still live, and `test (windows-latest)`
+     on this branch will be red for exactly it.
+  3. **Not applicable** — C was not chosen.
+  4. **Met by filing, with its premise corrected**:
+     [repo-34](./repo-34-the-windows-only-code-paths-nothing-asserts.md). The
+     gap as this ticket described it does not exist. What is left is three
+     narrower ones — `taskkillPath` has no direct assertion anywhere (a
+     search-order control whose only exercise is three layers away, behind a
+     `logger.warn` that swallows the failure), `findExecutable`'s `PATHEXT`
+     branch is untested and not testable without a small refactor, and
+     `assertPathInside` is OS-bound by an import rather than by necessity. Filed
+     rather than fixed here because two of the three are refactors of
+     `tools/downloader` source, and this branch is `repo`-scoped: folding them
+     in would put a downloader path under a squashed title written for a
+     workflow change. **`taskkillPath`'s test was nearly folded in anyway** — it
+     is a pure function with an injectable `env` and three assertions — and was
+     not, for that same scope reason. Recorded so the deferral is visible.
+
+  **Free fix taken on the way past**, since the lines were being edited: the
+  comment closing the `test` job said the "Windows suite" lives in
+  `downloader.yml`. It does not, and `git log -S windows --
+.github/workflows/downloader.yml` returns nothing at all, so no revision of
+  that file ever had one. Corrected to say `windows-latest` appears in this
+  repository exactly once.
+
+  **What was not verified, and could not be from here.** Three things, all
+  observable only once this branch is pushed and CI runs:
+
+  - That `if: failure()` fires in a step of a job carrying a job-level
+    `continue-on-error`. This is the documented split between a run's conclusion
+    and the step context, and the summary step is written on that reading, but
+    it was not executed locally — nothing here runs Actions.
+  - That the workflow still parses. There is **no YAML parser in this
+    repository's dependency tree** (`yaml` and `js-yaml` are both absent from
+    `node_modules`, and the container has no `pyyaml`), so `ci.yml` was reviewed
+    by eye and by diff and not machine-checked. `npm run check` does not read
+    it.
+  - That `main` still carries no `required_status_checks`, which is what makes
+    renaming the leg safe. `gh api` is denied in the development container by
+    `.claude/settings.json`, so this rests on the read `ci.yml` itself records
+    from 2026-08-23 and was not re-taken.
+
+  Each of those is answered by looking at this branch's own push run once, which
+  is a post-merge-shaped obligation on a ticket about to go `done` — which is
+  precisely what [repo-32](./repo-32-done-can-hide-an-outstanding-obligation.md)
+  is about, and it was answered in the same batch as this one. Its `awaiting`
+  field is not built yet, so this paragraph is where the obligation lives.
