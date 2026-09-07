@@ -3,10 +3,11 @@
  *
  * repo-30's whole subject is that this sweep lived in a markdown fence for
  * months and was wrong the entire time, in ways that produced a *confident*
- * answer rather than an error. The six cases below are the six failure modes
- * measured against the shell version before the lift, and each one exists so
- * that removing the corresponding guard turns this file red instead of turning
- * the board silently wrong.
+ * answer rather than an error. Each case below is a failure mode measured
+ * against the shell version before the lift, and exists so that removing the
+ * corresponding guard turns this file red instead of turning the board silently
+ * wrong. No count is written here on purpose: the guard set grew once already,
+ * and a number in a docblock is a fact with nothing keeping it true.
  *
  * Two layers, deliberately:
  *
@@ -14,10 +15,18 @@
  *     `run` is exact — it can die after writing half its output, which is the
  *     one case a `PATH` stub cannot express — and it is the same seam the CLI
  *     itself uses, not a test-only branch.
- *   - **the real CLI, spawned**, for the two cases that are about the process
- *     boundary: a command that is genuinely not on `PATH`, and a real `git`
- *     failing outside a repository. An injected runner cannot prove either, and
- *     both are `Done when` lines.
+ *   - **the real CLI, spawned**, for the cases that are about the process
+ *     boundary: a command genuinely not on `PATH`, a real `git` failing outside
+ *     a repository, and a checkout with no `origin/main`. An injected runner
+ *     cannot prove any of them, and they are `Done when` lines.
+ *
+ * **A CLI test's fixture has to establish the condition it names, and this file
+ * learned that from CI rather than from care.** The `PATH`-farm test asserted
+ * `gh`-absent-is-127 and passed five times across two machines without ever
+ * spawning `gh`: every one of those checkouts had an `origin/main`, and the
+ * runner's did not, so `git` failed 128 first. See the case itself for the
+ * repro. The rule it earned is that these tests assert *which* child failed
+ * before they assert a number.
  */
 
 import { spawnSync } from "node:child_process";
@@ -313,26 +322,91 @@ function cli(args: string[], over: { cwd?: string; PATH?: string } = {}) {
  * The lookup walks `PATH` here rather than asking a shell `command -v`, because
  * spawning `sh -c` to build a fixture in the repo that forbids shells would be
  * a poor joke, and because a symlink farm is what makes the 127 real rather
- * than stubbed.
+ * than stubbed. A farm is also the only option that works when the two commands
+ * share a directory, which on this box they do (`/usr/bin/git`, `/usr/bin/gh`)
+ * — filtering `PATH` by directory would take `git` out with `gh`.
+ *
+ * **The link keeps the resolved file's own name, extension included.** A link
+ * named `git` pointing at `git.exe` is invisible to Windows' `PATHEXT` lookup,
+ * which is the same shebang-and-shims hazard `.claude/rules/testing.md` records
+ * against `node_modules/.bin`. Getting it wrong does not fail loudly: the farm
+ * silently provides neither command and the sweep's *first* call is the one
+ * that dies, which is a different test than the one that is written.
  */
 function pathWithout(missing: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-path-"));
   const entries = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
+  const extensions = ["", ".exe", ".cmd", ".bat"];
   for (const command of ["git", "gh"]) {
     if (command === missing) continue;
     const found = entries
-      .map((entry) => path.join(entry, command))
+      .flatMap((entry) => extensions.map((ext) => path.join(entry, command + ext)))
       .find((candidate) => fs.existsSync(candidate));
-    if (found) fs.symlinkSync(found, path.join(dir, command));
+    if (found) fs.symlinkSync(found, path.join(dir, path.basename(found)));
   }
   return dir;
 }
 
+/**
+ * Case 6 — a command that is not installed at all.
+ *
+ * **This test is the branch's one CI failure, and the reason is worth more than
+ * the fix.** It passed here three times and on the reviewer's box twice, then
+ * came back `expected 128 to be 127` on both `ubuntu-latest` and
+ * `windows-latest`. Nothing about `gh` had changed: a default `actions/checkout`
+ * fetches one commit and creates **no remote-tracking refs**, so `git ls-tree
+ * origin/main` failed 128 before `gh` was ever spawned. Every local run had an
+ * `origin/main` to read, so the assertion had never once observed the thing its
+ * own name describes. Reproduced by rebuilding that checkout — `git init`, a
+ * depth-1 fetch of one sha, no `origin/main` — which returns 128 with the
+ * default rev and 127 with `--rev HEAD`.
+ *
+ * So two changes, and neither is a loosened assertion. `--rev HEAD` makes the
+ * *other* command succeed, which is what the fixture always had to do for this
+ * test to mean anything. And the assertions now name which child failed, so if
+ * the farm ever stops providing `git` this fails saying so instead of passing
+ * on a coincidence — a bare `toBe(127)` is satisfied by `git` being missing too.
+ */
 test("a command that is not on PATH exits 127 and says which one", () => {
-  const result = cli(["repo"], { PATH: pathWithout("gh") });
+  const result = cli(["repo", "--rev", "HEAD"], { PATH: pathWithout("gh") });
+  expect(result.error).toBeUndefined();
+  // Which child died, asserted before the number: `git` failing would also be
+  // a non-zero exit, and this test would be measuring the fixture, not the code.
+  expect(result.stderr).toMatch(/^gh:/mu);
+  expect(result.stderr).not.toMatch(/git ls-tree/u);
   expect(result.status).toBe(127);
-  expect(result.stderr).toMatch(/gh/u);
   // The half that matters: it did not answer from the merged half alone.
+  expect(result.stdout).toBe("");
+});
+
+/**
+ * The other half of the same discovery: a checkout with no `origin/main` is the
+ * ordinary state on a runner, so the default rev has to fail *legibly* rather
+ * than just non-zero. It must not fall back to `HEAD` — answering confidently
+ * from a different tree is this ticket's defect in one more costume.
+ */
+test("a missing default rev keeps git's status and says how to fix it", () => {
+  const shallow = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-shallow-"));
+  for (const args of [
+    ["init", "-q"],
+    [
+      "-c",
+      "user.email=t@example.com",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "x",
+    ],
+  ]) {
+    expect(spawnSync("git", args, { cwd: shallow, encoding: "utf8" }).status).toBe(0);
+  }
+  const result = cli(["repo", "--repo", shallow]);
+  expect(result.status).toBe(128);
+  expect(result.stderr).toMatch(/origin\/main` is not in this checkout/u);
+  expect(result.stderr).toMatch(/--rev HEAD/u);
   expect(result.stdout).toBe("");
 });
 

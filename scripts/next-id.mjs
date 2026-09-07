@@ -165,9 +165,40 @@ export function collect(prefix, options = {}) {
   const cwd = options.cwd;
   const rev = options.rev ?? "origin/main";
 
+  /**
+   * `origin/main` is not present in every checkout, and the failure reads as a
+   * bare `fatal: Not a valid object name` with no hint about what to do.
+   *
+   * A default `actions/checkout` fetches one commit and creates no
+   * remote-tracking ref at all, so this is the *ordinary* state on a runner and
+   * in any shallow clone — it is not an edge case. It is also how repo-30's own
+   * spec first went red: the test asserting `gh`-absent-is-127 never reached
+   * `gh`, because git failed 128 first, and locally it passed because this
+   * worktree happened to have the ref.
+   *
+   * The status stays the child's own. Only the advice is added — falling back
+   * to `HEAD` would answer confidently from a different tree, which is this
+   * ticket's defect in one more costume.
+   */
+  const lsTree = (args) => {
+    try {
+      return lines(run("git", args, { cwd }));
+    } catch (error) {
+      const failure = /** @type {Error} */ (error);
+      if (/not a valid object name|unknown revision|bad revision/iu.test(failure.message)) {
+        failure.message +=
+          `\n\`${rev}\` is not in this checkout. A shallow clone and a default CI checkout have no` +
+          `\nremote-tracking refs — run \`git fetch origin main\`, or pass \`--rev HEAD\` to sweep` +
+          `\nthe tree you have. This does not fall back on its own: answering from a different tree` +
+          `\nwithout saying so is the defect this command exists to prevent.`;
+      }
+      throw failure;
+    }
+  };
+
   const merged = [
-    ...lines(run("git", ["ls-tree", rev, "docs/work/", "--name-only"], { cwd })),
-    ...lines(run("git", ["ls-tree", "-r", rev, "tools/", "--name-only"], { cwd })).filter((p) =>
+    ...lsTree(["ls-tree", rev, "docs/work/", "--name-only"]),
+    ...lsTree(["ls-tree", "-r", rev, "tools/", "--name-only"]).filter((p) =>
       p.includes("/docs/work/"),
     ),
   ];

@@ -173,6 +173,19 @@ verified by removing each one in turn, not by assertion.
 | dedupe across sources, as `sort -u` did | a board holding `repo-99` in two pull requests printed it **once** — the clash is precisely what got erased |
 | break ties by input order | two rows holding one id swap between runs |
 | swallow a failing `gh pr list` | the merged half alone, exit 0 — which is the original defect exactly |
+| drop the advice on a missing default rev | `fatal: Not a valid object name origin/main` and nothing else, which is what every CI runner and every shallow clone gets |
+
+**The codes are each child's own, so which one you see says which command
+failed — and on a fresh checkout that is `git`, not `gh`.** A default
+`actions/checkout` fetches one commit and creates no remote-tracking refs at
+all, so `origin/main` is simply absent and the sweep exits **128** naming the
+ref, before `gh` is ever spawned. Same in any shallow clone. It says what to do
+(`git fetch origin main`, or `--rev HEAD`) and deliberately does not fall back on
+its own, because answering confidently from a different tree is the defect this
+whole page is about. Read the exit code as *which child*, never as *what went
+wrong* — this branch's own spec asserted 127 and passed five times across two
+machines without once reaching `gh`, because every local checkout had the ref
+that CI does not.
 
 Two of those are traps rather than oversights, and both caught a repair in
 progress. `grep` exits 1 on *no match*, so the shell version's `set -o pipefail`

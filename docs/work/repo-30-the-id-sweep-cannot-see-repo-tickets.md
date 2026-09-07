@@ -370,3 +370,63 @@ repo-31`. `dl` → `dl-46`, `pl` → `pl-38`.
   harness: it corrupted a mutation's anchor on purpose to confirm that `SKIPPED`
   is genuinely distinct from a pass, which is the same question asked one layer
   further up again. Three layers, and the same trap at each.
+
+- **2026-09-07, the CI red** — PR #176 failed on both `ubuntu-latest` and
+  `windows-latest`: `expected 128 to be 127`, in the one test named
+  `a command that is not on PATH exits 127`. **The fix is three lines and the
+  reason is the entry.**
+
+  **A default `actions/checkout` creates no remote-tracking refs.** It fetches
+  one commit; there is no `origin/main`. So `git ls-tree origin/main` exited 128
+  and the sweep stopped there, before `gh` — the command the test is about — was
+  ever spawned. Reproduced by rebuilding that checkout rather than by reading the
+  workflow: `git init`, `git fetch --depth 1 origin <sha>`, `git checkout
+FETCH_HEAD`, no remote-tracking refs at all; the CLI returns **128** with the
+  default rev and **127** with `--rev HEAD`, through the same `PATH` farm.
+
+  **The assertion had never once observed what its name describes.** It passed
+  three times here and twice on the reviewer's machine — five runs across two
+  machines — and all five had an `origin/main` to read, because both were working
+  clones. This is exactly the shape recorded under _tests that measure the
+  sandbox_: the test measured a property of the developer's checkout and
+  reported it as a property of the code. Five green runs on two machines is not
+  independent evidence when both machines share the assumption.
+
+  **What changed, and what deliberately did not.** The test now passes
+  `--rev HEAD`, so the _other_ command succeeds and `gh` is genuinely the one
+  that fails — the fixture finally establishing the condition it names. And it
+  asserts **which** child failed before it asserts a number: a bare `toBe(127)`
+  is equally satisfied by `git` being missing, so the number alone could never
+  have told the two apart. The documented promise was not weakened; `Done when` 2
+  asks only for a non-zero exit, and it would have been easy to relax the
+  assertion to `not.toBe(0)` and go green while learning nothing.
+
+  **Two things folded in, both earned by the incident rather than by tidiness.**
+  A failed default-rev `git ls-tree` now appends what to do — `git fetch origin
+main`, or `--rev HEAD` — while keeping git's own 128, because a bare
+  `fatal: Not a valid object name` is the ordinary experience of anyone running
+  this in a shallow clone, and legibility on failure is the entire subject of
+  this ticket. It **does not** fall back to `HEAD` on its own: answering
+  confidently from a different tree is the defect in one more costume.
+  `concurrency.md` gains the caveat that an exit code says _which child failed_,
+  not _what went wrong_.
+
+  **And one hazard found while fixing it, not by failing.** The `PATH` farm
+  linked `git` under a name with no extension, which Windows' `PATHEXT` lookup
+  cannot find for a `git.exe` — the same shims-and-shebang trap
+  `.claude/rules/testing.md` records against `node_modules/.bin`. It would not
+  have failed loudly: the farm would have supplied neither command, the first
+  call would have died, and a `toBe(127)` might well have passed on the wrong
+  command. The link now keeps the resolved file's own basename. That this was
+  invisible on Linux is the same lesson as the rest of the entry.
+
+  **The guard set is 8 now, not 7**, and the harness re-run against the fixed
+  source reports `mutations: 8 stale: 0 unpinned: 0 restored: true`. The gate
+  record above says seven and maps them one-to-one onto a seven-row table; that
+  was true at `6a5944b` and is left exactly as the reviewer wrote it. The eighth
+  is the missing-rev advice, which did not exist when it was gated.
+
+  **Not mine, and not touched:** `scripts/test/citations.test.ts` fails on
+  `windows-latest` on `main` at `24e5bf7` too, with none of this branch's work in
+  the tree. It arrived with repo-25 and is inherited by every branch; the
+  orchestrator is handling it separately.
