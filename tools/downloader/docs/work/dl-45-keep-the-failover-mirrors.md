@@ -463,3 +463,126 @@ z.ZodType<MediaVariant>` would have compiled without it and the field would
   was found during the build and is recorded in the previous entry, and the
   second `resolvers` producer is here by the owner's decision. A ticket with no
   `**Packages:**` line ended up touching five.
+
+- **2026-09-07 — a gate finding, reproduced, half-corrected, and fixed rather
+  than filed.** The reviewer found that `groupMirrors`, applied to the yt-dlp
+  producer by the fold-in above, merges two genuinely different renditions when
+  the mapper cannot tell them apart. Reproduced independently before it was
+  accepted: two audio-only formats, `mp4a.40.2` at 128 kbps, distinguished only
+  by `format_note: "English"` and `format_note: "French"`, came back as **one
+  variant** with the French URL in `alternateUrls`.
+
+  **The cause is that the key is read off a lossy projection.** `renditionKey`
+  is built from the mapped `MediaVariant`, and `mapYtDlpInfo` discards
+  `format_note` — the field yt-dlp uses for exactly this human-facing
+  distinction when it has no `language`. Two different tracks therefore mapped
+  to byte-identical variants, and a grouping that reads _absence of visible
+  difference_ as _sameness_ merged them. The HLS producer is not exposed the
+  same way: two `EXT-X-STREAM-INF` entries agreeing on every attribute are one
+  rendition by RFC 8216 §6.2.4, and the parser maps every attribute it reads.
+
+  **One half of the reported framing does not survive, and the correction
+  matters.** The finding described this as losing "a real, previously-reachable
+  choice". It was not previously reachable: measured, the picker's dl-40
+  collapse already merged those two into one row before dl-45 existed —
+  `toDisplayRows` on the ungrouped pair returns 1 row, `collapsed: 1`, keeping
+  the English one. Losing that choice is **dl-40's recorded trade, not a dl-45
+  regression.**
+
+  What dl-45 genuinely added is worse than a display loss and is the reason this
+  was fixed rather than documented: before, the French URL was _discarded_. Now
+  it is a live failover target, so a host failure on the English track would
+  **silently download French audio under the row the user chose for English**.
+  Serving content the user did not select is a different class of defect from
+  not offering it.
+
+  **The decision the gate framed had a cost premise, and the premise was wrong.**
+  It was put as "more correct but more work, and it touches the shared
+  function's contract", with the alternative being to accept a documented risk.
+  Measured instead of estimated: the guard is **two source files and about
+  twenty lines**, needed **no test changes**, **no fixture regeneration**, and
+  the suite stayed green at 1184. When one option is both more correct and
+  nearly free, the trade the question was built on is not there, so it was not
+  escalated as a decision — it was fixed, and this entry is the record for
+  anyone who would have chosen differently.
+
+  `groupMirrors` gained a `distinguish` callback: the producer's answer to what
+  its own mapping threw away, defaulting to contributing nothing. HLS passes
+  nothing, because its variants carry everything that separates one rendition
+  from another. yt-dlp passes `format_note` keyed by `format_id`.
+
+  **The guard is checked in both directions**, because the failure mode of
+  getting it wrong is silent either way. A discriminator that was always present
+  would have turned `groupMirrors` into a no-op for yt-dlp and every other
+  assertion would have stayed green — so there is a test asserting the balancer
+  fixture carries **no** `format_note` at all and still groups into 5 variants
+  with alternates. Red-checked by stubbing the callback to `""`: the
+  language-track test fails, the balancer tests do not.
+
+  **What this does not claim.** It closes the reproduced case and the shape it
+  represents. It does not prove that `format_note` is the _only_ thing
+  `mapYtDlpInfo` drops that could distinguish content — `dynamic_range` and
+  `audio_channels` are plausible candidates that would need contract fields
+  rather than a discriminator, and neither has been observed causing a bad
+  merge. Nothing here has been measured against a live site.
+
+- **2026-09-07 — the yt-dlp fold-in is reverted by the owner, and dl-45 ships as
+  the HLS-only change.** This undoes the second decision two entries above.
+  **Both entries stay**: the trail is the point, and an entry rewritten to look
+  like it always said this would hide that the fold-in is what found the defect.
+
+  **What was put to the owner** was three options — narrow the guard in place
+  (the gate's lean and the orchestrator's), revert the fold-in to its own
+  ticket, or accept the defect as a documented risk — together with the fact the
+  decision turns on: **this branch creates that defect; it does not exist on
+  `main`.** The owner chose the split, over the recommendation of both the
+  builder and the gate.
+
+  The reasoning, as relayed: the fold-in was decided on "the context is loaded",
+  and the context then produced a correctness defect whose fix is not obvious.
+  yt-dlp needs a positive same-content signal that HLS gets free from manifest
+  structure, and that is a ticket's worth of thinking rather than a guard bolted
+  onto a branch already twice widened.
+
+  **What was reverted**, all of it back to the pre-fold-in state and verified
+  rather than assumed — `resolvers/src/resolvers/ytdlp.ts` is byte-identical to
+  `origin/main` (`git diff origin/main -- <path>` is empty):
+
+  - `groupMirrors` and `renditionKey` moved back out of
+    `resolvers/src/common.ts` into `manifest/hls.ts`, and `common.ts` is
+    untouched by dl-45 again. With HLS the only consumer, that is where they
+    belong: this repo lifts shared code on the second _real_ consumer, and there
+    is once again one. dl-47 is that second consumer when it lands.
+  - The `distinguish` guard written against the gate's finding is gone with it,
+    and is recorded on dl-47 as **option A**, with its measured cost, so the
+    next builder starts from a measurement rather than an estimate.
+  - `balancer-duplicate-ladder.variants.json` back to ten variants;
+    `ytdlp.test.ts`, `probe-panel.test.tsx` and the balancer case in
+    `presentation-helpers.test.ts` back to `collapsed: 5`.
+
+  **What was kept, and why it stands on its own.**
+  `hls-master-mirrors-jittered-bandwidth` stays. Its original justification —
+  "the only fixture that still makes `collapsed` non-zero" — **died with the
+  revert and its comment has been corrected rather than left to read as still
+  true.** The reason it earns its place now is different and better: the two
+  live collapse fixtures prove different things. The balancer's rows differ in
+  their **URL alone**, which a producer _can_ group and dl-47 will, at which
+  point that fixture stops exercising anything. The jittered manifest's rows
+  differ in a **real number the table does not render**, which no producer may
+  ever group because they genuinely are different declarations. Only the second
+  is permanent. Asked to judge it on its own merits, that is the judgement, and
+  it is a stronger claim than the one it replaces.
+
+  **A correction to something in the previous entry.** That entry reported the
+  guard as "suite green at 1184". The suite was green; **`npm run check` was
+  not** — oxlint raised two `no-shadow` errors in the two tests the guard added
+  (`info` and `probe` shadowing the describe-level bindings). It was caught on
+  the run immediately after and the code is reverted regardless, so nothing
+  shipped on it. It is recorded because the earlier entry read as a clean gate
+  and was not: **a suite passing is not `npm run check` passing**, and reporting
+  one while implying the other is the failure mode this repo keeps writing down.
+
+  **The fold-in was not wasted, and dl-47 says so too.** It is what surfaced the
+  language-merge defect before a shared grouping key reached `main`, and it is
+  what surfaced the collapsed-count gap — dl-40's picker collapse having its code
+  and not one fixture exercising it. Both were bought by doing the work.

@@ -185,12 +185,18 @@ describe("variant rows", () => {
  * rung declared once per CDN mirror — is grouped in the HLS parser since dl-45,
  * so it no longer reaches the picker as separate rows at all.
  *
- * That leaves the picker's collapse with exactly one live producer, the yt-dlp
- * ladder below, and it is worth being clear about why the collapse stays: the
- * two do different jobs. The parser groups entries it *knows* are one rendition,
- * from the manifest's attributes. The picker collapses rows it *renders*
- * identically, from whatever any tier produced. `collapsed` counts the second,
- * so it now reads zero for a mirrored manifest, and that is the honest number.
+ * It is worth being clear about why the collapse stays, because dl-45 took away
+ * one of the two things it used to be doing. The parser groups entries it
+ * *knows* are one rendition, from the manifest's attributes. The picker
+ * collapses rows it *renders* identically, from whatever any tier produced.
+ * `collapsed` counts the second, so it now reads zero for a mirrored manifest,
+ * and that is the honest number.
+ *
+ * Two fixtures below still exercise it and they are not interchangeable: the
+ * yt-dlp ladder, whose mirrors no producer has grouped **yet** (a follow-up
+ * ticket will, and then it will stop counting), and the jittered-bandwidth
+ * manifest, whose rows no producer may **ever** group because they genuinely
+ * differ. Only the second is permanent.
  */
 describe("renditions that differ only in what the table cannot show (dl-40, dl-45)", () => {
   test("a mirrored manifest arrives pre-grouped, so the picker has nothing to merge", () => {
@@ -259,20 +265,22 @@ describe("renditions that differ only in what the table cannot show (dl-40, dl-4
     );
   });
 
-  test("the tier's dedup and its mirror grouping are different jobs", () => {
-    // The reported video needed both, and this is what the tier now emits: the
-    // exact duplicates the play-options map produced are deleted, and the
-    // mirrors that are left ride on the rendition they belong to instead of
-    // arriving as rows for the picker to throw away (dl-45).
+  test("the picker's collapse and the tier's dedup are different jobs", () => {
+    // The reported video needed both. This is the tier's output — duplicates
+    // already dropped, mirrors still present — and it is still ten rows' worth
+    // of variants until the picker collapses them to five.
+    //
+    // dl-45 grouped the *manifest* producer's mirrors and deliberately did not
+    // touch this one: the yt-dlp fold-in was built, found to merge two genuinely
+    // different audio tracks, and reverted to its own ticket by the owner. So
+    // the tier still emits one variant per mirror and the picker still throws
+    // the alternates away here, exactly as it did before dl-45.
     const fromTier = parsedVariants("ytdlp/balancer-duplicate-ladder");
-    expect(fromTier).toHaveLength(5);
-    expect(fromTier.map((item) => 1 + (item.alternateUrls?.length ?? 0))).toEqual([3, 2, 2, 1, 2]);
+    expect(fromTier).toHaveLength(10);
 
     const { rows, collapsed } = toDisplayRows(fromTier);
     expect(rows).toHaveLength(5);
-    // Nothing for the picker to merge — which is the whole change, and the line
-    // below is why the picker's collapse still exists anyway.
-    expect(collapsed).toBe(0);
+    expect(collapsed).toBe(5);
     expect(rows.map((row) => row.quality)).toEqual([
       "1280×720",
       "848×480",
@@ -292,18 +300,28 @@ describe("renditions that differ only in what the table cannot show (dl-40, dl-4
   });
 
   test("the picker still collapses what no producer could have grouped", () => {
-    // **This test is what dl-45 left the picker's collapse to do, and it is the
-    // only fixture in the repo that still makes `collapsed` non-zero** —
-    // measured across all six derived fixtures after the yt-dlp fold-in, the
-    // other five now report 0. Without it, dl-40's collapse would have kept its
-    // code and lost its proof.
+    // The case above and this one look alike and are not the same claim, which
+    // is the reason both are here.
     //
-    // Two rungs at two hosts whose declared BANDWIDTH differs by a few hundred
-    // bps. `groupMirrors` is exact and correctly refuses to call them the same
-    // rendition; `formatBitrate` renders both as `1.5 Mbps`, so the table would
-    // show two rows a person cannot tell apart. That gap is the picker's, and
-    // nothing upstream can close it — which is a sharper claim than the one this
-    // test used to make.
+    // Above, the picker merges rows that differ in their **URL alone**. A
+    // producer *can* group those — dl-45 did exactly that for the manifest
+    // parser, and a follow-up ticket will do it for the yt-dlp tier, at which
+    // point that fixture drops to `collapsed=0` and stops exercising anything.
+    // It is a case that is on its way upstream.
+    //
+    // Here the two rows differ in a **real number the table does not render**:
+    // two rungs at two hosts whose declared BANDWIDTH differs by a few hundred
+    // bps. `groupMirrors` is exact and correctly refuses to call them one
+    // rendition — they are not one, the manifest says so — while
+    // `formatBitrate` renders both as `1.5 Mbps`. No producer may merge these,
+    // so this case can never move upstream and is permanently the picker's.
+    //
+    // That distinction was measured rather than argued. During dl-45 the yt-dlp
+    // tier was briefly grouped too, and with both producers grouping, every
+    // derived fixture in the repo reported `collapsed=0` — dl-40's collapse had
+    // its code and not one fixture exercising it. The fold-in was reverted, so
+    // the case above is live again, but the gap it exposed was real and this is
+    // what closes it for good.
     const declared = parsedVariants("manifests/hls-master-mirrors-jittered-bandwidth");
     expect(declared).toHaveLength(4);
     expect(declared.every((item) => item.alternateUrls === undefined)).toBe(true);
