@@ -212,14 +212,17 @@ This diff records Build step 4's already-answered decision onto a `ready` ticket
   always ends in a container extension and none of `.jpg/.png/.webp/.gif` is
   one.
 
-  **Verified by mutation, not by reading.** Each of the four new tests was made
-  to fail on purpose: removing the persist call turns the TTL, sweep and restart
-  tests red; removing the route's disk fallback turns the TTL and restart tests
-  red; writing the bytes into `tmp/` instead of `out/` turns the sweep's unlink
-  assertion red, which is what stops that test being a tautology; and dropping
-  the row cleanup turns the sweep test red on its own. The first attempt at that
-  last one silently mutated nothing — the `sed` pattern still carried the old
-  indentation — and was rerun rather than reported.
+  **Verified by mutation, not by reading.** Five mutations, covering all seven
+  new tests: removing the persist call turns the TTL, sweep and restart tests
+  red; removing the route's disk fallback turns the TTL and restart tests red;
+  writing the bytes into `tmp/` instead of `out/` turns the sweep test red,
+  which is what stops it being a tautology; dropping the sweep's row cleanup
+  turns the sweep test red on its own; and dropping `assertRealPathInside` in
+  `readPersistedThumbnail` turns the confinement test in
+  [`thumbnails.test.ts`](../../api/test/thumbnails.test.ts) red. The first
+  attempt at the row-cleanup one silently mutated nothing — the `sed` pattern
+  still carried the pre-extraction indentation — and was rerun rather than
+  reported.
 
   **Folded in, because this made it free:** the retention sweep had no test at
   all. It lived inside `startRetentionSweep` reachable only through a
@@ -242,3 +245,31 @@ This diff records Build step 4's already-answered decision onto a `ready` ticket
   Also not done: no e2e assertion. `e2e/sniffer/mse-page.spec.ts` covers the
   same `/api/thumbnail/` path for the probe panel, and the e2e suites were not
   run on this branch.
+
+- **2026-09-07 — two gate findings closed, both reproduced first.** The gate
+  came back CONCERNS with two `med` findings, and both were real: the reviewer
+  deleted a line and ran the whole downloader project green, which is the only
+  form of that claim worth acting on. Reproduced independently here before
+  fixing anything — deleting the read-side allowlist check, and dropping the
+  `ON DELETE CASCADE` clause, each left **71 files / 1155 tests green**.
+
+  Two tests were added, and each was then made to fail by the mutation that was
+  green before it existed:
+
+  - the route's re-check of `record.contentType` against the allowlist —
+    `pipeline.test.ts` "a row naming a type outside the allowlist is refused,
+    bytes or no bytes". The row is written by hand through `saveThumbnail`,
+    because `captureThumbnail` allowlists before storing and so cannot produce
+    one; everything else about it is valid — real job, real bytes on disk,
+    well-formed token — which is what isolates this branch from the three
+    refusals above it. A second row over the _same bytes_ with an allowed type
+    is asserted to serve 200, so the 404 cannot be blamed on the row being
+    hand-written.
+  - the cascade — `job-store.test.ts` "deleting a job takes its persisted
+    preview row with it", mirroring the `file_tokens` test directly above it.
+    The migration comment claimed the cascade as fact and nothing held it.
+
+  Neither was a live orphan bug, and the reviewer said so rather than
+  overstating them: they were untested invariants, which is a different and
+  smaller thing. Recorded because "no test forces this" is exactly the finding
+  that disappears if it is not written down.

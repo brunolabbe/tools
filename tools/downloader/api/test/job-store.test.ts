@@ -387,4 +387,21 @@ describe("file tokens", () => {
     // remembers owning.
     expect(store.findToken("tok")).toBeNull();
   });
+
+  test("deleting a job takes its persisted preview row with it", () => {
+    // The twin of the case above, for `thumbnail_files` (dl-44). The migration
+    // comment claims the cascade as fact; without this, dropping the clause is
+    // green across the whole suite — measured, not assumed.
+    create();
+    store.saveThumbnail({
+      token: "thumb-tok",
+      jobId: "job-1",
+      path: "/p/preview.png",
+      contentType: "image/png",
+    });
+    expect(store.findThumbnail("thumb-tok")).not.toBeNull();
+
+    store.delete("job-1");
+    expect(store.findThumbnail("thumb-tok")).toBeNull();
+  });
 });

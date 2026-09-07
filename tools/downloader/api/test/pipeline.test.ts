@@ -342,6 +342,77 @@ describe("the preview a job keeps", () => {
     }
   });
 
+  test("a row naming a type outside the allowlist is refused, bytes or no bytes", async () => {
+    // The read path re-checks `record.contentType` because the value becomes a
+    // `Content-Type` on our own origin, and the row is a boundary: a build that
+    // did not agree with this one, or a hand-edited database, is the case it is
+    // for. Without this test, deleting that check is green across the whole
+    // downloader project — measured, not assumed.
+    //
+    // The row is written by hand rather than captured, because `captureThumbnail`
+    // allowlists before storing and so cannot produce one. Everything else about
+    // it is valid: a real job, a real file on disk, a well-formed token — which
+    // is what isolates the branch under test from the three refusals above it.
+    const image = await imageOrigin();
+    try {
+      harness = await createHarness({
+        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
+      });
+      const created = await createJob(harness);
+      const finished = await runToTerminal(harness, created.id);
+      const onDisk = path.join(harness.storageRoot, "out", created.id, "preview.png");
+      expect((await fs.stat(onDisk)).size).toBe(PNG.byteLength);
+
+      const store = harness.app.context.store;
+      // Well formed: 43 base64url characters, so it passes the shape guard and
+      // reaches the check this test is about.
+      const servable = "a".repeat(43);
+      const refused = "b".repeat(43);
+      store.saveThumbnail({
+        token: servable,
+        jobId: created.id,
+        path: onDisk,
+        contentType: "image/png",
+      });
+      store.saveThumbnail({
+        token: refused,
+        jobId: created.id,
+        path: onDisk,
+        // An SVG is a document that can carry script; serving one from this
+        // origin would be a stored XSS. See `ALLOWED_CONTENT_TYPES`.
+        contentType: "image/svg+xml",
+      });
+
+      // The control, so a 404 below cannot be blamed on the hand-written row:
+      // the same bytes under an allowed type serve.
+      const ok = await harness.app.server.inject({
+        method: "GET",
+        url: ROUTES.thumbnail(servable),
+      });
+      expect(ok.statusCode).toBe(200);
+      expect(ok.headers["content-type"]).toBe("image/png");
+
+      const blocked = await harness.app.server.inject({
+        method: "GET",
+        url: ROUTES.thumbnail(refused),
+      });
+      expect(blocked.statusCode).toBe(404);
+      expect(blocked.headers["content-type"]).not.toContain("image/svg+xml");
+
+      // The finished job's own preview is untouched by any of this.
+      expect(
+        (
+          await harness.app.server.inject({
+            method: "GET",
+            url: finished.thumbnailPath ?? "",
+          })
+        ).statusCode,
+      ).toBe(200);
+    } finally {
+      await image.close();
+    }
+  });
+
   test("a probe that never became a job keeps only its ten minutes", async () => {
     // The other side of the decision recorded on dl-44: the in-memory store is
     // kept, and it is the *only* source for a bare probe. There is no
