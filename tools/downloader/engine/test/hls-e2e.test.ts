@@ -303,7 +303,16 @@ describe("M1: HLS download end to end", () => {
     await expect(fs.stat(outcome.path)).resolves.toBeDefined();
   });
 
-  test("a missing Referer is a 403, which the engine reports as VARIANT_GONE", async () => {
+  // The name used to say "which the engine reports as VARIANT_GONE" while the
+  // assertion below said `DOWNLOAD_FAILED`, and the assertion was the right one:
+  // on the manifest path ffmpeg is doing the fetching, so every failure it has
+  // arrives as a non-zero exit with no status attached (`manifest.ts` sets
+  // `failureCode: "DOWNLOAD_FAILED"`). `VARIANT_GONE` is what the engine's *own*
+  // fetches raise on a 403 — see `http.ts` — and this is not one of them. Both
+  // codes are in `REPROBE_WORTHY`, which is why the mislabelling never showed up
+  // as a behaviour difference. Corrected while dl-45 was reading this path,
+  // since that ambiguity is the reason its failover has to classify by stderr.
+  test("a missing Referer is a 403, which the manifest path can only call DOWNLOAD_FAILED", async () => {
     const engine = createEngine({ storageDir });
     await engine.init();
 

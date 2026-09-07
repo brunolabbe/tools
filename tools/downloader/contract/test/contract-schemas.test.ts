@@ -147,6 +147,33 @@ describe("probeResultSchema", () => {
         .success,
     ).toBe(false);
   });
+
+  test("failover mirrors survive the parse, and an empty one does not (dl-45)", () => {
+    // `satisfies z.ZodType<MediaVariant>` proves the schema *may* carry the
+    // field; only a parse proves it does. Without this the field would be
+    // silently stripped at every boundary the contract guards — the job row read
+    // back out of SQLite most of all, which is the copy the engine downloads
+    // from.
+    const base = probe();
+    const [variant] = base.variants;
+    if (variant === undefined) throw new Error("fixture has no variant");
+
+    const withMirrors = {
+      ...base,
+      variants: [{ ...variant, alternateUrls: ["https://cdn-b.example/master.m3u8"] }],
+    };
+    const parsed = probeResultSchema.safeParse(withMirrors);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.variants[0]?.alternateUrls).toEqual(["https://cdn-b.example/master.m3u8"]);
+
+    // An empty string would clear `sourceUrlSchema`-free validation and then
+    // fail the SSRF guard's `new URL()`; it is not an address and is refused
+    // where it enters.
+    expect(
+      probeResultSchema.safeParse({ ...base, variants: [{ ...variant, alternateUrls: [""] }] })
+        .success,
+    ).toBe(false);
+  });
 });
 
 describe("jobEventSchema", () => {

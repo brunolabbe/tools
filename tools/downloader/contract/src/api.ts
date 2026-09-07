@@ -132,6 +132,10 @@ export const mediaVariantSchema = z.object({
   id: z.string().min(1),
   protocol: z.enum(STREAM_PROTOCOLS),
   url: z.string().min(1),
+  // Failover addresses for the same rendition. Each is SSRF-checked alongside
+  // `url` — see `urlsInProbeResult` — so an empty string here would be a URL
+  // that passes validation and fails the guard's parse.
+  alternateUrls: z.array(z.string().min(1)).optional(),
   audioUrl: z.string().optional(),
   hasVideo: z.boolean(),
   // Optional on purpose: absent means unverified, not silent. See `MediaVariant`.

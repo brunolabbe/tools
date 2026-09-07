@@ -305,13 +305,24 @@ export interface ProbeUrls {
 }
 
 export function urlsInProbeResult(probe: {
-  variants: readonly { url: string; audioUrl?: string | undefined }[];
+  variants: readonly {
+    url: string;
+    alternateUrls?: readonly string[] | undefined;
+    audioUrl?: string | undefined;
+  }[];
   subtitles: readonly { url: string }[];
   thumbnailUrl?: string | undefined;
 }): ProbeUrls {
   const mustPass: string[] = [];
   for (const variant of probe.variants) {
     mustPass.push(variant.url);
+    // A failover mirror is fetched by the engine exactly as `url` is, and it
+    // came out of the same attacker-influenced manifest (dl-45). Vetting only
+    // the primary would leave a page free to name any address it liked as long
+    // as it put a reachable one first.
+    for (const alternate of variant.alternateUrls ?? []) {
+      if (alternate !== "") mustPass.push(alternate);
+    }
     if (variant.audioUrl !== undefined && variant.audioUrl !== "") mustPass.push(variant.audioUrl);
   }
   // Subtitles are fetched by the engine with the same credentials as the media,

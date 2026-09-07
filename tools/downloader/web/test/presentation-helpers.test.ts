@@ -181,14 +181,26 @@ describe("variant rows", () => {
  * fixed.
  *
  * The reported video reached the picker as twenty rows through two layers. The
- * yt-dlp tier drops its half (`ytdlp.test.ts`); what is left here is the
- * manifest's own — each rung declared once per CDN mirror, with the mirror
- * count varied per rung so nothing can assume it.
+ * yt-dlp tier drops its half (`ytdlp.test.ts`); the manifest's own half — each
+ * rung declared once per CDN mirror — is grouped in the HLS parser since dl-45,
+ * so it no longer reaches the picker as separate rows at all.
+ *
+ * That leaves the picker's collapse with exactly one live producer, the yt-dlp
+ * ladder below, and it is worth being clear about why the collapse stays: the
+ * two do different jobs. The parser groups entries it *knows* are one rendition,
+ * from the manifest's attributes. The picker collapses rows it *renders*
+ * identically, from whatever any tier produced. `collapsed` counts the second,
+ * so it now reads zero for a mirrored manifest, and that is the honest number.
  */
-describe("renditions that differ only in what the table cannot show (dl-40)", () => {
-  test("mirrors of a rendition collapse to one row, whatever the mirror count", () => {
+describe("renditions that differ only in what the table cannot show (dl-40, dl-45)", () => {
+  test("a mirrored manifest arrives pre-grouped, so the picker has nothing to merge", () => {
+    // dl-45 moved this rung-per-host grouping into the resolver. The fixture is
+    // the same manifest; what reaches the picker is now five variants carrying
+    // their mirrors, not ten. `collapsed` counting zero here is the claim, not
+    // an accident: it counts what *the picker* merged, and the picker merged
+    // nothing.
     const declared = parsedVariants("manifests/hls-master-redundant-mirrors");
-    expect(declared).toHaveLength(10);
+    expect(declared).toHaveLength(5);
 
     const { rows, collapsed, showLanguage } = toDisplayRows(declared);
     expect(rows.map((row) => row.quality)).toEqual([
@@ -198,45 +210,50 @@ describe("renditions that differ only in what the table cannot show (dl-40)", ()
       "424×240",
       "256×144",
     ]);
-    // 3 + 2 + 2 + 1 + 2 declared, five rows kept. The rung with a single mirror
-    // has to survive untouched, and the one with three has to lose two.
-    expect(collapsed).toBe(5);
-
-    // And the single-mirror rung is *reached*, not merely present in the
-    // fixture: it is the one rung the collapse must leave completely alone, and
-    // the row it produces has to be that exact variant.
-    const lonely = declared.filter((item) => item.height === 240);
-    expect(lonely).toHaveLength(1);
-    expect(rows.find((row) => row.height === 240)?.id).toBe(lonely[0]?.id);
-
-    // The three-mirror rung is the other end of the same claim.
-    expect(declared.filter((item) => item.height === 720)).toHaveLength(3);
-    expect(rows.filter((row) => row.height === 720)).toHaveLength(1);
+    expect(collapsed).toBe(0);
     // Nothing declared a language, so a column of five empty cells would be
     // worse than no column.
     expect(showLanguage).toBe(false);
   });
 
-  test("the row that survives a collapse is one the manifest declared", () => {
+  test("the mirror count reaches the row, unequal per rung, and is not a row key", () => {
+    const declared = parsedVariants("manifests/hls-master-redundant-mirrors");
+    const { rows } = toDisplayRows(declared);
+
+    // 3, 2, 2, 1, 2 — the manifest's own counts, off the contract field rather
+    // than off anything the picker computed. The rung with no mirror is `1`, not
+    // `0` and not absent: the row still names one host.
+    expect(rows.map((row) => row.mirrors)).toEqual([3, 2, 2, 1, 2]);
+    expect(
+      rows.map((row) => 1 + (declared.find((v) => v.id === row.id)?.alternateUrls?.length ?? 0)),
+    ).toEqual([3, 2, 2, 1, 2]);
+
+    // And it must not separate rows. Two renditions identical except that one
+    // is mirrored are still one row — keying on the count would rebuild the
+    // dl-40 defect out of dl-45's own field.
+    const first = declared[0];
+    expect(first).toBeDefined();
+    const twin = {
+      ...(first as (typeof declared)[number]),
+      id: "twin",
+      url: "https://twin.example/0/index.m3u8",
+    };
+    delete (twin as { alternateUrls?: unknown }).alternateUrls;
+    expect(toDisplayRows([first as (typeof declared)[number], twin]).rows).toHaveLength(1);
+  });
+
+  test("the row the picker shows is the primary the manifest declared", () => {
     const declared = parsedVariants("manifests/hls-master-redundant-mirrors");
     const byId = new Map(declared.map((item) => [item.id, item]));
     const { rows } = toDisplayRows(declared);
 
-    // Each surviving row still names a real variant — the download would
-    // otherwise be pointed at an id nothing in the probe answers to.
+    // Each row still names a real variant — the download would otherwise be
+    // pointed at an id nothing in the probe answers to.
     const urls = rows.map((row) => byId.get(row.id)?.url);
     expect(urls.every((url) => url !== undefined)).toBe(true);
     expect(new Set(urls).size).toBe(rows.length);
-    // And specifically the first the manifest declared for that rung, which is
-    // its primary rather than one of the mirrors — asserted against the
-    // fixture's own text so it cannot agree with a bug in the parser.
-    const first = new Map<number, string>();
-    for (const item of declared) {
-      if (!first.has(item.height ?? 0)) first.set(item.height ?? 0, item.url);
-    }
-    for (const row of rows) expect(byId.get(row.id)?.url).toBe(first.get(row.height));
-    // Which in that fixture is the first host, on every rung including the one
-    // that has no mirror at all.
+    // And specifically the first host, on every rung including the one that has
+    // no mirror at all.
     expect(urls.map((url) => new URL(url ?? "").host)).toEqual(
       Array.from({ length: 5 }, () => "vod-a.cdn.example"),
     );

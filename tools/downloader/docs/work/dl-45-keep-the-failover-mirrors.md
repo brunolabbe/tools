@@ -3,7 +3,7 @@ id: dl-45
 tool: downloader
 title: A rendition's failover mirrors are discarded, not carried
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: [dl-40]
 difficulty: hard
@@ -188,15 +188,26 @@ Same reasoning as dl-44 for the heading: `status: ready` is untouched and nothin
   a second reference at all — it does not appear in the seven references the
   script counts for this file. So a clean citations run over this ticket says
   nothing about line 232, even though that is where the snippet the bullet
-  quotes actually lives; `web/src/lib/variants.ts:172` "collapsed: number" is
+  quotes actually lives; `web/src/lib/variants.ts:196` "collapsed: number" is
   the field's declaration, not the expression that computes it. The builder and the
   reviewer each resolved line 232 by hand, independently, and got the same line,
   so the bullet is accurate — but the evidence for it is two hand-reads, not the
   script. This entry re-states that coordinate in a shape the script _can_ read,
-  `web/src/lib/variants.ts:232` "collapsed: rows.length - kept.size", so the
+  `web/src/lib/variants.ts:256` "collapsed: rows.length - kept.size", so the
   claim the gate record could only hand-verify is machine-verified here. Left as one citation deliberately: splitting it would mean editing a
   committed gate record to improve the audit trail of the record rather than
   anything about this ticket.
+
+  **Both numbers in this entry were 172 and 232 when it was written, and dl-45's
+  build moved them to 196 and 256** — `variants.ts` grew a documented `mirrors`
+  field and a note on `displayKey`. They are repointed here rather than left to
+  rot, which is the whole argument the paragraph above makes: a coordinate is
+  only machine-verifiable while it is machine-verified, and `node
+scripts/citations.mjs` on this file reported both as MOVED, with the anchor
+  text unchanged, before this edit. **The gate record above is deliberately not
+  repointed.** It is pinned to tip `e3d065e` and names it, so its coordinates are
+  correct against the tree it reviewed; rewriting them against a later tree would
+  make the record claim to have checked something it never saw.
 
   **A reported observation here turned out to be an inference, and the mechanism
   is worth more than the correction.** The builder told the reviewer that oxfmt
@@ -216,3 +227,136 @@ Same reasoning as dl-44 for the heading: `status: ready` is untouched and nothin
   claim about the code, and it is the one that gets waved through**, because the
   effort of verifying tracks how risky a subject feels rather than whether the
   sentence is checkable.
+
+- **2026-09-07 — built.** Branch `feat/dl-45-keep-the-failover-mirrors`, off
+  `origin/main` at `4fad5f8`. `npm run check` exits 0;
+  `npm test -- --project downloader` is 1178 passing over 73 files, and the full
+  `npm test` is 2284 over 135, run because the contract moved.
+
+  **The contract change, which Build step 1 asked to have agreed first.** The
+  shape is the one the ticket named — `alternateUrls?: string[] | undefined`,
+  the manifest's own order, primary excluded — with the `| undefined` spelled
+  out because `exactOptionalPropertyTypes` is on and every type in `media.ts`
+  needs it to satisfy its zod counterpart. Nothing beyond that shape was needed,
+  so no wider contract question was opened. `mediaVariantSchema` grew the
+  matching `z.array(z.string().min(1)).optional()`; the `satisfies
+z.ZodType<MediaVariant>` would have compiled without it and the field would
+  have been stripped at every boundary the contract guards, silently, including
+  the job row read back out of SQLite — so there is a parse test rather than
+  only the type.
+
+  **What the brief had wrong, or rather had incomplete: `api` is in scope and
+  the ticket names neither it nor the reason.** `alternateUrls` are fetched by
+  the engine, and `urlsInProbeResult` — the inventory both the probe route and
+  the orchestrator feed to the SSRF guard — enumerated `url` and `audioUrl` and
+  would not have seen them. Left alone, dl-45 would have shipped a hole: a
+  hostile page names a reachable primary, the guard passes it, and the engine
+  follows the alternate to `169.254.169.254` on the first refusal. That is one
+  loop in `api/src/ssrf.ts` and a test, and it is not optional work; it is the
+  cost of the field existing. The repo rule it comes from is "SSRF-check every
+  URL that a user influenced", and a failover mirror is exactly that.
+
+  **The packages actually touched, against a ticket that budgeted none:**
+  `contract`, `resolvers`, `engine`, `api`, `web`. The scope paragraph above
+  named `web` as the widening; `api` was the second one and nothing predicted
+  it.
+
+  **The dl-40 objection, answered.** _"Why does a per-row mirror count not undo
+  dl-40?"_ Three things, of which the first is the load-bearing one:
+
+  1. **It does not add a row, and it cannot.** `displayKey` in
+     `web/src/lib/variants.ts` is the picker's identity function and `mirrors`
+     is deliberately absent from it — the one rendered value that is not in the
+     key. A rendition served by three hosts and an otherwise identical one
+     served by one collapse to a single row, which is asserted directly. Keying
+     on the count would have rebuilt the dl-40 defect out of dl-45's own field,
+     and that is the shape the objection was really about: dl-40's complaint was
+     never "a number appeared", it was "two rows a person cannot choose
+     between".
+  2. **It is in the Delivery cell, beside `HLS`, not in Quality.** The row
+     header — the thing the radio is labelled with — is untouched, asserted.
+  3. **The copy says which kind of fact it is.** Visible text is `3 servers`;
+     the tooltip and a `visually-hidden` span both carry _"Availability only:
+     the same rendition is served from 3 hosts, so a download can fail over if
+     one stops answering. Not a higher-quality rendition."_ The sentence is in
+     the DOM rather than only in `title`, because `title` is not reliably
+     announced and the screen-reader half of the obligation would then have been
+     a claim with no test behind it.
+
+  **The two counts coexist, and the table-level line now reads differently for a
+  mirrored manifest.** The scope paragraph left this open. `collapsed` counts
+  what the _picker_ merged and stays exactly as dl-40 built it; for
+  `hls-master-redundant-mirrors` it is now **0**, because the resolver grouped
+  the mirrors before the picker saw them, so `· N duplicate paths merged`
+  disappears for that manifest and `5 renditions` stands alone. That is the
+  honest number, not a regression: nothing was merged. The line is not dead —
+  `ytdlp/balancer-duplicate-ladder` still produces ten variants and still merges
+  five, because a load balancer handing the same ladder back under several
+  hostnames arrives as separate `formats` from separate responses and no
+  attribute grouping can see it. The dl-40 assertion moved onto that fixture,
+  which is where the behaviour still lives.
+
+  **How the engine tells a dead host from an expired URL, which the brief
+  treated as given.** On the engine's own fetches the taxonomy already separates
+  them (`UNREACHABLE` vs `VARIANT_GONE`), but the manifest path is ffmpeg, and
+  `manifest.ts` files every non-zero exit as `DOWNLOAD_FAILED` whatever
+  happened. So the signal is stderr, exactly as it is for
+  `isTlsVerificationFailure`, and the patterns in
+  `engine/src/download/failover.ts` are **measured against the bundled ffmpeg**
+  at `-loglevel warning` on 2026-09-07 rather than assumed — the table is in
+  that file's docblock. `Connection refused`, a DNS failure and a 5xx buy a
+  mirror; 403, 404 and `End of file` do not.
+
+  **Two coordinates in the Why above are now historical, and one of them is a
+  trap.** `contract/src/media.ts:87` still resolves to `MediaVariant`'s `url`
+  and is fine. `engine/src/index.ts:403` was `url: variant.url` — the line the
+  sentence "the engine downloads from exactly that" was pointing at — and that
+  line no longer exists; the engine loops over `downloadCandidates(variant)` and
+  passes a `url` into `#downloadFrom`. Line 403 in the tree this Log entry is
+  committed with happens to land on that method's `url: string` parameter, which
+  reads plausibly and means the opposite. **The Why is deliberately left as
+  written**: it is the dated statement of the defect, and repointing it at the
+  code that fixed the defect would make the problem statement describe the
+  solution. Neither coordinate is anchored, so `scripts/citations.mjs` cannot
+  catch this and did not — it is recorded here instead.
+
+  **A related label was wrong and is corrected here.** The engine e2e test named
+  _"a missing Referer is a 403, which the engine reports as VARIANT_GONE"_ while
+  asserting `DOWNLOAD_FAILED`. The assertion was right and the name was not, for
+  the reason above. Folded in rather than filed: it is one stale sentence, in the
+  exact path dl-45 had to read to classify anything, and the mislabelling is the
+  ambiguity this ticket works around.
+
+  **What the failover costs, measured.** ffmpeg's own
+  `-reconnect_delay_max 10` runs first, so a mirror attempt begins roughly
+  eleven seconds after the primary stops answering — `mirror-failover.test.ts`
+  takes 11.3 s for that reason and not because of anything dl-45 added. Nothing
+  was changed about the reconnect window; it is production behaviour and a
+  failover is strictly better than the failure it replaces. A mirror attempt
+  also **restarts** the download rather than resuming it, and clears the tmp dir
+  first: the partial came from a host that stopped answering, and nothing proves
+  the next host serves the same bytes at the same offsets.
+
+  **Deliberately left out.** The yt-dlp tier still discards its mirrors — the
+  balancer ladder above is ten variants the picker collapses to five, and the
+  five alternates go on the floor exactly as the manifest's did before today.
+  Build step 2 named `resolvers/src/manifest/hls.ts` and only that, so widening
+  to a second producer with a different grouping rule was not this ticket's
+  call; it is surfaced to the orchestrator as an open decision rather than
+  settled in a commit. `TLS_VERIFICATION_FAILED` is likewise **excluded** from
+  the failover, against the Why section's mention of a failed TLS handshake, and
+  that exclusion is the second open decision: a rejected certificate is a signal
+  dl-11, dl-19 and dl-27 all worked to surface, and succeeding quietly from
+  another host would replace it with a download. Both are in the builder's
+  report as options, neither is answered here.
+
+  **The fixtures dl-40 built, and what happened to them.** All four `.m3u8`
+  sources are byte-identical. `hls-master-redundant-mirrors.variants.json` was
+  regenerated from the parser as its own guard test instructs — 10 variants to 5,
+  carrying 3/2/2/1/2 addresses — and the other three were regenerated too, as a
+  check rather than a change: they came back byte-identical, which is the
+  measurement that says the grouping key touches genuine mirrors and nothing
+  else. `hls-master-two-profiles` and `hls-master-per-language-ladder` now also
+  assert `alternateUrls === undefined`, so the failure mode of a grouping key
+  that dropped a field — silently swallowing a real choice into a failover path
+  — is caught rather than reasoned about.

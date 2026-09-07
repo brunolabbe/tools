@@ -85,6 +85,29 @@ export interface MediaVariant {
   protocol: StreamProtocol;
   /** Manifest URL (HLS/DASH) or direct file URL (progressive). */
   url: string;
+  /**
+   * Other addresses serving **this same rendition**, in the order the source
+   * declared them. `url` is the first; these are the ones after it.
+   *
+   * An HLS master may declare one rung once per CDN host — identical on every
+   * attribute, differing in the hostname alone — and that repetition is not
+   * noise: it is how a player survives one host going down, by retrying the
+   * next entry with the same attributes (RFC 8216 §6.2.4). Before dl-45 the
+   * resolver emitted one variant per host and the picker collapsed them back to
+   * one row, which discarded the failover paths (dl-40).
+   *
+   * **Availability, not quality.** Two variants that differ only in how many of
+   * these they carry are the same rendition; nothing may order, prefer or label
+   * a variant *better* for having more. The engine uses them in exactly one
+   * situation — the current host would not serve the bytes at all — and never
+   * as a way around a refusal that would repeat everywhere, since an expired
+   * signed URL is expired at every mirror.
+   *
+   * Absent, not `[]`, when there is only one address. Every URL here is
+   * attacker-influenced exactly as `url` is and must clear the same SSRF check
+   * (`urlsInProbeResult`).
+   */
+  alternateUrls?: string[] | undefined;
   /** Separate audio rendition to mux in, when the video track is silent. */
   audioUrl?: string | undefined;
   hasVideo: boolean;
