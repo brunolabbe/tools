@@ -125,6 +125,12 @@ be spoken for before its file exists — promised in another ticket's Log as the
 follow-up it filed — and reusing one silently attaches new work to an old
 conversation. Take the highest of both and add one.
 
+`node scripts/next-id.mjs <prefix>` computes the file half of that — both ticket
+roots on `origin/main`, plus every open pull request's diff — and names who holds
+each id rather than just the highest. It cannot see the Log half, and it cannot
+see a peer's unpushed branch; `.claude/skills/orchestrate-tickets/reference/concurrency.md`
+says why that gap is not closable and what to do instead.
+
 **`needs-decision` is a ticket's first state, and `ready` is the second.** It
 means the filing is complete and the work is not dispatchable, because the ticket
 poses a question its own page says must not be settled by whoever picks it up.

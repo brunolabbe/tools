@@ -125,6 +125,16 @@ have left both defects intact.
    the other session which ids you hold; this is the measurement that says why
    that sentence is load-bearing rather than polite.
 
+5. **Lift the sweep out of the page into `scripts/next-id.mjs`, with a spec.**
+   Added after the first four shipped and were gated. The builder and the
+   orchestrator both recommended this as a _separate_ ticket; the repo's owner
+   was given that recommendation in those terms and chose to fold it in here, so
+   the route is decided and the shape is not. `concurrency.md` keeps the
+   reasoning and names the command instead of carrying it. The precedent to
+   follow is `scripts/citations.mjs`, whose own header gives the argument: the
+   work is mechanical, it must produce the same answer every time, and a snippet
+   has nowhere to put a test.
+
 ## Done when
 
 1. The sweep in `concurrency.md` reads `docs/work/` as well as
@@ -138,6 +148,12 @@ have left both defects intact.
 5. `concurrency.md` states that the sweep narrows the race and does not close it,
    with the commitless-branch case as the reason.
 6. `npm run check` passes and `npm run status -- --json` exits 0.
+7. The sweep is `node scripts/next-id.mjs <prefix>`, `concurrency.md` names it
+   rather than carrying it, and lines 1–4 above hold of the script — each as a
+   test in `scripts/test/next-id.test.ts` rather than as a worked run in a Log.
+8. **Every guard in the script has been watched failing**: removing it turns a
+   named test red, demonstrated one guard at a time rather than argued. A
+   mutation that fails to apply must report as unapplied, not as a pass.
 
 ## Review
 
@@ -272,3 +288,50 @@ repository` line and exited 0, new **128**; `pipefail` with unguarded greps —
   citation targets, not prose claims, and `grep -rn "concurrency.md"` over `.ts`
   and `.mjs` returns nothing outside `node_modules`, so "PASS by inspection" is
   the ceiling and is recorded as such rather than dressed up.
+
+- **2026-09-07, the lift** — The sweep is now `scripts/next-id.mjs` with
+  `scripts/test/next-id.test.ts` behind it, and `concurrency.md` names the
+  command instead of carrying it. **This was folded in against the
+  recommendation of both the builder and the orchestrator**, who each argued for
+  a separate ticket; the repo's owner was given that argument in those terms and
+  chose to fold it in. Recorded because the next reader should know the shape was
+  decided, not defaulted.
+
+  **Seven guards, each watched failing before it was believed.** A harness
+  removed one guard at a time from the script and recorded which tests went red —
+  reading only the tools root (red: the both-roots test, and two others that
+  depend on the merged half), not filtering the tools root to `docs/work/`,
+  reading a failed command's stdout, treating a missing command as an ordinary
+  failure, deduping across sources as `sort -u` did, breaking ties by input
+  order, and swallowing a failing `gh pr list`. Every one produced red in the
+  test named for it, and the source was restored byte-identical afterwards
+  (asserted by the harness, not assumed). The seventh mutation's anchor went
+  stale against the formatter on the first run and reported `SKIPPED` rather than
+  passing quietly — which is the only reason it was noticed, and is why the
+  harness distinguishes "no test failed" from "the mutation did not apply".
+
+  **A test of mine was wrong before the code was.** The partial-stdout test first
+  drove `node -e "<program>"` and asserted the leaked id was absent from the
+  thrown message. It went red against a working guard, because the message echoes
+  the command's arguments and the program text was in them. An assertion that
+  cannot tell leaked stdout from an echoed argument checks nothing, so the child
+  is now a file on disk and the payload is nowhere in argv.
+
+  **Two things deliberately not done.** No `npm run next-id` alias: the closest
+  sibling, `scripts/citations.mjs`, is invoked as `node scripts/…` and has no
+  alias either, and inventing one here would make the two look like different
+  kinds of thing. And the script does not restrict matches to paths shaped like a
+  ticket file — over-reporting a claim costs a reader a glance, under-reporting
+  one is this ticket's entire subject, so the two errors are not weighed equally.
+
+  **One earlier "not folded in" is reversed, and the reason it was declined no
+  longer holds.** The first Log entry left `docs/01-TICKETS.md` alone because
+  putting the sweep in two places would give the next reader two commands to keep
+  in sync. There is now exactly one command in exactly one file, so naming it
+  from the ticket-format page duplicates nothing — one sentence added there,
+  saying what it computes and, more usefully, the two halves it _cannot_ see (the
+  ids promised in Logs, and a peer's unpushed branch).
+
+  **Parity with the shell version it replaces was checked, not assumed:** both
+  return 30 merged `repo-` ids on this tip, and the new one adds `next free:
+repo-31`. `dl` → `dl-46`, `pl` → `pl-38`.

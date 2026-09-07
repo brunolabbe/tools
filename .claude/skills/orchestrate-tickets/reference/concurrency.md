@@ -138,53 +138,50 @@ for `repo-` and `tools/*/docs/work/` for a tool prefix, so a sweep that reads on
 of them answers from half the namespace without saying so:
 
 ```bash
-set -euo pipefail
-prefix="${1:?usage: sweep <prefix>}"
-# `|| true` on every grep: exit 1 means no match, and a pull request whose diff
-# touches no ticket file is ordinary. Without the guard, pipefail drops the ids
-# of every pull request after the first ordinary one.
-emit() { { grep -oE "${prefix}-[0-9]+" || true; } | sort -u | sed "s|^|$1 |"; }
-# Its own statement, never inlined into the `for` below: a command substitution
-# that fails inside a `for` word list has its status discarded even under
-# `set -e`, and the sweep then reports the merged half alone and exits 0.
-prs="$(gh pr list --state open --json number --jq '.[].number')"
-{
-  { git ls-tree origin/main docs/work/ --name-only
-    git ls-tree -r origin/main tools/ --name-only | { grep '/docs/work/' || true; }
-  } | emit "merged"
-  for pr in $prs; do
-    gh pr diff "$pr" --name-only | emit "PR#$pr"
-  done
-# No `-u` on this sort: it dedupes on the *key*, so `sort -u -t- -k2` collapses
-# two sources of one id into a single line — hiding the clash it exists to show.
-# No `-s` either, and that is the same trap from the other side: -s *disables*
-# last-resort comparison, so adding it is what makes two rows holding one id
-# swap order between runs. Bare, the rows for a clash are byte-ordered and
-# identical every run.
-} | sort -t- -k2 -n
+node scripts/next-id.mjs <prefix>     # repo, dl, pl …
 ```
 
-**It names every claimant with its source, rather than the maximum** — `merged
-repo-26`, `PR#170 repo-27`, `PR#171 repo-28`, `PR#172 repo-29`. A `tail -1`
-throws away the provenance that turns "the number looks free" into "here is who
-holds it", and it is the provenance you act on: everything above the merged
-high-water mark is somebody's.
+It prints **every claimant with its source**, then any id two sources both hold,
+then the first free one:
 
-**Every guard in it was measured failing first**, on `origin/main@24e5bf7`. Four
-of the six return a confident wrong answer under exit 0; one is loud but loses
-the same ids; the last is the one a reader adds on purpose:
+```
+merged repo-29
+merged repo-30
+PR#174 repo-31
+clash: repo-31 is claimed by PR#174, PR#175
+next free: repo-32
+```
 
-| take the guard out | what it returned |
+The maximum alone is what made two real collisions unreadable — `26` with no
+source cannot be told from `26` while somebody is already sitting on 27. Above
+the merged high-water mark, every id belongs to somebody, and the point is to see
+who.
+
+**It was a fenced snippet on this page until repo-30, and it was wrong the whole
+time.** That is the argument for it being a file: the work is mechanical, it must
+give the same answer every time, and a fence has nowhere to put a test. Each row
+below is a guard that was measured failing before it was written, and is now a
+test in `scripts/test/next-id.test.ts` that goes red when the guard is removed —
+verified by removing each one in turn, not by assertion.
+
+| take the guard out | what it did |
 | --- | --- |
-| read only `tools/<tool>/docs/work/`, for a `repo-` prefix | 0 ids, against 30 in `docs/work/` — the merged half contributes nothing, so the answer comes from open pull requests alone. On a board whose open PRs are releases it printed **nothing at all**, exit 0 |
-| inline `gh pr list` into the `for` | with `gh` gone: the merged half alone, exit 0. Its own statement: **exit 127** |
-| no `pipefail`, no status check (the old one-liner) | `gh` failing 401: exit 0. Run outside a repository: printed `repo-99` off the PR half with `fatal: not a git repository` above it, exit 0. The version above: exit 1 and exit 128 |
-| `pipefail` but unguarded greps | the first pull request touching no ticket file aborts the loop and takes every later pull request's ids with it. This one at least exits 1 — it is the quiet loss it causes that matters, not the status |
-| `sort -u` at the end | a board holding `repo-99` in two different pull requests printed it **once**, and an id held both merged and in a PR lost its PR row — the collision is exactly what is erased |
-| add `-s` to that sort | the same four equal-key rows fed in three input orders came back identical without it, and order-dependent with it — `-s` disables last-resort comparison, so it buys the instability a reader adds it to prevent |
+| read only `tools/<tool>/docs/work/` | for a `repo-` prefix: **0 ids against 30**. There is no `tools/repo/`, so the merged half contributed nothing and the answer came from open pull requests alone. On a board whose open PRs are releases it printed nothing at all, exit 0 |
+| do not filter the tools root to `docs/work/` | a path that is not a ticket file counts as a claim |
+| read a failed command's stdout | a command may write half its output and then die; that partial list is indistinguishable from a correct short one |
+| treat a missing command as an ordinary failure | `gh` absent stops being **127** and becomes a generic 1, and the recorded measurements stop meaning anything |
+| dedupe across sources, as `sort -u` did | a board holding `repo-99` in two pull requests printed it **once** — the clash is precisely what got erased |
+| break ties by input order | two rows holding one id swap between runs |
+| swallow a failing `gh pr list` | the merged half alone, exit 0 — which is the original defect exactly |
 
-The fourth row is why `|| true` is there and not an oversight: the obvious fix for
-row three reintroduces row four, and it caught the first cut at this repair.
+Two of those are traps rather than oversights, and both caught a repair in
+progress. `grep` exits 1 on *no match*, so the shell version's `set -o pipefail`
+needed a `|| true` on every grep or an ordinary pull request touching no ticket
+file took every later pull request's ids with it. And GNU `sort -s` **disables**
+last-resort comparison — a gate reviewer read the missing `-s` as the bug when it
+is the reverse, so adding it is what would have made a clash's two rows swap
+between runs. Neither survives the port; the tie-break is explicit in the script
+now, and the reasoning is in its comments.
 
 **This narrows the race; it cannot close it, and reading it as a lock is the new
 way to collide.** Measured in the 2026-09-06/07 incident that produced the table

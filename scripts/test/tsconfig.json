@@ -19,7 +19,13 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["**/*.ts", "../commit-message.mjs", "../status.mjs", "../citations.mjs"],
+  "include": [
+    "**/*.ts",
+    "../commit-message.mjs",
+    "../status.mjs",
+    "../citations.mjs",
+    "../next-id.mjs"
+  ],
   // Restated, not inherited — the root's exclude is about the root's program.
   "exclude": []
 }
