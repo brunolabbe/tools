@@ -3,7 +3,7 @@ id: repo-15
 tool: repo
 title: The deny list cannot express what it is protecting, and it does not protect itself
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -357,10 +357,25 @@ are the same fact seen from either end.
    `.claude/settings.json` under the matchers they need, and a fresh run of the
    step-1 matcher shows every threat in the chosen scope either denied by a
    permission rule or blocked by the hook.
-2. A test under `packages/core/test/` drives each hook script with fixture input
-   and asserts its exit code: at least one blocked command per threat group in
-   scope, at least one command that must remain allowed, and the heredoc case
-   from Build step 3. It failed before the hook existed.
+2. A test under ~~`packages/core/test/`~~ **`scripts/test/hooks.test.ts`** drives
+   each hook script with fixture input and asserts its exit code: at least one
+   blocked command per threat group in scope, at least one command that must
+   remain allowed, and the heredoc case from Build step 3. It failed before the
+   hook existed.
+
+   **Amended 2026-09-07, by the owner, on the builder's reading.** The original
+   named `packages/core/test/` because on 2026-09-01 its repo-wide scans were the
+   only precedent for a test asserting on files outside any package — that was
+   correct when written, and is struck rather than deleted so this reads as an
+   amendment and not as drift. It is no longer the closest precedent:
+   `scripts/test/hooks.test.ts` **did not exist then** (repo-22 added it), and it
+   already does exactly what this line asks — drives a hook with fixture JSON on
+   stdin and asserts the exit code — in the `repo` vitest project, which exists
+   for tooling belonging to no tool. `packages/core/test/` holds repo-wide
+   _source scans_, which is a different job. The substance of this line was
+   checked as met at the new path by the gate recorded below, which is the
+   outside check an amended acceptance line needs.
+
 3. ~~An attempted `Edit` of `.claude/settings.json` is refused by the hook,
    proven by that test rather than by an agent trying it.~~ **`n/a` — decision A
    landed on A1**, which is the condition this line names for itself, and the
@@ -376,6 +391,41 @@ are the same fact seen from either end.
 6. `npm run check` passes and `npm run format` has been run if any `.md` changed.
 7. `npm run status -- --show repo-15` parses and `npm run status -- --json`
    exits 0.
+
+## Review
+
+### Gate: PASS — 2026-09-07 · reviewed at `f343bc2` · base `origin/main@e9054c5`
+
+Built by **Opus**, gated by **Sonnet**. Long form — the reasoning, the row-by-row
+enumeration and the reproductions — is on the pull request thread; this is the
+short record, per the gate-record convention.
+
+**Three findings, all low, none changing a `Done when` verdict.**
+
+| #   | Finding                                                                                                        | Where                                                   | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | "12 tier-1 threats, 0 uncovered" read as contradicting the next sentence's concession of the workflow-edit gap | this file, `Done when` 1 verdict in the Log entry below | **Reworded, but not as proposed.** The gate suggested "11 of 12 covered, 1 known gap"; that would assert one of the twelve measured command strings is uncovered, and none is. The table's 11 rows are 10 command rows plus one non-command row, so the workflow-edit gap was never among the twelve. Now reads "12 tier-1 **command strings**, 0 uncovered" with the non-command row named. Gate agreed the correction is better than its suggestion                                                                 |
+| 2   | The mutation-red counts (`7 failed, 24 passed`; `13 of 31`) do not reconcile against a 33-test file            | this file, `Done when` 2 verdict in the Log entry below | **Corrected in place, visibly.** Gate read it as a transcription slip; it was not — they were real prints at an intermediate **31-test** state, before the two pin tests were added, and they reconcile against that file. Stale rather than mistyped, and stale has no place in an acceptance record. Re-measured at the tip: **`7 failed \| 26 passed (33)`**, matching the gate's independent run. The differing _composition_ is recorded too. Gate withdrew the "transcription slip" reading                     |
+| 3   | `check-main-writes.sh` has never fired live, including throughout its own build and gate                       | `.claude/hooks/check-main-writes.sh:70`                 | **Accepted and recorded**, in the header beside the other limits and in the Log. Confirmed here with the control the gate's method lacked: the build session's transcript shows `hook_success` for `check-tree-grep.sh` twice and zero records for this hook, so the mechanism is live and this hook is merely absent from the set. Written at the strength the evidence supports — _not observed to fire pre-merge_, _expected_ to register on merge by inference from the sibling, **not verified**. No code change |
+
+**Acceptance-to-test traceability.** All seven `Done when` lines proven or
+verified, each re-run by the gate rather than read: line 1 by the combined
+deny-plus-hook check plus `scripts/test/hooks.test.ts:144`; line 2 by an
+independent fail-first reproduction; lines 3 and 4 `n/a` as recorded; line 5 by
+`scripts/test/hooks.test.ts:457` and by reading the header; lines 6 and 7 by
+running `npm run check` and `npm run status` directly. Line 2's **path** was
+amended by the owner rather than by the gate — see the amendment on that line.
+
+**What this gate did not do.** It did not verify that the hook fires as a real
+`PreToolUse` hook — that is finding 3, and it is unverifiable before merge. It
+did not settle either open decision: the test-file path and the `gh api`
+path-refusal deferral were escalated to the owner, who answered both (keep
+`scripts/test/hooks.test.ts`; leave `gh api` alone). It did not re-derive the
+`f5d5a0e` coverage tables, and it ran no denied command.
+
+**Findings** · 3 returned, 3 carried, 0 dropped. **NFR** · security is the
+feature under test; performance n/a; reliability ✓ (fails open on missing input
+and on a failed HEAD read, by design); maintainability ✓.
 
 ## Log
 
@@ -485,3 +535,196 @@ visibility` returns `PUBLIC`. Tier 3's "one command, irreversible as a
   coverage tables above are still the `origin/main@f5d5a0e` measurement and Build
   step 1 still says to re-take them. This branch is bookkeeping across four
   tickets whose decisions were answered in one sitting.
+
+- **2026-09-07 — built, A1 + B1, off `origin/main@e9054c5`.**
+  `.claude/hooks/check-main-writes.sh` (new, registered in
+  `.claude/settings.json` under the existing `PreToolUse` `Bash` matcher
+  alongside `check-pr-title.sh` and `check-tree-grep.sh`), and its cases in
+  `scripts/test/hooks.test.ts`. `status: ready` → `done`.
+
+  **Build step 1 was re-taken and the coverage table survived the move from
+  `f5d5a0e` to `e9054c5` unchanged.** The matcher reports 11 deny rules, 7 of
+  them `Bash(…)`, **0** mentioning `.claude`/`settings`/`hooks` and **0**
+  `Edit(`/`Write(` rules — so §1 is uncovered at the tip exactly as it was at
+  filing. Every verdict in the tier 1–3 tables reproduced, including the two
+  gaps found while filing: `git push origin +main` and
+  `git push origin refs/heads/main` are still `ALLOWED` by the globs, and bare
+  `git push` and bare `gh pr merge` still are too.
+
+  **The ruleset was re-read** (`gh ruleset list` → `20870721`;
+  `gh ruleset view 20870721`) and is unchanged in every load-bearing field:
+  active, bypass never, `ref_name: [include: [~DEFAULT_BRANCH]]`, `deletion`,
+  `non_fast_forward`, and `pull_request` with
+  `required_approving_review_count: 0`, `require_last_push_approval: false`,
+  `dismiss_stale_reviews_on_push: false`. `gh repo view` still reports
+  `PUBLIC`. **One field is visible now that the 2026-09-01 transcript does not
+  show: `require_extra_approval_for_unattributed_changes: true`.** It is not
+  recorded here as new — it may simply be newly printed by `gh` — and it does
+  not move the finding: it governs commits GitHub cannot attribute to a user,
+  not a normally-attributed pull request, which still needs nobody.
+
+  **Verdicts, per `Done when` line.**
+
+  1. **Met.** A combined check ran each tier-1 threat through both the deny
+     matcher and the real hook (stdin JSON, exit code), against a fixture
+     checkout whose HEAD is `main` so the bare-push rows have a determinate
+     answer: **12 tier-1 command strings, 0 uncovered.** The four the deny list
+     misses (`gh pr merge` bare, `+main`, `refs/heads/main`, bare `git push`)
+     are covered by the hook alone; the two `gh api` rows by the permission rule
+     alone, per B1.
+
+     **"0 uncovered" is a statement about commands, and the tier-1 table's last
+     row is not one.** The table has 11 rows: 10 command rows — one of which
+     carries two strings, `git push origin main` and `git push --force origin
+main` — plus "editing `.github/workflows/` so a required check passes
+     trivially", which is a `Write`/`Edit` act and not a command at all. That
+     makes 11 command strings in the table; the check ran 12, the extra being
+     `git push --force-with-lease origin main`, added here. **The workflow-edit
+     row is deliberately not covered and is not claimed to be**: the decision
+     table puts workflow-edit coverage under A2, and A1 is a `Bash` matcher, so
+     it structurally cannot see it. Worded this way after the gate read the two
+     sentences as contradicting each other — they are about different sets, but
+     the original wording did not say so.
+
+  2. **Met, and it failed first — twice, and the second red is the one that
+     counts.** With the hook file absent and the `settings.json` entry reverted,
+     the suite failed; but the allowed-command cases failed there for the wrong
+     reason (bash exits 127 on a missing file, so "silent" is false). So the
+     hook was replaced with a two-line script that does nothing but `exit 0` —
+     the shape of a dead guard — and **every refusing assertion went red while
+     every allowed-command assertion stayed green**. That asymmetry is repo-26's
+     lesson applied to this hook, and it is the evidence that the tests detect a
+     hook which stops refusing rather than only one which stops existing.
+
+     **The authoritative numbers, re-measured at `f343bc2` after the gate, with
+     only the hook mutated and `settings.json` intact:
+     `7 failed | 26 passed (33)`, restored to `33 passed`.** The gate measured
+     the same independently.
+
+     **A correction, made visibly rather than by overwriting, because the wrong
+     number reached a report.** This entry first said `7 failed, 24 passed` and
+     `13 of 31 failed`. Those were real prints, but at an **intermediate
+     31-test** state of the file — the two pin tests (heredoc over-block,
+     quoted-refspec miss) were added afterwards. They reconcile against that
+     file (24+7 and 18+13 are both 31) and not against the 33 that shipped, so
+     the entry read as an arithmetic slip. It was not, but it was stale, and a
+     number that only reconciles against a file that no longer exists has no
+     business in an acceptance record. The current figures were produced now,
+     not backdated.
+
+     **The composition differed too, and the matching count of 7 is a
+     coincidence worth writing down.** In the build run the seven were six
+     refusal tests **plus the settings-wiring test**, because `settings.json`
+     was still reverted from the preceding absent-hook run. In the gate's run
+     and in the re-measurement they are six refusal tests **plus the
+     heredoc-over-block pin**, with wiring green. Same total, different set.
+
+  3. `n/a`, as the 2026-09-07 entry above already records.
+  4. **Met** by that entry; the repo-13 half stays `n/a`.
+  5. **Met**, and asserted by a test rather than by inspection: the header
+     carries `required_approving_review_count: 0`, the indirection limit, the
+     self-edit limit and the note that `gh api` is untouched by decision B1.
+  6. `npm run check` and `npm run format` — see the gate list at the end.
+  7. `npm run status -- --show repo-15` and `--json` — same.
+
+  **What the brief had wrong: the test's home.** Build step 5 and `Done when` 2
+  say the test goes under `packages/core/test/`, on the reasoning that its
+  repo-wide scans are "the precedent for a test that asserts on files outside
+  any package". That was the best precedent available on 2026-09-01 and is no
+  longer the closest one: **`scripts/test/hooks.test.ts` did not exist then**.
+  repo-22 added it, and it already does precisely what step 5 describes — drives
+  a hook script with fixture JSON on stdin and asserts the exit code — with a
+  `run()` helper, an `isSilent()` helper and a settings-wiring assertion this
+  work extends rather than duplicates. It is also in the `repo` vitest project,
+  which exists for "repo tooling, which belongs to no tool and ships in no
+  image". The cases went there. Putting them in `packages/core/test/` would have
+  copied the harness into a package that has nothing to do with hooks, and left
+  the three hooks tested in two places. **Recorded rather than done quietly,
+  because it is a `Done when` line: the substance of the line is met and the
+  path is not.**
+
+  **The `settings.local.json` probe was attempted and is inconclusive — the
+  ticket's `gh pr merge` question stays unmeasured.** The "Unmeasured" section
+  suggests settling whether `Bash(gh pr merge *)` covers the bare form by
+  testing a harmless analogue in a throwaway `settings.local.json`. A throwaway
+  file denying `Bash(zzrepo15probe foo *)` was written into this worktree and
+  `zzrepo15probe foo bar` was then run as the **positive control**. It was not
+  refused — it reached the shell and returned 127, "command not found" — so the
+  file had not been loaded into the running session and the probe could not
+  distinguish "the rule does not match" from "the rule was never read". No
+  conclusion is drawn from it. The file was deleted and
+  `git status --porcelain` is empty. **No denied command was attempted**, and
+  the real matcher's behaviour was not read. The hook blocks the bare form
+  either way, so this changes the size of the gap it closes, not whether it
+  closes one.
+
+  **Two behaviours of the hook are pinned by tests as trades rather than left to
+  be discovered**, both measured:
+
+  - It **over-blocks** an _unquoted_ mention at the start of a heredoc body
+    line — a heredoc whose body is `gh pr merge 129 --squash`, or
+    `git push origin +main`, or the same indented as a fenced code block, all
+    exit 2. `check-pr-title.sh` has had the identical shape since it shipped.
+    A quoted mention is silent, and so is a harmless push.
+  - It **misses** a quoted refspec: `git push origin "main"` and
+    `git push origin '+main'` are allowed, because the quote strip removes the
+    span before the argument scan sees it. Both are refused by the ruleset
+    regardless, and over-blocking is the costlier error — repo-15's own honest
+    limits say so.
+
+  **Not folded in, though it was free, and named here so the deferral is not
+  silent:** the hook could also refuse `gh api` calls naming a merge or
+  branch-protection path, as a second layer under the two tier-1 `gh api` rows
+  that today rest on the editable `Bash(gh api *)` rule alone. It would be
+  strictly additive — it can only block, never permit — and it is ~4 lines.
+  **It was left out because it is the first half of option B2's request parser,
+  which was declined**, and because this ticket names "B2 without
+  self-protection" as the one combination to refuse. `Done when` 1 is met
+  without it. If the owner wants it, it is a small edit to this file and two
+  tests; it is an open option, not a defect.
+
+  **The hook has never fired live, and had not throughout its own build and
+  gate.** Found by the gate, and it is the most valuable thing the gate
+  produced: it settled decisively what the `settings.local.json` probe above
+  could only fail to settle. A session resolves its `PreToolUse` hook set once,
+  from the settings in force when it starts — in practice the **shared root
+  checkout's** `.claude/settings.json`, which is on `main` and does not carry
+  this registration. A hook added on an unmerged branch is therefore never
+  loaded, **including by the session that writes it**. Measured three ways:
+
+  - the gate ran the two commands this suite pins as must-block
+    (`git push origin +main`, `git push origin refs/heads/main`) against a
+    scratch local remote, and both went through, exit 0;
+  - a heredoc shape this hook exits 2 on when driven directly completed
+    normally as an ordinary Bash call in the build session;
+  - and the build session's own transcript records `hook_success` for
+    `check-tree-grep.sh` **twice** and **zero** records of any kind for
+    `check-main-writes.sh`.
+
+  That third one is the control, and it is why this is not a defect in the
+  script: the mechanism is live and firing in the same session; this hook is
+  simply not in the set. **It is expected to register once this is on `main`,
+  inferred from that sibling evidence and not verified** — nobody has yet
+  watched it refuse anything, and it should not be written up as working until
+  somebody has. Every claim here and in the header about what it refuses is a
+  claim about what the script does when driven directly, which is what the tests
+  drive. Recorded in the header beside the indirection and self-edit limits.
+
+  **That is this ticket's own subject, one level up, and it deserves saying
+  rather than filing.** repo-15 exists because a guardrail that cannot protect
+  itself makes every other rule advisory. A guardrail that is not yet
+  _registered_ is the same silence standing somewhere else: it reads as
+  protection in the diff, it passes its tests, it is cited in a gate — and it
+  refuses nothing. The tests are green because they drive the script directly,
+  which is precisely the gap repo-26 names in the other direction: a check whose
+  failure mode is silence needs something asserting the negative, and no test
+  here can assert that the _harness_ loaded the hook. An observation, not new
+  work.
+
+  **The objection A1 carries is unchanged by having built it, and is worth
+  restating from inside the code:** this hook is a tracked file in
+  `.claude/hooks/`, referenced by a tracked `settings.json`, and neither is
+  named by any deny rule, any `Edit`/`Write` rule, any hook or any CI job. An
+  agent that can edit either has no hook. §1 remains uncovered. The header says
+  so in the file, in those terms, so the next reader does not mistake this for
+  protection it is not.
