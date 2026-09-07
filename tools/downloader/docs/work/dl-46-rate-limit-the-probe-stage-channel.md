@@ -229,6 +229,26 @@ only raises the number of sockets an attacker has to hold.
     pinned by an assertion: `EventSource` exposes no response headers to the
     page at all, so nothing can read them.
 
+  **What this does not close, named by the gate and stated here rather than
+  left implicit** — both inherent to the per-IP decision, neither a defect in
+  it:
+
+  - **Behind CGNAT, with `TRUST_PROXY` off, a crowd sharing one address shares
+    one bucket.** True, and **this endpoint adds nothing to it**: `POST
+/api/probe` has had the identical key and the identical number since dl-6,
+    and the two are spent one-for-one, so the analysis behind a throttled
+    narration is being refused in the same breath. There is no configuration in
+    which this bucket bites a real user that the probe bucket was not already
+    biting. That is the property the equal default was chosen for, read from the
+    other end.
+  - **A distributed fill of `MAX_CHANNELS` is still possible.** Nothing gates
+    the hub globally the way `probeGate` gates `POST /api/probe` — verified,
+    `context.probeGate` is referenced only in `routes/probe.ts`. Two addresses
+    are enough for 64 channels, since one holds 40. This ticket's subject is the
+    single unauthenticated address, and that is closed; the distributed case
+    costs an attacker addresses and still only denies narration, which is the
+    blast radius **Why** already bounds. Left open deliberately, not overlooked.
+
   Two things caught late, both worth the space:
 
   - **A green assertion that proved nothing**, caught by `tsc` and not by the
@@ -238,11 +258,30 @@ only raises the number of sockets an attacker has to hold.
     the right-hand side, which is the argument for tests being typechecked by
     the same gate the source is. Replaced with `title`, the variant count and
     `cached === false`.
-  - **`tsc --build` reported clean over that file once before it reported the
-    error**, on an incremental run. If a typecheck matters to a claim, force it:
-    `npx tsc --build --force` is what the numbers below were taken from.
+  - **The builder reported that gate clean once while it was failing, and the
+    fault was the builder's, not the toolchain's.** The first draft of this
+    entry blamed `tsc --build`'s incremental cache. The gate's reviewer could
+    not reproduce that and asked for the literal commands, which settled it in
+    one run. Two shell mistakes, both reproduced on this branch with the bug
+    deliberately reintroduced:
 
-  Gates: `npm run check` exit 0 (after `tsc --build --force`, also exit 0),
+    - `npm run check 2>&1 | tail -5; echo "EXIT:$?"` prints **`EXIT:0` while
+      the real exit code is 1**. Without `pipefail`, `$?` after a pipeline is
+      the _last_ command's status — `tail`'s, which always succeeds. The
+      unpiped `npm run check >/dev/null 2>&1; echo $?` on the same tree prints
+      `1`.
+    - `npm run check 2>&1 | grep -E "error|…" | head -20` hid the message
+      itself: `--verbose` prints a per-project line for all nineteen projects,
+      so `TS2339` was **line 35 of a 40-line filtered stream** and `head -20`
+      cut it off.
+
+    So `tsc` never lied and the standard gate is not at risk. **Never read an
+    exit code through a pipe**, and do not filter a gate's output with a
+    fixed-height `head` when the thing you are looking for is at the end.
+    `--force` was not the fix and was never needed; the numbers below are from
+    unpiped runs.
+
+  Gates, all from unpiped runs: `npm run check` exit 0,
   `npm test -- --project downloader` 1167 passed in 71 files, and the whole
   `npm test` — 2273 in 133 files — because this touched repo-level
   `.env.example` and `docs/02-DEPLOYMENT.md`. Not run: the Playwright suites and
@@ -253,7 +292,11 @@ only raises the number of sockets an attacker has to hold.
   without the hook an over-limit subscribe is _served_, and an allowed subscribe
   holds its socket until the probe it names ends, which for a probe that never
   comes is the whole `CHANNEL_TTL_MS`. That is the honest shape of this
-  endpoint's red, not a weaker one substituted for it.
+  endpoint's red, not a weaker one substituted for it. **The timeout is 60 s,
+  the project's `testTimeout`.** The builder's red runs passed
+  `--testTimeout=8000` to shorten them and reported "8 s" from that; the gate
+  ran the suite unmodified and got 60 s. Both numbers are real, the flag is the
+  whole difference, and the second is the one anyone re-running this will see.
 
 - **2026-09-07 — Build step 1 answered by the owner: per IP, matching the other
   endpoints.** The question was what the new bucket is keyed on. Options put:
