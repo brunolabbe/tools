@@ -39,7 +39,14 @@ the red check is a symptom.
 ## Decision
 
 **An excused finding is excused in the code it excuses, with a comment on the
-line above the alert.**
+line above the alert** — and that comment is the **register**, not the
+**mechanism**. It tells a reader of the file why the finding is excused, which
+nothing else here does; it does not, on its own, clear the `CodeQL` check. What
+clears the check is the dismissal step in
+[`security.yml`](../../.github/workflows/security.yml). See
+"[Register and mechanism are two jobs](#register-and-mechanism-are-two-jobs)"
+below. _(Amended 2026-09-07 by [repo-16](../work/repo-16-suppression-does-not-dismiss.md);
+this record originally used one word for both.)_
 
 ```ts
 // Why this query fires here and why that is correct, in prose.
@@ -82,6 +89,55 @@ every writer available here is a human who will forget, and a register that
 disagrees with the code is worse than none — so derive the view instead of
 storing it.
 
+### Register and mechanism are two jobs
+
+_Added 2026-09-07 by [repo-16](../work/repo-16-suppression-does-not-dismiss.md)._
+
+Rules 1–4 describe a **register**: an in-repo, in-diff, in-review record that a
+human looked at a finding and rejected it. That job is done, and no dismissal,
+SARIF filter or repository setting does it.
+
+They do **not**, by themselves, do the second job — clearing the check — and the
+first version of this record did not distinguish the two. Two workflow steps
+carry the mechanism, and both are needed:
+
+1. **`packs: codeql/javascript-queries:AlertSuppression.ql`** on the `init` step.
+   That query is what turns a `// codeql[<rule-id>]` comment into a SARIF
+   `suppressions[]` entry. It is **not** part of `security-extended`: that suite
+   selects queries of kind `problem`, `path-problem`, `diagnostic` and `metric`,
+   and `AlertSuppression.ql` is `@kind alert-suppression`. Without this line the
+   uploaded SARIF records no suppression at all.
+
+   **A free result from reading it: rule 1 is now measured, not only reasoned.**
+   The shared library behind that query
+   (`shared/util/codeql/util/suppression/AlertSuppression.qll`, github/codeql at
+   `4239fee`) matches `codeql[…]` anywhere in a single-line comment, requires
+   nothing else to start that line before it, and gives the comment a scope of
+   **exactly the line after it**. So "on its own line, immediately above the
+   alert" is what the query requires — an independent reason for rule 1, which
+   until now rested only on the alert-hash argument.
+
+2. **`advanced-security/dismiss-alerts`**, SHA-pinned, on pushes to `main` only.
+   It splits the uploaded SARIF by whether `suppressions[]` is non-empty and
+   PATCHes the suppressed results' alerts to dismissed — and re-opens an alert it
+   had dismissed whose suppression has since gone, which is what makes deleting a
+   comment mean something.
+
+**The cost of step 2, named rather than discovered later.** It dismisses with
+fixed text: reason `won't fix`, comment `Suppressed via SARIF`. Rule 2 requires
+five fields of justification, and under this mechanism all five live only in the
+code comment, so GitHub's own record of the decision is uninformative on its own
+— someone reading the security tab has to open the file. That is a real narrowing
+of what this record protects, though not a loss of it: the reasoning still exists,
+in the place rule 4 chose to put it.
+
+**The SHA pin is this repo's only one**, against 34 tag-pinned action references
+across 12 distinct actions in `.github/workflows/` (measured 2026-09-07). The
+exception is spoken rather than silent: a step holding `security-events: write`
+is pinned harder than the rest, because this one _writes_ alert state, and a
+compromised release could dismiss real alerts silently with nothing here to
+notice.
+
 ### Triaging a new alert
 
 The steps, in order, whichever query fired:
@@ -120,6 +176,19 @@ analysis entirely, and both trade a narrow known-wrong alert for a wide blind
 spot. Recorded at length because the shape is plausible enough that the next
 person will propose it again.
 
+> **Correction, 2026-09-07 ([repo-16](../work/repo-16-suppression-does-not-dismiss.md)).**
+> Everything above about CodeQL's _configuration_ is still true and still the
+> reason this option was struck. The sentence **"it does not exist"** is too
+> broad, and read as a general claim it is wrong: **path + rule-id scoping does
+> exist, one layer later in the pipeline.**
+> [`advanced-security/filter-sarif`](https://github.com/advanced-security/filter-sarif)
+> drops results from the SARIF by `[+/-]<file glob>[:<rule glob>]` before upload.
+> The paragraph answers "can the _analysis_ be scoped"; the question that
+> mattered was "can the _result_ be scoped". Filtering the result was costed on
+> its own terms in 2026-09-07's decision below and lost there, for a different
+> reason — it leaves nothing in GitHub's record to show a human looked, which is
+> the failure in Context.
+
 **Raise the check's failure severity in repository settings.** Not in version
 control, invisible from a checkout, and global: it would silence real `high` and
 `critical` findings everywhere to quiet one known-wrong finding in one file. The
@@ -132,6 +201,40 @@ for a second: a page describing two files inside one tool is where the root
 `docs/` spine starts to fuse with a tool's, which [001](./001-per-tool-docs-and-tickets.md)
 exists to prevent. The policy is repo-wide and belongs here; the entries are
 about specific lines and belong on them.
+
+### Carrying the suppression to the check — decided 2026-09-07
+
+The alternatives above answer "where does the reasoning live". These answer the
+second question, which this record did not separate from the first until
+[repo-16](../work/repo-16-suppression-does-not-dismiss.md): **what actually
+clears the `CodeQL` check.** Chosen by the repo's owner.
+
+**`advanced-security/dismiss-alerts` in `security.yml` — CHOSEN.** It converts a
+SARIF suppression into a real dismissal, and reverses itself when the comment
+goes. Its cost is named under "Register and mechanism" above: the dismissal it
+writes carries fixed generic text, so the security tab's own record of the
+decision is uninformative and rule 2's five fields live only in the code comment.
+
+**`advanced-security/filter-sarif` before upload — not chosen.** It scopes by
+path and rule id, which is the shape the struck alternative above was reaching
+for. Rejected because **the alert never appears at all**, so there is nothing in
+GitHub's record to show a human looked — precisely the failure this record's
+Context names. `dismiss-alerts` leaves a weakly worded dismissal; `filter-sarif`
+leaves nothing. Secondary cost: it runs _between_ `analyze` and upload, so the
+workflow must set `upload: failure-only` and add an explicit
+`github/codeql-action/upload-sarif` step — three steps change instead of one, and
+the repo takes ownership of an upload path `analyze` currently handles for it.
+
+**Dismiss by hand on each recurrence — not chosen**, on its measured price: this
+alert was dismissed on 2026-08-23 and came back when `dl-27` moved the code on
+2026-08-30 (`ec1dd6b`) with none of the first triage's reasoning attached. That
+is what [repo-13](../work/repo-13-codeql-false-positives-recur.md) was filed to
+escape. Its one real merit — a human in front of every finding — is cheaper than
+it was, because this record now carries the reasoning.
+
+**Accept the red check — not chosen.** Zero work, and the honest baseline. It
+trains people to ignore a red security check, which is the failure mode with the
+longest tail and the one nothing in this repo would detect.
 
 ## Consequences
 
@@ -164,6 +267,14 @@ separately and watching which tests notice. A guard covered only by a test that
 cannot fail is the case this whole record exists to prevent, and it was found
 inside the first excuse written under it.
 
+### The experiment, and what it settled
+
+_The four paragraphs immediately below are the 2026-09-01 statement of the open
+question, kept as written because the question they pose is the one
+[repo-16](../work/repo-16-suppression-does-not-dismiss.md) answered. **They are
+superseded by "What the merge showed" at the end of this subsection and are not
+this record's current position.**_
+
 **Whether GitHub honours the comment natively is still unverified, and the
 pull-request check cannot answer it.** #126 was expected to settle it and did
 not. Its `CodeQL` check was green, but every line it added was comment: the
@@ -186,8 +297,10 @@ and no third:
   as written.
 - **It stays `Open`** — they are not honoured natively, and the follow-up is the
   `advanced-security/dismiss-alerts` action, which converts SARIF suppression
-  data into real dismissals. That is a change to `security.yml`, to be taken on
-  its own evidence rather than pre-empted here.
+  data into real dismissals. ~~That is a change to `security.yml`, to be taken on
+  its own evidence rather than pre-empted here.~~ _(Struck 2026-09-07: the
+  evidence arrived and the change was made. See below. The diagnosis in this
+  bullet — "not honoured natively" — is itself narrowed there.)_
 
 Either way the comment keeps its documentation value, which is why this record
 does not depend on the answer.
@@ -204,6 +317,48 @@ this alert on 2026-08-30 without touching the flagged line either, only shifting
 the lines below it — and if a shift alone reattributes, this diff should have
 been reattributed too. That history is screenshot-relayed and unverified, so it
 is evidence rather than an answer.
+
+#### What the merge showed — 2026-09-07
+
+**The outcome was the second bullet: `js/request-forgery` stayed `Open` after
+`94206d9` put the comment on `main`.** Read from the security tab by the repo
+owner on 2026-09-01 and **relayed**; not verified in the development container,
+where `gh api` is denied and there is no other route to the code-scanning API.
+Everything downstream of this paragraph rests on that one relayed reading.
+
+**The diagnosis the outcome was first given is not the only one, and it is not
+the best-supported one.** "Not honoured natively" assumes a suppression reached
+GitHub and was ignored. Measured on 2026-09-07 against `github/codeql`
+(`4239fee`) and `github/codeql-action` (`cdf488f`, the `v4` tag), **no suppression
+was ever in the SARIF**:
+
+- `javascript/ql/src/AlertSuppression.ql` is `@kind alert-suppression`.
+- `misc/suite-helpers/security-extended-selectors.yml` — the selector behind
+  `queries: security-extended` — includes only kinds `problem`, `path-problem`,
+  `diagnostic` and `metric`. It never selects that query.
+- `github/codeql-action`'s bundle passes five `--sarif-*` flags to the CLI
+  (`--sarif-add-baseline-file-info`, `--sarif-category`,
+  `--sarif-group-rules-by-pack`, `--sarif-include-diagnostics`,
+  `--sarif-merge-runs-from-equal-category`) and none of them concerns
+  suppressions.
+
+**Both diagnoses predict `Open`, and this repo cannot distinguish them**, which
+is the same trap the paragraphs above fell into with the green check. Whether
+GitHub would act on a `suppressions[]` entry natively, had one been produced, is
+**not established from here** — the workflow change is not evidence that it would
+not.
+
+**The decision is unaffected, because both diagnoses want the same two steps.**
+Run the alert-suppression query so a suppression exists, and run `dismiss-alerts`
+so something acts on it whatever GitHub does. Both landed in `security.yml` on
+2026-09-07; see "Register and mechanism are two jobs".
+
+**What is still unverified, and it is the load-bearing part.** Nobody has yet
+observed this working. The dismissal step runs only on a push to `main`, so the
+first evidence is the security tab after this change merges: the alert reading
+_dismissed_ with the comment `Suppressed via SARIF`, rather than `Open`. Until
+somebody records that, this record describes a mechanism that has been built and
+not seen to run.
 
 **Nothing enforces the five fields.** A suppression comment with no reasoning and
 no named test would pass every gate this repo has. That is a real gap, and the

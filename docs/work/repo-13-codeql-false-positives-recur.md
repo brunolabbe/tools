@@ -216,6 +216,15 @@ regression cover, not the evidence behind an excuse.
    answer.~~ **Answered 2026-09-01: it closed.** It was a true positive
    throughout, so its entry is **struck** — and the stronger result is what that
    does to adr/005's scope, not the answer itself. See the Log.
+
+   **Settled, and used as a control, 2026-09-07 by
+   [repo-16](./repo-16-suppression-does-not-dismiss.md).** That this alert
+   closed on `dl-23`'s merge (`6f29eb0`) is what makes `js/request-forgery`
+   staying `Open` a result rather than a timing artefact: the pipeline does
+   retire an alert once a change lands. **`## Review`'s gate-1 table still
+   recorded this line as deferred**; that row is retracted below the table, in
+   place.
+
 4. ~~Whether a CodeQL query filter can be scoped to a path is confirmed against
    the action's configuration schema, not from memory.~~ **Done 2026-09-01: it
    cannot. Option 3 struck.**
@@ -227,6 +236,18 @@ regression cover, not the evidence behind an excuse.
    2026-09-01: the alert reads `Open` on `main`, which is what **both** readings
    predict while the only copy of the comment sits on an unmerged branch. **The
    experiment is the merge** — see acceptance line 8 and the Log.
+
+   **Answered 2026-09-07 by
+   [repo-16](./repo-16-suppression-does-not-dismiss.md), and not in the form
+   this line expected.** The alert stayed `Open` after the merge (security tab,
+   read 2026-09-01, relayed), so the comment does not clear the check on its
+   own: it is a **register**, not a **mechanism**. What repo-16 also measured is
+   that `Open` had a second explanation this line did not consider — the
+   `security-extended` suite never ran an alert-suppression query, so no
+   suppression reached the SARIF at all. Both explanations predict `Open` and
+   neither can be excluded from a checkout. repo-16 built both halves into
+   `security.yml`; **whether the mechanism works has still not been observed.**
+
 6. ~~One of the four options is chosen by the repo's owner, with the rejected
    ones named alongside the cost that ruled each out.~~ **Done 2026-09-01:
    inline comments, in [adr/005](../adr/005-excusing-a-code-scanning-finding.md)
@@ -244,6 +265,19 @@ regression cover, not the evidence behind an excuse.
    not**, and the follow-up is the `advanced-security/dismiss-alerts` action — a
    change to `security.yml`, named in adr/005 and not taken here. The next person
    to open the security tab settles it by reading one line.
+
+   **Answered 2026-09-07 by
+   [repo-16](./repo-16-suppression-does-not-dismiss.md): it stayed `Open`**
+   (relayed reading of 2026-09-01, never verified from a checkout), so the
+   second branch is the one that happened and `dismiss-alerts` is now in
+   `security.yml`, SHA-pinned and gated on pushes to `main`. **The "two
+   outcomes and no third" framing was itself too narrow**, which is the same
+   shape of error acceptance line 5's own med finding was about: a third
+   reading — that no suppression ever reached the SARIF, because
+   `security-extended` does not select an alert-suppression query — also
+   predicts `Open`, and repo-16 measured it. The line's conclusion survives
+   (the comment alone does not clear the check); its reasoning for it does not.
+
 9. ~~`npm run check` passes, and `npm run format` has been run if any `.md`
    changed.~~ **Done — see the gate record.**
 
@@ -253,17 +287,46 @@ regression cover, not the evidence behind an excuse.
 directly by the reviewer (no `Skill`/`Agent` tool in that role), to `medium` depth.
 Sonnet reviewing an Opus build.
 
-| Done when                                                        | Proof                                                                                                                                      |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1. Both alerts re-verified at the tip, guard/line recorded       | proven — triage record (ticket:115-193); guard lines and `connectOptions` arm re-checked at `196fd28`, resolve exactly as cited            |
-| 2. What fails the check established (scoped to diff)             | verified — `gh pr checks` on #121/#122/#124/#126 all consistent with "CodeQL results-check is diff-scoped, separate from the `codeql` job" |
-| 3. `js/missing-rate-limiting` open/closed                        | correctly left **deferred** — `gh api` denied, ticket does not claim otherwise, no defect                                                  |
-| 4. Path-scoped query filter confirmed not to exist               | not re-verified (caller: already settled against GitHub's docs)                                                                            |
-| 5. Inline suppression honoured, confirmed on a real PR           | **contested, not proven** — see high/med findings below                                                                                    |
-| 6. Option chosen by owner, rejected options costed               | proven — `docs/adr/005-excusing-a-code-scanning-finding.md:103-131`                                                                        |
-| 7. Durable home, five fields, criteria discoverable              | proven — `docs/adr/005:52-82`; register command reproduced, returns exactly one line                                                       |
-| 8. Answered by this PR's own `CodeQL` check                      | check ran and passed (`gh pr checks 126`), but what it answers is ambiguous — see med finding                                              |
-| 9. `npm run check` passes, `npm run format` run if `.md` changed | verified — ran `npm run check` at `196fd28`: pass (lint, format, typecheck)                                                                |
+| Done when                                                        | Proof                                                                                                                                                                 |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Both alerts re-verified at the tip, guard/line recorded       | proven — triage record (ticket:115-193); guard lines and `connectOptions` arm re-checked at `196fd28`, resolve exactly as cited                                       |
+| 2. What fails the check established (scoped to diff)             | verified — `gh pr checks` on #121/#122/#124/#126 all consistent with "CodeQL results-check is diff-scoped, separate from the `codeql` job"                            |
+| 3. `js/missing-rate-limiting` open/closed                        | **WITHDRAWN — do not cite this row**; retraction directly below the table · correctly left **deferred** — `gh api` denied, ticket does not claim otherwise, no defect |
+| 4. Path-scoped query filter confirmed not to exist               | not re-verified (caller: already settled against GitHub's docs)                                                                                                       |
+| 5. Inline suppression honoured, confirmed on a real PR           | **contested, not proven** — see high/med findings below                                                                                                               |
+| 6. Option chosen by owner, rejected options costed               | proven — `docs/adr/005-excusing-a-code-scanning-finding.md:103-131`                                                                                                   |
+| 7. Durable home, five fields, criteria discoverable              | proven — `docs/adr/005:52-82`; register command reproduced, returns exactly one line                                                                                  |
+| 8. Answered by this PR's own `CodeQL` check                      | check ran and passed (`gh pr checks 126`), but what it answers is ambiguous — see med finding                                                                         |
+| 9. `npm run check` passes, `npm run format` run if `.md` changed | verified — ran `npm run check` at `196fd28`: pass (lint, format, typecheck)                                                                                           |
+
+> **Retraction of row 3 — 2026-09-07, by
+> [repo-16](./repo-16-suppression-does-not-dismiss.md)'s build.** The row is
+> marked and kept, not deleted, because it was cited: it is the only reason this
+> ticket's `Done when` line 3 and its gate record could disagree for six days
+> while both read as current.
+>
+> **The standing statement is `Done when` line 3's, which this row displaced:**
+> `js/missing-rate-limiting` **closed when `dl-23` merged** at `6f29eb0` — a true
+> positive throughout, never a candidate for excusing. That is a reading of the
+> security tab relayed by the repo owner on 2026-09-01 and **still not verified
+> from a checkout**, so the row's own stated obstacle (`gh api` is denied) is
+> unchanged and is _not_ being contradicted here. What is retracted is only
+> "correctly left **deferred**", which stopped being true a few hours after the
+> gate was written.
+>
+> **Attribution: not the reviewer.** The row was accurate at `196fd28`, the tree
+> it reviewed. The break came from the round that applied the owner's reading —
+> the Log entry dated _2026-09-01, the open input_ — which struck `Done when`
+> line 3, the triage-record entry, the Why paragraph and adr/005, and did not put
+> a forward-pointer on the committed gate row. That round had just corrupted a
+> gate record with a badly anchored insert (its own last paragraph says so), so
+> leaving the table alone was the safe move at the time; the missing step was the
+> pointer, not the edit.
+>
+> **Row 4 is deliberately not retracted.** adr/005's path-scoped-filter
+> alternative was corrected on the same day, but that correction is about a
+> sentence in the ADR being too broad, not about row 4, which claims only that it
+> did not re-verify.
 
 - **high** · `tools/downloader/api/src/egress-proxy.ts:357-364` — the suppression
   comment claims "remove either [`guard.assertAllowed` or the pinning `lookup`] and
@@ -836,6 +899,31 @@ the fix-round narrative moved into `## Log`, per this gate's recommended remedy.
   failure that reads like staleness. The claim the citation supports was
   correct; only its pointer was not — which is the failure mode this ticket
   exists to describe, found in the ticket describing it.
+
+- **2026-09-07, amended from outside by
+  [repo-16](./repo-16-suppression-does-not-dismiss.md)** — this ticket is
+  `status: done`; the edit was made anyway, by the owner's decision against the
+  orchestrator's recommendation, because the ticket **contradicted itself**:
+  `Done when` line 3 read answered while `## Review`'s gate-1 row 3 read
+  "correctly left **deferred**". What changed, all of it additive except one
+  marked cell:
+
+  - `Done when` 3, 5 and 8 each gained a dated answer paragraph. Line 5 and 8's
+    conclusion (the comment does not clear the check) stands; their two-outcome
+    reasoning is recorded as too narrow, because a third reading also predicts
+    `Open` — see repo-16.
+  - Gate 1's table row 3 is marked `WITHDRAWN — do not cite this row` and kept,
+    with the retraction in a blockquote directly beneath the table, per
+    `.claude/skills/orchestrate-tickets/reference/records.md`. **No other cell in
+    either gate table changed**: compared programmatically, 29 table rows, one
+    differing in content, the rest re-padded by `oxfmt` when row 3 grew. No
+    sentence of either gate record's prose was touched.
+  - The retraction attributes the break to the round that applied the owner's
+    security-tab reading (`2026-09-01, the open input`), not to the reviewer,
+    whose row was accurate at `196fd28`.
+
+  Anchored on prose, not on `## The gate on this filing`, for the reason the
+  entry above this one records.
 
 ## The gate on this filing
 

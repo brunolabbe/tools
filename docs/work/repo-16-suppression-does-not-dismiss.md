@@ -3,7 +3,7 @@ id: repo-16
 tool: repo
 title: An inline CodeQL suppression documents the finding but does not clear the check
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: [repo-13]
 difficulty: hard
@@ -293,17 +293,33 @@ security tab rather than inferred.
    one is chosen; the rejected three are recorded with the cost that ruled each
    out.~~ **Done 2026-09-07: option 1 chosen, three rejected with their costs, in
    the Decision section above.**
-2. If an option changing `security.yml` is chosen, it is implemented, and the
+2. ~~If an option changing `security.yml` is chosen, it is implemented, and the
    default-branch-only condition on any dismissal step is verified by reading the
-   workflow rather than asserted.
+   workflow rather than asserted.~~ **Done 2026-09-07.** The condition was read
+   back out of the parsed file rather than off the diff: the dismissal step's
+   `if` is
+   `github.event_name == 'push' && github.ref == 'refs/heads/main'`. See the Log
+   for the command. **A second step was needed and the Build section did not name
+   it** — `packs: codeql/javascript-queries:AlertSuppression.ql` on `init`,
+   without which the SARIF carries no suppressions and the dismissal is inert.
 3. ~~The pinning sub-decision in Build step 2 is answered explicitly — tag or
    SHA~~ **— answered 2026-09-07: SHA** — and, **because it does depart from the
    repo's uniform tag pinning (34 references, 12 actions, 0 SHA pins, measured
-   2026-09-07), the reason is written beside the step.** That half is still
+   2026-09-07), the reason is written beside the step.** ~~That half is still
    outstanding: it lands in `security.yml` when this is built, and it is the part
-   of this line that can still fail.
-4. adr/005 carries all three amendments in Build step 3, including the correction
-   to its path-scoped-filter alternative.
+   of this line that can still fail.~~ **Done 2026-09-07:** the pin is
+   `advanced-security/dismiss-alerts@a18f986bdb40edba0dd7a74382c15d4a3d50a1c8`
+   (`v2.0.3`) and the paragraph above it in `security.yml` says why a step
+   holding `security-events: write` is pinned harder than the rest. The 34/12/0
+   measurement reproduces on `origin/main` at `e9054c5`; command in the Log.
+4. ~~adr/005 carries all three amendments in Build step 3, including the
+   correction to its path-scoped-filter alternative.~~ **Done 2026-09-07** —
+   register/mechanism split in the Decision, a `> Correction` under the
+   path-scoped-filter alternative, and a `#### What the merge showed`
+   subsection replacing the "still unverified" position, with the superseded
+   paragraphs kept and marked and the hypothetical-follow-up sentence struck in
+   place. A fourth amendment the ticket did not ask for: the `Open` result is
+   recorded as having **two** explanations this repo cannot separate, not one.
 5. repo-13's acceptance lines 5 and 8 are answered — pointing at this ticket is
    enough — and its deferred line 3 is marked settled by fact 4 above.
    **Answered 2026-09-07: amend repo-13 in place.** repo-13 is now
@@ -316,7 +332,10 @@ security tab rather than inferred.
    Its body reads
    `repo-13-codeql-false-positives-recur.md:216` "**Answered 2026-09-01: it closed.**"
    struck through, while its own gate table still reads
-   `repo-13-codeql-false-positives-recur.md:260` "correctly left **deferred**".
+   `repo-13-codeql-false-positives-recur.md:294` "correctly left **deferred**"
+   — **that row is now marked `WITHDRAWN` and retracted beneath the table; the
+   line number is repointed from the one this ticket was filed with, which this
+   build's own edit moved**.
    Leaving that standing misleads every future reader of repo-13, not only
    whoever builds this ticket.
 
@@ -336,10 +355,24 @@ security tab rather than inferred.
    **This is the build's work, not the bookkeeping branch's.** The branch that
    answered this decision deliberately did not touch repo-13.
 
-6. The state of alert 2 after the chosen change is recorded in this ticket's Log,
-   read from the security tab, with the date and the commit.
-7. `npm run check` passes and `npm run format` has been run, since this ticket's
-   work is `.md` and `.yml`.
+   **Done 2026-09-07.** Lines 3, 5 and 8 each carry a dated answer; gate 1's
+   table row 3 is marked `WITHDRAWN — do not cite this row` and kept, with the
+   retraction in a blockquote directly beneath the table, attributed to the
+   round that applied the owner's security-tab reading rather than to the
+   reviewer. Verified programmatically that exactly one of the 29 gate-table
+   rows changed in content; command in the Log.
+
+6. **Not done, and not doable from here.** The state of alert 2 after the chosen
+   change cannot be recorded yet by anyone: the dismissal step runs only on a
+   push to `main`, so there is no "after" until this merges. Nor could the
+   _current_ state be re-read — `gh api` is denied and the security tab is not
+   reachable from the development container, so fact 3 in "The measurement" above
+   is still the 2026-09-01 relayed reading and nothing on this branch upgrades
+   it. **This line is the ticket's outstanding acceptance**, and the first look
+   after the merge is what closes it: the alert should read _dismissed_ with the
+   comment `Suppressed via SARIF`.
+7. ~~`npm run check` passes and `npm run format` has been run, since this
+   ticket's work is `.md` and `.yml`.~~ **Done 2026-09-07** — see the Log.
 
 ## Log
 
@@ -452,6 +485,141 @@ security tab rather than inferred.
   such, and this ticket's own instruction to re-read the security tab before
   acting is unchanged. This branch is bookkeeping across four tickets whose
   decisions were answered in one sitting.
+
+- **2026-09-07 — built.** Branch `repo-16-dismiss-suppressed-alerts` off
+  `origin/main` at `e9054c5`; `origin/main` exists on the remote, checked with
+  `git ls-remote --heads origin main` → `e9054c5d1c…`. Files: three, exactly the
+  declared surface — `.github/workflows/security.yml`, `docs/adr/005-…md`,
+  `docs/work/repo-13-…md`, plus this ticket.
+
+  **The SHA, resolved at build time as Build step 2 requires.**
+  `git ls-remote --tags --refs https://github.com/advanced-security/dismiss-alerts`
+  →
+  `a18f986bdb40edba0dd7a74382c15d4a3d50a1c8 refs/tags/v2.0.3`. The same run
+  without `--refs` returns **no `^{}` peeled entry**, so `v2.0.3` is a
+  lightweight tag pointing straight at that commit and the SHA is the commit's,
+  not a tag object's. **`v2` resolves to the same commit**, which is worth
+  noting: today the moving tag and the pinned one agree, so the pin buys nothing
+  yet and everything later. `git clone --depth 1 --branch v2.0.3` then
+  `rev-parse HEAD` returns the same 40 hex.
+
+  **Three things the ticket had wrong or did not have, all found by reading the
+  pinned action rather than the docs page it was filed from.**
+
+  - **The input is `sarif-id`, not `sarif-upload-id`.** Build step 1 says the
+    action "takes `sarif-file` and `sarif-upload-id`". `action.yml` at
+    `a18f986` declares `sarif-id` and `sarif-file`, both required, and
+    `src/main.ts` reads exactly those, at lines 449-450. The ticket transcribed the
+    action's **own README**, whose prose bullet still says `sarif-upload-id`
+    while every YAML example beneath it says `sarif-id` — so the error came from
+    upstream and would have failed the step at runtime with
+    `Input required and not supplied: sarif-id`.
+  - **The step needs `GITHUB_TOKEN` in `env:`.** `src/main.ts` line 451, in the
+    same repository, is
+    `core.getInput("token") || getRequiredEnvParam("GITHUB_TOKEN")`, and
+    `action.yml` declares no `token` input. Build step 1's "no new permission" is
+    right — `security-events: write` is already on the job — but a permission is
+    not a token, and without the `env:` block the step throws before its first
+    API call.
+  - **The bigger one: `security-extended` never runs an alert-suppression
+    query, so there was no `suppressions[]` for anything to act on.** Measured
+    against `github/codeql` at `4239fee` and `github/codeql-action` at
+    `cdf488f` (the `v4` tag):
+    `javascript/ql/src/AlertSuppression.ql` is `@kind alert-suppression`;
+    `misc/suite-helpers/security-extended-selectors.yml`, the selector behind
+    `queries: security-extended`, includes only kinds `problem`,
+    `path-problem`, `diagnostic` and `metric`; and
+    `grep -o -E '"--sarif-[a-z-]+"' codeql-action/lib/entry-points.js | sort | uniq -c`
+    returns five flags
+    (`--sarif-add-baseline-file-info`, `--sarif-category`,
+    `--sarif-group-rules-by-pack`, `--sarif-include-diagnostics`,
+    `--sarif-merge-runs-from-equal-category`), none about suppressions.
+    So `packs: codeql/javascript-queries:AlertSuppression.ql` went on the `init`
+    step; codeql-action's own
+    `src/config/db-config.ts` — `generateCodeScanningConfig`, read at `cdf488f`
+    — shows `queries` and
+    `packs` are injected into the computed config independently, so the suite is
+    not displaced, and its `init/action.yml` says `packs` is available in a
+    single-language analysis, which this is.
+
+  **What that third finding does to this ticket's own premise, and it is not
+  cosmetic.** "The measurement" above states the answer as _GitHub reads the
+  suppression field and does not act on it_. On the evidence above, **no
+  suppression field was ever produced**, so alert 2 staying `Open` has a second
+  explanation and this repo cannot separate the two — the same trap repo-13's
+  green-check dichotomy fell into. The **conclusion** survives untouched: the
+  comment alone does not clear the check, and option 1 is still the answer,
+  because both explanations want the same two workflow steps. The **stated
+  mechanism** does not, and adr/005 now says so rather than asserting the
+  opposite. The Why section above is left as filed; this entry is the
+  correction.
+
+  **The default-branch gate, read rather than asserted** (`Done when` 2). Parsed
+  the file with the `yaml` package fetched to a scratch directory
+  (`npm pack yaml`, extracted outside the worktree — the repo has no YAML parser
+  in `node_modules` and none was installed into it) and printed
+  `jobs.codeql.steps`: all seven workflow files parse, and the dismissal step
+  reads
+  `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`,
+  `uses: advanced-security/dismiss-alerts@a18f986…`, with `sarif-id` and
+  `sarif-file` bound to `steps.analyze.outputs.*` and `GITHUB_TOKEN` in `env`.
+  `analyze` carries `id: analyze`; `analyze/action.yml` at `cdf488f` gives
+  `output` the default `../results` and declares `sarif-output` and `sarif-id`
+  as outputs, so nothing is hard-coded. Consequence worth stating: the step is
+  skipped on `schedule` and `workflow_dispatch` too, not only on pull requests.
+  That is the condition the decision specified and it is right — alerts move on
+  the push analysis — but it is broader than "not on pull requests".
+
+  **The pinning measurement reproduces**, on `origin/main` at `e9054c5` rather
+  than relayed:
+  `git grep -hoE 'uses: [^ ]+' origin/main -- .github/workflows/ | sort | uniq -c`
+  → **34 references, 12 distinct actions**, and
+  `git grep -hoE 'uses: [^ ]+@[0-9a-f]{40}' origin/main -- .github/workflows/ | wc -l`
+  → **0**. So this is the first SHA pin in the directory, and the reason sits
+  beside it in the file.
+
+  **repo-13, amended in place** (`Done when` 5). Row 3 of gate 1's table is
+  marked `WITHDRAWN — do not cite this row` and left standing, with the
+  retraction in a blockquote directly beneath the table. Checked
+  programmatically rather than by eye that nothing else in either gate record
+  moved: a script comparing every `|`-row against `git show HEAD:` with padding
+  normalised reports **29 rows, 1 differing in content**, and `git diff -U0`
+  shows no `-` line anywhere in the two records' prose. The retraction
+  attributes the break to the `2026-09-01, the open input` round — which struck
+  the body's line 3 and left the committed row without a forward-pointer — not
+  to the reviewer, whose row was accurate at `196fd28`. Row 4 is deliberately
+  not retracted, and the retraction says why.
+
+  **`Done when` 6 is outstanding and nobody could have closed it here.** The
+  dismissal runs only on a push to `main`, so there is no post-change state to
+  read until this merges, and the pre-change state could not be re-read either:
+  `gh api` is denied and there is no other route to the code-scanning API from
+  the container. Fact 3 above is still the 2026-09-01 relayed reading. Setting
+  `status: done` with one acceptance line waiting on a merge is what repo-13
+  itself did with its lines 5 and 8.
+
+  **What was not established, stated as unestablished.** Nobody has seen this
+  mechanism run. The workflow is not triggered by a push to a feature branch —
+  `on: push` is filtered to `main` — so opening a pull request is the earliest
+  point at which GitHub even parses the file, and the dismissal step is skipped
+  there by design. The `packs:` line has never been executed against a real
+  CodeQL run from here; that the suite excludes `AlertSuppression.ql` is
+  measured, but whether the CodeQL CLI would have added it by some other route
+  is **not established from here** — the Action passes no flag that would, and
+  the action's own README instructs adding the query explicitly, which is
+  evidence and not proof.
+
+  **One thing folded in, since reading `AlertSuppression.qll` made it free.**
+  adr/005's rule 1 ("the line before, never the end of the line") rested only on
+  the alert-hash argument. The shared library the query is built from gives a
+  `codeql[…]` comment a scope of exactly the line after it, and requires nothing
+  else to start that line — so the placement rule is what the query _requires_,
+  not only what avoids churn. Two sentences added to adr/005; no rule renumbered.
+
+  Gates: `npm run format`, then `npm run check`, then
+  `node scripts/citations.mjs` on both edited tickets, then
+  `npm run status -- --json`. Results in the report and in the pull request body;
+  no unit suite is implicated — the diff is one workflow file and three `.md`.
 
 ## The gate on this filing
 
