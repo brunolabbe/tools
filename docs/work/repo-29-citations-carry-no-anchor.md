@@ -384,6 +384,37 @@ machinery is C's, and only the framing is new**:
   anchor when it is next written or edited. A is not optional and not implied by
   D; it is the half that covers the Why sections D deliberately does not.
 
+**One more thing anchoring buys, added 2026-09-07 from repo-16's build.** An
+unanchored bare `:N` shorthand is not merely unchecked — it can be resolved
+against **the wrong file** and reported as `unanchored` rather than as a failure.
+`citations.mjs` takes a shorthand's file from the nearest qualified citation
+_above_ it, so a bare backticked range written under a citation naming a
+different file is attributed to that file, printed with both ends on screen, and
+does not fail. **Three independent instances in the 2026-09-07 batch, from three
+different agents**, and the third is the one worth reading:
+
+- **repo-16.** A builder note enumerating four repointed citations wrote each as
+  a fully-qualified left side and a bare shorthand right side. All four corrected
+  ranges bound to the wrong file. The run exited 0 and the record would have
+  committed clean; it was caught only because fully qualifying them moved the
+  verified count **2 → 6** — the four repointings had been counted and never
+  checked.
+- **dl-44's gate.** A bare range in a gate record inherited the previous
+  citation's file and resolved into a different file entirely.
+- **This paragraph, on its first draft.** It named the two ranges above in bare
+  backticked form as _examples_, and all three bound to
+  `repo-21-the-orchestration-skill-outgrew-its-loop.md` — the nearest qualified
+  citation above, and a ticket with nothing to do with either instance. The
+  prose describing the defect reproduced it, inside the hour, in the ticket filed
+  to fix it. That is the argument for enforcement rather than for care: three
+  agents and one of them forewarned.
+
+`--require-anchors` is what turns all three into failures, which is why this belongs
+here rather than in its own ticket: the flag this ticket already adopts is the
+fix, and the case strengthens option C's argument that counting a reference is
+not the same as checking it. Worth a line in whatever lands, so the next reader
+knows the flag buys correctness and not only coverage.
+
 Whatever is chosen, two things hold:
 
 1. **Prove the gate by making it fail first.** If a CI step is added, break one
@@ -619,3 +650,18 @@ moved` at exit 0. Run again on 2026-09-07 the same file reports **6 verified, 4
   **This entry landed after the gate that passed this branch**, like the entry
   above it, and is disclosed as uncovered by that verdict in the pull request
   rather than left to look reviewed.
+
+- **2026-09-07, one Build line added from outside** — by
+  [repo-16](./repo-16-suppression-does-not-dismiss.md)'s build, on the owner's
+  instruction, recording that an unanchored bare `:N` shorthand can bind to the
+  **wrong file** and still exit 0. **Three** instances that day: repo-16's,
+  dl-44's gate, and the first draft of that very Build paragraph, which wrote its
+  two examples in bare backticked form and bound all three to `repo-21`. The
+  third was caught by running `node scripts/citations.mjs` on this file before
+  committing, which is the only reason it is a reproduction rather than a defect
+  shipped into the ticket filed to fix it. All three are in the Build section.
+  **Nothing else here was touched** — no status, decision or scope change, and
+  nothing implemented. This
+  ticket is held and undispatched, and the line is there so whoever picks it up
+  has the strongest available argument for `--require-anchors` rather than
+  rediscovering it.

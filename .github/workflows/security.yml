@@ -48,11 +48,62 @@ jobs:
           # on a codebase this size; the default `security-extended` is the
           # signal worth reading.
           queries: security-extended
+          # The query that turns a `// codeql[<rule-id>]` comment into a SARIF
+          # `suppressions[]` entry, which is the input the dismissal step below
+          # reads. It is not in `security-extended`: that suite selects kinds
+          # `problem`, `path-problem`, `diagnostic` and `metric`, and
+          # `AlertSuppression.ql` is `@kind alert-suppression`. Without this
+          # line the SARIF carries no suppressions at all and the step below is
+          # inert — the adr/005 comments would still document a finding for a
+          # human reader and still not clear the check. `packs` and `queries`
+          # are combined rather than exclusive; `packs` is only available in a
+          # single-language analysis, which this is.
+          packs: codeql/javascript-queries:AlertSuppression.ql
       # No build step. The JS/TS extractor reads source directly, so it does not
       # need `npm ci` or a populated `dist` the way the suites in `ci.yml` do.
       - uses: github/codeql-action/analyze@v4
+        # `id:` so the step below can read `sarif-output` (the absolute path to
+        # the directory `output` defaults to, `../results`) and `sarif-id` (the
+        # upload the dismissal waits on) rather than hard-coding a path.
+        id: analyze
         with:
           category: /language:javascript-typescript
+      # Under adr/005 the inline `// codeql[<rule-id>]` comment is a register,
+      # not a dismissal: it does not clear the check on its own, so a pull
+      # request touching an excused file still gets a red `CodeQL` check.
+      # (Whether GitHub would act on a SARIF suppression by itself is *not*
+      # established — until the line above, this repo never produced one. See
+      # adr/005, "What the merge showed".)
+      #
+      # This step closes the gap regardless — it splits the uploaded SARIF by
+      # whether `suppressions[]` is non-empty, matches results to alerts by rule
+      # id, file, line and column, and PATCHes the suppressed ones to dismissed.
+      # It also re-opens an alert it previously dismissed whose suppression has
+      # gone, which is what makes deleting a comment mean something.
+      #
+      # The cost, named rather than discovered later: it dismisses with fixed
+      # text — reason "won't fix", comment "Suppressed via SARIF". adr/005's
+      # five fields of justification live only in the code comment, so the
+      # security tab's record of the decision is uninformative on its own.
+      #
+      # Pinned to a commit SHA, and it is the only such pin in this directory —
+      # every other action reference here is tag-pinned (34 of them, 12 distinct
+      # actions, measured 2026-09-07). A step holding `security-events: write`
+      # is pinned harder than the rest, because this one writes alert state: a
+      # compromised release could dismiss real alerts silently and nothing in
+      # this repo would notice. The pin is `v2.0.3`, resolved at build time
+      # with `git ls-remote --tags`; see repo-16.
+      #
+      # Push-to-`main` only. A dismissal is repository-global, so a pull request
+      # that adds a suppression must not be able to dismiss an alert for
+      # everybody before it merges.
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: advanced-security/dismiss-alerts@a18f986bdb40edba0dd7a74382c15d4a3d50a1c8 # v2.0.3
+        with:
+          sarif-id: ${{ steps.analyze.outputs.sarif-id }}
+          sarif-file: ${{ steps.analyze.outputs.sarif-output }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
   # Blocks a known-vulnerable dependency at the pull request rather than at
   # whatever later moment someone runs `npm audit`. Pull requests only — there
