@@ -180,3 +180,43 @@ and is not this ticket's to implement.
   `scripts/citations.mjs` was the only `path.relative` in `scripts/` —
   `grep -rn "path.relative" scripts/` returns one line, now inside
   `locateRecord` as the documented fallback.
+
+- **2026-09-07, after the gate** — the reviewer's one finding was that
+  `sameDirectory`'s `realpathSync.native` branch is not merely untested but
+  looked unreachable, since both values it compares are git's own
+  `--show-toplevel` answer for one directory and git normalises deterministically
+  — so only the `a === b` line ever runs, under a docblock claiming the branch
+  did real work. **The finding is right and the docblock was wrong**: it
+  described one operand as coming from `path.resolve`, which is the defect
+  `locateRecord` undoes, written into the wrong function. Corrected in place.
+
+  I tried to disprove the unreachability before accepting it and failed. Beyond
+  the reviewer's `-C`-against-a-symlink check, `git rev-parse --show-toplevel`
+  was run in five configurations — cwd at the real directory and at a symlink to
+  it, each with `PWD` unset, `PWD` set to the symlinked spelling, and from a
+  subdirectory. All five returned the resolved path; **git ignores `PWD`
+  entirely**, so the one asymmetry in this file's own code (`main()`'s call
+  inherits the parent's environment and cwd, `locateRecord`'s inherits the
+  environment but overrides the cwd) cannot produce a divergence either.
+
+  Kept rather than deleted, and the reasoning is recorded in the docblock so the
+  next reader can act on it: the equality rests on git-for-windows' `getcwd`
+  normalising a short name identically across two invocations, which is
+  precisely the class of claim this ticket got burned by and the one link here
+  nobody has run. It cannot produce a false positive — two different directories
+  have two different real paths — and if the assumption is wrong it is the
+  difference between a correct path and a silent return to the bug. The docblock
+  says to delete it, and its test, the day someone confirms that normalisation on
+  a Windows host.
+
+  Made reachable by contract instead of left unexamined: `sameDirectory` is now
+  exported and tested directly — false for two different directories, false for
+  paths that do not exist (the `catch`), and true through a symlink, which is
+  the branch. Verified it can fail: replacing the branch body with `return false`
+  gave `1 failed | 66 passed` on
+  `AssertionError: expected false to be true`; restored, `67 passed`. **Still
+  unreached in production**, and the test does not change that — it tests the
+  predicate's contract, not a path `main()` takes. One thing the test does _not_
+  prove, since a POSIX symlink is resolved by either variant: that `.native`
+  rather than plain `realpathSync` is required. That claim is Windows-only and
+  remains unmeasured.

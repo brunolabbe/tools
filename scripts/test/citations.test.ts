@@ -15,6 +15,7 @@ import {
   makeResolver,
   parseArgs,
   recordDrift,
+  sameDirectory,
   selectSection,
   USAGE,
 } from "../citations.mjs";
@@ -1368,6 +1369,51 @@ test("a record outside the repo keeps its ..-path rather than borrowing another 
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+/**
+ * `sameDirectory` is what decides whether git's answer is used or the `..`-path
+ * is, and its contract is tested here rather than only through `locateRecord`,
+ * because through `locateRecord` it is not tested at all: both values it ever
+ * compares in production are git's own `--show-toplevel` output for one
+ * directory, so they are byte-identical and only the `a === b` line runs. A
+ * gate found that, and the honest answer was to test the predicate directly and
+ * say in its docblock that the `realpath` half is unreached — not to leave a
+ * branch nothing has ever executed sitting under a comment claiming it works.
+ *
+ * The false cases matter more than the true one. A wrong `true` is the failure
+ * this whole script exists to catch — a record resolving to a plausible path in
+ * a tree that is not the one being checked.
+ */
+test("sameDirectory is false for two different directories, and for paths that do not exist", () => {
+  expect(sameDirectory(REPO, REPO)).toBe(true);
+  expect(sameDirectory(REPO, path.join(REPO, "scripts"))).toBe(false);
+  // The catch: `realpathSync` throws on a missing path, and throwing must read
+  // as "not the same", never as "same".
+  expect(sameDirectory(path.join(REPO, "no-such-dir"), path.join(REPO, "no-such-dir-2"))).toBe(
+    false,
+  );
+});
+
+/**
+ * The `realpath` half, exercised directly since nothing in production reaches
+ * it. Two spellings of one directory, which on POSIX means a symlink; skipped on
+ * Windows for the same reason the CLI symlink test below is.
+ */
+test.skipIf(process.platform === "win32")(
+  "sameDirectory sees through two spellings of one directory",
+  () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-same-")));
+    const link = `${dir}-link`;
+    fs.symlinkSync(dir, link, "junction");
+
+    // Not the fast path: the strings genuinely differ, so this is the branch.
+    expect(link).not.toBe(dir);
+    expect(sameDirectory(dir, link)).toBe(true);
+
+    fs.unlinkSync(link);
+    fs.rmSync(dir, { recursive: true, force: true });
+  },
+);
 
 /**
  * The other half of repo-33, reproduced on a platform that is not Windows.

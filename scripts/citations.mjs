@@ -1157,24 +1157,38 @@ export function parseArgs(argv) {
 }
 
 /**
- * The same directory, whatever the caller spelled it.
+ * The same directory, whatever it was spelled.
  *
- * `git rev-parse` answers with the path git resolved; `path.resolve` answers
- * with the path the caller typed. Comparing those two strings is the defect
- * `locateRecord` exists to undo, so the comparison itself has to run both sides
- * through one canonicaliser rather than trusting either — and specifically
- * through `realpathSync.native`, the variant that expands a Windows 8.3 short
- * name where the JS implementation leaves it alone.
+ * **Both callers pass git's own `--show-toplevel` answer**, one from the
+ * process's cwd and one from the record's directory, and that is worth stating
+ * plainly because an earlier draft of this comment claimed one side came from
+ * `path.resolve` — which is the defect `locateRecord` exists to undo, described
+ * in the wrong place. It was wrong, a gate caught it, and the correction is the
+ * point: git resolves symlinks and short names before it answers, so two
+ * invocations naming one directory agree byte for byte, and `a === b` is the
+ * whole comparison in practice.
+ *
+ * **The `realpath` branch is therefore unreached today, and it is kept
+ * deliberately rather than by oversight.** Attempts to construct a divergence,
+ * all of which failed: `-C` against a symlinked root, an inherited cwd through
+ * the same symlink, and `PWD` set to the symlinked spelling in four
+ * combinations — git returned the resolved path every time and ignores `PWD`
+ * outright. What keeps it is one link in the chain this ticket could not
+ * measure: that git-for-windows' `getcwd` normalises a short name *identically*
+ * for two separate invocations. If it ever does not, this branch is the
+ * difference between a correct path and a silent return to the bug, and it
+ * cannot produce a false positive — two different directories have two
+ * different real paths. `realpathSync.native` and not the plain one, because
+ * only the native variant expands an 8.3 short name.
+ *
+ * So: delete this branch and its tests the day someone confirms that
+ * normalisation on a Windows host. Until then it is insurance against the one
+ * assumption here that nobody has run.
  *
  * @param {string} a
  * @param {string} b
  */
-function sameDirectory(a, b) {
-  // Both sides are usually git's own answer for the same directory, in which
-  // case they are byte-identical and no syscall can disagree. Taken first so
-  // the common path — including the Windows short-name case this fixes, where
-  // the cwd and the record's directory are the same directory spelled one
-  // way — cannot be lost to a `realpath` that refuses the string.
+export function sameDirectory(a, b) {
   if (a === b) return true;
   try {
     return fs.realpathSync.native(a) === fs.realpathSync.native(b);
