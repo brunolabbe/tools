@@ -337,6 +337,20 @@ describe("the preview a job keeps", () => {
       expect(served.rawPayload.equals(PNG)).toBe(true);
     } finally {
       await image.close();
+      // **Close both databases before unlinking anything.** This is the only
+      // test in the suite backed by a real SQLite file rather than `:memory:`,
+      // and it is the only one that has to say this out loud.
+      //
+      // The second app is still up here: `afterEach` is what disposes it, and
+      // `afterEach` runs *after* this `finally`. Measured on Linux by counting
+      // `/proc/self/fd` at each point — 3 descriptors on `jobs.sqlite`, `-wal`
+      // and `-shm` are open at this line and drop to 0 only inside `afterEach`.
+      // POSIX unlinks an open file happily, so this cost nothing here and
+      // failed on Windows, where an open handle refuses `unlink` with `EBUSY`.
+      // `shutdown()` is idempotent, so disposing again in `afterEach` is a
+      // no-op and the first app's second shutdown below is free.
+      await harness?.app.shutdown();
+      await first?.app.shutdown();
       if (first !== undefined) await fs.rm(first.storageRoot, { recursive: true, force: true });
       await fs.rm(dbDir, { recursive: true, force: true });
     }

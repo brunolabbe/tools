@@ -337,3 +337,59 @@ Every citation now carries anchor text, so the checker verifies the claim rather
   record now carries anchor text, so the checker verifies the claim and not the
   coordinate — the same lesson dl-41's Log recorded against itself, learned
   again one layer up.
+
+- **2026-09-07 — the restart test failed on Windows in CI, and the whole batch
+  was blind to it.** PR #183's `test (windows-latest)` leg failed on
+  `pipeline.test.ts` "a restart does not lose the preview of a job whose file
+  survived it" with `EBUSY: resource busy or locked, unlink ... jobs.sqlite`.
+  `test (ubuntu-latest)` passed. **The builder, the reviewer and the
+  orchestrator all ran Linux, and a two-handle SQLite test is precisely the
+  shape that passes everywhere except the platform nobody was on.** Three
+  independent gates — a mutation-verified build, a reproduce-everything gate,
+  and a ship-condition check — all green, and none of them could see it. The
+  note is worth more than the fix: the defect was not in the reasoning, it was
+  in the platform coverage of the people doing the reasoning.
+
+  **The diagnosis, and the first hypothesis was wrong.** The relay suggested the
+  _first_ app's database handle was still open. It is not: `App.shutdown()` ends
+  with `db.close()`, and the test already calls it. The open handle belongs to
+  the **second** app, which the test never shuts down — `afterEach` disposes it,
+  and `afterEach` runs _after_ the test body's `finally`, which is where
+  `fs.rm(dbDir)` sits. Measured rather than reasoned, by counting
+  `/proc/self/fd` at each point in a throwaway spec:
+
+  | point                                         | open descriptors on the db files |
+  | --------------------------------------------- | -------------------------------- |
+  | test body, both apps created, first shut down | 3                                |
+  | test `finally`, the line that unlinks         | **3**                            |
+  | `afterEach`, before `dispose()`               | 3                                |
+  | `afterEach`, after `dispose()`                | 0                                |
+
+  The three are `jobs.sqlite`, `jobs.sqlite-wal` and `jobs.sqlite-shm` — WAL
+  mode, so one connection holds several. POSIX unlinks an open file happily and
+  Windows refuses with `EBUSY`, which is the entire difference between the two
+  legs.
+
+  **The fix is one line of ordering in the test**, plus the comment explaining
+  it: shut the second app down in the `finally`, before removing anything.
+  `shutdown()` is idempotent, so `afterEach` disposing it again is a no-op.
+  **No source change was needed** — the API already had the close path the
+  orchestrator offered to let me add, so the diff stays inside the files the
+  gate reviewed. The acceptance is untouched: still two app instances over one
+  database and one storage directory, and **not** skipped on Windows, which
+  would have hidden exactly this class of bug on the leg least able to afford
+  it.
+
+  **What was verified by running, and what was not.** Verified here, on Linux:
+  that 3 descriptors are open at the unlink line before the fix and **0**
+  after — a throwaway spec asserted that number and was deleted, since a
+  `/proc`-reading test would itself be Linux-only. That 0 is the condition
+  Windows enforces, so it is the closest local proxy that exists. **Not
+  verified here: that the Windows leg now passes.** No Windows machine was
+  available to this branch at any point, and the only evidence that can settle
+  it is the CI run on the pushed commit. This entry deliberately does not claim
+  it.
+
+  One thing not fixed, deliberately: `scripts/test/citations.test.ts` also
+  fails on that leg, identically at `origin/main`, and is parked as `repo-31`.
+  Untouched.
