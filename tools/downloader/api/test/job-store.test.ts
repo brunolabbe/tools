@@ -221,7 +221,10 @@ describe("the preview path, and the migration that adds its column", () => {
 
     migrate(legacy);
 
-    expect(legacy.pragma("user_version", { simple: true })).toBe(3);
+    // 4, not 3: dl-44 appended `thumbnail_files`. The number is the count of
+    // shipped migrations, and it moves every time one is added — which is the
+    // point of asserting it rather than asserting "greater than 2".
+    expect(legacy.pragma("user_version", { simple: true })).toBe(4);
     const upgraded = new JobStore(legacy).get("legacy-1");
     expect(upgraded.status).toBe("completed");
     // Null, not absent and not invented: nothing may fabricate a token that was
@@ -236,7 +239,7 @@ describe("the preview path, and the migration that adds its column", () => {
     const legacy = legacyDatabase();
     migrate(legacy);
     expect(() => migrate(legacy)).not.toThrow();
-    expect(legacy.pragma("user_version", { simple: true })).toBe(3);
+    expect(legacy.pragma("user_version", { simple: true })).toBe(4);
     expect(new JobStore(legacy).get("legacy-1").thumbnailPath).toBeNull();
     legacy.close();
   });

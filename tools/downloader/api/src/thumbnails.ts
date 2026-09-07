@@ -1,5 +1,5 @@
 /**
- * Preview images: fetched at probe time, held in memory, served by token.
+ * Preview images: fetched at probe time, served by token, held in two places.
  *
  * ## Why the bytes come through this service at all
  *
@@ -36,13 +36,37 @@
  * Fetching where the credentials already are is the only shape that serves the
  * probe panel and the downloads list from one code path.
  *
+ * ## Why there are two copies, and which owns what (dl-44)
+ *
+ * The in-memory store below is the **probe-only** path: a probe that has not
+ * become a job — or has not finished being one — has no file on disk to keep a
+ * preview beside, and `/api/thumbnail/:token` has to answer for it anyway. It
+ * keeps its ten minutes.
+ *
+ * A **completed** job gets `persistThumbnail`, which writes the same bytes into
+ * that job's `out/<jobId>/` directory. That is the whole of the retention rule:
+ * the image is in the directory the retention sweep already deletes at
+ * `fileRetentionHours`, so it lives exactly as long as the file it depicts and
+ * is unlinked on the same pass. Nothing new has to know when to delete it.
+ *
+ * The token does not change between the two. `thumbnailPath` still means
+ * `/api/thumbnail/<token>` and nothing else, so a client — or a `localStorage`
+ * record written before any of this — keeps working across the hand-off and
+ * across a restart. The route decides which copy answers; see
+ * `routes/thumbnail.ts`.
+ *
  * Everything here is decorative and every failure is non-fatal. Nothing in this
- * file throws into the probe path.
+ * file throws into the probe path, and `persistThumbnail`'s caller must treat a
+ * failure the same way: a download that succeeded is not undone by a picture
+ * that could not be written.
  */
 
 import { randomBytes } from "node:crypto";
+import fs from "node:fs/promises";
 import { AppError, ROUTES } from "@downloader/contract";
 import type { ProbeResult, RequestContext } from "@downloader/contract";
+import { assertRealPathInside } from "@downloader/engine";
+import type { Storage } from "@downloader/engine";
 import type { GuardedFetch } from "./guarded-fetch.ts";
 import type { AppLogger } from "./logger.ts";
 import type { SsrfGuard } from "./ssrf.ts";
@@ -166,6 +190,24 @@ export class ThumbnailStore {
   }
 }
 
+/**
+ * One captured preview: the bytes, the name they were filed under, and the path
+ * that serves them.
+ *
+ * `captureThumbnail` used to return just the path. The bytes are returned too
+ * because the job pipeline needs them *later* than it captures them — a probe
+ * happens before a download and a download can outlast `THUMBNAIL_TTL_MS`, so
+ * reading them back out of the store at completion would lose the preview of
+ * exactly the long downloads most worth keeping one for.
+ */
+export interface CapturedThumbnail {
+  /** The name the bytes are filed under, in memory and on disk alike. */
+  token: string;
+  /** `/api/thumbnail/<token>` — what `thumbnailPath` has always meant. */
+  path: string;
+  thumbnail: StoredThumbnail;
+}
+
 export interface CaptureThumbnailOptions {
   probe: ProbeResult;
   guard: SsrfGuard;
@@ -177,15 +219,17 @@ export interface CaptureThumbnailOptions {
 }
 
 /**
- * Fetches the probe's preview image and returns the path that serves it, or
- * `null` if anything at all went wrong.
+ * Fetches the probe's preview image and returns it, or `null` if anything at
+ * all went wrong.
  *
  * **Never throws.** Timeout, 404, oversized body, wrong content type, blocked
  * address, malformed URL — every one of them means "no preview", and the probe
  * carries on exactly as it does today. A user who cannot see a picture can
  * still download the video.
  */
-export async function captureThumbnail(options: CaptureThumbnailOptions): Promise<string | null> {
+export async function captureThumbnail(
+  options: CaptureThumbnailOptions,
+): Promise<CapturedThumbnail | null> {
   const { probe, guard, fetchImpl, store, logger } = options;
   const maxBytes = options.maxBytes ?? MAX_THUMBNAIL_BYTES;
   const timeoutMs = options.timeoutMs ?? THUMBNAIL_FETCH_TIMEOUT_MS;
@@ -233,7 +277,9 @@ export async function captureThumbnail(options: CaptureThumbnailOptions): Promis
       return null;
     }
 
-    return ROUTES.thumbnail(store.put({ contentType, bytes }));
+    const thumbnail: StoredThumbnail = { contentType, bytes };
+    const token = store.put(thumbnail);
+    return { token, path: ROUTES.thumbnail(token), thumbnail };
   } catch (error) {
     // Deliberately swallowed, at `debug`: a blocked address here is a page
     // being hostile about its *preview*, which says nothing about whether the
@@ -241,6 +287,97 @@ export async function captureThumbnail(options: CaptureThumbnailOptions): Promis
     logger.debug("no preview image: the fetch failed", {
       reason: error instanceof AppError ? error.code : String(error),
     });
+    return null;
+  }
+}
+
+/**
+ * Extension per allowed content type.
+ *
+ * The set is closed — it is `ALLOWED_CONTENT_TYPES` — so this is a total map and
+ * not a guess about what an origin said. The extension is cosmetic: the served
+ * `Content-Type` comes from the recorded row, never from the name on disk.
+ */
+const PERSISTED_EXTENSIONS: Readonly<Record<string, string>> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+};
+
+/**
+ * The stem the persisted copy takes inside `out/<jobId>/`.
+ *
+ * It cannot collide with the media file the engine puts in the same directory:
+ * that name always ends in a container extension (`.mp4`, `.mkv`, `.webm`,
+ * `.m4a` — `outputExtension` in the engine), and none of those is in
+ * `PERSISTED_EXTENSIONS`. A page titled "preview" produces `preview.mp4`.
+ */
+const PERSISTED_THUMBNAIL_STEM = "preview";
+
+export interface PersistThumbnailOptions {
+  /** The engine's storage, so the path is built and confined by its own rules. */
+  storage: Storage;
+  jobId: string;
+  thumbnail: StoredThumbnail;
+}
+
+/**
+ * Writes a captured preview into the job's own output directory, and returns
+ * the absolute path it was written to.
+ *
+ * **Beside the file on purpose.** `out/<jobId>/` is what the retention sweep
+ * deletes at `fileRetentionHours` — both through `Storage.removeJob`, which the
+ * API calls for an expired token, and through `Storage.collectGarbage`, which
+ * removes the whole directory by age. Putting the image there is the entire
+ * implementation of "the image goes when the file goes"; there is no second
+ * rule to keep in step with the first, which is the one thing a directory of
+ * its own would have cost.
+ *
+ * Throws on an I/O failure rather than swallowing it — unlike `captureThumbnail`,
+ * this one has a caller that knows what to do (log it, keep the download).
+ */
+export async function persistThumbnail(options: PersistThumbnailOptions): Promise<string> {
+  const { storage, jobId, thumbnail } = options;
+  const extension = PERSISTED_EXTENSIONS[thumbnail.contentType];
+  if (extension === undefined) {
+    // Unreachable: the type was checked against the allowlist before the bytes
+    // were kept. Loud rather than a mystery file, if the two ever drift apart.
+    throw new AppError("INTERNAL", "Refusing to persist a preview of an unknown type.", {
+      details: { contentType: thumbnail.contentType },
+    });
+  }
+
+  await storage.createOutDir(jobId);
+  // `outPath` sanitises and confines textually; `assertRealPathInside` repeats
+  // the check after symlinks, for the same reason `files.ts` does it at the
+  // moment of use. The name is a constant, but the confinement is about the
+  // *directory*, whose segment comes from a job id.
+  const target = storage.outPath(jobId, `${PERSISTED_THUMBNAIL_STEM}${extension}`);
+  await assertRealPathInside(storage.root, target);
+  await fs.writeFile(target, thumbnail.bytes);
+  return target;
+}
+
+/**
+ * Reads a persisted preview back.
+ *
+ * Returns `null` when the bytes are not there — which is the ordinary case once
+ * the retention sweep has run, and must read as "gone" rather than as an error.
+ *
+ * A path *outside* the storage root is not that case, and it throws: the row
+ * was written by this process, so a row naming somewhere else is a bug or a
+ * tampered database, and `/api/files/:token` treats its own equivalent the same
+ * way rather than quietly answering "no".
+ */
+export async function readPersistedThumbnail(
+  storage: Storage,
+  filePath: string,
+): Promise<Buffer | null> {
+  await assertRealPathInside(storage.root, filePath);
+  try {
+    return await fs.readFile(filePath);
+  } catch {
     return null;
   }
 }

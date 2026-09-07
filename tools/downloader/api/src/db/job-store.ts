@@ -32,6 +32,18 @@ export interface FileToken {
   expiresAt: string;
 }
 
+/**
+ * Where a completed job's preview image was written, filed under the same token
+ * the in-memory store minted. See `thumbnails.ts` and dl-44.
+ */
+export interface ThumbnailFile {
+  token: string;
+  jobId: string;
+  /** Absolute, inside `STORAGE_DIR/out/<jobId>/`. Re-confined at the point of use. */
+  path: string;
+  contentType: string;
+}
+
 export interface CreateJobInput {
   id: string;
   sourceUrl: string;
@@ -140,6 +152,9 @@ export class JobStore {
     markSwept: Statement;
     prunableTokens: Statement;
     unfinished: Statement;
+    insertThumbnail: Statement;
+    thumbnailByToken: Statement;
+    dropThumbnailsForJob: Statement;
   };
 
   constructor(db: Database) {
@@ -180,6 +195,12 @@ export class JobStore {
       unfinished: db.prepare(
         `SELECT * FROM jobs WHERE status IN ('queued', 'probing', 'downloading', 'muxing')`,
       ),
+      insertThumbnail: db.prepare(
+        `INSERT INTO thumbnail_files (token, job_id, path, content_type, created_at)
+         VALUES (@token, @job_id, @path, @content_type, @created_at)`,
+      ),
+      thumbnailByToken: db.prepare(`SELECT * FROM thumbnail_files WHERE token = ?`),
+      dropThumbnailsForJob: db.prepare(`DELETE FROM thumbnail_files WHERE job_id = ?`),
     };
   }
 
@@ -387,5 +408,48 @@ export class JobStore {
 
   deleteToken(token: string): void {
     this.#statements.deleteToken.run(token);
+  }
+
+  // --- persisted preview images -------------------------------------------
+
+  /**
+   * Records where a completed job's preview image was written.
+   *
+   * The token is not minted here and is not new: it is the one the in-memory
+   * store already handed out, which is what lets `thumbnailPath` keep meaning
+   * the same thing before and after the bytes reach disk.
+   */
+  saveThumbnail(thumbnail: ThumbnailFile, now = new Date().toISOString()): void {
+    this.#statements.insertThumbnail.run({
+      token: thumbnail.token,
+      job_id: thumbnail.jobId,
+      path: thumbnail.path,
+      content_type: thumbnail.contentType,
+      created_at: now,
+    });
+  }
+
+  findThumbnail(token: string): ThumbnailFile | null {
+    const row = this.#statements.thumbnailByToken.get(token) as
+      | { token: string; job_id: string; path: string; content_type: string }
+      | undefined;
+    if (row === undefined) return null;
+    return {
+      token: row.token,
+      jobId: row.job_id,
+      path: row.path,
+      contentType: row.content_type,
+    };
+  }
+
+  /**
+   * Drops the rows for a job whose output directory has been swept.
+   *
+   * Unlike `file_tokens`, the row buys nothing once the bytes are gone: a
+   * missing preview renders as no preview, so there is no better answer to
+   * preserve the way `410 Gone` is better than `404` for a download link.
+   */
+  removeThumbnailsForJob(jobId: string): void {
+    this.#statements.dropThumbnailsForJob.run(jobId);
   }
 }

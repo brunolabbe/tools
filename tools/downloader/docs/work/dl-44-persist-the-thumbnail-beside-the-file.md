@@ -3,7 +3,7 @@ id: dl-44
 tool: downloader
 title: Persist the thumbnail beside the file, so the preview outlives ten minutes
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: [dl-41]
 difficulty: hard
@@ -70,8 +70,9 @@ cheaper than settling it if the reasoning survives the branch.
 
 The options as they were put, with the costs that came from reading the code —
 the store is filled at probe time and read by token at
-`api/src/routes/thumbnail.ts:27` "context.thumbnails.get", so it is what shows
-a preview before any file exists:
+`api/src/routes/thumbnail.ts:53` "context.thumbnails.get", so it is what shows
+a preview before any file exists (the coordinate moved when the build recorded
+in the Log added the route's second source above it):
 
 - **A. Keep it for the probe-only case — recommended, not chosen.** Disk
   persistence for completed jobs; the in-memory store stays as the pre-download
@@ -128,6 +129,10 @@ image lives exactly as long as the thing it depicts.
 
 **Gate: PASS** — 2026-09-07 · `origin/main...HEAD`, tip `e3d065e` · own defect hunt (docs-only diff; no `code-review` dispatch)
 
+<!-- citations: evidence api/src/routes/thumbnail.ts:27 -->
+
+The citation below is left at the coordinate this gate actually resolved, at tip `e3d065e`, and is declared as that gate's own evidence rather than repointed: rewriting it would make the record claim to have checked a line that did not exist when it ran. The build recorded in the Log moved that line down the file, to the coordinate the `## Decision` section above now names.
+
 This diff records Build step 4's already-answered decision onto a `ready` ticket — no implementation exists, so no `Done when` line applies, and per `docs/01-TICKETS.md` ("A gate on a pull request that only files a ticket does not go in `## Review`") this record sits under its own heading rather than `## Review`, so `repo-12`'s board check does not read a `ready` ticket with a review record as merged-without-status-flip.
 
 - The added `## Decision` section is consistent with the unedited Build section: step 4's added sentence restates the Decision section's own text (A recommended and standing, C chosen, B's orphan-retention cost attached) without contradicting it.
@@ -160,3 +165,80 @@ This diff records Build step 4's already-answered decision onto a `ready` ticket
   **Recorded, not built.** Nothing in `src` was touched and `status` stays
   `ready`. This is a brief whose last open question is closed — closed by being
   handed to the builder with its cost attached, not by being answered one way.
+
+- **2026-09-07 — built.** Branch `dl-44-persist-thumbnail`, off `origin/main` at
+  `e9054c5`.
+
+  **Build step 4, the delegated call: A — the in-memory store is kept.** The
+  reason is the objection the Decision section attaches to B, met head on rather
+  than reasoned around: `POST /api/probe` mints a token for a probe that has no
+  job, and a probe that never becomes one has no `out/<jobId>/` to keep a copy
+  beside. Taking B would have meant inventing an expiry for those bytes — a
+  second retention rule, with its own sweep, for a class of file nothing else in
+  this service owns. A costs one branch in one route and needs no such rule at
+  all, because `out/<jobId>/` is already swept at `fileRetentionHours`. That
+  asymmetry is the whole of the difference, exactly as the section said it was.
+  The kept store is now covered as its own case, not just as a leftover:
+  [`pipeline.test.ts`](../../api/test/pipeline.test.ts) "a probe that never
+  became a job keeps only its ten minutes" asserts the ten minutes still expire
+  **and** that nothing was written under `out/` for it.
+
+  **The route decides, the field does not move.** Step 2's preferred route was
+  taken literally: `thumbnailPath` still means `/api/thumbnail/<token>` and
+  nothing else, the token is the _same_ one the in-memory store minted, and
+  `/api/thumbnail/:token` tries memory first and the recorded file second. So a
+  `localStorage` record written before this branch keeps working, and the
+  contract was not touched — no edit to `contract/src/job.ts`, `api.ts` or
+  `media.ts`.
+
+  **What the brief could not have known, and it is the trap in step 1.** "Write
+  the bytes at the point the job's file is finalised" reads as though the bytes
+  are in hand there. They are not: the capture happens during `probing`, and a
+  download can easily outlast `THUMBNAIL_TTL_MS`, so reading them back out of
+  the store at completion would have dropped the preview of exactly the long
+  downloads most worth keeping one for. `captureThumbnail` therefore returns the
+  bytes as well as the path (`CapturedThumbnail`), and the orchestrator carries
+  them across the download in a local. The cost is bounded and small: at most
+  `MAX_THUMBNAIL_BYTES` (512 KB) per running job, and `maxConcurrentJobs`
+  defaults to 2 and caps at 64.
+
+  **Where the bytes go, and why that is the whole retention rule.**
+  `out/<jobId>/preview.<ext>`, through the engine's own `Storage.outPath` so the
+  path is sanitised and confined by the same code the media file uses. Both
+  sweep paths already delete that directory — `Storage.removeJob`, which the
+  API calls for a lapsed token, and `Storage.collectGarbage`, which removes an
+  out dir by age — so step 3 needed no new deletion logic, only the row cleanup
+  beside `markSwept`. The stem cannot collide with the media file: that name
+  always ends in a container extension and none of `.jpg/.png/.webp/.gif` is
+  one.
+
+  **Verified by mutation, not by reading.** Each of the four new tests was made
+  to fail on purpose: removing the persist call turns the TTL, sweep and restart
+  tests red; removing the route's disk fallback turns the TTL and restart tests
+  red; writing the bytes into `tmp/` instead of `out/` turns the sweep's unlink
+  assertion red, which is what stops that test being a tautology; and dropping
+  the row cleanup turns the sweep test red on its own. The first attempt at that
+  last one silently mutated nothing — the `sed` pattern still carried the old
+  indentation — and was rerun rather than reported.
+
+  **Folded in, because this made it free:** the retention sweep had no test at
+  all. It lived inside `startRetentionSweep` reachable only through a
+  `setInterval`, and nothing in the suite drove it (`startGc: false` in every
+  harness). One pass is now `runRetentionSweep(context)`, exported, and the
+  timer calls it — which is what let this ticket assert its own Done-when about
+  unlinked bytes, and leaves the sweep testable for whoever needs it next.
+
+  **Not done, deliberately.** No rate limit was added to `/api/thumbnail`. Its
+  cost profile did change — a miss can now reach SQLite and read up to 512 KB
+  off disk, where before it was a `Map` lookup — so a caller holding one valid
+  token can cause a repeated small read. It is mitigated but not closed: the
+  token is rejected on _shape_ before the database is touched, so scanning still
+  costs what a 404 costs. Whether to key a limiter on the token the way
+  `files.ts` does is an open decision and was put to the orchestrator rather
+  than settled here, because it is adjacent to dl-46, which is held and will add
+  a rate-limit knob to `api/src/config.ts`. That file is **not** edited by this
+  branch.
+
+  Also not done: no e2e assertion. `e2e/sniffer/mse-page.spec.ts` covers the
+  same `/api/thumbnail/` path for the probe panel, and the e2e suites were not
+  run on this branch.

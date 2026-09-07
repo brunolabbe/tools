@@ -7,12 +7,16 @@
  * them is the real thing.
  */
 
+import fs from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import os from "node:os";
+import path from "node:path";
 import { AppError, ROUTES } from "@downloader/contract";
 import type { Job, JobResponse, JobStatus, ProbeResponse } from "@downloader/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import { initialProgress } from "../src/db/job-store.ts";
+import { runRetentionSweep } from "../src/server.ts";
 import {
   createHarness,
   probeResult,
@@ -218,6 +222,159 @@ describe("the preview a job keeps", () => {
     expect(finished.status).toBe("completed");
     expect(finished.result?.filename).toBe("video.mp4");
     expect(finished.thumbnailPath).toBeNull();
+  });
+
+  // --- dl-44: the preview lives as long as the file it depicts -------------
+
+  test("the preview outlives the in-memory store's ten minutes", async () => {
+    // Done-when 1. The whole of dl-44's reason to exist: the result panel lives
+    // six hours and the in-memory bytes lived ten minutes, so for ~97% of that
+    // panel's life the image was silently absent. The clock is advanced past
+    // `THUMBNAIL_TTL_MS` rather than the behaviour being read off the code.
+    let clock = new Date("2026-09-07T10:00:00.000Z");
+    const image = await imageOrigin();
+    try {
+      harness = await createHarness({
+        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
+        now: () => clock,
+      });
+
+      const finished = await runToTerminal(harness, (await createJob(harness)).id);
+      expect(finished.status).toBe("completed");
+      const thumbnailPath = finished.thumbnailPath ?? "";
+      expect(thumbnailPath).toMatch(/^\/api\/thumbnail\/[A-Za-z0-9_-]+$/u);
+
+      // The in-memory store is on the same injected clock, so this is the real
+      // expiry and not a stubbed one: eleven minutes on, `get` drops the entry.
+      clock = new Date(clock.getTime() + 11 * 60_000);
+      const token = thumbnailPath.slice(ROUTES.thumbnail("").length);
+      expect(harness.app.context.thumbnails.get(token)).toBeNull();
+
+      // Before dl-44 this was a 404 with nothing logged, which is exactly the
+      // failure the ticket calls silent.
+      const served = await harness.app.server.inject({ method: "GET", url: thumbnailPath });
+      expect(served.statusCode).toBe(200);
+      expect(served.headers["content-type"]).toBe("image/png");
+      expect(served.headers["x-content-type-options"]).toBe("nosniff");
+      expect(served.rawPayload.equals(PNG)).toBe(true);
+    } finally {
+      await image.close();
+    }
+  });
+
+  test("the retention sweep unlinks the preview with the file", async () => {
+    // Done-when 2, asserted on the bytes rather than on the route: the image
+    // sits inside `out/<jobId>/`, which is what the sweep deletes, so "the
+    // image goes when the file goes" has no second rule to fall out of step.
+    let clock = new Date("2026-09-07T10:00:00.000Z");
+    const image = await imageOrigin();
+    try {
+      harness = await createHarness({
+        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
+        now: () => clock,
+        config: { fileRetentionHours: 6 },
+      });
+
+      const created = await createJob(harness);
+      const finished = await runToTerminal(harness, created.id);
+      const thumbnailPath = finished.thumbnailPath ?? "";
+      // Where `persistThumbnail` puts it: inside the job's own out directory,
+      // named for its content type. See `PERSISTED_THUMBNAIL_STEM`.
+      const onDisk = path.join(harness.storageRoot, "out", created.id, "preview.png");
+      // The write happened at all — otherwise the unlink below proves nothing.
+      expect((await fs.stat(onDisk)).size).toBe(PNG.byteLength);
+
+      // Seven hours on, past `fileRetentionHours`, so the file token has lapsed
+      // and the sweep takes the job's output directory.
+      clock = new Date(clock.getTime() + 7 * 3_600_000);
+      await runRetentionSweep(harness.app.context);
+
+      await expect(fs.stat(onDisk)).rejects.toThrow();
+      // And the route agrees, which is the half a user sees.
+      const served = await harness.app.server.inject({ method: "GET", url: thumbnailPath });
+      expect(served.statusCode).toBe(404);
+      // The row went too, so nothing is left pointing at deleted bytes.
+      expect(
+        harness.app.context.store.findThumbnail(thumbnailPath.slice(ROUTES.thumbnail("").length)),
+      ).toBeNull();
+    } finally {
+      await image.close();
+    }
+  });
+
+  test("a restart does not lose the preview of a job whose file survived it", async () => {
+    // Done-when 3. Two apps over one database and one storage directory, which
+    // is what a redeploy is: the in-memory store is empty in the second, and
+    // the token the first minted still resolves because the bytes are on disk.
+    const dbDir = await fs.mkdtemp(path.join(os.tmpdir(), "downloader-dl44-db-"));
+    const databasePath = path.join(dbDir, "jobs.sqlite");
+    const image = await imageOrigin();
+    let first: Harness | undefined;
+    try {
+      first = await createHarness({
+        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
+        config: { databasePath },
+      });
+      const created = await createJob(first);
+      const finished = await runToTerminal(first, created.id);
+      const thumbnailPath = finished.thumbnailPath ?? "";
+      expect(thumbnailPath).not.toBe("");
+
+      // Down. Not `dispose()`, which would take the storage directory with it —
+      // a restart that loses the file is a different test.
+      await first.app.shutdown();
+
+      // Up again on the same database and the same storage.
+      harness = await createHarness({
+        config: { databasePath, storageDir: first.storageRoot },
+        engineOptions: { storageRoot: first.storageRoot },
+      });
+      // Nothing carried over in memory; only the row and the bytes did.
+      expect(harness.app.context.thumbnails.size).toBe(0);
+
+      const served = await harness.app.server.inject({ method: "GET", url: thumbnailPath });
+      expect(served.statusCode).toBe(200);
+      expect(served.rawPayload.equals(PNG)).toBe(true);
+    } finally {
+      await image.close();
+      if (first !== undefined) await fs.rm(first.storageRoot, { recursive: true, force: true });
+      await fs.rm(dbDir, { recursive: true, force: true });
+    }
+  });
+
+  test("a probe that never became a job keeps only its ten minutes", async () => {
+    // The other side of the decision recorded on dl-44: the in-memory store is
+    // kept, and it is the *only* source for a bare probe. There is no
+    // `out/<jobId>/` to keep a copy beside, and inventing a retention rule for
+    // one was the cost this ticket declined to pay.
+    let clock = new Date("2026-09-07T10:00:00.000Z");
+    const image = await imageOrigin();
+    try {
+      harness = await createHarness({
+        resolver: new StubResolver(probeResult({ thumbnailUrl: `${image.origin}/og.png` })),
+        now: () => clock,
+      });
+      const probe = (
+        await harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.probe,
+          payload: { url: SOURCE_URL },
+        })
+      ).json() as ProbeResponse;
+      const thumbnailPath = probe.probe.thumbnailPath ?? "";
+      expect(
+        (await harness.app.server.inject({ method: "GET", url: thumbnailPath })).statusCode,
+      ).toBe(200);
+
+      clock = new Date(clock.getTime() + 11 * 60_000);
+      expect(
+        (await harness.app.server.inject({ method: "GET", url: thumbnailPath })).statusCode,
+      ).toBe(404);
+      // Nothing was written to disk for it, so nothing is left to own.
+      expect(await fs.readdir(path.join(harness.storageRoot, "out"))).toEqual([]);
+    } finally {
+      await image.close();
+    }
   });
 });
 

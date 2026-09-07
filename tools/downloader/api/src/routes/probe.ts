@@ -137,13 +137,17 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
       // and neither carries the origin URL. Eager rather than on demand because
       // `probe.requestContext.headers` is the only credential that will ever
       // fetch this image, and it exists here and nowhere later.
-      const thumbnailPath = await captureThumbnail({
+      const captured = await captureThumbnail({
         probe,
         guard: context.guard,
         fetchImpl: context.guardedFetch,
         store: context.thumbnails,
         logger: context.logger,
       });
+      // A bare probe has no job and so no `out/` directory to keep a copy
+      // beside; the in-memory store is the whole of its retention. Only the
+      // job pipeline persists (dl-44).
+      const thumbnailPath = captured?.path ?? null;
       const clientProbe = withThumbnailPath(probe, thumbnailPath);
 
       // The **rewritten** probe is what is cached, so the double-click that this
