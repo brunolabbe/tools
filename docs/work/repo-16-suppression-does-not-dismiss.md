@@ -25,11 +25,43 @@ consistent with "suppressed" and with "never attributed".
 
 **It is now settled, and the answer is that it does not clear the check.**
 
-CodeQL's alert-suppression queries record a suppression in the SARIF it uploads.
-GitHub code scanning reads that field but does not act on it: the alert stays
-`Open`. **The comment is a register, not a dismissal.** So every pull request
-that touches `egress-proxy.ts` still gets a red `CodeQL` check, which is the cost
-adr/005 measured on #123 and expected to have removed.
+> **WITHDRAWN — do not cite this paragraph.**
+>
+> _CodeQL's alert-suppression queries record a suppression in the SARIF it
+> uploads. GitHub code scanning reads that field but does not act on it: the
+> alert stays `Open`. **The comment is a register, not a dismissal.** So every
+> pull request that touches `egress-proxy.ts` still gets a red `CodeQL` check,
+> which is the cost adr/005 measured on #123 and expected to have removed._
+>
+> **Retraction, 2026-09-07, by this ticket's own build; reproduced
+> independently by its gate.** The middle sentence is false, and it is the
+> sentence everything above rests on. **No such field was ever produced.**
+> `security-extended` selects queries of kind `problem`, `path-problem`,
+> `diagnostic` and `metric`; `AlertSuppression.ql` is `@kind alert-suppression`,
+> so the suite never ran it, and `codeql-action` passes the CLI no flag that
+> would add it. Measured against `github/codeql@4239fee` and
+> `github/codeql-action@cdf488f` by the builder over `git clone`, and again by
+> the gate over `curl` — two containers, two routes, the same result.
+>
+> **The standing statement, and it is narrower than what it replaces.** The
+> alert stayed `Open` — a relayed reading, see fact 3 below. `Open` has **two**
+> explanations and this repo cannot separate them: GitHub ignored a suppression,
+> or there was never one to ignore. On the evidence the second is the supported
+> one. **Whether GitHub would honour a real `suppressions[]` entry is not
+> established from here**, and the workflow change is not evidence that it would
+> not.
+>
+> **Nothing this ticket concluded changes.** The comment alone does not clear
+> the check; option 1 is still the answer; the two workflow steps are still the
+> right ones — because both explanations want exactly those two steps. What
+> changes is the reason, not the remedy.
+>
+> **Attribute it to the mechanism, not to a round or a person.** The claim is a
+> plausible mechanism written in the register of a measurement. It is the same
+> shape as repo-13's green-check dichotomy, which this ticket was filed to
+> correct, and the same shape as two further claims caught later on this branch
+> — one the builder's, one the gate's. A sentence that explains the observation
+> is not thereby the sentence that produced it.
 
 ### The measurement
 
@@ -441,6 +473,19 @@ _All twelve resolve against `36c8b31`, the pre-squash branch sha this gate
 reviewed — kept because it is the only tree where they resolve, and reachable
 afterwards through this ticket's pull request._
 
+> **Two of the twelve moved after the gate, and are pinned rather than
+> remapped.** Post-gate edits added 32 lines above them in this file, so the
+> table's two self-citations resolve at `36c8b31` and **not** in the merged tree:
+> `repo-16:67-231` is `:99-263` here, and `repo-16:365-373` is `:397-405`. Both
+> offsets were measured, not computed from the diff — `## Decision — answered
+2026-09-07, not open` and `6. **Not done, and not doable from here.**` were
+> located by `grep -n` and the endpoints re-resolved by `awk 'NR==n'`. The
+> reviewer's numbers are left as given, per `records.md`'s answer to this exact
+> case: pin the record to the tree the gate read rather than remap it, since a
+> gate record describes the tree it reviewed. **The other ten are unmoved** and
+> re-resolved at the tip — three in `docs/adr/005`, five in `repo-13`, two in
+> `security.yml`._
+
 > **WITHDRAWN — do not cite this paragraph.** _One commit was added after the
 > gate, rewrapping a ragged comment in `security.yml`; **its line count was
 > preserved deliberately**, so `security.yml:100` and `:89-101` resolve
@@ -714,6 +759,45 @@ afterwards through this ticket's pull request._
   `node scripts/citations.mjs` on both edited tickets, then
   `npm run status -- --json`. Results in the report and in the pull request body;
   no unit suite is implicated — the diff is one workflow file and three `.md`.
+
+- **2026-09-07, after the gate — three owner answers applied, then shipped.**
+  All three arrived with the ship authority and none of them changes the build.
+
+  - **This ticket's `Why` is withdrawn in place**, not rewritten. Its middle
+    paragraph asserted that GitHub reads a SARIF suppression field and declines
+    to act on it; no such field was ever produced. The paragraph stands, marked
+    `WITHDRAWN — do not cite this paragraph`, with the corrected and **narrower**
+    statement beneath it: `Open` has two explanations, this repo cannot separate
+    them, and whether GitHub would honour a real `suppressions[]` entry stays
+    _not established from here_. The ticket's conclusion is unaffected and says
+    so — both explanations want the same two workflow steps. Attributed to the
+    mechanism (a plausible explanation written in the register of a measurement)
+    rather than to a round or a person, on the owner's instruction.
+  - **[repo-32](./repo-32-done-can-hide-an-outstanding-obligation.md) filed**,
+    `status: needs-decision`, for the gap this ticket's `Done when` 6
+    demonstrates: `npm run status` cannot tell "done, nothing left" from "done,
+    with an acceptance line waiting on a merge". Three instances in one batch —
+    repo-13, this ticket, repo-15's hook. Three options costed, option A
+    recommended, **not settled**; the mechanism touches the strictly-parsed
+    frontmatter that gates CI, and repo-24 is the recorded instance of that going
+    wrong. Id from `node scripts/next-id.mjs repo` (`next free: repo-32`), not
+    derived by hand. **Surfaced by this ticket's gate**, which named it and
+    declined to resolve it; recorded there as the gate's, per its request that it
+    appear once.
+  - **One Build line and one Log note added to
+    [repo-29](./repo-29-citations-carry-no-anchor.md)** — that an unanchored bare
+    `:N` binds to the nearest qualified file _above_ it and exits 0, so a
+    wrongly-attributed citation reports `unanchored` rather than failing. Two
+    instances that day from different agents: this branch's builder note (four
+    repointed citations all bound to the wrong file; verified count **2 → 6**
+    once qualified) and dl-44's gate (`:345-412` resolved into a different file
+    entirely). Nothing else on repo-29 touched — it is held and undispatched, and
+    its status, decision and scope are unchanged.
+
+  **What the gate did not see.** The gate passed `009072d`; all three edits above
+  landed after it, in four files, one of them new. They are disclosed as
+  uncovered by that verdict in the pull request rather than left to look
+  reviewed.
 
 ## The gate on this filing
 
