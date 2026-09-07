@@ -3,7 +3,7 @@ id: repo-21
 tool: repo
 title: The orchestration skill has outgrown its loop, and nothing re-verifies it
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: [repo-18]
 difficulty: hard
@@ -1038,3 +1038,145 @@ what covers the real tip, and it is the only participant positioned to take it.
   would fail `status.mjs --json`, which is the CI gate. The constraint is stated
   at the top of the page instead, where an orchestrator reading the opening
   section will see it.
+
+- **2026-09-07 — built against `origin/main@24e5bf7`, and six of this ticket's own
+  reproductions had drifted.** The ticket said to re-run them all before building.
+  That was not optional: five came back different and one came back already fixed.
+
+  1. **`SKILL.md` is 674 lines at `24e5bf7`, not the 567 the arithmetic assumes.**
+     It grew ~107 lines after this was filed — repo-27, repo-28, repo-29 and
+     repo-30's batches. Every size figure in Build 2, 3 and 6 is against 567 and
+     had to be rebased before it could be evaluated.
+  2. **Defect 4 is already gone from `main`**, exactly as the ticket predicted.
+     `grep -n resolvedModel SKILL.md` at `24e5bf7` returns the corrected narrower
+     wording — _"does not reach **you** in the tool result"_ and _"which the
+     backgrounded dispatch **does** carry but does not put in the tool result"_.
+     So Build 4 step 2 was a no-op and **only the compression half ran**, as the
+     step instructs. Defects 1, 2 and 3 were re-checked the same way and are all
+     still fixed: step 3 maps `mechanical` to `haiku`, the _"Read the matches, do
+     not count them"_ bullet is present, and `grep -n "nobody in the loop"` exits 1.
+  3. **`repo-19` has landed, so the decision grep is the fallback.** Build 6 asked
+     which was true when I built: `needs-decision` is in `STATUSES` and excluded
+     from `UNSTARTED` in `scripts/status.mjs` on `main`. The bullet is rewritten to
+     say `--ready` already excludes it, and the grep moved to a new
+     `## Fallbacks and caveats` section with its measurement intact.
+  4. **Build 5's `^## Review` counts have both moved.** Re-measured 2026-09-07 with
+     `grep -rlE '^## Review$' --include='*.md' docs tools` and the `^#{2,3}
+(Review|Gates?)` variant over the same paths: **51 and 68**, where the ticket
+     recorded 36 and 52. The conclusion is unchanged and the ratio is close, so the
+     numbers on the page are the new ones and the discriminator is unaltered.
+  5. **Build 7's `-l` transcript has drifted and the rule survives it.**
+     `grep -rlnE 'repo-(40|80|90|99|404|808|901|999)' scripts packages` now names
+     **two** files, not one, and the `-roE … | sort -u` companion shows **two** ids
+     (`repo-404` and `repo-90`), not one. So the `-l` run now reads as "all eight
+     are there" where it used to read as "one of eight" — the count changed, what
+     `-l` can answer did not. `records.md` carries the drift beside the rule and
+     cites `repo-20`'s Log for the full reproduction rather than restating it, as
+     the step asked. The missing-path case reproduced unchanged: warning on stderr,
+     real matches on stdout, **exit 2**.
+  6. **`citations.mjs` no longer prints the carve-out sentence**, which this Log's
+     third bullet predicted would go false when `#146` merged. Withdrawn in place
+     rather than rewritten: that bullet's "prints … `scripts/citations.mjs:435-436`"
+     is false at `24e5bf7`. The sentence is a source comment on line 1320 and
+     appears in no output — confirmed by running the tool over `SKILL.md`'s
+     unresolvable state and reading the whole stderr trailer.
+
+- **The gate was proved before it was trusted (Build 1.4).** With the `ci.yml` step
+  wired, `SKILL.md`'s `builder.md` anchor was falsified to defect 1's own original
+  wording and the command re-run:
+
+  ```
+  $ sed -i 's/"| `mechanical` | `haiku` |"/"| `mechanical` | `sonnet` |"/' SKILL.md
+  $ node scripts/citations.mjs .claude/skills/orchestrate-tickets/SKILL.md --require-anchors
+    MOVED      .claude/agents/builder.md:21-25 "| `mechanical` | `sonnet` |"
+               anchor "| `mechanical` | `sonnet` |" is not in 21-25, and not
+               anywhere in .claude/agents/builder.md
+  exit 2 — 1 moved
+  ```
+
+  <!-- citations: evidence .claude/agents/builder.md:21-25 -->
+
+  Reverted, and the same command exits **0** with `4 verified, 0 moved, 0
+unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
+  exact words the defect was written in. Exit codes were read from `$?` on an
+  unpiped invocation redirected to a file, per Build 7's own rule.
+
+  **That transcript is a third deliberate citation failure on this page**, and it
+  is declared rather than left bare: the falsified anchor above is quoted verbatim
+  because it _is_ the evidence, so `<!-- citations: evidence ... -->` names it,
+  which is the one part of the carve-out a machine can read. With the declaration
+  this file's run is back to the two bare failures the opening section describes.
+
+  **Two figures in that opening section have gone stale, and are withdrawn here
+  rather than rewritten.** It says this file "exits 1 at `14/16 resolve`". At
+  `24e5bf7` it exits **3** over **26 references** — `repo-18` replaced
+  `N/N resolve` with six counted states and made the exit code a bitmask, so the
+  `1` became `2 | 1`. The two deliberate failures it names are unchanged, and are
+  still the only bare ones.
+
+- **The size target was not met, and the arithmetic is the honest part.**
+  `SKILL.md` is **674 → 340**, a 50% cut, against a target of ~180 that was sized
+  when the page was 567. Rebased, ~180 of 567 is ~32% of the page; 340 of 674 is
+  50%. So the gap is real and it is not all drift. What is left is 12 loop steps
+  (68 lines), a model section, a three-row failure table, `After a merge`,
+  `Decisions` with its fourteen-row table, two fallbacks, and the reporting
+  section — **every line of which is an instruction, a dated measurement or a
+  citation**. Reaching 180 from here means deleting instructions, which `Done when`
+  6 exists to forbid and no `Done when` line asks for a count. Recorded as measured
+  rather than argued away.
+
+- **Two dated measurements live in `reference/dispatching.md`, not in `SKILL.md` or
+  `history.md`.** `Done when` 6's parenthetical names those two files; the three
+  `resolvedModel` reading routes are dispatch _mechanics_ rather than narrative, so
+  `history.md` — which now opens its new section with "nothing here is an
+  instruction" — was the wrong home, and `dispatching.md` is the page the Reference
+  table already sends you to for exactly this. The two are the 2026-09-06 task-output-file
+  measurement (182 records, one distinct value) and repo-17's 2026-09-01 ~94%
+  cache-read figure. All **29** dated measurements from the merge-base survive
+  somewhere in the skill; the per-measurement check is in the report. Flagged
+  rather than absorbed, because it is a deviation from an acceptance line.
+
+- **The four undated `measured` claims were dated from `git log -S`, and the column
+  says so.** `Relaying`'s table has a date in every row; where the page recorded
+  only "the second session" or "the fourth session", the date is the commit that
+  introduced the provision, which is a _written_ date and not a measurement date.
+  The four Build 2 named resolve to `ab909c9` 2026-08-30 (11 tickets, 22 gates),
+  `fa081f9` 2026-09-03 (a reviewer reporting only "findings sent"), and `ea52f8b`
+  2026-08-24 twice ("a ticket's own baseline" and "the builder's measured answer
+  beats both gates"). The last is demoted rather than promoted: `history.md` now
+  states it as the reading the page explicitly rejects.
+
+- **One fix folded in, one declined.** Folded: `records.md`'s state table said a
+  `MOVED` citation exits **1**. It exits **2** — `citations.mjs` sets `EXIT` as a
+  bitmask (`unresolvable: 1`, `moved: 2`, `unanchored: 4`, `declaration: 8`), and a
+  run with one of each exits **3**, which I confirmed by falsifying two anchors at
+  once rather than by reading the constant. A false claim about the exact tool this
+  ticket wires into CI, on the page this ticket already edits, is not worth a
+  ticket. **Declined:** that same table lists four states where the tool now
+  reports six — `unchecked` and `evidence` arrived with repo-25 and have no row.
+  That is not a transcription error; it needs a decision about what an `unchecked`
+  reference means for a gate's policy, and deciding it inside this rewrite would be
+  settling a question in prose. Left for a ticket.
+
+- **A citation I added and then removed, because it made two other references
+  falsely resolve.** The exit-code correction above was first written as a real
+  `scripts/citations.mjs:662` citation. It verified — and it also became the
+  _nearest preceding qualified citation_ for the two illustrative shorthands
+  further down that page (_"the text is at `:94-95`, not `:93-94`"_), which
+  promptly stopped failing and started resolving against `citations.mjs`, a file
+  they have nothing to do with. Caught by diffing the per-citation output against
+  `main`'s rather than by comparing exit codes, which were 11 both ways. Rewritten
+  as prose with the reason attached; `records.md`'s citation output is now
+  byte-identical to `main`'s.
+
+- **What I could not check.** Every harness claim in Build 4 is still relayed:
+  `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, `availableModels`, `fork`, fallback chains,
+  the `PostToolUse` hook route and `/tasks` are named on the page **and marked as
+  relayed from Claude Code's documentation and not verified in this tree**, which
+  is how the ticket asked for them. Nothing about them was promoted. The
+  `.github/workflows/ci.yml` step was not executed by Actions — it is parsed here
+  and the command it runs was run here, which is not the same as a green run.
+
+- **Written by Opus 5 (1M context), `claude-opus-5[1m]`**, which is the model this
+  session was told it is at dispatch, not a self-report taken as evidence — see the
+  self-report row this ticket adds.
