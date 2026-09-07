@@ -226,6 +226,48 @@ fast one and it is tempting to test only the slow one.
   against the running app and noted in the Log.
 - `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+**Gate: PASS** — 2026-09-07 · `origin/main (24e5bf7)...616c0c4` · defect hunt run directly by the ticket-reviewer (no `code-review` subagent available to it), at medium depth, plus targeted empirical reproduction of every flagged item across both commits.
+
+| Done when                                                                                    | Proof                                                                                                                                       |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| A probe answered by the first tier never reports the second or third                         | `api/test/probe-stages.test.ts:253-266` (asserts at :264,265,266) ✓, mirrored at `resolvers/test/registry.test.ts:351`                      |
+| A probe held at the pool semaphore reports waiting for a slot, not "opening a browser"       | `resolvers/test/browser/pool-stages.test.ts:61` ✓                                                                                           |
+| A stage not yet reached is absent from the document, not present-and-greyed; fails on `main` | `web/test/chrome.test.tsx:99-123` (asserts at :105,116,119) ✓ — "fails on `main`" independently reproduced, see Findings                    |
+| The text a screen reader is given changes when a stage advances                              | `web/test/chrome.test.tsx:125-162` (asserts at :140 for `aria-live="polite"`, :157-158 for the content change) ✓                            |
+| A job that took `downloading → probing` still shows both where it is and how far it got      | `web/test/job-card.test.tsx:339-373` (asserts at :362,372,373) ✓ — pre-existing dl-9/dl-18 test, file untouched by this branch, still green |
+| The indeterminate bar animates, reduced-motion fallback asserted                             | `web/test/styles.test.ts:45-56` (:48,54-55) and `:67-75` (:70,74) ✓                                                                         |
+| Every state in `scenarios.ts` renders without layout jump, checked by hand                   | **verified** — ticket Log, 2026-09-07 entry; numbers cross-checked, see Findings                                                            |
+| `npm run check` and `npm test -- --project downloader` pass                                  | **verified** — exit 0; 71 files / 1148 tests at `616c0c4`, matching the Log's own count                                                     |
+
+- **The contract widening (item 1) is fair.** `git diff origin/main...616c0c4 -- tools/downloader/contract/src/{api,resolver}.ts` has zero removed lines — every addition is additive and optional. Step 3's own text anticipates "a probe id minted on request with its own SSE endpoint" and invites a different shape if justified in the Log; the schema/route mirror of `jobEventSchema`/`ROUTES.jobEvents` is the mechanical shape that implies, not a new decision. No disagreement, nothing that needed to come to the orchestrator.
+- **The client-minted probe id (item 2) holds up under test, not just under reading.** `PROBE_STAGES` is a closed `as const` enum and `probeEventSchema`'s `stage` field is `z.enum(PROBE_STAGES)` — an unrecognised stage is dropped, not rendered, now pinned at `contract/test/contract-schemas.test.ts:252`. The `resolver` field is a free `z.string()` in the schema, but every value that reaches it is a fixed `readonly name` literal on a `Resolver` — never derived from the probed URL, title or headers. `mintProbeId()` draws 128 bits from `crypto.getRandomValues`. `routes/probe-events.ts` has no write path — a guessed id can only subscribe, matching the claim exactly.
+- **dropped** · none — both low findings from the first gate were carried and both are now repaired rather than accepted as residuals; no finding stands unaddressed.
+- **findings** · 2 returned across the full exchange, 2 carried, 2 repaired, 0 dropped.
+
+**On the two "found and fixed while building" defects (item 4), both reproduced by breaking them, not just read:**
+
+- Reverting the `if (!existing.ended)` guard (`api/src/probe-stages.ts:217`) and re-running `api/test/probe-stages.test.ts:89` turns it red — `expected 1 to be +0`.
+- Rendered `.progress--indeterminate` from this branch's `styles.css` and from `origin/main`'s in real headless Chromium, identical viewport and CSS variables. `main`'s render is a flat, motionless track; this branch's shows a visible traveling gradient band. The claim that `::-webkit-progress-bar` painted over the old barber-pole in Chromium is confirmed empirically.
+
+**On the two named substitutions (item 3):**
+
+- **(a) Fair.** `main`'s `AnalysingPanel` takes no `stage` prop and always renders all five `<li>` stage items regardless of elapsed time. A minimal props-adapted copy of it, run against the shipped test's exact assertions, fails exactly as claimed (`expected <li>Waiting for the network to go quiet</li> to be null`).
+- **(b) Fair, and a higher bar than what was asked**, not a cheaper substitute — reading computed `animation-name`/`background-position` off real Chromium is not something a human eye can do from a screenshot. The claimed "fourteen narration lines" checks out exactly against `scenarios.ts`'s `slow` sequence (3 `resolver-start` + 11 stage frames = 14), and `.stage`'s `min-height: 1.4em` is consistent with the no-reflow claim.
+
+**On the gate's own second-round finding — the SSE channel exhaustion — this was escalated and repaired, not argued down.** The first-round writeup understated it as "64 held-open GETs"; both the finder and the builder independently measured that `subscribe`'s unsubscribe never removed a channel from `#channels`, only the TTL sweep did, so 64 _fire-and-forget_ requests with nothing held open exhausted `MAX_CHANNELS` and denied a real probe's channel. Confirmed independently against the unfixed hub before any code moved (`channelCount` 64, `open()` false), and confirmed again against the fix by reverting `api/src/probe-stages.ts:148`'s `claimed` check and getting the same red the fix's own regression test (`api/test/probe-stages.test.ts:127-139`) pins. The contract-schema test gap (finding 2) is closed the same way: `contract/test/contract-schemas.test.ts:232,281,297` now cover `probeEventSchema`/`parseProbeEvent`/`probeIdSchema` directly.
+
+**Residual, disclosed rather than fixed, and correctly not decided in this branch:** 64 _concurrently held_ connections to `GET /api/probe/:id/events` still fill `MAX_CHANNELS`, with no per-IP limit of its own on that route. Effect is bounded to unnarrated analyses, never a failed one. Whether to add a limiter now or file a follow-up is an open scope/policy call about `rateLimits` in `config.ts`, correctly raised to the orchestrator by both the builder and this gate rather than settled quietly.
+
+**Acceptance-to-test traceability (item 5):** all eight `Done when` lines trace to real assertions (table above); the back-edge line is carried by `job-card.test.tsx:339` alone — `:288` (bytes and label only) does not carry the step-list half of the claim and citing it alongside would have overstated the row, a correction the builder made unprompted and I agree with. Diffed every touched test file for deletions across both commits: only `import type` line moves and the intentional replacement of the old clock-driven narration test in `chrome.test.tsx` (asserting behaviour that no longer exists, not a weakened assertion).
+
+**Gaps not measured, and not changing the verdict:** no e2e run, no container build, no CI run, and the probe channel has never been driven by a real `EventSource` (only Fastify `inject` and the web transport seam) — all disclosed and none contradicted by what unit tests exist.
+
+**Invariants walked:** no tool-to-tool import; `AppError` with `RATE_LIMITED` (core, correctly) used for both the probe gate and the SSE hub's cap; no shell; no `any`/`console`; `import type` and `.ts` extensions throughout; no new workspace dependency, no Dockerfile edit needed or made. `redactHeaders`/`redactUrl` — `api/src/routes/probe.ts:158` passes `probe.requestContext` to the logger unmodified, but `logger.ts`'s `safeFields` (`:74-112`) structurally redacts any top-level `requestContext` key regardless of call site, and `tools/downloader/api/test/logging.test.ts:253` proves a cookie in a probe's context never reaches this exact log line (re-run: 1 passed). No faked progress. `npm run check` passes at `616c0c4`.
+
+NFR: security ✓ (both prior gaps closed this round; redaction confirmed structural) · performance n/a · reliability ✓ (hub sweep, deadline guard, immediate reclamation, cleanup on every exit path) · maintainability ✓ (`styles.test.ts` and the new hub/contract tests prevent recurrence of every silent failure found this round).
+
 ## Log
 
 - **2026-09-05 — filed** as a pure-UI pass over the analyse and download
