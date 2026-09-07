@@ -306,13 +306,36 @@ security tab rather than inferred.
    to its path-scoped-filter alternative.
 5. repo-13's acceptance lines 5 and 8 are answered — pointing at this ticket is
    enough — and its deferred line 3 is marked settled by fact 4 above.
-   **Flagged 2026-09-07, unresolved: repo-13 is now `status: done`**, so this
-   line asks for an edit to a closed ticket. Whoever builds this has to decide
-   how — amend the closed ticket in place, record the answer only here and leave
-   repo-13 alone, or something else. **It is deliberately not decided here**, and
-   see the Log for a second wrinkle: repo-13's own acceptance line 3 already
-   reads answered, while its gate table's row 3 still reads deferred, so "mark
-   line 3 settled" is partly stale on its face.
+   **Answered 2026-09-07: amend repo-13 in place.** repo-13 is now
+   `status: done`, so this line asks for an edit to a closed ticket, and the
+   owner chose to make it. **That overrode the orchestrator's recommendation**,
+   which was to record the answer on this ticket only and leave the closed one
+   alone, on the grounds that a `done` ticket is a historical record and
+   amending it retroactively is the same class of move as repointing a dated
+   citation. **The reason the override wins: repo-13 contradicts itself today.**
+   Its body reads
+   `repo-13-codeql-false-positives-recur.md:216` "**Answered 2026-09-01: it closed.**"
+   struck through, while its own gate table still reads
+   `repo-13-codeql-false-positives-recur.md:260` "correctly left **deferred**".
+   Leaving that standing misleads every future reader of repo-13, not only
+   whoever builds this ticket.
+
+   **The objection this amendment must meet, and it is the reason it is not a
+   free edit: the half being corrected is a reviewer's committed gate record.**
+   Whoever does it is amending evidence somebody else signed. So **annotate,
+   do not overwrite** — the repo's own rule for this exact case is in
+   `.claude/skills/orchestrate-tickets/reference/records.md`, which says a claim
+   that reached a record is withdrawn in place and never deleted: mark the wrong
+   row `WITHDRAWN — do not cite this paragraph`, leave it standing with the
+   retraction directly beneath it, restore the corrected statement as the
+   standing one, and **attribute the error to the link that made it** rather than
+   to the reviewer generically. A record showing only the corrected state hides
+   that the claim was made and acted on, and the propagation is the part a later
+   reader needs.
+
+   **This is the build's work, not the bookkeeping branch's.** The branch that
+   answered this decision deliberately did not touch repo-13.
+
 6. The state of alert 2 after the chosen change is recorded in this ticket's Log,
    read from the security tab, with the date and the commit.
 7. `npm run check` passes and `npm run format` has been run, since this ticket's
@@ -395,11 +418,25 @@ security tab rather than inferred.
   this one _writes_ alert state and a compromised release could dismiss real
   alerts silently.
 
-  **`Done when` line 5 is flagged and deliberately not resolved.** It asks to
-  answer repo-13's acceptance lines 5 and 8 and mark its deferred line 3 settled.
-  **repo-13 now reads `status: done`** — read from the file, not relayed — so
-  that means editing a closed ticket, which is a call for whoever builds this
-  rather than for whoever records this answer.
+  **`Done when` line 5 is answered too, and its answer overrode a
+  recommendation.** It asks to answer repo-13's acceptance lines 5 and 8 and mark
+  its deferred line 3 settled. **repo-13 now reads `status: done`** — read from
+  the file, not relayed — so that means editing a closed ticket. **The owner
+  chose to amend repo-13 in place**, against the orchestrator's recommendation to
+  record only here and leave the closed ticket alone. The losing argument is kept
+  because it is still true: a `done` ticket is a historical record, and amending
+  it retroactively is the same class of move as repointing a dated citation —
+  which is the very thing this branch refused to do on repo-29. What settles it
+  the other way is that **repo-13 already contradicts itself**, so leaving it
+  alone is not neutral.
+
+  **The objection the amendment must meet: the half being corrected is a
+  reviewer's committed gate record**, so it means amending evidence somebody else
+  signed. `Done when` line 5 above now carries the rule for that —
+  `.claude/skills/orchestrate-tickets/reference/records.md`'s withdraw-in-place
+  form, annotate rather than overwrite, and attribute the error to the link that
+  made it. **Not done on this branch:** the amendment is repo-16's build work,
+  and repo-13 was not touched.
 
   A second wrinkle found while checking, worth carrying because it changes what
   that line is even asking for: **repo-13's acceptance line 3 already reads

@@ -455,7 +455,11 @@ unanchored, 0 unresolvable` at exit 0. Two things had to be written around to
   answer that was given — under D it is a large anchoring pass plus a CI gate,
   which is neither obviously `mechanical` nor obviously `standard`. Rating it
   here would be this recorder guessing, which is the thing the original entry
-  was trying to avoid. **It needs one line from whoever answers it.**
+  was trying to avoid. **Answered 2026-09-07 by the owner: leave it unset.**
+  Absent means inherit, which is the honest statement while nobody has read the
+  work. The refusal to rate work this branch was not asked to rate is upheld, so
+  the earlier Log entry's "set it in the commit that answers the decision" is
+  **discharged by a deliberate choice not to**, not left undone.
 
   **The gap that leaves is narrow but real, and worth naming as a mechanism
   rather than as an unease.** `.claude/agents/builder.md`'s table maps an absent
@@ -467,8 +471,11 @@ unanchored, 0 unresolvable` at exit 0. Two things had to be written around to
   work wires `.github/workflows/ci.yml`, which is the seam-reaching territory
   `hard` is defined for. Leaving it unrated is the safe direction only in the
   sense that it does not _lower_ the model; it does not raise it either, and that
-  is the half that could bite. Whoever rates this should decide between `hard`
-  and `standard` on the merits, not inherit the absence.
+  is the half that could bite. **This note is kept deliberately even though the
+  answer was "leave it unset"** — the answer settles the rating, not the gap, and
+  the note is the only thing that makes the gap legible rather than silent.
+  Anyone rating this later should decide between `hard` and `standard` on the
+  merits, not inherit the absence.
 
   **This page's own citations have gone stale since it was filed, and that is
   left standing on purpose.** The filing entry above records `10 verified, 0
@@ -487,15 +494,43 @@ moved` at exit 0. Run again on 2026-09-07 the same file reports **6 verified, 4
   oversight.** Two of the four sit inside reproduction 1, which is a dated
   measurement of where two symbols were on a given day; silently rewriting the
   coordinates would edit the evidence to match the tree, which is the move this
-  whole ticket exists to make visible. **How to settle it is an open question for
-  whoever builds this** — repoint and re-anchor against the tip, pin the record
-  with `--rev`, or leave it and let the four `moved` stand as the ticket's own
-  live demonstration. It is not decided here.
+  whole ticket exists to make visible. Three ways to settle it were put to the
+  owner — repoint and re-anchor against the tip, pin the record with `--rev`, or
+  leave the four `moved` standing as the ticket's own live demonstration.
 
-  **Worth noticing, because it is this ticket's thesis arriving unbidden:** all
-  four were caught **because they carry anchors**. An unanchored citation drifting
-  the same distance would still have reported exit 0 with the wrong line's content
-  underneath it, which is precisely reproduction 1.
+  **Answered 2026-09-07 by the owner: leave them. Do not "fix" this.** This page
+  is expected to fail its own checker at exit 2, and **that failure is the
+  argument the page makes**. A later agent finding the four `moved` lines has
+  found the ticket working, not a defect: repointing them would delete the
+  demonstration to make a number go green, which is the precise move reproduction
+  1 exists to warn about. If you believe they should be repointed, that is a
+  decision to reopen with the owner, not a tidy-up to perform in passing.
+
+  **Why they are worth more standing than fixed, and it is this ticket's thesis
+  arriving unbidden:** all four were caught **because they carry anchors**. An
+  unanchored citation drifting the same distance would still have reported exit 0
+  with the wrong line's content underneath it — which is exactly reproduction 1,
+  reproducing itself on the page that describes it. Anchoring is what converted a
+  silent staleness into a loud one, and the loudness is the feature.
+
+  **The Build section's scope statement was ruled on rather than assumed.** This
+  ticket told the answering commit to "replace this section with the steps for
+  the chosen option"; the dispatch that produced this branch said to mark steps
+  in place and not to rewrite them into new briefs. Those conflict, and leaving
+  `status: ready` above a Build reading "Not startable" would have been a real
+  board defect — so the scope-not-steps compromise above was written, then put
+  back to the orchestrator that wrote the constraint, which accepted it as the
+  intended reading of its own instruction.
+
+  **The distinction that took, and it is worth carrying past this ticket: a gate
+  can verify that a compromise's _content_ is correct without that being the same
+  question as whether making the compromise was the right call.** They are
+  different objects. The reviewer here checked the content against the owner's
+  answer — correctly, and it found a real misattribution in it — and then called
+  the compromise itself settled, which was one object too far, since it did not
+  hold the dispatcher's instruction as an artefact it could weigh. It corrected
+  its own relay when that was put to it. A reviewer certifies output; only the
+  agent whose instruction was bent can ratify the bending.
 
   **Recorded, not built.** Nothing under `scripts/` or `.github/` was touched and
   no citation anywhere was anchored. This branch is bookkeeping across four
