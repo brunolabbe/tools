@@ -1,5 +1,5 @@
 ---
-id: repo-28
+id: repo-29
 tool: repo
 title: Most citations carry no anchor text, so nothing checks what they claim
 kind: chore
@@ -8,7 +8,7 @@ milestone: null
 depends_on: []
 ---
 
-# repo-28 — Most citations carry no anchor text
+# repo-29 — Most citations carry no anchor text
 
 **Packages:** `docs/work/`, `tools/*/docs/work/`, and — under one of the options
 below only — `.github/workflows/ci.yml`.
@@ -318,3 +318,24 @@ unanchored, 0 unresolvable` at exit 0. Two things had to be written around to
   a `git diff`-filtered CI step. Rejected because a record's citations go stale
   when the _source_ moves, not when the record changes, so a diff filter watches
   the wrong file.
+
+- **2026-09-07** — Renumbered from `repo-28` to `repo-29` before merge. It was
+  filed as `repo-28` after a sweep that read every open pull request's diff
+  individually and found the id free; a peer session's branch existed at that
+  moment with the number in its name, no commits and no ticket file, and was
+  flagged in the filing report as a possible second claimant. It then committed
+  its own `repo-28` and opened PR #171, a lower number than this one's #172, so
+  it claimed the id first and this ticket moved. Nothing of theirs was touched.
+
+  **The branch is still named `repo-28-anchor-citations` and is deliberately left
+  that way** — a branch name is not load-bearing here, the file and the pull
+  request title carry the id, and churning an open pull request costs more than
+  the stale name removes. Recorded here so a later reader hitting the mismatch in
+  the history does not have to reconstruct it.
+
+  Worth keeping for whoever answers this ticket's decision: an id sweep that
+  reads the maximum rather than each pull request's own diff would have missed
+  #171 entirely, and one taken a few minutes earlier — as this one was — sees a
+  claimant that does not exist yet. That is the same shape as the defect this
+  ticket is about. A coordinate, or an id, that is checked once and then trusted
+  is checked against a tree that has since moved.
