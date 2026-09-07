@@ -3,7 +3,7 @@ id: repo-30
 tool: repo
 title: The documented id sweep cannot see repo-wide tickets, and fails short instead of failing
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -14,8 +14,11 @@ difficulty: standard
 ## Why
 
 `docs/01-TICKETS.md` says the next free id is the union of two lists, and
-`.claude/skills/orchestrate-tickets/reference/concurrency.md:139 "git ls-tree origin/main"`
-gives the command that computes it:
+`.claude/skills/orchestrate-tickets/reference/concurrency.md` gives the command
+that computes it. It was at line 139 of that file on this branch's base,
+`24e5bf7`; the block moved when this ticket fixed it, so that is deliberately
+written as prose rather than as a live citation — a coordinate that now resolves
+to the repaired command would misdescribe the defect below.
 
 ```bash
 { git ls-tree origin/main tools/<tool>/docs/work/ --name-only
@@ -157,3 +160,60 @@ have left both defects intact.
   lists" sentence is correct as written; it is the command in `concurrency.md`
   that does not implement it, and putting the fix in both places would give the
   next reader two commands to keep in sync.
+
+- **2026-09-07** — Built on `repo-30-id-sweep-repo-tickets` off `origin/main`
+  at `24e5bf7`. One file changed: the sweep and its surrounding prose in
+  `.claude/skills/orchestrate-tickets/reference/concurrency.md`. Every guard was
+  measured failing before it was measured holding, with the snippet **extracted
+  out of the committed page** rather than retyped, so what was run is what a
+  reader would copy.
+
+  **The brief's own replacement snippet had two defects, and both are fixed
+  differently here.** Build step 2 asserts it "exits 127 rather than printing a
+  short list when `gh` is unavailable". It does not: `for pr in $(gh pr list …)`
+  discards the substitution's status even under `set -e`, so with `gh` off the
+  PATH the snippet printed the merged half and **exited 0** — the exact failure
+  the step exists to fix, surviving inside its own fix. Hoisting the list into
+  its own assignment, `prs="$(gh pr list …)"`, makes the same run exit 127. And
+  Build step 3 wants every claimant named, but the snippet ends `sort -u -t- -k2
+-n`, and `sort -u` dedupes on the **key**, not the line: against a board
+  holding `repo-99` in two different pull requests it printed `PR#901 repo-99`
+  once and dropped `PR#903` entirely, and an id held both merged and in a PR lost
+  its PR row. The clash the sweep exists to surface was the one thing it erased.
+  Dropping `-u` fixes it — each `emit` already dedupes within its own source.
+
+  **Measured, on `origin/main@24e5bf7`.** Defect 1: `tools/repo/docs/work/`
+  yields 0 ids against 30 in `docs/work/`; run verbatim for `repo-` on today's
+  board, whose only open PRs are the two release PRs, the old one-liner printed
+  **nothing at all** and exited 0. Defect 2, four ways: `gh` missing — old exit 0
+  (empty), new **127**; `gh` present but 401 — old exit 0, new **1**; run outside
+  a repository — old printed `repo-99` off the PR half under a `fatal: not a git
+repository` line and exited 0, new **128**; `pipefail` with unguarded greps —
+  the first PR touching no ticket file aborts the loop and takes every later PR's
+  ids with it. The failure injection used a stub `gh` on `PATH` (a four-PR board:
+  one touching no ticket file, one holding `repo-99`, one re-touching an already
+  merged `repo-30`, one holding `repo-99` a second time) and a `PATH` symlink
+  farm with `gh` deliberately absent, so 127 is a real command-not-found rather
+  than a stubbed status.
+
+  **Where the ticket's Why is now imprecise, and left standing.** It says the
+  unguarded-grep variant loses the PR ids "while the script still exited 0". The
+  loss reproduces; the exit-0 half does not in this shape — with `pipefail` on
+  the outer pipeline the aborted group surfaces as **exit 1**. Left as written
+  because it is a record of what that session saw, and corrected here rather than
+  edited there.
+
+  **The line-139 citation into `concurrency.md` in _Why_ was rewritten as
+  prose** (spelled out that way here so this sentence is not itself parsed as a
+  live citation into a line that moved), naming
+  the base commit instead of a line number. The block moved, and a coordinate
+  that still resolved would now point at the repaired command while the sentence
+  around it describes the broken one — the failure `scripts/citations.mjs` exists
+  to catch, in a file the checker would have reported as fine.
+
+  **Not folded in, second time.** `reference/history.md` also describes this
+  command's failure, correctly and in the past tense, under a heading that says
+  "none fixed here". It is a record of a session, not instructions, so changing
+  it would falsify the record. `.claude/skills/orchestrate-tickets/SKILL.md` was
+  not read for related wording either: `repo-21` holds that file in another
+  worktree, and a second writer there is a merge conflict rather than a fold-in.

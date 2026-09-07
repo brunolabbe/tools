@@ -133,15 +133,62 @@ misses a different half, and both halves were hit within one session:
   reached for `dl-20` on exactly that reasoning.
 
 Commit subjects and PR titles both lie, in opposite directions. Only the file list
-is reliable:
+is reliable — and the ticket format keeps that list in **two** roots, `docs/work/`
+for `repo-` and `tools/*/docs/work/` for a tool prefix, so a sweep that reads one
+of them answers from half the namespace without saying so:
 
 ```bash
-{ git ls-tree origin/main tools/<tool>/docs/work/ --name-only
-  for pr in $(gh pr list --state open --json number --jq '.[].number'); do
-    gh pr diff "$pr" --name-only
+set -euo pipefail
+prefix="${1:?usage: sweep <prefix>}"
+# `|| true` on every grep: exit 1 means no match, and a pull request whose diff
+# touches no ticket file is ordinary. Without the guard, pipefail drops the ids
+# of every pull request after the first ordinary one.
+emit() { { grep -oE "${prefix}-[0-9]+" || true; } | sort -u | sed "s|^|$1 |"; }
+# Its own statement, never inlined into the `for` below: a command substitution
+# that fails inside a `for` word list has its status discarded even under
+# `set -e`, and the sweep then reports the merged half alone and exits 0.
+prs="$(gh pr list --state open --json number --jq '.[].number')"
+{
+  { git ls-tree origin/main docs/work/ --name-only
+    git ls-tree -r origin/main tools/ --name-only | { grep '/docs/work/' || true; }
+  } | emit "merged"
+  for pr in $prs; do
+    gh pr diff "$pr" --name-only | emit "PR#$pr"
   done
-} | grep -oE '<prefix>-[0-9]+' | sort -u -t- -k2 -n | tail -1
+# No `-u` on this sort: it dedupes on the *key*, so `sort -u -t- -k2` collapses
+# two sources of one id into a single line — hiding the clash it exists to show.
+} | sort -t- -k2 -n
 ```
+
+**It names every claimant with its source, rather than the maximum** — `merged
+repo-26`, `PR#170 repo-27`, `PR#171 repo-28`, `PR#172 repo-29`. A `tail -1`
+throws away the provenance that turns "the number looks free" into "here is who
+holds it", and it is the provenance you act on: everything above the merged
+high-water mark is somebody's.
+
+**Every guard in it was measured failing first**, on `origin/main@24e5bf7`. Four
+of the five return a confident wrong answer under exit 0; the fifth is loud but
+loses the same ids:
+
+| take the guard out | what it returned |
+| --- | --- |
+| read only `tools/<tool>/docs/work/`, for a `repo-` prefix | 0 ids, against 30 in `docs/work/` — the merged half contributes nothing, so the answer comes from open pull requests alone. On a board whose open PRs are releases it printed **nothing at all**, exit 0 |
+| inline `gh pr list` into the `for` | with `gh` gone: the merged half alone, exit 0. Its own statement: **exit 127** |
+| no `pipefail`, no status check (the old one-liner) | `gh` failing 401: exit 0. Run outside a repository: printed `repo-99` off the PR half with `fatal: not a git repository` above it, exit 0. The version above: exit 1 and exit 128 |
+| `pipefail` but unguarded greps | the first pull request touching no ticket file aborts the loop and takes every later pull request's ids with it. This one at least exits 1 — it is the quiet loss it causes that matters, not the status |
+| `sort -u` at the end | a board holding `repo-99` in two different pull requests printed it **once**, and an id held both merged and in a PR lost its PR row — the collision is exactly what is erased |
+
+The fourth row is why `|| true` is there and not an oversight: the obvious fix for
+row three reintroduces row four, and it caught the first cut at this repair.
+
+**This narrows the race; it cannot close it, and reading it as a lock is the new
+way to collide.** Measured in the 2026-09-06/07 incident that produced the table
+above: the id that clashed was held on a peer's branch that carried **no commit
+yet**, so nothing this reads — not `origin/main`, not any pull request diff — could
+show it, and a direct look at the branch showed a possible claimant rather than a
+real one. A branch is not a claim until it has a commit, and no command run at
+time T sees a claim made at T+1. Which makes the next paragraph load-bearing
+rather than polite.
 
 **When another session shares the repo, say which ids you hold and ask what it
 holds.** A message costs almost nothing (see below) and a collision costs a
