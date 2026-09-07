@@ -439,10 +439,34 @@ the way a truncated range does. The other seven resolved exactly._
 
 _All twelve resolve against `36c8b31`, the pre-squash branch sha this gate
 reviewed — kept because it is the only tree where they resolve, and reachable
-afterwards through this ticket's pull request. One commit was added after the
-gate, rewrapping a ragged comment in `security.yml`; **its line count was
-preserved deliberately**, so `security.yml:100` and `:89-101` resolve identically
-at both shas._
+afterwards through this ticket's pull request._
+
+> **WITHDRAWN — do not cite this paragraph.** _One commit was added after the
+> gate, rewrapping a ragged comment in `security.yml`; **its line count was
+> preserved deliberately**, so `security.yml:100` and `:89-101` resolve
+> identically at both shas._
+>
+> **Retraction, same day, by the reviewer's own run.** The second half is false.
+> `--numstat` on the two shas for that file reports `3 3`, and diffing the two
+> `sed -n '89,101p'` slices shows a three-line hunk: the commit did not only
+> reflow, it added three words — "resolved with `git ls-remote --tags`" became
+> "resolved **at build time** with `git ls-remote --tags`". `md5sum` on the
+> slices differs (`da2c91fe…` / `a173676c…`).
+>
+> **The standing statement, each half checked separately rather than predicted
+> from the edit's shape:** `security.yml:100` **is** byte-identical at both shas
+> — `diff` of the two single lines is empty. `security.yml:89-101` resolves at
+> both and still holds the pin-reason block the row cites it for, but is **not**
+> byte-identical; three words moved inside the range. `Done when` 3 is
+> unaffected. Only this note's claim about itself was wrong.
+>
+> **Attribution: the builder, and the mechanism is worth naming.** "Line count
+> preserved" was true, and was written as though it entailed "range unchanged",
+> which it does not — the same edit that preserved the count also reworded. A
+> prediction from the shape of an edit, wearing the clothes of a measurement, in
+> a note whose whole subject is catching exactly that. The reviewer found it by
+> running the diff rather than accepting the sentence, which is the only reason
+> it is retracted here instead of standing in the record.
 
 ## Log
 
