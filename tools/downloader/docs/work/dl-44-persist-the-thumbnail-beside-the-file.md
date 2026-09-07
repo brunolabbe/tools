@@ -298,3 +298,42 @@ Every citation now carries anchor text, so the checker verifies the claim rather
   overstating them: they were untested invariants, which is a different and
   smaller thing. Recorded because "no test forces this" is exactly the finding
   that disappears if it is not written down.
+
+- **2026-09-07 — the rate-limit question was answered C, and the follow-up is
+  filed rather than implicit.** The open decision this branch carried — whether
+  `/api/thumbnail/:token` needs a bucket now that a miss can reach SQLite and a
+  file read — went to the owner as three options and came back as C: leave the
+  route alone here, and fold a Build line into dl-46, which already owns the
+  `config.ts` rate-limit knobs. So **no limiter was added and
+  `api/src/config.ts` is still empty-diffed against `origin/main`**, which was
+  the point of choosing C over B. dl-46 now carries the work as its Build step
+  5, with the measured exposure attached: up to 512 KB per request, unlimited
+  requests per minute, per valid token, for up to `fileRetentionHours`
+  (default 6 h), against a 256-bit capability, shape-rejection before the
+  database, and `private, max-age=300`.
+
+  **The route's docblock stays as written** — its "Why it is still not rate
+  limited" section states the changed cost rather than repeating the old claim
+  that the answer comes from a `Map`. That paragraph is the honest statement of
+  the exposure until dl-46 runs, and it is deliberately not softened now that
+  the decision has gone the way it has.
+
+- **2026-09-07 — two process notes, kept because they are transferable.**
+
+  **A `git checkout -- <file>` in the first mutation script discarded
+  uncommitted work** on four source files, reverting them to `HEAD` mid-run. It
+  was caught from the script's own `git status` tail, every edit was re-applied,
+  and the mutations were redone with `cp` backups against a committed baseline.
+  Nothing reached the branch wrong, and that run's contaminated results were
+  thrown away rather than reported. Mutate against a commit, restore with `cp`.
+
+  **A gate record's citations need the same scepticism as its findings.** The
+  reviewer's PASS record was correct in substance and carried one citation that
+  resolved into the wrong file entirely: a bare shorthand range written after a
+  `routes/thumbnail.ts` citation inherited that file, because the file it meant
+  was named in the same sentence but in prose, which `citations.mjs` cannot
+  read. Two more were ambiguous, since the planner has an `api/src/db/schema.ts`
+  too. None of it was visible to either of us by eye. Every citation in the
+  record now carries anchor text, so the checker verifies the claim and not the
+  coordinate — the same lesson dl-41's Log recorded against itself, learned
+  again one layer up.
