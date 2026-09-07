@@ -67,6 +67,25 @@
 #     trains everyone to route around it, and routing around it works. The push
 #     half is double-covered by the ruleset anyway.
 #
+#   - IT HAS NEVER BEEN OBSERVED TO FIRE, AND THAT WAS TRUE THROUGHOUT ITS OWN
+#     BUILD AND GATE. A session resolves its PreToolUse hook set once, from the
+#     settings that were in force when it started — in practice the shared root
+#     checkout's `.claude/settings.json`, which is on `main`. A hook registered
+#     only on an unmerged branch is therefore not loaded, including by the
+#     session writing it. Measured three ways before this landed: the two
+#     commands the test suite pins as must-block (`git push origin +main`,
+#     `git push origin refs/heads/main`) ran unblocked against a scratch local
+#     remote; a heredoc shape this file exits 2 on when driven directly
+#     completed normally as a real Bash call; and the build session's own
+#     transcript records `hook_success` for `check-tree-grep.sh` and **zero**
+#     records of any kind for this file. The sibling firing in the same
+#     transcript is the control: the mechanism is live, this hook is simply not
+#     in the set. It is EXPECTED to register once this is on `main` — inferred
+#     from that sibling evidence, NOT verified, and it should not be written up
+#     as verified until somebody watches it refuse something. Until then, treat
+#     every claim in this header about what the hook refuses as a claim about
+#     what the script does when driven directly, which is what its tests drive.
+#
 #   - IT OVER-BLOCKS IN EXACTLY ONE PLACE, AND IT IS KNOWN RATHER THAN LATENT.
 #     The quote strip and the boundary rule work per line, so an UNQUOTED
 #     mention at the start of a heredoc body line reads as an invocation and is

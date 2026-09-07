@@ -197,6 +197,41 @@ them.
 - **findings** · 0 returned, 0 carried, 0 dropped.
 - NFR: not applicable — no code in this filing.
 
+## Review
+
+### Gate: PASS — 2026-09-07 · reviewed at `f343bc2` · base `origin/main@e9054c5`
+
+Built by **Opus**, gated by **Sonnet**. Separate from `## The gate on this
+filing` above, which gated the 2026-09-06 filing and is left as it stands; this
+one gates the close-out. Long form is on the pull request thread.
+
+**Zero findings against this ticket.** The three findings that gate returned are
+all against repo-15 and are recorded there.
+
+**Acceptance-to-test traceability.** All four `Done when` lines proven or
+verified, each re-run by the gate:
+
+| `Done when`                                                                 | Verdict                     | Evidence                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 — a process-level test asserting a non-zero exit on input it must reject  | proven                      | `scripts/test/commit-message.test.ts:304`, `run as a process, a bad message is rejected`                                                                                                                                                                                                                                                                                                       |
+| 2 — replacing the guard with `if (false)` fails at least one test           | **verified, independently** | The gate mutated `scripts/commit-message.mjs:317` itself and got `1 failed \| 26 passed (27)`, failing exactly that test with `expected '' to contain 'not a conventional commit'` — an exact match to the builder's claim, assertion text included. Restored, `git status --porcelain` empty, back to `27 passed`. This is the line that had never been measured outside repo-22's own branch |
+| 3 — no test asserts only the accepting direction for a silent-failure guard | proven                      | `scripts/test/commit-message.test.ts:312` is the accepting half, labelled weak in a comment in the file, and paired with `:304`                                                                                                                                                                                                                                                                |
+| 4 — `npm run check` and `status --json` exit 0                              | verified                    | both run by the gate                                                                                                                                                                                                                                                                                                                                                                           |
+
+It also checked the close-out's honesty rather than only its claims: that the
+work is attributed to **repo-22 / PR #161** and not to this branch, and that the
+Log's reading of its own standing objection holds — repo-15's new hook names
+`scripts/commit-message.mjs` only inside printed advice text and never invokes
+it, so the set in option (a) is genuinely unchanged.
+
+**What this gate did not do.** It did not re-run the Windows reproduction, which
+cannot run on this platform and which this ticket's own Log already forbids
+citing as a red-green. It performed no work on repo-26 — the ticket closes as
+already built.
+
+**Findings** · 0 returned, 0 carried, 0 dropped. **NFR** · not applicable; no
+code changed on this ticket.
+
 ## Log
 
 **2026-09-06 — filed out of repo-22, from a failure it hit rather than a review
