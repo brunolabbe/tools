@@ -135,6 +135,65 @@ only raises the number of sockets an attacker has to hold.
   it covers the other three.
 - `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+### Gate — 2026-09-07, Sonnet reviewer
+
+**Gate: PASS** — 2026-09-07 · `origin/main...HEAD` (`4fad5f8...8c965c5`, code
+unchanged through `76076ac`) · manual defect hunt at medium, self-run (no
+`code-review` tool available to the reviewing subagent)
+
+| Done when                                                             | Proof                                                                                                                             |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Client over its limit refused with JSON error, no `text/event-stream` | `api/test/rate-limit.test.ts:703-742` (`:722-736`) ✓                                                                              |
+| Refused probe still completes and answers normally                    | `api/test/rate-limit.test.ts:744-779` (`:762`, `:769-775`) ✓                                                                      |
+| Client under its limit unaffected                                     | `api/test/rate-limit.test.ts:781-808` ✓                                                                                           |
+| Default on, bucket covered like the other three                       | `api/test/rate-limit.test.ts:834-854` (probe-events), `:969-971` (thumbnail) ✓                                                    |
+| `npm run check` and `npm test -- --project downloader` pass           | verified — both re-run at `8c965c5`: `npm run check` exit 0 (unpiped); `npm test -- --project downloader` 1167 passed, 71 files ✓ |
+
+- **low** · The Log's earlier "tsc caveat" paragraph claimed an incremental
+  `tsc --build` reported clean before catching a reintroduced `mediaUrl` error.
+  The builder's own re-reproduction traced it to two shell mistakes, not a tsc
+  or scope issue: the exit code was read after `| tail -5` (without `pipefail`,
+  `$?` is `tail`'s status, always 0 — confirmed independently:
+  `false | tail -5; echo $?` → `0`), and an earlier `| grep ... | head -20`
+  truncated the TS2339 line out of the filtered stream (line 35 of 40).
+  `tsc --build` caught the error on the first run it was given every time either
+  of us tried it unpiped; `npm run check` was never at risk. Corrected on the
+  branch at `76076ac`.
+- **settled, two findings one mechanism** · Named per the ticket's own
+  instruction, not raised as defects. (a) `POST /api/probe` has used the
+  identical key (`clientKey(request.ip)`) and identical default (10/min) since
+  dl-6, and the two endpoints are spent one-for-one by construction — so there
+  is no configuration in which a CGNAT-shared address is refused by
+  `probeEvents` that the `probe` bucket was not already refusing in the same
+  breath; the narration is refused alongside an analysis that is itself being
+  refused and told properly. (b) confirmed via
+  `grep -rn probeGate tools/downloader/api/src/` (`server.ts:493`,
+  `routes/probe.ts:105,109`) — nothing gates the SSE hub globally, so two
+  distinct addresses suffice to fill all 64 channels between them, each
+  individually under its own ~40-channel ceiling. Both inherent to the owner's
+  per-IP decision and the ticket's own scope; not this branch's to fix.
+- **dropped** · "8 s" vs my measured 60017–60019 ms was not a discrepancy: the
+  builder's red check used `--testTimeout=8000` to keep it cheap; mine used the
+  project default (60000ms). Both correct at their configuration.
+- **dropped** · Whether the three probe-events red-run tests "genuinely bind the
+  limit or merely observe sockets hang": reproduced the causal chain directly —
+  without the hook, the over-limit subscribe is served and holds its socket until
+  the test times out, because nothing ever posts the matching probe. Traceable
+  consequence of removing the limiter, not an unrelated hang. Legitimate, just
+  slower/less specific than an assertion. Builder concurs, no disagreement.
+- **findings** · manual hunt returned 4; 2 carried (1 low, 1 settled/informational
+  merged from 2), 2 dropped.
+- Invariants walked: `AppError`/`RATE_LIMITED` from core taxonomy ✓;
+  redact-before-log ✓ (hashed key, pinned by test); no cross-bucket spending ✓
+  (five separate `RateLimiter`s); style (no `any`/`console`, `import type`,
+  `node:` protocol) ✓. Skipped as not applicable: no-shell, SSRF, faked-progress,
+  contract-package edit, new-test registration, Dockerfile workspace list — diff
+  touches none of them.
+- NFR: security ✓ · performance n/a · reliability ✓ · maintainability ✓
+  (`capabilityBucketKey` extraction on its second real consumer).
+
 ## Log
 
 - **2026-09-07 — Build step 5's key answered by the owner: the token, as
