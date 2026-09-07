@@ -550,3 +550,287 @@ claim and needs its own command***, and `| tail` is not that command.
   half is a file read rather than a report, since `ticket-reviewer.md` pins it in
   frontmatter; the builder half is still each agent's statement about itself, which
   the eighth session's entry 4 is about.
+
+## Tenth session — 2026-09-06
+
+**Written by a builder on the orchestrator's dispatch, from the orchestrator's
+own account.** The account was supplied as prose and is not itself gated; what
+could be checked from a worktree was re-run here against `origin/main@b142a4a`
+and the three branches, and **two supplied claims did not reproduce and are
+corrected below rather than transcribed**. Every figure says whether it is a
+measurement made here, an observation relayed, or `not recorded`. The probed
+video is referred to only as *the reported video*: naming it is the owner's
+constraint and it binds this page too.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **3** taken from `ready` to a gated branch, none merged at close: `repo-24` (#166), `repo-25` (#168), `dl-40` (#169). All three carry `difficulty: standard` — verified on `main`, and the **first batch in which every built ticket was rated**. Six were `ready` at intake and the same six still are, because none merged: `dl-40`, `dl-43`, `dl-44`, `repo-21`, `repo-24`, `repo-25` — re-measured here with `npm run status -- --ready`. Three further candidates were withheld as `status: needs-decision` (`repo-15`, `repo-16`, `repo-26`), which is the board carrying a blocker in frontmatter rather than in prose. **Two records travelled on a sibling's branch**: `dl-43`'s answered decision at `e7fd0ce` and the newly filed `dl-45` at `7bb3b62`, both on `dl-40`'s |
+| `agents` / `dispatches` | **9** agents — 1 seam-mapper, 3 builders, 3 reviewers, and **2 closing builders killed by a session rate limit** — / total dispatches-and-wakes **`not recorded`**. The builder half is recoverable and is in the next row; the gate half is not |
+| `builder rounds` | **12 resumes across 3 builders** — `repo-24` 2, `repo-25` 5, `dl-40` 5 — relayed, not measured here. **Two are the orchestrator's own by its account**, both the same move and both caught by a builder rather than a gate; see _Orchestrator errors_. **A `standard` rating predicted nothing about cost this batch** (n=3): the three ordinary-rated tickets ran 2, 5 and 5 resumes and 160 k, 442 k and 423 k tokens. `builder.md` reads `standard` as "somebody read the work and said it is ordinary. Same dispatch, different statement" — this is the first evidence that the second half is the only half that holds. **`repo-27` (#170) does not disturb this**: read here from the diff rather than relayed, it moves the **`hard`** row only, from `inherit` to `opus`; `absent`, `standard` and `mechanical` are untouched, so all three of this batch's builders were dispatched under the mapping still in force. A peer is separately trialling `standard` against Sonnet in `repo-28` (#171), which is **not read here** and is named only so a later reader of this row does not think the n=3 above is all the evidence there is |
+| `gates` | **3 records, all PASS, all committed and read here.** Pass counts: `repo-24` 1; `repo-25` **4**, relayed; `dl-40` not stated as a count. **All three returned findings.** The pass structure is not recoverable from the records — see defect 7 |
+| `wrong findings` | **No gate finding was refuted.** What happened instead ran in two other directions and neither has a home in this row. **Orchestrator → builder**: two relayed details were wrong, a builder caught both, neither reached a commit. **Reviewer → its own report**: an off-by-two coordinate the reviewer corrected upward unprompted, closed in `dl-40`'s record at `9925874` rather than silently repaired |
+| `subagent tokens` | **1,840,153 across the 7 agents that reported; 2 reported nothing.** Last-observed cumulative values, so every entry is a floor — an agent whose last turn ends in `SendMessage` delivers no usage block. `repo-25` builder 442,412 · `dl-40` builder 422,835 · `repo-25` gate 260,588 · `repo-24` gate 252,377 · `dl-40` gate 205,865 · `repo-24` builder 159,694 · seam-mapper 96,382. Split (arithmetic on the floors, checked here): builders **55.7%** · gates **39.1%** · intake **5.2%** |
+| `cost` | **≈ $33.49** at the 2026-09-02 rate of $0.0182/1k — an arithmetic conversion of a set of floors with two agents missing, so a floor and not a bill |
+
+**Two supplied claims did not reproduce, and both are more useful once
+corrected.**
+
+- **"Gates cost less than builders on every branch" is false on one of the
+  three.** `repo-24`'s gate cost **+58.0%** against its builder (252,377 vs
+  159,694). It holds on the other two — `repo-25` **−41.1%**, `dl-40`
+  **−51.3%** — so the observation is two of three, not a pattern, and the
+  branch that inverts it is the one whose builder needed fewest resumes. The
+  nearest prior comparable is the seventh session's 49/47 builder/gate split,
+  which is not a "usual pattern" for this to invert.
+- **The id-sweep on `reference/concurrency.md` does not contain `2>/dev/null`,
+  and never has** — a `-S` search over that file's history returns nothing, and
+  the string appears nowhere in the skill or in either agent definition. The
+  failure the session actually hit is real and the mechanism is different, and
+  arguably worse than a redirect: the `for` loop's stdout feeds a pipeline
+  ending in `sort | tail -1`, so a failing `gh pr diff` **writes to stderr and
+  has its exit status discarded**. The sweep still degrades to *fewer ids* and
+  the only signal is a stderr line sitting above a confident one-line answer.
+  Deleting a redirect that is not there would fix nothing. **And this is the
+  smaller of that command's two defects** — a peer session found a structural
+  one underneath it, re-measured here and recorded as defect 5.
+
+**what the skill got wrong** — eight, none fixed here: this commit is scoped to
+this file.
+
+1. **The tool list an agent definition declares is not the tool list it is
+   given, and `dispatching.md` states the declared one as a probed fact.**
+   Under `dispatching.md:206 "Probed on 2026-09-01"`, three lines down at
+   `:209`, the page says both agent types carry `ListAgents` and `SendMessage`
+   directly. Two builders reported this batch that they had
+   no `ListAgents`, one distinguishing it from an unreliable self-report on the
+   ground that it is *not in the function schema*, so invoking it would be a
+   fabricated call. **This row's own builder is the third**: its delivered
+   schema is exactly `Read, Write, Edit, Bash, WebFetch, Skill, SendMessage`,
+   while `.claude/agents/builder.md:4 "tools: Read, Write, Edit, Grep, Glob"`
+   declares six more that never arrived — `Grep`, `Glob`, `TodoWrite`,
+   `ListAgents`, `EnterPlanMode`, `ExitPlanMode`. The consequence for the loop is
+   that **a builder cannot find its reviewer's id and the orchestrator must
+   supply it**; both builders that tried correctly failed on `SendMessage` to
+   the agent-*type* name. **Rewriting the prose will not fix it**, which is the
+   part worth carrying: the mismatch is between a declaration and a delivery,
+   and the page can only ever record which one it saw. Whether the harness
+   drops them or this particular dispatch restricted them is **not established
+   from here**. One datum in the other direction, committed in the tree:
+   `repo-24`'s gate line records "subagent has no `Skill` tool", which agrees
+   with `ticket-reviewer.md`'s declaration rather than contradicting it. **It is
+   the strongest evidence the two agent types differ** — the reviewer's delivered
+   set matched its declaration on the entry it was asked about, where the
+   builder's does not.
+
+   **Answered 2026-09-07 — fold the prose correction into `repo-21`**, which
+   already rewrites `dispatching.md`. That is against the recommendation, which
+   was to file the reproduction as its own ticket, **and the objection is not
+   retired by the answer**: `repo-21` will be correcting a sentence whose
+   underlying cause is unestablished, which is the eighth session's entry 5 in
+   this row's own terms — *rewriting prose does not re-check it*. So both halves
+   travel to whoever builds `repo-21`. **Nobody has probed the reviewer's
+   delivered tool set**, only its behaviour on one entry, so "the harness
+   delivers less than the frontmatter declares" remains an **observation of one
+   agent type**, not a finding about both. The check that would convert it is a
+   reviewer asked to print its own function schema, and it costs one dispatch.
+2. **There is a rule against reporting a verification you did not run, and none
+   against reporting a *determination* you did not establish.** `dl-40`'s Build
+   step 1 reads, verbatim, "**Determine the cause before changing anything.**"
+   Its builder reached ~85% confidence on a cause the ticket required to be
+   established; what stopped it was the unrelated rule about surfacing
+   decisions, not anything about evidence. Its own diagnosis generalises and is
+   the fix: *"determine the cause" names an outcome, not a standard of
+   evidence, and an outcome word is satisfied by whatever process ends in a
+   confident answer.* So **for anything that must be established, name the
+   artifact that establishes it and the substitute that does not count.** "From
+   the manifest, not from the picker's output" cannot be satisfied by being
+   clever; `determine`, `confirm` and `verify` all can.
+3. **A ticket that needs an artifact must record the artifact at filing time.**
+   `dl-40`'s reproduction died with the session that saw it — the URL was typed
+   into a running web UI and never into a transcript — and the ticket then sat
+   `ready` across two batches on an owner-supplied input that no page named.
+4. **No step exists for a decision that is answered but not dispatched when the
+   answer has no carrier.** `dl-43`'s answer was folded onto `dl-40`'s branch
+   (`e7fd0ce`). It worked, and the eighth session's row is why it was done at
+   all — an answered decision left unwritten evaporates. But it **coupled
+   `dl-43`'s record to `dl-40`'s timeline**, and `dl-40` was then blocked for
+   hours on defect 3's missing URL. Say the trade out loud where the step goes:
+   **recording an answer on a sibling branch buys evaporation-safety with
+   schedule coupling**, and the sibling you pick is a scheduling decision, not
+   a filing convenience.
+5. **The id-sweep on `concurrency.md` has two defects, and the one the session
+   noticed is the smaller.** Found by a peer session; **every measurement below
+   was re-run here** rather than relayed.
+
+   **The structural half: for a `repo-` prefix the snippet's `git ls-tree` half
+   reads zero, permanently.** Substituting the prefix into the documented
+   command literally gives
+   `git ls-tree origin/main tools/repo/docs/work/ --name-only`, and there is no
+   `tools/repo` — `origin/main` has `tools/downloader` and `tools/planner` and
+   nothing else. Repo-wide tickets live in `docs/work/`, which the snippet never
+   names: that path returns **26** ids, highest `repo-26`. So **the command
+   cannot see the merged half of the `repo-` board at all**, and the open-PR
+   loop is the only half doing any work. This is the first fix; it is not a
+   transient.
+
+   **The transient half is the discarded exit status**, corrected under _Two
+   supplied claims_ above. It sits on top of the structural one, which is why a
+   sweep can be wrong twice over.
+
+   **Two collisions in one session, from one command.** The sweep returned
+   `repo-26` as highest while `repo-27` sat in an open PR's diff (#170, open
+   against `main`); this session reserved `repo-27` on that basis; the filing
+   agent then died to a rate limit and only the re-check on resume caught it.
+   The replacement filing took `repo-28` — **and collided again**, with a peer's
+   #171, which had been commitless minutes earlier. It is now `repo-29` (#172),
+   and the rename is visible in the tree: **#172's branch is still named
+   `repo-28-anchor-citations` while its title and its file say `repo-29`.** The
+   second collision was caught only because an agent read the **per-PR lines**
+   rather than the maximum, which is what the page should ask for.
+
+   **And a timing property no fix addresses.** A sweep taken minutes earlier
+   sees a claimant that does not exist yet. Reading per-PR output fixes the
+   silent-failure half and nothing fixes the race except **sessions telling each
+   other**, which is what resolved this one — `concurrency.md` already says to
+   ask a peer which ids it holds, and this is the measurement behind that
+   sentence rather than a new rule. The defect belongs to the peer session,
+   which holds the reproduction and is filing it; recorded here, not filed here.
+   Same family as the `tools/*/docs/work` pathspec in _What went right_: **a
+   command that fails by returning less, rather than by failing** — and this one
+   does it twice, structurally and transiently.
+6. **Step 2's decision-grep was wrong in both directions for the fourth session
+   running** — re-run here over this batch's six candidates, which is the
+   cheapest check on this page. Four matches. Three true
+   (`repo-24:144`, `repo-25:61`, `dl-43:111`); one false positive,
+   `repo-21:688`, a **gate-record** heading — *the same false positive the
+   ninth session recorded on the same ticket*, so the page now has a named,
+   reproducible instance rather than a tendency; and one false negative,
+   `dl-40`, whose decision is a `###` prose section headed "The warning on
+   collapsing". That miss was not harmless: it is the decision the owner
+   answered mid-batch, and answering it is what filed `dl-45`. **And there is a
+   second class of blocker the grep cannot see at all** — `dl-40`'s other
+   blocker was a *missing artifact*, which is not a decision and matches no
+   wording. A blocked board has at least two shapes and step 2 detects one.
+7. **A committed gate record preserves the verdict and loses the pass
+   structure.** `repo-25`'s four passes appear in its record as a **single**
+   `Gate: PASS` line over `origin/main...c983c28`; `dl-40`'s reads its three
+   commits as one sequence, "not restarted". The ninth session's row leaned on
+   committed records to recover counts the orchestrator had lost, and that
+   works for *records* and not for *passes* — this row could recover neither
+   gate count from the tree. If pass count is worth having, `records.md` has to
+   ask for a line per pass, which `repo-21`'s own gate section already does.
+8. **Nothing checks this page.** `.claude/` is the first entry in
+   `.oxfmtrc.json`'s `ignorePatterns`, so `oxfmt` neither formats nor checks
+   any of it, and `npm run check` passing on this commit says nothing about
+   this file. The page carrying the schema is the one file in the loop with no
+   tool behind it.
+
+**Orchestrator errors, both its own by its own account.**
+
+- **It dispatched `dl-40`'s gate and, in the same message block, told the
+  builder to fold in an edit.** The reviewer gated `7bb3b62` while the tree
+  moved to `effeb02` and then `6061bc6`. Disclosed immediately and handled as a
+  narrow additional range rather than a restart, costing one small pass instead
+  of a round — the committed record's own Gate line is the corroboration, since
+  it names the full `7bb3b62 → effeb02 → 6061bc6` sequence and says it was not
+  restarted. The correct sequence was to hold the fold-in.
+- **It twice relayed an unverified detail as fact, and a builder caught it both
+  times — never a gate.** (i) It said the master playlist carried the
+  credential parameters; they are in the yt-dlp capture. (ii) It repeated a
+  reviewer's quoted *line contents* for two citations. **The second chain is
+  worth tracing in full because three parties touched it**: the reviewer read a
+  multi-line `sed -n '105,110p'` and attributed line 105's content to line 107
+  — an off-by-two, its own words, tip drift explicitly ruled out; the
+  orchestrator repeated it as fact; the builder caught it; both re-verified
+  with `sed -n '107p'`. **Two lessons, not one.** *A verified premise does not
+  make a quoted detail verified* — the orchestrator had checked that the
+  citations were **stale**, not what sat at them. And *reading a multi-line
+  result is itself a step that can fail*, so *prefer the addressed form when
+  the answer goes into a record*: `sed -n '107p'` cannot be misread the way a
+  six-line window can. The reviewer corrected itself upward unprompted: *"a
+  coordinate restated in a report becomes someone else's claim, and I'd rather
+  correct it myself than have it discovered a third time."*
+
+**And this row reproduced that error inside the sentence describing it, which is
+the eighth session's shape arriving again.** Writing the entry above, its builder
+read `sed -n '205,216p'` of `dispatching.md`, took the first printed line as 205
+and cited it — but 205 is blank and the harness trimmed it, so the real
+coordinate was 206. `citations.mjs` caught it, and `sed -n '206p'` settled it.
+**Rewriting prose about an off-by-N does not immunise you against an off-by-N**,
+and the window that produced this one was three lines shorter than the one it was
+describing. The same run also caught a coordinate this row had aimed into an
+unmerged branch. Two of the three citations here were wrong before a tool read
+them, in a row whose subject is coordinates going wrong.
+
+- **Both closing steps died to a session rate limit having committed nothing** —
+  the history row and a ticket filing — and both had to be re-dispatched. Worth
+  its own line because of what they have in common: **the two steps with
+  nothing forcing them are the two that get cut when a session runs out.** No
+  gate, no CI job and no frontmatter field notices either one missing.
+
+**What went right, and is worth copying.**
+
+- **Asking a reviewer to break the builder's own work, saying in advance that a
+  successful break outranks everything else in the range**, produced the
+  batch's only med. It broke on the first attempt; narrowing the scope put ten
+  real signals back and cost nothing.
+- **Four gate passes on `repo-25`, each scoped to a commit range, all earned.**
+  Pass 2 existed only because the reviewer refused to extend a PASS over
+  commits it had not read; pass 3 found the med. **The economy is in scope, not
+  in count** — which is the same lesson as the seventh session's "gate yield
+  tracks prompt specificity, not runtime", arrived at from the other end.
+- **Two independent constructions agreeing beats one confirmation.** `dl-40`'s
+  reviewer wrote its own mutants and its own 28-needle leak list against the
+  builder's 34, and got identical results — exactly 3 and 7 mutant failures, 0
+  hits. **And a leak sweep proves absence while a shape check proves method**:
+  the same reviewer compared the fixture's field set to the real capture's,
+  testing the allowlist *claim* rather than the output.
+- **A premise inferred from a tool's output, written down as a manifest fact,
+  and falsified by a probe.** `dl-40`'s brief said the manifest declared twenty
+  renditions. It declares **ten**: five distinguishable rungs, ×2 for CDN
+  mirrors in the manifest, ×2 again in the yt-dlp tier from a play-options
+  balancer returning byte-identical URLs under two keys. The wrong sentence
+  stood in the ticket until 2026-09-06 and is marked in place near the top of
+  `dl-40`'s brief on branch `dl-40-rendition-rows` (PR #169) rather than
+  deleted — named as a branch and not as a `file:line`, because a coordinate
+  into an unmerged branch resolves against the working tree and lands on
+  unrelated text. This row's first draft cited it as a coordinate and
+  `citations.mjs` caught it. **The tell on the original error was that the
+  number came from the picker — the thing under repair — and was recorded as
+  coming from the source.**
+- **A peer session supplied what this batch could not get itself.** The owner
+  had opened the container firewall from the WSL host; a peer probed live and
+  produced the falsification above. **The orchestrator then re-put the material
+  scope decision to the owner rather than accept the peer's report that it was
+  settled, because a peer cannot carry the owner's approval** — and the peer's
+  account proved accurate on every point that was checked. Both halves matter:
+  the peer was trusted for measurements and not for consent.
+- **Three self-corrections were kept as two shapes rather than forced into one
+  root**: a claim whose scope quietly exceeded a real measurement, and a claim
+  with no measurement where familiarity stood in. ***Scope the sentence to the
+  command, not to the topic***, and ***familiarity with code is not a
+  measurement of it***. The tell was on its own screen — a 17,150-reference
+  corpus printed beside a claimed 760, and the 22× gap attributed to the
+  variable being changed rather than to the constant.
+- **A pathspec of `tools/*/docs/work` matches zero tracked files**, so a
+  *combined* pathspec degrades silently to its working half instead of
+  erroring. Re-measured here: listing `docs/work` together with
+  `tools/*/docs/work` returns **26** files, and the same listing with the
+  trailing `/*` returns **107**. So the combined form saw **24%** of the work
+  corpus and reported a total. (The session's own figure was "a sixth",
+  measured in references rather than files; that unit is not re-derived here.)
+  This is defect 5's shape again in a different tool.
+- **A builder refused to compose a `## Review` from the orchestrator's
+  paraphrase**, correctly, costing a round worth paying — the ninth session's
+  entry 1 holding for a third time.
+- **A builder declined to silently improve its reviewer's citations**, leaving
+  two off-by-a-line coordinates as written with the corrections in a disclosed
+  note beneath.
+- **A leak tripwire fired on the builder's own prose**, on the sentence naming
+  the parameters it documented. Nothing had leaked; it rewrote the sentence
+  anyway, because *a detector that reports true on its own documentation is one
+  nobody trusts next time*.
+- **The tool `repo-25` built caught its own gate record.** A tight markdown list
+  has no blank line, so it is one paragraph, so a shorthand citation in one
+  bullet inherits from the bullet above and turns fatal. That mechanism is now
+  in `citations.mjs`'s docblock, via an authorised doc-only post-gate commit.
