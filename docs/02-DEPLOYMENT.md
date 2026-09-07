@@ -488,21 +488,92 @@ container that answers fine by hand and reports unhealthy anyway.
 
 ## Adding the second tool
 
-**The tunnel does not change.** One tunnel, one `cloudflared`, one subdomain per
-tool — add a service on the `edge` network and a public hostname pointing at
-`planner:8090`, which is why step 1 says to name the tunnel after the host and
-not after the downloader. The `planner` API has the same shape as this one: a
-Fastify app serving its UI same-origin from `WEB_DIR`, SQLite behind it, and a
-`/api/health` that reports 503 while draining, so `depends_on: service_healthy`
-works once its image carries a `HEALTHCHECK`.
+**The tunnel does not change, and neither does anything above.** One tunnel per
+host, one subdomain per tool — which is why step 1 says to name the tunnel after
+the machine and not after the downloader. What follows is a delta on the
+walkthrough above, and the only step in it that is genuinely new work is the
+Access application.
 
-**The access policy does not carry over, and must not be copied.** Four
-differences, and the first is not a hardening preference:
+### What the host merges
+
+A host says which tools it runs by the list of files it merges, and nothing
+else. [adr/004](./adr/004-one-compose-fragment-per-tool.md) is why:
+
+```bash
+# the downloader alone — unchanged, and still what a downloader-only host types
+docker compose -f compose.yaml -f compose.prod.yaml up -d
+
+# both tools, one tunnel
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.planner.prod.yaml up -d
+```
+
+[`compose.planner.prod.yaml`](../compose.planner.prod.yaml) is additive: it adds
+the `planner` service on the `edge` network and adds `planner` to `cloudflared`'s
+`depends_on`, and it changes nothing a two-file host sees. That is deliberate and
+it is the whole reason it is a file rather than a block in
+[`compose.prod.yaml`](../compose.prod.yaml) — a `planner:` block in the shared
+overlay is a service definition, so a downloader-only host merging it would
+stand up the planner without ever asking for it.
+
+**ADR 004's other half is not done, and you will notice it here.** The rename to
+`compose.downloader.yaml` and the explicit `name:` on every fragment are
+[repo-33](./work/repo-33-adr-004-rename-and-the-project-name.md), left out on
+purpose: setting `name:` renames the compose project, and a renamed project does
+not find the `storage` volume holding the job database and every file still
+inside its retention window. Until that ticket lands, **do not merge
+`compose.planner.yaml` with `compose.yaml`** — the grounding fragment sets
+`name: webtools` and the two would be different projects. The fragment says so
+in its own header too.
+
+### 1 — Name the version
+
+In `.env` on the host, beside the `DOWNLOADER_TAG` already there:
+
+```bash
+PLANNER_TAG=0.4.0     # an exact version, never `latest` — same argument as the downloader's
+```
+
+The two tools release independently, so these are unrelated numbers. Leaving
+`PLANNER_TAG` empty while merging the fragment refuses the boot with a message
+naming the variable, rather than starting something on a tag nobody chose.
+
+### 2 — Route the hostname
+
+Same tunnel, **Public Hostnames → Add a public hostname**:
+
+| Field     | Value          |
+| --------- | -------------- |
+| Subdomain | `planner`      |
+| Domain    | your domain    |
+| Path      | _(empty)_      |
+| Type      | `HTTP`         |
+| URL       | `planner:8090` |
+
+`8090`, not `8080`: the downloader's API defaults there and both tools run on
+this machine. Cloudflare creates the proxied DNS record itself.
+
+**Leave `Path` empty, and do not try to put both tools on one hostname under
+`/downloader` and `/planner`.** The Path field matches; it does not strip, so
+the origin receives the prefix it cannot serve. Making that work is a change in
+both tools rather than a routing setting: each mounts its bundle at the root
+(`prefix: "/"` in both `api/src/routes/web.ts` files) and neither `vite.config.ts`
+sets `base`, so the document would ask for `/assets/…` at the apex and the two
+tools would collide there. A subdomain each costs nothing and is what the rest
+of this page assumes.
+
+### 3 — Its own Access application, which is not a copy of the downloader's
+
+**Access → Applications → Add an application → Self-hosted**, subdomain
+`planner`, path empty, one policy: action **Allow**, include **Emails** → your
+address.
+
+**That is the whole application. Do not add a Bypass rule.** Four differences
+from the downloader's, and the first is not a hardening preference:
 
 - **No Bypass rule.** The one on `/api/files/*` above is bought by a 256-bit
-  capability token. `planner` has no capability tokens, so nothing in it is safe
-  to serve unauthenticated. Its Access application gets one Allow policy and no
-  exceptions.
+  capability token, and [`jobs/tokens.ts`](../tools/downloader/api/src/jobs/tokens.ts)
+  is the argument for why that token can stand alone. `planner` has no
+  capability tokens, so nothing in it is safe to serve unauthenticated.
 - **`planner` has no owner model at all.** Migration 1 in
   [`db/schema.ts`](../tools/planner/api/src/db/schema.ts) is
   `conversations (id, title, created_at, updated_at)` — no user column — and
@@ -514,32 +585,62 @@ differences, and the first is not a hardening preference:
   the only configuration in which that model is coherent.
 - **No rate limiting, and no `TRUST_PROXY` to set.** Its `ApiConfig` has neither
   the limiter fields nor the trust setting the downloader's has, so the
-  `TRUST_PROXY` line in `compose.prod.yaml` is downloader-specific and has no
-  planner equivalent. This matters more here, not less: once `MODEL_PROVIDER` is
-  something other than `scripted`, an unauthenticated endpoint is a stranger
-  spending your token budget, with `MAX_OUTPUT_TOKENS` capping one reply and
-  nothing at all capping the number of replies. A Cloudflare WAF rate limiting
-  rule is the only layer available until the tool grows its own.
+  `TRUST_PROXY` line in `compose.prod.yaml` is downloader-specific and
+  `compose.planner.prod.yaml` has no equivalent. This matters more here, not
+  less: once `MODEL_PROVIDER` is something other than `scripted`, an
+  unauthenticated endpoint is a stranger spending your token budget, with
+  `MAX_OUTPUT_TOKENS` capping one reply and nothing at all capping the number of
+  replies. A Cloudflare WAF rate limiting rule is the only layer available until
+  the tool grows its own.
 - **`MODEL_PROVIDER` defaults to `scripted`.** A deployment that does not set it
-  looks healthy and answers from a fixed script. `/api/health` reports
-  `agent.provider`, so it is visible — but set it explicitly rather than relying
-  on someone reading a health payload.
+  looks healthy and answers from a fixed script. It is set explicitly in the
+  image and again in the fragment, and `/api/health` reports `agent.provider` —
+  but set it deliberately rather than relying on someone reading a health
+  payload.
 
-**It has its own image, and had to.** The downloader's is built on Playwright's
-base and installs ffmpeg and yt-dlp; `planner` needs neither, so
+### 4 — Bring it up, and check the right thing
+
+```bash
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.planner.prod.yaml pull
+docker compose -f compose.yaml -f compose.prod.yaml -f compose.planner.prod.yaml up -d
+```
+
+This pull is short — the planner's image is a plain Node base, not the
+downloader's Playwright one. `cloudflared` now waits on **both** services'
+health checks before it registers, so the tunnel comes up a little later than it
+used to and a restart no longer publishes either hostname early.
+
+```bash
+curl -sS https://planner.example.com/api/health           # expect an Access login page
+curl -sS http://127.0.0.1:8090/api/health | jq            # on the host: real JSON
+curl -sS http://127.0.0.1:8090/api/health | jq .grounding # {"provider":"fixtures"} until you do the section above
+```
+
+The first returning HTML rather than JSON is the good outcome — it means Access
+is enforcing.
+
+Then drive one intake end to end in the browser. `/api/health` answering is not
+evidence the UI is served: pl-2 shipped an image whose bundle was never handed
+out, and the CI gate asked only for `/api/health`, which answered perfectly
+throughout. That gate now greps the document for the bundle's root element, and
+this is the deployed equivalent of the same check.
+
+### It has its own image, and had to
+
+The downloader's is built on Playwright's base and installs ffmpeg and yt-dlp;
+`planner` needs neither, so
 [`tools/planner/Dockerfile`](../tools/planner/Dockerfile) is a plain Node base
-and a twentieth of the size. That is why each tool now owns its Dockerfile, the
-way the slow CI gates already live in `.github/workflows/<tool>.yml`. Both are
+and a twentieth of the size. That is why each tool owns its Dockerfile, the way
+the slow CI gates already live in `.github/workflows/<tool>.yml`. Both are
 published to GHCR by the release pipeline — see
-[03-RELEASING.md](./03-RELEASING.md) — so what is left here is the compose
-service and the Cloudflare half, which is
-[pl-2](../tools/planner/docs/work/pl-2-container-image.md).
+[03-RELEASING.md](./03-RELEASING.md).
 
 Two things to expect a little further out. A real model provider means outbound
 egress and, on a hosted API, a key — `.env.prod.example` grows past
 `TUNNEL_TOKEN`, or a local model joins the compose network instead. And
 streaming replies, which
 [`agent/src/provider.ts`](../tools/planner/agent/src/provider.ts) says are
-coming, will meet Cloudflare's 100-second idle timeout: this service survives it
-only because of the 15-second heartbeat in `routes/events.ts`, and `planner` will
-need the same thing built in with the streaming rather than diagnosed after it.
+coming, will meet Cloudflare's 100-second idle timeout: the downloader survives
+it only because of the 15-second heartbeat in `routes/events.ts`, and `planner`
+will need the same thing built in with the streaming rather than diagnosed after
+it.
