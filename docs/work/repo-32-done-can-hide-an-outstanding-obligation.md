@@ -3,7 +3,7 @@ id: repo-32
 tool: repo
 title: A done ticket can carry an obligation nobody can see
 kind: chore
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: hard
@@ -96,19 +96,23 @@ genuinely findable place.
 
 ## Build
 
-**Not startable until the decision above is answered** — that is what
-`status: needs-decision` records here, and the work below is a sketch of option A
-rather than an instruction. Whoever answers should re-read the three instances
-first; two of them may have closed by then, which changes the argument's shape
-but not its direction.
+**Startable: the decision is answered — option A, with the sub-decision in step
+2 answered as "render only".** Both answers, and the costs that ruled the other
+options out, are in the dated Log entry below; this section is not the record of
+them. Whoever builds it should re-read the three instances first; two of them may
+have closed by now, which changes the argument's shape but not its direction, and
+a fourth arrived on 2026-09-07 (the Log entry names it).
 
-1. **Answer the decision**, with the owner. Do not settle it in the
-   implementation.
-2. **If A:** add the field to `docs/01-TICKETS.md`'s field table, teach
-   `scripts/status.mjs` to parse and render it, and decide the `--json` contract
-   — in particular whether an unclosed obligation is a `problem` (and so a CI
-   failure) or only a rendered line. **Take that sub-decision to the owner too**;
-   it is the difference between a reminder and a gate.
+1. ~~**Answer the decision**, with the owner.~~ **Done, 2026-09-07.** Option A,
+   over B and C. Do not re-open it in the implementation.
+2. **A, so:** add the field to `docs/01-TICKETS.md`'s field table, teach
+   `scripts/status.mjs` to parse and render it, and implement the `--json`
+   contract as answered: **an unclosed obligation is a rendered line and a
+   `--json` field, never a `problem` and never a CI failure.** That
+   sub-decision is settled — the reasoning is in the Log and it is not a
+   builder's to revisit. What is still open and belongs to the builder is the
+   shape, not the severity: the field's name in `--json`, where it renders on
+   the board, and what an empty or malformed value does.
 3. **Whichever:** amend `docs/01-TICKETS.md` where it says a ticket moves to
    `done` in the commit that earns it, since that sentence is the one that reads
    as though `done` meant nothing is left.
@@ -154,3 +158,56 @@ but not its direction.
   repo-16's Log records that trap being sprung.
 
   Nothing implemented, and deliberately: the mechanism is the decision.
+
+- **2026-09-07** — **Answered by the owner: option A**, and a second answer to
+  the sub-decision Build step 2 was told to bring back. `status` moves to
+  `ready`. **Nothing is implemented here, deliberately** — the owner held the
+  implementation for its own batch, because this ticket is rated `hard` and the
+  field it adds lands in frontmatter that is parsed strictly and gates CI.
+
+  **A — an optional `awaiting` field on a `done` ticket, surfaced by
+  `npm run status`.** That is this ticket's own recommendation, taken as filed.
+  The costs it names are accepted rather than waived: the field needs its
+  validation, its render, its `--json` shape, and an answer to "who clears it
+  and when" or it becomes a second projection with the same defect adr/003
+  rejected.
+
+  The rejected options, with the cost that ruled each out:
+
+  - **B, a convention in `docs/01-TICKETS.md` with no mechanism** — rejected as
+    the mechanism adr/003 already rejected, wearing a style guide. The three
+    instances in "The reproduction" were each written by an agent that had read
+    that file.
+  - **C, do nothing and rely on adr/005's closing sentence** — rejected because
+    it reaches only the reader who opens that document, which is the reader who
+    least needs telling.
+
+  **The sub-decision, answered: render only. An unclosed `awaiting` never fails
+  CI.** It is a rendered line and a `--json` field, and it is not a `problem`.
+  The owner's reasoning, recorded because the shape of the implementation turns
+  on it: these obligations are open **by construction** — the proof does not
+  exist until after a merge — and the person holding one frequently cannot close
+  it, so gating on it would block unrelated work for a reason nobody could act
+  on. [repo-24](./repo-24-quoted-scalars-render-with-quotes.md) is the recorded
+  case of a frontmatter parser change failing the board on sound work, and that
+  is the failure mode a new field must not reintroduce. So this is a reminder
+  and not a gate, and Build step 2 is answered: whoever builds it should not
+  need to ask again.
+
+  Recorded from repo-31's branch (`repo-31-windows-leg-non-blocking`, base
+  `origin/main` at `4fad5f8`), which was the batch in which the owner answered
+  both tickets. That branch touches nothing this ticket will touch —
+  `scripts/status.mjs` and `docs/01-TICKETS.md` are untouched by it — so
+  whoever picks this up starts from `main` with no dependency on it.
+
+  **One thing for the builder, found while recording this rather than relayed.**
+  repo-31 went `done` in that same batch carrying exactly the state this ticket
+  describes: three claims in its Log that can only be checked once the branch's
+  own CI has run — whether `if: failure()` fires under a job-level
+  `continue-on-error`, whether the workflow still parses (there is no YAML
+  parser in this repository's dependency tree, so it was reviewed by eye), and
+  whether `main` still carries no `required_status_checks` (`gh api` is denied
+  in the development container). That is a fourth instance, two days newer than
+  the three above, and it is the one whose `awaiting` line a builder could write
+  first to see the mechanism fail before it is trusted — `Done when` 2's
+  requirement.
