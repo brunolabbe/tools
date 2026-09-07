@@ -133,15 +133,77 @@ misses a different half, and both halves were hit within one session:
   reached for `dl-20` on exactly that reasoning.
 
 Commit subjects and PR titles both lie, in opposite directions. Only the file list
-is reliable:
+is reliable — and the ticket format keeps that list in **two** roots, `docs/work/`
+for `repo-` and `tools/*/docs/work/` for a tool prefix, so a sweep that reads one
+of them answers from half the namespace without saying so:
 
 ```bash
-{ git ls-tree origin/main tools/<tool>/docs/work/ --name-only
-  for pr in $(gh pr list --state open --json number --jq '.[].number'); do
-    gh pr diff "$pr" --name-only
-  done
-} | grep -oE '<prefix>-[0-9]+' | sort -u -t- -k2 -n | tail -1
+node scripts/next-id.mjs <prefix>     # repo, dl, pl …
 ```
+
+It prints **every claimant with its source**, then any id two sources both hold,
+then the first free one:
+
+```
+merged repo-29
+merged repo-30
+PR#174 repo-31
+clash: repo-31 is claimed by PR#174, PR#175
+next free: repo-32
+```
+
+The maximum alone is what made two real collisions unreadable — `26` with no
+source cannot be told from `26` while somebody is already sitting on 27. Above
+the merged high-water mark, every id belongs to somebody, and the point is to see
+who.
+
+**It was a fenced snippet on this page until repo-30, and it was wrong the whole
+time.** That is the argument for it being a file: the work is mechanical, it must
+give the same answer every time, and a fence has nowhere to put a test. Each row
+below is a guard that was measured failing before it was written, and is now a
+test in `scripts/test/next-id.test.ts` that goes red when the guard is removed —
+verified by removing each one in turn, not by assertion.
+
+| take the guard out | what it did |
+| --- | --- |
+| read only `tools/<tool>/docs/work/` | for a `repo-` prefix: **0 ids against 30**. There is no `tools/repo/`, so the merged half contributed nothing and the answer came from open pull requests alone. On a board whose open PRs are releases it printed nothing at all, exit 0 |
+| do not filter the tools root to `docs/work/` | a path that is not a ticket file counts as a claim |
+| read a failed command's stdout | a command may write half its output and then die; that partial list is indistinguishable from a correct short one |
+| treat a missing command as an ordinary failure | `gh` absent stops being **127** and becomes a generic 1, and the recorded measurements stop meaning anything |
+| dedupe across sources, as `sort -u` did | a board holding `repo-99` in two pull requests printed it **once** — the clash is precisely what got erased |
+| break ties by input order | two rows holding one id swap between runs |
+| swallow a failing `gh pr list` | the merged half alone, exit 0 — which is the original defect exactly |
+| drop the advice on a missing default rev | `fatal: Not a valid object name origin/main` and nothing else, which is what every CI runner and every shallow clone gets |
+
+**The codes are each child's own, so which one you see says which command
+failed — and on a fresh checkout that is `git`, not `gh`.** A default
+`actions/checkout` fetches one commit and creates no remote-tracking refs at
+all, so `origin/main` is simply absent and the sweep exits **128** naming the
+ref, before `gh` is ever spawned. Same in any shallow clone. It says what to do
+(`git fetch origin main`, or `--rev HEAD`) and deliberately does not fall back on
+its own, because answering confidently from a different tree is the defect this
+whole page is about. Read the exit code as *which child*, never as *what went
+wrong* — this branch's own spec asserted 127 and passed five times across two
+machines without once reaching `gh`, because every local checkout had the ref
+that CI does not.
+
+Two of those are traps rather than oversights, and both caught a repair in
+progress. `grep` exits 1 on *no match*, so the shell version's `set -o pipefail`
+needed a `|| true` on every grep or an ordinary pull request touching no ticket
+file took every later pull request's ids with it. And GNU `sort -s` **disables**
+last-resort comparison — a gate reviewer read the missing `-s` as the bug when it
+is the reverse, so adding it is what would have made a clash's two rows swap
+between runs. Neither survives the port; the tie-break is explicit in the script
+now, and the reasoning is in its comments.
+
+**This narrows the race; it cannot close it, and reading it as a lock is the new
+way to collide.** Measured in the 2026-09-06/07 incident that produced the table
+above: the id that clashed was held on a peer's branch that carried **no commit
+yet**, so nothing this reads — not `origin/main`, not any pull request diff — could
+show it, and a direct look at the branch showed a possible claimant rather than a
+real one. A branch is not a claim until it has a commit, and no command run at
+time T sees a claim made at T+1. Which makes the next paragraph load-bearing
+rather than polite.
 
 **When another session shares the repo, say which ids you hold and ask what it
 holds.** A message costs almost nothing (see below) and a collision costs a
