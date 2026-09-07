@@ -3,7 +3,7 @@ id: repo-26
 tool: repo
 title: No test runs a script as a process, so a dead entry point is invisible
 kind: chore
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: standard
@@ -84,31 +84,65 @@ a suite of happy-path assertions will report a disabled check as healthy for as
 long as it stays disabled. repo-22 was the first thing here to assert the
 unfashionable direction, which is the only reason this was ever seen.
 
-## Decision — open, and the reason this ticket is `needs-decision`
+## Decision — answered 2026-09-07, not open
+
+**The question was:** which entry points need a process-level test — only the
+scripts a hook or commit hook shells out to (a), every `scripts/*.mjs` with an
+entry-point guard (b), or a self-maintaining scan over the tree (c)?
+
+**The answer, from the owner, relayed through the orchestrator: option (a).** It
+was this ticket's own recommendation, so it overrode nobody. Recorded
+2026-09-07; **nothing below has been built.**
+
+**The scope that answer fixes:** `scripts/commit-message.mjs`, and nothing else.
+`.githooks/commit-msg` and `.claude/hooks/check-pr-title.sh` are the two callers
+that shell out to it, and no other script in `scripts/` is shelled out to by a
+hook today.
+
+**Carry the objection with the answer**, or the next builder rediscovers it from
+scratch — it is stated in this ticket's own text and it is the standing cost of
+(a), not a reason to revisit it:
+
+- **The set in (a) is invisible and unenforced.** It is a judgement made at the
+  call site and written down nowhere a machine reads, so **a future hook that
+  shells out to a new script inherits the gap with nothing noticing** — the same
+  silence this ticket exists to describe, one level up. That is the price of the
+  cheap option and it is accepted, not answered.
+- **(b) was not rejected as wrong**; it is the option that closes exactly that
+  hole, and it stays the right answer if the hook set ever grows past one
+  script. It was declined on cost — a process spawn per script, for scripts
+  whose guards do not fail silently.
+- **(c) stays recorded as a shape, not as a plan.** It is self-maintaining, and
+  it needs a per-script notion of "input it must reject" that not every script
+  has. Kept so it is not re-proposed as new.
+
+The reasoning that produced the question stands, and is kept because it is what
+makes the answer legible:
 
 **Which entry points need a process-level test?**
 
-- **(a) Only the scripts a hook or githook shells out to.** Today that is
+- **(a) Only the scripts a hook or githook shells out to — chosen.** Today that is
   `scripts/commit-message.mjs` and nothing else: `.githooks/commit-msg` and
   `.claude/hooks/check-pr-title.sh` both invoke it. Cheapest, and it covers
   every case where a dead entry point silently disables a guard — which is the
   actual harm. Risk: the set is not enforced anywhere, so a future hook that
   shells out to a new script inherits the gap without anyone noticing.
-- **(b) Every `scripts/*.mjs` with an entry-point guard.** Uniform, needs no
+- **(b) Every `scripts/*.mjs` with an entry-point guard — not chosen, and not wrong.** Uniform, needs no
   judgement at the call site, and cannot go stale as hooks are added. Costs a
   process spawn per script in the suite, and most of those scripts have no guard
   whose death would be silent — `status.mjs` and `citations.mjs` are run by
   humans and agents who would notice an empty answer immediately.
-- **(c) A scan rather than per-script tests** — one test that finds every
+- **(c) A scan rather than per-script tests — not chosen.** One test that finds every
   `scripts/*.mjs` containing an entry-point guard and asserts each exits
   non-zero on input it must reject. Self-maintaining, but it needs a
   per-script notion of "input it must reject", which not every script has.
 
-**Recommendation: (a), with the reasoning recorded**, because the harm is
+**Recommendation was: (a), with the reasoning recorded**, because the harm is
 specifically "a guard that silently stops guarding" and that set is exactly the
 scripts a hook depends on. But (b) is defensible on the grounds that the set in
-(a) is invisible and unenforced, and this is a real choice rather than a
-formality — hence `needs-decision` rather than `ready`.
+(a) is invisible and unenforced, and this was a real choice rather than a
+formality — which is why this ticket was `needs-decision`. **The answer went to
+(a), and the objection stands as recorded above.**
 
 **Do not answer it by sweeping the tree first.** The count of affected scripts is
 not known and is deliberately not measured here; measuring it is the first step
@@ -116,9 +150,12 @@ of the work, not of the filing.
 
 ## Build
 
-Once the decision is answered:
+The decision is answered, so this is startable. **The steps below are marked in
+place rather than rewritten** — the answer narrows them, it does not replace
+them.
 
-1. Add a process-level test for each entry point the answer covers, asserting
+1. Add a process-level test for each entry point the answer covers — **settled
+   by the decision above: `scripts/commit-message.mjs` alone** — asserting
    **the rejecting direction**. Pair it with an accepting assertion only if the
    pair is labelled — see step 2.
 2. **Mark the accepting half weak wherever it appears.** A dead entry point exits
@@ -130,9 +167,11 @@ Once the decision is answered:
    **Measured 2026-09-06: exactly one occurrence existed repo-wide** and it is
    fixed on repo-22's branch — so this step is expected to find nothing, and is
    here so that a later reader does not assume it was skipped.
-4. If the answer is (c), the scan belongs beside the existing repo-wide scans in
-   `packages/core/test/`, which is where `spawn-safety` and `image-closure`
-   already live.
+4. ~~If the answer is (c), the scan belongs beside the existing repo-wide scans
+   in `packages/core/test/`, which is where `spawn-safety` and `image-closure`
+   already live.~~ **`n/a` — the answer is (a), not (c).** Left in place rather
+   than deleted, so a later reader meeting the scan idea in the Decision section
+   can see where it would have gone and that it was not overlooked.
 
 ## Done when
 
@@ -183,3 +222,27 @@ live, and it deliberately fixes nothing.
   entry-point guard, and how many of those are shelled out to by anything. That
   count is the first step of the work and would prejudge the Decision if taken
   now.
+
+- **2026-09-07 — the decision was answered by the owner: option (a).** Only the
+  scripts a hook or commit hook shells out to, which today is
+  `scripts/commit-message.mjs` and nothing else. It was this ticket's own
+  recommendation, so it overrode nobody; (b) was declined on cost rather than on
+  the idea, and (c) is kept so it is not re-proposed. `status: needs-decision` →
+  `ready`. The Decision section is now `## Decision — answered 2026-09-07, not
+open`, and Build step 4 is marked `n/a` because it was conditional on (c).
+
+  **The objection carried with the answer**, in this ticket's own words: the set
+  in (a) is invisible and unenforced, so a future hook that shells out to a new
+  script inherits the gap with nothing noticing. That is accepted as a standing
+  cost, not resolved. Whoever builds this should not treat it as an oversight to
+  fix in passing — widening to (b) is a different answer, not a better build of
+  this one.
+
+  **Build step 3 still expects to find nothing**, and is deliberately left as
+  written. The measurement it rests on was not re-run here; nothing on this
+  branch touched `scripts/`.
+
+  **Recorded, not built.** This entry is bookkeeping from a branch that answers
+  four tickets' decisions in one sitting and implements none of them. The next
+  reader should treat this as a brief whose open question is closed, not as work
+  in progress.

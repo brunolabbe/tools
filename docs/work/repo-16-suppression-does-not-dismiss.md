@@ -3,7 +3,7 @@ id: repo-16
 tool: repo
 title: An inline CodeQL suppression documents the finding but does not clear the check
 kind: chore
-status: needs-decision
+status: ready
 milestone: null
 depends_on: [repo-13]
 difficulty: hard
@@ -64,6 +64,82 @@ Facts 3 and 4 are the load-bearing ones and neither can be verified from here.
 **Whoever picks this up should re-read the security tab before acting**, per
 adr/005's own triage step 1: an alert is a claim about a commit, and `main` moves.
 
+## Decision — answered 2026-09-07, not open
+
+**The question was:** which of four options carries the suppression —
+`advanced-security/dismiss-alerts` in `security.yml` (option 1),
+`advanced-security/filter-sarif` before upload (option 2), dismissing by hand on
+each recurrence (option 3), or accepting the red check (option 4)? And the
+sub-decision Build step 2 poses: **tag-pin that step like everything else, or
+SHA-pin it and write down why the exception exists?**
+
+**The answer, from the owner, relayed through the orchestrator: option 1, and
+SHA-pin the step with the reason written beside it.** Both were the recommended
+answers, so neither overrode anything. Recorded 2026-09-07; **nothing below has
+been built** — `.github/workflows/security.yml` is untouched and adr/005 is
+unedited.
+
+**Why the other three were not chosen**, which `Done when` line 1 requires be
+recorded with the cost that ruled each out:
+
+- **Option 2 — `filter-sarif`. Ruled out because the alert never appears at
+  all.** There is nothing in GitHub's record to show a human looked, which is
+  precisely the property adr/005's Context identifies as the failure worth
+  fixing. Option 1 leaves a weakly worded dismissal; option 2 leaves nothing.
+  Secondary cost: it is a three-step workflow change rather than a one-step one,
+  and it moves ownership of the upload path onto this repo.
+- **Option 3 — dismiss by hand on each recurrence. Ruled out on its measured
+  price:** this alert was dismissed on 2026-08-23 and came back when `dl-27`
+  moved the code on 2026-08-30, with none of the first triage's reasoning
+  attached. It is exactly what repo-13 was filed to escape, and the recurring
+  cost is the click plus the red check in between.
+- **Option 4 — accept the red check. Ruled out because it trains people to
+  ignore a red security check** — the failure mode with the longest tail and the
+  one nothing in this repo would detect. It is the honest baseline and it is not
+  free.
+
+**Carry option 1's own cost with the answer**, in this ticket's terms: it
+dismisses with **fixed generic text** — reason "won't fix", comment "Suppressed
+via SARIF". adr/005 requires five fields of justification, and under option 1 all
+five live only in the code comment while **GitHub's own record of the decision
+becomes uninformative**. Someone reading the security tab sees a machine-worded
+dismissal and has to open the file. That is a **real narrowing of the property
+adr/005 was written to protect, though not a loss of it** — the reasoning still
+exists, in the place adr/005 chose to put it. Whoever builds this should not
+discover that late and treat it as a defect in the action.
+
+### The pinning sub-decision, and the measurement behind it
+
+**Answered: SHA-pin the `dismiss-alerts` step, and write the reason beside it in
+`security.yml`.**
+
+Re-measured on this branch on 2026-09-07 rather than relayed —
+`grep -rhoE 'uses: [^ ]+' .github/workflows/*.yml | sort | uniq -c`:
+
+**34 action references across `.github/workflows/`, every one tag-pinned, across
+12 distinct actions, with no SHA pins at all.** (`actions/checkout@v7` ×12,
+`actions/setup-node@v7` ×4, `docker/build-push-action@v7` ×4,
+`docker/setup-buildx-action@v4` ×4, `actions/upload-artifact@v7` ×2,
+`docker/login-action@v4` ×2, and one each of `actions/cache@v6`,
+`actions/dependency-review-action@v5`, `docker/metadata-action@v6`,
+`github/codeql-action/analyze@v4`, `github/codeql-action/init@v4`,
+`googleapis/release-please-action@v5`. A grep for a 40-hex `@` suffix returns 0.)
+
+**So the SHA pin is the first exception to a uniform convention.** This ticket's
+own rule is that a convention with one _silent_ exception is worse than either
+policy — so the exception is only acceptable spoken. **The reason must be written
+beside the step in `security.yml` when it is built:** steps holding
+`security-events: write` are pinned harder than the rest, because this one
+_writes_ alert state and a compromised release could dismiss real alerts
+silently. That sentence is the deliverable of this half of the decision, not a
+nicety attached to it.
+
+**One thing this branch did not do:** it did not check whether
+`advanced-security/dismiss-alerts` still publishes the `v2.0.3` tag recorded
+above, and did not resolve any commit SHA. Both are the builder's to read at
+build time, and a SHA copied out of a ticket filed a week earlier is the failure
+this pin exists to prevent.
+
 ## Build
 
 **Nothing here is a code fix, and the deliverable is a decision.** Do not settle
@@ -71,9 +147,14 @@ it inside the implementation — bring the four options below to the repo's owne
 with their costs, as the root `CLAUDE.md`'s "Decisions" section requires, and
 implement the one chosen.
 
-### 1. Bring the four options, costed
+### 1. ~~Bring the four options, costed~~ — done; option 1 chosen
 
-**Option 1 — `advanced-security/dismiss-alerts` in `security.yml`.** Parses the
+**Settled by the decision above.** The four options and their costs are kept as
+written, because they are what makes the answer legible and because `Done when`
+line 1 requires the rejected three to stay recorded with the cost that ruled each
+out. Build the chosen one; do not re-cost the others.
+
+**Option 1 — `advanced-security/dismiss-alerts` in `security.yml` — CHOSEN.** Parses the
 uploaded SARIF, splits results by whether `suppressions[]` is non-empty, matches
 them to alerts by rule id, file, line and column through the Code Scanning Alerts
 API, and PATCHes the suppressed ones to dismissed. It also re-opens alerts it
@@ -107,7 +188,7 @@ security tab sees a machine-worded dismissal and has to open the file. That is a
 real narrowing of the property adr/005 was written to protect, though not a loss
 of it: the reasoning still exists, in the place adr/005 chose to put it.
 
-**Option 2 — `advanced-security/filter-sarif`.** Filters results out of the SARIF
+**Option 2 — `advanced-security/filter-sarif` — not chosen.** Filters results out of the SARIF
 by **path and rule id** before upload; patterns are
 `[+/-]<file glob>[:<rule glob>]`, later lines overriding earlier ones.
 
@@ -134,19 +215,24 @@ Cost, and it is structural in two ways:
   and the repo takes ownership of the upload path `analyze` currently handles for
   it.
 
-**Option 3 — dismiss by hand on each recurrence.** What repo-13 was filed to
+**Option 3 — dismiss by hand on each recurrence — not chosen.** What repo-13 was filed to
 escape, now with a measured price: this alert was dismissed on 2026-08-23 and
 came back when `dl-27` moved the code on 2026-08-30 (`ec1dd6b`), with none of the
 first triage's reasoning attached. Its one real merit — a human in front of every
 finding — is cheaper than it was, because adr/005 now carries the reasoning; the
 recurring cost is the click, and the red check in between.
 
-**Option 4 — accept the red check** on any pull request touching that file. Zero
+**Option 4 — accept the red check — not chosen** on any pull request touching that file. Zero
 work, and the honest baseline. It trains people to ignore a red security check,
 which is the failure mode with the longest tail and the one nothing in this repo
 would detect.
 
-### 2. Cost the supply-chain exposure separately, because it is a convention question
+### 2. ~~Cost the supply-chain exposure separately~~ — answered: SHA-pin, with the reason beside it
+
+**Settled by the decision above**, including the measurement that makes it an
+exception worth naming. The reasoning below is kept as written; the answer is
+the SHA, and the sentence in `security.yml` is part of the deliverable rather
+than a comment somebody may skip.
 
 **Options 1 and 2 both add a third-party action to the job that uploads security
 results and holds `security-events: write`.** For option 1 that action also
@@ -167,6 +253,9 @@ or SHA-pin this one step and write down why the exception exists.** A convention
 with one silent exception is worse than either; if the answer is a SHA, it wants
 a sentence in `.github/workflows/security.yml` beside it saying that steps
 holding `security-events: write` are pinned harder than the rest.
+
+**Answered 2026-09-07: SHA, with that sentence.** The tag list above is left as
+written and should be re-read at build time rather than trusted from here.
 
 ### 3. Amend adr/005 — required whichever option wins
 
@@ -197,18 +286,30 @@ security tab rather than inferred.
 
 ## Done when
 
-1. The four options are put to the repo's owner as a decision with costs, and one
-   is chosen; the rejected three are recorded with the cost that ruled each out.
+1. ~~The four options are put to the repo's owner as a decision with costs, and
+   one is chosen; the rejected three are recorded with the cost that ruled each
+   out.~~ **Done 2026-09-07: option 1 chosen, three rejected with their costs, in
+   the Decision section above.**
 2. If an option changing `security.yml` is chosen, it is implemented, and the
    default-branch-only condition on any dismissal step is verified by reading the
    workflow rather than asserted.
-3. The pinning sub-decision in Build step 2 is answered explicitly — tag or SHA —
-   and, if it departs from the repo's uniform tag pinning, the reason is written
-   beside the step.
+3. ~~The pinning sub-decision in Build step 2 is answered explicitly — tag or
+   SHA~~ **— answered 2026-09-07: SHA** — and, **because it does depart from the
+   repo's uniform tag pinning (34 references, 12 actions, 0 SHA pins, measured
+   2026-09-07), the reason is written beside the step.** That half is still
+   outstanding: it lands in `security.yml` when this is built, and it is the part
+   of this line that can still fail.
 4. adr/005 carries all three amendments in Build step 3, including the correction
    to its path-scoped-filter alternative.
 5. repo-13's acceptance lines 5 and 8 are answered — pointing at this ticket is
    enough — and its deferred line 3 is marked settled by fact 4 above.
+   **Flagged 2026-09-07, unresolved: repo-13 is now `status: done`**, so this
+   line asks for an edit to a closed ticket. Whoever builds this has to decide
+   how — amend the closed ticket in place, record the answer only here and leave
+   repo-13 alone, or something else. **It is deliberately not decided here**, and
+   see the Log for a second wrinkle: repo-13's own acceptance line 3 already
+   reads answered, while its gate table's row 3 still reads deferred, so "mark
+   line 3 settled" is partly stale on its face.
 6. The state of alert 2 after the chosen change is recorded in this ticket's Log,
    read from the security tab, with the date and the commit.
 7. `npm run check` passes and `npm run format` has been run, since this ticket's
@@ -265,6 +366,51 @@ security tab rather than inferred.
   was on the `--ready` board and could not be started, and a builder dispatched
   against it would have spent a full round to learn that. Move it back to `ready`
   in the commit that writes the chosen option onto this page.
+
+- **2026-09-07 — the decision was answered by the owner: option 1
+  (`advanced-security/dismiss-alerts` in `security.yml`), plus the pinning
+  sub-decision: SHA-pin that step, with the reason written beside it.** Both were
+  the recommended answers, so neither overrode anything. `status: needs-decision`
+  → `ready`. The Decision section above is new, Build steps 1 and 2 are marked
+  settled in place, and `Done when` lines 1 and 3 are marked.
+
+  **The cost carried with the answer:** option 1 dismisses with fixed generic
+  text ("won't fix" / "Suppressed via SARIF") where adr/005 requires five fields
+  of justification, so GitHub's own record of the decision becomes uninformative
+  and the reasoning lives only in the code comment. A real narrowing of what
+  adr/005 protects, not a loss of it. The three rejected options are recorded
+  with the cost that ruled each out, per `Done when` line 1.
+
+  **The pinning measurement was taken on this branch, not relayed:**
+  `grep -rhoE 'uses: [^ ]+' .github/workflows/*.yml | sort | uniq -c` returns
+  **34 action references, 12 distinct actions, every one tag-pinned; a grep for a
+  40-hex `@` suffix returns 0.** So the SHA pin is the **first exception to a
+  uniform convention**, which is exactly the case this ticket says must not be
+  silent. The sentence beside the step is therefore part of the deliverable:
+  steps holding `security-events: write` are pinned harder than the rest, because
+  this one _writes_ alert state and a compromised release could dismiss real
+  alerts silently.
+
+  **`Done when` line 5 is flagged and deliberately not resolved.** It asks to
+  answer repo-13's acceptance lines 5 and 8 and mark its deferred line 3 settled.
+  **repo-13 now reads `status: done`** — read from the file, not relayed — so
+  that means editing a closed ticket, which is a call for whoever builds this
+  rather than for whoever records this answer.
+
+  A second wrinkle found while checking, worth carrying because it changes what
+  that line is even asking for: **repo-13's acceptance line 3 already reads
+  answered** — struck through, with "**Answered 2026-09-01: it closed.**" — while
+  its gate table's row 3 still reads "correctly left **deferred** — `gh api`
+  denied". So the body and the gate record disagree, and "mark its deferred line
+  3 settled" was already partly stale when this ticket was filed. Not fixed here;
+  fixing it is an edit to a closed ticket, which is the same unresolved question.
+
+  **Recorded, not built.** `.github/workflows/security.yml` is untouched, adr/005
+  is unedited, no SHA was resolved, and the security tab was not re-read — facts
+  3 and 4 in the measurement section above are still relayed and still marked as
+  such, and this ticket's own instruction to re-read the security tab before
+  acting is unchanged. This branch is bookkeeping across four tickets whose
+  decisions were answered in one sitting.
 
 ## The gate on this filing
 
