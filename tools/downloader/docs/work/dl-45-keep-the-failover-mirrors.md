@@ -178,3 +178,41 @@ Same reasoning as dl-44 for the heading: `status: ready` is untouched and nothin
   **Recorded, not built.** Nothing in `src` was touched and `status` stays
   `ready`. Treat this as a brief whose last open question is closed, not as work
   in progress.
+
+- **2026-09-07 — two notes about the gate record above, kept because a future
+  reader would otherwise trust it further than it earned.**
+
+  **`web/src/lib/variants.ts:172,232` is only half machine-checked.**
+  `scripts/citations.mjs` parses `web/src/lib/variants.ts:172` and never reads
+  the `,232` as
+  a second reference at all — it does not appear in the seven references the
+  script counts for this file. So a clean citations run over this ticket says
+  nothing about line 232, even though that is where the snippet the bullet
+  quotes actually lives; `web/src/lib/variants.ts:172` "collapsed: number" is
+  the field's declaration, not the expression that computes it. The builder and the
+  reviewer each resolved line 232 by hand, independently, and got the same line,
+  so the bullet is accurate — but the evidence for it is two hand-reads, not the
+  script. This entry re-states that coordinate in a shape the script _can_ read,
+  `web/src/lib/variants.ts:232` "collapsed: rows.length - kept.size", so the
+  claim the gate record could only hand-verify is machine-verified here. Left as one citation deliberately: splitting it would mean editing a
+  committed gate record to improve the audit trail of the record rather than
+  anything about this ticket.
+
+  **A reported observation here turned out to be an inference, and the mechanism
+  is worth more than the correction.** The builder told the reviewer that oxfmt
+  had reflowed the gate record's long lines. It had not — the committed bytes
+  are identical to what was sent, measured afterwards as line lengths of 426,
+  246 and 208 characters, none of them wrapped. What makes this worth a Log
+  entry is that the same builder had caught the same failure in its own draft
+  three steps earlier, in the dl-45 scope paragraph that contradicted Build
+  step 2, and the catch did not generalise. The reason it did not: **the guard
+  was pointed at the deliverable, not at the report about the deliverable.**
+  Every claim about ticket content was checked against the file, because that
+  was the assigned risk. The oxfmt claim was about what the builder's own tools
+  had just done — `npm run format` had genuinely rewritten files earlier in the
+  dispatch — so it presented as recollection rather than as an assertion, and
+  recollection does not feel like something that needs a command. It is one.
+  **A claim about your own process is a measurement with the same standing as a
+  claim about the code, and it is the one that gets waved through**, because the
+  effort of verifying tracks how risky a subject feels rather than whether the
+  sentence is checkable.
