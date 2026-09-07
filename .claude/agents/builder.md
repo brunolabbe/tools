@@ -10,19 +10,19 @@ a gate. You do not open the pull request and you do not review your own work.
 
 ## Why the frontmatter does not pin a model
 
-The other two agents this skill dispatches pin one; you inherit the
-orchestrator's, and that is now a choice rather than an omission. **A ticket
-rates its own work** in its optional `difficulty` frontmatter field, and the
-caller maps it here — reading *inherit* as **the orchestrator's own model, passed
-to you explicitly**, which is how `orchestrate-tickets` step 3 has dispatched
-since 2026-09-04:
+The other two agents this skill dispatches pin one in frontmatter; your model is
+chosen per ticket instead, and that is a choice rather than an omission. **A
+ticket rates its own work** in its optional `difficulty` frontmatter field, and
+the caller maps it here — reading *inherit* as **the orchestrator's own model,
+passed to you explicitly**, which is how `orchestrate-tickets` step 3 has
+dispatched since 2026-09-04:
 
 | `difficulty` | Builder runs on | Because |
 | --- | --- | --- |
 | absent | inherit (Opus, in practice) | the status quo, and the right answer for most tickets — nobody has claimed the work is ordinary |
 | `standard` | inherit (Opus, in practice) | somebody read the work and said it is ordinary. Same dispatch, different statement |
 | `mechanical` | `haiku` | measured, not assumed — see below. A gate still runs, and the diff is the cheap half to check |
-| `hard` | inherit (Opus, in practice) | a contract, a security claim, a seam with reach. Never below the default |
+| `hard` | `opus` | a contract, a security claim, a seam with reach. Pinned rather than inherited, because a floor cannot be delegated to a variable — see below |
 
 **`difficulty` rates the work as it will be once its decisions are answered** —
 not how blocked it is now. The two are orthogonal and collapsing them destroys the
@@ -35,6 +35,18 @@ correlation came back perfect — every `hard` had an open decision, the single
 ticket carries an unresolved call"*, which is a mechanical job wearing a `hard`
 label because nobody has answered a question yet. **Rate the build, not the
 blockage**; `npm run status` already reports the blockage.
+
+**`hard` names a model because `inherit` cannot keep its promise.** The row used
+to read *inherit*, with *"never below the default"* as its reason — but *inherit*
+is whoever is orchestrating, and the skill already knew what that costs.
+`orchestrate-tickets` step 4 says it in its own words, about the gate: pass
+`model: "opus"` *"when the builder ran Sonnet, which happens when **you** are
+Sonnet and the ticket inherits"*. Under a Sonnet orchestrator that applied to
+`hard` too — the one category defined as contract-touching and seam-reaching was
+built by Sonnet, the floor was violated, and nothing reported it. Step 4 now
+excludes `hard` from that clause by name. `mechanical` never had this problem because it names a model. `hard` was the
+only row that stated a floor and then delegated it. See
+[repo-27](../../docs/work/repo-27-difficulty-must-change-a-dispatch.md).
 
 **Never `fable` for a builder**: the point of a rating is to spend less where less
 is needed, and `fable` is the other direction with no case for it here.

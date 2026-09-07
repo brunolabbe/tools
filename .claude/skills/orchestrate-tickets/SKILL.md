@@ -83,9 +83,10 @@ you are there.
    case and means inherit. Never rate an unrated ticket yourself — you have not
    read it, which is the whole point of step 2. **Then pass that model explicitly
    rather than letting it inherit**, naming your own model where the table says
-   inherit. A backgrounded dispatch's `resolvedModel` never reaches **you** — the
-   parent sees only the subagent's final text — so inherit is the one setting that
-   leaves the builder's model unobservable from where the decision is made,
+   inherit. A backgrounded dispatch's `resolvedModel` does not reach **you** in
+   the tool result — the parent sees only the subagent's final text — so inherit
+   is the one setting that leaves the builder's model unstated where the decision
+   is made,
    including by the builder, which on 2026-09-04 asserted its own model from a
    line that turned out not to exist. One parameter, and step 4's comparison
    becomes something you wrote down instead of something you infer. See
@@ -98,13 +99,24 @@ you are there.
    builder has no `Agent` tool and is told not to spawn, and both of those are
    this rule, not an oversight. **Both halves are knowable if you make them so,
    and neither needs `resolvedModel`** — which the backgrounded dispatch *does*
-   carry but never shows you, and background is how `reference/concurrency.md`
-   tells you to dispatch a batch. If you ever do need it read, two documented
-   routes exist: a `PostToolUse` hook on the `Agent` tool returning it through
-   `hookSpecificOutput.additionalContext`, and `/tasks` (v2.1.242+), which names
-   the model per row. **Every claim in this paragraph about what a dispatch
-   carries is relayed and unverified here** — Claude Code's behaviour, not this
-   tree's, read from a sandbox with no network. The gate's half was never in doubt:
+   carry but does not put in the tool result, and background is how
+   `reference/concurrency.md` tells you to dispatch a batch. If you ever do need
+   it read, three routes exist, and **only the third is measured in this tree**: a
+   `PostToolUse` hook on the `Agent` tool returning it through
+   `hookSpecificOutput.additionalContext`; `/tasks` (v2.1.242+), which names the
+   model per row; and the **task output file** whose path a backgrounded `Agent`
+   result hands you, which carries `/message/model` on every assistant record.
+   Measured 2026-09-06 against a `ticket-reviewer` dispatched `model: "sonnet"`:
+   182 records, one distinct value, `claude-sonnet-5`. **Read it with a script
+   that prints aggregates** — it is the full subagent transcript, and the tool
+   result's "do not read this" is a warning about your context, not a seal. That
+   same file carries `cache_read_input_tokens` per request, which is the half
+   `subagent_tokens` omits — and which repo-17 measured on 2026-09-01 at ~94% of
+   the bill, not a figure re-measured here. **It is the dispatcher's route, not
+   the subagent's**: a subagent cannot read its own, and the file named for its
+   session id under `~/.claude/projects/` is a different conversation
+   altogether — found the hard way by this branch's own gate, which went looking. The first two routes remain
+   relayed and unverified here — Claude Code's behaviour, not this tree's. The gate's half was never in doubt:
    [`.claude/agents/ticket-reviewer.md`](../../agents/ticket-reviewer.md) pins
    `model: sonnet` in its frontmatter, so it is a file read. The builder's half is
    the one step 3 tells you to write down at dispatch. Do both and the comparison
@@ -118,9 +130,12 @@ you are there.
    repo history names any other model — 480 across all refs — and that is the
    inheritance, not evidence Opus built them. Sonnet is right when the builder ran Opus or Haiku; pass
    `model: "opus"` when the builder ran Sonnet, which happens when *you* are
-   Sonnet and the ticket inherits. Never `haiku`, never `fable`. **Since repo-17
+   Sonnet and the ticket inherits — **never on a `hard` ticket**, which since
+   repo-27 pins `opus` rather than inheriting, so the one category defined by its
+   reach cannot be built below the default. Never `haiku`, never `fable`. **Since repo-17
    the builder's model varies inside a batch** — a `mechanical` ticket dispatches
-   `haiku` where its siblings inherit — so check the pairing per ticket rather
+   `haiku` and, since repo-27, a `hard` one dispatches `opus`, where their
+   siblings inherit — so check the pairing per ticket rather
    than setting the gate once. Say which model gated in the record; and if you did
    have to infer either, say so and **name the rule you inferred from precisely**,
    because a citation given as fact is transcribed as fact. Measured before this
