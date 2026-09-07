@@ -39,6 +39,65 @@ fails, the download fails — even though the manifest named another host servin
 the same bytes, and we parsed it, and then dropped it on the floor before the
 engine ever saw it. Every retry we do make goes back to the same host.
 
+## Decision — answered 2026-09-07, not open
+
+**The question was:** what does the picker say about mirrors, if anything? A
+rendition with three mirrors is not a better rendition; it is a more available
+one, and it may deserve nothing at all in the table.
+
+**The answer, from the owner, relayed through the orchestrator: show the mirror
+count.** **This overrode the recommendation**, which was to show nothing —
+recorded because a decision that went against its recommendation is the one most
+likely to be re-argued from scratch by whoever inherits it, and because the
+grounds for the option that lost are still true. Recorded 2026-09-07; **nothing
+below has been built.**
+
+The options as they were put:
+
+- **A. Nothing — mirrors stay invisible. Recommended, and overridden.** The
+  engine fails over silently and the picker table is unchanged, which keeps the
+  change to `contract` + `resolvers` + `engine`. The grounds were this ticket's
+  own framing — a mirrored rendition is not a better one — and dl-40, which
+  collapsed those rows precisely to stop the table implying a difference that is
+  not there.
+- **B. Show the mirror count — chosen.** A small affordance on the row.
+- **C. Let the builder decide and record it. Not chosen:** this one is settled,
+  and it is settled as B.
+
+**The scope now includes `web`, and this ticket had not budgeted for it.** dl-45
+carries no `**Packages:**` line at all, so there is no list to correct and this
+paragraph is the record of the widening. Named so it is visible; deliberately
+not rewritten into a brief, which is the next builder's job with the
+implementation in front of it. Two coordinates, and a number already on screen
+that this one is not:
+
+- the row is built in
+  [`web/src/lib/variants.ts`](../../web/src/lib/variants.ts) and rendered in
+  [`web/src/components/VariantTable.tsx`](../../web/src/components/VariantTable.tsx),
+  so `VariantRow` grows a count and the table grows somewhere to put it;
+- **the count comes from step 1's contract field, not from the picker's
+  collapse.** Step 2 is explicit that alternates are computed in the resolver,
+  so by the time the picker sees a mirrored rendition it is already one variant
+  carrying its alternates — the picker counts what it was told, it does not
+  discover it. Reading the number off the collapse would put the computation in
+  the one place step 2 forbids;
+- the picker's own `collapsed` total is a **different** number and stays one: it
+  counts rows the picker itself merged, and it is already on screen as
+  `N duplicate paths merged` in
+  [`web/src/components/ProbePanel.tsx`](../../web/src/components/ProbePanel.tsx).
+  After step 2 the mirrors it used to count arrive pre-grouped, so that total
+  drops for a mirrored manifest whether or not a per-row count is added. Whether
+  the two coexist, and what the table-level line then says, is part of the work.
+
+**Carry the cost with the answer**, from the option that was recommended
+against: **dl-40 collapsed duplicate rows on purpose, so the table would stop
+implying a difference between renditions identical on every attribute but the
+hostname.** A per-row mirror count reintroduces a per-row distinction, so
+whoever builds this owes an answer to _"why does this not undo dl-40?"_ — most
+likely by making it unmistakable that the count is about **availability, not
+quality**, in the copy and in whatever the row gives a screen reader. The
+objection travels with the answer; it was not dismissed by it.
+
 ## Build
 
 1. **Contract first, and not unilaterally.** `MediaVariant` needs somewhere to
@@ -60,7 +119,11 @@ engine ever saw it. Every retry we do make goes back to the same host.
    every mirror.
 4. Decide what the picker says, if anything. A rendition with three mirrors is
    not a better rendition; it is a more available one. It may deserve nothing at
-   all in the table.
+   all in the table. **Settled by the decision above: show the mirror count** —
+   which overrode the recommendation of showing nothing, and which brings `web`
+   into scope and the dl-40 objection with it. Left as written rather than
+   rewritten into a new brief; that is the builder's job with the code in front
+   of it.
 
 ## Done when
 
@@ -85,3 +148,16 @@ engine ever saw it. Every retry we do make goes back to the same host.
   never used an alternate. This ticket is the other option, kept separate so the
   picker fix was not blocked behind an engine change. Nothing about the reported
   video, its site or its hosts is recorded here, deliberately.
+- **2026-09-07 — Build step 4 was answered by the owner: show the mirror
+  count.** The orchestrator recommended showing nothing, on this ticket's own
+  framing and on dl-40's collapse; **the answer overrode that recommendation**,
+  and the section above is now `## Decision — answered 2026-09-07, not open`
+  with step 4 marked as settled by it. Two things travel with the answer and are
+  recorded there: the scope now reaches `web`, which this ticket had not
+  budgeted for and has no `**Packages:**` line to correct, and the dl-40
+  objection — a per-row count reintroduces the per-row distinction dl-40
+  removed, so whoever builds it owes an answer to why this does not undo dl-40.
+
+  **Recorded, not built.** Nothing in `src` was touched and `status` stays
+  `ready`. Treat this as a brief whose last open question is closed, not as work
+  in progress.
