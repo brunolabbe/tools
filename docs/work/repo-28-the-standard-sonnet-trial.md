@@ -215,6 +215,26 @@ the same page. `#170` was confirmed merged first — `gh pr view 170` reports
 3. **proven** — `npm run check` exit 0, `node scripts/status.mjs --json` exit 0,
    `npm test` 2170 passed.
 
+## Review
+
+**Gate: PASS** — 2026-09-07 · `origin/main...HEAD` (`5065aed`) · own defect hunt, no `code-review` dispatch (subagent has no `Skill` tool), Sonnet against an Opus build
+
+Same checkout as repo-21's gate (one branch, shared commits); see that ticket's header for setup detail. Re-verified at the final tip `5065aed`; nothing in this ticket's own files changed between `928e3ac` and `5065aed`.
+
+| Done when                                          | Proof                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Decision recorded with answer and reason        | _Answered 2026-09-07_ section present: question, 3 options with the recommended one marked, which was chosen, whose recommendation it overrode, how it was taken ✓                                                                                                                                 |
+| 2. `builder.md` reflects the answer                | `builder.md:23`'s `standard` row reads `sonnet`, confirmed by direct read and by `citations.mjs` resolving `SKILL.md`'s citation of it. Machine-checked from the other side: reverting the row turns `ci.yml`'s citations step red, reproduced independently as part of repo-21's Build 1.4 test ✓ |
+| 3. `npm run check` passes, `status --json` exits 0 | Reproduced at `5065aed`: both exit 0 ✓                                                                                                                                                                                                                                                             |
+
+- **low** · The ticket's own Done-when-3 test-count claim ("2170 passed") is correct — reproduced independently at 129 files / 2170 tests, matching exactly.
+- **dropped** · none.
+- **findings** · own defect hunt returned 1; 1 carried (low, above), 0 dropped.
+
+NFR: security n/a · performance n/a — the cost/gate-parity arithmetic ($7.20 vs $7.18) is re-derivable from the numbers given; not re-run, since it is a historical measurement this branch's diff does not re-execute · reliability n/a · maintainability — the decision's provenance table is a good model of the "how it was taken" rule the ticket itself argues for.
+
+**Shared observation, not a finding.** `.claude/agents/ticket-reviewer.md` — the file I am — carries no comment beside its untouched `model: sonnet` pin, which repo-28 leaves deliberately out of scope. The residual risk is stated clearly at the two places a dispatcher actually consults before it would bite (`SKILL.md`'s pairing table, and this ticket's own Log), just not in the pin's own file. Not raised as a finding; this is a deferred question for the repo's owner, not a settled one.
+
 ## Log
 
 - **2026-09-07** — Filed after running the trial, so it carries the result rather

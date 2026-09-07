@@ -825,6 +825,48 @@ the skill prescribes: **pin the verdict to the sha it was taken on and let the
 recording commit be the recording commit.** The orchestrator's pre-merge look is
 what covers the real tip, and it is the only participant positioned to take it.
 
+## Review
+
+**Gate 1: CONCERNS** — 2026-09-07 · `origin/main...HEAD` (`928e3ac`) · own defect hunt, no `code-review` dispatch (subagent has no `Skill` tool), Sonnet against an Opus build
+
+Checked out `928e3ac` via `git fetch origin && git checkout --detach 928e3ac`. `git log --oneline -1` matched; `git diff --stat origin/main...HEAD` showed 9 files, 1004 insertions / 601 deletions across six commits (this ticket plus repo-28, coupled per repo-28's Build step 2). `worktree-farm.sh` then `npm run build` succeeded before any check.
+
+| Done when                                                                         | Proof                                                                                                                                                                                                                                                                                          |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `citations.mjs --require-anchors` on `SKILL.md` exits 0, all `ok`              | Reproduced: exit 0, 5/5 `ok` ✓                                                                                                                                                                                                                                                                 |
+| 2. Same command in `ci.yml`'s `check` job; Log records Build 1.4's falsify/revert | `ci.yml` runs it in the unfiltered `check` job. Falsify/revert reproduced independently: falsifying the `mechanical` anchor → exit 2, 1 moved; revert → exit 0, matching the Log's transcript ✓. Confirmed independently the step needs no build (ran with `dist/` moved aside, still correct) |
+| 3. Every cross-file claim is an anchored citation                                 | `grep -noE '\]\(\.\./[^)]*\)' SKILL.md` → empty ✓                                                                                                                                                                                                                                              |
+| 4. Laundering family collapsed to 1 section, 14-row table                         | Confirmed: 1 `###` heading under `## Decisions`, 14 data rows ✓                                                                                                                                                                                                                                |
+| 5. Loop: 12 steps, no paragraph >3 lines                                          | Confirmed via `awk` ✓                                                                                                                                                                                                                                                                          |
+| 6. Every dated measurement at merge-base survives in `SKILL.md` or `history.md`   | **unproven as literally written** — two of ~29 dated measurements (the 2026-09-06 task-output-file result, repo-17's ~94% figure) live in `reference/dispatching.md:101,110`, not in the line's named pair. See finding below                                                                  |
+| 7. Defect 4 gone, did not come back                                               | `grep -n resolvedModel SKILL.md` → both lines the narrow correct form ✓                                                                                                                                                                                                                        |
+| 8. No self-report-as-model verification path                                      | Confirmed, 1 line, the explaining clause only ✓                                                                                                                                                                                                                                                |
+| 9. `records.md` one generalisation; step 7 one clause                             | Confirmed ✓                                                                                                                                                                                                                                                                                    |
+| 10. `npm run check`, `format`, `status --json` pass                               | Reproduced independently, all exit 0 ✓                                                                                                                                                                                                                                                         |
+
+- **med** · Done-when 6 is internally self-contradictory, independent of anything this branch did: its primary clause ("somewhere in the skill") and its own checkable procedure ("grep each in the new tree") both already admit `reference/dispatching.md`, while only its em-dash apposition ("`SKILL.md` or `reference/history.md`") excludes it — three readings of four pass. Reproduced independently by builder and reviewer with the same command. Nothing was lost: every other spot-checked dated measurement from the merge-base survives in the named files, and a full 29-measurement sweep confirms it.
+- **low** · The Log's "`records.md`'s citation output is now byte-identical to `main`'s" is not literally true — same resolution status per entry, different `record line N` values from unrelated content shifting line numbers elsewhere in the file.
+- **low** · The new CI step has run nowhere but locally — `gh run list --branch repo-21-orchestration-skill-loop` returns empty, no PR open yet. Confirmed independently the mechanism is sound (works with `dist/` removed; `check` carries no path filter).
+- **dropped** · none.
+- **findings** · own defect hunt returned 3; 3 carried, 0 dropped.
+
+NFR: security n/a (docs/CI only) · performance n/a · reliability — CI step well-scoped, confirmed build-independent, genuinely unrun in Actions yet · maintainability — strong: sampling found no narrative outside instruction/measurement/citation.
+
+**Gate 2: settled, PASS** — 2026-09-07 · re-verified independently at `5065aed` (`928e3ac..5065aed`, two commits, `records.md` + the ticket file, 114 insertions / 4 deletions)
+
+All three Gate 1 findings resolved on the branch and independently re-verified, not taken from the Log:
+
+- **Finding 1 (med), fixed.** `Done when` 6 amended in place at lines 539–583: original text byte-for-byte untouched, an indented annotation beneath it admits `reference/dispatching.md` as a third home **"for a measurement whose instruction is dispatch mechanics"**, states explicitly _"Not 'or elsewhere in the skill' — three named files, closed the way the original was closed, and a fourth needs its own amendment,"_ quotes the contradiction, states the checked property (29 of 29 survive), gives an honest mixed self-assessment (tighter than the procedure clause, looser than the apposition by one file), and records a rejected fourth remedy (moving both into `history.md`'s tenth-session row) with the command that killed it (`27,800`/`87,596`/`100–330` each have exactly one home across the skill, so a two-home measurement has no precedent). Re-verified myself: the annotation text matches exactly what's described; re-ran the 29-measurement sweep independently and confirm 29/29 with the two resolving under the three named files (`grep -n "182 records\|94% of the bill" SKILL.md reference/history.md reference/dispatching.md` → both found, only in `dispatching.md`). `Done when` 6 is now **proven** as amended.
+- **Finding 2 (low), fixed and improved.** The Log's "byte-identical" claim is struck through and withdrawn in place (not deleted), with the actual mechanism written up: the builder's own verification command produced silent, correct output and then had an authored `&& echo "IDENTICAL to main"` label read back as if it were the tool's result. Re-ran the comparison myself without any label in the output position: 13 references both sides, identical resolution state and citation target on every entry once record-line numbering noise is stripped, exit 11 both ways — matches the corrected claim exactly. Filed as instance four of `records.md`'s existing "a command's real signal is not the line you read" family (`reference/records.md:298-309`), not as a new `SKILL.md` row — right call, since `SKILL.md` is the page this ticket just halved and `records.md` already governs exactly this failure shape.
+- **Finding 3 (low), no fix, correctly attributed.** The Log now credits the reviewer's gate with confirming the CI step needs no build (`dist/` removed, step still works) and that `check` carries no path filter. What remains genuinely unmeasured — an actual green run in GitHub Actions — is stated as exactly that, with the empty `gh run list` as its evidence. Nothing to fix; this stays true until a PR opens.
+
+**Re-verified independently at `5065aed`, not read off the Log:** `npm run check` exit 0 · `npm run format` exit 0, clean `git status` · `node scripts/status.mjs --json` exit 0 · `npm test` 129 files / 2170 tests, unchanged · both new commit subjects pass `commit-message.mjs` · `citations.mjs .claude/skills/orchestrate-tickets/SKILL.md --require-anchors` exit 0, 5/5 ok · the ticket's own `citations.mjs` run still exits 3 with exactly its two deliberate bare failures, the Build-1.4 evidence declaration still suppressing correctly.
+
+- **dropped** · none — all three Gate 1 findings carried through to resolution.
+- **findings** · Gate 1 returned 3; all 3 carried, fixed on the branch, and independently re-verified here. 0 dropped.
+
+NFR: security n/a · performance n/a · reliability — improved (the CI-step build-independence claim is now measured, not assumed) · maintainability — the med finding's resolution is itself an instance of the property this ticket argues for: a page that can find and fix a contradiction in its own acceptance criteria rather than let it stand.
+
 ## Log
 
 - **2026-09-05 — filed.** Every number was measured against `origin/main@c37cab9`
@@ -1289,6 +1331,43 @@ repo-21-orchestration-skill-loop` returns `[]` because no pull request exists
 - **Written by Opus 5 (1M context), `claude-opus-5[1m]`**, which is the model this
   session was told it is at dispatch, not a self-report taken as evidence — see the
   self-report row this ticket adds.
+
+- **2026-09-07 — the gate exchange stalled, and it was invisible from inside it.**
+  The builder held both gate records on one open question (literal pipes in
+  `repo-28`'s `Done when` row 2, which markdown reads as cell delimiters and which
+  broke a two-column table into five cells — measured, not predicted). The reviewer
+  answered, choosing to reword rather than escape. **The answer never reached the
+  builder**, and both parties then reported the exchange closed, accurately, from
+  where each of them stood: the reviewer had sent its answer, the builder had done
+  everything not blocked on it, and the two reports agreed. `npm run status` read
+  `done`, the branch was pushed, and **nothing went red.**
+
+  It was caught by the orchestrator running the one discriminator this skill
+  already prescribes — `git show <branch>:<ticket-path>` piped to
+  `grep '^## Review'`, empty — and then re-relaying the reviewer's replacement text
+  verbatim so the build could finish.
+
+  **This is `SKILL.md`'s _stalled exchange_ row, arriving from a direction its own
+  measurement did not cover.** The 2026-09-04 case behind that row was a pair that
+  agreed and stopped, each treating the record as the other's move. This one is
+  narrower and harder: **a message that was sent and not received**, where every
+  participant's account is true and the failure lives only in the gap between them.
+  Two consequences, and the second is the one worth carrying:
+
+  1. The discriminator holds unchanged — it tests the artefact on the remote, not
+     anyone's account of it, which is exactly why it survived a failure mode nobody
+     had in mind when it was written. No edit earned.
+  2. **A report of a sent message is not evidence of a delivered one.** Both agents
+     wrote "I sent it" / "I am waiting" and both were right; neither could tell the
+     two states apart from inside. That is the self-report row one level out —
+     a claim about the channel is checked from outside the channel — and the
+     participant standing outside it is the orchestrator. Its pre-merge look is not
+     only about CI.
+
+  Left as a Log entry rather than a fifteenth table row, for the same reason
+  finding 2's mechanism went to `records.md`: the page already carries the
+  instruction that caught this, and growing it to record a case the existing rule
+  handled would be the disease.
 
 - **2026-09-07 — this branch also carries `repo-28`, on the owner's answer, and
   that is a coupling in `repo-28`'s Build rather than scope creep.** `repo-28`'s
