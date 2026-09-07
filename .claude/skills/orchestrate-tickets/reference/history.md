@@ -1292,3 +1292,233 @@ mapping. Two Sonnet builder dispatches ran under it this session — `#180`'s
 replacement filing (161,278 tokens) and this row's own dispatch — and a filing
 is not a representative `standard` build, so this is a datum for the next
 session to add to, not a second trial.
+
+## Twelfth session — 2026-09-07
+
+**Written by a builder (Opus 5 (1M context), dispatched explicitly) from the
+orchestrator's own account of a batch it ran on Opus 5 (1M context), with no gate
+on this branch** — ship authority was conditional on `npm run check` and
+`status --json` exiting 0 with the diff confined to this file, and the
+orchestrator states it is the only participant that watched the session end to
+end. What could be checked from a worktree was re-run here against
+`origin/main@e9054c5` and the three branches; everything else is marked as
+supplied.
+
+**The dispatch called this the eleventh session and it is the twelfth.** The
+entry above — `## Eleventh session — 2026-09-07` — was added by `e9054c5` (#181),
+which the dispatch referred to as the tenth; `## Tenth session — 2026-09-06` is a
+separate, earlier entry. Two batches ran on 2026-09-07, which is what makes the
+off-by-one cheap to commit: this is the second of them, based on the merge that
+closed the first. Numbered from the sequence in the file rather than from the
+dispatch, and recorded because a duplicated heading is the one error this page
+cannot absorb.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **3** taken from `ready` to a gated branch, none merged at close: `repo-15` (#182, tip `a2c5b0a`), `dl-44` (#183, tip `b94f9bf`), `repo-16` (#184, tip `14703b5`) — every tip and PR number re-checked here with `git ls-remote --heads origin` and `gh pr view --json headRefOid`, all three open against `main`. Around them: **one ticket closed without being built** (`repo-26`, `status: done` on `repo-15`'s branch, closed as already built by `repo-22`/#161 — confirmed on `main`, where `36be01b` carries it), **one filed** (`repo-32`, `status: needs-decision`, no `## Review` heading, on `repo-16`'s branch), and **two held tickets amended on a sibling's branch** (`dl-46` on `dl-44`'s, `repo-29` on `repo-16`'s). Both amendments re-verified additive-only by `--numstat` (+24/−0 and +46/−0) and frontmatter-identical by hunk position — the added hunks open at 105 and 140, and at 387 and 653, none of them inside a nine-line frontmatter block. **Board at intake: 7 `ready`, 1 withheld**, re-measured at the base with `npm run status -- --ready` — `dl-44`, `dl-45`, `dl-46`, `repo-15`, `repo-16`, `repo-26`, `repo-29` ready, `repo-31` withheld as `needs-decision`; all four `depends_on` blockers among them (`dl-40`, `dl-41`, `dl-43`, `repo-13`) read `done`. **All three built tickets carry `difficulty: hard`, and all three were built on Opus and gated on Sonnet**, stated in each pull request body — the first batch to run entirely under `repo-27`'s pinned `hard` row, `.claude/agents/builder.md:25` "a contract, a security claim, a seam with reach" |
+| `agents` / `dispatches` | **7** agents — 1 seam-mapper, 3 builders, 3 reviewers — / **11** dispatches-and-wakes: 7 dispatches plus 4 orchestrator `SendMessage` wakes. Supplied; nothing in the tree records either half |
+| `builder rounds` | **8 across 3 builders** — `repo-15` 2, `repo-16` 2, `dl-44` 4 — supplied. **Zero caused by orchestrator error**, which is the half the schema asks for. It is the **first zero** among the sessions that stated an attribution at all — seventh 1, eighth 1, ninth 2, tenth 2, and the eleventh stated none. `dl-44`'s fourth round was the Windows CI defect below: structural, not a relay failure. One orchestrator error did harden a gate finding into an instruction, and cost no round only because it rode an existing relay — see _Orchestrator errors_ |
+| `gates` | **3, all returned findings**, every verdict read out of `git show` on the branch rather than from the account. `repo-15` **PASS**, 3 low, none changing a `Done when` verdict. `repo-16` **CONCERNS** — its own defect hunt at medium returned **0**, and the concern is one acceptance line unprovable before merge: the dismissal step has never run, and the live alert state is unreachable because `gh api` is denied. `dl-44` **CONCERNS → PASS**, 2 med both closed plus 1 low, the final record re-verifying at `992ac2e` |
+| `wrong findings` | **Five, spread across four different links, and exactly one reached a commit** — and the one that did was the **builder's**, not a gate's, withdrawn in place the same day at `009072d`. The per-link attribution is the part worth carrying and is in the table below; "findings were wrong" is the summary that destroys it |
+| `subagent tokens` | **1,502,839 across all 7 agents, none missing** — last-observed cumulative, so each is a floor. `dl-44` builder 299,804 · `repo-16` builder 298,695 · `dl-44` reviewer 233,894 · `repo-16` reviewer 231,057 · `repo-15` builder 182,864 · `repo-15` reviewer 165,799 · seam-mapper 90,726. Re-added here; the supplied total is exact. Split on the floors: builders 781,363 (**52.0%**) · gates 630,750 (**42.0%**) · intake 90,726 (**6.0%**), from 51.99/41.97/6.04 before rounding. **A full report from every agent is itself the datum** — the ninth, tenth and eleventh sessions each lost between one and two agents' figures to a last turn that ended in `SendMessage` |
+| `cost` | **≈ $27.35** at the 2026-09-02 rate of $0.0182/1k, recomputed here from the total above. An arithmetic conversion of a set of floors with cache reads excluded, so a floor and not a bill — the same caveat the three rows above carry |
+
+**Where the five wrong findings came from.** Every row was checked against the
+committed record on its branch, and one of them is filed against a different link
+than the account filed it against.
+
+| Link | What was wrong | Reached a commit |
+| --- | --- | --- |
+| `repo-15` gate → builder | 2 of 3 findings refuted by the builder and the refutations accepted. One was an arithmetic reading: the builder's `7 failed, 24 passed` and `13 of 31` were real prints against an intermediate **31-test** file, and the gate compared them against the 33-test tip. The other was a proposed reword, "11 of 12 covered" — which would have asserted that one of twelve measured command strings was uncovered, and none is; the workflow-edit gap is a non-command row a Bash matcher structurally cannot see | No |
+| `repo-16` gate → builder | 4 of 12 `file:line` citations in the gate record were short or loose, all in the same direction, and were repointed before the record was committed. Both sides converged by re-running single-line `awk 'NR==n'` rather than reading a range; the record names one of the four as **the builder's miss**, listed as already-correct in the first pass and caught only on the second | No — repointed pre-commit |
+| `repo-16` **builder** → its own gate note | The note claimed a post-gate comment rewrap preserved a thirteen-line range in the branch's `security.yml` because it preserved the comment's line count. True of the single line, **false of the range**: the same edit added three words. `--numstat` reports `3 3` and the two slices' md5sums differ | **Yes**, at `ff9c64b`; withdrawn in place at `009072d` |
+| `dl-44` gate → its own PASS record | Two citations in the record the reviewer wrote were defective: a bare shorthand naming only a line range inherited the previous citation's filename and resolved into a different file, and `schema.ts` is repo-wide ambiguous because `tools/downloader` and `tools/planner` both carry `api/src/db/schema.ts`. Caught by `node scripts/citations.mjs` refusing the record, not by either agent | No — refused before commit |
+| orchestrator → builders, ×3 | See _Orchestrator errors_ | One false pass, in the orchestrator's own verification |
+
+The account files the third row under "`repo-16` gate". The withdrawal commit
+itself attributes it to the builder — *"Attribution: the builder"* — and names
+the reviewer's run as what caught it. Corrected here rather than transcribed,
+because which link failed is the whole content of this table. The account also
+reports the `repo-16` reviewer miscounting "thirteen citations" for twelve in its
+closing summary and correcting itself; the committed record reads **twelve**
+throughout, which is consistent with the correction landing but is not
+independent evidence of the miscount. Supplied.
+
+**The batch's own defect: no platform diversity, and what is and is not Windows
+evidence.**
+
+`dl-44`'s pull request failed on `test (windows-latest)` with
+`EBUSY: resource busy or locked, unlink ... jobs.sqlite`, inside **its own new
+test** — `pipeline.test.ts > the preview a job keeps > a restart does not lose the
+preview of a job whose file survived it`. Three independent gates had been green
+and none could see it: a mutation-verified build, a reproduce-everything review
+that wrote its own mutants and returned two meds of its own, and a ship-condition
+check. Builder, reviewer and orchestrator all ran Linux.
+
+The orchestrator relayed a hypothesis — the first app's handle still open —
+**labelled as a hypothesis to verify rather than a diagnosis to implement**, and
+it was wrong about which handle. The builder measured instead, and the two halves
+of the evidence are different in kind and must not be merged:
+
+- **A Linux proxy.** Counting `/proc/self/fd` at the unlink line found 3
+  descriptors open — `jobs.sqlite`, `-wal`, `-shm`, so WAL mode — belonging to the
+  **second** app, which the test never shuts down because `afterEach` disposes it
+  only after the `finally` that unlinks. POSIX unlinks an open file happily, so
+  the count is a proxy for the condition Windows enforces, not a reproduction of
+  the failure. The commit says so itself: *"Not verified here that the Windows leg
+  passes; only CI can show that."*
+- **The only Windows evidence is CI.** The leg at `5a40543` reads **2 failed /
+  2247 passed**, the `EBUSY` plus an inherited failure; the leg at `b94f9bf` reads
+  **1 failed / 2248 passed**, the inherited failure alone. Both read here from
+  `gh run view --json jobs` and `--log-failed`, never from the run table.
+
+The fix was ordering inside the `finally` — shut the second app down before
+removing anything — with **no source change** and the acceptance untouched: still
+two instances over one database, and explicitly not skipped on Windows.
+**No Windows machine was available to any agent in this batch**, and no claim here
+should be read as one.
+
+**Pre-merge CI: `main` is red, and all three branches inherit it.** At
+`origin/main@277a182` the `test (windows-latest)` leg fails on
+`scripts/test/citations.test.ts`, the test named *"--rev names which record it
+read, and says when that record cited something else"*, on a path-separator
+assertion — the expected string comes back as `2 references in ..\..\..\..\..\RUNNER…`.
+Re-run here: 1 failed / 2239 passed, and it is the same single assertion behind
+`dl-44`'s remaining red. `repo-31` is the parked ticket for it.
+
+**what the skill got wrong** — three, none fixed on this branch, which is scoped
+to this file alone. Four candidates were offered and two are dropped below with
+the line that already covers them.
+
+1. **`skipped` is the same class as `cancelled`, and the entry above already
+   proved it without the rule moving.** `main`'s most recent run at `e9054c5`
+   reads `conclusion: success`; that commit was all-markdown, so `ci.yml`'s
+   `changes` job gated the unit matrix off and `gh run view --json jobs` reads
+   `test  skipped`. A workflow-level `success` whose matrix job never ran is
+   indistinguishable from a green one in `gh run list`. The glance-reading row
+   at `.claude/skills/orchestrate-tickets/SKILL.md:261` "and a glance counts it as green"
+   still names only `cancelled`. **What is new is not the mechanism** — the entry
+   directly above this one records exactly it, on the same workflow, from the
+   previous batch — **it is that recording it changed nothing.** A defect written
+   into this page one commit earlier was re-committed by the next session, because
+   the page it was written on is not the page an orchestrator reads at step 8. The
+   lesson is about the propagation, not the flag: **a defect that stops at the
+   history entry has not been fixed**, and the cheap test is whether the rule it
+   belongs to changed in the same commit.
+2. **A batch with no platform diversity has a blind spot no gate on any of these
+   pages can close.** Three green gates — one mutation-verified build, one
+   reproduce-everything review with its own mutants, one ship-condition check —
+   and the defect was visible only on the platform nobody was running. None of
+   *reproduce the finding*, *ask for a positive control* or *enumerate rather than
+   spot-check* reaches it, because all three are checks on **reasoning**, and this
+   was a gap in **execution surface**. Nothing in `SKILL.md` or `reference/` names
+   a platform at all outside one incidental mention in `sizing.md`. The remedy is
+   not a new gate: it is that a branch whose tests touch the filesystem, process
+   trees or path separators **has no pre-merge verdict until its own CI matrix has
+   run**, and a gate that says PASS before that has said something narrower than
+   it sounds. This batch also shows the cost is bounded — one extra builder round,
+   caught by CI on the pull request, before any merge.
+3. **A history entry's citations are a claim about a past tree, and the checker
+   reads the present one — so a correct entry rots the moment its own subject
+   merges.** Measured at the base, before this row was added:
+   `node scripts/citations.mjs` on this file exits **2** with *5 verified, 3
+   moved, 1 unanchored, 0 unresolvable, 3 unchecked — of 12 references*. All three
+   `moved` were correct when written, and **two of them drifted precisely because
+   the work they describe landed**: the eleventh session cited `repo-30`'s
+   frontmatter as `status: ready` and that line now reads `status: done`, and it
+   cited `toHaveCount(5)` in `tools/downloader/e2e/sniffer/mse-page.spec.ts` as
+   the assertion `dl-43` existed to remove — which `dl-43` removed, so the anchor
+   is nowhere in the file. The third drifted when `repo-21` rewrote
+   `dispatching.md`. **Nothing reports this**: `npm run check` does not run the
+   checker at all, and CI runs it on exactly one file —
+   `.github/workflows/ci.yml:136` "--require-anchors" — scoped that way on
+   purpose, `.github/workflows/ci.yml:128` "alone, on purpose". So the page
+   carrying the schema every session must append to is failing its own checker at
+   the base, and each session inherits a red baseline it has no way to see. The
+   tenth session's entry 8 said *nothing checks this page*; this is the
+   measurement under it, and it points at a specific remedy the checker already
+   supports — **pin a history citation with `--rev` and say so**, because a
+   coordinate into a tree that has since been fixed is not stale, it is correctly
+   describing something that no longer exists.
+
+**Two candidates were offered and are dropped, each against the line that already
+covers it.**
+
+- **"`worktree-hygiene.md` has no test for *and it has stopped working*"** —
+  it does. `.claude/skills/orchestrate-tickets/reference/worktree-hygiene.md:74` "Retire a reviewer when its record is pushed"
+  continues *"**and** the exchange
+  has ended — not on the record alone"*, and the paragraph above it says the
+  exception is now the common case rather than the rare one. The reviewer here had
+  explicitly said it was staying live for follow-up, so the existing rule already
+  forbade the removal. This is a rule violated, not a rule missing, and it belongs
+  below with the other orchestrator errors — filing it as a page defect would have
+  put a fix on a page that did not need one.
+- **"The seam-mapper found something step 2 does not ask for"** — its own brief
+  asks for it verbatim. `.claude/agents/seam-mapper.md:53` "a Build section that describes work"
+  sits in the bullet headed *Anything the
+  frontmatter got wrong*, with *"State these as findings, not corrections"*
+  attached. `SKILL.md` step 2 mentions only the collision matrix, which is
+  probably where the impression came from — but the agent reads the definition,
+  not the step. It is kept below as the first recorded instance of that bullet
+  paying for itself, which is worth more than a false novelty claim.
+
+**Orchestrator errors, three, all its own by its own account.**
+
+- **It reclaimed `dl-44`'s reviewer worktree mid-verification, after saying it
+  would hold it.** The reviewer got one command out and then every Bash call
+  refused; it flagged the round **partial** rather than reporting it done, and the
+  builder closed the gap itself at the same tip. The rule it broke is quoted
+  above. Two things generalise past the violation: the reviewer's failure mode was
+  the good one — a tool that stops working is legible from inside in a way a
+  removed worktree's *silent* auto-reclaim is not — and **a stated intention to
+  hold is itself a promise another agent plans against**, which is the half no
+  page covers because no page expects the orchestrator to reverse itself
+  unannounced.
+- **It relayed the `repo-15` gate's arithmetic finding as established, and
+  instructed the builder to correct its Log.** It was the gate's error and not the
+  builder's, and one `wc -l` against the intermediate file would have settled it.
+  The builder pushed back rather than transcribing, and the gate withdrew its
+  reading. It cost no round, because it was batched into a relay already going
+  out — but the shape is `SKILL.md`'s *relaying a finding as an instruction to
+  apply*, which gets the wrong thing applied confidently, and the only reason it
+  did not is that a builder refused. That is the ninth session's entry 1 holding
+  again, and the fourth or fifth consecutive session in which a builder is the
+  link that caught an orchestrator.
+- **Its own verification produced a false pass.** Checking that `repo-29`'s
+  amendment was frontmatter-identical, it guessed the ticket's filename wrong —
+  the file is `docs/work/repo-29-citations-carry-no-anchor.md` — so both `git show` calls failed, `diff` compared two empty outputs, and the check printed
+  **IDENTICAL**. Caught only by noticing the `fatal:` lines sitting above the
+  result. This is `defect-shapes.md`'s *verification harness that cannot fail*,
+  committed by the orchestrator inside a one-line check, which is where that shape
+  is least expected and cheapest to write. **A comparison of two empty results is
+  not a pass**, and the guard is to assert the inputs are non-empty before
+  comparing them — the same discipline a test fixture gets. Re-run here with the
+  correct path, the claim it was checking is true.
+
+**What went right, and is worth copying.**
+
+- **The seam-mapper flagged `repo-26` as already built on `main` by `repo-22`/#161,
+  with the coordinates** — verified independently by the orchestrator, then the
+  ticket's decision section read to confirm scope. That saved a whole builder
+  dispatch on a ticket whose frontmatter read `ready` with unstruck Build steps,
+  and it is the **first recorded case of the *anything the frontmatter got wrong*
+  bullet paying for itself**. Confirmed here: `36be01b` is on `main`, the
+  process-spawning assertions it added are in `scripts/test/commit-message.test.ts`,
+  and the gate's own words are *"It performed no work on `repo-26` — the ticket
+  closes as already built."* One intake dispatch at 90,726 tokens returned that,
+  a collision matrix, and 6.0% of the batch.
+- **A hypothesis relayed as a hypothesis survived being wrong.** The orchestrator
+  was wrong about which app held the handle and said in the same message that this
+  was to be verified rather than implemented. The builder measured, contradicted
+  it, and the wrong guess cost nothing — the counterfactual is the row above,
+  where a finding relayed as established cost a builder an argument.
+- **A false claim that reached a commit was withdrawn in place, with its
+  propagation named.** `009072d` keeps the original paragraph struck through and
+  marked *do not cite*, states which half was true and which false, checks each
+  half separately instead of predicting from the edit's shape, and attributes it
+  to the builder. Its commit message names the mechanism generally: *"line count
+  preserved"* was a measurement written as though it entailed *"range
+  unchanged"*, which is a prediction.
+- **Every agent's token figure arrived.** Seven of seven, against 7 of 9, 12 of 13
+  and unrecorded totals in the three entries above. Whatever produced that is
+  worth finding and repeating; the account does not say what it was.
