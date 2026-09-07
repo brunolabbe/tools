@@ -1,5 +1,12 @@
 # What to name in a prompt, and what not to believe
 
+**"Self-report" on this page always means a builder's claim about its _work_** — a
+mutation sweep, a red run, a count — and the check for it is reproducing the work.
+A claim an agent makes about **itself**, about its tools or its model or its
+lifecycle, is a different rule with a different check, and it lives in
+[`SKILL.md`](../SKILL.md) under _Relaying_. One word doing two jobs is how a rule
+gets read as already-covered; these two do not cover each other.
+
 ## Defect shapes worth naming in a prompt
 
 **A fixture value that is also the component's no-op.** A sorted list handed to a
@@ -38,7 +45,7 @@ reviewed*, so the next reader trusts it harder than the original. Twice on one
 branch in the third session: "drop the fold and both go red" replaced a different
 false sentence, and only one of the two tests goes red because the other is a
 control that must stay green. This is the concrete case for _one false
-self-report means another gate_ below: it is the correction, not the original,
+self-reported result means another gate_ below: it is the correction, not the original,
 that the second gate caught. When relaying, say **state only what you have run** —
 the builder that fixed it put it best: what broke the pattern was not care, it was
 refusing to write the sentence until the command had exited.
