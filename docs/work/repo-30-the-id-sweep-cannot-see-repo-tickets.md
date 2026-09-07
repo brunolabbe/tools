@@ -217,3 +217,35 @@ repository` line and exited 0, new **128**; `pipefail` with unguarded greps —
   it would falsify the record. `.claude/skills/orchestrate-tickets/SKILL.md` was
   not read for related wording either: `repo-21` holds that file in another
   worktree, and a second writer there is a merge conflict rather than a fold-in.
+
+- **2026-09-07, after the gate** — The gate passed `f30422d` and reproduced every
+  measurement independently. Both of its two informational notes were run rather
+  than accepted, and one of them **inverted**, so the page gained a row.
+
+  **`sort -s` is the trap from the other side.** The note read the missing `-s`
+  as leaving equal-key rows unordered run to run. GNU `sort --help` says the
+  opposite in its own words — "`-s, --stable` stabilize sort by disabling
+  last-resort comparison" — so bare `sort` compares whole lines as a last resort
+  and is totally ordered. Measured on coreutils 9.4: the four equal-key rows
+  `PR#901 repo-99` / `PR#903 repo-99` / `merged repo-30` / `PR#902 repo-30` fed
+  in three different input orders came back **identical** all three times without
+  `-s`; the same two `repo-99` rows fed in the two possible orders came back in
+  **different** orders _with_ `-s`. Adding `-s` buys exactly the instability it
+  would be added to prevent, so the code comment and the table now say not to.
+
+  **Partial stdout before a failure is handled, and was the gate's second note.**
+  A stub `gh` that prints some of its output and then exits 1 was not exercised
+  by anything, so it is now: with `gh pr list` dying half-written the sweep exits
+  **1** before reading anything; with `gh pr diff` dying half-written it prints
+  the ids it got — `PR#900 repo-77` — and still exits **1**, never reaching the
+  later pull request. The old one-liner in both cases printed `repo-88` and
+  exited **0**. That is the ticket's whole defect, so the case belonged in the
+  record even though it changes no verdict.
+
+  **Also settled with the gate:** the `sort -u` removal is required by the
+  ticket's own _Done when_ 4, not scope added on top — the brief's illustrative
+  snippet keeps `-u` and therefore fails that line. Neither of us could find
+  anything executable behind _Done when_ 5; `scripts/citations.mjs` resolves
+  citation targets, not prose claims, and `grep -rn "concurrency.md"` over `.ts`
+  and `.mjs` returns nothing outside `node_modules`, so "PASS by inspection" is
+  the ceiling and is recorded as such rather than dressed up.

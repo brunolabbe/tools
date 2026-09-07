@@ -157,6 +157,10 @@ prs="$(gh pr list --state open --json number --jq '.[].number')"
   done
 # No `-u` on this sort: it dedupes on the *key*, so `sort -u -t- -k2` collapses
 # two sources of one id into a single line — hiding the clash it exists to show.
+# No `-s` either, and that is the same trap from the other side: -s *disables*
+# last-resort comparison, so adding it is what makes two rows holding one id
+# swap order between runs. Bare, the rows for a clash are byte-ordered and
+# identical every run.
 } | sort -t- -k2 -n
 ```
 
@@ -167,8 +171,8 @@ holds it", and it is the provenance you act on: everything above the merged
 high-water mark is somebody's.
 
 **Every guard in it was measured failing first**, on `origin/main@24e5bf7`. Four
-of the five return a confident wrong answer under exit 0; the fifth is loud but
-loses the same ids:
+of the six return a confident wrong answer under exit 0; one is loud but loses
+the same ids; the last is the one a reader adds on purpose:
 
 | take the guard out | what it returned |
 | --- | --- |
@@ -177,6 +181,7 @@ loses the same ids:
 | no `pipefail`, no status check (the old one-liner) | `gh` failing 401: exit 0. Run outside a repository: printed `repo-99` off the PR half with `fatal: not a git repository` above it, exit 0. The version above: exit 1 and exit 128 |
 | `pipefail` but unguarded greps | the first pull request touching no ticket file aborts the loop and takes every later pull request's ids with it. This one at least exits 1 — it is the quiet loss it causes that matters, not the status |
 | `sort -u` at the end | a board holding `repo-99` in two different pull requests printed it **once**, and an id held both merged and in a PR lost its PR row — the collision is exactly what is erased |
+| add `-s` to that sort | the same four equal-key rows fed in three input orders came back identical without it, and order-dependent with it — `-s` disables last-resort comparison, so it buys the instability a reader adds it to prevent |
 
 The fourth row is why `|| true` is there and not an oversight: the obvious fix for
 row three reintroduces row four, and it caught the first cut at this repair.
