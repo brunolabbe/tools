@@ -295,9 +295,21 @@ discarded. So:
     `grep -rlnE 'repo-(40|404)' scripts nosuchdir` warns on **stderr**, prints real
     matches on **stdout**, and exits **2**. With stderr discarded an incomplete
     search is indistinguishable from a complete one — the third comment on #148.
+  - **A `&& echo "<verdict>"` on the end of a check is your label, not the tool's
+    result.** Measured 2026-09-07, on the branch that wrote this bullet. A builder
+    compared two citation runs with `diff <(… | sed 's/record line [0-9]*/record
+    line N/g') <(…) && echo "IDENTICAL to main"`, then wrote *"byte-identical"*
+    into a committed Log. The comparison was right and the sentence was false: the
+    `sed` it had written itself was normalising away the only thing that differed.
+    **A `diff` that finds nothing says so by printing nothing**, and once the
+    invented word had scrolled past, the transcript could not tell a gloss from an
+    answer. Quote the silence and the exit code; if a check needs a word to be
+    legible, write the word in the record where it can be argued with, never in
+    the command where it reads as output.
 
-  In all three the fix is the same: take the exit code unpiped, and choose flags
-  that print the thing you are about to write down rather than a superset of it.
+  In all four the fix is the same: take the exit code unpiped, choose flags that
+  print the thing you are about to write down rather than a superset of it, and
+  never let a string you authored occupy the position a result would.
 - **A count with no denominator is not a measurement.** "Removing the guard fails
   3" says nothing without the command it was taken from and the total it is out
   of. Two builders in one session recorded per-**scenario** counts while their

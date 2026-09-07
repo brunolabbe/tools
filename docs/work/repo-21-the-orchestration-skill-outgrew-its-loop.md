@@ -1167,7 +1167,43 @@ unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
   they have nothing to do with. Caught by diffing the per-citation output against
   `main`'s rather than by comparing exit codes, which were 11 both ways. Rewritten
   as prose with the reason attached; `records.md`'s citation output is now
-  byte-identical to `main`'s.
+  byte-identical to `main`'s. **~~byte-identical~~ — withdrawn, see below: every
+  entry has the same resolution state, and the `record line N` values differ
+  throughout because unrelated content shifted them. Same outcome, not the same
+  bytes.**
+
+- **Why the discipline did not catch its own paragraph, which is worth more than
+  that correction.** The gate found "byte-identical" false and the substance
+  intact. The mechanism is specific, and it is not carelessness. My check was:
+
+  ```
+  diff <(grep … rec-main.txt | sed 's/record line [0-9]*/record line N/g') \
+       <(grep … rec3.txt     | sed 's/record line [0-9]*/record line N/g') \
+    && echo "IDENTICAL to main"
+  ```
+
+  **I wrote the normalisation that made the claim false, and then quoted my own
+  `echo` back as the tool's finding.** The `diff`'s real output was _nothing_ —
+  silence and exit 0 are the whole result — and `IDENTICAL to main` is a label I
+  authored, sitting in the position where output goes. Once it had scrolled past,
+  my own transcript could not distinguish my gloss from the tool's answer, and the
+  Log copied the gloss.
+
+  **Every guard this branch wrote points at the artefact, and this failure is in
+  the sentence about the run.** Reproduce the finding, run the command, anchor the
+  citation — I did all three, and all three were satisfied by a comparison that
+  was _correct_ and a description of it that was not. A `&& echo "<verdict>"`
+  tacked onto a check is not a smaller version of the check's output; it is a
+  claim wearing output's clothes, which is the same object-swap as _paste the
+  artifact, never describe it_ one level down.
+
+  **It is a fourth instance of this branch's own `records.md` rule, and it is
+  filed there rather than as a fifteenth row on `SKILL.md`** — the family is "a
+  command's real signal is not the line you read", the other three are a piped
+  `$?`, `-l` under an alternation, and a missing search path, and `records.md` is
+  the page that governs an agent misreading its own command and writing the
+  misreading down. Filing it as a new shape on the page I just halved would be
+  growing the page to record a defect the page already had a home for.
 
 - **A seventh drifted claim, found while re-reading my own table, and it was
   already false on `main`.** `SKILL.md` said _"Both generalisations quoted on this
@@ -1187,6 +1223,17 @@ unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
   is how the ticket asked for them. Nothing about them was promoted. The
   `.github/workflows/ci.yml` step was not executed by Actions — it is parsed here
   and the command it runs was run here, which is not the same as a green run.
+
+  **The gate closed half of that gap and I did not, so the credit is its.** It
+  moved `dist/` aside and re-ran the step's command, which still worked — so the
+  step genuinely needs no build, the same property that lets `status.mjs` sit in
+  this job, and it is now measured rather than assumed. It also confirmed from
+  `ci.yml`'s own header comments that `check` carries no path filter on either
+  `push` or `pull_request`, so a markdown-only pull request reaches it. What
+  remains unmeasured is only the Actions run itself: `gh run list --branch
+repo-21-orchestration-skill-loop` returns `[]` because no pull request exists
+  yet. First green run is the last piece of evidence, and it is not on this
+  branch.
 
 - **Written by Opus 5 (1M context), `claude-opus-5[1m]`**, which is the model this
   session was told it is at dispatch, not a self-report taken as evidence — see the
