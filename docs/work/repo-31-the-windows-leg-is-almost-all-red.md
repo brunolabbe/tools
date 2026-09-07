@@ -546,3 +546,43 @@ kills the process tree"` was run: 1 passed, and the marker file contained
   precisely what [repo-32](./repo-32-done-can-hide-an-outstanding-obligation.md)
   is about, and it was answered in the same batch as this one. Its `awaiting`
   field is not built yet, so this paragraph is where the obligation lives.
+
+- **2026-09-07, after the gate** — Two of the three unverified claims in the
+  entry above have moved, and one correction to that entry's own facts. Recorded
+  here rather than by editing it, so what was claimed at commit time stays
+  legible.
+
+  **The workflow parses, and its expressions type-check.** `actionlint` v1.7.12,
+  downloaded from its release page into a scratch directory and run from this
+  worktree: `actionlint -shellcheck= -pyflakes= .github/workflows/ci.yml` exits
+  0, and so does a bare `actionlint` over every workflow in the repository. The
+  two sub-linters are disabled because neither binary exists in this container,
+  so **the shell inside the summary step's `run:` block is still unchecked** —
+  what is checked is the YAML, the job and step schema, and the expression
+  syntax and types, which is the gap the entry above named. Prompted by the
+  gate, which ran the same tool independently and got the same answer; this run
+  is this branch's own. `actionlint` is not in this repository's dependency tree
+  and is not added by this change — it installs in seconds when wanted.
+
+  **Still unverified, and unchanged:** whether `if: failure()` actually fires in
+  a step of a job carrying a job-level `continue-on-error`. `actionlint` does
+  not evaluate expressions against a runtime, and nothing here runs Actions.
+  That one is answered by watching the first pull-request run go green with
+  `test (windows-latest, informational)` red and a notice in its summary.
+
+  **Correction to the entry above.** It says the `citations.mjs` regression "is
+  being filed as **repo-33** by another builder on a branch not yet pushed."
+  That was true when this session was told it and stale by the time it was
+  committed: `origin/repo-33-citations-windows-paths` exists at `a1c2a83`,
+  pushed 2026-09-07T21:53:02Z — two minutes and nineteen seconds before this
+  branch's first commit. Nothing depends on it: `Done when` 2 asks that the
+  regression be filed separately, which it is, and this branch still neither
+  fixes nor edits it. `node scripts/next-id.mjs repo` still reports
+  `next free: repo-33` even with that branch fetched, because it reads open pull
+  requests rather than arbitrary pushed branches — so taking `repo-34` was right
+  for a reason slightly different from the one given above.
+
+  **Not changed on this branch, though the gate raised it:** the leg's rename
+  breaks no reference — `grep` over `.github/workflows/` finds no other workflow
+  naming `test (ubuntu…`, `test (windows…` or `needs: test`, and the ubuntu
+  leg's rendered name is byte-identical to what it was.

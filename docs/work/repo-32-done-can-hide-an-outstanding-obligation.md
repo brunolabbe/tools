@@ -200,14 +200,38 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
   `scripts/status.mjs` and `docs/01-TICKETS.md` are untouched by it — so
   whoever picks this up starts from `main` with no dependency on it.
 
-  **One thing for the builder, found while recording this rather than relayed.**
-  repo-31 went `done` in that same batch carrying exactly the state this ticket
-  describes: three claims in its Log that can only be checked once the branch's
-  own CI has run — whether `if: failure()` fires under a job-level
-  `continue-on-error`, whether the workflow still parses (there is no YAML
-  parser in this repository's dependency tree, so it was reviewed by eye), and
-  whether `main` still carries no `required_status_checks` (`gh api` is denied
-  in the development container). That is a fourth instance, two days newer than
-  the three above, and it is the one whose `awaiting` line a builder could write
-  first to see the mechanism fail before it is trusted — `Done when` 2's
-  requirement.
+  **One thing for the builder, found while recording this rather than relayed —
+  and it splits three ways rather than one.** repo-31 went `done` in that same
+  batch carrying three claims its own Log could not check. repo-31's gate
+  pointed out that they are not all the same shape, and it is right; the
+  distinction is worth having before anybody designs a field around it.
+
+  1. **Whether `if: failure()` fires in a step of a job carrying a job-level
+     `continue-on-error`.** Observable on the branch's own **pull-request** run,
+     because `ci.yml` triggers on `pull_request` — so it is not post-merge at
+     all. It is still exactly this ticket's shape for the reason the "Why"
+     section gives rather than the one its examples give: the proof is not
+     available **to the agent that closes the ticket**, which stops before
+     opening the pull request and writes `status: done` before any run exists.
+  2. **Whether the workflow parses.** Was in the same class, and is now closed:
+     `actionlint` v1.7.12 answers it locally, run independently by both the
+     builder and the gate. An obligation that turns out to be answerable by a
+     tool nobody had reached for is the good outcome, and it is worth noticing
+     that what closed it was a second reader, not a mechanism.
+  3. **Whether `main` still carries no `required_status_checks`.** Not this
+     ticket's shape at all. Merging does not unlock it — `gh api` is denied in
+     the development container, and it would still be denied afterwards. It is
+     blocked by a permission decision the repo made on purpose, which is a
+     different thing from an observation that does not exist yet.
+
+  **The design consequence, which is the reason this is here.** If `awaiting`
+  reads as "wait for the merge", it fits (3) badly and (1) only by accident.
+  The class this ticket is actually about is **"the proof is not available to
+  whoever is closing this"** — the "Why" section already says exactly that, in
+  those words, while all three of its examples happen to be post-merge ones. A
+  builder who takes the field's meaning from the examples rather than from the
+  premise will write something narrower than the ticket. Instance (1) is
+  nonetheless the one to write an `awaiting` line for first, because it is
+  hours old rather than the six days repo-13's lines went unseen, and its
+  closure is imminent and directly observable — which is what `Done when` 2
+  needs.
