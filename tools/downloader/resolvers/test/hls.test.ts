@@ -318,6 +318,28 @@ describe("renditions that differ only in what the picker cannot show (dl-40, dl-
     expect(rung[0]?.alternateUrls).toEqual(["https://vod-b.cdn.example/1/index.m3u8"]);
   });
 
+  test("hosts that disagree on an attribute are not mirrors, however small the disagreement", () => {
+    // The boundary of `groupMirrors`, and the reason the picker's collapse
+    // survives dl-45. These four entries *are* two rungs at two hosts, but each
+    // host declared its own BANDWIDTH and the two differ by 500 bps — so the key
+    // sees four renditions and groups nothing. Nothing here is wrong: the
+    // resolver refuses to assert that two entries are the same rendition when
+    // the manifest says they are not, and the table sorts it out later by
+    // rendering both as `1.5 Mbps`.
+    const jittered = parseHls(
+      fixture("hls-master-mirrors-jittered-bandwidth.m3u8"),
+      "https://vod-a.cdn.example/hls/reported/master.m3u8",
+    );
+    expect(jittered.variants).toHaveLength(4);
+    expect(jittered.variants.every((variant) => variant.alternateUrls === undefined)).toBe(true);
+    // Both hosts are present for both rungs — the point is that they arrive
+    // separately, not that one was lost.
+    expect(new Set(jittered.variants.map((variant) => new URL(variant.url).host))).toEqual(
+      new Set(["vod-a.cdn.example", "vod-b.cdn.example"]),
+    );
+    expect(new Set(jittered.variants.map((variant) => variant.bitrateBps)).size).toBe(4);
+  });
+
   test("a rung with no mirror carries no alternates at all, rather than an empty list", () => {
     // `[]` and absent are different claims on the wire, and the picker renders
     // the count off this: an empty array would still say "1", but it would also
@@ -396,6 +418,7 @@ describe("derived variant fixtures (dl-40)", () => {
     "hls-master-per-language-ladder",
     "hls-master-two-profiles",
     "hls-master-multibitrate",
+    "hls-master-mirrors-jittered-bandwidth",
   ];
 
   for (const name of derived) {

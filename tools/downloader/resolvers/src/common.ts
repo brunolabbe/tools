@@ -6,6 +6,8 @@
  * same way — three subtly different label formats would read as three bugs.
  */
 
+import type { MediaVariant } from "@downloader/contract";
+
 /**
  * Drops `undefined` entries so an object literal can be spread into a type
  * compiled with `exactOptionalPropertyTypes`, where `{ width: undefined }` is
@@ -218,6 +220,73 @@ export function compareVariantQuality(
   const heightDelta = (b.height ?? 0) - (a.height ?? 0);
   if (heightDelta !== 0) return heightDelta;
   return (b.bitrateBps ?? 0) - (a.bitrateBps ?? 0);
+}
+
+/**
+ * Everything about a variant except *where it is* — its identity as a
+ * rendition (dl-45).
+ *
+ * By exclusion rather than by listing the fields that matter, so a field added
+ * to `MediaVariant` later is part of this key without anyone remembering to add
+ * it. The failure mode of forgetting is the expensive one: two genuinely
+ * different renditions silently merged, with one of them demoted to the other's
+ * failover path and unreachable from the picker.
+ *
+ * Three exclusions, each for its own reason. `id` is positional and arbitrary.
+ * `url` is the thing mirrors differ in, and excluding it is the whole point.
+ * `alternateUrls` cannot count because it is what the grouping computes.
+ *
+ * Sorted, so the key depends on the fields' contents and not on the order a
+ * particular producer happened to insert them — the two producers build their
+ * variants through different code and must still agree on what one rendition is.
+ */
+function renditionKey(variant: MediaVariant): string {
+  const entries = Object.entries(variant)
+    .filter(([key]) => key !== "id" && key !== "url" && key !== "alternateUrls")
+    .toSorted(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+  return JSON.stringify(entries);
+}
+
+/**
+ * Collapses one rendition declared at several hosts into one variant carrying
+ * the rest as `alternateUrls` (dl-45).
+ *
+ * Shared by both producers that can see mirrors as mirrors — `manifest/hls.ts`,
+ * where they are `EXT-X-STREAM-INF` entries agreeing on every attribute, and
+ * `resolvers/ytdlp.ts`, where they are `formats` agreeing on everything yt-dlp
+ * reported. One function rather than two because they must not drift: a
+ * rendition grouped by one producer and split by the other would put the same
+ * manifest on screen two different ways depending on which tier answered.
+ *
+ * **Not** the picker's collapse in `web/src/lib/variants.ts`, which is a
+ * presentation decision made on rendered columns and must stay one — this
+ * groups what is *known* to be one rendition, and that runs out where the
+ * knowledge does.
+ *
+ * Order is the source's: the first declaration is the primary and the alternates
+ * follow in declaration order, because that is the order a player would try them
+ * in (RFC 8216 §6.2.4).
+ *
+ * An address declared twice inside one rendition is dropped rather than kept as
+ * its own alternate — the same host is not a second server, and retrying it is
+ * the failure the engine's failover exists to avoid.
+ */
+export function groupMirrors(variants: readonly MediaVariant[]): MediaVariant[] {
+  const groups = new Map<string, { primary: MediaVariant; urls: string[] }>();
+  for (const variant of variants) {
+    const key = renditionKey(variant);
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, { primary: variant, urls: [variant.url] });
+    } else if (!group.urls.includes(variant.url)) {
+      group.urls.push(variant.url);
+    }
+  }
+
+  return [...groups.values()].map(({ primary, urls }) => {
+    const alternateUrls = urls.slice(1);
+    return alternateUrls.length === 0 ? primary : { ...primary, alternateUrls };
+  });
 }
 
 /** A hint token that is an absolute URL — a scheme, then `://`. */

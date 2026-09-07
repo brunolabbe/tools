@@ -41,24 +41,49 @@
  * connections without ever completing one is not covered, and is not claimed to
  * be.
  *
- * `TLS_VERIFICATION_FAILED` is excluded too, and that one is a judgement call
- * rather than a measurement: a rejected certificate is a security signal this
- * repo goes out of its way to surface (dl-11, dl-19, dl-27), and quietly
- * succeeding from another host would replace that signal with a download. It is
- * recorded on dl-45 as the open question it is.
+ * ## `TLS_VERIFICATION_FAILED` is included, over a recorded objection
+ *
+ * A rejected certificate **does** buy a mirror. This is not the obvious call and
+ * it is not the builder's: it was raised as an objection, put to the owner as an
+ * open decision, and decided against the recommendation on 2026-09-07. The
+ * objection stands and is recorded on dl-45 — a rejected certificate is a signal
+ * dl-11, dl-19 and dl-27 all worked to surface, and a silent success from
+ * another host replaces a possible-MITM warning with a download nobody was
+ * warned about. The grounds for including it are the ticket's own Why, which
+ * names a failed TLS handshake as one of the two conditions that lose a
+ * download while another host is serving the same bytes.
+ *
+ * **What makes it safe enough to be a decision rather than a defect**, checked
+ * rather than assumed: every attempt is a fresh `runFfmpeg` with the same
+ * `tlsVerify` and `tlsCaFile` on each input, built by `tlsOptions` in
+ * `manifest.ts` from the engine config — so a mirror's certificate is verified
+ * on its own terms and a second bad certificate raises the same code again. The
+ * failover **cannot** downgrade verification; the worst case is that a bad
+ * certificate on host A is not reported when host B is healthy. And it cannot
+ * loop forever: `TLS_VERIFICATION_FAILED` at the last candidate propagates
+ * unchanged, so a wholly MITM'd path still surfaces the certificate error rather
+ * than a generic failure.
+ *
+ * The one thing this does lose is the *warning* in the mixed case, and no code
+ * here can give it back — the engine has one error channel and a successful
+ * download does not use it. The `logger.warn` on each failover is where that
+ * evidence lives, and it names the code.
  */
 
 import { AppError } from "@downloader/contract";
 
 /**
- * Codes that mean the address itself did not answer, whoever raised them.
+ * Codes that mean *this host* could not deliver, whoever raised them.
  *
  * `UNREACHABLE` is `classifyFetchError`'s verdict on a DNS or TCP failure and
- * is unambiguous. Nothing else belongs here: `RATE_LIMITED` and `AUTH_REQUIRED`
- * are the origin talking, and an origin that is talking is not the condition a
- * mirror addresses.
+ * is unambiguous. `TLS_VERIFICATION_FAILED` is here by the owner's decision of
+ * 2026-09-07, over the objection recorded above and on dl-45.
+ *
+ * Nothing else belongs here: `RATE_LIMITED` and `AUTH_REQUIRED` are the origin
+ * talking, and an origin that is talking about *the request* is not the
+ * condition a mirror addresses.
  */
-const HOST_FAILURE_CODES: ReadonlySet<string> = new Set(["UNREACHABLE"]);
+const HOST_FAILURE_CODES: ReadonlySet<string> = new Set(["UNREACHABLE", "TLS_VERIFICATION_FAILED"]);
 
 /**
  * ffmpeg's own words for "I never got the bytes from this host".

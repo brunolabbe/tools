@@ -259,16 +259,20 @@ describe("renditions that differ only in what the table cannot show (dl-40, dl-4
     );
   });
 
-  test("the picker's collapse and the tier's dedup are different jobs", () => {
-    // The reported video needed both. This is the tier's output — duplicates
-    // already dropped, mirrors still present — and it is still ten rows' worth
-    // of variants until the picker collapses them to five.
+  test("the tier's dedup and its mirror grouping are different jobs", () => {
+    // The reported video needed both, and this is what the tier now emits: the
+    // exact duplicates the play-options map produced are deleted, and the
+    // mirrors that are left ride on the rendition they belong to instead of
+    // arriving as rows for the picker to throw away (dl-45).
     const fromTier = parsedVariants("ytdlp/balancer-duplicate-ladder");
-    expect(fromTier).toHaveLength(10);
+    expect(fromTier).toHaveLength(5);
+    expect(fromTier.map((item) => 1 + (item.alternateUrls?.length ?? 0))).toEqual([3, 2, 2, 1, 2]);
 
     const { rows, collapsed } = toDisplayRows(fromTier);
     expect(rows).toHaveLength(5);
-    expect(collapsed).toBe(5);
+    // Nothing for the picker to merge — which is the whole change, and the line
+    // below is why the picker's collapse still exists anyway.
+    expect(collapsed).toBe(0);
     expect(rows.map((row) => row.quality)).toEqual([
       "1280×720",
       "848×480",
@@ -285,6 +289,32 @@ describe("renditions that differ only in what the table cannot show (dl-40, dl-4
       "353 kbps",
       "209 kbps",
     ]);
+  });
+
+  test("the picker still collapses what no producer could have grouped", () => {
+    // **This test is what dl-45 left the picker's collapse to do, and it is the
+    // only fixture in the repo that still makes `collapsed` non-zero** —
+    // measured across all six derived fixtures after the yt-dlp fold-in, the
+    // other five now report 0. Without it, dl-40's collapse would have kept its
+    // code and lost its proof.
+    //
+    // Two rungs at two hosts whose declared BANDWIDTH differs by a few hundred
+    // bps. `groupMirrors` is exact and correctly refuses to call them the same
+    // rendition; `formatBitrate` renders both as `1.5 Mbps`, so the table would
+    // show two rows a person cannot tell apart. That gap is the picker's, and
+    // nothing upstream can close it — which is a sharper claim than the one this
+    // test used to make.
+    const declared = parsedVariants("manifests/hls-master-mirrors-jittered-bandwidth");
+    expect(declared).toHaveLength(4);
+    expect(declared.every((item) => item.alternateUrls === undefined)).toBe(true);
+    // Different underlying numbers…
+    expect(new Set(declared.map((item) => item.bitrateBps)).size).toBe(4);
+
+    const { rows, collapsed } = toDisplayRows(declared);
+    // …one rendered string each, so two rows and two merges.
+    expect(rows.map((row) => row.bitrate)).toEqual(["1.5 Mbps", "686 kbps"]);
+    expect(rows).toHaveLength(2);
+    expect(collapsed).toBe(2);
   });
 
   test("the default selection is never a row that was collapsed away", () => {

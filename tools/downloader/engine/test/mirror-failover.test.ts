@@ -224,6 +224,38 @@ test("an expired signed URL never reaches the mirror — it is expired there too
   expect(mirror.requests.slice(before)).toHaveLength(0);
 });
 
+test("the last candidate's own failure is what reaches the caller", async () => {
+  // The bound on dl-45's overridden objection, and it is a general property
+  // rather than a TLS one: the loop advances on a host failure and rethrows
+  // whatever the *final* attempt raised. It never substitutes the first error,
+  // and it never degrades a specific code into a generic one.
+  //
+  // Primary is a dead port (a host failure — the loop advances); the alternate
+  // 403s (not a host failure — it propagates). So the error the caller sees is
+  // the *second* host's, which is the half that would be silently lost if the
+  // loop remembered the first error instead. It also proves the loop stops:
+  // there is no third candidate and no third request.
+  const engine = createEngine({ storageDir });
+  await engine.init();
+
+  const before = { mirror: mirror.requests.length, expired: expired.requests.length };
+  await expect(
+    engine.download({
+      jobId: "mirror-last-error",
+      variant: { ...variant(deadOrigin), alternateUrls: [`${expired.origin}/index.m3u8`] },
+      requestContext: CONTEXT,
+      title: "both bad",
+      durationSec: CLIP_SECONDS,
+    }),
+  ).rejects.toMatchObject({ code: "DOWNLOAD_FAILED" });
+
+  // The alternate really was tried — otherwise this test would pass on an engine
+  // that never failed over at all.
+  expect(expired.requests.length).toBeGreaterThan(before.expired);
+  // And the healthy mirror was never involved: it is not in this variant's list.
+  expect(mirror.requests).toHaveLength(before.mirror);
+});
+
 test("with no mirror to try, a dead host fails as it always did", async () => {
   const engine = createEngine({ storageDir });
   await engine.init();

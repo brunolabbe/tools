@@ -474,29 +474,49 @@ describe("weighing a rendition (dl-30)", () => {
  * The mirror count is varied per rung — the real one had two everywhere, and a
  * fixture repeating that would let an implementation hardcode two.
  */
-describe("duplicate formats from a play-options balancer (dl-40)", () => {
+describe("duplicate formats from a play-options balancer (dl-40, dl-45)", () => {
   const info = fixture("balancer-duplicate-ladder");
   const probe = mapYtDlpInfo(info, "https://videos.example.com/watch/reported-video", "yt-dlp", {});
 
-  test("twenty formats over ten URLs become ten variants", () => {
+  test("twenty formats over ten URLs become five variants over ten addresses", () => {
+    // Two passes, and the numbers say which did what. Twenty formats over ten
+    // distinct URLs: `dropDuplicateFormats` deletes the ten exact copies the
+    // play-options map produced, then `groupMirrors` folds the remaining ten
+    // into five renditions carrying the other host as an alternate (dl-45).
     expect(info.formats).toHaveLength(20);
     expect(new Set(info.formats?.map((format) => format.url)).size).toBe(10);
 
-    expect(probe.variants).toHaveLength(10);
-    expect(new Set(probe.variants.map((variant) => variant.url)).size).toBe(10);
+    expect(probe.variants).toHaveLength(5);
+
+    // Every one of the ten addresses survives, and none is repeated — the second
+    // pass moved them onto the primaries rather than dropping them, which is
+    // exactly what the first pass must not do to them.
+    const addresses = probe.variants.flatMap((variant) => [
+      variant.url,
+      ...(variant.alternateUrls ?? []),
+    ]);
+    expect(addresses).toHaveLength(10);
+    expect(new Set(addresses).size).toBe(10);
   });
 
-  test("what survives is the first the extractor listed, and the mirrors are kept", () => {
+  test("what survives is the first the extractor listed, and the mirrors are carried", () => {
     // The duplicate pair differs in `format_id` alone, so which one survives is
     // only a question of stability: yt-dlp's own order, first wins.
     expect(probe.variants.every((variant) => variant.id.startsWith("default-"))).toBe(true);
 
     // Mirrors are *not* duplicates — different URLs, and each is a failover
-    // path. They stay here and become one row in the picker, which is a
-    // presentation question and not this layer's.
+    // path. Until dl-45 they stayed here as separate variants and the picker
+    // dropped them; now they ride on the rendition they belong to and the
+    // engine can use them.
     const rung = probe.variants.filter((variant) => variant.height === 720);
-    expect(rung).toHaveLength(3);
-    expect(new Set(rung.map((variant) => new URL(variant.url).host)).size).toBe(3);
+    expect(rung).toHaveLength(1);
+    const hosts = [rung[0]?.url ?? "", ...(rung[0]?.alternateUrls ?? [])].map(
+      (url) => new URL(url).host,
+    );
+    expect(hosts).toHaveLength(3);
+    expect(new Set(hosts).size).toBe(3);
+    // The primary is the first host the extractor listed, not an arbitrary one.
+    expect(hosts[0]).toBe("vod-a.cdn.example");
   });
 
   test("nothing is dropped merely for sharing a URL", () => {

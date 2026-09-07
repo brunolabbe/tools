@@ -118,27 +118,33 @@ test("the header names what was found and which resolver found it", () => {
 });
 
 test("the count over the table counts the rows the table shows (dl-40)", () => {
-  // Ten declared, five rendered: "10 renditions" above five rows is the same
-  // defect as ten identical rows, told from the other end. What was merged is
+  // Four declared, two rendered: "4 renditions" above two rows is the same
+  // defect as four identical rows, told from the other end. What was merged is
   // said out loud rather than silently dropped from the count.
   //
-  // The yt-dlp ladder rather than the manifest one, because since dl-45 that is
-  // where the picker still has something to merge — a load balancer handing the
-  // same ladder back under several hostnames, which no parser can group by
-  // attributes because they are separate `formats` from separate responses.
-  mount(probe({ variants: parsedVariants("ytdlp/balancer-duplicate-ladder") }));
+  // This fixture rather than either of the mirrored ladders, because since
+  // dl-45 it is the only one the picker still merges anything in — both
+  // resolvers now group mirrors upstream, so what is left here is the residue
+  // no producer can group: two hosts whose declared bitrates differ by a few
+  // hundred bps and render as the same `1.5 Mbps`.
+  mount(probe({ variants: parsedVariants("manifests/hls-master-mirrors-jittered-bandwidth") }));
 
-  expect(screen.getByText(/5 renditions · 5 duplicate paths merged/u)).toBeDefined();
-  expect(within(screen.getByRole("table")).getAllByRole("radio")).toHaveLength(5);
+  expect(screen.getByText(/2 renditions · 2 duplicate paths merged/u)).toBeDefined();
+  expect(within(screen.getByRole("table")).getAllByRole("radio")).toHaveLength(2);
 });
 
-test("a manifest whose mirrors were grouped upstream reports no merge (dl-45)", () => {
-  // The other half of the same line, and the one that would be a lie: the
-  // resolver grouped this manifest's mirrors into the variants themselves, so
-  // the picker merged nothing and must not claim it did. Five rows, five
-  // renditions, no "duplicate paths merged".
+test("a ladder whose mirrors were grouped upstream reports no merge (dl-45)", () => {
+  // The other half of the same line, and the one that would be a lie: both
+  // resolvers now group mirrors into the variants themselves, so the picker
+  // merged nothing and must not claim it did. Both producers are checked, since
+  // dl-45 changed both and the line is the same line for either.
   mount(probe({ variants: parsedVariants("manifests/hls-master-redundant-mirrors") }));
+  expect(screen.getByText(/12:34 · 5 renditions$/u)).toBeDefined();
+  expect(within(screen.getByRole("table")).getAllByRole("radio")).toHaveLength(5);
 
+  cleanup();
+
+  mount(probe({ variants: parsedVariants("ytdlp/balancer-duplicate-ladder") }));
   expect(screen.getByText(/12:34 · 5 renditions$/u)).toBeDefined();
   expect(within(screen.getByRole("table")).getAllByRole("radio")).toHaveLength(5);
 });

@@ -86,14 +86,31 @@ describe("isHostFailure", () => {
     expect(
       isHostFailure(new AppError("AUTH_REQUIRED", undefined, { details: { status: 401 } })),
     ).toBe(false);
-    // A rejected certificate. Excluded on judgement rather than on measurement,
-    // and recorded on dl-45 as such: succeeding quietly from another host would
-    // replace a security signal this repo works hard to surface (dl-11, dl-19,
-    // dl-27) with a download.
-    expect(isHostFailure(new AppError("TLS_VERIFICATION_FAILED"))).toBe(false);
     // "End of file" is what a truncated response from a healthy host looks like
     // too, so it does not buy a mirror. Measured, and excluded on purpose.
     expect(isHostFailure(ffmpegFailure("Error opening input: End of file"))).toBe(false);
+  });
+
+  test("a rejected certificate buys a mirror, over a recorded objection", () => {
+    // Included by the owner's decision of 2026-09-07, against the builder's
+    // recommendation. Asserted here rather than left implicit precisely because
+    // it is the surprising direction: a reader who knows dl-11, dl-19 and dl-27
+    // would expect this to be `false`, and the reason it is not belongs beside
+    // the assertion. The objection — a silent success from another host replaces
+    // a possible-MITM warning — is on dl-45 and in `failover.ts`.
+    expect(isHostFailure(new AppError("TLS_VERIFICATION_FAILED"))).toBe(true);
+  });
+
+  test("a variant with no alternate has nowhere to fail over to, whatever the code", () => {
+    // The bound on the objection above, at the only level this file can prove
+    // it: `isHostFailure` decides whether the loop *may* advance, and
+    // `downloadCandidates` decides whether there is anywhere to advance to. On a
+    // single-host variant — every variant in the repo before dl-45 — a rejected
+    // certificate reaches the caller exactly as it did before, because the list
+    // is one long. That the *last* candidate's error is the one that propagates
+    // is an engine-loop property and is proven in `mirror-failover.test.ts`.
+    expect(isHostFailure(new AppError("TLS_VERIFICATION_FAILED"))).toBe(true);
+    expect(downloadCandidates({ url: "https://a.example/i.m3u8" })).toHaveLength(1);
   });
 
   test("anything that is not an AppError, and anything unrecognised, is not", () => {

@@ -360,3 +360,106 @@ z.ZodType<MediaVariant>` would have compiled without it and the field would
   assert `alternateUrls === undefined`, so the failure mode of a grouping key
   that dropped a field — silently swallowing a real choice into a failover path
   — is caught rather than reasoned about.
+
+- **2026-09-07 — two decisions answered by the owner, both against the builder's
+  recommendation, and both built.** They were surfaced as open decisions with
+  options rather than settled in a commit; this entry is the record that they
+  were raised, overridden, and implemented knowingly. Neither is a design
+  preference that was quietly dropped.
+
+  **1. `TLS_VERIFICATION_FAILED` now buys a mirror.** The builder recommended
+  keeping it excluded and the owner chose to include it, knowing the objection.
+
+  **The objection, which stands:** a rejected certificate is a security signal
+  this repo went to some trouble to surface — dl-11 identified the ambiguity,
+  dl-19 measured what two TLS backends actually write, dl-27 added the egress
+  proxy's own wording — and failing over replaces a possible-MITM warning with a
+  successful download from somewhere else. In the mixed case (host A MITM'd,
+  host B healthy) the user is now told nothing. **No code here can give that
+  warning back**: the engine has one error channel and a successful download does
+  not use it. The `logger.warn` emitted on each failover names the code and is
+  the only place that evidence survives.
+
+  **The grounds it was overridden on:** this ticket's own Why names a failed TLS
+  handshake as one of the two conditions that lose a download while another host
+  is serving the same bytes. Excluding it made the implementation narrower than
+  the brief.
+
+  **What was checked rather than assumed, because an overridden objection that
+  turns out to be load-bearing is worth stopping for.** Two things could have
+  turned this from a decision into a defect, and neither does:
+
+  - **A mirror's certificate is verified on its own terms.** `tlsVerify` and
+    `tlsCaFile` are read from the engine config inside `#downloadFrom` and spread
+    into `buildNetworkInputArgs` for every input on every attempt, so each
+    candidate gets a fresh `runFfmpeg` with identical verification settings. The
+    failover has no path to downgrade verification — it cannot pass a weaker
+    setting, because it does not carry one. A second bad certificate raises the
+    same code again.
+  - **The last candidate's error propagates unchanged.** A wholly MITM'd path
+    still surfaces `TLS_VERIFICATION_FAILED` rather than degrading into a
+    generic failure, because the loop rethrows what the final attempt raised and
+    never substitutes the first error. Proven at the engine level in
+    `mirror-failover.test.ts` — "the last candidate's own failure is what reaches
+    the caller" — with a dead primary and a 403 alternate, which also asserts the
+    alternate was really tried.
+
+  **Not measured, and named as such:** no origin with an actually-rejected
+  certificate was driven end to end. Standing up an HTTPS fixture with a bad
+  cert was out of proportion here, so the TLS inclusion is proven at the
+  classifier level plus the two code-path reads above. A real bad-certificate
+  failover has not been observed.
+
+  **2. The yt-dlp tier groups mirrors too, which this ticket did not scope.**
+  Build step 2 named `resolvers/src/manifest/hls.ts` and only that. The builder
+  recommended a follow-up ticket, on the grounds that the grouping rule is
+  genuinely different — separate `formats` from separate responses rather than
+  attributes in one manifest — and that this branch had already outgrown its
+  brief. **The owner chose to fold it in**, to close the defect in both producers
+  in one pass while the context was loaded, accepting the wider branch.
+
+  `groupMirrors` and `renditionKey` moved from `manifest/hls.ts` into
+  `resolvers/src/common.ts` and both producers now call the one function. Two
+  producers with two copies of "what makes these the same rendition" would drift,
+  and the same manifest would then reach the picker one way through the parser
+  and another through the tier.
+
+  In `ytdlp.ts` the grouping runs **after** `dropDuplicateFormats`, and the order
+  is load-bearing: an exact duplicate arriving at the grouping would become its
+  own rendition's "alternate", which is a mirror on the same host — a retry
+  against the machine that just failed, which is the thing this ticket exists to
+  avoid.
+
+  **The interaction that bit, and it is the one to read.** `collapsed` — dl-40's
+  "N duplicate paths merged" — counts what the _picker_ merged. The first half of
+  dl-45 took it to 0 for the HLS manifest fixture and the dl-40 assertion moved
+  onto `ytdlp/balancer-duplicate-ladder`. Folding in the yt-dlp tier then took
+  **that** to 0 as well. Measured across all five derived fixtures afterwards:
+  every one reported `collapsed=0`. dl-40's collapse still had its code and no
+  longer had a single fixture that exercised it — an assertion that would have
+  stayed green while proving nothing.
+
+  So `hls-master-mirrors-jittered-bandwidth.m3u8` was added, and it is the only
+  fixture in the repo that now makes `collapsed` non-zero: two rungs at two hosts
+  whose declared `BANDWIDTH` differs by a few hundred bps. `groupMirrors` is
+  exact and correctly refuses to call them one rendition; `formatBitrate` renders
+  both as `1.5 Mbps`. Four variants, two rows, `collapsed=2`.
+
+  **That fixture is constructed, not observed, and its header says so at
+  length.** Every other manifest fixture here records something a live probe
+  found; this one is the reported ladder with the bandwidth digits varied, and it
+  borrows none of that capture's authority. It is legitimate for the job it does
+  — exercising a code path whose defect dl-40 already established — and would not
+  be legitimate as evidence that the defect is real.
+
+  **What this leaves the picker's collapse claiming is narrower and truer than
+  before.** It is not a second mirror grouping. It is the layer that catches
+  renditions the table _renders_ identically for reasons no producer could have
+  grouped away, which is exactly what `displayKey`'s docblock always said it was
+  for and what nothing had tested in isolation.
+
+  **Scope, finally.** Packages touched by dl-45 overall: `contract`, `resolvers`,
+  `engine`, `api`, `web`. Of those, `web` was named by the decision above, `api`
+  was found during the build and is recorded in the previous entry, and the
+  second `resolvers` producer is here by the owner's decision. A ticket with no
+  `**Packages:**` line ended up touching five.

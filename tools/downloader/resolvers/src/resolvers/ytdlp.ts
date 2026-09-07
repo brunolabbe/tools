@@ -38,6 +38,7 @@ import { toAbortError } from "../abort.ts";
 import {
   buildLabel,
   compareVariantQuality,
+  groupMirrors,
   optional,
   resolveUrl,
   subtitleFormat,
@@ -458,11 +459,16 @@ function mapSubtitles(
  * drops exact duplicates and nothing else, and a format that differs in any way
  * a caller could act on is not an exact duplicate.
  *
- * This is not the picker's row collapse. Mirrors of one rendition on two hosts
- * are *different* URLs and survive here; they are one row later because a
- * person cannot choose between two spellings of the same rendition, which is a
- * presentation question. Both layers are needed: without this one the probe
- * result carries the duplicates for every consumer, not just the table.
+ * This is not the picker's row collapse, and since dl-45 it is not `groupMirrors`
+ * either. Mirrors of one rendition on two hosts are *different* URLs and survive
+ * this pass untouched; `groupMirrors` runs next and folds them into one variant
+ * carrying the others as `alternateUrls`, which is where the failover paths this
+ * function must not touch are kept. Both passes are needed and neither
+ * substitutes for the other: this one deletes a copy nothing could ever use,
+ * that one keeps a second server a player would have tried. Without this pass
+ * first, an exact duplicate would arrive at the grouping as a candidate
+ * alternate — a "mirror" on the same host, which is a retry against the machine
+ * that just failed.
  */
 function dropDuplicateFormats(variants: readonly MediaVariant[]): MediaVariant[] {
   const seen = new Set<string>();
@@ -576,7 +582,26 @@ export function mapYtDlpInfo(
     } satisfies MediaVariant;
   });
 
-  const variants = dropDuplicateFormats(unsorted).toSorted(compareVariantQuality);
+  // Two passes, and they are not the same pass written twice (dl-45).
+  //
+  // `dropDuplicateFormats` removes formats that are the same *entry* — same URL
+  // and same everything, reported twice because the site offered one stream
+  // under two names. Nothing is learned from the second copy and nothing is
+  // kept from it.
+  //
+  // `groupMirrors` then removes formats that are the same *rendition at a
+  // different host* — a load balancer handing the ladder back under several
+  // hostnames, which is the reported video's other doubling. Those are not
+  // redundant: the second URL is the server a player would try when the first
+  // one stops answering, and until dl-45 it was dropped by the picker and lost.
+  // It carries them onto the primary instead.
+  //
+  // Order matters. Grouping first would let an exact duplicate become its own
+  // rendition's "alternate", which is a mirror that is not a second host —
+  // precisely the retry the engine's failover exists to avoid. The URL dedup
+  // inside `groupMirrors` would catch it, but relying on that would make the
+  // first pass's job depend on the second's implementation.
+  const variants = groupMirrors(dropDuplicateFormats(unsorted)).toSorted(compareVariantQuality);
 
   const headers: Record<string, string> = {
     ...info.http_headers,
