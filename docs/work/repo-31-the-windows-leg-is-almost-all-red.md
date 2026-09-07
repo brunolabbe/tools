@@ -633,3 +633,60 @@ kills the process tree"` was run: 1 passed, and the marker file contained
   breaks no reference — `grep` over `.github/workflows/` finds no other workflow
   naming `test (ubuntu…`, `test (windows…` or `needs: test`, and the ubuntu
   leg's rendered name is byte-identical to what it was.
+
+- **2026-09-07, after the first pull-request run** — **Three of the four claims
+  above are now measured rather than reasoned, and they hold.** The entry that
+  called them unverified stays standing above this one; it was honest when it
+  was written and the correction is worth more beside it than in place of it.
+
+  Run `34166115140`, `CI`, `pull_request`, PR #187, head
+  `ce636aa8709d92e3b8cbb7df8302dad7ba2c4e54` — read with
+  `gh run view 34166115140 --json status,conclusion,headSha,jobs` and
+  `--json jobs --jq '.jobs[] | select(.name | contains("informational")) |
+.steps[]'`, rather than taken from the relay that prompted this entry.
+
+  1. **The rename renders on a real runner.** The job list reads
+     `test (windows-latest, informational)`; the other leg is exactly
+     `test (ubuntu-latest)`, unchanged, which is what the expression was written
+     to do.
+  2. **`continue-on-error` does what the build claimed.** Job
+     `test (windows-latest, informational)`: **failure**. Run conclusion:
+     **success**. `changes`, `check` and `test (ubuntu-latest)` all green. That
+     is option D demonstrated rather than argued — the leg reports and the merge
+     is not gated.
+  3. **`if: failure()` fires in a step of a job carrying a job-level
+     `continue-on-error`.** This was the load-bearing assumption, flagged above
+     as documentation-reasoning and not an executed run. The step list settles
+     it: step 9 `Run npm test` → **failure**, step 10 `Say so in the run summary`
+     → **success**. The notice ran.
+
+  And it went red for the predicted reason, not a new one: `gh run view
+34166115140 --log-failed` shows the same
+  `citations.test.ts > --rev names which record it read…` assertion,
+  `expected '2 references in ..\..\..\..\..\RUNNER…'`, which repo-33 fixes on
+  its own branch. The prediction that this leg would be red on this pull request
+  was written into #187's body before the run existed, so nobody would read the
+  red as a regression.
+
+  **The fourth claim stays open, and this is the one that is genuinely
+  repo-32-shaped**: whether `main` still carries no `required_status_checks`,
+  which is what makes renaming the leg safe. `gh api` is denied by
+  `.claude/settings.json`, merging does not unlock it, and no CI run reveals it.
+  It remains inherited from the 2026-08-23 read recorded at the top of
+  `.github/workflows/ci.yml`. Two of these four were closed by a tool
+  (`actionlint`), three by a run; this one is closed by nothing available here,
+  which is exactly the distinction repo-32's field has to be able to express.
+
+  **The durable lesson, which is worth more than the three facts.** Everything
+  closed here was labelled "could not be measured from this container", and all
+  of it was measurable **one `gh run view` after the pull request existed**. Not
+  everything called unmeasurable is unmeasurable — some of it is only
+  unmeasurable _before the pull request_, and a builder who stops at `done` is
+  standing exactly one step short of the evidence. The three categories are
+  different and should be written differently: _not yet tried_ (the YAML parse,
+  closed by a tool nobody had reached for), _not available until the pull
+  request runs_ (these three), and _not available here at all_ (the ruleset).
+  Only the third is a standing obligation; the first two are work.
+
+  No change to `.github/workflows/ci.yml` in this commit, and none needed —
+  the implementation is what was measured.
