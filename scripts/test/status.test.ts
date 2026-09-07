@@ -336,6 +336,201 @@ test("a tool with no work directory yet is a young tool, not an error", () => {
 });
 
 // ---------------------------------------------------------------------------
+// A value is literal, so it is never quoted (repo-24)
+// ---------------------------------------------------------------------------
+//
+// The grammar takes the rest of the line, so quoting was never required — not
+// even for a title opening with a backtick, which is what sent two authors
+// reaching for YAML habit in two days. Carrying the quotes into a render was
+// the one behaviour the parser's docblock does not allow for: neither strict
+// nor named. It is named now.
+
+test("a quoted title is a named failure, and the name carries the file, the line and the key", () => {
+  expect(() => parseFrontmatter(pl("pl-1", { title: '"the pl-1 thing"' }), "t.md")).toThrow(
+    /^t\.md:4: "title" is quoted \("the pl-1 thing"\)\./,
+  );
+});
+
+test("the error says why, so the author unquotes rather than reaching for an escape", () => {
+  expect(() => parseFrontmatter(pl("pl-1", { title: '"the pl-1 thing"' }), "t.md")).toThrow(
+    /taken literally, so wrapping quotes are neither required nor permitted/,
+  );
+});
+
+// The cost Option B was chosen knowing about, pinned so it is visible rather
+// than merely accepted in prose: the rule cannot tell a wrapped value from one
+// whose first and last characters happen both to be quote marks, and a title
+// contrasting two quoted terms is exactly that shape. Narrowing it to "the
+// interior holds no quote of the same kind" would separate the two, at the
+// price of parsing `"the \"srt\" host"` and rendering its backslashes — a
+// silent wrong render traded for a loud wrong rejection, which is backwards for
+// a parser whose whole documented virtue is being loud.
+test("a value whose two ends are quoted by two different words is rejected too, and that is the accepted cost", () => {
+  for (const title of ['"downloaded" is not "verified"', "'ready' does not mean 'startable'"]) {
+    expect(() => parseFrontmatter(pl("pl-1", { title }), "t.md"), title).toThrow(
+      /^t\.md:4: "title" is quoted/,
+    );
+  }
+});
+
+// ...which is only an acceptable cost because it is not a loss. The message
+// names this way out, and it is the spelling the repo already uses for a
+// code-ish term in a title.
+test("the way out of that is backticks, which parse untouched — so no title is unwriteable", () => {
+  const title = "`downloaded` is not `verified`";
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { title }) });
+  expect(readTickets(root)[0]?.title).toBe(title);
+  expect(() => parseFrontmatter(pl("pl-1", { title }), "t.md")).not.toThrow();
+});
+
+test("the error names backticks, so following it literally cannot corrupt the value", () => {
+  expect(() =>
+    parseFrontmatter(pl("pl-1", { title: '"downloaded" is not "verified"' }), "t.md"),
+  ).toThrow(/write those terms in backticks instead/);
+});
+
+test("single quotes are rejected the same as double, since YAML habit reaches for both", () => {
+  expect(() => parseFrontmatter(pl("pl-1", { title: "'the pl-1 thing'" }), "t.md")).toThrow(
+    /^t\.md:4: "title" is quoted \('the pl-1 thing'\)\./,
+  );
+});
+
+test("a quoted empty value is quoted too, rather than reading as the field being unset", () => {
+  expect(() => parseFrontmatter(pl("pl-1", { title: '""' }), "t.md")).toThrow(
+    /^t\.md:4: "title" is quoted/,
+  );
+});
+
+test("a quoted note is rejected too — it is the field the markdown renders instead of the title", () => {
+  expect(() => parseFrontmatter(pl("pl-1", { note: '"a quoted note"' }), "t.md")).toThrow(
+    /^t\.md:9: "note" is quoted/,
+  );
+});
+
+// A quoted `milestone` did not merely render wrong: it grouped as a second,
+// distinct milestone beside the unquoted one, so one milestone reported as two
+// rows in two states.
+test("a quoted milestone is named at the parse rather than splitting one milestone into two rows", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { milestone: "m1" }),
+    [at("pl-2")]: pl("pl-2", { milestone: '"m1"' }),
+  });
+  expect(() => readTickets(root)).toThrow(/pl-2-slug\.md:7: "milestone" is quoted \("m1"\)\./);
+});
+
+// The rule is about *surrounding* quotes. A title that merely contains them —
+// `dl-25`'s is `A CDN hostname containing "srt" classifies the track as SubRip`
+// — is an ordinary value, and so is one quoted at one end only.
+test("a quote mark at one end only is not surrounding, and parses", () => {
+  for (const title of [
+    '"srt" in a hostname is not a track',
+    'a hostname can contain "srt"',
+    "\"mismatched at the other end'",
+  ]) {
+    const root = repoWith({ [at("pl-1")]: pl("pl-1", { title }) });
+    expect(readTickets(root)[0]?.title, title).toBe(title);
+  }
+});
+
+test("no rendering path emits a quote mark the title did not have", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { title: '"the pl-1 thing"' }) });
+  for (const args of [["--show", "pl-1"], [], ["--ready"], ["--markdown"]]) {
+    const label = args.join(" ") || "(default)";
+    const { stdout, stderr, status } = run(args, root);
+    expect(stdout, `${label} rendered a quote mark`).not.toContain('"');
+    expect(stdout, `${label} rendered the quoted title`).not.toContain("the pl-1 thing");
+    expect(stderr, `${label} did not name the defect`).toMatch(/"title" is quoted/);
+    expect(status, `${label} exit`).toBe(1);
+  }
+});
+
+// The other half of the same row: a title that genuinely contains quote marks
+// still reaches every render with exactly the ones it was written with. Without
+// this, "emits no quote mark" would pass on a parser that emitted nothing.
+test("a title carrying quote marks of its own renders with exactly those, on every path", () => {
+  const title = 'a hostname containing "srt" is not a track';
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { title }) });
+  for (const args of [["--show", "pl-1"], [], ["--ready"], ["--markdown"]]) {
+    const label = args.join(" ") || "(default)";
+    const { stdout, status } = run(args, root);
+    expect(stdout, label).toContain(title);
+    expect(status, label).toBe(0);
+  }
+});
+
+// This is what makes rejecting quotes cost nothing: repo-22's title had to be
+// quoted only because YAML reserves a leading backtick. This parser does not.
+test("a title opening with a backtick needs no quoting, and renders on every path", () => {
+  const title = "`grep` here is a wrapper that silently honours ignore files";
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { title }) });
+  for (const args of [["--show", "pl-1"], [], ["--ready"], ["--markdown"]]) {
+    const label = args.join(" ") || "(default)";
+    const { stdout, status } = run(args, root);
+    expect(stdout, label).toContain(title);
+    expect(stdout, label).not.toContain(`"${title}"`);
+    expect(status, label).toBe(0);
+  }
+});
+
+// `parseList` was the half that reached the exit code: a quoted entry matched
+// no id, so the board reported a dangling dependency on a ticket that exists
+// and `--json` — CI's whole board gate — went red on sound work. The parse
+// fails first now, so the false problem is not raised at all.
+test("a quoted depends_on entry is named at the parse and never becomes a dangling dependency", () => {
+  const root = repoWith({
+    [atRepo("repo-90")]: repoTicket("repo-90"),
+    [atRepo("repo-91")]: repoTicket("repo-91", { depends_on: '["repo-90"]' }),
+  });
+  const { stdout, stderr, status } = run(["--json"], root);
+  expect(stdout).not.toContain("dangling-dependency");
+  expect(stderr).not.toContain("dangling-dependency");
+  expect(stderr).toMatch(
+    /^docs\/work\/repo-91-slug\.md:8: a depends_on entry is quoted \("repo-90"\)\./,
+  );
+  expect(status).toBe(1);
+});
+
+// The message must not double the quotes the way the dangling report did when
+// it echoed a corrupted id back — `depends_on ""repo-90"", which is not a
+// ticket` named a ticket that was right there.
+test("the depends_on message echoes the entry once, not wrapped in quotes of its own", () => {
+  expect(() => parseFrontmatter(pl("pl-1", { depends_on: "['pl-2']" }), "t.md")).toThrow(
+    /^t\.md:8: a depends_on entry is quoted \('pl-2'\)\./,
+  );
+  expect(() => parseFrontmatter(pl("pl-1", { depends_on: "['pl-2']" }), "t.md")).not.toThrow(
+    /""|''/,
+  );
+});
+
+// The same fixture unquoted, so the case above proves the quoting and not the
+// fixture: this is a sound board, and it is the one the false problem was
+// raised against.
+test("the same dependency unquoted is a sound board with no problems at all", () => {
+  const root = repoWith({
+    [atRepo("repo-90")]: repoTicket("repo-90"),
+    [atRepo("repo-91")]: repoTicket("repo-91", { depends_on: "[repo-90]" }),
+  });
+  const { stdout, status } = run(["--json"], root);
+  expect(JSON.parse(stdout).problems).toEqual([]);
+  expect(status).toBe(0);
+});
+
+test("a list entry quoted beside a sound one is still caught", () => {
+  expect(() => parseFrontmatter(pl("pl-1", { depends_on: '[pl-2, "pl-3"]' }), "t.md")).toThrow(
+    /^t\.md:8: a depends_on entry is quoted \("pl-3"\)\./,
+  );
+});
+
+// The rule has to be written where an author reads it, or the parser is only
+// enforcing a convention nobody was told about. Its absence is what let two
+// authors reach for YAML in two days.
+test("the ticket format states the rule the parser enforces", () => {
+  const format = fs.readFileSync(path.join(REPO, "docs", "01-TICKETS.md"), "utf8");
+  expect(format).toMatch(/quot/i);
+  expect(format).toMatch(/taken literally/);
+});
+
+// ---------------------------------------------------------------------------
 // The projections
 // ---------------------------------------------------------------------------
 
