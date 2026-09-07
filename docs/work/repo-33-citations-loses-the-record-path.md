@@ -299,3 +299,38 @@ That miss is worth more than the one character it cost, because it happened **in
   explicitly **not** a test of `locateRecord`, whose ambient `path` cannot be
   driven from here, and it would not catch someone re-adding `.startsWith("..")`.
   Its docblock says so, and says a reviewer would be within rights to strike it.
+
+- **2026-09-07, a second Windows run, and a relayed inference this does not
+  support.** A second run was offered as evidence that the runner's workspace
+  drive varies between runs, making `.startsWith("..")` _flaky_ on Windows rather
+  than wrong. **Checked, and it is not what happened.** The workspace is `D:` in
+  both:
+
+  | Run           | Branch                       | Windows leg                      | Received path                         |
+  | ------------- | ---------------------------- | -------------------------------- | ------------------------------------- |
+  | `34165962251` | this one, at `795dd1c`       | fails on the new assertion       | absolute, `C:\…`                      |
+  | `34166349722` | `07ca0a73`, without this fix | fails on the original regression | relative, `..\..\..\..\..\RUNNER~1\…` |
+
+  `gh run view --job … --log` on each gives `D:\a\tools\tools` as the workspace
+  in **both**. Nothing varied. What differs is **which two paths each failing
+  test subtracts**:
+
+  - the `--rev` fixture spawns the CLI with `cwd: dir`, the temp directory
+    (`scripts/test/citations.test.ts`, the `at` helper), so both its operands are
+    under `C:\Users\…\Temp` — same drive, `..`-path expressible, and the five
+    `..` reach `RUNNER~1` because the only difference between the operands is the
+    short name against the long one. That is the original defect, unchanged.
+  - the outside-the-repo test compares `REPO` — the checkout, on `D:` — with
+    `os.tmpdir()`, on `C:`. That is the only pair here that crosses drives.
+
+  So `.startsWith("..")` was **deterministically wrong** on this runner image for
+  the pair that test compares, not intermittently wrong. Both drives are stable;
+  the assumption survived because the _other_ tests never subtract a pair that
+  crosses them. The deletion is right either way, and the reason recorded above —
+  that the assertion was implied by the line before it and bought no coverage —
+  is unaffected by any of this.
+
+  The `path.win32` test now pins both pairs rather than an invented same-drive
+  one, and its docblock names both run ids. The `C:` side is still a deduction
+  from the assertion pair and the `RUNNER~1` strings rather than a reading of
+  `TEMP`, and stays labelled that way.

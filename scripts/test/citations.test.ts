@@ -1401,7 +1401,9 @@ test("a record outside the repo is not given an in-tree name", () => {
  * tool that makes a cross-drive layout testable from Linux. The constants are
  * not invented: `D:\a\tools\tools` is read out of the failing run's own
  * checkout step, and `C:\Users\RUNNER~1\…\Temp` is where that runner's
- * `os.tmpdir()` resolves.
+ * `os.tmpdir()` resolves. Both drives are stable across runs — checked in two,
+ * `34165962251` and `34166349722` — so this is a fixed property of the runner
+ * image, not a layout that varies from one run to the next.
  *
  * **What this does and does not buy, stated so nobody has to guess.** It is not
  * a test of `locateRecord`: that function uses the ambient `path` module, so its
@@ -1424,12 +1426,22 @@ test("across drive roots the fallback is absolute, and the property survives it"
   // ...and the property the fallback actually needs, holding anyway.
   expect(path.win32.resolve(repo, located)).toBe(outside);
 
-  // The other half, and the reason the old assertion was not obviously wrong:
-  // on one drive Windows does express the `..`-path, so the assumption held
-  // everywhere anyone had looked.
-  const sameDrive = path.win32.relative(repo, "D:\\a\\_temp\\x\\record.md");
-  expect(sameDrive.startsWith("..")).toBe(true);
-  expect(path.win32.resolve(repo, sameDrive)).toBe("D:\\a\\_temp\\x\\record.md");
+  // The other half, and the reason the assumption survived: whether a `..`-path
+  // comes back depends on *which two paths a test subtracts*, not on the
+  // platform. This file's `--rev` fixture spawns the CLI with its cwd inside the
+  // temp directory, so both of its operands are under `C:` and the `..`-path is
+  // expressible — which is why CI's original failure string is a relative one.
+  // Only the test above crosses `D:` to `C:`, because only it compares the
+  // checkout with `os.tmpdir()`.
+  const tempRepo = "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\citations-rev-uh5dmk";
+  const sameDrive = path.win32.relative(tempRepo, `${tempRepo}\\drift.md`);
+  expect(sameDrive.startsWith("..")).toBe(false);
+  expect(sameDrive).toBe("drift.md");
+  const acrossShortName = path.win32.relative(
+    "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\citations-rev-uh5dmk",
+    `${tempRepo}\\drift.md`,
+  );
+  expect(acrossShortName.startsWith("..")).toBe(true);
 });
 
 /**
