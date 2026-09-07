@@ -137,6 +137,19 @@ only raises the number of sockets an attacker has to hold.
 
 ## Log
 
+- **2026-09-07 — Build step 5's key answered by the owner: the token, as
+  built.** The builder read the earlier "per IP" answer as governing step 1
+  only, implemented step 5 on the token, and surfaced the reading rather than
+  letting it merge unremarked. Options put: **A, the token key** (the builder's
+  recommendation, listed first — it matches this ticket's own "the token is the
+  likelier key", it matches `/api/files/:token`, a leaked token cannot buy more
+  allowance by being fetched from more addresses, and it survives CGNAT and
+  `TRUST_PROXY` being off); **B, per IP**, if the earlier answer was meant to
+  reach step 5, at the cost of one test rewrite. **A was chosen**, so **the
+  "per IP" answer below governs Build step 1 only** and no code changed. The
+  entry below stands as written, including its own note that this was the one
+  place the two readings diverged.
+
 - **2026-09-07 — built.** `rateLimitProbeEventsPerMinute` (default **10**,
   `RATE_LIMIT_PROBE_EVENTS_PER_MINUTE`) and a `createRateLimitHook` on
   `registerProbeEventRoutes`, keyed per IP as answered. Step 5's thumbnail
@@ -181,8 +194,9 @@ only raises the number of sockets an attacker has to hold.
     were probe-id-shaped; the ticket says step 1's question "applies unchanged"
     to the thumbnail route while itself concluding "the token is the likelier
     key", and `fileBucketKey` is the named precedent. Implemented as the ticket
-    reads. If the answer was meant to cover step 5 too, it is one line: drop
-    `key:` from `registerThumbnailRoute` and the default IP key applies.
+    reads, and surfaced as an open decision rather than settled in the commit —
+    **the owner has since confirmed the token key and that reading; see the
+    entry above it.**
   - **`fileBucketKey` moved to `rate-limit.ts` as `capabilityBucketKey`**, on
     the "second real consumer" rule — its logic (hash the token, fall back to
     the address when it is not well formed) is identical for both routes and its
