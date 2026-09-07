@@ -99,6 +99,58 @@ that is right.** Reading carefully catches an instance. Anchoring catches the
 class. That is the whole of the gap, and it is why this is worth a ticket rather
 than a fix in passing.
 
+### Three more, from live work rather than a retrospective sweep — 2026-09-07
+
+Added after this ticket's decision was answered, and **deliberately not folded
+into the options above**: they change nothing about which option was chosen. They
+are here because they answer the strongest objection to the evidence this page
+already carries.
+
+**The evidence above is retrospective** — a sweep over records that were already
+finished, where "these went stale over time" is the natural reading and "nobody
+was being careless, the coordinates simply aged" is a fair defence. **These three
+are not that.** All three were produced inside a single ticket's review cycle on
+the same day, on a branch where both participants were being unusually careful,
+and **all three still got past two agents**. They were caught only because
+somebody ran `scripts/citations.mjs` by hand.
+
+From dl-43's review cycle. **The coordinates below are as measured on that
+branch, which is unmerged, so they are named in prose rather than cited** — a
+`file:line` into an unmerged branch does not resolve repo-relative and would fail
+this ticket's own checker:
+
+1. **A citation landing on a blank line.** The gate cited line 251 of
+   `contract-schemas.test.ts`; the test it was pointing at starts at line 252.
+   Off by one, onto a line with no content at all. An anchor makes this
+   impossible — there is no fragment to find on a blank line — while unanchored it
+   resolves, because the file has that many lines, and reports clean.
+2. **and 3. Two citations ambiguous between a downloader file and a planner file
+   of the same name**, which resolved against the wrong tree until they were
+   qualified with full paths.
+
+**The second class is structural here, and it is measurable on `main` today
+rather than only on that branch.** Comparing basenames across the two tool trees
+— `git ls-files 'tools/downloader/*'` and `'tools/planner/*'`, reduced to
+basenames — **41 names exist in both**, among them `errors.ts`, `index.ts`,
+`config.ts`, `context.ts`, `logger.ts`, `events.ts` and `logging.test.ts`. So an
+unqualified basename plus a line number is ambiguous across a large and growing
+set of exactly the files a review is most likely to cite, and the repo's own
+"a tool never imports from another tool" rule guarantees the duplication will
+continue. Three of the four `moved` citations on this very page are in that
+category of file.
+
+**Why this is evidence for this ticket rather than a new one.** It is the same
+argument, not a second one: the citations were _produced wrong_ rather than
+_aged wrong_, which strengthens the case for enforcement without changing what
+enforcement should be. And nothing in flight closes it — **repo-21's branch adds
+a CI step reading `node scripts/citations.mjs
+.claude/skills/orchestrate-tickets/SKILL.md --require-anchors`, which is
+`SKILL.md` alone** (read from `refs/heads/repo-21-orchestration-skill-loop`, not
+relayed; that branch is unmerged, hence prose). So `docs/work/`'s records stay
+unchecked in CI whichever way repo-21 lands, and the gap these three fell through
+is exactly the corpus-wide enforcement option C describes and which the owner has
+now named as the destination.
+
 ## Decision — answered 2026-09-07, not open
 
 **The question was:** which of four options does this repo take — anchor on
@@ -535,3 +587,35 @@ moved` at exit 0. Run again on 2026-09-07 the same file reports **6 verified, 4
   **Recorded, not built.** Nothing under `scripts/` or `.github/` was touched and
   no citation anywhere was anchored. This branch is bookkeeping across four
   tickets whose decisions were answered in one sitting.
+
+- **2026-09-07 — three more reproductions added to the Why, from dl-43's review
+  cycle.** Evidence only: **the Decision section was not touched and the answered
+  option is unchanged.** A citation onto a blank line, and two ambiguous between a
+  downloader and a planner file of the same name. All three were produced during
+  live review by two careful agents and caught only by a manual
+  `scripts/citations.mjs` run.
+
+  **What they add over the evidence already here:** everything above is a
+  retrospective sweep over finished records, which admits the defence that the
+  coordinates merely aged. These three were **produced wrong, not aged wrong**,
+  on the same day, which is the stronger form of the same argument.
+
+  **Their coordinates are as measured on dl-43's branch and are not cited**, on
+  purpose: that branch is unmerged, `citations.mjs` resolves repo-relative, and a
+  coordinate into an unmerged branch fails. Prose names the branch instead — the
+  same dodge, and the same reason, as the two already recorded at the top of this
+  Log.
+
+  **Two things were checked here rather than relayed**, and one of them turned out
+  stronger than the claim that prompted it. repo-21's branch really does scope its
+  new CI step to `SKILL.md` alone — read from
+  `refs/heads/repo-21-orchestration-skill-loop`, so `docs/work/` stays unchecked
+  in CI whichever way it lands. And the ambiguity class is not anecdotal: **41
+  basenames exist in both `tools/downloader/` and `tools/planner/`**, including
+  `errors.ts`, `index.ts` and `config.ts`. That measurement is new here, it holds
+  on `main` rather than only on dl-43's branch, and the repo's "a tool never
+  imports from another tool" rule guarantees the set keeps growing.
+
+  **This entry landed after the gate that passed this branch**, like the entry
+  above it, and is disclosed as uncovered by that verdict in the pull request
+  rather than left to look reviewed.
