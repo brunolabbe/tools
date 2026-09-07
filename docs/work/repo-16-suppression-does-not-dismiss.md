@@ -74,10 +74,13 @@ sub-decision Build step 2 poses: **tag-pin that step like everything else, or
 SHA-pin it and write down why the exception exists?**
 
 **The answer, from the owner, relayed through the orchestrator: option 1, and
-SHA-pin the step with the reason written beside it.** Both were the recommended
-answers, so neither overrode anything. Recorded 2026-09-07; **nothing below has
-been built** — `.github/workflows/security.yml` is untouched and adr/005 is
-unedited.
+SHA-pin the step with the reason written beside it.** Both matched the
+orchestrator's recommendation, so neither overrode anything. **This ticket itself
+recommends neither** — Build step 1 deliberately costs the four options without
+picking one, and Build step 2 poses the pinning question without answering it —
+so there is no ticket-level recommendation for the answer to have overridden.
+Recorded 2026-09-07; **nothing below has been built** —
+`.github/workflows/security.yml` is untouched and adr/005 is unedited.
 
 **Why the other three were not chosen**, which `Done when` line 1 requires be
 recorded with the cost that ruled each out:
@@ -369,8 +372,9 @@ security tab rather than inferred.
 
 - **2026-09-07 — the decision was answered by the owner: option 1
   (`advanced-security/dismiss-alerts` in `security.yml`), plus the pinning
-  sub-decision: SHA-pin that step, with the reason written beside it.** Both were
-  the recommended answers, so neither overrode anything. `status: needs-decision`
+  sub-decision: SHA-pin that step, with the reason written beside it.** Both
+  matched the orchestrator's recommendation, and this ticket recommends neither
+  option itself, so nothing was overridden. `status: needs-decision`
   → `ready`. The Decision section above is new, Build steps 1 and 2 are marked
   settled in place, and `Done when` lines 1 and 3 are marked.
 
