@@ -178,6 +178,22 @@ have left both defects intact.
 
 **Transcription note, by the builder.** The section above is the reviewer's own text, sent to me as the section it wanted committed and committed as sent. I asked for it rather than composing one from its two conversational messages, which would have put my words over its name. Nothing was altered: the only things dropped are the two `---` rules that fenced the section in the message, and whatever `oxfmt` does to table padding. **There were no `file:line` coordinates to re-resolve**, and that is the reviewer's decision, not an omission — I warned it that the `scripts/next-id.mjs` lift was about to move every line inside the sweep, and it chose prose over coordinates that would be stale before a reader could check them. The scope note is likewise its own, written after I told it the branch would grow past what it gated.
 
+### Gate — 2026-09-07 · `40e8d1b...6a5944b` (the `scripts/next-id.mjs` lift) · self-run defect hunt at medium depth
+
+**PASS**, additive to the gate above — Done-when 1-6 are unchanged from the `40e8d1b` record and were not re-derived here.
+
+| Done when                                                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The sweep is `node scripts/next-id.mjs <prefix>`, `concurrency.md` names it rather than carrying it, and lines 1-4 hold of the script, each as a test | verified — ran the CLI directly (`node scripts/next-id.mjs repo`, real output); `concurrency.md`'s fence now reads `node scripts/next-id.mjs <prefix>`; all four properties hold as named tests in `scripts/test/next-id.test.ts`, confirmed both green and — via the mutation harness — red when the guard is removed |
+| Every guard has been watched failing, one at a time, source restored byte-identical; a mutation that fails to apply reports as unapplied, not a pass  | verified — re-ran the mutation harness myself (adjusted only its `REPO` path) against the committed source: all 7 mutations turned a named test red, `restored: true`; independently confirmed the SKIPPED-vs-pass distinction is real by corrupting one mutation's anchor on purpose                                  |
+
+- **low** · cosmetic only: the tie-break orders by raw string comparison on the source label, so `PR#902` sorts before `merged` (uppercase before lowercase) — deterministic and tested, just not the ordering a reader might expect at a glance. Not proposing a change.
+- **findings** · self-run defect hunt at medium depth returned 1; carried as the low note above, 0 dropped.
+- Suite count: 130 files / 2184 tests at `6a5944b`, vs 129/2170 at `40e8d1b` — +1 file, +14 tests, matching the reported delta exactly.
+- NFR: security n/a (no user-influenced input, no shell, argument arrays throughout) · performance n/a · reliability + (mutation-verified guards are a stronger bar than the ticket's own Done-when 1-4 asked of the shell version) · maintainability + (see low note above; otherwise no concern).
+
+**Transcription note, by the builder.** The reviewer's text, committed as sent, minus the `---` rules that fenced it in the message. It is a `###` under the first record rather than a peer of it, because the first was committed without one and re-heading somebody else's verbatim section to make the file symmetrical is the edit a gate record exists to forbid. Again no `file:line` coordinates, so again nothing to re-resolve. Four claims in it I checked against the tip rather than relaying: the failure table has **7** data rows and maps one-to-one onto the seven mutations; no "of the six" lead-in survives the revision; `scripts/test/tsconfig.json` carries `../next-id.mjs`; and `"PR#902" < "merged"` is true in JS, so the low note describes real behaviour. **The low note is accepted and deliberately not fixed.** `merged` first would arguably read better — the merged claim is the settled one and the pull requests are the contenders — but the order is deterministic, asserted by a test, and carries no meaning that a reader acts on; changing it would rewrite a test expectation to buy nothing. It is recorded here so the next person to notice it finds a decision rather than an oversight.
+
 ## Log
 
 - **2026-09-07** — Filed out of two live collisions rather than a code read. Id
@@ -335,3 +351,22 @@ repository` line and exited 0, new **128**; `pipefail` with unguarded greps —
   **Parity with the shell version it replaces was checked, not assumed:** both
   return 30 merged `repo-` ids on this tip, and the new one adds `next free:
 repo-31`. `dl` → `dl-46`, `pl` → `pl-38`.
+
+  **The override produced the better artefact, and that is the note worth
+  keeping.** The builder recommended filing the lift as a separate ticket and the
+  orchestrator agreed; the owner read both arguments in their own terms and folded
+  it in anyway. What our recommendation would have produced is a twenty-line
+  untested snippet still sitting in a documentation page, plus a ticket in the
+  backlog — which is _exactly the state this ticket was filed to fix_, one layer
+  up and with the fix already in hand. Two agents recommending the same thing is
+  not a measurement, and the fact that both of us reached for the process answer
+  over the cheap one is more interesting than either argument was.
+
+  It also earned the sharpest thing on this page, which is worth stating on its
+  own: **a spec over a sweep that was never shown failing is the same defect one
+  layer up.** The seven mutations exist because writing tests for a sweep whose
+  guards nobody had watched fail would have reproduced repo-30 in TypeScript —
+  green, confident, and proving nothing. The gate then did the same thing to the
+  harness: it corrupted a mutation's anchor on purpose to confirm that `SKIPPED`
+  is genuinely distinct from a pass, which is the same question asked one layer
+  further up again. Three layers, and the same trap at each.
