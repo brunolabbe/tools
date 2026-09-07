@@ -20,7 +20,7 @@ dispatched since 2026-09-04:
 | `difficulty` | Builder runs on | Because |
 | --- | --- | --- |
 | absent | inherit (Opus, in practice) | the status quo, and the right answer for most tickets — nobody has claimed the work is ordinary |
-| `standard` | inherit (Opus, in practice) | somebody read the work and said it is ordinary. Same dispatch, different statement |
+| `standard` | `sonnet` | measured, and the cheapest row to get wrong — see below. **Its gate is `opus`**, because the default would gate a Sonnet build with Sonnet |
 | `mechanical` | `haiku` | measured, not assumed — see below. A gate still runs, and the diff is the cheap half to check |
 | `hard` | `opus` | a contract, a security claim, a seam with reach. Pinned rather than inherited, because a floor cannot be delegated to a variable — see below |
 
@@ -41,7 +41,9 @@ to read *inherit*, with *"never below the default"* as its reason — but *inher
 is whoever is orchestrating, and the skill already knew what that costs.
 `orchestrate-tickets` step 4 says it in its own words, about the gate: pass
 `model: "opus"` *"when the builder ran Sonnet, which happens when **you** are
-Sonnet and the ticket inherits"*. Under a Sonnet orchestrator that applied to
+Sonnet and the ticket inherits"* — **step 4's wording at repo-27, quoted as it
+stood; repo-28 widened when it applies, because a `standard` ticket now builds on
+Sonnet by rating rather than by inheritance**. Under a Sonnet orchestrator that applied to
 `hard` too — the one category defined as contract-touching and seam-reaching was
 built by Sonnet, the floor was violated, and nothing reported it. Step 4 now
 excludes `hard` from that clause by name. `mechanical` never had this problem because it names a model. `hard` was the
@@ -73,6 +75,53 @@ case, where the other asserted properties and a round-trip.
 output tokens were $0.014 of a $0.254 bill. So the saving comes from the rate, not
 from doing less work — haiku made *more* calls and read *more* context in both
 trials and was cheaper anyway. It was also slower: 444 s against 268 s on dl-36.
+
+### What the second head-to-head measured, for `standard`
+
+`standard` mapped to *inherit* until repo-28, on the reasoning in the row above:
+somebody read the work and said it was ordinary, which is a statement and not a
+dispatch. The trial that settled it, 2026-09-06/07 — one synthetic subject, an
+RFC 7233 `Content-Range` parser with tests, two `builder` dispatches whose prompts
+differed by **one character**, neither builder told it was in a trial, and a
+grading oracle **pre-registered before either implementation existed**
+(`sha256 357fc4bb22b20f95`), 27 scored cases and 6 delegated judgement calls
+deliberately left unscored:
+
+| | sonnet 5 | opus 5 |
+| --- | --- | --- |
+| scored oracle cases | **27/27** | **27/27** |
+| billed cost | **$2.36** | $4.23 |
+| cache-read volume | 8,597,089 | 5,584,076 |
+
+Both models were confirmed from their own task-output files rather than assumed.
+Cost is billed volume with `cache_read_input_tokens` counted at 96–97% of input,
+which independently reproduces repo-17's ~94% — the field repo-17 lacked when it
+reported an "8% saving" that was wrong by an order of magnitude.
+
+**The one capability difference went Sonnet's way**, which is the opposite of the
+direction the argument for large builders predicts. The brief asserted that
+nothing in the tree parsed `Content-Range`; that was false, and the Sonnet builder
+caught it and said so where the Opus builder did not. One instance, not a pattern.
+
+**And the saving does not survive the gate, which is why this row was a decision
+and not a calculation.** A Sonnet build must be gated by Opus, and the gate is the
+larger consumer: today's pairing costs **$7.20** a ticket and the new one **$7.18**
+— a 0.3% difference, a wash. The upper-bound reading is a 36% *loss*. **repo-28
+therefore recommended leaving this row alone, and the owner overrode that
+recommendation**, on the volume-adjusted reading that it is cost-neutral with the
+capability evidence mildly in Sonnet's favour. The row is here on an owner
+decision against the filer's advice, not on a cost case — recorded so nobody
+re-derives a saving from it. See
+[repo-28](../../docs/work/repo-28-the-standard-sonnet-trial.md).
+
+**What it costs the dispatcher, and this is the live consequence.** `standard` is
+the largest rated category, so three of the four rows now disagree with
+`ticket-reviewer.md`'s `model: sonnet` default and the gate's model cannot be set
+once per batch. Before repo-28 that default was right whenever the builder
+inherited Opus; it is now wrong for every rated `standard` ticket, and it fails
+**silently** — a Sonnet build gated by Sonnet looks exactly like a compliant pair.
+`orchestrate-tickets`' _Which model built it, and which gated it_ carries the
+pairing table; it is the dispatcher's rule and is not restated here.
 
 ### The one thing that actually went wrong, and the rule it earned
 

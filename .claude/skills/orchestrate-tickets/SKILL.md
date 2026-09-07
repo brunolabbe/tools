@@ -52,8 +52,8 @@ you are there.
    **Pass the builder's model explicitly** — see _Which model built it_.
 
 4. **Gate each finished branch** — `subagent_type: "ticket-reviewer"`, spawned by
-   **you and never the builder**: a builder picking its own reviewer is the thing
-   being checked choosing its checker. **Pass the gate's model explicitly too.**
+   **you, never the builder**: the checked thing must not pick its checker. **Pass
+   the gate's model explicitly, paired per ticket** — `standard` gates on `opus`.
 
 5. **The reviewer sends its findings to the builder itself**, as one batched
    message, **and the same findings to you in full** — not a status line saying it
@@ -107,19 +107,27 @@ take one narrow gate afterwards, scoped to the corrections. Not the default.
 **Both halves are knowable before either agent runs, and neither needs
 `resolvedModel`.** Write them down at dispatch rather than inferring them after.
 
-- **The builder's** comes from the ticket, not from you: read its `difficulty` off
-  `npm run status -- --json` and map it with the table at
-  `.claude/agents/builder.md:21-25` "| `mechanical` | `haiku` |".
-  Absent means inherit — name your own model rather than leaving it unstated.
-  **Never rate an unrated ticket yourself**; you have not read it, which is the
-  point of step 2.
-- **The gate's** is a file read: `.claude/agents/ticket-reviewer.md:6` "model: sonnet".
-  Pass it explicitly anyway, including when Sonnet is what you wanted. Sonnet is
-  right when the builder ran Opus or Haiku; pass `model: "opus"`
-  when the builder ran Sonnet — **never on a `hard` ticket**, which pins `opus`
-  rather than inheriting. Never `haiku`, never `fable`.
-- **Check the pairing per ticket, not once per batch.** A `mechanical` ticket
-  dispatches `haiku` and a `hard` one `opus` while their siblings inherit.
+**Read each ticket's `difficulty` off `npm run status -- --json` and pair it here.**
+**Never rate an unrated ticket yourself**; you have not read it, which is the point
+of step 2. The builder column is two rows of one table —
+`.claude/agents/builder.md:23` "| `standard` | `sonnet` |" and
+`.claude/agents/builder.md:24` "| `mechanical` | `haiku` |". The gate column is
+yours to compute, because `.claude/agents/ticket-reviewer.md:6` "model: sonnet" is
+a **default, not an answer**, and it is right on two rows of four.
+
+| `difficulty` | Builder | Gate |
+| --- | --- | --- |
+| `mechanical` | `haiku` | `sonnet` |
+| `standard` | `sonnet`, since repo-28 | **`opus`** |
+| `hard` | `opus`, pinned rather than inherited | `sonnet` |
+| absent | inherit — pass your own model by name | whichever of `sonnet` / `opus` the builder is not |
+
+**Pair per ticket, never once per batch**, because no two adjacent rows agree.
+**`standard` is the trap**: it is the largest rated category, it moved to Sonnet
+with repo-28, and a `standard` ticket gated by the default is a Sonnet build
+checked by Sonnet — which looks exactly like a compliant pair and reports nothing.
+Never `haiku` for a gate, never `fable` for either.
+
 - **Three documented paths override an explicit `model`**, so a dispatcher writing
   "gated by Sonnet" should know what could make that false:
   `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`, an `availableModels` allowlist, and `fork`.

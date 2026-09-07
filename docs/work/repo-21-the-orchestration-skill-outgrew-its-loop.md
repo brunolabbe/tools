@@ -1191,3 +1191,30 @@ unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
 - **Written by Opus 5 (1M context), `claude-opus-5[1m]`**, which is the model this
   session was told it is at dispatch, not a self-report taken as evidence — see the
   self-report row this ticket adds.
+
+- **2026-09-07 — this branch also carries `repo-28`, on the owner's answer, and
+  that is a coupling in `repo-28`'s Build rather than scope creep.** `repo-28`'s
+  step 2 says that if `standard` maps to `sonnet`, the row change and `SKILL.md`'s
+  per-ticket pairing check must land **in the same commit** — which is impossible
+  across two branches both rewriting this page in the same window. The owner
+  overrode `repo-28`'s own recommendation and chose to map it; the decision, its
+  options and the recommendation it went against are recorded in `repo-28`'s
+  Decision section, not here.
+
+  **What it cost this page: eight lines.** `## Which model built it, and which
+gated it` gained a four-row pairing table with a gate column and lost three
+  prose bullets that said less; loop step 4 names `standard` in one clause and
+  stays at three lines. `SKILL.md` is **355** lines here, against **347** at
+  `f5fe74e` — the repo-21 work alone, which is what the size bullet above reports
+  — and 674 at the merge-base. Both counts taken after the last `npm run format`:
+  the first draft of this sentence claimed "nothing net" at 350 and was falsified
+  by the format pass that followed it, which is this ticket's own subject arriving
+  in its own Log. The `Done when` checks were re-run after the addition and all
+  still pass, including the loop's twelve steps and three-line paragraph bound.
+
+  **It also gave the citation gate its first real subject.** The pairing table
+  cites `.claude/agents/builder.md:23` "| `standard` | `sonnet` |", so the row
+  `repo-28` just changed is machine-checked from `SKILL.md` by the `ci.yml` step
+  this ticket adds. A future revert of that row without a matching skill edit is
+  now a red CI run naming the line — defect 1's class, caught on the first change
+  that could have reproduced it.
