@@ -98,6 +98,24 @@ wrong in the brief. This is what a future reader actually needs.
 | `note`       | Optional. What the status view shows instead of the title                     |
 | `difficulty` | Optional. `mechanical` · `standard` · `hard` — how much judgement it needs    |
 
+**A value runs to the end of its line and is taken literally, so wrapping one in
+quotes is neither required nor permitted.** This is not YAML. A title opening
+with a backtick parses exactly as written, and so does one carrying quote marks
+inside it — `A CDN hostname containing "srt" classifies the track as SubRip` is
+a real title here. A value whose first and last characters are both `"`, or both
+`'`, is a named parse error instead. `status.mjs` used to carry those marks into
+every render, and through `depends_on` into a dangling dependency naming a
+ticket that exists — which failed the board's own CI gate on sound work
+([repo-24](./work/repo-24-quoted-scalars-render-with-quotes.md)).
+
+**The rule is positional, so it also catches a title that merely ends where it
+began** — `"downloaded" is not "verified"` is rejected although nothing wraps
+it. Write those terms in backticks, which is the spelling used everywhere else
+here and parses untouched. The rule is not narrowed to spare that case, because
+the narrowing would let `title: "the \"srt\" host"` through to render its
+backslashes: a silent wrong render in exchange for a loud wrong rejection, which
+is the wrong trade for a parser whose whole job is to be loud.
+
 The id prefix exists so `dl-8` means something in a commit message and in
 conversation, where the directory is not there to disambiguate it.
 
@@ -375,7 +393,8 @@ substitute the tool's name.
 > if you believe the contract is wrong, stop and say so rather than changing it.
 > Use `AppError` with a code from the taxonomy for every failure. Ship unit
 > tests with checked-in fixtures, never live network calls. In a fresh worktree
-> run `npm install` **and `npm run build`** before anything else. `npm run check`
+> run `bash .claude/scripts/worktree-farm.sh` **and `npm run build`** before
+> anything else — not `npm install`. `npm run check`
 > and `npm test` must pass — and neither runs that tool's slow gates, so if you
 > changed what the container ships or what the browser loads, say that CI has not
 > proved it rather than reporting green. The pull request title is itself a
@@ -393,7 +412,16 @@ they are the three ways a correct change fails here.
 - **Build before you test.** Every workspace is consumed through its `dist`, so
   an unbuilt worktree fails on `@webtools/core` with a Vite resolve error naming
   nothing that has anything to do with the cause. It is the first thing to do and
-  it looks like the last.
+  it looks like the last. **The step before it is not `npm install`**, which
+  costs minutes in a worktree and can fail outright when `ffmpeg-static`'s
+  postinstall cannot reach the network — leaving no `node_modules` at all, and a
+  build error that says nothing about why.
+  [`.claude/scripts/worktree-farm.sh`](../.claude/scripts/worktree-farm.sh)
+  populates one from the shared checkout in about half a second. **It is safe to
+  name here because it is tracked**: `.claude/` is gitignored except for a named
+  allowlist, so whether any path under it can be cited from a document is a
+  question with an answer — `git check-ignore <path>`, which exits 1 for this
+  one. Check that before citing another.
 - **`check` and `test` are not the whole gate.** A tool's e2e suite and its
   container build live in `.github/workflows/<tool>.yml` and run nowhere else, so
   a green local tree is silent about both. The worked example is

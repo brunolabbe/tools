@@ -292,6 +292,12 @@ is the caller's alone.
    are the author's to accept, argue with or defer: a CONCERNS gate is not a work
    order, and FAIL is a report rather than a decision to stop.
 
+   **A gate report is not a hand-back.** `# Done` — CLAUDE.md's
+   [Handing back](../../../CLAUDE.md) — belongs on the turn where the work is
+   finished, and a CONCERNS or FAIL whose findings nobody has repaired is the
+   opposite of that: it ends in the offer above, and waits. Only a PASS with
+   nothing left to propose closes.
+
    A finding the ticket has already settled — a `low` it recorded as a deliberate
    product decision — is not work to propose. Say that it is settled and move on.
    That is the `dropped` line's honesty applied to a finding that lives but is
