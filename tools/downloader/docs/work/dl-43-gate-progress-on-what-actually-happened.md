@@ -477,3 +477,53 @@ Ready` (and `→ Failed` on `dlfail`) at a **constant 828 px** with five gate
   simply moved. Every one was caught only by running `scripts/citations.mjs` by
   hand; it is in neither `.github/workflows/` nor `package.json`. Recorded here as
   evidence for repo-29 rather than filed again.
+
+- **2026-09-07 — CI caught what I had reasoned past: the sniffer e2e spec.**
+  `e2e/sniffer/mse-page.spec.ts:102` asserted `getByRole("listitem")` had a count
+  of **5** inside the analysing region — the five-at-once stage list this ticket
+  exists to remove. Expected 5, received 0. Reproduced locally before touching
+  anything, identical to CI.
+
+  **Why the judgement went wrong, which is the part worth reusing.** I wrote that
+  the e2e suites were unrun and that "nothing here touches a path they cover that
+  the unit suites do not". The first half was true and the second was the error,
+  and it was not a slip — it was a wrong _rule_. I checked which **features** the
+  e2e suites cover, saw that `chrome.test.tsx` and `app.test.tsx` already covered
+  the analysing panel, and concluded the e2e added nothing. But a test's value is
+  not the feature it covers, it is **the assertions it makes**, and this spec
+  asserted a structural fact — five list items — that no unit test asserted
+  because no unit test had any reason to. A component rewrite invalidates every
+  assertion about its _markup_, wherever that assertion lives, and grep is what
+  finds those, not reasoning about coverage. Two minutes of
+  `grep -rn "listitem\|Analysing" e2e/` would have found it; I ran that grep
+  only for the string `analysing` and read the hits without opening the file.
+
+  **The fix changes the spec, and that needs saying rather than doing quietly.**
+  The old assertion encodes the defect: five stages on screen at once is what the
+  ticket removed. It is now `toHaveCount(0)` — asserted positively, so "no stage
+  list" is pinned rather than merely unmentioned — plus the assertion that
+  replaces it and is strictly stronger: the `.stage` line carries
+  `aria-live="polite"` and its text matches one of the browser tier's real
+  phases, which can only be on screen because a frame arrived over
+  `GET /api/probe/:id/events`. The elapsed counter at the end is kept unchanged;
+  it is the one element in the panel that is honest with no event behind it.
+
+  **This closed a gap I had disclosed as unmeasured.** Every other test reaches
+  the stage channel through Fastify's `inject` or the web transport seam; this
+  spec is the only place a real `EventSource` drives it. Instrumenting the live
+  panel during a real sniffer probe recorded
+  `{"stage":"Opening a headless browser","live":"polite","items":0,"pill":"0s"}`
+  then `{"stage":"Waiting for the network to go quiet",…,"pill":"2s"}` — the
+  channel works end to end. The new assertion was then run red by withholding
+  `probeId` in `App.tsx`, so no channel opens and the line stays on its
+  pre-probe placeholder: `toHaveText` failed. Red with the channel broken, green
+  with it working, in 6.9 s against 32 s for the old doomed wait.
+
+  **A repo-level defect this surfaced, not dl-43's to fix.** The `push` CI run at
+  `24e5bf7` reported success while the _scheduled_ run at the same sha failed on
+  `windows-latest`, because `ci.yml`'s test matrix is gated by its `changes` job
+  and that merge was markdown-only. So a Windows-only failure merged and stayed
+  invisible behind green push runs, and every branch since inherits it. It is the
+  same lesson as this entry in a different register, and it is why the e2e gap
+  mattered rather than being a tidy disclosure: **a suite that does not run is
+  indistinguishable from a suite that passes.**
