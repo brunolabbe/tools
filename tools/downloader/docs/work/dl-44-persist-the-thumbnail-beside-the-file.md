@@ -124,6 +124,20 @@ image lives exactly as long as the thing it depicts.
 - A restart does not lose the preview of a job whose file survived it.
 - `npm run check` and `npm test -- --project downloader` pass.
 
+## The gate on this decision record
+
+**Gate: PASS** — 2026-09-07 · `origin/main...HEAD`, tip `e3d065e` · own defect hunt (docs-only diff; no `code-review` dispatch)
+
+This diff records Build step 4's already-answered decision onto a `ready` ticket — no implementation exists, so no `Done when` line applies, and per `docs/01-TICKETS.md` ("A gate on a pull request that only files a ticket does not go in `## Review`") this record sits under its own heading rather than `## Review`, so `repo-12`'s board check does not read a `ready` ticket with a review record as merged-without-status-flip.
+
+- The added `## Decision` section is consistent with the unedited Build section: step 4's added sentence restates the Decision section's own text (A recommended and standing, C chosen, B's orphan-retention cost attached) without contradicting it.
+- Citation `api/src/routes/thumbnail.ts:27 "context.thumbnails.get"` verifies — `node scripts/citations.mjs` → `1 verified, 0 moved, 0 unanchored, 0 unresolvable, 0 unchecked, 0 evidence`.
+- `status: ready`, `depends_on: [dl-41]` untouched; `npm run status -- --json` exits 0, `"status": "ready"`, `"reviewed": false`, `"problems": []`.
+- No `## Review` heading present.
+- `npm run check` exits 0; `npx oxfmt --check` reports correct formatting.
+- findings: own hunt (docs-only, no code-review dispatch — out of scope per gate brief) returned 0.
+- NFR: security n/a · performance n/a · reliability n/a · maintainability ✓ — the added text names its own condition ("Recorded, not built") so a future reader cannot mistake this for implemented work.
+
 ## Log
 
 - **2026-09-05 — filed** from dl-41, which is option C of its second decision

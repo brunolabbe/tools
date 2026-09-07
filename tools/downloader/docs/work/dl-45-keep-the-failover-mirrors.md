@@ -138,6 +138,23 @@ objection travels with the answer; it was not dismissed by it.
   unchanged.
 - `npm run check` and `npm test -- --project downloader` pass.
 
+## The gate on this decision record
+
+**Gate: PASS** — 2026-09-07 · `origin/main...HEAD`, tip `e3d065e` · own defect hunt (docs-only diff; no `code-review` dispatch)
+
+Same reasoning as dl-44 for the heading: `status: ready` is untouched and nothing is built, so this is not `## Review`.
+
+- The added `## Decision` and Build-step-4 text do not contradict Build step 2: the decision text states the mirror count "comes from step 1's contract field, not from the picker's collapse ... Reading the number off the collapse would put the computation in the one place step 2 forbids," matching step 2's own text. Swept both files for other new-prose-vs-Build contradictions; found none.
+- `**Packages:**` line: confirmed absent from both dl-44 and dl-45 (`grep -rl '^\*\*Packages:\*\*' tools/downloader/docs/work/` — 21 files match repo-wide, neither ticket among them).
+- Confirmed `web/src/components/ProbePanel.tsx:82` renders the `· N duplicate paths merged` line, asserted by `web/test/probe-panel.test.tsx:126`.
+- Confirmed `web/src/lib/variants.ts:172,232` (`collapsed: rows.length - kept.size`) is a picker-level merge count, mechanically distinct from a future per-row mirror count sourced from the contract field per step 2.
+- Citations: `node scripts/citations.mjs` → 2 unanchored (`contract/src/media.ts:87`, `engine/src/index.ts:403`), 0 moved, 0 unresolvable. Both pre-existing (outside this diff) and both resolve on manual read to the content the ticket describes.
+- `status: ready`, `depends_on: [dl-40]` untouched; `npm run status -- --json` exits 0, `"reviewed": false`, `"problems": []`.
+- No `## Review` heading present.
+- `npm run check` exits 0; `npx oxfmt --check` reports correct formatting.
+- findings: own hunt returned 0.
+- NFR: security n/a · performance n/a · reliability n/a · maintainability ✓.
+
 ## Log
 
 - **2026-09-06 — filed from dl-40**, whose builder reserved this id. dl-40
