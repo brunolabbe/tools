@@ -90,9 +90,9 @@ jobs:
       # every other action reference here is tag-pinned (34 of them, 12 distinct
       # actions, measured 2026-09-07). A step holding `security-events: write`
       # is pinned harder than the rest, because this one writes alert state: a
-      # compromised release could
-      # dismiss real alerts silently and nothing in this repo would notice. The
-      # pin is `v2.0.3`, resolved with `git ls-remote --tags`; see repo-16.
+      # compromised release could dismiss real alerts silently and nothing in
+      # this repo would notice. The pin is `v2.0.3`, resolved at build time
+      # with `git ls-remote --tags`; see repo-16.
       #
       # Push-to-`main` only. A dismissal is repository-global, so a pull request
       # that adds a suppression must not be able to dismiss an alert for

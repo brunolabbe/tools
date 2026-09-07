@@ -374,6 +374,76 @@ security tab rather than inferred.
 7. ~~`npm run check` passes and `npm run format` has been run, since this
    ticket's work is `.md` and `.yml`.~~ **Done 2026-09-07** — see the Log.
 
+## Review
+
+**Gate: CONCERNS** — 2026-09-07 · `origin/main(e9054c5)...HEAD(36c8b31)` · defect
+hunt run directly by the reviewer (no `Skill`/`Agent` tool in that role), to
+`medium` depth.
+
+| Done when                                                                   | Proof                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Four options costed, one chosen, three rejected with cost                | verified — `docs/work/repo-16-suppression-does-not-dismiss.md:67-231`                                                                                                                                                                             |
+| 2. `security.yml` implemented, default-branch condition verified by reading | verified — `security.yml:100`                                                                                                                                                                                                                     |
+| 3. Pinning sub-decision answered (SHA + reason beside step)                 | verified — `security.yml:89-101`; SHA independently confirmed against `advanced-security/dismiss-alerts`' `v2.0.3` tag via the GitHub API                                                                                                         |
+| 4. adr/005 carries all three amendments                                     | verified — `docs/adr/005-excusing-a-code-scanning-finding.md:39-50, 179-190, 321-361`                                                                                                                                                             |
+| 5. repo-13 lines 5/8 answered, line 3 settled, withdrawn in place           | verified — `docs/work/repo-13-codeql-false-positives-recur.md:216-226, 231-249, 260-279, 294, 302-329`; programmatic row-diff independently reproduced: 29 rows, 1 differing in content, no `-` line outside the one repadded table hunk          |
+| 6. Alert 2's post-change state recorded from the security tab               | **unproven (gate)** — `docs/work/repo-16-suppression-does-not-dismiss.md:365-373`; the dismissal step has never run (`gh run list --branch repo-16-dismiss-suppressed-alerts` → 0 rows) and the live alert state is unreachable (`gh api` denied) |
+| 7. `npm run check` passes, `npm run format` run                             | proven — reproduced: `npm run check` exit 0; `npx oxfmt --check .` clean on 569 files                                                                                                                                                             |
+
+- **The load-bearing claim (no `suppressions[]` without `packs:`) was
+  independently re-derived from `github/codeql@4239fee` and
+  `github/codeql-action@cdf488f`/`v4` fetched live, not taken on the ticket's
+  word** — `AlertSuppression.ql`'s `@kind alert-suppression`,
+  `security-extended-selectors.yml`'s four selected kinds, and the compiled
+  bundle's five `--sarif-*` flags all reproduced exactly, including the
+  `sarif-id` / `GITHUB_TOKEN` / `v2.0.3`-SHA corrections against
+  `advanced-security/dismiss-alerts@a18f986`.
+- **dropped** — `citations.mjs`'s 3-unresolvable exit on `repo-13` is
+  pre-existing (identical under `--rev origin/main`) and not wired into
+  `npm run check`; not a defect of this branch.
+- **findings** · defect hunt at medium returned 0; 0 carried, 0 dropped.
+- NFR: security ✓ (SHA-pinned third-party action holding `security-events:
+write`, ambient `github.token`, push+main-only gate on the mutating step) ·
+  performance n/a · reliability — mechanism unobserved pre-merge, named as such
+  (Done-when 6) · maintainability ✓ (record-withdrawal done in-place per repo
+  convention, ADR amendments annotate rather than overwrite).
+
+_Committed by the builder. The verdict, the dispositions and the prose are the
+reviewer's as given. **Four of the twelve `file:line` citations were repointed in
+the re-resolve step** and are the only characters changed. Each was put to the
+reviewer with the measurement first and agreed; every boundary below was resolved
+with single-line `awk 'NR==n'` rather than read out of a `sed` range, which is how
+the fourth was found after a range-read had passed it:_
+
+- `docs/adr/005-excusing-a-code-scanning-finding.md:321-361 "#### What the merge showed"`,
+  repointed from 318-360. The subsection begins at 321; 360 ended mid-sentence on
+  "has been built and", and 361 is its close.
+- `docs/adr/005-excusing-a-code-scanning-finding.md:179-190 "the failure in Context."`,
+  repointed from 179-188. 188 ended mid-clause on "for a different", severing the
+  clause that says why `filter-sarif` lost — which is what the row cites it for.
+  **This one was the builder's miss**, listed as already-correct in the first
+  pass and caught only on the second.
+- `docs/work/repo-13-codeql-false-positives-recur.md:260-279 "its reasoning for it does not."`,
+  repointed from 260-268. 268 is blank; the answer the row cites as its proof
+  runs 269-279.
+- `docs/work/repo-13-codeql-false-positives-recur.md:302-329 "**Retraction of row 3"`,
+  repointed from 304-320 — the blockquote's true bounds. 302 is its announcing
+  line and 329 its last; the original range dropped both that line and the whole
+  "Row 4 is deliberately not retracted" paragraph.
+
+_All four were short or loose in the same direction — anchored on the
+pre-existing text and stopping before the addition — which is why they were
+enumerated rather than spot-checked. `docs/adr/005:39-50` is left exactly as
+written: it runs one line long onto a blank, which does not misrepresent anything
+the way a truncated range does. The other seven resolved exactly._
+
+_All twelve resolve against `36c8b31`, the pre-squash branch sha this gate
+reviewed — kept because it is the only tree where they resolve, and reachable
+afterwards through this ticket's pull request. One commit was added after the
+gate, rewrapping a ragged comment in `security.yml`; **its line count was
+preserved deliberately**, so `security.yml:100` and `:89-101` resolve identically
+at both shas._
+
 ## Log
 
 - **2026-09-01** — Filed, branched from `origin/main` at `94206d9`. Facts 1, 2
