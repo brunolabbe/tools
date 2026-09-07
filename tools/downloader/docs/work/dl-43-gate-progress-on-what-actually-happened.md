@@ -442,3 +442,38 @@ Ready` (and `→ Failed` on `dlfail`) at a **constant 828 px** with five gate
   `job-card.test.tsx:339 "a re-probe keeps Downloading marked done"`, which
   asserts the step-list high-water mark. `:288` covers the carried bytes and the
   label only, and citing it alongside overstated what it proves.
+
+- **2026-09-07 — two things about the review loop itself, worth more than either
+  finding.**
+
+  **A relayed finding is a hypothesis until the builder runs it.** The gate's
+  channel-exhaustion finding arrived framed as "64 bare GETs with no POST can
+  hold every slot", which reads as an attacker paying for 64 concurrent sockets
+  and is the kind of cost that argues for accepting a residual. Reproducing it
+  instead of applying it showed the sockets never had to be held at all: the
+  unsubscribe emptied `listeners` and left the channel in place, so 64
+  fire-and-forget requests filled the cap for the full TTL. Both readers then
+  measured the same 64/64 with the next probe's `open()` false, independently,
+  before any code moved. That is what turned a disclosed residual into a fix —
+  the finding was right, its framing was not, and only running it could tell the
+  two apart.
+
+  **A gate record the builder silently corrects is the builder's words under the
+  reviewer's name.** Two claims in the draft record were wrong: that
+  `probe.requestContext` is logged unredacted at `routes/probe.ts:158`, which
+  `logger.ts`'s `safeFields` and a passing
+  `tools/downloader/api/test/logging.test.ts:253` both disprove, and a citation
+  landing on a blank line. Both went back with the evidence rather than being
+  edited in place, and the reviewer re-ran and corrected both itself. The record
+  was then committed verbatim — the only later change was two bare filenames
+  disambiguated at the reviewer's explicit instruction, and the commit message
+  says so, because it had previously claimed nothing but formatting differed.
+  A reader has to be able to hold the record against the builder's report; that
+  stops working the moment one is written by the author of the other.
+
+  **Four citations across this cycle named a file the checker could not resolve**
+  — `pool.ts`, `probe-stages.ts`, `api/test/logging.test.ts`, `api/src/context.ts`
+  — each ambiguous because a sibling tool has the same path, and one more that had
+  simply moved. Every one was caught only by running `scripts/citations.mjs` by
+  hand; it is in neither `.github/workflows/` nor `package.json`. Recorded here as
+  evidence for repo-29 rather than filed again.
