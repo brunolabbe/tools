@@ -1354,20 +1354,82 @@ test("locateRecord names the record the way git does — repo-relative, forward 
 /**
  * The fallback, asserted rather than left implicit, because it is the half that
  * a "just ask git" fix breaks if nobody writes it down. A record outside the
- * repository being checked has no in-tree name, and the honest answer is the
- * `..`-path — not a plausible-looking path resolved against some other checkout
- * the record happens to sit in. Most of this file's own CLI tests depend on it:
- * they check fixture records under `os.tmpdir()` with the cwd set to this repo.
+ * repository being checked has no in-tree name, and the honest answer is
+ * whatever `path.relative` gives — not a plausible-looking path resolved
+ * against some other checkout the record happens to sit in. Most of this file's
+ * own CLI tests depend on it: they check fixture records under `os.tmpdir()`
+ * with the cwd set to this repo.
+ *
+ * **This test used to assert `.startsWith("..")` and that was itself a POSIX
+ * path assumption** — the exact class of defect this ticket exists to fix,
+ * introduced by the test asserting the fix. It passed on Linux and failed on
+ * `windows-latest`, where the checkout is on `D:` and `os.tmpdir()` resolves
+ * under `C:`: two paths on different drive roots have no relative form Windows
+ * can express, so `path.relative` returns the target absolute and no `..`
+ * appears. The test below it pins that, and the assertion here is now the
+ * property rather than one platform's spelling of it.
  */
-test("a record outside the repo keeps its ..-path rather than borrowing another tree's", () => {
+test("a record outside the repo is not given an in-tree name", () => {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-outside-")));
   const outside = path.join(dir, "record.md");
   fs.writeFileSync(outside, "## Review\n");
 
+  // One assertion, and deliberately only one. The fallback hands back
+  // `path.relative`'s answer as-is, whatever shape this platform gives it —
+  // which is the whole contract, and it already fails for the bug this test is
+  // named for: a `locateRecord` that borrowed an in-tree name returns
+  // `record.md`, which is not that string. Measured, by making it do exactly
+  // that: `AssertionError: expected 'record.md' to be '../../../../../tmp/…'`.
+  //
+  // **Anything added after this line is implied by it and cannot fail on its
+  // own**, which is what the removed `.startsWith("..")` really was: given the
+  // result equals `path.relative`'s output, every further claim about that
+  // output's shape is a claim about `path.relative`, not about this code. It
+  // contributed no coverage and one platform assumption. The next person
+  // tempted to strengthen this test should add a case, not an assertion.
   expect(locateRecord(REPO, outside)).toBe(path.relative(REPO, outside));
-  expect(locateRecord(REPO, outside).startsWith("..")).toBe(true);
 
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * Why the assertion above is not `.startsWith("..")`, measured here rather than
+ * argued from memory — and the local reproduction of a failure that only a
+ * Windows host produced.
+ *
+ * `path.win32` is Node's Windows path algebra on any platform, which is the one
+ * tool that makes a cross-drive layout testable from Linux. The constants are
+ * not invented: `D:\a\tools\tools` is read out of the failing run's own
+ * checkout step, and `C:\Users\RUNNER~1\…\Temp` is where that runner's
+ * `os.tmpdir()` resolves.
+ *
+ * **What this does and does not buy, stated so nobody has to guess.** It is not
+ * a test of `locateRecord`: that function uses the ambient `path` module, so its
+ * Windows behaviour cannot be driven from here, and pretending otherwise is how
+ * a test comes to prove nothing. It also would not catch someone re-adding
+ * `.startsWith("..")` above. What it does is convert a claim that was
+ * previously reasoned — "on that runner the answer is absolute, so the `..`
+ * never appears" — into one this repo has actually run, and put it somewhere
+ * that a comment's rot cannot reach. That is the whole of it, and if a reviewer
+ * decides a comment would have done, they are not wrong to strike it.
+ */
+test("across drive roots the fallback is absolute, and the property survives it", () => {
+  const repo = "D:\\a\\tools\\tools";
+  const outside = "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\citations-outside-abc\\record.md";
+  const located = path.win32.relative(repo, outside);
+
+  // CI's `expected false to be true`, reproduced on Linux.
+  expect(located.startsWith("..")).toBe(false);
+  expect(path.win32.isAbsolute(located)).toBe(true);
+  // ...and the property the fallback actually needs, holding anyway.
+  expect(path.win32.resolve(repo, located)).toBe(outside);
+
+  // The other half, and the reason the old assertion was not obviously wrong:
+  // on one drive Windows does express the `..`-path, so the assumption held
+  // everywhere anyone had looked.
+  const sameDrive = path.win32.relative(repo, "D:\\a\\_temp\\x\\record.md");
+  expect(sameDrive.startsWith("..")).toBe(true);
+  expect(path.win32.resolve(repo, sameDrive)).toBe("D:\\a\\_temp\\x\\record.md");
 });
 
 /**

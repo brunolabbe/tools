@@ -142,6 +142,8 @@ and is not this ticket's to implement.
 
 **Builder's note on one coordinate, appended rather than folded silently into the record above.** The reviewer's record as sent cited `scripts/test/citations.test.ts:1278` for the fixture's root-level record. Line 1278 at `ab5e6fa` is **blank**; the line carrying the claim is 1279 — `const record = path.join(dir, "drift.md");`. Changed to 1279 above, on the orchestrator's instruction to re-resolve every `file:line` before committing, and disclosed here rather than passed off as verbatim. The reviewer was told; the claim itself is unaffected and holds.
 
+**Every coordinate in the subsection above is pinned to `ab5e6fa` and most no longer resolve at the branch tip.** The round-two fix edited `scripts/test/citations.test.ts` in the middle, so `:1362`, `:1387`, `:1440`, `:1453` and `:1465` now land on a docblock asterisk, a comment, prose, another comment and a different test's name; `:1279`, `:1344` and `:1351` sit above the edit and still hold. Read that subsection with `--rev ab5e6fa`, which is what the flag is for. **The checker cannot tell you this**: `citations.mjs` over this file reports `0 moved, 0 unresolvable, exit 0` both against the tip and against `ab5e6fa` — the same clean answer for a set of coordinates that is right in one tree and wrong in the other — because an unanchored citation is checked for existence and nothing else.
+
 That miss is worth more than the one character it cost, because it happened **in a gate record for the citation checker, and the checker cleared it**. `node scripts/citations.mjs` over this file reports `0 verified, 0 moved, 10 unanchored, 0 unresolvable, 2 unchecked — of 12 references` and **exit 0**, printing an empty preview line under `scripts/test/citations.test.ts:1278` without objecting to it. With `--require-anchors` the same file is exit 4 on all 10. Nothing here is a defect in the fix under review — it is repo-18's and repo-29's thesis reproducing itself on this very branch: a citation with no anchor text is a coordinate nobody checked, and only a human re-resolution catches it. The record is left unanchored because it is the reviewer's text and the gating run is the unflagged one, but the next reader should read those ten as unverified coordinates, not as checked ones.
 
 ## Log
@@ -243,3 +245,57 @@ That miss is worth more than the one character it cost, because it happened **in
   prove, since a POSIX symlink is resolved by either variant: that `.native`
   rather than plain `realpathSync` is required. That claim is Windows-only and
   remains unmeasured.
+
+- **2026-09-07, the Windows leg observed — superseding two claims above.** CI ran
+  the matrix on PR #186 at `795dd1c` (run `34165962251`), which is the first time
+  anything in this ticket was measured on a Windows host rather than argued for.
+  Both results matter and they point opposite ways.
+
+  **The fix works.** `test (windows-latest)` shows
+  `✓ --rev names which record it read, and says when that record cited something else` —
+  the assertion that was red on `main` across eleven runs. The entry above says
+  that outcome "is an argument, not a reading". **It is now a reading**, and the
+  argument it rested on was correct. `test (ubuntu-latest)` and `check` are green.
+
+  **And the branch broke Windows in a new place, in the test asserting the fix.**
+  The run's one failure is
+  `a record outside the repo keeps its ..-path rather than borrowing another tree's`,
+  at `scripts/test/citations.test.ts:1368:56`,
+  `AssertionError: expected false to be true` — `1 failed | 2265 passed | 2 skipped`,
+  the two skips being this branch's `skipIf(win32)` pair, as designed.
+
+  The diagnosis is the assertion pair, because line 1367 passed and 1368 failed:
+  `locateRecord` returned exactly `path.relative`'s output — **the production
+  code is correct and was not changed** — and that output did not begin with
+  `..`. On Windows the only way that happens is two different drive roots, where
+  no relative path is expressible and `path.relative` returns the target
+  absolute. The runner's checkout is `D:\a\tools\tools`, read out of that run's
+  own log; `os.tmpdir()` on that image resolves under `C:\Users\RUNNER~1\…\Temp`.
+
+  **The finding is the irony, and it is the most useful sentence here.**
+  `.startsWith("..")` is a POSIX-shaped assumption about what a path outside a
+  tree looks like — the exact class of defect this ticket exists to fix,
+  introduced by the test asserting the fix, and green on Linux the whole time.
+
+  Fixed in the assertion, not the code. The second assertion is **deleted rather
+  than repaired**, which was not the first instinct: the replacement was going to
+  be `path.resolve(REPO, located) === outside`, until making it fail showed it
+  could not fail on its own. Given the line above it pins the result to
+  `path.relative`'s output, _every_ further claim about that output's shape is a
+  claim about `path.relative` rather than about this code — so the old assertion
+  contributed no coverage and one platform assumption, and so would its
+  replacement. The surviving line still catches the bug the test is named for,
+  measured by making `locateRecord` borrow an in-tree name:
+  `AssertionError: expected 'record.md' to be '../../../../../tmp/citations-outside-…'`.
+
+  The cross-drive case is now reproduced **on Linux** rather than left as
+  reasoning, in a second test driven by `path.win32` — Node's Windows path
+  algebra on any platform — with the runner's real constants:
+  `path.win32.relative("D:\\a\\tools\\tools", "C:\\Users\\RUNNER~1\\…\\record.md")`
+  returns the target absolute, `startsWith("..")` is `false`, `isAbsolute` is
+  `true`, and it still round-trips through `path.win32.resolve`. The same call on
+  one drive _does_ return a `..`-path, which is why the old assumption held
+  everywhere anyone had looked. That test pins a platform assumption; it is
+  explicitly **not** a test of `locateRecord`, whose ambient `path` cannot be
+  driven from here, and it would not catch someone re-adding `.startsWith("..")`.
+  Its docblock says so, and says a reviewer would be within rights to strike it.
