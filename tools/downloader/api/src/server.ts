@@ -27,6 +27,7 @@ import { toErrorResponse } from "./http-errors.ts";
 import { JobEventHub } from "./jobs/events.ts";
 import { JobOrchestrator } from "./jobs/orchestrator.ts";
 import { ProbeCache } from "./jobs/probe-cache.ts";
+import { ProbeStageHub } from "./probe-stages.ts";
 import { ConcurrencyGate, RateLimiter } from "@webtools/core/rate-limit";
 import { InProcessJobQueue } from "./jobs/queue.ts";
 import type { AppLogger } from "./logger.ts";
@@ -37,6 +38,7 @@ import { registerEventRoutes } from "./routes/events.ts";
 import { registerFileRoutes } from "./routes/files.ts";
 import { registerHealthRoute } from "./routes/health.ts";
 import { registerJobRoutes } from "./routes/jobs.ts";
+import { registerProbeEventRoutes } from "./routes/probe-events.ts";
 import { registerProbeRoute } from "./routes/probe.ts";
 import { registerThumbnailRoute } from "./routes/thumbnail.ts";
 import { registerWebRoutes, serveIndexForUnknownPath } from "./routes/web.ts";
@@ -407,6 +409,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   });
   const events = new JobEventHub(options.now);
   const probeCache = new ProbeCache({ ttlMs: config.probeCacheTtlMs });
+  const probeStages = new ProbeStageHub(options.now);
   const thumbnails = new ThumbnailStore();
 
   let shuttingDown = false;
@@ -459,6 +462,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     queue,
     events,
     probeCache,
+    probeStages,
     thumbnails,
     guardedFetch,
     orchestrator,
@@ -501,6 +505,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
 
   registerHealthRoute(server, context);
   registerProbeRoute(server, context);
+  registerProbeEventRoutes(server, context);
   registerJobRoutes(server, context);
   registerEventRoutes(server, context);
   registerFileRoutes(server, context);

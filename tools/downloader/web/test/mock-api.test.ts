@@ -9,10 +9,11 @@ import {
   jobEventSchema,
   jobSchema,
   jobOptionsSchema,
+  probeEventSchema,
   probeRequestSchema,
   sourceUrlSchema,
 } from "@downloader/contract";
-import type { ErrorCode, Job, JobEvent, JobOptions } from "@downloader/contract";
+import type { ErrorCode, Job, JobEvent, JobOptions, ProbeEvent } from "@downloader/contract";
 import { createMockClient } from "../src/api/mock.ts";
 import { SCENARIOS, baseProbeResult, findScenario, scenarioUrl } from "../src/api/scenarios.ts";
 import type { ApiClient } from "../src/api/types.ts";
@@ -345,5 +346,87 @@ describe("scenario coverage", () => {
 
     const missing = ERROR_CODES.filter((code) => !fromScenarios.has(code));
     expect(missing).toEqual([]);
+  });
+});
+
+/**
+ * The mock's own probe narration (dl-43).
+ *
+ * The mock is a server, so its stages are the points on its simulated timeline
+ * that it actually reaches — the same standing as the `JobEvent` timeline it
+ * has always replayed. What must not come back is the *UI* inventing stages
+ * from a clock; that is asserted in `chrome.test.tsx`, where the panel is given
+ * no timer at all.
+ */
+describe("the probe stage channel", () => {
+  /** Watches one probe and returns its frames, with the answer it was narrating. */
+  async function narrate(url: string): Promise<{ frames: ProbeEvent[]; failed: boolean }> {
+    const probeId = "0123456789abcdef0123456789abcdef";
+    const frames: ProbeEvent[] = [];
+    const stream = api.openProbeEvents(probeId, {
+      onOpen: () => {},
+      onEvent: (event) => frames.push(event),
+      onError: () => {},
+    });
+    let failed = false;
+    const pending = api.probe({ url, probeId }).catch(() => {
+      failed = true;
+    });
+    await vi.advanceTimersByTimeAsync(40_000);
+    await pending;
+    stream.close();
+    return { frames, failed };
+  }
+
+  test("every frame is one the shared schema accepts", async () => {
+    const { frames } = await narrate(scenarioUrl("slow"));
+    expect(frames.length).toBeGreaterThan(0);
+    for (const frame of frames) expect(probeEventSchema.safeParse(frame).success).toBe(true);
+  });
+
+  test("a slow probe narrates the chain degrading to a browser, and terminates", async () => {
+    const { frames } = await narrate(scenarioUrl("slow"));
+    const stages = frames.flatMap((frame) => (frame.type === "stage" ? [frame.stage] : []));
+
+    // The tiers in order, then the browser's phases. The wait for a free
+    // browser is in there because that is what an 18-second probe usually is.
+    expect(stages.slice(0, 6)).toEqual([
+      "resolver-start",
+      "direct-head",
+      "resolver-start",
+      "ytdlp-run",
+      "resolver-start",
+      "browser-slot",
+    ]);
+    expect(stages).toContain("measure-variants");
+    expect(frames.at(-1)?.type).toBe("done");
+  });
+
+  test("a fast probe never mentions a tier it did not need", async () => {
+    // The happy path answers on the cheap tier, and the narration says so and
+    // stops. This is the mock half of the acceptance the registry proves for
+    // the real chain.
+    const { frames } = await narrate(scenarioUrl(""));
+    const stages = frames.flatMap((frame) => (frame.type === "stage" ? [frame.stage] : []));
+    expect(stages).toEqual(["resolver-start", "direct-head"]);
+    expect(stages).not.toContain("ytdlp-run");
+    expect(stages).not.toContain("browser-launch");
+  });
+
+  test("a probe that fails still ends its stream", async () => {
+    const { frames, failed } = await narrate(scenarioUrl("nomedia"));
+    expect(failed).toBe(true);
+    expect(frames.at(-1)?.type).toBe("done");
+  });
+
+  test("a probe with no channel behaves exactly as it did", async () => {
+    // `probeId` is optional in the request schema, so nothing that predates
+    // dl-43 has to change to keep working.
+    const answer = await (async () => {
+      const pending = api.probe({ url: scenarioUrl("") });
+      await vi.advanceTimersByTimeAsync(40_000);
+      return await pending;
+    })();
+    expect(answer.probe.variants.length).toBeGreaterThan(0);
   });
 });

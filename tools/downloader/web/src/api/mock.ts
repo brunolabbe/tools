@@ -28,6 +28,7 @@ import type {
   JobResult,
   JobStatus,
   MediaVariant,
+  ProbeEvent,
   ProbeRequest,
   ProbeResponse,
   ProbeResult,
@@ -37,7 +38,7 @@ import type { Clock } from "../lib/clock.ts";
 import type { EventStream, EventStreamHandlers } from "../lib/event-stream.ts";
 import { applyJobEvent } from "../lib/job-reducer.ts";
 import { findVariant, pickDefaultVariantId } from "../lib/variants.ts";
-import { baseProbeResult, findScenario } from "./scenarios.ts";
+import { DIRECT_STAGE_SCRIPT, baseProbeResult, findScenario } from "./scenarios.ts";
 import type { JobScript, Scenario } from "./scenarios.ts";
 import type { ApiClient } from "./types.ts";
 
@@ -54,6 +55,12 @@ interface Step {
 
 interface MockStream {
   handlers: EventStreamHandlers;
+  closed: boolean;
+}
+
+/** The same, for the probe stage channel — a different frame union (dl-43). */
+interface MockProbeStream {
+  handlers: EventStreamHandlers<ProbeEvent>;
   closed: boolean;
 }
 
@@ -103,6 +110,7 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
   const clock = options.clock ?? systemClock;
   const speed = options.speed ?? 1;
   const runtimes = new Map<string, JobRuntime>();
+  const probeStreams = new Map<string, Set<MockProbeStream>>();
 
   const scaled = (ms: number): number => Math.max(0, Math.round(ms * speed));
   const nowIso = (): string => new Date(clock.now()).toISOString();
@@ -244,17 +252,63 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
     return steps;
   }
 
+  /**
+   * Publishes to one probe's stage channel (dl-43).
+   *
+   * Best-effort and fire-and-forget, exactly like the server's hub: nothing
+   * here may affect whether the probe itself succeeds.
+   */
+  function emitProbe(probeId: string, event: ProbeEvent): void {
+    const streams = probeStreams.get(probeId);
+    if (streams === undefined) return;
+    // A copy, because a handler is free to close its own stream — which deletes
+    // from the set being walked. `dropStreams` above copies for the same reason.
+    // oxlint-disable-next-line no-useless-spread
+    for (const stream of [...streams]) {
+      if (!stream.closed) stream.handlers.onEvent(event);
+    }
+  }
+
   async function probe(request: ProbeRequest): Promise<ProbeResponse> {
     const parsed = probeRequestSchema.safeParse(request);
     if (!parsed.success) throw new AppError("INVALID_URL");
 
     const scenario = findScenario(parsed.data.url);
-    await sleep(clock, scaled(scenario.probeDelayMs));
+    const { probeId } = parsed.data;
+    const cancelBeats: Array<() => void> = [];
+    if (probeId !== undefined) {
+      // Scheduled against the same clock the sleep below uses, so the narration
+      // and the wait it narrates cannot drift apart — including under the
+      // fake clock in tests and under `VITE_MOCK_SPEED`.
+      for (const beat of scenario.stages ?? DIRECT_STAGE_SCRIPT) {
+        cancelBeats.push(
+          clock.schedule(
+            () => {
+              emitProbe(probeId, {
+                type: "stage",
+                probeId,
+                stage: beat.stage,
+                resolver: beat.resolver,
+                at: nowIso(),
+              });
+            },
+            scaled(scenario.probeDelayMs * beat.at),
+          ),
+        );
+      }
+    }
 
-    if (scenario.probeError)
-      throw new AppError(scenario.probeError, undefined, drmDetails(scenario));
+    try {
+      await sleep(clock, scaled(scenario.probeDelayMs));
 
-    return { probe: buildProbe(scenario, parsed.data.url, nowIso()), cached: false };
+      if (scenario.probeError)
+        throw new AppError(scenario.probeError, undefined, drmDetails(scenario));
+
+      return { probe: buildProbe(scenario, parsed.data.url, nowIso()), cached: false };
+    } finally {
+      for (const cancel of cancelBeats) cancel();
+      if (probeId !== undefined) emitProbe(probeId, { type: "done", probeId, at: nowIso() });
+    }
   }
 
   async function createJob(request: CreateJobRequest): Promise<JobResponse> {
@@ -339,6 +393,29 @@ export function createMockClient(options: MockClientOptions = {}): ApiClient {
         at: nowIso(),
       });
       return { job: runtime.job };
+    },
+
+    openProbeEvents(probeId, handlers): EventStream {
+      const stream: MockProbeStream = { handlers, closed: false };
+      let streams = probeStreams.get(probeId);
+      if (streams === undefined) {
+        streams = new Set();
+        probeStreams.set(probeId, streams);
+      }
+      streams.add(stream);
+      const cancelOpen = clock.schedule(() => {
+        if (!stream.closed) handlers.onOpen();
+      }, scaled(20));
+      return {
+        close() {
+          cancelOpen();
+          stream.closed = true;
+          streams.delete(stream);
+          // Dropped when the last listener goes, or a long session accumulates
+          // one entry per URL it ever analysed.
+          if (streams.size === 0) probeStreams.delete(probeId);
+        },
+      };
     },
 
     openJobEvents(jobId, handlers): EventStream {

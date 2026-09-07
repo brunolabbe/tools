@@ -10,7 +10,7 @@
  */
 
 import { AppError } from "@downloader/contract";
-import type { ErrorCode, ProbeResult, ResolveOptions } from "@downloader/contract";
+import type { ErrorCode, ProbeResult, ProbeStageEvent, ResolveOptions } from "@downloader/contract";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { BrowserPool } from "../../src/browser/pool.ts";
 import { BrowserResolver } from "../../src/resolvers/browser.ts";
@@ -321,4 +321,79 @@ describe("BrowserResolver", () => {
     const resolver = new BrowserResolver({ maxConcurrentBrowsers: 1 });
     await expect(resolver.dispose()).resolves.toBeUndefined();
   });
+});
+
+/**
+ * The stages the browser tier reports, against a real page (dl-43).
+ *
+ * The point of running this here rather than with a mocked pool is that every
+ * assertion below is only true because a real Chromium got that far: the page
+ * was loaded, playback was provoked, the network went quiet and the manifest
+ * was fetched and parsed. That is the whole claim the ticket makes — a stage
+ * appears because code reached the point that emits it — and it cannot be
+ * checked by any test that stands in for the work.
+ */
+describe("stage narration", () => {
+  test(
+    "reports each phase it actually reaches, in order, and none it does not",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      const hls = recordingHlsParser();
+      const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+      const seen: ProbeStageEvent[] = [];
+      await probe(
+        "/mse.html",
+        resolver,
+        options({
+          onStage: (event) => {
+            seen.push(event);
+          },
+        }),
+      );
+
+      expect(seen.every((event) => event.resolver === "browser")).toBe(true);
+      const stages = seen.map((event) => event.stage);
+      expect(stages).toEqual([
+        // No `browser-slot`: this pool has a free slot, so nothing waited for
+        // one, so nothing said it did.
+        "browser-launch",
+        "page-load",
+        "provoke-playback",
+        "network-quiet",
+        "settle-requests",
+        "manifest-fetch",
+        "manifest-parse",
+        "measure-variants",
+      ]);
+    },
+  );
+
+  test(
+    "a page with nothing playable never claims to have read a manifest",
+    { timeout: TEST_TIMEOUT_MS },
+    async () => {
+      // The three phases after `settle-requests` are conditional on there being
+      // something to fetch, parse and weigh. A narration that listed them
+      // anyway would be back to describing a script rather than a probe.
+      const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+      const seen: ProbeStageEvent[] = [];
+      await expect(
+        probe(
+          "/no-media.html",
+          resolver,
+          options({
+            onStage: (event) => {
+              seen.push(event);
+            },
+          }),
+        ),
+      ).rejects.toThrow(AppError);
+
+      const stages = seen.map((event) => event.stage);
+      expect(stages).toContain("settle-requests");
+      expect(stages).not.toContain("manifest-fetch");
+      expect(stages).not.toContain("manifest-parse");
+      expect(stages).not.toContain("measure-variants");
+    },
+  );
 });

@@ -12,14 +12,14 @@ Every package named below lives under `tools/downloader/`.
 ```
 ┌──────────────┐   POST /api/probe          ┌────────────────────────────┐
 │              │ ─────────────────────────► │                            │
-│     web      │   POST /api/jobs           │            api             │
-│  React+Vite  │ ─────────────────────────► │          Fastify           │
-│              │   GET  /api/jobs/:id/events│                            │
-│              │ ◄───────── SSE ─────────── │  ┌──────────────────────┐  │
-└──────────────┘   GET  /api/files/:token   │  │  Job orchestrator    │  │
-                 ◄──────────────────────────│  │  queue · FSM · SSE   │  │
-                                            │  └──────┬───────────────┘  │
-                                            └─────────┼──────────────────┘
+│              │  GET  /api/probe/:id/events│            api             │
+│     web      │ ◄───────── SSE ─────────── │          Fastify           │
+│  React+Vite  │   POST /api/jobs           │                            │
+│              │ ─────────────────────────► │  ┌──────────────────────┐  │
+│              │   GET  /api/jobs/:id/events│  │  Job orchestrator    │  │
+│              │ ◄───────── SSE ─────────── │  │  queue · FSM · SSE   │  │
+└──────────────┘   GET  /api/files/:token   │  └──────┬───────────────┘  │
+                 ◄──────────────────────────└─────────┼──────────────────┘
                                     ┌─────────────────┴─────────────────┐
                                     ▼                                   ▼
                     ┌───────────────────────────┐      ┌────────────────────────────┐
@@ -107,6 +107,18 @@ change, but do not pay for it now.
 **SSE, not WebSockets.** Progress is server→client only. SSE is a plain HTTP
 response, survives proxies, and reconnects on its own. WebSockets buy nothing
 here.
+
+**Two SSE channels, because a probe has no job (dl-43).** `/api/jobs/:id/events`
+is keyed on a row in the job store, so it can 404 and its subscribers are bounded
+by the store. `/api/probe/:id/events` is keyed on an id the _client_ mints and
+sends with the POST — there is no earlier request to have been handed one by, and
+the first resolver stage happens while that POST is still in flight. So it cannot
+404 on an unknown id, it buffers until its first subscriber attaches, and its
+channels expire on a timer of their own. The rule both obey is that a stage is
+reported because code reached the line that reports it; the analyse panel is a
+single replaced line and deliberately _not_ a gated bar, because the resolver
+tiers are alternatives and a bar that filled as the chain degraded would report
+failure as progress.
 
 **Capability-token file URLs.** `/api/files/:token` where the token is
 unguessable random bytes, never the job id. Job ids appear in logs and URLs; the

@@ -3,7 +3,7 @@ id: dl-43
 tool: downloader
 title: Gate the analyse and download progress on events that actually happened
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -84,8 +84,8 @@ inventing — it needs emitting.
 
 | Stage                            | Where it already happens                                                                    | Shown today as               |
 | -------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------- |
-| Waiting for a free browser slot  | `#semaphore.acquire()`, [`browser/pool.ts:186`](../../resolvers/src/browser/pool.ts)        | "Opening a headless browser" |
-| Launching / claiming the browser | `#launch` / `#shareBrowser`, [`browser/pool.ts:195`](../../resolvers/src/browser/pool.ts)   | same line                    |
+| Waiting for a free browser slot  | `#semaphore.acquire()`, [`browser/pool.ts:234`](../../resolvers/src/browser/pool.ts)        | "Opening a headless browser" |
+| Launching / claiming the browser | `#launch` / `#shareBrowser`, [`browser/pool.ts:246`](../../resolvers/src/browser/pool.ts)   | same line                    |
 | Loading the page                 | `navigate(page, url, …)`, [`browser.ts:202`](../../resolvers/src/resolvers/browser.ts)      | "Loading the page…"          |
 | Provoking playback               | `provokePlayback`, [`browser.ts:208`](../../resolvers/src/resolvers/browser.ts)             | "Provoking playback…"        |
 | Waiting for network quiet        | `waitForQuiet`, [`browser.ts:213`](../../resolvers/src/resolvers/browser.ts)                | "Waiting for the network…"   |
@@ -258,3 +258,99 @@ fast one and it is tempting to test only the slow one.
   few lines did not earn a dispatch of its own. Nothing in `src` was touched for
   dl-43 and `status` stays `ready`: the next reader should treat this as a brief
   whose last open question is closed, not as work in progress.
+
+- **2026-09-07 — built.** Option A, all eight Build steps, plus the server half
+  the ticket widened into. Branch `dl-43-gate-progress-on-what-actually-happened`
+  off `origin/main` at `24e5bf7`.
+
+  **What the brief had wrong.** Two line citations in the stage table pointed at
+  the wrong thing: `browser/pool.ts:186` is `return this.#semaphore.max;` inside
+  a getter and `:195` is inside the `stats` doc comment — neither is an `await`
+  at all. The table now cites the tree being committed:
+  `browser/pool.ts:234 "await this.#semaphore.acquire(options.signal)"` and
+  `:246 "dedicated = await this.#launch(proxyUrl)"`. It has been corrected in
+  place, since a done ticket
+  that cites the wrong line is a trap rather than a record. Every other citation
+  in the ticket was re-derived and holds. A relayed report that Build step 1's
+  prose implied `contract/src/job.ts` did **not** reproduce — step 1 names
+  `ResolveOptions` and no file, and `job.ts` appears only in the "Why" section,
+  where it is correct (it is where `JOB_STATUSES` lives). `ResolveOptions` is in
+  `contract/src/resolver.ts` and that is where the new types went.
+
+  **The contract.** `PROBE_STAGES` (twelve entries, one per row of the table
+  above plus `resolver-start`), `ProbeStageEvent`, the SSE frame union
+  `ProbeEvent`, and an **optional** `ResolveOptions.onStage` — so every caller
+  and test that predates this is unaffected. Beyond what step 1 authorised, the
+  channel needed three more contract lines, all of them mechanical consequences
+  of step 3 asking for an SSE endpoint modelled on `routes/events.ts`:
+  `probeEventSchema` + `parseProbeEvent` (that route validates every frame with a
+  shared schema, and the client re-validates), `probeIdSchema` and an optional
+  `probeId` on `probeRequestSchema`, and `ROUTES.probeEvents`.
+
+  **The probe id is minted by the client, which is the one place this differs
+  from step 3's "a probe id minted on request".** The POST that starts a probe is
+  the request that would have to hand a server-minted id back, and by then the
+  first stages have happened; the alternatives were a round trip before every
+  analysis, or a race in which the opening stages are emitted into an empty room.
+  What it protects is weaker in kind than `ROUTES.file`'s token — a guessed id
+  reveals which phase somebody else's probe is in and nothing else, and
+  `PROBE_STAGES` is a closed vocabulary with no free text, so that stays true by
+  construction rather than by review. The hub buffers up to 32 frames for a
+  subscriber that has not attached yet, which is what makes the client free to
+  open the `EventSource` and POST without ordering them.
+
+  **Two defects found while building, both fixed here.** (1) `#open` refreshed a
+  channel's deadline unconditionally, so a client attaching after `done` bought a
+  finished probe another full TTL — caught by
+  `api/test/probe-stages.test.ts:89 "reaches a subscriber that only arrives
+afterwards"`, fixed at `api/src/probe-stages.ts:183 "if (!existing.ended)"`. (2) `.progress::-webkit-progress-bar` sets
+  an opaque background and that pseudo-element paints _above_ the element's own,
+  so in Chromium the static barber-pole this ticket was replacing had been
+  invisible all along — the animated background would have been too. Only the
+  indeterminate case is reset.
+
+  **`browser-slot` is emitted only when the semaphore is actually full.**
+  `Semaphore.acquire` returns without suspending whenever `active < max` and
+  nothing can run between the read and the call, so a full semaphore at that
+  instant means this lease _will_ wait. An unconditional emit would have put
+  "waiting for a free browser" on screen for every uncontended probe, which is
+  narration again by another name.
+
+  **Checked by hand against the running app** (mock transport, `VITE_MOCK_SPEED=0.35`,
+  real Chromium at 900×1000), because that is the one acceptance line no test
+  reaches:
+
+  - The analysing card measured **one height (213 px) and one top (303 px)
+    across all fourteen narration lines** of the `slow` scenario — the line is
+    replaced, the card does not move. `.stage` carries a `min-height` for the
+    wrapping case.
+  - The indeterminate bar's computed `animation-name` is `progress-travel` with
+    one running animation, and its `background-position` was sampled advancing
+    `-40.5% → -15.6% → +9.3% → +34.2%`. Under `prefers-reduced-motion: reduce`
+    the computed `animation-name` is `none`, zero animations are running, and the
+    hatch covers the whole track — visibly not a determinate bar at 0%, which
+    would be an empty one.
+  - The download card walked `Queued → Re-analysing → Downloading → Assembling →
+Ready` (and `→ Failed` on `dlfail`) at a **constant 828 px** with five gate
+    segments throughout, on `""`, `indeterminate`, `flaky`, `expired` and
+    `dlfail`. Screenshots confirm the gated bar reads as intended: done segments
+    green with a tick, the current one accented, the rest grey.
+
+  **Not measured, and worth saying so.** The e2e suites were not run — they need
+  `npm run e2e:install` and a fixture origin, and nothing in this change touches
+  a path they cover that the unit suites do not. The probe channel has never been
+  exercised over a real `EventSource`: the API tests drive it through Fastify's
+  `inject`, and the web tests through the transport seam. Both are the shapes
+  those suites already use for `/api/jobs/:id/events`, but neither is a browser
+  talking to the API.
+
+  **Folded in rather than filed:** the two stale citations above; the
+  `::-webkit-progress-bar` reset, without which step 7 would have shipped an
+  animation nobody could see; and `01-ARCHITECTURE.md`'s diagram and SSE
+  decision, which listed every other client↔api route and would have gone stale
+  the moment this merged. **Deliberately not folded in:** anchor text for this
+  ticket's citations. `scripts/citations.mjs` reports the brief's as unanchored
+  and repo-29 is filed for exactly that, so anchoring them wholesale here would do
+  that ticket's work in the wrong branch; the four citations _this entry_ writes
+  carry anchors, because an unanchored one is a claim nothing checks and these are
+  claims about work that just moved.

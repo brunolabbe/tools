@@ -86,6 +86,8 @@ export class DirectUrlResolver implements Resolver {
 
   async resolve(url: URL, options: ResolveOptions): Promise<ProbeResult> {
     const headers = this.#buildHeaders(url, options);
+    // dl-43: the HEAD (or its ranged-GET fallback) is this tier's one wait.
+    options.onStage?.({ stage: "direct-head", resolver: this.name });
     const head = await this.#head(url, headers, options.signal);
     const contentType = (head.headers.get("content-type") ?? "").toLowerCase();
     const extension = urlExtension(url.href);

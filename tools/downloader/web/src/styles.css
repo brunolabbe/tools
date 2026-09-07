@@ -433,47 +433,131 @@ code {
   background: var(--accent);
 }
 
-/* Indeterminate: the element carries no value attribute, so it cannot fill. */
+/*
+ * Indeterminate: the element carries no value attribute, so it cannot fill, and
+ * a band travels the track instead (dl-43 defect 3). It was a static
+ * `repeating-linear-gradient` before, which made a stalled probe and a healthy
+ * one pixel-identical — the one distinction an indeterminate bar exists to draw.
+ *
+ * The `::-webkit-progress-bar` reset is what makes any of this visible in
+ * Chromium: that pseudo-element paints an opaque track *over* the element's own
+ * background, so the barber-pole this replaced was being hidden there too. Only
+ * the indeterminate case is reset, so a determinate bar's track is untouched.
+ */
 .progress--indeterminate {
-  background: repeating-linear-gradient(
-    115deg,
-    var(--surface-2) 0 10px,
-    color-mix(in srgb, var(--accent) 35%, transparent) 10px 20px
+  background-color: var(--surface-2);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 60%, transparent) 50%,
+    transparent 100%
   );
+  background-repeat: no-repeat;
+  background-size: 40% 100%;
+  animation: progress-travel 1.4s linear infinite;
+}
+
+.progress--indeterminate::-webkit-progress-bar {
+  background: transparent;
+}
+
+@keyframes progress-travel {
+  from {
+    background-position: -45% 0;
+  }
+
+  to {
+    background-position: 145% 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .progress::-webkit-progress-value {
     transition: none;
   }
+
+  /*
+   * The still fallback has to stay unmistakably *not* a determinate bar sitting
+   * at 0%, so it is the whole track carrying a hatch rather than an empty one:
+   * there is no unfilled end to read as "nothing has happened".
+   */
+  .progress--indeterminate {
+    animation: none;
+    background-image: repeating-linear-gradient(
+      115deg,
+      var(--surface-2) 0 10px,
+      color-mix(in srgb, var(--accent) 35%, transparent) 10px 20px
+    );
+    background-size: auto;
+    background-position: 0 0;
+  }
 }
 
-/* --- stages / steps --- */
+/*
+ * --- the analyse stage line, and the download's gated bar ---
+ *
+ * One rule served both until dl-43, which is why they are apart now: the two
+ * are no longer the same thing. The download's five statuses are a pipeline
+ * that always runs in order, so they are drawn as gates. The analyse tiers are
+ * a fallback chain in which exactly one succeeds, so there is nothing to gate —
+ * a bar that filled as the chain degraded would report failure as progress —
+ * and it is one line, replaced as the server reports a new stage.
+ *
+ * Sharing a selector meant every change to one landed on the other by accident.
+ */
 
-.stages,
+/* The analyse panel: one line, and no list. */
+.stage {
+  margin: 0.5rem 0 0.2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--accent);
+  /* The text is replaced, not appended, so the line must not resize the card as
+     it goes. `min-height` rather than a fixed one, in case it wraps. */
+  min-height: 1.4em;
+}
+
+/*
+ * Gated: five equal columns, so the bar is the pipeline rather than a caption
+ * under one. `1fr` columns are also what keeps the card still — the active step
+ * goes bold, and in the wrapping flex row this replaced that shifted every
+ * label after it.
+ */
 .steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1rem;
-  margin: 0.6rem 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0.35rem;
+  margin: 0.7rem 0 0.4rem;
   padding: 0;
   list-style: none;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
 }
 
-.stages__item--active,
+.steps__item {
+  padding-top: 0.4rem;
+  border-top: 4px solid var(--surface-2);
+  border-radius: 2px;
+  overflow-wrap: anywhere;
+}
+
 .steps__item--active {
+  border-top-color: var(--accent);
   color: var(--accent);
   font-weight: 600;
 }
 
-.stages__item--done,
+/*
+ * `active` outranks `done` at the call site, not here — a re-probing job is
+ * *at* a gate it has already passed, and where it is now is the more useful of
+ * the two facts. See `statusHighWaterMark` and `JobCard`.
+ */
 .steps__item--done {
+  border-top-color: var(--ok);
   color: var(--ok);
 }
 
-.stages__item--done::before,
 .steps__item--done::before {
   content: "✓ ";
 }

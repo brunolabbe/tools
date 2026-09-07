@@ -241,6 +241,8 @@ export class YtDlpResolver implements Resolver {
     }
     args.push(url.href);
 
+    // dl-43: the whole tier is one subprocess, and this is the await it waits on.
+    options.onStage?.({ stage: "ytdlp-run", resolver: this.name });
     const result = await runProcess(
       binary,
       args,

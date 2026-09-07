@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { AppError } from "@downloader/contract";
-import type { ProbeResult, Resolver, ResolveOptions } from "@downloader/contract";
+import type { ProbeResult, ProbeStageEvent, Resolver, ResolveOptions } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
 import { ResolverRegistry } from "../src/registry.ts";
 import { YtDlpResolver } from "../src/resolvers/ytdlp.ts";
@@ -323,5 +323,115 @@ describe("the yt-dlp tier is expendable", () => {
       new ResolverRegistry([ytdlp, sniffer]).resolve(URL_UNDER_TEST, options()),
     ).rejects.toMatchObject({ code: "TLS_VERIFICATION_FAILED" });
     expect(sniffer.calls).toEqual([]);
+  });
+});
+
+/**
+ * The chain's own narration (dl-43).
+ *
+ * The rule these pin is the one the whole feature stands on: a stage may only
+ * be reported because code reached the point that reports it. In the chain that
+ * has a sharp consequence — the tiers are *alternatives*, exactly one succeeds
+ * and the rest never run — so a probe answered on tier 1 must not mention the
+ * other two on its way to done. It is the acceptance most likely to be missed,
+ * because the happy path is the fast one and it is tempting to test only the
+ * slow one.
+ */
+function collector(): { events: ProbeStageEvent[]; onStage: (e: ProbeStageEvent) => void } {
+  const events: ProbeStageEvent[] = [];
+  return {
+    events,
+    onStage: (event) => {
+      events.push(event);
+    },
+  };
+}
+
+describe("stage narration", () => {
+  test("a probe answered by the first tier never reports the second or third", async () => {
+    const first = new StubResolver({ name: "yt-dlp", priority: 20, behaviour: "succeed" });
+    const second = new StubResolver({ name: "browser", priority: 50, behaviour: "succeed" });
+    const third = new StubResolver({ name: "direct", priority: 90, behaviour: "succeed" });
+    const seen = collector();
+
+    const result = await new ResolverRegistry([first, second, third]).resolve(
+      URL_UNDER_TEST,
+      options({ onStage: seen.onStage }),
+    );
+
+    expect(result.resolver).toBe("yt-dlp");
+    expect(seen.events).toEqual([{ stage: "resolver-start", resolver: "yt-dlp" }]);
+    // Named rather than left to the deep-equal above, because this is the claim:
+    // the tiers that did not run said nothing at all.
+    expect(seen.events.map((event) => event.resolver)).not.toContain("browser");
+    expect(seen.events.map((event) => event.resolver)).not.toContain("direct");
+    expect(second.calls).toHaveLength(0);
+    expect(third.calls).toHaveLength(0);
+  });
+
+  test("each tier is announced before it runs, so the one that answers is named", async () => {
+    // Fired after `resolve` instead, the tier that succeeds would be the one
+    // tier never announced — which is the only one the user is waiting on.
+    const first = new StubResolver({ name: "yt-dlp", priority: 20, behaviour: "no-media" });
+    const second = new StubResolver({ name: "browser", priority: 50, behaviour: "succeed" });
+    const seen = collector();
+
+    await new ResolverRegistry([first, second]).resolve(
+      URL_UNDER_TEST,
+      options({ onStage: seen.onStage }),
+    );
+
+    expect(seen.events).toEqual([
+      { stage: "resolver-start", resolver: "yt-dlp" },
+      { stage: "resolver-start", resolver: "browser" },
+    ]);
+  });
+
+  test("a chain that finds nothing announces every tier it actually tried", async () => {
+    const first = new StubResolver({ name: "yt-dlp", priority: 20, behaviour: "no-media" });
+    const skipped = new StubResolver({
+      name: "site",
+      priority: 10,
+      canHandle: false,
+      behaviour: "succeed",
+    });
+    const last = new StubResolver({ name: "browser", priority: 50, behaviour: "no-media" });
+    const seen = collector();
+
+    await expect(
+      new ResolverRegistry([first, skipped, last]).resolve(
+        URL_UNDER_TEST,
+        options({ onStage: seen.onStage }),
+      ),
+    ).rejects.toThrow(AppError);
+
+    // `site` never ran — `canHandle` refused it — so it is not in the narration
+    // either. A candidate list and a stage list that disagreed would be the
+    // same defect as reporting a tier that never started.
+    expect(seen.events.map((event) => event.resolver)).toEqual(["yt-dlp", "browser"]);
+  });
+
+  test("a listener that throws does not fail the probe it is narrating", async () => {
+    // The contract says `onStage` must never throw. This is what makes that
+    // true for anything reached through the chain rather than a rule each
+    // caller is trusted to have read: a browser tab that closed mid-probe is a
+    // listener that raises, and the analysis must still answer.
+    const resolver = new StubResolver({ name: "browser", priority: 50, behaviour: "succeed" });
+    const result = await new ResolverRegistry([resolver]).resolve(
+      URL_UNDER_TEST,
+      options({
+        onStage: () => {
+          throw new Error("subscriber went away");
+        },
+      }),
+    );
+    expect(result.resolver).toBe("browser");
+  });
+
+  test("a chain with no listener behaves exactly as it did", async () => {
+    const resolver = new StubResolver({ name: "browser", priority: 50, behaviour: "succeed" });
+    const result = await new ResolverRegistry([resolver]).resolve(URL_UNDER_TEST, options());
+    expect(result.resolver).toBe("browser");
+    expect(resolver.calls).toEqual([URL_UNDER_TEST.href]);
   });
 });
