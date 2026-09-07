@@ -3,7 +3,7 @@ id: repo-15
 tool: repo
 title: The deny list cannot express what it is protecting, and it does not protect itself
 kind: chore
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 difficulty: hard
@@ -168,10 +168,14 @@ file contains, and one of them is what repo-13 is waiting on.
    candidate command strings. Re-read the ruleset with `gh ruleset list` and
    `gh ruleset view <id>` — both are read-only and neither is denied.
 2. **Write the hook** at `.claude/hooks/`, matcher per the scope decision, and
-   register it in `settings.json`'s `PreToolUse` block. It must fire on `Bash`
+   register it in `settings.json`'s `PreToolUse` block. ~~It must fire on `Bash`
    for the command threats and on `Write|Edit` for the self-protection ones,
    which is **two matchers, therefore plausibly two hook files** — `PostToolUse`
-   is useless for self-protection, since it runs after the write.
+   is useless for self-protection, since it runs after the write.~~ **Narrowed
+   by decision A1: `Bash` only, one hook file.** The `Write|Edit` matcher was
+   the self-protection half, and A1 does not take it. The struck sentence is
+   left in place because it is what A2 would need, and A2 is the option kept
+   open above.
 3. **Borrow `check-pr-title.sh`'s invocation test, do not re-derive it.** Its
    comment records that a plain substring test fired on the command name
    appearing inside a heredoc and blocked an innocent command on the hook's
@@ -192,8 +196,12 @@ file contains, and one of them is what repo-13 is waiting on.
 6. **Record the limits in the hook's header comment**, not only here — see
    below. Both existing hooks carry their reasoning in the file, and it is the
    only place the next editor reliably reads.
-7. If the `gh api` decision lands on "narrow it", say so in **repo-13's** Log or
-   Build in the same commit, since that is the ticket waiting on it.
+7. ~~If the `gh api` decision lands on "narrow it", say so in **repo-13's** Log
+   or Build in the same commit, since that is the ticket waiting on it.~~
+   **`n/a` — decision B landed on B1, so nothing is narrowed.** And repo-13 is
+   now `status: done`, so this step would have meant editing a closed ticket
+   even had B2 been chosen. Left in place so a later reader can see the coupling
+   that used to exist and how it ended.
 
 ### The honest limits, which belong in the file rather than being discovered later
 
@@ -238,33 +246,110 @@ file contains, and one of them is what repo-13 is waiting on.
   run. They are listed as unmatched by the deny list, which is a statement about
   the list and not about the token.
 
-## The decisions this ticket poses, which it does not settle
+## Decision — answered 2026-09-07, not open
 
-**Decision A — scope of the hook.** Recommended first.
+Two questions were posed here. Both are answered, and **both answers went
+against this ticket's own recommendation.**
 
-| Option                            | Covers                                                                                             | Cost                                                                                                                    |
-| --------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **A2 — tier 1 + self-protection** | the merge and workflow-edit paths, plus `.claude/settings.json` and `.claude/hooks/` (recommended) | one `Bash` hook and one `Write\|Edit` hook, ~2 short files and a test. Closes the item nothing else covers              |
-| A1 — tier 1 only                  | the merge paths and the `git push` spellings the deny list misses                                  | cheapest, and leaves the guardrail editable — which makes every other rule advisory                                     |
-| A3 — the full list                | tiers 1–3, including `git reset --hard`/`rm -rf`/`worktree remove` in the shared checkout          | the largest false-positive surface, on the commands agents run most. Highest risk of training people to route around it |
+**Question A was:** what does the hook cover — tier 1 only (A1), tier 1 plus
+self-protection of `.claude/settings.json` and `.claude/hooks/` (A2), or the full
+tier 1–3 list (A3)?
 
-A2 is recommended because §1 is uncovered by every existing mechanism while
+**Question B was:** what happens to the blanket `gh api` deny — the hook sits
+alongside it and `gh api` stays fully denied (B1), the hook replaces the deny
+with a parser permitting read-only calls (B2), or the deny rule is narrowed
+directly (B3)?
+
+**The answer, from the owner, relayed through the orchestrator: A1 + B1.**
+Recorded 2026-09-07; **nothing below has been built.**
+
+**This overrode two recommendations, and both said A2.** The ticket's own text
+recommends A2, with B2 named as "the only option that unblocks repo-13"; the
+orchestrator relaying the question also recommended A2 + B2. The answer is A1 +
+B1. **The losing options' grounds are not withdrawn — they are still true**, and
+they are kept below in full for that reason.
+
+**The objection A1 must live with, in this ticket's own words: it "leaves the
+guardrail editable — which makes every other rule advisory."** Section 1 above
+is uncovered by every mechanism this repo has, and A1 does not cover it either.
+So after this work lands, an agent that can edit `.claude/settings.json` still
+has no deny list, and the hook A1 adds is a tracked file in `.claude/hooks/` that
+the same agent can unregister. That is accepted as a standing cost of the cheap
+option, not answered by it. **A2 remains the option that closes it** and should
+not be re-argued as new; it was declined on cost, not on the reasoning.
+
+### The correction to decision B's costing, which had expired
+
+**This ticket's costing of B1 is stale, and this section supersedes it.** It was
+correct when written on 2026-09-01 and is not correct now. The stale text reads
+that B1 is recommended "only if repo-13 can proceed on relayed data, which its
+Log says it cannot" — i.e. that B1's price is **repo-13 stalling**.
+
+**repo-13 now reads `status: done`.** Verified on this branch by reading the
+file, not relayed. It was not unblocked; **it shipped carrying the gap**, and it
+says so itself:
+
+- its gate table's acceptance row 3 reads "correctly left **deferred** —
+  `gh api` denied, ticket does not claim otherwise, no defect";
+- the same gate records "**Could not verify**, both needing `gh api`, which is
+  denied", against the SARIF/fingerprint attribution;
+- and its filing Log says "the alert numbers, severities and alert text are
+  **relayed from screenshots and were not verified**, because `gh api` is denied
+  by `.claude/settings.json` and there is no other route to the code-scanning API
+  from here."
+
+**So B1's real cost is not that work stalls. It is that security records close
+with unverified claims in them, and the next one will too.** That is a worse cost
+than the one the table below states, not a milder one: a stalled ticket is
+visible, and a closed ticket carrying relayed alert data reads exactly like a
+closed ticket that checked. repo-16 is the immediate next instance — its own
+measurement section marks two of its four load-bearing facts as relayed, for the
+same reason.
+
+**Attribution, so a later reader does not read the original as wrong:** the
+table's B1 row was accurate on 2026-09-01, when repo-13 was open and blocked.
+This correction was written on 2026-09-07 while recording the answer, and it
+supersedes that row rather than contradicting it.
+
+The reasoning that produced both questions stands, and is kept because it is what
+makes the answers legible:
+
+**Decision A — scope of the hook.** A2 was recommended here; **A1 was chosen.**
+
+| Option                          | Covers                                                                                                                 | Cost                                                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **A1 — tier 1 only — CHOSEN**   | the merge paths and the `git push` spellings the deny list misses                                                      | cheapest, and leaves the guardrail editable — which makes every other rule advisory                                     |
+| A2 — tier 1 + self-protection   | the merge and workflow-edit paths, plus `.claude/settings.json` and `.claude/hooks/` (was recommended, **overridden**) | one `Bash` hook and one `Write\|Edit` hook, ~2 short files and a test. Closes the item nothing else covers              |
+| A3 — the full list — not chosen | tiers 1–3, including `git reset --hard`/`rm -rf`/`worktree remove` in the shared checkout                              | the largest false-positive surface, on the commands agents run most. Highest risk of training people to route around it |
+
+A2 was recommended because §1 is uncovered by every existing mechanism while
 tier 1's `git push` rows are already double-covered by the ruleset, and because
-tier 3's headline item turned out to be a no-op on a public repo.
+tier 3's headline item turned out to be a no-op on a public repo. **That
+reasoning was not refuted; the answer went to A1 anyway, on cost.** §1 therefore
+stays uncovered — see the objection recorded under the Decision heading.
 
-**Decision B — what happens to the `gh api` blanket deny.** This is the one
-repo-13 is waiting on.
+**Decision B — what happens to the `gh api` blanket deny.** ~~This is the one
+repo-13 is waiting on.~~ **B1 was chosen. repo-13 has since closed carrying the
+gap rather than waiting — see "The correction to decision B's costing" above,
+which supersedes the B1 row's stated consequence.**
 
-| Option                                                                   | Consequence                                                                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **B1 — hook sits alongside the deny; `gh api` stays fully denied**       | safest, and **repo-13 stays blocked** on unverifiable alert data (recommended only if repo-13 can proceed on relayed data, which its Log says it cannot)                                                                                                      |
-| **B2 — hook replaces the deny with a parser permitting read-only calls** | repo-13 unblocks. The hook must then allow `GET`/no-`--method` against a `code-scanning` path and refuse everything else, and it becomes the **sole** control on merge-by-API and branch-protection-by-API. An allow-list of paths, never a deny-list of them |
-| B3 — narrow the deny rule itself, no hook                                | not viable: permission rules are prefix matches, so `Bash(gh api *)` cannot express "GET only" — the flag order is free (`gh api -X PUT x` and `gh api x -X PUT` are the same call)                                                                           |
+| Option                                                                                                 | Consequence                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **B1 — hook sits alongside the deny; `gh api` stays fully denied — CHOSEN**                            | safest. ~~**repo-13 stays blocked** on unverifiable alert data (recommended only if repo-13 can proceed on relayed data, which its Log says it cannot)~~ — **superseded 2026-09-07: repo-13 is `done`. The cost is not a stall; it is that security records close with unverified claims in them.** See above                                                                      |
+| B2 — hook replaces the deny with a parser permitting read-only calls (was recommended, **overridden**) | ~~repo-13 unblocks~~ — repo-13 already closed without it, so what B2 now buys is _future_ verifiable security records, not an unblock. The hook must then allow `GET`/no-`--method` against a `code-scanning` path and refuse everything else, and it becomes the **sole** control on merge-by-API and branch-protection-by-API. An allow-list of paths, never a deny-list of them |
+| B3 — narrow the deny rule itself, no hook — not viable                                                 | not viable: permission rules are prefix matches, so `Bash(gh api *)` cannot express "GET only" — the flag order is free (`gh api -X PUT x` and `gh api x -X PUT` are the same call)                                                                                                                                                                                                |
 
-B2 is the only option that unblocks repo-13, and it is safe only if A2 or A3
+~~B2 is the only option that unblocks repo-13~~, and it is safe only if A2 or A3
 lands in the same change — otherwise the parser it depends on is editable by the
 agent it constrains. **B2 without self-protection is the one combination to
 refuse.**
+
+**That last sentence is why A1 + B1 is coherent rather than merely cheap.** The
+combination the ticket warned against is B2 without self-protection; the answer
+takes neither half of it. A1 + B1 leaves the `gh api` deny exactly as it is, so
+no parser becomes the sole control on merge-by-API, and nothing depends on a
+hook the agent could edit. What it does not do is close §1 — and the two facts
+are the same fact seen from either end.
 
 ## Done when
 
@@ -276,11 +361,16 @@ refuse.**
    and asserts its exit code: at least one blocked command per threat group in
    scope, at least one command that must remain allowed, and the heredoc case
    from Build step 3. It failed before the hook existed.
-3. An attempted `Edit` of `.claude/settings.json` is refused by the hook, proven
-   by that test rather than by an agent trying it. (If decision A lands on A1,
-   this line is `n/a` and the Log says so.)
-4. Decision B is recorded on this ticket with its answer and its reason, and
-   repo-13's Log or Build says what it now can or cannot do.
+3. ~~An attempted `Edit` of `.claude/settings.json` is refused by the hook,
+   proven by that test rather than by an agent trying it.~~ **`n/a` — decision A
+   landed on A1**, which is the condition this line names for itself, and the
+   Log says so. There is no `Write|Edit` hook under A1, so there is nothing to
+   refuse the edit and nothing to prove.
+4. Decision B is recorded on this ticket with its answer and its reason ~~, and
+   repo-13's Log or Build says what it now can or cannot do~~. **The repo-13 half
+   is `n/a`: B1 changes nothing about what repo-13 could do, and repo-13 is
+   `done` — editing a closed ticket to say "still denied" records nothing it does
+   not already say.**
 5. The hook's header comment states the indirection limit, the self-edit limit
    and the ruleset's `required_approving_review_count: 0`, in the file.
 6. `npm run check` passes and `npm run format` has been run if any `.md` changed.
@@ -350,3 +440,48 @@ visibility` returns `PUBLIC`. Tier 3's "one command, irreversible as a
   and B under a heading that says it does not settle them, and B is the one
   repo-13 is waiting on. It was on the `--ready` board and could not be started.
   Move it back to `ready` in the commit that writes both answers onto this page.
+
+- **2026-09-07 — both decisions were answered by the owner: A1 + B1.** Tier 1
+  only, no self-protection hook; the hook sits alongside the deny list and
+  `gh api` stays fully denied. `status: needs-decision` → `ready`. The decision
+  section is now `## Decision — answered 2026-09-07, not open`, the option tables
+  are marked in place, and Build steps 2 and 7 and `Done when` lines 3 and 4 are
+  marked where the answer narrows them.
+
+  **This overrode two recommendations, both of which said A2** — this ticket's
+  own, and the orchestrator's (A2 + B2). Neither was refuted; A1 was chosen on
+  cost. The losing options' grounds are left standing in the tables rather than
+  rewritten, because they are still true.
+
+  **`Done when` line 3 is `n/a`, and this is the Log entry that line asks for.**
+  It reads "(If decision A lands on A1, this line is `n/a` and the Log says so.)"
+  — decision A landed on A1. There is no `Write|Edit` hook to refuse an `Edit` of
+  `.claude/settings.json`, so there is nothing to prove and the line is retired
+  rather than failed.
+
+  **The objection A1 must live with**, in this ticket's own words: it leaves the
+  guardrail editable, which makes every other rule advisory. §1 stays uncovered
+  by every mechanism this repo has, including the hook this ticket will now
+  build. Accepted as a standing cost. A2 is not re-argued as new if someone wants
+  it later; it is the same option, declined on cost.
+
+  **A correction to this ticket's own costing of B, made here and attributed
+  here.** The B1 row said B1 was acceptable "only if repo-13 can proceed on
+  relayed data, which its Log says it cannot". That was true on 2026-09-01 and is
+  not true now: **repo-13 reads `status: done`** — read from the file on this
+  branch, not relayed. It was never unblocked; it closed carrying the gap, with
+  an acceptance row reading "correctly left **deferred** — `gh api` denied", a
+  "**Could not verify**, both needing `gh api`" note, and alert numbers and
+  severities described as "relayed from screenshots and were not verified".
+
+  So the real cost of B1 is **not** that work stalls — it is that security
+  records close with unverified claims in them, and the next one will too;
+  repo-16 is already the next instance. The stale row is struck rather than
+  deleted, and dated, so a later reader knows the original text was superseded
+  rather than wrong when written.
+
+  **Recorded, not built.** `.claude/settings.json` and `.claude/hooks/` were not
+  touched, no hook was written, and the step-1 matcher was not re-run — the
+  coverage tables above are still the `origin/main@f5d5a0e` measurement and Build
+  step 1 still says to re-take them. This branch is bookkeeping across four
+  tickets whose decisions were answered in one sitting.

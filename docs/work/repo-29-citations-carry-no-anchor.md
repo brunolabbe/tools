@@ -3,7 +3,7 @@ id: repo-29
 tool: repo
 title: Most citations carry no anchor text, so nothing checks what they claim
 kind: chore
-status: needs-decision
+status: ready
 milestone: null
 depends_on: []
 ---
@@ -99,13 +99,118 @@ that is right.** Reading carefully catches an instance. Anchoring catches the
 class. That is the whole of the gap, and it is why this is worth a ticket rather
 than a fix in passing.
 
-## The decision — do not settle it while building
+### Three more, from live work rather than a retrospective sweep — 2026-09-07
 
-**Four options. None is picked here, and picking one is what moves this ticket to
-`ready`.** They are not exclusive: A is a floor the others sit on, and D is a
-scoped C.
+Added after this ticket's decision was answered, and **deliberately not folded
+into the options above**: they change nothing about which option was chosen. They
+are here because they answer the strongest objection to the evidence this page
+already carries.
 
-### A. Anchor on touch
+**The evidence above is retrospective** — a sweep over records that were already
+finished, where "these went stale over time" is the natural reading and "nobody
+was being careless, the coordinates simply aged" is a fair defence. **These three
+are not that.** All three were produced inside a single ticket's review cycle on
+the same day, on a branch where both participants were being unusually careful,
+and **all three still got past two agents**. They were caught only because
+somebody ran `scripts/citations.mjs` by hand.
+
+From dl-43's review cycle. **The coordinates below are as measured on that
+branch, which is unmerged, so they are named in prose rather than cited** — a
+`file:line` into an unmerged branch does not resolve repo-relative and would fail
+this ticket's own checker:
+
+1. **A citation landing on a blank line.** The gate cited line 251 of
+   `contract-schemas.test.ts`; the test it was pointing at starts at line 252.
+   Off by one, onto a line with no content at all. An anchor makes this
+   impossible — there is no fragment to find on a blank line — while unanchored it
+   resolves, because the file has that many lines, and reports clean.
+2. **and 3. Two citations ambiguous between a downloader file and a planner file
+   of the same name**, which resolved against the wrong tree until they were
+   qualified with full paths.
+
+**The second class is structural here, and it is measurable on `main` today
+rather than only on that branch.** Comparing basenames across the two tool trees
+— `git ls-files 'tools/downloader/*'` and `'tools/planner/*'`, reduced to
+basenames — **41 names exist in both**, among them `errors.ts`, `index.ts`,
+`config.ts`, `context.ts`, `logger.ts`, `events.ts` and `logging.test.ts`. So an
+unqualified basename plus a line number is ambiguous across a large and growing
+set of exactly the files a review is most likely to cite, and the repo's own
+"a tool never imports from another tool" rule guarantees the duplication will
+continue. Three of the four `moved` citations on this very page are in that
+category of file.
+
+**Why this is evidence for this ticket rather than a new one.** It is the same
+argument, not a second one: the citations were _produced wrong_ rather than
+_aged wrong_, which strengthens the case for enforcement without changing what
+enforcement should be. And nothing in flight closes it — **repo-21's branch adds
+a CI step reading `node scripts/citations.mjs
+.claude/skills/orchestrate-tickets/SKILL.md --require-anchors`, which is
+`SKILL.md` alone** (read from `refs/heads/repo-21-orchestration-skill-loop`, not
+relayed; that branch is unmerged, hence prose). So `docs/work/`'s records stay
+unchecked in CI whichever way repo-21 lands, and the gap these three fell through
+is exactly the corpus-wide enforcement option C describes and which the owner has
+now named as the destination.
+
+## Decision — answered 2026-09-07, not open
+
+**The question was:** which of four options does this repo take — anchor on
+touch (A), a one-time sweep of all 1,036 (B), corpus-wide CI enforcement (C), or
+anchor and enforce only the `## Review` gate records (D)? And, because the
+ticket asked for it explicitly, **is C the intended destination, so that D is
+built as a first slice rather than as a boundary?**
+
+**The answer, from the owner, relayed through the orchestrator: D, then A — and
+yes, corpus-wide enforcement (C) is the intended destination.** Both halves are
+load-bearing and the second is the one a builder will otherwise guess at. It was
+this ticket's own recommendation, so it overrode nobody. Recorded 2026-09-07;
+**nothing below has been built.**
+
+**D is a first slice of C, not a boundary.** So the wiring D adds is to be
+written as something C can widen — one enforcement path that later takes a
+larger scope — rather than as a rule about `## Review` sections that would have
+to be unpicked. The `--section Review` scoping is the _scope_ of the first
+slice, not the _shape_ of the mechanism.
+
+**B stays open, and is not rejected.** It remains the right answer if a sweep
+can be shown to pick distinctive anchors — and **that measurement is one nobody
+has taken.** Recorded as still open rather than closed: whoever takes it should
+take the measurement first, because the objection to B is not its size.
+
+**Carry the objections with the answer:**
+
+- **D's own cost, in this ticket's words: it draws a line that has to be
+  explained and defended.** A wrong coordinate in a Why section misled a whole
+  dispatch in reproduction 1 above, and **D would not have caught it.** A covers
+  that case only by convergence, and A never reaches a record nobody touches.
+  That gap is the reason C is the destination rather than the ceiling.
+- **A's cost is that "expected, with nothing enforcing it" is how the present
+  state arose.** A is doing real work here — it is what covers everything
+  outside `## Review` until C lands — and it is the half most likely to be
+  quietly dropped.
+- **C cannot land before its scope is anchored**, or every affected record fails
+  at once on the first push. That constraint is unchanged by this answer; naming
+  C as the destination is not permission to wire it early.
+
+**One fact that changed after this ticket was filed, verified 2026-09-07 rather
+than relayed: repo-25 has merged** (PR #168; its ticket reads `status: done`, and
+`citations.mjs` carries the `citations: evidence` declaration on `main`). The
+dependency written in prose below as "do not start before it merges" is
+therefore satisfied. The consequence for this ticket is the one its option C
+already states: **an enforced gate must be built on that declaration mechanism,
+not beside it** — and the mechanism now exists to build on.
+
+`depends_on` stays `[]`. The reasoning is in "Two dependencies, deliberately in
+prose" below and it still holds: a `depends_on` naming a ticket absent from a
+branch's base fails the board gate, and prose is how this ticket carries the
+constraint instead.
+
+The reasoning that produced the question stands, and is kept because it is what
+makes the answer legible:
+
+**Four options. They are not exclusive: A is a floor the others sit on, and D is
+a scoped C.**
+
+### A. Anchor on touch — chosen, as the floor under D
 
 A citation gains an anchor when it is next written or edited; nothing changes
 today and the corpus converges as records are worked.
@@ -118,7 +223,7 @@ today and the corpus converges as records are worked.
   anchor grammar has existed since repo-18 and the corpus went from 965 citations
   to 1,246 with 26 of them verified.
 
-### B. One-time sweep
+### B. One-time sweep — not chosen, and explicitly still open
 
 Anchor all 1,036 in a migration.
 
@@ -136,7 +241,7 @@ Anchor all 1,036 in a migration.
   purely mechanical: it will surface an unknown number of real errors of class 1,
   each needing judgement. That is a benefit and a cost estimate problem.
 
-### C. Enforce in CI, corpus-wide
+### C. Enforce in CI, corpus-wide — not chosen now; named as the destination
 
 Wire `node scripts/citations.mjs … --require-anchors` into `.github/workflows/ci.yml`
 over every work record. **This is the option that needs the most care, and it
@@ -165,7 +270,7 @@ cannot be taken first.**
 
   `.github/workflows/ci.yml:115` "node scripts/status.mjs --json"
 
-### D. Enforce where a citation carries a verdict
+### D. Enforce where a citation carries a verdict — chosen, as the first slice
 
 Anchor and enforce only the `## Review` gate records — the citations that name
 the test proving an acceptance line — using the `--section` flag the script
@@ -188,13 +293,17 @@ build step 2 exists to reword the identical false positive out of a skill page.)
 - Adds a per-record `--section` invocation to CI rather than one command over a
   glob, which is more wiring than C.
 
-**Recommendation: D, then A, with B and C held open.** D buys the enforcement
-where a citation is load-bearing, at a third of the migration, and it is the only
-option whose cost has been measured against the corpus rather than estimated. A
-covers the rest at no cost. B remains the right answer if the sweep can be shown
-to pick distinctive anchors — that is a separate measurement nobody has taken.
-**Whoever answers this should also say whether C is the intended destination**, so
-D is built as a first slice rather than as a boundary.
+**Recommendation was: D, then A, with B and C held open.** D buys the
+enforcement where a citation is load-bearing, at a third of the migration, and it
+is the only option whose cost has been measured against the corpus rather than
+estimated. A covers the rest at no cost. B remains the right answer if the sweep
+can be shown to pick distinctive anchors — that is a separate measurement nobody
+has taken. **Whoever answers this should also say whether C is the intended
+destination**, so D is built as a first slice rather than as a boundary.
+
+**The answer took the recommendation, and answered the destination question:
+D, then A; C is the destination; B stays open on the unmeasured
+distinctiveness question.** See the Decision heading above.
 
 ## Two dependencies, deliberately in prose
 
@@ -203,11 +312,13 @@ D is built as a first slice rather than as a boundary.
 `node scripts/status.mjs --json` exit non-zero, and that is the CI board gate —
 `docs/01-TICKETS.md:160` "the view; every ticket still renders, and only".
 
-- **repo-25 (PR #168, open)** ships the `<!-- citations: evidence ... -->`
-  declaration, the exit-code bitmask (`1` unresolvable · `2` moved · `4`
-  unanchored under `--require-anchors` · `8` a wrong declaration), and the
-  shorthand/paragraph rule. Anything here builds on all three. Do not start
-  before it merges.
+- **repo-25 (PR #168) — ~~open~~ merged 2026-09-07, so this constraint is
+  discharged.** It ships the `<!-- citations: evidence ... -->` declaration, the
+  exit-code bitmask (`1` unresolvable · `2` moved · `4` unanchored under
+  `--require-anchors` · `8` a wrong declaration), and the shorthand/paragraph
+  rule. Anything here builds on all three. ~~Do not start before it merges.~~
+  Verified on `main` rather than relayed: its ticket reads `status: done` and
+  `citations.mjs` carries the declaration.
 - **repo-21 (unbuilt, `status: ready`)** already proposes wiring
   `citations.mjs --require-anchors` into the `check` job — scoped to one file,
   `.claude/skills/orchestrate-tickets/SKILL.md`, in its build step 3:
@@ -241,10 +352,37 @@ each one as a checker bug.
 
 ## Build
 
-**Not startable.** The build is whichever option is chosen; writing it before the
-decision would be writing three briefs and discarding two. When the decision is
-recorded on this page, replace this section with the steps for the chosen option
-and move `status` to `ready` in the same commit.
+~~**Not startable.** The build is whichever option is chosen; writing it before
+the decision would be writing three briefs and discarding two.~~ **The decision
+is answered — D, then A, with C as the destination — so this is startable.** The
+scope is stated here rather than expanded into step-by-step instructions,
+deliberately: the corpus moves, and the sizing below was taken at `b142a4a`.
+Whoever builds it writes the steps with the records in front of them.
+
+**What D, then A means concretely.** The provenance of each line is marked,
+because "D, then A, with C as the destination" is an answer that draws on two
+option blocks and not only on D's — **the scope is D's, the enforcement
+machinery is C's, and only the framing is new**:
+
+- **Scope: the `## Review` gate records** — D's, verbatim. Measured at
+  `b142a4a`: 353 unanchored citations across 42 of the 46 records that have a
+  `Review` section, out of 418. Re-measure before starting; the denominator grows
+  with every gate record.
+- **Anchor them**, obeying the two invariants below — and repoint any that turn
+  out to be stale, since anchoring a wrong coordinate forces fixing it.
+- **Enforce that scope** with `--require-anchors` **and** the `--section` flag.
+  Only `--section` is D's; **`--require-anchors` is named under option C, not
+  under D**, and so is the requirement that an enforced gate be built **on**
+  repo-25's `citations: evidence` declaration "not beside it". They are pulled
+  forward deliberately — D is the first slice of C, so it uses C's machinery at
+  D's scope.
+- **Shape it so C can widen it** rather than as a rule about `## Review`
+  specifically. **This line is in neither option block**; it follows from the
+  owner's answer that C is the destination, and it is recorded as a consequence
+  of the decision rather than as something the ticket already said.
+- **A is the floor for everything outside that scope**: a citation gains an
+  anchor when it is next written or edited. A is not optional and not implied by
+  D; it is the half that covers the Why sections D deliberately does not.
 
 Whatever is chosen, two things hold:
 
@@ -339,3 +477,145 @@ unanchored, 0 unresolvable` at exit 0. Two things had to be written around to
   claimant that does not exist yet. That is the same shape as the defect this
   ticket is about. A coordinate, or an id, that is checked once and then trusted
   is checked against a tree that has since moved.
+
+- **2026-09-07 — the decision was answered by the owner: D, then A, with C named
+  as the intended destination.** D is a first slice, not a boundary. It was this
+  ticket's own recommendation, so it overrode nobody. **B was not rejected and is
+  recorded as still open**: it is the right answer if a sweep can be shown to
+  pick distinctive anchors, and that measurement is one nobody has taken.
+  `status: needs-decision` → `ready`. The decision heading is now
+  `## Decision — answered 2026-09-07, not open`, the four option headings are
+  marked chosen or not in place, and the Build section's "Not startable" is
+  struck.
+
+  **The objection carried with the answer**, so it is not rediscovered: D would
+  not have caught reproduction 1 — a wrong coordinate in a Why section, which
+  misled a whole dispatch. A covers that only by convergence and never reaches a
+  record nobody touches. That residue is exactly why C is the destination.
+
+  **One fact re-checked here rather than relayed: repo-25 merged.** Its ticket
+  reads `status: done` and `scripts/citations.mjs` carries the
+  `citations: evidence` declaration on `main`, so the "do not start before it
+  merges" line above is discharged and struck. The corpus figures were **not**
+  re-measured on this branch — they are still the `b142a4a` sweep, and the Build
+  section says to re-take them.
+
+  **`difficulty` is still unset, and that is a gap this entry is recording
+  rather than closing.** The Log entry above says to set it in the commit that
+  answers the decision. This branch relays an answer it did not make, and the
+  rating that answer implies is a judgement about the work, not part of the
+  answer that was given — under D it is a large anchoring pass plus a CI gate,
+  which is neither obviously `mechanical` nor obviously `standard`. Rating it
+  here would be this recorder guessing, which is the thing the original entry
+  was trying to avoid. **Answered 2026-09-07 by the owner: leave it unset.**
+  Absent means inherit, which is the honest statement while nobody has read the
+  work. The refusal to rate work this branch was not asked to rate is upheld, so
+  the earlier Log entry's "set it in the commit that answers the decision" is
+  **discharged by a deliberate choice not to**, not left undone.
+
+  **The gap that leaves is narrow but real, and worth naming as a mechanism
+  rather than as an unease.** `.claude/agents/builder.md`'s table maps an absent
+  `difficulty` to `inherit` — the same dispatch as `standard`, and **with no
+  floor**. `hard` is the one row that names a model instead, and repo-27 (`done`)
+  changed it to do so for exactly this reason: "a floor cannot be delegated to a
+  variable." So if this ticket is picked up while the orchestrating session is
+  running Sonnet, it inherits Sonnet with nothing to stop it — and under D the
+  work wires `.github/workflows/ci.yml`, which is the seam-reaching territory
+  `hard` is defined for. Leaving it unrated is the safe direction only in the
+  sense that it does not _lower_ the model; it does not raise it either, and that
+  is the half that could bite. **This note is kept deliberately even though the
+  answer was "leave it unset"** — the answer settles the rating, not the gap, and
+  the note is the only thing that makes the gap legible rather than silent.
+  Anyone rating this later should decide between `hard` and `standard` on the
+  merits, not inherit the absence.
+
+  **This page's own citations have gone stale since it was filed, and that is
+  left standing on purpose.** The filing entry above records `10 verified, 0
+moved` at exit 0. Run again on 2026-09-07 the same file reports **6 verified, 4
+  moved, 1 unanchored, 5 unchecked of 16 references, exit 2** — the extra
+  references are repo-25's shorthand and prose counting, and the four `moved` are
+  drift in the targets, not in this record: dl-40 moved both downloader lines,
+  repo-25 rewrote the `citations.mjs` docblock, and repo-30 moved
+  `docs/01-TICKETS.md`.
+
+  **The drift is pre-existing and this branch did not cause it**, checked rather
+  than asserted: `main`'s copy of this file, run against the same working tree,
+  reports the identical `6 verified, 4 moved, 1 unanchored, 5 unchecked` at exit 2. Only the record line numbers differ.
+
+  **It is not repointed here, and that is a deliberate refusal rather than an
+  oversight.** Two of the four sit inside reproduction 1, which is a dated
+  measurement of where two symbols were on a given day; silently rewriting the
+  coordinates would edit the evidence to match the tree, which is the move this
+  whole ticket exists to make visible. Three ways to settle it were put to the
+  owner — repoint and re-anchor against the tip, pin the record with `--rev`, or
+  leave the four `moved` standing as the ticket's own live demonstration.
+
+  **Answered 2026-09-07 by the owner: leave them. Do not "fix" this.** This page
+  is expected to fail its own checker at exit 2, and **that failure is the
+  argument the page makes**. A later agent finding the four `moved` lines has
+  found the ticket working, not a defect: repointing them would delete the
+  demonstration to make a number go green, which is the precise move reproduction
+  1 exists to warn about. If you believe they should be repointed, that is a
+  decision to reopen with the owner, not a tidy-up to perform in passing.
+
+  **Why they are worth more standing than fixed, and it is this ticket's thesis
+  arriving unbidden:** all four were caught **because they carry anchors**. An
+  unanchored citation drifting the same distance would still have reported exit 0
+  with the wrong line's content underneath it — which is exactly reproduction 1,
+  reproducing itself on the page that describes it. Anchoring is what converted a
+  silent staleness into a loud one, and the loudness is the feature.
+
+  **The Build section's scope statement was ruled on rather than assumed.** This
+  ticket told the answering commit to "replace this section with the steps for
+  the chosen option"; the dispatch that produced this branch said to mark steps
+  in place and not to rewrite them into new briefs. Those conflict, and leaving
+  `status: ready` above a Build reading "Not startable" would have been a real
+  board defect — so the scope-not-steps compromise above was written, then put
+  back to the orchestrator that wrote the constraint, which accepted it as the
+  intended reading of its own instruction.
+
+  **The distinction that took, and it is worth carrying past this ticket: a gate
+  can verify that a compromise's _content_ is correct without that being the same
+  question as whether making the compromise was the right call.** They are
+  different objects. The reviewer here checked the content against the owner's
+  answer — correctly, and it found a real misattribution in it — and then called
+  the compromise itself settled, which was one object too far, since it did not
+  hold the dispatcher's instruction as an artefact it could weigh. It corrected
+  its own relay when that was put to it. A reviewer certifies output; only the
+  agent whose instruction was bent can ratify the bending.
+
+  **Recorded, not built.** Nothing under `scripts/` or `.github/` was touched and
+  no citation anywhere was anchored. This branch is bookkeeping across four
+  tickets whose decisions were answered in one sitting.
+
+- **2026-09-07 — three more reproductions added to the Why, from dl-43's review
+  cycle.** Evidence only: **the Decision section was not touched and the answered
+  option is unchanged.** A citation onto a blank line, and two ambiguous between a
+  downloader and a planner file of the same name. All three were produced during
+  live review by two careful agents and caught only by a manual
+  `scripts/citations.mjs` run.
+
+  **What they add over the evidence already here:** everything above is a
+  retrospective sweep over finished records, which admits the defence that the
+  coordinates merely aged. These three were **produced wrong, not aged wrong**,
+  on the same day, which is the stronger form of the same argument.
+
+  **Their coordinates are as measured on dl-43's branch and are not cited**, on
+  purpose: that branch is unmerged, `citations.mjs` resolves repo-relative, and a
+  coordinate into an unmerged branch fails. Prose names the branch instead — the
+  same dodge, and the same reason, as the two already recorded at the top of this
+  Log.
+
+  **Two things were checked here rather than relayed**, and one of them turned out
+  stronger than the claim that prompted it. repo-21's branch really does scope its
+  new CI step to `SKILL.md` alone — read from
+  `refs/heads/repo-21-orchestration-skill-loop`, so `docs/work/` stays unchecked
+  in CI whichever way it lands. And the ambiguity class is not anecdotal: **41
+  basenames exist in both `tools/downloader/` and `tools/planner/`**, including
+  `errors.ts`, `index.ts` and `config.ts`. That measurement is new here, it holds
+  on `main` rather than only on dl-43's branch, and the repo's "a tool never
+  imports from another tool" rule guarantees the set keeps growing.
+
+  **This entry landed after the gate that passed this branch**, like the entry
+  above it, and is disclosed as uncovered by that verdict in the pull request
+  rather than left to look reviewed.
