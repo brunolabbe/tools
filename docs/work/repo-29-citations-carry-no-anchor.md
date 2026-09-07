@@ -424,6 +424,96 @@ Whatever is chosen, two things hold:
 2. **A sweep must report what it could not anchor**, rather than picking a
    fragment to satisfy itself.
 
+### What enforcement costs and buys, measured on three real gate records — 2026-09-07
+
+Recorded on the owner's instruction from that day's orchestration batch, as
+evidence for the option already chosen. **It changes nothing above**: no new
+option, no reopening of the answered decision, `status` unchanged, and nothing
+here is built. Every figure was re-derived on this branch against the branches
+named rather than transcribed from the batch's report, and where a relayed number
+did not reproduce exactly that is said so.
+
+Both records sit on unmerged branches, so they are named in prose rather than
+cited — the same dodge, and the same reason, as the dl-43 reproductions above.
+
+**The strongest instance is a gate record for the citation checker itself, and
+the checker cleared it.** repo-33 (branch `repo-33-citations-windows-paths`,
+PR #186) fixes how `citations.mjs` names a record's own path; its gate record is
+unanchored throughout. At its tip the checker reports `7 verified, 0 moved, 29
+unanchored, 0 unresolvable, 3 unchecked, 0 evidence — of 39 references` at **exit
+0**. Two distinct failures sat inside that clean result:
+
+- **A citation onto a blank line.** The reviewer's record cited the fixture's
+  root-level record at 1278 of `citations.test.ts`; 1278 is blank and 1279
+  carries the claim. The checker prints an empty preview under it and exits 0.
+  Caught by a human re-resolution before the record was committed, not by the
+  run.
+- **Five coordinates that drifted onto unrelated content.** They were correct at
+  `ab5e6fa`, and the round-three commits then edited the middle of the same test
+  file. Running the round-one-and-two record against the branch tip, and again
+  with `--rev ab5e6fa`, gives the **identical** answer both ways — `0 verified, 0
+moved, 11 unanchored, 0 unresolvable, 2 unchecked — of 13 references`, exit 0 —
+  for a set of coordinates that is right in one tree and wrong in the other. At
+  the tip the five land on a docblock asterisk, a `//` comment, a statement, a
+  docblock prose continuation and another `//` comment. The checker emits four
+  entries for the five, because it previews a range at its start. **The record's
+  own description of what they landed on is itself already stale** — it matches
+  the tree at `1a774db` and not the tip, so the drift drifted again while the
+  record was describing it. Both revs were checked here rather than assumed.
+
+**The one anchored round failed loudly, inside a single run, and what it caught
+was its own anchor.** Round four of that same record was the first written with
+anchors. Four of them quoted lines containing double quotes and escaped the inner
+ones; the parser takes straight quotes only —
+
+`scripts/citations.mjs:146` "const ANCHOR = String.raw"
+
+— so each anchor terminated at the escape and matched nothing. Reconstructed here
+on a scratch record carrying those four anchors in the escaped form: `3 verified,
+4 moved, 0 unanchored, 0 unresolvable, 0 unchecked — of 7 references`, **exit 2**,
+each failure printed with its anchor truncated at the backslash. That was the
+record's first non-zero exit across four rounds, and the coordinates were right —
+only the anchor text was malformed. **Operationally, for whoever anchors the
+corpus: an anchor fragment cannot contain a double quote at all.** Pick a
+quote-free substring of the line rather than escaping one; the repair on that
+branch was exactly that, with the coordinates untouched.
+
+**The second record repeats the shape, and carries the one form that does fail.**
+dl-45 (branch `feat/dl-45-keep-the-failover-mirrors`, PR #189) reports at its tip
+`2 verified, 0 moved, 34 unanchored, 0 unresolvable, 5 unchecked, 0 evidence — of
+41 references`, exit 0. Two coordinate errors in it were caught **by hand, not by
+the checker**: a `displayKey` range given as 159–186, which overshoots the symbol
+it names — `displayKey` ends at 173, 175–184 is `groupByKey`, and 186 is the
+`DisplayRows` docblock, re-resolved against that branch — and the
+`engine.download` call site cited by **bare filename**. Only the second failed. A
+bare `orchestrator.ts` plus a number is `unresolvable` at **exit 1**, because
+three files of that name are tracked here: `tools/downloader/api/src/jobs/`,
+`tools/planner/agent/src/` and `tools/planner/api/src/runs/`. Worth stating
+precisely, because it is the boundary of what the unanchored checker can do:
+**that citation failed because it was bare, not because it was wrong.** The
+overshooting range in the same record cleared at exit 0, and so would a plain
+wrong number in place of a right one.
+
+**Why this is evidence for D rather than an argument that D is noisy.** Across
+both records the anchored round is the **only** round in which the mechanism
+objected to anything at all — and what it objected to was a malformed anchor,
+repaired in one edit, on a record whose 29 unanchored coordinates were
+simultaneously hiding a blank line and five drifted ranges at exit 0. The
+enforcement's one false alarm cost a single re-anchoring; the absence of
+enforcement cost two silent failures on the same page. Under `--require-anchors`
+today both records are exit 4 — 29 and 34 unanchored respectively — which is the
+size of the gap on two gate records written the day this was measured, and the
+scope D is defined over.
+
+**One more thing for whoever writes the counts into a record: a record that
+counts its own references changes what it is counting.** Two instances in the
+same batch. dl-45's record stated `32 of these 39 references`, its gate caught it,
+and a fresh run gave 34 of 41 — the paragraph carrying the numbers had added its
+own citations after the run they came from. repo-33's round-one-and-two record
+states `10 unanchored ... of 12 references`; re-run here at that very commit it
+reports 11 of 13, for the same reason, and that one was never caught. Re-run the
+command **after** writing the sentence that quotes it.
+
 ## Done when
 
 Deliberately written against the decision rather than an implementation — each
@@ -665,3 +755,54 @@ moved` at exit 0. Run again on 2026-09-07 the same file reports **6 verified, 4
   ticket is held and undispatched, and the line is there so whoever picks it up
   has the strongest available argument for `--require-anchors` rather than
   rediscovering it.
+
+- **2026-09-07 — the anchoring evidence from that day's orchestration batch
+  recorded on the Build section, on the owner's instruction.** Evidence only:
+  **the answered decision was not touched**, no option was added, reopened or
+  re-argued, `status` stays `ready`, `difficulty` stays unset, and nothing in this
+  ticket is built. Three measurements, taken on committed gate records rather
+  than on a retrospective sweep: repo-33's (PR #186), the anchored round of the
+  same record, and dl-45's (PR #189).
+
+  **Every number was re-derived on this branch rather than transcribed from the
+  batch's report**, by checking out each branch in this worktree and running
+  `scripts/citations.mjs` against it. Three things came back differently from the
+  relay, and are written as measured:
+
+  - The relay quoted five states; the script prints six. Both headline counts
+    carry `0 evidence` as well, which is repo-25's mechanism reporting that
+    neither record declares anything.
+  - The five drifted coordinates appear as **four** entries in the checker's
+    output, because it previews a range at its start and two of the five are the
+    ends of one range. And the repo-33 record's own prose description of what
+    they drifted onto matches the tree at `1a774db`, not at the branch tip —
+    checked at both revs, and recorded because the description going stale is the
+    same defect one layer up.
+  - The round-one-and-two record's self-reported `10 unanchored ... of 12
+references` does not reproduce at its own commit: a fresh run there gives 11
+    of 13. That is the same self-counting error dl-45's gate caught in `32 of
+these 39`, uncaught in the second instance, and it is now a line in the Build
+    section.
+
+  **What could not be re-run, stated rather than reasoned around.** The
+  malformed-anchor round was repaired before it was ever committed, so there is no
+  commit holding it; the `3 verified, 4 moved`, exit 2 result is a
+  **reconstruction** on a scratch record carrying the four anchors in their
+  escaped form against the same branch tip, not a replay of the original run. It
+  reproduces the reported counts and exit code exactly, and it independently
+  confirms the mechanism — the parser's anchor group admits no `"` at all, so an
+  escaped one truncates the fragment at the backslash. Both branches were read at
+  the shas they carried on 2026-09-07 (`d0869fd` and `857114d`); a force-push to
+  either detaches the figures from what is on the branch, and they are pinned to
+  those shas here for that reason.
+
+  `node scripts/citations.mjs docs/work/repo-29-citations-carry-no-anchor.md`
+  goes from `6 verified, 4 moved, 1 unanchored, 0 unresolvable, 7 unchecked — of
+18 references` on `main` to `7 verified, 4 moved, 1 unanchored, 0 unresolvable,
+7 unchecked — of 19`, both at **exit 2**. This edit therefore adds exactly one
+  reference and it is anchored and verified, which is what the entry above
+  requires of anything written into this ticket. The four `moved` are the
+  deliberate demonstration the owner ruled on, and they are untouched — the
+  baseline was re-run from `main`'s own copy of this file in this worktree rather
+  than assumed, because the count last recorded here (`of 16 references`) predates
+  the entry that added the blank-line reproduction.
