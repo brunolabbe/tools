@@ -85,6 +85,30 @@ at the filing date, 2026-08-31 — five days. **Recording it is its own dispatch
 has to be scheduled as one** — cheap, but not free, and not something to notice at
 close-out.
 
+### Reading a subagent's `resolvedModel`, when you have to
+
+You should not have to: both halves of the model pairing are knowable at dispatch,
+and `SKILL.md`'s _Which model built it_ says to write them down there. This is for
+the case where a record has to be reconstructed afterwards. **Three routes, and
+only the third is measured in this tree.**
+
+- A **`PostToolUse` hook** on the `Agent` tool, returning the field through
+  `hookSpecificOutput.additionalContext`. Relayed, not run here.
+- **`/tasks`** (v2.1.242+), which names the model per subagent row. Relayed, not
+  run here.
+- The **task output file** whose path a backgrounded `Agent` result hands you,
+  which carries `/message/model` on every assistant record. Measured 2026-09-06
+  against a `ticket-reviewer` dispatched `model: "sonnet"`: 182 records, one
+  distinct value, `claude-sonnet-5`.
+
+The third is **the dispatcher's route, not the subagent's** — a subagent cannot
+read its own, and the file named for its session id under `~/.claude/projects/` is
+a different conversation altogether. Read it with a script that prints aggregates:
+it is the full subagent transcript, and the tool result's "do not read this" is a
+warning about your context, not a seal. The same file carries
+`cache_read_input_tokens` per request, the half `subagent_tokens` omits, which
+repo-17 measured on 2026-09-01 at ~94% of the bill.
+
 ## Dispatching a gate — the highest-leverage thing you write
 
 Gate yield tracked prompt specificity, not gate number. In the reference session
@@ -223,10 +247,13 @@ at; what is worth keeping is that a negative probe taken moments after an edit i
 not evidence about the design, and a claim that broad deserved a second
 measurement before it was written down.
 
-**Also note the self-report is unreliable.** Each probe listed fewer tools than
-its own frontmatter grants — a builder reporting eight where the file lists
-thirteen, omitting `Grep` and `Glob`, which it certainly has. Ask an agent to
-*call* a tool, not to tell you whether it has one.
+**Also note the self-report is unreliable, and this is the tool-list measurement
+behind it.** Each probe listed fewer tools than its own frontmatter grants — a
+builder reporting eight where the file lists thirteen, omitting `Grep` and `Glob`,
+which it certainly has. The rule this is an instance of is not about tools and is
+not stated here: a claim an agent makes about **itself** — its tools, its model,
+its lifecycle — is a self-report and is checked from outside, with the one-call
+check per field in [`SKILL.md`](../SKILL.md) under _Relaying_.
 
 **So make gate 1 look like gate 4.** Every gate prompt should:
 

@@ -204,8 +204,7 @@ discarded. So:
     `citations.mjs --rev HEAD <ticket>` opens `HEAD` as the ticket. **Always put
     the ticket path first.** It fails loudly — ENOENT, exit 1 — so any run that
     reported "N/N resolve" used a valid invocation; only the `--section` no-op is
-    silent. (Measure that exit code without a pipe: `$?` after `| tail` is
-    tail's.)
+    silent. (`$?` after `| tail` is tail's — one instance of the bullet below.)
 
   **So a bare filename is not a citation in this repo — it is a coin flip the
   tool refuses to make.** `travel.ts:286` matches three tracked files and
@@ -278,6 +277,39 @@ discarded. So:
   gate record citing text a later correction deleted outright — inherent to
   committing a gate in the branch that fixes it. Say so in the record's preamble
   rather than repointing them.
+- **A command's flags and its exit code carry what its output cannot, and reading
+  the matching line discards them.** Three instances, all of which produce a
+  truthful transcript of a question you did not ask:
+
+  - **`$?` after a pipe is the last stage's.** `node scripts/citations.mjs … | tail`
+    reports `tail`'s status, so the tool's own exit code — the entire signal — is
+    gone. Redirect to a file and read `$?` unpiped.
+  - **`-l` under an alternation cannot say which alternative matched.** The worked
+    reproduction, including why `sort -u` is load-bearing in the `-o` transcript, is
+    in `repo-20`'s Log; do not restate it here. Re-run 2026-09-07, it has drifted
+    and still holds: `grep -rlnE 'repo-(40|80|90|99|404|808|901|999)' scripts packages`
+    now names **two** files and `-roE … | sort -u` shows **two** of the eight ids,
+    so `-l` reads as "all eight are there" where it was "one of eight" when the rule
+    was written. The count changed; what `-l` can answer did not.
+  - **A missing search path still prints the matches from the paths that exist.**
+    `grep -rlnE 'repo-(40|404)' scripts nosuchdir` warns on **stderr**, prints real
+    matches on **stdout**, and exits **2**. With stderr discarded an incomplete
+    search is indistinguishable from a complete one — the third comment on #148.
+  - **A `&& echo "<verdict>"` on the end of a check is your label, not the tool's
+    result.** Measured 2026-09-07, on the branch that wrote this bullet. A builder
+    compared two citation runs with `diff <(… | sed 's/record line [0-9]*/record
+    line N/g') <(…) && echo "IDENTICAL to main"`, then wrote *"byte-identical"*
+    into a committed Log. The comparison was right and the sentence was false: the
+    `sed` it had written itself was normalising away the only thing that differed.
+    **A `diff` that finds nothing says so by printing nothing**, and once the
+    invented word had scrolled past, the transcript could not tell a gloss from an
+    answer. Quote the silence and the exit code; if a check needs a word to be
+    legible, write the word in the record where it can be argued with, never in
+    the command where it reads as output.
+
+  In all four the fix is the same: take the exit code unpiped, choose flags that
+  print the thing you are about to write down rather than a superset of it, and
+  never let a string you authored occupy the position a result would.
 - **A count with no denominator is not a measurement.** "Removing the guard fails
   3" says nothing without the command it was taken from and the total it is out
   of. Two builders in one session recorded per-**scenario** counts while their
@@ -365,9 +397,18 @@ Four states, and no `N/N`:
 | | means |
 | --- | --- |
 | `ok` | the anchor is in the cited range. The only state anything verified |
-| `MOVED` | the anchor is not there. The reason says which line it is at now, or that it is nowhere in the file. **Exit 1** |
-| `unanchored` | the lines exist and nothing checked them. The cited line is printed for you to judge by hand, which is the only check it has |
+| `MOVED` | the anchor is not there. The reason says which line it is at now, or that it is nowhere in the file. **Exit 2** |
+| `unanchored` | the lines exist and nothing checked them. The cited line is printed for you to judge by hand, which is the only check it has. **Exit 4**, but only under `--require-anchors` |
 | `FAIL` | it cannot be right at all — file gone, line past the end, bare name matching several files. **Exit 1** |
+
+**The exit code is a bitmask, not a ranking.** `citations.mjs` sets `EXIT` to
+`unresolvable: 1`, `moved: 2`, `unanchored: 4`, `declaration: 8`, so a run with
+one `MOVED` and one `FAIL` exits **3** — run to confirm on 2026-09-07, not read
+off the table. Reading the code as "the worst thing that happened" loses the other
+half; `!= 0` is the only reading a script should make of it. *(Cited as prose
+rather than `file:line` on purpose: a real citation here becomes the nearest
+preceding one for the two illustrative shorthands below, which then resolve
+against a file they have nothing to do with.)*
 
 **An unanchored run is not a passing run, it is an unchecked one.** `0 verified,
 0 moved, 9 unanchored, 0 unresolvable` exits 0 and means nobody has looked.

@@ -3,7 +3,7 @@ id: repo-28
 tool: repo
 title: The standard-to-sonnet trial, and why the saving does not survive the gate
 kind: chore
-status: needs-decision
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -148,6 +148,28 @@ Options, for the record:
 **Not decided here:** `ticket-reviewer.md`'s `model: sonnet` pin, untouched by
 repo-17 and untouched here.
 
+### Answered 2026-09-07 — option 2, against this ticket's own recommendation
+
+Recorded with its provenance, because a decision that overrode a recommendation
+is a different fact from one that followed it, and only the record carries which.
+
+|                                      |                                                                                                                                                                                                                            |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Question**                         | Should a `standard` ticket dispatch its builder on Sonnet instead of inheriting Opus?                                                                                                                                      |
+| **Options put**                      | (1) leave `standard` at `inherit`, **this ticket's recommendation and offered first**; (2) map `standard` → `sonnet` on the volume-adjusted reading; (3) revisit the gate instead, as a separate ticket                    |
+| **Chosen**                           | **(2), map it.**                                                                                                                                                                                                           |
+| **Whose recommendation it overrode** | **This ticket's own.** The filer recommended (1) on the grounds that the 44% builder saving is an artefact of measuring the builder alone, and that the coupled figure is a wash at best                                   |
+| **Stated grounds for the answer**    | The volume-adjusted reading — cost-neutral, with the capability evidence mildly favouring Sonnet                                                                                                                           |
+| **How it was taken**                 | The orchestrator put the three options to the owner with (1) first and recommended; the owner chose (2). Relayed to this branch with that provenance attached, and re-read here against this ticket's text before building |
+
+**What the answer does not change.** The measurements above stand exactly as
+written: the coupled per-ticket figure is still $7.20 against $7.18, still a 0.3%
+wash, and the upper-bound reading is still a 36% loss. **The change is not
+justified by a saving and must not be cited as one** — it is an owner decision
+that the move is free and that the one capability observation points the right
+way. Option 3 — measuring whether the gate needs to be the larger consumer —
+remains unfiled and is still the better question.
+
 ## Build
 
 Nothing to build until the decision is answered.
@@ -167,11 +189,51 @@ before it was removed.
    make `SKILL.md` step 4's per-ticket pairing check explicit for `standard`,
    because the gate's correct model then varies across most of the board.
 
+**Built 2026-09-07 on `repo-21-orchestration-skill-loop`, step 2.** Not a branch
+of its own: repo-21 rewrites `SKILL.md` from 674 lines to 347 in the same window,
+and step 2's "in the same commit" cannot be honoured across two branches racing
+the same page. `#170` was confirmed merged first — `gh pr view 170` reports
+`MERGED` at 2026-09-07T11:41:13Z, and `repo-27`'s file reads `status: done` on
+`main` — so the ordering this section requires held.
+
 ## Done when
 
 1. The decision above is recorded with its answer and its reason.
 2. `.claude/agents/builder.md` reflects the answer, whichever it is.
 3. `npm run check` passes and `npm run status -- --json` exits 0.
+
+**Verdicts, 2026-09-07.**
+
+1. **proven** — _Answered 2026-09-07_ above, with the question, the three options,
+   which was chosen, and that it went against this ticket's own recommendation.
+2. **proven** — the `standard` row reads `` `sonnet` ``, and the change is now
+   machine-checked from the other side: `SKILL.md` carries
+   `.claude/agents/builder.md:23` "| `standard` | `sonnet` |" as an anchored
+   citation, and `ci.yml` runs
+   `node scripts/citations.mjs …/SKILL.md --require-anchors` on every push. Revert
+   the row and that job goes red naming this line.
+3. **proven** — `npm run check` exit 0, `node scripts/status.mjs --json` exit 0,
+   `npm test` 2170 passed.
+
+## Review
+
+**Gate: PASS** — 2026-09-07 · `origin/main...HEAD` (`5065aed`) · own defect hunt, no `code-review` dispatch (subagent has no `Skill` tool), Sonnet against an Opus build
+
+Same checkout as repo-21's gate (one branch, shared commits); see that ticket's header for setup detail. Re-verified at the final tip `5065aed`; nothing in this ticket's own files changed between `928e3ac` and `5065aed`.
+
+| Done when                                          | Proof                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Decision recorded with answer and reason        | _Answered 2026-09-07_ section present: question, 3 options with the recommended one marked, which was chosen, whose recommendation it overrode, how it was taken ✓                                                                                                                                 |
+| 2. `builder.md` reflects the answer                | `builder.md:23`'s `standard` row reads `sonnet`, confirmed by direct read and by `citations.mjs` resolving `SKILL.md`'s citation of it. Machine-checked from the other side: reverting the row turns `ci.yml`'s citations step red, reproduced independently as part of repo-21's Build 1.4 test ✓ |
+| 3. `npm run check` passes, `status --json` exits 0 | Reproduced at `5065aed`: both exit 0 ✓                                                                                                                                                                                                                                                             |
+
+- **low** · The ticket's own Done-when-3 test-count claim ("2170 passed") is correct — reproduced independently at 129 files / 2170 tests, matching exactly.
+- **dropped** · none.
+- **findings** · own defect hunt returned 1; 1 carried (low, above), 0 dropped.
+
+NFR: security n/a · performance n/a — the cost/gate-parity arithmetic ($7.20 vs $7.18) is re-derivable from the numbers given; not re-run, since it is a historical measurement this branch's diff does not re-execute · reliability n/a · maintainability — the decision's provenance table is a good model of the "how it was taken" rule the ticket itself argues for.
+
+**Shared observation, not a finding.** `.claude/agents/ticket-reviewer.md` — the file I am — carries no comment beside its untouched `model: sonnet` pin, which repo-28 leaves deliberately out of scope. The residual risk is stated clearly at the two places a dispatcher actually consults before it would bite (`SKILL.md`'s pairing table, and this ticket's own Log), just not in the pin's own file. Not raised as a finding; this is a deferred question for the repo's owner, not a settled one.
 
 ## Log
 
@@ -200,3 +262,64 @@ before it was removed.
   this one is strict. Consolidating those is a real ticket in `tools/downloader`,
   not filed here, because it belongs to a tool this ticket has no business
   reaching into.
+
+- **2026-09-07, second pass — the decision came back as an override, and it was
+  built on `repo-21`'s branch rather than its own.** The full record is under
+  _Answered 2026-09-07_ above; what belongs here is what the build found.
+
+  **Both relayed facts were re-checked before building on them, and both held.**
+  `gh pr view 170` reports `MERGED` at 2026-09-07T11:41:13Z with merge commit
+  `7862e9c`, and `repo-27`'s file on `main` reads `status: done` — so the "land
+  this after PR #170" ordering was satisfied, verified rather than taken from the
+  relay. Build step 2's wording was read from this file, not from the relay, and
+  it asks for exactly what was done.
+
+  **The pairing consequence is bigger than the table row, and it is the reason
+  step 2 couples them.** With `standard` on Sonnet, three of four difficulty rows
+  now disagree with `ticket-reviewer.md`'s `model: sonnet` default, and the row
+  that moved is the largest rated category. The failure it introduces is
+  **silent**: a `standard` ticket gated by the default is a Sonnet build checked
+  by Sonnet, which produces a normal-looking gate record and trips nothing. That
+  is the same shape as the violation repo-27 fixed for `hard`, one row over —
+  a default that was right by accident and stopped being right when something
+  underneath it changed.
+
+  So `SKILL.md` now carries a four-row pairing table with a gate column, and loop
+  step 4 names `standard` in one clause, because step 4 is what an orchestrator
+  reads mid-loop and the table is what it reads once.
+
+  **Placement was questioned rather than transcribed.** repo-28 was written
+  against a 674-line `SKILL.md`; the page is 350 lines on this branch and the
+  question of whether the rule belongs there at all was put explicitly. It does:
+  the gate's model is a **dispatch decision**, and the orchestrator is the only
+  participant that makes it — the builder cannot choose its reviewer by design,
+  and `dispatching.md` is prompt mechanics. Moving it would split one decision
+  across two pages, which is exactly what this branch's own one-instruction-one-file
+  rule forbids. The addition costs **no net lines**: the table replaces three
+  prose bullets that said less.
+
+  **The row is now checked from both sides.** `SKILL.md` cites
+  `.claude/agents/builder.md:23` "| `standard` | `sonnet` |" as an anchored
+  citation, and `ci.yml`'s `check` job runs `citations.mjs --require-anchors` over
+  `SKILL.md` on every push (repo-21). Reverting the row without updating the skill
+  turns CI red naming the line — which is the drift class repo-21 exists to catch,
+  applied to this ticket's own change on the day it landed.
+
+- **One thing left undone, named rather than absorbed.**
+  `.claude/agents/ticket-reviewer.md`'s `model: sonnet` pin is now wrong for the
+  largest rated category, and this ticket declares it out of scope
+  (_"Not decided here"_). That scope call is respected: the pin is untouched and
+  no warning was added beside it, because the dispatch rule lives in `SKILL.md`
+  and a second copy is the disease repo-21 just treated. **The residual risk is
+  therefore real and stated**: an orchestrator that forgets to pass `model` gets
+  Sonnet-gates-Sonnet on a `standard` ticket, silently. Whether the pin should
+  become an explicit `null`, a comment, or stay as it is, is a decision for the
+  owner and a follow-up ticket — not something to settle inside this build.
+
+- **`commit-message.mjs` has no opinion about ticket ids, which is worth knowing
+  before anyone designs around it.** Asked whether two ids in one subject are
+  accepted, the answer is yes — and so is **none**:
+  `node scripts/commit-message.mjs --text "fix(repo): a subject with no id at all"`
+  exits 0. It enforces type, format and scope (a `fix` with no scope is rejected,
+  naming the allowed set) and nothing else. The id-in-the-subject convention is
+  `CLAUDE.md`'s and is unenforced, exactly as `CLAUDE.md` itself says.

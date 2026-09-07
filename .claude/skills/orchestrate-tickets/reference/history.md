@@ -834,3 +834,309 @@ them, in a row whose subject is coordinates going wrong.
   has no blank line, so it is one paragraph, so a shorthand citation in one
   bullet inherits from the bullet above and turns fatal. That mechanism is now
   in `citations.mjs`'s docblock, via an authorised doc-only post-gate commit.
+
+## The worked examples behind `SKILL.md`'s rules
+
+Moved here by `repo-21` on 2026-09-07 rather than deleted. `SKILL.md` had grown to
+674 lines by appending, with no structural difference between a rule you must obey
+and the story explaining why it exists — so nothing could ever be removed. The
+split it now holds to is **instruction and one dated measurement stay there, the
+narrative comes here**, and each heading below names the provision it belongs to so
+a reviser can get from one to the other.
+
+Nothing in this section is an instruction. If you are running a batch, you do not
+need this page.
+
+### Step 1 — read the opening section, not the status line
+
+A ticket in the second session read `status: ready` while its own first section was
+titled "Read this before picking it up" and said the work must not be pulled
+forward. `--ready` is a projection of frontmatter, and frontmatter can disagree with
+the page it sits on.
+
+The other half of that step is `git fetch` before dispatch: `main` moved between the
+status call and the dispatch, landing a commit that deleted machinery three builder
+prompts went on to reference. Harmless that time; it need not be.
+
+### Step 2 — a board can be mostly unbuildable
+
+Measured 2026-09-03: `--ready` returned nine and **eight carried an open decision
+their own page forbids a builder from settling**. Offering the user a choice of
+batches out of that set buys a round that ends in "this ticket says I may not
+answer this". When it holds, the question becomes **which slices**, not which
+tickets — see _Slice a blocked ticket_ in `reference/sizing.md`. `repo-19`'s
+`needs-decision` status later moved that answer into the status call itself, which
+is why `SKILL.md` now carries the grep as a fallback rather than the primary move.
+
+### Step 3 — the builder that asserted its own model
+
+On 2026-09-04 a builder stated its own model, drawn from a line that turned out not
+to exist. That is one of the observations behind _Never ask an agent what model it
+is_: an inherited model is unstated at the point the decision is made, including by
+the agent it is about.
+
+### Step 6 — upward wakes, where two sessions disagree
+
+**Sideways wakes work.** Confirmed again 2026-09-03: a builder that needed the
+reviewer's record woke it from `completed`, and it came back with the text
+re-resolved against the new tip, with no orchestrator hop.
+
+**Upward wakes are disputed, so check rather than plan around either reading.**
+2026-09-02 recorded, three times, that you are *not* woken when a child finishes —
+sitting `completed` beside a finished agent until something outside nudged you,
+with "no completion signal to wait for". **2026-09-03 measured the opposite, six or
+more times**: every finishing subagent delivered a `<task-notification>` that woke
+the orchestrator unprompted, and a reviewer's `SendMessage` to `main` arrived the
+same way. **2026-09-04 agreed with the later reading a third time.** All three
+sessions ran this skill in this repo, so two-to-one is a tally rather than a
+resolution: do not retire the earlier reading on it. Whether the harness changed
+between them or the earlier reading was wrong cannot be settled from inside either.
+Plan the batch so a missed wake is survivable, and if you do find yourself idle
+beside finished work, say so in your report rather than letting a stalled batch read
+as a quiet one.
+
+### Step 8 — glance-reading, and the claim that did not feel like a claim
+
+Asking *where* a quote is, rather than only what it says, catches **glance-reading**
+— taking a result in at a glance and reporting the reading as the measurement. Four
+instances turned up across one batch in 2026-09, in prose every time and in
+citations never, because a tool covered those. The sharpest of them was an agent
+that had measured every other claim on its branch and fabricated the one about
+itself: *"the one claim I did not run a check against was the one about myself,
+because it did not feel like a claim."* A statement about the speaker does not
+present itself as needing evidence, which is why "be careful" is not the fix.
+
+The step's last clause is the counterweight: an acceptance step that always finds
+something is a relay wearing a different hat.
+
+### Step 10 — why "the exchange is over" cannot be evaluated
+
+The reviewer's worktree used to come down earlier, once its record was pushed and
+its exchange with the builder had ended. That condition was tested twice on
+2026-09-03, once from "the PR exists" and once from *both agents reporting closed*,
+and both times the exchange resumed — a builder can always push one more commit and
+wake its reviewer, and neither is lying when it says it is done. The second removal
+landed mid-`npm run check` and cost a verification round. Holding costs ~18 MB;
+removing early costs an agent its tools mid-command. From inside, a removal and the
+documented auto-reclaim are indistinguishable, which is why an early removal has to
+be announced.
+
+### Step 12 — the post-PR gate that found something
+
+The fourth session opened a PR on its documentation branch under conditional ship
+authority and took one narrow gate afterwards, scoped to the corrections alone. That
+gate found a real defect the correction pass had introduced. The ordering costs one
+cheap gate instead of a whole builder round and gives up no gating at all, because
+the orchestrator controls the merge.
+
+### After a merge — the job that had never once succeeded
+
+In the reference repo a job that only runs on `push` to `main` had never succeeded:
+branch protection rejected its push with `GH013 — changes must be made through a
+pull request`, so a generated file it maintained sat a week stale while listing a
+merged ticket as open and omitting a live security ticket entirely. Every pull
+request stayed green throughout, because nobody was looking at `main`.
+
+### Decisions — the exception that pays best
+
+Measured 2026-09-03: a slice dispatched as "steps 1–2 only, the ticket stays open"
+was widened to the full ticket by a single message, because the answer arrived
+before the builder stopped. Say in the message which part of the original dispatch
+you are reversing.
+
+### Decisions — why the overridden recommendation is a field
+
+Both decisions that overrode a builder's own recommendation in the 2026-09-04
+session exposed a real pre-existing defect that only implementing the overridden
+option could have found — a CLI parser that consumed a value for every flag,
+including the first one that takes none, and a contract declaring a field non-null
+that arrives `null` from a real binary. A recommendation is an argument, not a
+measurement.
+
+### Decisions — hold a question until you can bring a measurement
+
+In the fourth session the open question was whether a fix should widen to a
+neighbouring row. The gate was asked to *measure* whether it could, came back with
+one failing test out of 732 — and that one the row already pinned as a defect — and
+the user decided on that rather than on two plausible arguments. The delay was one
+gate the branch was taking anyway.
+
+The companion case, 2026-09-04: a builder whose remedy was still an open owner
+decision ran the reproduction anyway. It was needed under *every* candidate answer,
+"do nothing" included, so running it was never a bet. Building the mechanism on top
+of it was the bet, and it paid, because it converted "we could fix this" into "the
+fix exists, measured and reviewer-validated", which is the fact that changed the
+owner's answer. What kept it safe was committing and pushing nothing while either
+decision was open, so the tree each party inspected was never ambiguous.
+
+### Decisions — "accept the baseline" is rarely zero work
+
+Measured 2026-09-03: a four-option decision was answered with the zero-work option,
+and the ticket's own Build still required amending an ADR "whichever option wins"
+and clearing an outstanding alert "whichever way this goes" — the second explicitly
+noting that no option retires it retroactively, *do nothing included*. So the answer
+converted a blocked ticket into a small dispatchable one rather than closing it.
+
+### Decisions — parallelise at intake
+
+In the reference session two tickets overlapped and the question brought to the user
+was *how to reconcile them* — never *whether to run them concurrently at all*. By
+then both were half-built and every option was bad; three rebases followed.
+
+### Relaying — a relayed option
+
+Measured 2026-09-03: the seam map's extraction of a ticket's options was faithful
+and still corrected the orchestrator's own count on the way past, which is the
+argument for reading the options yourself, not against it. Cost is a few `sed` calls
+against the decision headings.
+
+### Relaying — an option's stated mechanism
+
+The sharpest laundering route on `SKILL.md`, because it does not feel like relaying
+at all. A ticket or a subagent writes an option as *"do X by doing Y"*; you put it
+to the user faithfully; the user picks it; and Y arrives in your dispatch as an
+instruction that nobody ever checked. The faithfulness of the relay is what
+disguises it — you were careful with the words, and the words carried an unverified
+claim.
+
+Measured 2026-09-03. A builder surfaced a decision whose option A read "guard that
+call and **route failure to `options.onFailed`**". The user chose to fold the work
+in, and the orchestrator relayed `onFailed` as the mechanism. A gate then
+established it is **not reachable** from that call site — it is wired to a different
+handler on the same socket, and the throw is a synchronous exception in the success
+path, not an event that socket emits. The builder's own proposal had been wrong
+about its own file, the orchestrator had repeated it without checking, and only the
+gate stopped it being built.
+
+Hence the remedy attached to that row: say what must be true — *a failure here must
+fail fast with a typed code instead of escaping* — and say explicitly that the
+mechanism named in the option is unverified and the builder should choose the route.
+That costs one sentence and it puts the decision's *purpose* beyond the reach of its
+*guess*.
+
+### Relaying — a caveat where a command would do
+
+The value is not catching the reviewer; in the fourth session none of these checks
+found a reviewer wrong. It is the difference between "the reviewer says" and "I
+checked", which is what lets a finding travel as fact without the relay becoming the
+middle link in a laundering chain.
+
+The worked example is a count of the files one commit touched, published wrong in a
+document: `git show --name-only <sha>` settles it in one line, and the same line
+settled it a second time two passes later when the published number had drifted
+again. Note the object — a *branch's* touched-file count is
+`git diff --name-only <base>...<tip>`, a different command, and reaching for the
+wrong one gives a confident wrong answer.
+
+### Relaying — an unmarked relay
+
+In the third session a ticket asserted that a file contained a word, the
+orchestrator repeated it in a brief without running the one-line `grep` that same
+brief demanded, and the builder repeated it from the orchestrator. Three links, and
+the middle one was the only place it was cheap to stop. The same orchestrator later
+relayed a peer session's claims explicitly flagged as unrun, and that one did not
+propagate — the builder verified them against merged code instead.
+
+### Relaying — your own summary, sent downstream
+
+In the second session the orchestrator passed a reviewer's framing of a guard as
+"prototype-pollution defence" down to the builder as an instruction; it was wrong —
+the value reached a `Map` key, so that route was already closed, and the real risk
+was key collision. The builder refused to transcribe it, wrote the test for the
+collision it could demonstrate, and the next gate upheld the builder. **Three
+separate builders corrected an orchestrator error in one session** — an id, a
+ticket's status, and a diagnosis. In the fourth session all four builders corrected
+something: a brief's fixture tree that would have passed against the CLI it was
+testing, a brief's claim that an option "removes the whole class", an orchestrator
+framing that treated a choice as settled when its premise was unmeasured, and a
+ticket's own baseline.
+
+### Relaying — a finding whose premises are all true
+
+In the sixth session a gate reported that two call sites logged a request context
+unredacted, and every premise held: the sites do log it raw, the headers are
+documented as carrying `Cookie` and `Authorization`, and the redactor that exists
+for exactly that shape is called at neither. The orchestrator checked the premises,
+found them sound, and relayed the conclusion as work to do. The conclusion was false
+— the logger recognises that field structurally and redacts on the way out, by
+design, so a call site is **not** supposed to redact, and adding one would have
+taught the next reader the opposite of the intended pattern. The builder reproduced
+it first, refuted it, applied nothing, and wrote the regression test the finding had
+actually been pointing at.
+
+### Relaying — a wrong citation under a right conclusion
+
+Measured 2026-09-04. An orchestrator told a gate that the builder's model was
+inferred off `builder.md`'s `hard` difficulty row. The ticket carried no
+`difficulty` at all — `hard` was a *sibling's*, in the same batch — and both rows
+resolve to the same model, so the error was invisible in the answer and reached a
+committed gate record. The reviewer transcribed it because it was given as fact,
+which was correct of it. The record has to show which link failed, or the next
+reader blames the gate; how to withdraw a claim that reached a record is in
+`reference/records.md`.
+
+### Relaying — a described artifact
+
+In the sixth session the orchestrator described a gate record instead of pasting it:
+its verdict, its method, seven of its citations, accurately. The builder searched its
+worktree, the ticket, `git status` and `origin`, found no such text, and **stopped**,
+on the grounds that composing a reviewer's record from a summary is fabricated
+evidence. It was right, and the round was lost. A description is not a smaller
+version of a record; it is a different object, and no amount of accuracy converts one
+into the other. The tell is the verb: if the relay asks the builder to *commit*,
+*post* or *quote* something, that something has to be in the relay.
+
+The shape to avoid is the opposite one: relaying a finding as an instruction to
+apply. That gets it applied and learns nothing, and when the reviewer is wrong it
+gets a wrong thing applied confidently.
+
+### Relaying — a disposition marked "accepted"
+
+Measured 2026-09-05 on `repo-21`'s own gate. A builder answered a finding about a
+section being too narrative by rewording it, wrote *"the reasoning is gone"* into a
+committed gate record, and shrank the section by **one line**. The reviewer's first
+pass accepted the disposition because the numbers beside it were measurements; its
+second pass caught it by measuring the *fix* instead of reading the disposition —
+90 lines before, 89 after, against 62 once it was done properly.
+
+### When two gates disagree
+
+In the fourth session gate A rated a rule's type enumeration a real defect; gate B
+rated the same thing acceptable. Relayed as an open disagreement, the builder
+rejected both framings and proposed a third: read the mechanism off the `hidden`
+flag rather than off a list of type names, so *enumerating type names was itself the
+defect*. An answer neither gate proposed, and the instruction it wrote — read the
+test off the config — does not go stale when a type is added.
+
+**And then a later gate corrected the builder in turn, which is the part not to
+lose.** That third answer was an *inference*, not a measurement: only two types were
+ever run, and both results are equally consistent with a hardcoded releasing list.
+It shipped because it **errs safe** — if the hypothesis is wrong the new rule
+over-warns, where the enumeration it replaced under-warned. So the lesson is not
+"the builder's measured answer beats both gates" (2026-08-24, as written); it is
+that relaying the split produced a better *hypothesis* than either gate held, and
+that a further gate was still needed to say what kind of claim it was. Repeating a
+builder's self-description as measurement is the laundering `SKILL.md` forbids, and
+the orchestrator did exactly that in the first draft of that paragraph.
+
+Often the builder has run the mechanism and the reviewers have not — though not
+always: one gate in that session reproduced a release-please dry run end to end,
+which is more than the builder's own claim rested on. Say which gate found what,
+keep both attributions, and let whoever is closest to the measurement decide.
+
+### Reporting — what the accounting table showed that prose hid
+
+All three from the 2026-09-05/06 batch:
+
+- **Where the cost actually went.** One branch — `repo-22`, PR #161 — took roughly
+  a third of that batch, and **its gate cost about what its own builder did**:
+  411,966 against 406,732, last-observed cumulative figures 1.3% apart, which is a
+  tie and not a ranking. The comparison that carries weight is the other one — that
+  gate cost **roughly 60% more than the next most expensive builder in the batch**
+  (256,418). Either way it inverts `sizing.md`'s "builder round-trips cost more than
+  gates", which is true per *round* and stops being true when one branch takes six
+  gate rounds.
+- **Whether the model-difference rule held**, per branch rather than as a claim. A
+  Model column turns compliance into something a reader can audit at a glance.
+- **What an interruption cost.** A replaced agent sits in its own row beside its
+  replacement instead of vanishing into a total.

@@ -113,6 +113,27 @@ jobs:
       # needs no build and no dependencies, for the same reason
       # `commit-message.mjs` does not, so it costs this job seconds.
       - run: node scripts/status.mjs --json > /dev/null
+      # Resolves every `file:line` citation in the orchestration skill against the
+      # tree, and with `--require-anchors` fails on any that carries no quoted
+      # fragment — so a claim `SKILL.md` makes about another file has to say what
+      # that file says, and is re-checked on every push.
+      #
+      # This is repo-21's defect 1, which nothing could have caught: `SKILL.md`
+      # said a `mechanical` ticket puts a Sonnet builder in a batch, `builder.md`
+      # changed underneath it to `haiku`, and the sentence went on being read as
+      # current because no check knew the two files were related. An unanchored
+      # citation still *resolves* while no longer *saying* what was claimed, which
+      # is why the flag is not optional here.
+      #
+      # **Scoped to `SKILL.md` alone, on purpose.** The `reference/` pages carry
+      # the narrative and are full of prose that parses as a citation; widening
+      # this is a separate ticket, not a free extension.
+      #
+      # Like `status.mjs` above it, this reads the checkout rather than the
+      # history, so it is safe in this job's depth-1 clone — and like it, it needs
+      # `check` to be filtered by nothing, because the change that breaks it is
+      # usually a markdown-only one.
+      - run: node scripts/citations.mjs .claude/skills/orchestrate-tickets/SKILL.md --require-anchors
 
   # Which files this change actually touches, because **Actions has no per-job
   # `paths` filter** — `paths-ignore` gates the whole workflow, so the only way
