@@ -109,6 +109,21 @@ discarded. So:
   guessing** (this repo has two `logging.test.ts`), and exits non-zero so it can
   gate a commit. It prints each cited line so you can judge the content.
 
+  **Since repo-25 it counts every reference, not the ones it can check.** A
+  backticked shorthand takes its file from the nearest qualified citation above
+  it, and is printed as `:27 in <file> (named at record line N)` — the file is a
+  guess, and both ends are on screen so you can see whether the guess is right. A
+  prose `line 367` is reported `unchecked`: counted, never resolved, and never
+  fatal. Before this, a record carrying five references and three citations
+  reported three and read as full coverage, which is the same defect as `9/9
+  resolve` one layer out.
+
+  The exit code is a **bitmask** — `1` unresolvable, `2` moved, `4` unanchored
+  under `--require-anchors`, `8` a wrong evidence declaration — and the run prints
+  it as `exit 3 — 1 unresolvable, 1 moved`. So a CI job can tell a record that
+  cannot be right from one that says the wrong thing, and either from a record
+  whose failures are deliberate.
+
   **A record and a Log passage pin to different commits, and swapping them breaks
   one of them.** This repo squash-merges, so a branch sha does not survive the
   merge — pin a record to it and the `--rev` dangles for everyone who reads the
@@ -214,11 +229,27 @@ discarded. So:
   at `<sha>`" — whenever you quote from a commit. This one costs a reviewer a
   finding and a builder a round, and neither party is wrong.
 
-  It cannot judge two of the four modes, and says so: a citation whose *content*
-  changed still resolves, and a citation that is a finding's own evidence must
-  stay wrong. Those are yours. Run it as the genuinely last action before
-  `git add` regardless — it is a second and cheaper thing to be last, not a
-  replacement for being careful about the order.
+  It cannot judge one of the four modes, and says so: a citation whose *content*
+  changed still resolves unless you anchor it. The other — a citation that is a
+  finding's own evidence and must stay wrong — is now something you **declare**
+  rather than something you warn about in prose:
+
+  ```md
+  <!-- citations: evidence hls.ts:367, index.ts:440 -->
+  ```
+
+  One or more per record, each naming a citation as the record writes it,
+  qualified. Those are reported `evidence` and set no exit bit, so the record
+  passes with its wrong coordinates intact and nothing has to be edited to make a
+  gate green. Put the declaration in the same `##` section as the citations it
+  excuses, so a `--section` run is excused too. **A declaration that excuses
+  nothing fails** — because the citation now passes, or because the record no
+  longer contains it — which is what stops a waiver outliving the finding it was
+  written for. Judging whether a citation *deserves* one is still yours.
+
+  Run it as the genuinely last action before `git add` regardless — it is a
+  second and cheaper thing to be last, not a replacement for being careful about
+  the order.
 
   Three mechanics make the check actually catch things, all learned by nearly
   missing them:
@@ -233,7 +264,8 @@ discarded. So:
   - **Do not remap a citation that is the finding's own evidence.** A gate that
     reports "`:93-94` is wrong, the text is at `:94-95`" contains a coordinate that
     must stay wrong — it is a quotation of the defect, not a pointer. A positional
-    remap will silently "fix" it and destroy the finding.
+    remap will silently "fix" it and destroy the finding. Declare it instead, so
+    the next run agrees with you rather than being argued with in prose.
 
   **A caveat specific to editing this file.** `.claude/` sits in `.oxfmtrc.json`'s
   `ignorePatterns`, so `oxfmt` never touches this page and `npm run check` cannot
@@ -368,8 +400,10 @@ anchor minus a length, missing the `+1` an inclusive range needs.
 
 Two things it still cannot judge, and you must. A citation that is a finding's
 own evidence ("the text is at `:94-95`, not `:93-94`") must stay as written even
-when the run calls it moved. And an anchor is only as good as the fragment
-chosen: `"const"` is on every line of the file and verifies nothing.
+when the run calls it moved — say so in a `<!-- citations: evidence ... -->`
+declaration, which is the one part of that a machine can now read; whether the
+citation earns the declaration is not. And an anchor is only as good as the
+fragment chosen: `"const"` is on every line of the file and verifies nothing.
 
 ### Migration: nothing already committed is rewritten
 

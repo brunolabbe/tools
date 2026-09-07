@@ -4,12 +4,16 @@ import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
 import {
+  applyDeclarations,
   checkCitations,
+  EXIT,
   extractCitations,
+  extractDeclarations,
   extractSections,
   FLAGS,
   makeResolver,
   parseArgs,
+  recordDrift,
   selectSection,
   USAGE,
 } from "../citations.mjs";
@@ -25,6 +29,8 @@ const cite = (over: Partial<ReturnType<typeof extractCitations>[number]> = {}) =
   anchor: null as string | null,
   source: "inline" as const,
   line: 1,
+  from: null as number | null,
+  nearby: false,
   ...over,
 });
 
@@ -43,10 +49,13 @@ const summary = (
   unanchored: number,
   unresolvable: number,
   total: number,
+  unchecked = 0,
+  evidence = 0,
 ) =>
   new RegExp(
     `${verified} verified, ${moved} moved, ${unanchored} unanchored, ` +
-      `${unresolvable} unresolvable — of ${total} citation`,
+      `${unresolvable} unresolvable, ${unchecked} unchecked, ${evidence} evidence` +
+      ` — of ${total} reference`,
   );
 
 /** Any `N/N`, the shape the summary must never print again. */
@@ -58,7 +67,16 @@ const marks = (out: string) => out.split("\n").filter((line) => /^ {2}\S/.test(l
 test("finds an inline file:line citation", () => {
   const found = extractCitations("The guard is wrong at `src/a.ts:12`.");
   expect(found).toEqual([
-    { file: "src/a.ts", start: 12, end: 12, anchor: null, source: "inline", line: 1 },
+    {
+      file: "src/a.ts",
+      start: 12,
+      end: 12,
+      anchor: null,
+      source: "inline",
+      line: 1,
+      from: null,
+      nearby: false,
+    },
   ]);
 });
 
@@ -630,7 +648,10 @@ test("the CLI tells a citation whose referent moved from one that still points a
   expect(atWriting.stdout).toMatch(/^ {2}ok /m);
 
   const atTip = spawnSync("node", [CLI, record, "--rev", "HEAD"], { cwd: dir, encoding: "utf8" });
-  expect(atTip.status).toBe(1);
+  // `moved` alone, so the code says `moved` alone — not the generic 1 it shared
+  // with `unresolvable` before repo-25 gave each class its own bit.
+  expect(atTip.status).toBe(EXIT.moved);
+  expect(atTip.stdout).toMatch(/^exit 2 — 1 moved$/m);
   expect(atTip.stdout).toMatch(summary(0, 1, 0, 0, 1));
   expect(atTip.stdout).toMatch(/^ {2}MOVED /m);
   expect(atTip.stdout).toMatch(/anchor "Defence in depth" is not in 2-3 — it is at 5/);
@@ -649,7 +670,10 @@ test("the summary cannot read N/N while a citation is in the moved state", () =>
   const { dir, mixed, cleanup } = withInsertionRepo();
 
   const result = spawnSync("node", [CLI, mixed, "--rev", "HEAD"], { cwd: dir, encoding: "utf8" });
-  expect(result.status).toBe(1);
+  // Two classes co-occur, so two bits are set and both are named. A ranking
+  // would have had to drop one of them exactly here.
+  expect(result.status).toBe(EXIT.unresolvable | EXIT.moved);
+  expect(result.stdout).toMatch(/^exit 3 — 1 unresolvable, 1 moved$/m);
   expect(result.stdout).toMatch(summary(1, 1, 1, 1, 4));
 
   // Not merely "the wording changed": no `N/N` of any kind survives anywhere in
@@ -692,7 +716,8 @@ test("--require-anchors makes an unanchored citation fatal, and nothing else doe
   expect(lenient.stdout).toMatch(/carry no anchor text/);
 
   const strict = at("--require-anchors");
-  expect(strict.status).toBe(1);
+  expect(strict.status).toBe(EXIT.unanchored);
+  expect(strict.stdout).toMatch(/^exit 4 — 2 unanchored$/m);
   // It ran, rather than refusing the argument: same citations, same states, same
   // counts. Without this the assertion above is satisfied by "unknown option".
   expect(strict.stdout).toMatch(summary(0, 0, 2, 0, 2));
@@ -701,7 +726,7 @@ test("--require-anchors makes an unanchored citation fatal, and nothing else doe
 
   // And the reason is on the line with the numbers, so a CI log says which
   // policy judged them.
-  expect(strict.stdout).toMatch(/unresolvable — of 2 citations, anchors required/);
+  expect(strict.stdout).toMatch(/0 evidence — of 2 references, anchors required/);
   expect(lenient.stdout).not.toMatch(/anchors required/);
 
   cleanup();
@@ -728,9 +753,10 @@ test("--require-anchors changes the exit code and not a single citation's state"
 
   // Both fail here, because a moved citation was already fatal — so this record
   // cannot show what the flag does, which is why the test above uses one that
-  // has nothing but unanchored citations.
-  expect(lenient.status).toBe(1);
-  expect(strict.status).toBe(1);
+  // has nothing but unanchored citations. The flag adds its own bit and takes
+  // none away, which is the same "policy, not taxonomy" claim read off the code.
+  expect(lenient.status).toBe(EXIT.unresolvable | EXIT.moved);
+  expect(strict.status).toBe(EXIT.unresolvable | EXIT.moved | EXIT.unanchored);
 
   cleanup();
 });
@@ -878,4 +904,581 @@ test("selectSection refuses a name that matches nothing, and one that matches tw
   // The refusal lists what is there, so a typo costs one read rather than two.
   expect(() => selectSection(sections, "Missing")).toThrow(/## Nested/);
   expect(() => selectSection(sections, "N")).toThrow(/"N" matches 2 sections/);
+});
+
+/**
+ * **repo-25, Done when 2**, at the unit: the reproduction accounts for *every*
+ * reference in it. Five were written; three were detected before this ticket and
+ * the summary called that full coverage.
+ *
+ * The fixture is the ticket's reproduction verbatim, and the assertion is on the
+ * whole list rather than on a count, because a count is the thing that was wrong.
+ */
+const REPRODUCTION = [
+  "See [`release-please-config.json:31`](../../../release-please-config.json), and",
+  "the `docs` line at `:27` in the same file.",
+  "",
+  "Also [`manifest/hls.ts:456`](../../resolvers/src/manifest/hls.ts) and then",
+  "line 367 of that file, and hls.ts:367 as a bare mention.",
+].join("\n");
+
+test("every reference in the reproduction is extracted, not the three that are qualified", () => {
+  expect(extractCitations(REPRODUCTION).map((c) => `${c.source} ${c.file}:${c.start}`)).toEqual([
+    "inline release-please-config.json:31",
+    // The shorthand took its file from the citation above it, which is what
+    // "in the same file" means and what nothing read before.
+    "shorthand release-please-config.json:27",
+    "inline manifest/hls.ts:456",
+    "prose null:367",
+    "inline hls.ts:367",
+  ]);
+});
+
+/**
+ * **Done when 1**, end to end. Every reference is in the denominator, the
+ * shorthand resolves, the prose one is `unchecked` rather than absent, and the
+ * bare basename still fails — which is Build step 4 and is not negotiable.
+ */
+test("the CLI counts all five references in the reproduction, and still refuses the bare name", () => {
+  const { record, cleanup } = withRecord(`## Review\n\n${REPRODUCTION}\n`);
+
+  const result = run(record);
+  expect(result.stdout).toMatch(summary(0, 0, 3, 1, 5, 1, 0));
+  // The shorthand is printed as written *and* with the file it inherited, so the
+  // guess is auditable rather than presented as a fact.
+  expect(result.stdout).toMatch(/:27 in release-please-config\.json \(named at record line 3\)/);
+  expect(result.stdout).toMatch(/^ {2}unchecked {2}line 367 {2}\(record line 7, prose\)$/m);
+  // Build step 4: ten tracked `index.ts` and two `hls.ts` — ambiguity is the
+  // answer, and resolving it by guessing is what makes a check a rubber stamp.
+  expect(result.status).toBe(EXIT.unresolvable);
+  expect(result.stdout).toMatch(/FAIL {7}hls\.ts:367/);
+
+  cleanup();
+});
+
+/**
+ * The rule the ticket asks for by name: a shorthand with nothing before it is an
+ * **error, not a skip**. It claims a file — the one above it — so a shorthand
+ * with no file above it cannot be right, which is exactly `unresolvable`.
+ */
+test("a shorthand with no qualified citation above it fails rather than disappearing", () => {
+  const orphan = extractCitations("The guard at `:27` is wrong.");
+  expect(orphan).toHaveLength(1);
+  expect(orphan[0]?.file).toBe(null);
+
+  const checked = checkCitations(orphan, () => ["one", "two"]);
+  expect(checked[0]?.state).toBe("unresolvable");
+  expect(checked[0]?.reason).toMatch(/shorthand :27 has no qualified citation before it/);
+});
+
+/**
+ * A shorthand inherits the file **as written**, ambiguity included. Resolving
+ * `status.test.ts` to whichever of the two the shorthand "probably" meant is the
+ * same guess Build step 4 forbids one line up, and it would be made silently
+ * because the shorthand does not name the file a reader would check.
+ */
+test("a shorthand that inherits an ambiguous bare name stays ambiguous", () => {
+  const found = extractCitations("At `status.test.ts:12`, and again at `:40`.");
+  const resolve = makeResolver([
+    "scripts/test/status.test.ts",
+    "tools/downloader/web/test/status.test.ts",
+  ]);
+  const results = checkCitations(found, () => ["a"], resolve);
+  expect(results.map((r) => r.state)).toEqual(["unresolvable", "unresolvable"]);
+  expect(results[1]?.reason).toMatch(/ambiguous — 2 tracked files/);
+});
+
+/**
+ * Document order, not shape order. A shorthand takes the *nearest preceding*
+ * qualified citation, so one sitting to the left of a citation on the same line
+ * must not inherit from it — scanning shape by shape would resolve it against a
+ * file named after it, which is a guess dressed as a rule.
+ */
+test("a shorthand takes the file from the citation before it, never one after it", () => {
+  const found = extractCitations("At `a/one.ts:5` then `:9`, and `:11` before `b/two.ts:20`.");
+  expect(found.map((c) => `${c.file}:${c.start}`)).toEqual([
+    "a/one.ts:5",
+    "a/one.ts:9",
+    "a/one.ts:11",
+    "b/two.ts:20",
+  ]);
+  // And the record line the file came from travels with it, so the inheritance
+  // can be checked by eye rather than taken on trust.
+  expect(found.map((c) => c.from)).toEqual([null, 1, 1, null]);
+});
+
+/**
+ * A table row's `file` cell names a file too, so the shorthands under a findings
+ * table inherit from it. Without this the most citation-dense shape in a gate
+ * record is the one a shorthand cannot follow.
+ */
+test("a table row's file cell sets the file a later shorthand inherits", () => {
+  const found = extractCitations(
+    [
+      "| file | line | finding |",
+      "| --- | --- | --- |",
+      "| `src/a.ts` | 42 | off by one |",
+      "",
+      "And also `:44`.",
+    ].join("\n"),
+  );
+  expect(found.map((c) => `${c.source} ${c.file}:${c.start}`)).toEqual([
+    "table src/a.ts:42",
+    "shorthand src/a.ts:44",
+  ]);
+});
+
+/**
+ * **Done when 3**, the half that is not a tautology. The corpus is "full of
+ * sentences containing numbers", and the prose rule has to read none of them. A
+ * looser rule — a bare number, or a number near a file word — matches every one
+ * of these, which is what makes this able to fail.
+ */
+test("ordinary prose containing numbers is not a reference", () => {
+  const sentences = [
+    "It cost 367 tokens and 12 of 40 tests passed.",
+    "Ran at 10:30, exit 2:1, verdict PASS:1, version 2.5.",
+    "Measured 568 shorthands across 26 records, a 7% ratio.",
+    "See PR #367 and the 2026-09-05 batch.",
+    "The deadline 5 days out, and airlines 3 of them.",
+  ];
+  for (const sentence of sentences) expect(extractCitations(sentence)).toEqual([]);
+});
+
+/** An anchor is quoted text. A number inside one is not a second reference. */
+test("a number inside a citation's anchor text is not read as a prose reference", () => {
+  const found = extractCitations('`src/a.ts:12` "the line 44 guard, on lines 7-9"');
+  expect(found).toHaveLength(1);
+  expect(found[0]?.anchor).toBe("the line 44 guard, on lines 7-9");
+});
+
+/**
+ * **Done when 3**, over the corpus the acceptance names. Two claims, and the
+ * second is the one with teeth: prose is detected often enough that the rule is
+ * doing work, and rarely enough that it is signal rather than noise. Measured
+ * when written: 99 prose references of 1915 across the 107 work records, about
+ * 1 in 19. Loosening `PROSE` to a bare number takes it past 1 in 2 and fails here.
+ *
+ * And no prose reference may ever set an exit bit, which is what "does not cause
+ * a false failure on ordinary ticket text" means operationally.
+ */
+test("prose references are found across the work records without becoming the corpus", () => {
+  const dirs = [
+    path.join(REPO, "docs", "work"),
+    ...fs
+      .readdirSync(path.join(REPO, "tools"))
+      .map((tool) => path.join(REPO, "tools", tool, "docs", "work")),
+  ].filter((dir) => fs.existsSync(dir));
+
+  const references = dirs.flatMap((dir) =>
+    fs
+      .readdirSync(dir)
+      .filter((name) => name.endsWith(".md"))
+      .flatMap((name) => extractCitations(fs.readFileSync(path.join(dir, name), "utf8"))),
+  );
+
+  const prose = references.filter((c) => c.source === "prose");
+  expect(references.length).toBeGreaterThan(500);
+  expect(prose.length).toBeGreaterThan(20);
+  expect(prose.length * 8).toBeLessThan(references.length);
+
+  // Every one of them is `unchecked`, and `unchecked` is not a failure. The read
+  // is deliberately a stub: what is under test is the verdict on a reference
+  // with no file, not whether the corpus's files still have those lines.
+  const states = new Set(checkCitations(prose, () => ["a"]).map((r) => r.state));
+  expect([...states]).toEqual(["unchecked"]);
+});
+
+/** A record that is nothing but prose references reports them all, and exits 0. */
+test("a record of nothing but prose references is counted in full and still passes", () => {
+  const { record, cleanup } = withRecord(
+    "## Review\n\nThe guard is on line 12, and the test on lines 40-44.\n",
+  );
+  const result = run(record);
+  expect(result.status).toBe(0);
+  expect(result.stderr).toBe("");
+  expect(result.stdout).toMatch(summary(0, 0, 0, 0, 2, 2, 0));
+  expect(result.stdout).toMatch(/^exit 0 — nothing to fix$/m);
+  expect(result.stdout).toMatch(/name a line without naming a file/);
+  cleanup();
+});
+
+/**
+ * **Done when 4**, and the whole reason this ticket cares about a marker: a
+ * record whose citations are its own evidence must be distinguishable from a
+ * broken one **by exit code**. One record, two versions differing only by the
+ * declaration line, so the exit code turns on the declaration and nothing else —
+ * the standard `--require-anchors` was held to one ticket ago.
+ */
+const BROKEN = "## Review\n\nBroken at `scripts/citations.mjs:999999`.\n";
+const DECLARED =
+  "## Review\n\n<!-- citations: evidence scripts/citations.mjs:999999 -->\n\n" +
+  "Broken at `scripts/citations.mjs:999999`.\n";
+
+test("a record declaring its citation deliberately unresolvable exits 0 where a broken one exits 1", () => {
+  const broken = withRecord(BROKEN);
+  const bad = run(broken.record);
+  expect(bad.status).toBe(EXIT.unresolvable);
+  expect(bad.stdout).toMatch(/^exit 1 — 1 unresolvable$/m);
+  broken.cleanup();
+
+  const declared = withRecord(DECLARED);
+  const good = run(declared.record);
+  expect(good.status).toBe(0);
+  expect(good.stdout).toMatch(/^exit 0 — nothing to fix$/m);
+  // The citation is still there, still printed, and still carries the reason it
+  // would have failed for — a waiver that hid it would be a worse silence than
+  // the one this ticket is about.
+  expect(good.stdout).toMatch(summary(0, 0, 0, 0, 1, 0, 1));
+  expect(good.stdout).toMatch(/^ {2}evidence {3}scripts\/citations\.mjs:999999/m);
+  expect(good.stdout).toMatch(/declared evidence — line 999999 is past end of file/);
+  // Exit 0 and empty stderr still mean the same thing.
+  expect(good.stderr).toBe("");
+  declared.cleanup();
+});
+
+/**
+ * The declaration is not a free pass, and this is what keeps the three classes
+ * three rather than "anything a record says about itself". A declaration that
+ * excuses nothing is stale — the citation was repointed and the waiver outlived
+ * it — and it fails on its own bit, which no citation can set.
+ */
+test("an evidence declaration that excuses nothing fails, on a bit of its own", () => {
+  const cited = withRecord(
+    "## Review\n\n<!-- citations: evidence scripts/citations.mjs:1 -->\n\nFine at `scripts/citations.mjs:1`.\n",
+  );
+  const passes = run(cited.record);
+  expect(passes.status).toBe(EXIT.declaration);
+  expect(passes.stdout).toMatch(/^exit 8 — 1 stale evidence declaration$/m);
+  expect(passes.stderr).toMatch(/is declared evidence, but it does not fail/);
+  // And it did not repaint the citation it named.
+  expect(passes.stdout).toMatch(/^ {2}unanchored scripts\/citations\.mjs:1/m);
+  cited.cleanup();
+
+  const absent = withRecord(
+    "## Review\n\n<!-- citations: evidence scripts/citations.mjs:999999 -->\n\nNothing is cited here.\n",
+  );
+  const missing = run(absent.record);
+  expect(missing.status).toBe(EXIT.declaration);
+  expect(missing.stderr).toMatch(/this record does not cite it/);
+  absent.cleanup();
+});
+
+/**
+ * A declaration is parsed strictly for the reason `status.mjs`'s frontmatter is:
+ * a marker nobody has to spell right is a marker that silently excuses nothing
+ * while reading as though it had.
+ */
+test("a malformed evidence declaration is refused, and carries the declaration bit", () => {
+  const { record, cleanup } = withRecord(
+    "## Review\n\n<!-- citations: evidence :440 -->\n\nBroken at `scripts/citations.mjs:999999`.\n",
+  );
+  const result = run(record);
+  expect(result.status).toBe(EXIT.declaration);
+  expect(result.stderr).toMatch(/":440" is not a citation an evidence declaration can name/);
+  // It refused rather than checking the record anyway.
+  expect(result.stdout).toBe("");
+  cleanup();
+});
+
+/** The declaration line is metadata, so the locations it names are not citations. */
+test("an evidence declaration does not add its own locations to the count", () => {
+  expect(extractCitations("<!-- citations: evidence src/a.ts:12 -->")).toEqual([]);
+  expect(extractDeclarations("<!-- citations: evidence `src/a.ts:12`, src/b.ts:3-9 -->")).toEqual([
+    { file: "src/a.ts", start: 12, end: 12, text: "src/a.ts:12", line: 1 },
+    { file: "src/b.ts", start: 3, end: 9, text: "src/b.ts:3-9", line: 1 },
+  ]);
+});
+
+/**
+ * `applyDeclarations` excuses a failure and only a failure. Asserted at the unit
+ * because the rule is the whole safety of the marker, and the CLI can only show
+ * one half of it at a time.
+ */
+test("applyDeclarations excuses a failing citation and reports one that excuses nothing", () => {
+  const results = checkCitations(
+    [cite({ file: "a.ts", start: 99, end: 99 }), cite({ file: "a.ts", start: 1, end: 1 })],
+    () => ["one", "two"],
+  );
+  expect(results.map((r) => r.state)).toEqual(["unresolvable", "unanchored"]);
+
+  const declarations = extractDeclarations("<!-- citations: evidence a.ts:99, a.ts:1 -->");
+  const { results: applied, stale } = applyDeclarations(results, declarations);
+  expect(applied.map((r) => r.state)).toEqual(["evidence", "unanchored"]);
+  expect(stale).toHaveLength(1);
+  expect(stale[0]?.reason).toMatch(/"a\.ts:1" is declared evidence, but it does not fail/);
+});
+
+/**
+ * `--section` filters the declarations by the same span as the citations, so a
+ * filtered run can neither be failed by a declaration outside it nor excused by
+ * one. The alternative fails `--section Review` on a `## Log` the run never read,
+ * which is the wrong-denominator failure repo-14 fixed, one field over.
+ */
+test("--section filters evidence declarations by the same span as the citations", () => {
+  const { record, cleanup } = withRecord(
+    [
+      "## Review",
+      "",
+      "<!-- citations: evidence scripts/citations.mjs:999999 -->",
+      "",
+      "Broken at `scripts/citations.mjs:999999`.",
+      "",
+      "## Log",
+      "",
+      "<!-- citations: evidence scripts/status.mjs:999999 -->",
+      "",
+      "Broken at `scripts/status.mjs:999999`.",
+      "",
+    ].join("\n"),
+  );
+
+  const review = run(record, "--section", "Review");
+  expect(review.status).toBe(0);
+  expect(review.stdout).toMatch(summary(0, 0, 0, 0, 1, 0, 1));
+
+  const whole = run(record);
+  expect(whole.status).toBe(0);
+  expect(whole.stdout).toMatch(summary(0, 0, 0, 0, 2, 0, 2));
+
+  cleanup();
+});
+
+/**
+ * **Done when 6**, the `--rev` fold-in. Folded in on the owner's instruction and
+ * against the builder's recommendation to file it, so it carries its own
+ * acceptance rather than arriving as a behaviour change nobody wrote down.
+ *
+ * A record whose citation list grew *after* the pinned sha has the new citation
+ * checked against the old tree, and reported against the record as though the
+ * record had claimed it then. Reproduced before fixing, and this is that
+ * reproduction: commit 1 has one citation into a 7-line file, commit 2 grows the
+ * file and adds `src/tls.ts:99`, and `--rev <commit 1>` fails on a citation the
+ * record did not contain at commit 1.
+ *
+ * The fix is deliberately **not** "read the ticket from the rev". A gate record
+ * is written after the commit it reviews, so it does not exist at the sha it
+ * pins to — the assertion below pins that, because it is the reason the obvious
+ * fix is the wrong one.
+ */
+function withGrowingRecord(): { dir: string; record: string; before: string; cleanup: () => void } {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-rev-")));
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+    return result.stdout.trim();
+  };
+
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "citations@example.test");
+  git("config", "user.name", "citations test");
+  fs.mkdirSync(path.join(dir, "src"));
+
+  const record = path.join(dir, "drift.md");
+  fs.writeFileSync(
+    path.join(dir, "src", "tls.ts"),
+    `${["a", "b", "c", "d", "e", "f", "g"].join("\n")}\n`,
+  );
+  fs.writeFileSync(record, "## Review\n\nThe guard at `src/tls.ts:2`.\n");
+  git("add", "-A");
+  git("commit", "-qm", "the tree the record was written against");
+  const before = git("rev-parse", "HEAD");
+
+  const grown = Array.from({ length: 120 }, (_, i) => `line ${i + 1}`);
+  fs.writeFileSync(path.join(dir, "src", "tls.ts"), `${grown.join("\n")}\n`);
+  fs.writeFileSync(
+    record,
+    "## Review\n\nThe guard at `src/tls.ts:2`.\n\nAnd later, at `src/tls.ts:99`.\n",
+  );
+  git("add", "-A");
+  git("commit", "-qm", "the file grew, and the record gained a citation");
+
+  return { dir, record, before, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("--rev names which record it read, and says when that record cited something else", () => {
+  const { dir, record, before, cleanup } = withGrowingRecord();
+  const at = (...argv: string[]) =>
+    spawnSync("node", [CLI, record, ...argv], { cwd: dir, encoding: "utf8" });
+
+  // Both sides named. Naming only the rev was the defect: a reader who passed a
+  // sha and got a verdict had no way to see which document produced it.
+  const tip = at("--rev", "HEAD");
+  expect(tip.stdout).toMatch(/read from the working tree and resolved against HEAD/);
+  // At the tip the record and the tree agree, so there is nothing to report.
+  expect(tip.stdout).not.toMatch(/cited something different/);
+  expect(tip.status).toBe(0);
+
+  const pinned = at("--rev", before);
+  // The reproduction: `src/tls.ts:99` fails against the old tree, and the record
+  // did not contain it at that sha.
+  expect(pinned.status).toBe(EXIT.unresolvable);
+  expect(pinned.stdout).toMatch(/line 99 is past end of file \(8 lines\)/);
+  // ...and now the run says so, rather than leaving the reader to infer it.
+  expect(pinned.stdout).toMatch(
+    /This record exists at that rev and cited something different there/,
+  );
+  expect(pinned.stdout).toMatch(/2 reference\(s\)\nnow, 1 then — 1 it did not have then/);
+  expect(pinned.stdout).toMatch(/git show .*:drift\.md/);
+  // Advice, not a verdict: it does not move the exit code and does not reach
+  // stderr, so `stderr is empty` and `exit 0` still mean the same thing.
+  expect(pinned.stderr).not.toMatch(/cited something different/);
+
+  cleanup();
+});
+
+/**
+ * Why the obvious fix is the wrong one, pinned rather than left in a comment. A
+ * gate record is committed *after* the sha it reviews, so reading the record
+ * from the rev would fail the flag's main use outright — there is nothing there
+ * to read. The silence is then the correct output.
+ */
+test("a record that does not exist at the rev reports no drift, because there is nothing to compare", () => {
+  const { dir, before, cleanup } = withGrowingRecord();
+
+  const late = path.join(dir, "gate.md");
+  fs.writeFileSync(late, "## Review\n\nThe guard at `src/tls.ts:2`.\n");
+  const gate = spawnSync("node", [CLI, late, "--rev", before], { cwd: dir, encoding: "utf8" });
+
+  expect(spawnSync("git", ["-C", dir, "show", `${before}:gate.md`]).status).not.toBe(0);
+  expect(gate.status).toBe(0);
+  expect(gate.stdout).toMatch(/read from the working tree and resolved against/);
+  expect(gate.stdout).not.toMatch(/cited something different/);
+
+  cleanup();
+});
+
+/** The comparison is on the reference list, not on the bytes — a Log entry is not drift. */
+test("recordDrift ignores prose that changed and reports a reference that did", () => {
+  const then = "## Review\n\nAt `src/a.ts:12`.\n";
+  expect(recordDrift(`${then}\n## Log\n\nRewritten prose, no citations.\n`, then)).toBe(null);
+
+  const added = recordDrift(`${then}\nAlso \`src/b.ts:3\`.\n`, then);
+  expect(added?.now).toBe(2);
+  // `atRev`, not `then`: an object with a `then` property is a thenable, and
+  // oxlint's `no-thenable` refused the obvious name for a real reason.
+  expect(added?.atRev).toBe(1);
+  expect(added?.added.map((c) => `${c.file}:${c.start}`)).toEqual(["src/b.ts:3"]);
+  expect(added?.removed).toEqual([]);
+
+  const dropped = recordDrift("## Review\n\nNothing cited.\n", then);
+  expect(dropped?.removed.map((c) => `${c.file}:${c.start}`)).toEqual(["src/a.ts:12"]);
+});
+
+/**
+ * **Done when 7**, and the boundary is the whole of it.
+ *
+ * A shorthand's file is inherited, so a "past end of file" verdict on one is a
+ * claim about a pairing the record did not write. Where the file was named in
+ * another paragraph that is a guess and must not be fatal — `` `:443` `` in a
+ * paragraph about TLS ports read as a line into whatever file was named above,
+ * which is how this branch turned `dl-38` and `dl-21` red.
+ *
+ * **Where it was named in the same paragraph it is not a guess at all**, and a
+ * number past the end of the file is simply a stale citation. The first version
+ * of this rule missed that and excused both; a reviewer built the case below and
+ * it went from a hard failure to exit 0. Over half the corpus's shorthands sit in
+ * that tier — 180 same-line and 151 more within five lines, of 465 — so the
+ * unconditional version gave up detection on the majority to fix the minority.
+ *
+ * Both sides are pinned here, because a leniency with no asserted boundary is
+ * how the first version shipped.
+ */
+test("a stale shorthand fails in its own paragraph and is only excused across one", () => {
+  const { record, cleanup } = withRecord(
+    [
+      "## Review",
+      "",
+      "The guard moved from `scripts/citations.mjs:5` to `:99999` after the refactor.",
+      "",
+      "A later paragraph, no longer naming a file, mentions `:88888`.",
+      "",
+    ].join("\n"),
+  );
+
+  const result = run(record);
+  // Same line as the citation it inherits from: no guesswork, so a number past
+  // the end of the file is a stale citation and still fatal.
+  expect(result.stdout).toMatch(/^ {2}FAIL {7}:99999 in scripts\/citations\.mjs/m);
+  // A paragraph later, the file is inherited across a boundary the scanner
+  // cannot read past, so the same shape is reported and fails nothing.
+  expect(result.stdout).toMatch(/^ {2}unchecked {2}:88888 in scripts\/citations\.mjs/m);
+  expect(result.stdout).toMatch(/inherited from another paragraph/);
+  // One fatal, one not — so the boundary, not the shape, is what decided it.
+  expect(result.status).toBe(EXIT.unresolvable);
+
+  cleanup();
+});
+
+/**
+ * The case the rule exists for, end to end: a backticked port in a paragraph
+ * about TLS, far below the last file anyone named. `dl-38` carries eleven of
+ * these and `dl-21` two, and this branch made them fatal on two already-merged,
+ * already-gated tickets before the rule existed.
+ */
+test("a backticked port far below the last named file is counted, not failed", () => {
+  const { record, cleanup } = withRecord(
+    [
+      "## Review",
+      "",
+      "The config is `release-please-config.json:5`.",
+      "",
+      "Several paragraphs of prose about something else entirely.",
+      "",
+      "The origin answers on `:443`-good and `:8443`-bad, which are ports.",
+      "",
+    ].join("\n"),
+  );
+
+  const result = run(record);
+  expect(result.status).toBe(0);
+  expect(result.stdout).toMatch(summary(0, 0, 1, 0, 3, 2, 0));
+  expect(result.stdout).toMatch(/^ {2}unchecked {2}:443 in release-please-config\.json/m);
+  expect(result.stdout).toMatch(/^ {2}unchecked {2}:8443 in release-please-config\.json/m);
+  cleanup();
+});
+
+/**
+ * The two things the downgrade must never reach, asserted because nothing else
+ * in the suite pinned them and a reviewer had to check them by hand.
+ *
+ * A **qualified** citation past the end of its file is untouched: the record
+ * wrote that file out, so nothing was guessed. And **ambiguity never routes
+ * through the downgrade at all**, even for a shorthand — that is a fact about
+ * the name, which the qualified citation above wrote out, and which fails on its
+ * own. Routing it would have made this ticket's own `hls.ts:27` declaration
+ * excuse nothing and flip the record to `exit 8`.
+ */
+test("the downgrade reaches neither a written file nor an ambiguous name", () => {
+  const written = checkCitations([cite({ file: "a.ts", start: 99, end: 99 })], () => ["one"]);
+  expect(written[0]?.state).toBe("unresolvable");
+
+  const ambiguous = extractCitations("At `status.test.ts:12`, and again at `:9999`.");
+  const results = checkCitations(
+    ambiguous,
+    () => ["one"],
+    makeResolver(["scripts/test/status.test.ts", "tools/downloader/web/test/status.test.ts"]),
+  );
+  // The shorthand is same-paragraph *and* the name is ambiguous; either alone
+  // keeps it fatal, and the reason is about the name rather than the pairing.
+  expect(results.map((r) => r.state)).toEqual(["unresolvable", "unresolvable"]);
+  expect(results[1]?.reason).toMatch(/ambiguous — 2 tracked files/);
+});
+
+/** `nearby` is a fact about paragraphs, so a blank line is what changes it. */
+test("extractCitations marks a shorthand nearby only inside its own paragraph", () => {
+  const found = extractCitations(
+    [
+      "At `a/one.ts:5` and `:6`.",
+      "Still the same paragraph, `:7`.",
+      "",
+      "New paragraph, `:8`.",
+    ].join("\n"),
+  );
+  expect(found.map((c) => `${c.source}:${c.start}=${c.nearby}`)).toEqual([
+    "inline:5=false",
+    "shorthand:6=true",
+    "shorthand:7=true",
+    "shorthand:8=false",
+  ]);
 });
