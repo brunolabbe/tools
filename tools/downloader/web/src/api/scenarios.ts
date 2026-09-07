@@ -11,6 +11,7 @@
 import type {
   ErrorCode,
   JobStatus,
+  ProbeStage,
   MediaVariant,
   ProbeResult,
   SubtitleTrack,
@@ -29,12 +30,60 @@ export interface JobScript {
   expiredResult?: boolean;
 }
 
+/**
+ * One beat of the mock's own probe narration (dl-43).
+ *
+ * The rule the real system obeys — a stage appears only because code reached
+ * the point that emits it — holds here in the only way it can: the mock *is*
+ * the server, its work is a scheduled timeline, and these are the points on
+ * that timeline it reaches. What must never come back is the UI inventing
+ * stages from a clock of its own; the panel renders frames it was sent and has
+ * no timer at all. `at` is a fraction of `probeDelayMs`, so a scenario that
+ * changes its duration keeps its shape.
+ */
+export interface StageBeat {
+  at: number;
+  stage: ProbeStage;
+  resolver: string;
+}
+
+/** The cheap tier answers. Two beats, because there are two things it does. */
+export const DIRECT_STAGE_SCRIPT: readonly StageBeat[] = [
+  { at: 0, stage: "resolver-start", resolver: "direct" },
+  { at: 0.15, stage: "direct-head", resolver: "direct" },
+];
+
+/**
+ * The chain degrading all the way to a browser, which is what a slow probe
+ * actually is. It opens contended — a probe that arrives while every browser is
+ * busy is both the commonest cause of a long wait and the one the old panel
+ * actively mis-reported as "Opening a headless browser".
+ */
+export const BROWSER_STAGE_SCRIPT: readonly StageBeat[] = [
+  { at: 0, stage: "resolver-start", resolver: "direct" },
+  { at: 0.02, stage: "direct-head", resolver: "direct" },
+  { at: 0.06, stage: "resolver-start", resolver: "yt-dlp" },
+  { at: 0.07, stage: "ytdlp-run", resolver: "yt-dlp" },
+  { at: 0.15, stage: "resolver-start", resolver: "browser" },
+  { at: 0.16, stage: "browser-slot", resolver: "browser" },
+  { at: 0.26, stage: "browser-launch", resolver: "browser" },
+  { at: 0.32, stage: "page-load", resolver: "browser" },
+  { at: 0.45, stage: "provoke-playback", resolver: "browser" },
+  { at: 0.58, stage: "network-quiet", resolver: "browser" },
+  { at: 0.79, stage: "settle-requests", resolver: "browser" },
+  { at: 0.85, stage: "manifest-fetch", resolver: "browser" },
+  { at: 0.9, stage: "manifest-parse", resolver: "browser" },
+  { at: 0.94, stage: "measure-variants", resolver: "browser" },
+];
+
 export interface Scenario {
   /** Matched against the pasted URL's path segments. */
   keyword: string;
   title: string;
   description: string;
   probeDelayMs: number;
+  /** Narration for this probe. Defaults to `DIRECT_STAGE_SCRIPT`. */
+  stages?: readonly StageBeat[];
   /** When set, the probe rejects with this code instead of returning a result. */
   probeError?: ErrorCode;
   /** Applied to the baseline probe result. */
@@ -203,6 +252,7 @@ export const SCENARIOS: readonly Scenario[] = [
     title: "Slow probe",
     description: "An 18-second browser probe — the case the analysing indicator exists for.",
     probeDelayMs: 18_000,
+    stages: BROWSER_STAGE_SCRIPT,
     job: SUCCESS,
   },
   {
@@ -283,6 +333,9 @@ export const SCENARIOS: readonly Scenario[] = [
     title: "No media found",
     description: "Page loaded, nothing playable requested.",
     probeDelayMs: 6_000,
+    // Every tier tried and none answered, which is what NO_MEDIA_FOUND means —
+    // and the one case where the whole chain is genuinely walked to the end.
+    stages: BROWSER_STAGE_SCRIPT,
     probeError: "NO_MEDIA_FOUND",
     job: SUCCESS,
   },

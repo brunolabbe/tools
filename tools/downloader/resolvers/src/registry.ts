@@ -13,7 +13,12 @@
  */
 
 import { AppError } from "@downloader/contract";
-import type { ProbeResult, Resolver, ResolveOptions } from "@downloader/contract";
+import type {
+  ProbeResult,
+  ProbeStageListener,
+  Resolver,
+  ResolveOptions,
+} from "@downloader/contract";
 
 function byPriority(a: Resolver, b: Resolver): number {
   return a.priority - b.priority;
@@ -52,11 +57,33 @@ export class ResolverRegistry {
 
     const deadline = AbortSignal.timeout(options.timeoutMs);
     const signal = AbortSignal.any([options.signal, deadline]);
-    const chainOptions: ResolveOptions = { ...options, signal };
+    // dl-43: a listener that throws must not fail the probe it is only
+    // narrating. `ResolveOptions.onStage` documents that rule; wrapping here
+    // makes it true for every resolver reached through the chain rather than
+    // relying on each caller to have read it.
+    const listener = options.onStage;
+    const onStage: ProbeStageListener | undefined =
+      listener === undefined
+        ? undefined
+        : (event) => {
+            try {
+              listener(event);
+            } catch {
+              // Best effort, exactly like the SSE hub's fan-out.
+            }
+          };
+    const chainOptions: ResolveOptions = {
+      ...options,
+      signal,
+      ...(onStage === undefined ? {} : { onStage }),
+    };
     const attempts: Array<{ resolver: string; code: string }> = [];
 
     for (const resolver of candidates) {
       abortIfNeeded(options.signal, deadline);
+      // Before `resolve`, not after: firing on the way out would never announce
+      // the tier that succeeds, which is the only one the user waits on.
+      onStage?.({ stage: "resolver-start", resolver: resolver.name });
       try {
         // Sequential on purpose: the point of the chain is that the cheap tiers
         // spare us the expensive ones. Running them in parallel would pay for

@@ -41,7 +41,7 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
         details: { issues: parsed.error.issues.slice(0, 3) },
       });
     }
-    const { url: rawUrl, refresh } = parsed.data;
+    const { url: rawUrl, refresh, probeId } = parsed.data;
 
     // Before the cache, so a blocked address is rejected even if a previous
     // request cached an answer for it under a different policy.
@@ -68,6 +68,11 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
       if (request.raw.destroyed) controller.abort(new AppError("CANCELED"));
     });
 
+    // dl-43. Opened only for the fresh path — a cache hit returned above never
+    // reaches here, and a channel for a probe that will not run would leave the
+    // client watching an empty stream until its own timeout.
+    const narrating = probeId !== undefined && context.probeStages.open(probeId);
+
     const resolveOptions: ResolveOptions = {
       // The loopback proxy, never `config.proxyUrl`: the browser and yt-dlp
       // tiers fetch from their own processes, so this is the only place their
@@ -76,6 +81,22 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
       proxyUrl: context.egressProxyUrl,
       timeoutMs: context.config.probeTimeoutMs,
       signal: controller.signal,
+      ...(narrating && probeId !== undefined
+        ? {
+            onStage: (event) => {
+              context.probeStages.stage(probeId, event);
+            },
+          }
+        : {}),
+    };
+
+    // dl-43: every exit from here on terminates the stream, including the ones
+    // that throw. A `finally` on the resolve alone would leave the channel open
+    // through the thumbnail capture — and the gate refusal below never gets
+    // that far at all, so a client whose probe was refused outright would sit
+    // watching a live stream that will never say anything again.
+    const finishNarration = (): void => {
+      if (narrating && probeId !== undefined) context.probeStages.done(probeId);
     };
 
     // The per-IP bucket above bounds one caller. This bounds the whole server,
@@ -83,6 +104,7 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
     // thousand addresses that have each spent nothing.
     const release = context.probeGate.tryAcquire();
     if (release === null) {
+      finishNarration();
       context.logger.warn("probe refused: concurrency gate full", {
         limit: context.probeGate.limit,
       });
@@ -94,48 +116,52 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
       );
     }
 
-    let probe: ProbeResult;
     try {
-      // The resolvers echo the proxy they were given; that is this process's own
-      // loopback port and no client's business.
-      probe = withoutEgressProxy(await context.registry.resolve(url, resolveOptions));
+      let probe: ProbeResult;
+      try {
+        // The resolvers echo the proxy they were given; that is this process's own
+        // loopback port and no client's business.
+        probe = withoutEgressProxy(await context.registry.resolve(url, resolveOptions));
+      } finally {
+        release();
+      }
+
+      // Resolver output is attacker-influenced. Vetting it here means a client
+      // never even learns that an internal address answered. `mustPass` only —
+      // `bestEffort` is the preview image, whose refusal must not cost the user a
+      // downloadable video, so it is vetted inside `captureThumbnail` where the
+      // refusal is caught. See `urlsInProbeResult`.
+      await context.guard.assertAllAllowed(urlsInProbeResult(probe).mustPass);
+
+      // Before the cache write and before the response, so both carry our path
+      // and neither carries the origin URL. Eager rather than on demand because
+      // `probe.requestContext.headers` is the only credential that will ever
+      // fetch this image, and it exists here and nowhere later.
+      const thumbnailPath = await captureThumbnail({
+        probe,
+        guard: context.guard,
+        fetchImpl: context.guardedFetch,
+        store: context.thumbnails,
+        logger: context.logger,
+      });
+      const clientProbe = withThumbnailPath(probe, thumbnailPath);
+
+      // The **rewritten** probe is what is cached, so the double-click that this
+      // cache exists for gets the same token rather than a second fetch. That is
+      // why `THUMBNAIL_TTL_MS` is required to exceed `PROBE_CACHE_TTL_CEILING_MS`.
+      context.probeCache.set(cacheKey, clientProbe);
+      context.logger.info("probe complete", {
+        resolver: probe.resolver,
+        variants: probe.variants.length,
+        drm: probe.drm.protected,
+        preview: thumbnailPath !== null,
+        requestContext: probe.requestContext,
+      });
+
+      const body: ProbeResponse = { probe: probeForClient(clientProbe), cached: false };
+      return await reply.send(body);
     } finally {
-      release();
+      finishNarration();
     }
-
-    // Resolver output is attacker-influenced. Vetting it here means a client
-    // never even learns that an internal address answered. `mustPass` only —
-    // `bestEffort` is the preview image, whose refusal must not cost the user a
-    // downloadable video, so it is vetted inside `captureThumbnail` where the
-    // refusal is caught. See `urlsInProbeResult`.
-    await context.guard.assertAllAllowed(urlsInProbeResult(probe).mustPass);
-
-    // Before the cache write and before the response, so both carry our path
-    // and neither carries the origin URL. Eager rather than on demand because
-    // `probe.requestContext.headers` is the only credential that will ever
-    // fetch this image, and it exists here and nowhere later.
-    const thumbnailPath = await captureThumbnail({
-      probe,
-      guard: context.guard,
-      fetchImpl: context.guardedFetch,
-      store: context.thumbnails,
-      logger: context.logger,
-    });
-    const clientProbe = withThumbnailPath(probe, thumbnailPath);
-
-    // The **rewritten** probe is what is cached, so the double-click that this
-    // cache exists for gets the same token rather than a second fetch. That is
-    // why `THUMBNAIL_TTL_MS` is required to exceed `PROBE_CACHE_TTL_CEILING_MS`.
-    context.probeCache.set(cacheKey, clientProbe);
-    context.logger.info("probe complete", {
-      resolver: probe.resolver,
-      variants: probe.variants.length,
-      drm: probe.drm.protected,
-      preview: thumbnailPath !== null,
-      requestContext: probe.requestContext,
-    });
-
-    const body: ProbeResponse = { probe: probeForClient(clientProbe), cached: false };
-    return await reply.send(body);
   });
 }

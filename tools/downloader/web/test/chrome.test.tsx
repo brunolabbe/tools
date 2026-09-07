@@ -9,16 +9,22 @@
  *
  * `AnalysingPanel` is the one with teeth. A browser probe reports no percentage
  * — it opens a page, provokes playback and waits for network quiet — so the bar
- * must be indeterminate and the reassurance has to come from elapsed time. That
- * is the never-fake-progress rule again, at the other place it lives.
+ * must be indeterminate. That is the never-fake-progress rule at the other
+ * place it lives, and since dl-43 it extends to the *narration*: the panel
+ * shows the stage the server last reported and has no clock of its own. Every
+ * case below therefore hands it a stage rather than advancing a timer, and the
+ * ones that do advance a timer are there to prove nothing moves.
  */
 
 import { afterEach, expect, test, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { PROBE_STAGES } from "@downloader/contract";
+import type { ProbeStageEvent } from "@downloader/contract";
 import { AnalysingPanel } from "../src/components/AnalysingPanel.tsx";
 import { ScenarioHints } from "../src/components/ScenarioHints.tsx";
 import { ThemeToggle } from "../src/components/ThemeToggle.tsx";
 import { SCENARIOS, scenarioUrl } from "../src/api/scenarios.ts";
+import { PROBE_STAGE_PENDING, probeStageText } from "../src/lib/probe-stages.ts";
 import { THEME_CHOICES } from "../src/lib/theme.ts";
 import type { ThemeChoice } from "../src/lib/theme.ts";
 import { NOW, SOURCE_URL } from "./fixtures.ts";
@@ -30,36 +36,23 @@ afterEach(cleanup);
 // ---------------------------------------------------------------------------
 
 /**
- * Which stage the panel is narrating, by ARIA state.
+ * Which line the panel is showing.
  *
- * This used to read `.stages__item--active`, because a class was all there was:
- * the stage list marked done, active and pending with CSS alone, so a screen
- * reader heard five items and no indication of which one was happening. dl-18
- * closed that here and at `JobCard`'s pipeline together — the two lists read as
- * siblings to a user, and narrating one without the other leaves the tool half
- * spoken for.
+ * It is the live region itself, and that is the point: before dl-43 the state
+ * was a class on one of five permanently-rendered `<li>`s, so this had to read
+ * `aria-current` to find out anything, and the four lines the probe had not
+ * reached were on screen the whole time. There is one line now, it is the text
+ * of the polite region, and replacing it is what makes the region announce.
  */
-function activeStage(): string {
-  return screen.getByRole("listitem", { current: "step" }).textContent ?? "";
+function stageLine(): string {
+  const line = document.querySelector(".stage");
+  if (line === null) throw new Error("no stage line rendered");
+  return line.textContent ?? "";
 }
 
-/** The stages the panel says are behind it, in list order. */
-function doneStages(): string[] {
-  return screen
-    .getAllByRole("listitem", { name: /, done$/u })
-    .map((item) => item.textContent ?? "");
-}
-
-/** The class the stylesheet keys off, which is set from the same expression. */
-function stageClasses(): string[] {
-  return within(screen.getByRole("list"))
-    .getAllByRole("listitem")
-    .map((item) => item.className);
-}
-
-function analysing(): ReturnType<typeof vi.fn<() => void>> {
+function analysing(stage: ProbeStageEvent | null = null): ReturnType<typeof vi.fn<() => void>> {
   const onCancel = vi.fn<() => void>();
-  render(<AnalysingPanel url={SOURCE_URL} startedAt={NOW} onCancel={onCancel} />);
+  render(<AnalysingPanel url={SOURCE_URL} startedAt={NOW} stage={stage} onCancel={onCancel} />);
   return onCancel;
 }
 
@@ -72,6 +65,7 @@ test("a probe in flight shows an indeterminate bar and never a percentage", () =
     const bar = screen.getByRole("progressbar");
     expect(bar.hasAttribute("value")).toBe(false);
     expect(bar.getAttribute("aria-label")).toBe("Analysing page: in progress, total unknown");
+    expect(bar.className).toContain("progress--indeterminate");
     expect(screen.queryByText(/%/u)).toBeNull();
     expect(screen.getByText(SOURCE_URL)).toBeDefined();
     expect(screen.getByText("0s")).toBeDefined();
@@ -80,52 +74,150 @@ test("a probe in flight shows an indeterminate bar and never a percentage", () =
   }
 });
 
-test("the narration follows the clock rather than inventing progress", () => {
-  // `useElapsed` reads `Date.now()` and drives a `setInterval`, so the system
-  // time has to move with the timers — which is what vitest's fake timers do.
+test("before the server says anything, the panel claims nothing about the server", () => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   try {
     analysing();
+    // The POST is out and nothing has come back. That is all the client knows,
+    // and the copy says exactly that rather than guessing at a first phase.
+    expect(stageLine()).toBe(PROBE_STAGE_PENDING);
 
-    const stages = screen.getByRole("list");
-    expect(within(stages).getAllByRole("listitem")).toHaveLength(5);
-    expect(screen.getByText("0s")).toBeDefined();
-
-    // All five stage texts are on screen at every elapsed time — only the
-    // *marking* moves. So asserting a stage's text is present proves nothing
-    // about the clock, which is what this test used to do: freezing
-    // `activeIndex` at 0 left all 162 tests green.
-    expect(activeStage()).toBe("Opening a headless browser");
-    // Nothing is behind the first stage, so no item claims to be done — and the
-    // class the CSS keys off agrees, because both come from one expression.
-    expect(screen.queryAllByRole("listitem", { name: /, done$/u })).toEqual([]);
-    expect(stageClasses()[0]).toBe("stages__item stages__item--active");
-    expect(stageClasses()[1]).toBe("stages__item");
-
+    // And no clock moves it. Sixteen seconds was where the old panel put "Still
+    // going — some sites are slow to start playing"; the line is unchanged
+    // because nothing happened, which is the whole fix.
     act(() => {
-      vi.advanceTimersByTime(5_000);
-    });
-    expect(screen.getByText("5s")).toBeDefined();
-    expect(activeStage()).toBe("Provoking playback and watching network requests");
-    expect(doneStages()).toEqual([
-      "Opening a headless browser",
-      "Loading the page and dismissing consent banners",
-    ]);
-    expect(stageClasses()[0]).toBe("stages__item stages__item--done");
-
-    act(() => {
-      vi.advanceTimersByTime(11_000);
+      vi.advanceTimersByTime(16_000);
     });
     expect(screen.getByText("16s")).toBeDefined();
-    expect(activeStage()).toBe("Still going — some sites are slow to start playing");
-
-    // Narration throughout, and never a figure.
-    expect(screen.getByRole("progressbar").hasAttribute("value")).toBe(false);
-    expect(screen.queryByText(/%/u)).toBeNull();
+    expect(stageLine()).toBe(PROBE_STAGE_PENDING);
   } finally {
     vi.useRealTimers();
   }
+});
+
+test("a stage the probe has not reached is absent from the document", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  try {
+    analysing({ stage: "page-load", resolver: "browser" });
+
+    expect(stageLine()).toBe("Loading the page");
+    // Absent, not present and greyed. Every one of these is a later phase of
+    // the same probe, and each was on screen from second zero before dl-43 —
+    // which is how copy written to reassure at second 16 ended up reading as a
+    // warning at second 0.
+    for (const later of [
+      "Waiting for the network to go quiet",
+      "Settling the last outstanding requests",
+      "Weighing the available qualities",
+      "Provoking playback and watching network requests",
+    ]) {
+      expect(screen.queryByText(later)).toBeNull();
+    }
+    // Nor is there a list of stages to grey out any more.
+    expect(screen.queryAllByRole("listitem")).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("the text a screen reader is given changes when a stage advances", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  try {
+    const onCancel = vi.fn<() => void>();
+    const view = render(
+      <AnalysingPanel
+        url={SOURCE_URL}
+        startedAt={NOW}
+        stage={{ stage: "browser-launch", resolver: "browser" }}
+        onCancel={onCancel}
+      />,
+    );
+
+    const region = document.querySelector(".stage");
+    expect(region?.getAttribute("aria-live")).toBe("polite");
+    const before = stageLine();
+    expect(before).toBe("Opening a headless browser");
+
+    view.rerender(
+      <AnalysingPanel
+        url={SOURCE_URL}
+        startedAt={NOW}
+        stage={{ stage: "provoke-playback", resolver: "browser" }}
+        onCancel={onCancel}
+      />,
+    );
+
+    // A *content* mutation, which is what a polite region announces. The list
+    // this replaced changed only `className` and `aria-current`, so a screen
+    // reader heard the five stages once and then silence for the whole probe.
+    expect(document.querySelector(".stage")).toBe(region);
+    expect(stageLine()).not.toBe(before);
+    expect(stageLine()).toBe("Provoking playback and watching network requests");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("the tier being tried is named, and an unknown one does not leak its identifier", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  try {
+    const onCancel = vi.fn<() => void>();
+    const view = render(
+      <AnalysingPanel
+        url={SOURCE_URL}
+        startedAt={NOW}
+        stage={{ stage: "resolver-start", resolver: "yt-dlp" }}
+        onCancel={onCancel}
+      />,
+    );
+    expect(stageLine()).toBe("Trying yt-dlp");
+
+    // A tier added server-side reaches an older bundle as a name it has never
+    // heard of. Saying something true beats putting an internal identifier on
+    // screen, and beats a blank line.
+    view.rerender(
+      <AnalysingPanel
+        url={SOURCE_URL}
+        startedAt={NOW}
+        stage={{ stage: "resolver-start", resolver: "some-future-tier" }}
+        onCancel={onCancel}
+      />,
+    );
+    expect(stageLine()).toBe("Trying another method");
+    expect(stageLine()).not.toContain("some-future-tier");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("waiting for a free browser is not reported as opening one", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  try {
+    analysing({ stage: "browser-slot", resolver: "browser" });
+    // The mis-report the ticket was filed over: a probe queued behind a full
+    // pool used to be told "Opening a headless browser", which is not what is
+    // happening and does not explain why it is slow.
+    expect(stageLine()).toBe("Waiting for a free browser — they are all busy");
+    expect(stageLine()).not.toContain("Opening");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("every stage in the contract has a line, and no two share one", () => {
+  // `PROBE_STAGES` is the closed vocabulary the server emits from. A stage with
+  // no copy would render as an empty live region — an announcement of nothing,
+  // which is worse than the silence it replaced.
+  const lines = PROBE_STAGES.filter((stage) => stage !== "resolver-start").map((stage) =>
+    probeStageText({ stage, resolver: "browser" }),
+  );
+  expect(lines.every((line) => line.length > 0)).toBe(true);
+  expect(new Set(lines).size).toBe(lines.length);
 });
 
 test("the wait can be abandoned", () => {

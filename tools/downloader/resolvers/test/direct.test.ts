@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { AppError } from "@downloader/contract";
-import type { ResolveOptions } from "@downloader/contract";
+import type { ProbeStageEvent, ResolveOptions } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
 import { classify, DirectUrlResolver } from "../src/resolvers/direct.ts";
 
@@ -329,5 +329,34 @@ describe("fallthrough and failure mapping", () => {
     expect(resolver.canHandle(new URL("file:///etc/passwd"))).toBe(false);
     expect(resolver.canHandle(new URL("data:text/plain,hi"))).toBe(false);
     expect(resolver.priority).toBe(90);
+  });
+});
+
+describe("stage narration (dl-43)", () => {
+  test("announces the head request before it is made, and nothing else", async () => {
+    // This tier's whole cost is one HEAD (or the ranged GET it falls back to),
+    // so one stage is the honest count. It is emitted *before* the request, or
+    // the only thing it could narrate is a wait that is already over.
+    const seen: ProbeStageEvent[] = [];
+    const stub = stubFetch((call) => {
+      // The stage is on record by the time the request goes out — the ordering
+      // is the assertion, not the presence.
+      expect(seen).toEqual([{ stage: "direct-head", resolver: "direct" }]);
+      return call.method === "HEAD"
+        ? new Response(null, { headers: { "content-type": "video/mp4" } })
+        : new Response(null, { headers: { "content-type": "video/mp4" } });
+    });
+    const resolver = new DirectUrlResolver({ fetch: stub.fetch });
+
+    await resolver.resolve(
+      new URL("https://cdn.example.com/clip.mp4"),
+      options({
+        onStage: (event) => {
+          seen.push(event);
+        },
+      }),
+    );
+
+    expect(seen).toEqual([{ stage: "direct-head", resolver: "direct" }]);
   });
 });

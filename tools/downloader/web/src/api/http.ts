@@ -9,6 +9,7 @@ import {
   appErrorPayloadSchema,
   jobResponseSchema,
   parseJobEvent,
+  parseProbeEvent,
   probeResponseSchema,
   ROUTES,
 } from "@downloader/contract";
@@ -92,6 +93,26 @@ export function createHttpClient(options: HttpClientOptions = {}): ApiClient {
         // EventSource retries on its own schedule and tells us nothing about
         // what we missed. Close it and hand the reconnect (and the mandatory
         // reconcile fetch) to the caller's backoff controller.
+        source.close();
+        handlers.onError();
+      });
+      return {
+        close: () => source.close(),
+      };
+    },
+
+    openProbeEvents(probeId, handlers): EventStream {
+      const source = new EventSource(url(ROUTES.probeEvents(probeId)));
+      source.addEventListener("open", () => handlers.onOpen());
+      source.addEventListener("message", (message: MessageEvent<string>) => {
+        const event = parseProbeEvent(message.data);
+        if (event) handlers.onEvent(event);
+      });
+      source.addEventListener("error", () => {
+        // No reconnect, unlike `openJobEvents`: there is no probe to reconcile
+        // against, and a channel this client alone named is not going to have
+        // acquired history while it was away. Narration stops; the analysis the
+        // user actually asked for is a separate request and carries on.
         source.close();
         handlers.onError();
       });

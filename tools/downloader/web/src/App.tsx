@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppError, sourceUrlSchema } from "@downloader/contract";
-import type { AppErrorPayload, Job, JobOptions, ProbeResult } from "@downloader/contract";
+import type {
+  AppErrorPayload,
+  Job,
+  JobOptions,
+  ProbeResult,
+  ProbeStageEvent,
+} from "@downloader/contract";
 import { USING_MOCK_API, api } from "./api/client.ts";
 import { AnalysingPanel } from "./components/AnalysingPanel.tsx";
 import { ErrorPanel } from "./components/ErrorPanel.tsx";
@@ -11,13 +17,21 @@ import { ThemeToggle } from "./components/ThemeToggle.tsx";
 import { UrlForm } from "./components/UrlForm.tsx";
 import { useJobs } from "./hooks/useJobs.ts";
 import { localErrorPayload } from "./lib/error-presentation.ts";
+import type { EventStream } from "./lib/event-stream.ts";
 import { getBrowserStorage } from "./lib/job-store.ts";
+import { mintProbeId } from "./lib/probe-id.ts";
 import { applyTheme, loadTheme, saveTheme } from "./lib/theme.ts";
 import type { ThemeChoice } from "./lib/theme.ts";
 
 type Phase =
   | { kind: "idle" }
-  | { kind: "analysing"; url: string; startedAt: number }
+  | {
+      kind: "analysing";
+      url: string;
+      startedAt: number;
+      /** The last stage the server reported over the probe's channel (dl-43). */
+      stage: ProbeStageEvent | null;
+    }
   | { kind: "probed"; url: string; probe: ProbeResult; cached: boolean };
 
 export function App(): React.JSX.Element {
@@ -31,6 +45,8 @@ export function App(): React.JSX.Element {
   // Bumped on every new analysis so a late response from an abandoned probe
   // cannot overwrite the current one.
   const probeToken = useRef(0);
+  /** The stage channel for the probe in flight, so a new analysis can close it. */
+  const stageStream = useRef<EventStream | null>(null);
 
   const jobs = useJobs(api);
 
@@ -50,10 +66,35 @@ export function App(): React.JSX.Element {
     probeToken.current = token;
     setProbeError(null);
     setStartError(null);
-    setPhase({ kind: "analysing", url: parsed.data, startedAt: Date.now() });
+    setPhase({ kind: "analysing", url: parsed.data, startedAt: Date.now(), stage: null });
+
+    // dl-43. Opened before the POST and named by this client, because the
+    // request that starts the probe is also the first thing that can produce a
+    // stage — there is no moment later at which subscribing would still catch
+    // the beginning. A stale stream from an abandoned probe is closed here
+    // rather than left to the server's channel timeout.
+    stageStream.current?.close();
+    const probeId = mintProbeId();
+    const stream = api.openProbeEvents(probeId, {
+      onOpen: () => {},
+      onEvent: (event) => {
+        if (probeToken.current !== token || event.type !== "stage") return;
+        // Only while analysing: a frame that arrives after the answer has no
+        // panel to reach, and must not resurrect one.
+        setPhase((current) =>
+          current.kind === "analysing"
+            ? { ...current, stage: { stage: event.stage, resolver: event.resolver } }
+            : current,
+        );
+      },
+      // Narration is decoration over a request that is still in flight. Losing
+      // it leaves the panel on its last honest line and changes nothing else.
+      onError: () => {},
+    });
+    stageStream.current = stream;
 
     try {
-      const response = await api.probe({ url: parsed.data });
+      const response = await api.probe({ url: parsed.data, probeId });
       if (probeToken.current !== token) return;
       setPhase({
         kind: "probed",
@@ -65,11 +106,16 @@ export function App(): React.JSX.Element {
       if (probeToken.current !== token) return;
       setPhase({ kind: "idle" });
       setProbeError(AppError.from(error).toPayload());
+    } finally {
+      stream.close();
+      if (stageStream.current === stream) stageStream.current = null;
     }
   }, []);
 
   const abandonProbe = useCallback(() => {
     probeToken.current += 1;
+    stageStream.current?.close();
+    stageStream.current = null;
     setPhase({ kind: "idle" });
   }, []);
 
@@ -136,7 +182,12 @@ export function App(): React.JSX.Element {
         )}
 
         {phase.kind === "analysing" && (
-          <AnalysingPanel url={phase.url} startedAt={phase.startedAt} onCancel={abandonProbe} />
+          <AnalysingPanel
+            url={phase.url}
+            startedAt={phase.startedAt}
+            stage={phase.stage}
+            onCancel={abandonProbe}
+          />
         )}
 
         {phase.kind === "probed" && (

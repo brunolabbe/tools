@@ -22,6 +22,8 @@ import { CONTAINER_OPTIONS, JOB_STATUSES } from "./job.ts";
 import type { Job, JobEvent, JobOptions, JobProgress, JobResult } from "./job.ts";
 import { DRM_SYSTEMS, STREAM_PROTOCOLS, SUBTITLE_FORMATS } from "./media.ts";
 import type { DrmInfo, MediaVariant, ProbeResult, RequestContext, SubtitleTrack } from "./media.ts";
+import { PROBE_STAGES } from "./resolver.ts";
+import type { ProbeEvent } from "./resolver.ts";
 
 /** Schemes we will follow. Anything else is rejected as `INVALID_URL`. */
 export const ALLOWED_SCHEMES = ["http:", "https:"] as const;
@@ -53,10 +55,33 @@ export const jobOptionsSchema = z.object({
     .optional(),
 }) satisfies z.ZodType<JobOptions>;
 
+/**
+ * The stage channel's name, minted by the *client* (dl-43).
+ *
+ * Opaque and unguessable, like `ROUTES.file`'s token — but client-minted rather
+ * than server-minted, which is the one place these two differ. A server-minted
+ * id would have to be handed back before the probe could start, and the probe
+ * POST is the request that starts it; the alternatives were a round trip before
+ * every analysis or a race in which the early stages are emitted before anyone
+ * is listening. What it protects is weaker in kind, too: a guessed id reveals
+ * which phase somebody else's probe is in and nothing else — no URL, no title,
+ * no header. The `PROBE_STAGES` vocabulary is closed and carries no free text,
+ * so that stays true by construction rather than by review.
+ */
+export const probeIdSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]{16,64}$/, "Must be an opaque 16–64 character token");
+
 export const probeRequestSchema = z.object({
   url: sourceUrlSchema,
   /** Skip the probe cache and re-analyse. */
   refresh: z.boolean().optional(),
+  /**
+   * Where to publish `ProbeEvent` frames while this probe runs. Optional: a
+   * client that does not want the narration simply omits it, and the probe
+   * behaves exactly as it did before dl-43.
+   */
+  probeId: probeIdSchema.optional(),
 });
 
 export const createJobRequestSchema = z.object({
@@ -245,6 +270,36 @@ export function parseJobEvent(raw: string): JobEvent | null {
   return result.success ? result.data : null;
 }
 
+/**
+ * Discriminated for the same reason as `jobEventSchema`, and validated on the
+ * client for the same reason: a frame this app cannot read is dropped rather
+ * than rendered. `stage` is an enum, so a server one version ahead that invents
+ * a stage name gets silence from an older UI instead of an empty line.
+ */
+export const probeEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("stage"),
+    probeId: probeIdSchema,
+    stage: z.enum(PROBE_STAGES),
+    resolver: z.string().min(1),
+    at: z.string(),
+  }),
+  z.object({ type: z.literal("done"), probeId: probeIdSchema, at: z.string() }),
+  z.object({ type: z.literal("heartbeat"), at: z.string() }),
+]) satisfies z.ZodType<ProbeEvent>;
+
+/** Parses an SSE `data:` payload from the probe channel. Null for anything unrecognised. */
+export function parseProbeEvent(raw: string): ProbeEvent | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const result = probeEventSchema.safeParse(parsed);
+  return result.success ? result.data : null;
+}
+
 export interface ProbeResponse {
   probe: ProbeResult;
   /** True when served from cache rather than freshly analysed. */
@@ -277,6 +332,12 @@ export const errorResponseSchema = z.object({
 export const ROUTES = {
   health: "/api/health",
   probe: "/api/probe",
+  /**
+   * The stage channel for one probe. `id` is the client-minted `probeId` sent
+   * with the POST — see `probeIdSchema`. Modelled on `jobEvents`, deliberately
+   * not reusing it: a probe has no job.
+   */
+  probeEvents: (id: string) => `/api/probe/${id}/events`,
   jobs: "/api/jobs",
   job: (id: string) => `/api/jobs/${id}`,
   jobEvents: (id: string) => `/api/jobs/${id}/events`,

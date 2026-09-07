@@ -15,6 +15,7 @@ import type { JobEventHub } from "./jobs/events.ts";
 import type { ConcurrencyGate, RateLimiter } from "@webtools/core/rate-limit";
 import type { JobOrchestrator } from "./jobs/orchestrator.ts";
 import type { ProbeCache } from "./jobs/probe-cache.ts";
+import type { ProbeStageHub } from "./probe-stages.ts";
 import type { JobQueue } from "./jobs/queue.ts";
 import type { AppLogger } from "./logger.ts";
 import type { SsrfGuard } from "./ssrf.ts";
@@ -57,6 +58,11 @@ export interface AppContext {
   queue: JobQueue;
   events: JobEventHub;
   probeCache: ProbeCache;
+  /**
+   * Stage narration for a running analysis, held by the client-minted probe id.
+   * Separate from `events` because a probe has no job. See `probe-stages.ts`.
+   */
+  probeStages: ProbeStageHub;
   /** Preview images fetched at probe time, held by token. See `thumbnails.ts`. */
   thumbnails: ThumbnailStore;
   /**

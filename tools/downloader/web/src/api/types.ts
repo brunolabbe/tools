@@ -4,7 +4,7 @@ import type {
   ProbeRequest,
   ProbeResponse,
 } from "@downloader/contract";
-import type { EventStreamFactory } from "../lib/event-stream.ts";
+import type { EventStreamFactory, ProbeEventStreamFactory } from "../lib/event-stream.ts";
 
 /**
  * The whole surface the UI depends on. Both the mock and the HTTP transport
@@ -19,4 +19,10 @@ export interface ApiClient {
   getJob(id: string): Promise<JobResponse>;
   cancelJob(id: string): Promise<JobResponse>;
   openJobEvents: EventStreamFactory;
+  /**
+   * The stage channel for one analysis (dl-43). Opened *before* `probe` is
+   * called, with the same client-minted id, because the first stages are
+   * emitted the moment the server starts resolving.
+   */
+  openProbeEvents: ProbeEventStreamFactory;
 }

@@ -15,6 +15,7 @@ import { AppError, redactUrl } from "@downloader/contract";
 import type {
   MediaVariant,
   ProbeResult,
+  ProbeStage,
   RequestContext,
   ResolveOptions,
   Resolver,
@@ -135,7 +136,15 @@ export class BrowserResolver implements Resolver {
     const deadline = Date.now() + Math.max(5000, options.timeoutMs);
 
     return await this.#pool.withBrowser(
-      { proxyUrl: options.proxyUrl, signal: options.signal },
+      {
+        proxyUrl: options.proxyUrl,
+        signal: options.signal,
+        // The pool reports a stage key; this resolver owns the lease, so it is
+        // the thing that has a name to put on the event. See `BrowserLeaseOptions`.
+        ...(options.onStage === undefined
+          ? {}
+          : { onStage: (stage: "browser-slot" | "browser-launch") => this.#stage(options, stage) }),
+      },
       async (browser) => await this.#probe(browser, url, options, deadline),
     );
   }
@@ -143,6 +152,11 @@ export class BrowserResolver implements Resolver {
   async dispose(): Promise<void> {
     // A pool handed in by the caller belongs to the caller.
     if (this.#ownsPool) await this.#pool.close();
+  }
+
+  /** dl-43. One place that stamps this resolver's name onto a stage key. */
+  #stage(options: ResolveOptions, stage: ProbeStage): void {
+    options.onStage?.({ stage, resolver: this.name });
   }
 
   async #probe(
@@ -211,17 +225,20 @@ export class BrowserResolver implements Resolver {
     collector.attach(context);
 
     const page = await context.newPage();
+    this.#stage(options, "page-load");
     const navigation = await navigate(page, url, deadline, options);
 
     // Checked as early as possible: DRM is a fact about the source, and there
     // is nothing worth waiting for once it is established.
     if (drm.detected) throw drm.toError();
 
+    this.#stage(options, "provoke-playback");
     await provokePlayback(page, {
       deadline: deadline - TEARDOWN_RESERVE_MS,
       signal: options.signal,
     });
 
+    this.#stage(options, "network-quiet");
     const quietReached = await waitForQuiet({
       collector,
       deadline: deadline - TEARDOWN_RESERVE_MS,
@@ -231,6 +248,7 @@ export class BrowserResolver implements Resolver {
       stop: () => drm.detected,
     });
 
+    this.#stage(options, "settle-requests");
     await collector.settle(Math.min(SETTLE_TIMEOUT_MS, remaining(deadline)));
     await readBackDrm(page, drm);
     if (drm.detected) throw drm.toError();
@@ -238,7 +256,7 @@ export class BrowserResolver implements Resolver {
 
     const finalUrl = page.url();
     const ranked = rankHits(collector.hits, finalUrl);
-    const outcome = await this.#buildOutcome(context, collector, ranked, deadline);
+    const outcome = await this.#buildOutcome(context, collector, ranked, deadline, options);
 
     if (!outcome) {
       const signals = await readSignals(page);
@@ -283,6 +301,7 @@ export class BrowserResolver implements Resolver {
     collector: HitCollector,
     ranked: readonly NetworkHit[],
     deadline: number,
+    options: ResolveOptions,
   ): Promise<ProbeOutcome | undefined> {
     const manifests = ranked.filter((hit) => hit.kind === "hls" || hit.kind === "dash");
     const files = ranked.filter((hit) => hit.kind === "progressive");
@@ -290,9 +309,11 @@ export class BrowserResolver implements Resolver {
     for (const hit of manifests.slice(0, MAX_MANIFEST_ATTEMPTS)) {
       // Sequential on purpose: the first manifest that parses wins, and probing
       // the runner-up costs a request against a CDN that may rate-limit us.
+      this.#stage(options, "manifest-fetch");
       // oxlint-disable-next-line no-await-in-loop
       const text = await this.#loadManifest(context, collector, hit, deadline);
       if (text === undefined) continue;
+      this.#stage(options, "manifest-parse");
       const parsed = this.#parseManifest(hit, text);
       if (!parsed) continue;
 
@@ -311,6 +332,7 @@ export class BrowserResolver implements Resolver {
 
       // dl-30: the parser's sizes come from declared bitrates, which overstate
       // VBR content by up to 2x. Weigh one rendition and rescale from that.
+      this.#stage(options, "measure-variants");
       // oxlint-disable-next-line no-await-in-loop
       const variants = await measureVariantSizes(
         parsed.variants,

@@ -99,9 +99,38 @@ test("finds a blob-only stream through the sniffer and downloads it", async ({ p
   const analysing = page.getByRole("region", { name: "Analysing" });
   await expect(analysing).toBeVisible();
   await expect(analysing.getByText(hls.watchUrl)).toBeVisible();
-  await expect(analysing.getByRole("listitem")).toHaveCount(5);
+
+  // **This assertion was five list items until dl-43, and the change is the
+  // point rather than a repair.** The panel used to render all five stages at
+  // once, keyed to `elapsed >= afterMs` on a client-side timer over a POST that
+  // returns nothing until it is finished — so it narrated a wait it could not
+  // observe, and copy written to reassure at second 16 was on screen at second
+  // 0. The list is gone; there is one line, replaced as the server reports a
+  // stage it actually reached. Zero is asserted rather than merely dropping the
+  // old count, because "no stage list" is now a property worth pinning.
+  await expect(analysing.getByRole("listitem")).toHaveCount(0);
+
+  // What replaces it, and it is a stronger claim than the count ever was: this
+  // text can only be on screen because `GET /api/probe/:id/events` delivered a
+  // frame the resolver chain emitted. No timer produces it, and a panel that
+  // fell back to its pre-probe placeholder would fail here.
+  //
+  // The alternation spans the browser tier's whole run rather than naming one
+  // phase, so this cannot race a fast machine past a single stage; it is copy
+  // from `web/src/lib/probe-stages.ts`, and if that copy changes this goes red,
+  // which is correct. **This spec is the only place the stage channel is driven
+  // by a real `EventSource`** — every other test reaches it through Fastify's
+  // `inject` or the web transport seam.
+  const stageLine = analysing.locator(".stage");
+  await expect(stageLine).toHaveAttribute("aria-live", "polite");
+  await expect(stageLine).toHaveText(
+    /Opening a headless browser|Loading the page|Provoking playback|Waiting for the network|Settling the last|stream manifest|available qualities/u,
+  );
+
   // The elapsed counter reaching a second is what separates a live panel from
-  // a static one; a browser launch alone takes longer than that.
+  // a static one; a browser launch alone takes longer than that. Kept, and it
+  // is the one element here that is honest with no event behind it — how long
+  // the user has waited is a fact about the wait, not a claim about the server.
   await expect(analysing.getByText(/^[1-9]\d*s$/u)).toBeVisible();
 
   // --- The probe ----------------------------------------------------------

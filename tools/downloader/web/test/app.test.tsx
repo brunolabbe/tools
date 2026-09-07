@@ -29,10 +29,11 @@
 
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { AppError, Job, JobEvent, ProbeResponse } from "@downloader/contract";
+import type { AppError, Job, JobEvent, ProbeEvent, ProbeResponse } from "@downloader/contract";
 import type { ApiClient } from "../src/api/types.ts";
 import type { EventStreamHandlers } from "../src/lib/event-stream.ts";
 import { JOBS_STORAGE_KEY } from "../src/lib/job-store.ts";
+import { PROBE_STAGE_PENDING } from "../src/lib/probe-stages.ts";
 import { NOW, SOURCE_URL, job, probe, progress, variant } from "./fixtures.ts";
 
 interface Deferred<T> {
@@ -82,6 +83,7 @@ async function mountApp(usingMock: boolean, overrides: Partial<ApiClient> = {}):
     getJob: vi.fn(unused("JOB_NOT_FOUND")),
     cancelJob: vi.fn(unused("JOB_NOT_FOUND")),
     openJobEvents: vi.fn(() => ({ close: vi.fn() })),
+    openProbeEvents: vi.fn(() => ({ close: vi.fn() })),
     // The job-stream cases below need a client that answers; the probe cases
     // need one that rejects loudly on anything they did not mean to reach. The
     // two live in one harness because the module-registry dance above is the
@@ -563,4 +565,165 @@ test("a reconnect that slept through the download stage keeps the refetch's word
     ["Assembling", "pending"],
     ["Ready", "pending"],
   ]);
+});
+
+// ---------------------------------------------------------------------------
+// The probe stage channel (dl-43)
+// ---------------------------------------------------------------------------
+
+/** The channel opened by the analysis in flight, and the id it was opened under. */
+interface Channel {
+  probeId: string;
+  handlers: EventStreamHandlers<ProbeEvent>;
+  closed: boolean;
+}
+
+function channelSpy(channels: Channel[]): Partial<ApiClient> {
+  return {
+    openProbeEvents: vi.fn((probeId: string, handlers: EventStreamHandlers<ProbeEvent>) => {
+      const channel: Channel = { probeId, handlers, closed: false };
+      channels.push(channel);
+      return {
+        close: () => {
+          channel.closed = true;
+        },
+      };
+    }),
+  };
+}
+
+function stageLine(): string {
+  return document.querySelector(".stage")?.textContent ?? "";
+}
+
+test("the channel is opened under the same id the probe is sent with", async () => {
+  const channels: Channel[] = [];
+  const fake = await mountApp(true, channelSpy(channels));
+
+  analyse(SOURCE_URL);
+  await settle();
+
+  // Opened *before* the POST is answered, because the first stages happen while
+  // it is still in flight — there is no later moment at which subscribing would
+  // still catch the beginning.
+  expect(channels).toHaveLength(1);
+  const opened = channels[0]?.probeId ?? "";
+  expect(opened).toMatch(/^[a-f0-9]{32}$/u);
+  expect(fake.client.probe).toHaveBeenCalledWith({ url: SOURCE_URL, probeId: opened });
+});
+
+test("a stage frame becomes the line on screen", async () => {
+  const channels: Channel[] = [];
+  await mountApp(true, channelSpy(channels));
+
+  analyse(SOURCE_URL);
+  await settle();
+  expect(stageLine()).toBe(PROBE_STAGE_PENDING);
+
+  await act(async () => {
+    channels[0]?.handlers.onEvent({
+      type: "stage",
+      probeId: channels[0].probeId,
+      stage: "network-quiet",
+      resolver: "browser",
+      at: "2026-09-07T10:00:00.000Z",
+    });
+    await Promise.resolve();
+  });
+
+  expect(stageLine()).toBe("Waiting for the network to go quiet");
+});
+
+test("the channel is closed when the answer arrives, and again when abandoned", async () => {
+  const channels: Channel[] = [];
+  const fake = await mountApp(true, channelSpy(channels));
+
+  analyse(SOURCE_URL);
+  await settle();
+  expect(channels[0]?.closed).toBe(false);
+
+  await act(async () => {
+    fake.probes[0]?.resolve({ probe: probe(), cached: false });
+    await Promise.resolve();
+  });
+  await settle();
+  // Leaving it open would hold an `EventSource` per analysis for the life of
+  // the tab, on a channel that will never say anything again.
+  expect(channels[0]?.closed).toBe(true);
+
+  analyse(SOURCE_URL);
+  await settle();
+  fireEvent.click(screen.getByRole("button", { name: "Stop waiting" }));
+  await settle();
+  expect(channels[1]?.closed).toBe(true);
+});
+
+test("a frame from an abandoned analysis cannot resurrect the panel", async () => {
+  // Same hazard as the probe race above, on the other channel: a stale stream
+  // that outlived its analysis must not put a stage back on screen.
+  const channels: Channel[] = [];
+  const fake = await mountApp(true, channelSpy(channels));
+
+  // The scenario buttons, not the form: the form's own button reads
+  // "Analysing…" and is disabled while a probe is in flight, which is exactly
+  // the state this case has to start a second analysis from.
+  const scenarios = screen.getAllByRole("button", { name: /Happy path|Slow probe/u });
+  fireEvent.click(scenarios[0] as HTMLButtonElement);
+  await settle();
+  const stale = channels[0];
+  fireEvent.click(scenarios[1] as HTMLButtonElement);
+  await settle();
+
+  await act(async () => {
+    fake.probes[1]?.resolve({ probe: probe({ title: "The current one" }), cached: false });
+    await Promise.resolve();
+  });
+  await settle();
+
+  await act(async () => {
+    stale?.handlers.onEvent({
+      type: "stage",
+      probeId: stale.probeId,
+      stage: "page-load",
+      resolver: "browser",
+      at: "2026-09-07T10:00:00.000Z",
+    });
+    await Promise.resolve();
+  });
+
+  expect(screen.queryByRole("heading", { name: "Analysing" })).toBeNull();
+  expect(screen.getByRole("heading", { name: "The current one" })).toBeDefined();
+});
+
+test("a channel that drops leaves the analysis running and the last line standing", async () => {
+  const channels: Channel[] = [];
+  const fake = await mountApp(true, channelSpy(channels));
+
+  analyse(SOURCE_URL);
+  await settle();
+  await act(async () => {
+    channels[0]?.handlers.onEvent({
+      type: "stage",
+      probeId: channels[0].probeId,
+      stage: "page-load",
+      resolver: "browser",
+      at: "2026-09-07T10:00:00.000Z",
+    });
+    await Promise.resolve();
+  });
+  await act(async () => {
+    channels[0]?.handlers.onError();
+    await Promise.resolve();
+  });
+
+  // Narration is decoration over a request that is still in flight. Unlike the
+  // job stream there is nothing to reconcile, so losing it changes nothing but
+  // the line stops moving.
+  expect(stageLine()).toBe("Loading the page");
+  await act(async () => {
+    fake.probes[0]?.resolve({ probe: probe({ title: "Answered anyway" }), cached: false });
+    await Promise.resolve();
+  });
+  await settle();
+  expect(screen.getByRole("heading", { name: "Answered anyway" })).toBeDefined();
 });

@@ -140,6 +140,15 @@ export interface BrowserLeaseOptions {
    */
   proxyUrl?: string | undefined;
   signal?: AbortSignal | undefined;
+  /**
+   * Narration for the two waits this lease contains (dl-43).
+   *
+   * Deliberately narrower than `ResolveOptions.onStage`: the pool is not a
+   * resolver and has no name to stamp on an event, so the resolver that holds
+   * the lease wraps this and supplies its own. Typed to the two stages the pool
+   * can honestly report, so it cannot emit anybody else's.
+   */
+  onStage?: ((stage: "browser-slot" | "browser-launch") => void) | undefined;
 }
 
 const BASE_ARGS: readonly string[] = [
@@ -214,11 +223,22 @@ export class BrowserPool {
     if (this.#closed) {
       throw new AppError("INTERNAL", "The browser pool has already been shut down.");
     }
+    // Reported only when there is genuinely a queue. `Semaphore.acquire`
+    // returns without suspending whenever `active < max`, and nothing can run
+    // between this read and that call, so a full semaphore here means this lease
+    // *will* wait — which is the distinction the UI is being asked to draw. An
+    // unconditional emit would put "waiting for a free slot" on screen for the
+    // uncontended case too, which is exactly the kind of narration dl-43 exists
+    // to remove.
+    if (this.#semaphore.active >= this.#semaphore.max) options.onStage?.("browser-slot");
     const release = await this.#semaphore.acquire(options.signal);
     let dedicated: Browser | undefined;
     try {
       throwIfAborted(options.signal);
       const proxyUrl = options.proxyUrl === "" ? undefined : options.proxyUrl;
+      // The slot is held; from here on the cost is launching or claiming a
+      // browser, which is what the old copy claimed was happening all along.
+      options.onStage?.("browser-launch");
       let browser: Browser;
       if (this.#sharedClaimed && this.#sharedProxyUrl !== proxyUrl) {
         // A second proxy in one process. Rare enough not to be worth a second

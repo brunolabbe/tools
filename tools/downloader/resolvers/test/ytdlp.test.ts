@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { AppError } from "@downloader/contract";
-import type { ResolveOptions } from "@downloader/contract";
+import type { ProbeStageEvent, ResolveOptions } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
 import { mapProtocol, mapYtDlpInfo, YtDlpResolver } from "../src/resolvers/ytdlp.ts";
 import type { YtDlpInfo } from "../src/resolvers/ytdlp.ts";
@@ -561,5 +561,28 @@ describe("derived variant fixtures (dl-40)", () => {
         {},
       ).variants,
     ).toEqual(record.variants);
+  });
+});
+
+describe("stage narration (dl-43)", () => {
+  test("announces the subprocess once, whether it answers or fails", async () => {
+    // The tier is one spawn, so it is one stage — and it belongs to `yt-dlp`
+    // rather than to whoever called it, which is what lets the UI name the tier
+    // the user is waiting on.
+    const seen: ProbeStageEvent[] = [];
+    const collect = (event: ProbeStageEvent): void => {
+      seen.push(event);
+    };
+
+    await fakeResolver("youtube-like").resolve(SOURCE, options({ onStage: collect }));
+    expect(seen).toEqual([{ stage: "ytdlp-run", resolver: "yt-dlp" }]);
+
+    // A tier that fails still ran, so it still reported having started. The
+    // stage is a fact about what happened, not about whether it worked.
+    seen.length = 0;
+    await expect(
+      fakeResolver("unsupported").resolve(SOURCE, options({ onStage: collect })),
+    ).rejects.toThrow(AppError);
+    expect(seen).toEqual([{ stage: "ytdlp-run", resolver: "yt-dlp" }]);
   });
 });
