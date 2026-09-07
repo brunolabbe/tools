@@ -307,18 +307,27 @@ scope is stated here rather than expanded into step-by-step instructions,
 deliberately: the corpus moves, and the sizing below was taken at `b142a4a`.
 Whoever builds it writes the steps with the records in front of them.
 
-**What D, then A means concretely**, all of it drawn from option D above rather
-than added here:
+**What D, then A means concretely.** The provenance of each line is marked,
+because "D, then A, with C as the destination" is an answer that draws on two
+option blocks and not only on D's — **the scope is D's, the enforcement
+machinery is C's, and only the framing is new**:
 
-- **Scope: the `## Review` gate records.** Measured at `b142a4a`: 353 unanchored
-  citations across 42 of the 46 records that have a `Review` section, out of 418.
-  Re-measure before starting; the denominator grows with every gate record.
+- **Scope: the `## Review` gate records** — D's, verbatim. Measured at
+  `b142a4a`: 353 unanchored citations across 42 of the 46 records that have a
+  `Review` section, out of 418. Re-measure before starting; the denominator grows
+  with every gate record.
 - **Anchor them**, obeying the two invariants below — and repoint any that turn
   out to be stale, since anchoring a wrong coordinate forces fixing it.
-- **Enforce that scope**, using `--require-anchors` and the `--section` flag the
-  script already has, built **on** repo-25's `citations: evidence` declaration
-  rather than beside it, and **shaped so C can widen it** rather than as a rule
-  about `## Review` specifically.
+- **Enforce that scope** with `--require-anchors` **and** the `--section` flag.
+  Only `--section` is D's; **`--require-anchors` is named under option C, not
+  under D**, and so is the requirement that an enforced gate be built **on**
+  repo-25's `citations: evidence` declaration "not beside it". They are pulled
+  forward deliberately — D is the first slice of C, so it uses C's machinery at
+  D's scope.
+- **Shape it so C can widen it** rather than as a rule about `## Review`
+  specifically. **This line is in neither option block**; it follows from the
+  owner's answer that C is the destination, and it is recorded as a consequence
+  of the decision rather than as something the ticket already said.
 - **A is the floor for everything outside that scope**: a citation gains an
   anchor when it is next written or edited. A is not optional and not implied by
   D; it is the half that covers the Why sections D deliberately does not.
@@ -446,9 +455,20 @@ unanchored, 0 unresolvable` at exit 0. Two things had to be written around to
   answer that was given — under D it is a large anchoring pass plus a CI gate,
   which is neither obviously `mechanical` nor obviously `standard`. Rating it
   here would be this recorder guessing, which is the thing the original entry
-  was trying to avoid. **It needs one line from whoever answers it**; until then
-  an unrated ticket dispatches on the orchestrator's own model, which is the
-  safe direction.
+  was trying to avoid. **It needs one line from whoever answers it.**
+
+  **The gap that leaves is narrow but real, and worth naming as a mechanism
+  rather than as an unease.** `.claude/agents/builder.md`'s table maps an absent
+  `difficulty` to `inherit` — the same dispatch as `standard`, and **with no
+  floor**. `hard` is the one row that names a model instead, and repo-27 (`done`)
+  changed it to do so for exactly this reason: "a floor cannot be delegated to a
+  variable." So if this ticket is picked up while the orchestrating session is
+  running Sonnet, it inherits Sonnet with nothing to stop it — and under D the
+  work wires `.github/workflows/ci.yml`, which is the seam-reaching territory
+  `hard` is defined for. Leaving it unrated is the safe direction only in the
+  sense that it does not _lower_ the model; it does not raise it either, and that
+  is the half that could bite. Whoever rates this should decide between `hard`
+  and `standard` on the merits, not inherit the absence.
 
   **This page's own citations have gone stale since it was filed, and that is
   left standing on purpose.** The filing entry above records `10 verified, 0
