@@ -217,8 +217,10 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
       // tripping a limiter they are not testing. `rate-limit.test.ts` turns
       // them back on explicitly.
       rateLimitProbePerMinute: 0,
+      rateLimitProbeEventsPerMinute: 0,
       rateLimitJobsPerMinute: 0,
       rateLimitFilesPerMinute: 0,
+      rateLimitThumbnailPerMinute: 0,
       ...options.config,
     },
   });

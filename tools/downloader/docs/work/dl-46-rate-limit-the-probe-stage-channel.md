@@ -3,7 +3,7 @@ id: dl-46
 tool: downloader
 title: Rate-limit the probe stage channel, which is the one open endpoint without a bucket
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: [dl-43]
 ---
@@ -136,6 +136,121 @@ only raises the number of sockets an attacker has to hold.
 - `npm run check` and `npm test -- --project downloader` pass.
 
 ## Log
+
+- **2026-09-07 — built.** `rateLimitProbeEventsPerMinute` (default **10**,
+  `RATE_LIMIT_PROBE_EVENTS_PER_MINUTE`) and a `createRateLimitHook` on
+  `registerProbeEventRoutes`, keyed per IP as answered. Step 5's thumbnail
+  bucket landed with it: `rateLimitThumbnailPerMinute` (default **60**), keyed
+  on the token. What the brief did not settle, and what was decided here:
+
+  - **The limit is 10/min**, copied from `POST /api/probe` — not from `files`,
+    which is a video player's rate and would be meaningless here. Two reasons,
+    and the second is the one that sizes it: the endpoints are used exactly
+    one-for-one (`App.tsx` opens the stream, then POSTs the probe it names), so
+    an equal allowance means this bucket can never be what refuses a client
+    still inside its probe allowance; and a rate has to be checked against the
+    concurrency it is meant to bound. A subscriber's socket is closed after
+    `CHANNEL_TTL_MS` (180 s), so the channels one bucket key holds at once are
+    the requests it can make in that window — a full bucket's burst **plus** the
+    refill over it, `perMinute * (1 + 3)`, which is **40 of `MAX_CHANNELS`'
+    64**. Under the cap, so one address cannot fill the hub alone; the ceiling
+    for this default is 15. Written here because the first draft of this
+    reasoning said 30 and shipped it into three comments: it dropped the burst
+    term, which understates the bound by a quarter and is exactly the mistake
+    that would make a raised default look safe. The arithmetic is pinned by a
+    test now rather than left in prose.
+  - **A throttled client is told `RATE_LIMITED` with `Retry-After`**, the house
+    pattern, because the hook already is it. What the ticket asked to check is
+    below.
+  - **Step 4: `App.tsx`'s empty `onError` is still right, and no `web` file
+    changed.** The seam map was right that the ticket's `**Packages:** api` does
+    not cover `web/src/App.tsx`; the answer is that step 4 is a check whose
+    verdict is "no change", not work in `web`. Two reasons it holds. The
+    transport already treats every failure identically —
+    `web/src/api/http.ts`'s `openProbeEvents` closes the source and calls
+    `onError()` with no reconnect, and it cannot do better: `EventSource`
+    exposes neither the status code nor the body of a failed handshake to the
+    page, so the client **cannot** tell a 429 from a dropped socket even if it
+    wanted to. And it should not want to: the analysis is a separate request
+    that is still in flight, and a client inside its probe allowance is inside
+    this one by construction, so a 429 here means the probe itself is about to
+    be refused and told properly. Surfacing "narration was rate limited" would
+    be a second error message for a request that has not failed.
+  - **Step 5's key is the token, and this is the one place the owner's answer
+    may not reach.** The question put to the owner was step 1's, whose options
+    were probe-id-shaped; the ticket says step 1's question "applies unchanged"
+    to the thumbnail route while itself concluding "the token is the likelier
+    key", and `fileBucketKey` is the named precedent. Implemented as the ticket
+    reads. If the answer was meant to cover step 5 too, it is one line: drop
+    `key:` from `registerThumbnailRoute` and the default IP key applies.
+  - **`fileBucketKey` moved to `rate-limit.ts` as `capabilityBucketKey`**, on
+    the "second real consumer" rule — its logic (hash the token, fall back to
+    the address when it is not well formed) is identical for both routes and its
+    docblock is the one place that reasoning lives. Behaviour is unchanged;
+    `files.ts` keeps its own comment saying which key it passes and why. The two
+    routes hold separate `RateLimiter`s, so a shared key format cannot let one
+    spend the other's allowance.
+
+  What the brief and the code had wrong:
+
+  - **`routes/probe-events.ts` said the hub's cap refusal "is a 503".** It is a
+    429: the code is `RATE_LIMITED` and `http-errors.ts` maps it to 429, and has
+    since before dl-43. A stale sentence in dl-43's own docblock, corrected in
+    place rather than filed.
+  - **`probe-stages.ts`'s `MAX_CHANNELS` docblock ended "a per-IP limiter … is
+    deliberately not decided here"**, which is now false. Rewritten to say what
+    the bucket bounds and to keep the load-bearing half — the cap is still not
+    the defence on its own.
+  - **The load-test escape hatch in `tools/downloader/CLAUDE.md` would have gone
+    stale silently.** It turns off three limiters by name; a fourth and fifth
+    would have left the load test tripping a limiter it thought it had disabled.
+    Updated, along with `.env.example`, `docs/02-DEPLOYMENT.md` and this tool's
+    `01-ARCHITECTURE.md`, whose rate-limiting bullet now states the _property_
+    ("every client-facing route has a bucket") rather than a list of two that
+    goes out of date on the next route.
+  - **An asymmetry worth knowing rather than rediscovering:** the advisory
+    `RateLimit-*` headers survive a refusal, which is an ordinary Fastify error
+    response, but not an _allowed_ subscribe — this route writes its headers
+    straight to `reply.raw`, bypassing Fastify's header store. Left alone and
+    pinned by an assertion: `EventSource` exposes no response headers to the
+    page at all, so nothing can read them.
+
+  Two things caught late, both worth the space:
+
+  - **A green assertion that proved nothing**, caught by `tsc` and not by the
+    run: `expect(probed.json().probe.mediaUrl).toBe(probeResult().mediaUrl)`
+    compared `undefined` to `undefined`, because `ProbeResult` has no
+    `mediaUrl` and `.json()` is untyped. It passed. `npm run check` failed on
+    the right-hand side, which is the argument for tests being typechecked by
+    the same gate the source is. Replaced with `title`, the variant count and
+    `cached === false`.
+  - **`tsc --build` reported clean over that file once before it reported the
+    error**, on an incremental run. If a typecheck matters to a claim, force it:
+    `npx tsc --build --force` is what the numbers below were taken from.
+
+  Gates: `npm run check` exit 0 (after `tsc --build --force`, also exit 0),
+  `npm test -- --project downloader` 1167 passed in 71 files, and the whole
+  `npm test` — 2273 in 133 files — because this touched repo-level
+  `.env.example` and `docs/02-DEPLOYMENT.md`. Not run: the Playwright suites and
+  the container build, neither of which this reaches. The six new route tests
+  were **run red first**, by replacing
+  `{ onRequest: rateLimit }` with `{}` on both routes: the three thumbnail ones
+  fail on their assertions, and the three probe-events ones fail by timing out —
+  without the hook an over-limit subscribe is _served_, and an allowed subscribe
+  holds its socket until the probe it names ends, which for a probe that never
+  comes is the whole `CHANNEL_TTL_MS`. That is the honest shape of this
+  endpoint's red, not a weaker one substituted for it.
+
+- **2026-09-07 — Build step 1 answered by the owner: per IP, matching the other
+  endpoints.** The question was what the new bucket is keyed on. Options put:
+  **per IP** (recommended, and chosen); **both per IP and per probe id**;
+  **per probe id alone**; **let the builder decide**. The three rejected ones
+  all turn on the same fact — a probe id is minted by the client and costs
+  nothing to mint, so a bucket named by one is a bucket refilled by changing a
+  string, and `fileBucketKey`'s precedent does not transfer because a file token
+  is a capability _this service issued_. Recorded here because the answer fixes
+  only the **key**: the limit, the window and what a throttled client is told
+  were left to the build and are in the entry above.
 
 - **2026-09-07 — Build step 5 added from dl-44**, which persisted thumbnail
   bytes to disk and so changed what a miss on `/api/thumbnail/:token` costs. The

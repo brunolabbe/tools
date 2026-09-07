@@ -15,16 +15,14 @@
  *    nothing and turns a would-be traversal into a 500.
  */
 
-import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import { AppError, ROUTES } from "@downloader/contract";
 import { assertRealPathInside } from "@downloader/engine";
-import { clientKey } from "@webtools/core/rate-limit";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AppContext } from "../context.ts";
 import { isWellFormedToken } from "../jobs/tokens.ts";
-import { createRateLimitHook } from "../rate-limit.ts";
+import { capabilityBucketKey, createRateLimitHook } from "../rate-limit.ts";
 
 interface ByteRange {
   start: number;
@@ -68,40 +66,6 @@ export function contentDisposition(filename: string): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-/**
- * The bucket key for one request to this route.
- *
- * **The token, not the address.** The other two limited routes protect the
- * service and key on `clientKey(request.ip)`; here the thing being protected is
- * one file, and the token is what both names it and bounds who may ask for it.
- * Keying on the token means a leaked link cannot outrun its own bucket by being
- * fetched from many addresses at once — the pair `(token, ip)` would hand each
- * of those addresses a fresh allowance, which is precisely the case worth
- * stopping. It also means the limit survives CGNAT and a reverse proxy, neither
- * of which an address key does; `trustProxy` is off by default and cannot be
- * turned on safely without knowing the deployment.
- *
- * The token is hashed because this key reaches a log line, and a file token is
- * a live credential — the same reason `redactUrl` exists. A prefix of the digest
- * is a stable bucket name that leaks nothing.
- *
- * A token that is not even well formed cannot name a file, so it falls back to
- * the address. Be precise about what that buys: `isWellFormedToken` checks
- * length and charset, not existence, so a scanner guessing *well-formed* tokens
- * — the realistic case — still mints a bucket per guess. What bounds that is
- * `RateLimiter`'s `maxKeys` (10,000, evicted least-recently-seen), not this
- * branch. The fallback buys the two things it can: obviously-malformed junk
- * shares one allowance rather than getting a fresh one per request, and no
- * amount of guessing lands in a real file's bucket.
- */
-function fileBucketKey(request: FastifyRequest): string {
-  const token = (request.params as { token?: unknown }).token;
-  if (typeof token !== "string" || !isWellFormedToken(token)) {
-    return `ip:${clientKey(request.ip)}`;
-  }
-  return `token:${createHash("sha256").update(token).digest("base64url").slice(0, 16)}`;
-}
-
 export function registerFileRoutes(app: FastifyInstance, context: AppContext): void {
   // Sized for a video player rather than a form: a `<video>` element issues one
   // open-ended `Range` request per completed seek, so an ordinary scrub-bar
@@ -111,7 +75,10 @@ export function registerFileRoutes(app: FastifyInstance, context: AppContext): v
     limiter: context.rateLimits.files,
     logger: context.logger,
     scope: "files",
-    key: fileBucketKey,
+    // The token, not the address: what this protects is one file. The full
+    // reasoning, and what the malformed-token fallback does and does not buy,
+    // is on `capabilityBucketKey`.
+    key: capabilityBucketKey,
   });
 
   app.get<{ Params: { token: string } }>(

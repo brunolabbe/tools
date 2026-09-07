@@ -74,13 +74,22 @@ export interface AppContext {
   guardedFetch: GuardedFetch;
   orchestrator: JobOrchestrator;
   /**
-   * Token buckets, one per expensive endpoint.
+   * Token buckets, one per client-facing endpoint. Since dl-46 that is every
+   * one of them: an endpoint without a bucket is one whose cost anybody may
+   * spend, and the SSE channel was the last of those.
    *
-   * `probe` and `jobs` are keyed per IP. `files` is not — it is keyed on the
-   * file's capability token, because what it protects is one file rather than
-   * the service. See `fileBucketKey` in `routes/files.ts`.
+   * `probe`, `probeEvents` and `jobs` are keyed per IP, because what they
+   * protect is the service. `files` and `thumbnail` are not — they are keyed on
+   * the capability token in the path, because what each protects is the one
+   * artefact that token names. See `capabilityBucketKey` in `rate-limit.ts`.
    */
-  rateLimits: { probe: RateLimiter; jobs: RateLimiter; files: RateLimiter };
+  rateLimits: {
+    probe: RateLimiter;
+    probeEvents: RateLimiter;
+    jobs: RateLimiter;
+    files: RateLimiter;
+    thumbnail: RateLimiter;
+  };
   /** Global cap on simultaneous probes, which no per-IP limit can provide. */
   probeGate: ConcurrencyGate;
   now: () => Date;

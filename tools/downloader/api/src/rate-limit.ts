@@ -13,9 +13,11 @@
  * with *this* tool's logger, in a Fastify hook.
  */
 
+import { createHash } from "node:crypto";
 import { AppError } from "@downloader/contract";
 import { clientKey, type RateLimiter } from "@webtools/core/rate-limit";
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { isWellFormedToken } from "./jobs/tokens.ts";
 import type { AppLogger } from "./logger.ts";
 
 export interface RateLimitHookOptions {
@@ -27,11 +29,51 @@ export interface RateLimitHookOptions {
    * What to bucket on. Defaults to the caller's address, which is right when
    * the thing being protected is *the service*.
    *
-   * The file route protects a *file* instead, and keys on its capability token
-   * — the reasoning is on `registerFileRoutes`. Whatever this returns reaches a
-   * log line, so a key derived from a secret has to be reduced first.
+   * The file and thumbnail routes protect one *artefact* instead, and key on
+   * the capability token that names it — `capabilityBucketKey` below. Whatever
+   * this returns reaches a log line, so a key derived from a secret has to be
+   * reduced first.
    */
   key?: (request: FastifyRequest) => string;
+}
+
+/**
+ * The bucket key for a route whose path carries a capability token.
+ *
+ * **The token, not the address.** The endpoints that protect *the service* key
+ * on `clientKey(request.ip)`; on `/api/files/:token` and
+ * `/api/thumbnail/:token` the thing being protected is one file or one image,
+ * and the token is what both names it and bounds who may ask for it. Keying on
+ * the token means a leaked link cannot outrun its own bucket by being fetched
+ * from many addresses at once — the pair `(token, ip)` would hand each of those
+ * addresses a fresh allowance, which is precisely the case worth stopping. It
+ * also means the limit survives CGNAT and a reverse proxy, neither of which an
+ * address key does; `trustProxy` is off by default and cannot be turned on
+ * safely without knowing the deployment.
+ *
+ * The token is hashed because this key reaches a log line, and one of these
+ * tokens is a live credential — the same reason `redactUrl` exists. A prefix of
+ * the digest is a stable bucket name that leaks nothing.
+ *
+ * A token that is not even well formed cannot name anything, so it falls back
+ * to the address. Be precise about what that buys: `isWellFormedToken` checks
+ * length and charset, not existence, so a scanner guessing *well-formed* tokens
+ * — the realistic case — still mints a bucket per guess. What bounds that is
+ * `RateLimiter`'s `maxKeys` (10,000, evicted least-recently-seen), not this
+ * branch. The fallback buys the two things it can: obviously-malformed junk
+ * shares one allowance rather than getting a fresh one per request, and no
+ * amount of guessing lands in a real artefact's bucket.
+ *
+ * Each route passes its own `RateLimiter`, so two routes holding the same
+ * string cannot spend each other's allowance — and no route mints tokens the
+ * other would recognise anyway.
+ */
+export function capabilityBucketKey(request: FastifyRequest): string {
+  const token = (request.params as { token?: unknown }).token;
+  if (typeof token !== "string" || !isWellFormedToken(token)) {
+    return `ip:${clientKey(request.ip)}`;
+  }
+  return `token:${createHash("sha256").update(token).digest("base64url").slice(0, 16)}`;
 }
 
 /**

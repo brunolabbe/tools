@@ -57,13 +57,19 @@ export const DONE_GRACE_MS = 5_000;
  * them. Measured at 64/64, with a subsequent real probe refused a channel. That
  * is what `Channel.claimed` exists to close.
  *
- * What remains, stated rather than hidden: 64 *concurrently held* connections
- * still fill the cap, and the effect is that other users' analyses run
- * unnarrated — the analysis itself is unaffected, since `probeStages.open()`
- * returning false only drops the narration. A per-IP limiter on this endpoint is
- * the obvious next step and is deliberately not decided here; it is a policy call
- * about `rateLimits`, whose buckets are chosen in `config.ts` alongside the two
- * that protect real work.
+ * What remained after that, and what dl-46 closed: 64 *concurrently held*
+ * connections still filled the cap, and the effect was that other users'
+ * analyses ran unnarrated — the analysis itself is unaffected, since
+ * `probeStages.open()` returning false only drops the narration. The SSE
+ * endpoint now carries a per-IP bucket of its own
+ * (`rateLimitProbeEventsPerMinute`, default 10/min), which bounds how fast one
+ * address can acquire channels: a subscriber's socket is closed after
+ * `CHANNEL_TTL_MS`, so what one address holds at once is what it can ask for in
+ * that window — a full bucket's burst plus the refill, `perMinute * (1 + 3)`,
+ * which is **40 of these 64** at the default. **The cap is still not the
+ * defence on its own**; it is the ceiling the bucket keeps a single address
+ * under. Both numbers are pinned together in `rate-limit.test.ts`, because
+ * raising either one alone is what would quietly reopen this.
  */
 export const MAX_CHANNELS = 64;
 

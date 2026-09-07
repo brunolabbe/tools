@@ -261,8 +261,13 @@ address for `/api/files/*` and keep the UI where it is — not to argue about it
 Consider tightening these once it is reachable by more than you. The defaults in
 `compose.yaml` assume a single trusted user on a laptop:
 
-- `RATE_LIMIT_PROBE_PER_MINUTE` / `RATE_LIMIT_JOBS_PER_MINUTE` — per client, and
-  meaningful now that `TRUST_PROXY` makes "client" mean the right thing.
+- `RATE_LIMIT_PROBE_PER_MINUTE` / `RATE_LIMIT_JOBS_PER_MINUTE` /
+  `RATE_LIMIT_PROBE_EVENTS_PER_MINUTE` — per client, and meaningful now that
+  `TRUST_PROXY` makes "client" mean the right thing. The third is the SSE
+  channel that narrates an analysis, and it defaults to the same number as the
+  probe because the two are used one-for-one; subscribing is what creates a
+  channel, so without it one client could fill the hub and leave every other
+  user's analysis silent (dl-46).
 - `RATE_LIMIT_FILES_PER_MINUTE` — per **file token**, not per client, so it does
   not depend on `TRUST_PROXY` and one leaked link cannot buy itself more
   allowance by being fetched from more addresses. Its default is 600 because a
@@ -270,6 +275,10 @@ Consider tightening these once it is reachable by more than you. The defaults in
   request per seek: dl-23 measured 207–274 requests a minute from an ordinary
   scrub-bar drag. Lower it only if you know nobody plays these links in a
   browser; 0 turns it off.
+- `RATE_LIMIT_THUMBNAIL_PER_MINUTE` — per **thumbnail token**, on the same
+  reasoning and with the same independence from `TRUST_PROXY`. Its default is 60
+  because the client is an `<img>` rather than a player: one request per result
+  panel, and the response is `private, max-age=300`.
 - `MAX_TOTAL_STORAGE_GB` and `FILE_RETENTION_HOURS` — the only things standing
   between a shared instance and a full disk.
 - A Cloudflare **WAF rate limiting rule** on `/api/` as a second layer, since it

@@ -9,8 +9,10 @@
  *    404. A probe id is minted by the client and the channel it names may not
  *    exist yet: this endpoint is opened *before* the POST that starts the
  *    probe, on purpose, so that the first stages are not emitted into an empty
- *    room. Subscribing is therefore what creates the channel. The refusal that
- *    remains is the hub's cap, which is a 503 rather than a 404.
+ *    room. Subscribing is therefore what creates the channel. The refusals that
+ *    remain are both 429s rather than 404s: the per-IP bucket dl-46 added
+ *    below, and behind it the hub's global cap. (dl-43 wrote "503" here; the
+ *    code has always been `RATE_LIMITED`, which `http-errors.ts` maps to 429.)
  *  - **A hard lifetime.** Nothing else would ever reclaim this stream. The hub
  *    expires the channel on its own schedule; this closes the socket on the
  *    same one, so a client that never POSTs is not held forever.
@@ -21,6 +23,7 @@ import type { ProbeEvent } from "@downloader/contract";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
 import { CHANNEL_TTL_MS } from "../probe-stages.ts";
+import { createRateLimitHook } from "../rate-limit.ts";
 
 export const PROBE_HEARTBEAT_INTERVAL_MS = 15_000;
 
@@ -30,99 +33,132 @@ export function formatProbeSseFrame(event: ProbeEvent): string {
 }
 
 export function registerProbeEventRoutes(app: FastifyInstance, context: AppContext): void {
-  app.get<{ Params: { id: string } }>(ROUTES.probeEvents(":id"), async (request, reply) => {
-    const { id } = request.params;
-
-    let closed = false;
-    let streaming = false;
-    let unsubscribe: (() => void) | undefined;
-    /**
-     * Frames that arrived before the headers went out.
-     *
-     * `subscribe` replays the hub's buffer synchronously, from inside the call
-     * below — and that call has to happen before `writeHead`, or a refusal
-     * could not be a JSON error. Writing to `reply.raw` first would make Node
-     * emit its own default headers, and the stream would be a `text/plain` 200
-     * that no `EventSource` accepts.
-     */
-    const queued: ProbeEvent[] = [];
-
-    const write = (event: ProbeEvent): void => {
-      if (closed) return;
-      if (!streaming) {
-        queued.push(event);
-        return;
-      }
-      try {
-        reply.raw.write(formatProbeSseFrame(event));
-      } catch {
-        // The socket went away between our check and our write.
-        cleanup();
-      }
-    };
-
-    function cleanup(): void {
-      if (closed) return;
-      closed = true;
-      clearInterval(heartbeat);
-      clearTimeout(lifetime);
-      unsubscribe?.();
-    }
-
-    const heartbeat = setInterval(() => {
-      write({ type: "heartbeat", at: context.now().toISOString() });
-    }, PROBE_HEARTBEAT_INTERVAL_MS);
-    heartbeat.unref?.();
-
-    const lifetime = setTimeout(() => {
-      cleanup();
-      reply.raw.end();
-    }, CHANNEL_TTL_MS);
-    lifetime.unref?.();
-
-    let finished = false;
-    // Before any streaming header is written, so a refusal is a normal JSON
-    // error rather than an event stream that says nothing.
-    const subscription = context.probeStages.subscribe(id, (event) => {
-      write(event);
-      if (event.type !== "done") return;
-      finished = true;
-      if (!streaming) return;
-      cleanup();
-      reply.raw.end();
-    });
-    if (subscription === null) {
-      clearInterval(heartbeat);
-      clearTimeout(lifetime);
-      throw new AppError(
-        "RATE_LIMITED",
-        "The server is narrating as many analyses as it can at once.",
-        { details: { scope: "probe-stages" } },
-      );
-    }
-    unsubscribe = subscription;
-
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      // Nginx buffers proxied responses by default, which would hold every
-      // frame until the probe finished — precisely defeating the point.
-      "X-Accel-Buffering": "no",
-    });
-
-    request.raw.on("close", cleanup);
-    reply.raw.on("close", cleanup);
-
-    streaming = true;
-    const replay = queued.splice(0, queued.length);
-    for (const event of replay) write(event);
-    if (finished) {
-      cleanup();
-      reply.raw.end();
-    }
-
-    // Tells Fastify the reply is being managed by hand.
-    return reply;
+  /**
+   * Per IP, and per IP only (dl-46). Subscribing is what creates a channel
+   * here, so without this hook the hub's cap was spendable by anyone who could
+   * reach the port: `MAX_CHANNELS` concurrent connections, and every other
+   * user's analysis runs unnarrated.
+   *
+   * Not keyed on the probe id, which was the question dl-46 asked and the owner
+   * answered. The id is minted by the client and costs nothing to mint, so a
+   * bucket named by one is a bucket refilled by changing a string —
+   * `capabilityBucketKey`'s case does not apply, because that key is a
+   * capability *this service issued*.
+   *
+   * `onRequest`, so a refusal happens before the handler and therefore before
+   * `writeHead` — the same ordering constraint the hub's own refusal has below,
+   * and for the same reason: a throttled client must get a JSON error it can
+   * read, not an event stream that says nothing.
+   *
+   * One asymmetry, pinned by a test rather than left to be rediscovered: the
+   * advisory `RateLimit-*` headers the hook sets survive a **refusal**, which is
+   * an ordinary Fastify error response, and not an allowed subscribe, whose
+   * headers this route writes straight to `reply.raw`. That costs nothing —
+   * `EventSource` exposes no response headers to the page at all.
+   */
+  const rateLimit = createRateLimitHook({
+    limiter: context.rateLimits.probeEvents,
+    logger: context.logger,
+    scope: "probe-events",
   });
+
+  app.get<{ Params: { id: string } }>(
+    ROUTES.probeEvents(":id"),
+    { onRequest: rateLimit },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      let closed = false;
+      let streaming = false;
+      let unsubscribe: (() => void) | undefined;
+      /**
+       * Frames that arrived before the headers went out.
+       *
+       * `subscribe` replays the hub's buffer synchronously, from inside the call
+       * below — and that call has to happen before `writeHead`, or a refusal
+       * could not be a JSON error. Writing to `reply.raw` first would make Node
+       * emit its own default headers, and the stream would be a `text/plain` 200
+       * that no `EventSource` accepts.
+       */
+      const queued: ProbeEvent[] = [];
+
+      const write = (event: ProbeEvent): void => {
+        if (closed) return;
+        if (!streaming) {
+          queued.push(event);
+          return;
+        }
+        try {
+          reply.raw.write(formatProbeSseFrame(event));
+        } catch {
+          // The socket went away between our check and our write.
+          cleanup();
+        }
+      };
+
+      function cleanup(): void {
+        if (closed) return;
+        closed = true;
+        clearInterval(heartbeat);
+        clearTimeout(lifetime);
+        unsubscribe?.();
+      }
+
+      const heartbeat = setInterval(() => {
+        write({ type: "heartbeat", at: context.now().toISOString() });
+      }, PROBE_HEARTBEAT_INTERVAL_MS);
+      heartbeat.unref?.();
+
+      const lifetime = setTimeout(() => {
+        cleanup();
+        reply.raw.end();
+      }, CHANNEL_TTL_MS);
+      lifetime.unref?.();
+
+      let finished = false;
+      // Before any streaming header is written, so a refusal is a normal JSON
+      // error rather than an event stream that says nothing.
+      const subscription = context.probeStages.subscribe(id, (event) => {
+        write(event);
+        if (event.type !== "done") return;
+        finished = true;
+        if (!streaming) return;
+        cleanup();
+        reply.raw.end();
+      });
+      if (subscription === null) {
+        clearInterval(heartbeat);
+        clearTimeout(lifetime);
+        throw new AppError(
+          "RATE_LIMITED",
+          "The server is narrating as many analyses as it can at once.",
+          { details: { scope: "probe-stages" } },
+        );
+      }
+      unsubscribe = subscription;
+
+      reply.raw.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        // Nginx buffers proxied responses by default, which would hold every
+        // frame until the probe finished — precisely defeating the point.
+        "X-Accel-Buffering": "no",
+      });
+
+      request.raw.on("close", cleanup);
+      reply.raw.on("close", cleanup);
+
+      streaming = true;
+      const replay = queued.splice(0, queued.length);
+      for (const event of replay) write(event);
+      if (finished) {
+        cleanup();
+        reply.raw.end();
+      }
+
+      // Tells Fastify the reply is being managed by hand.
+      return reply;
+    },
+  );
 }
