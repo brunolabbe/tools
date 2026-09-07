@@ -247,7 +247,7 @@ instruction; where the shape has a worked example it is in
 | Your own **summary**, sent downstream | Relay the reproduction, not the verdict, and say the builder should push back rather than transcribe. Every builder in the fourth session corrected something | 2026-08-23 |
 | A finding whose **premises are all true** | Checking a finding's premises is not checking the finding; only running it is. Relay the premises **as premises** | 2026-09-01 |
 | A wrong **citation** under a right conclusion | The outcome cannot catch this one. Check the rule you are about to cite, not only the answer it gives you, and attribute the correction when one lands | 2026-09-04 |
-| A fix relayed without its **mechanism** | Ask *"why did the argument not transfer?"*, not for a corrected number. Both generalisations quoted on this page exist because a relay asked; neither builder volunteered it | 2026-08-24 |
+| A fix relayed without its **mechanism** | Ask *"why did the argument not transfer?"*, not for a corrected number. [reference/defect-shapes.md](reference/defect-shapes.md)'s re-derive-list rule exists because a relay asked for one; its builder did not volunteer it | 2026-08-24 |
 | A finding accepted **unreproduced** | Make the builder reproduce it first — not to doubt the reviewer, but to put the builder in contact with the gap. It also catches the reviewer being wrong, which happens | 2026-08-24 |
 | A **described** artifact | Paste anything the builder must *commit*, *post* or *quote*. A description is not a smaller version of a record; a builder asked to commit one it could not find correctly stopped, and the round was lost | 2026-09-01 |
 | A result read **at a glance** | `cancelled` is a *completed* run and a glance counts it as green. Take the measurement with `--json`; four glance-readings turned up in one batch, in prose every time and in citations never | 2026-09-05 |
@@ -271,6 +271,13 @@ one, and neither covers the other.
 Two remedies on this page are not shapes of their own and belong to their
 neighbours: **separate the outcome from the route** when you dispatch a decided
 option, and **check the rule you are about to cite** rather than only the answer.
+
+**On the `Measured` column.** Where the session recorded a date, that is the date.
+Where it recorded only "the second session" or "the fourth session" — rows 3 to 6,
+9 and 10 — the date is the commit that wrote the provision, taken with
+`git log -S`, and it is a *written* date rather than a measured one. Stated here
+once rather than marked per row, because a column of asterisks is worse than a
+sentence.
 
 ## Fallbacks and caveats
 

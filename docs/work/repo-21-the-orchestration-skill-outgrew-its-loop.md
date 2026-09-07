@@ -1169,6 +1169,17 @@ unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
   as prose with the reason attached; `records.md`'s citation output is now
   byte-identical to `main`'s.
 
+- **A seventh drifted claim, found while re-reading my own table, and it was
+  already false on `main`.** `SKILL.md` said _"Both generalisations quoted on this
+  page — 'tested it and narrated the other', and the edit-list/re-derive-list
+  split — exist because a relay asked for them."_ `git grep -n narrated origin/main
+-- .claude docs` returns **exactly one line: that sentence.** The generalisation
+  it names as quoted on the page appears nowhere in the tree, so the page was
+  citing itself for a quotation it does not carry. The row now names
+  `defect-shapes.md`'s re-derive-list rule, which does exist there, and claims
+  nothing about the other. Same shape as defect 1, one level in: a claim about
+  neighbouring text that stopped being true and that nothing re-read.
+
 - **What I could not check.** Every harness claim in Build 4 is still relayed:
   `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, `availableModels`, `fork`, fallback chains,
   the `PostToolUse` hook route and `/tasks` are named on the page **and marked as
