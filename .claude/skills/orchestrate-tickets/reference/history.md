@@ -566,7 +566,7 @@ constraint and it binds this page too.
 | --- | --- |
 | `tickets` | **3** taken from `ready` to a gated branch, none merged at close: `repo-24` (#166), `repo-25` (#168), `dl-40` (#169). All three carry `difficulty: standard` — verified on `main`, and the **first batch in which every built ticket was rated**. Six were `ready` at intake and the same six still are, because none merged: `dl-40`, `dl-43`, `dl-44`, `repo-21`, `repo-24`, `repo-25` — re-measured here with `npm run status -- --ready`. Three further candidates were withheld as `status: needs-decision` (`repo-15`, `repo-16`, `repo-26`), which is the board carrying a blocker in frontmatter rather than in prose. **Two records travelled on a sibling's branch**: `dl-43`'s answered decision at `e7fd0ce` and the newly filed `dl-45` at `7bb3b62`, both on `dl-40`'s |
 | `agents` / `dispatches` | **9** agents — 1 seam-mapper, 3 builders, 3 reviewers, and **2 closing builders killed by a session rate limit** — / total dispatches-and-wakes **`not recorded`**. The builder half is recoverable and is in the next row; the gate half is not |
-| `builder rounds` | **12 resumes across 3 builders** — `repo-24` 2, `repo-25` 5, `dl-40` 5 — relayed, not measured here. **Two are the orchestrator's own by its account**, both the same move and both caught by a builder rather than a gate; see _Orchestrator errors_. **A `standard` rating predicted nothing about cost this batch** (n=3): the three ordinary-rated tickets ran 2, 5 and 5 resumes and 160 k, 442 k and 423 k tokens. `builder.md` reads `standard` as "somebody read the work and said it is ordinary. Same dispatch, different statement" — this is the first evidence that the second half is the only half that holds |
+| `builder rounds` | **12 resumes across 3 builders** — `repo-24` 2, `repo-25` 5, `dl-40` 5 — relayed, not measured here. **Two are the orchestrator's own by its account**, both the same move and both caught by a builder rather than a gate; see _Orchestrator errors_. **A `standard` rating predicted nothing about cost this batch** (n=3): the three ordinary-rated tickets ran 2, 5 and 5 resumes and 160 k, 442 k and 423 k tokens. `builder.md` reads `standard` as "somebody read the work and said it is ordinary. Same dispatch, different statement" — this is the first evidence that the second half is the only half that holds. **`repo-27` (#170) does not disturb this**: read here from the diff rather than relayed, it moves the **`hard`** row only, from `inherit` to `opus`; `absent`, `standard` and `mechanical` are untouched, so all three of this batch's builders were dispatched under the mapping still in force. A peer is separately trialling `standard` against Sonnet in `repo-28` (#171), which is **not read here** and is named only so a later reader of this row does not think the n=3 above is all the evidence there is |
 | `gates` | **3 records, all PASS, all committed and read here.** Pass counts: `repo-24` 1; `repo-25` **4**, relayed; `dl-40` not stated as a count. **All three returned findings.** The pass structure is not recoverable from the records — see defect 7 |
 | `wrong findings` | **No gate finding was refuted.** What happened instead ran in two other directions and neither has a home in this row. **Orchestrator → builder**: two relayed details were wrong, a builder caught both, neither reached a commit. **Reviewer → its own report**: an off-by-two coordinate the reviewer corrected upward unprompted, closed in `dl-40`'s record at `9925874` rather than silently repaired |
 | `subagent tokens` | **1,840,153 across the 7 agents that reported; 2 reported nothing.** Last-observed cumulative values, so every entry is a floor — an agent whose last turn ends in `SendMessage` delivers no usage block. `repo-25` builder 442,412 · `dl-40` builder 422,835 · `repo-25` gate 260,588 · `repo-24` gate 252,377 · `dl-40` gate 205,865 · `repo-24` builder 159,694 · seam-mapper 96,382. Split (arithmetic on the floors, checked here): builders **55.7%** · gates **39.1%** · intake **5.2%** |
@@ -590,7 +590,9 @@ corrected.**
   ending in `sort | tail -1`, so a failing `gh pr diff` **writes to stderr and
   has its exit status discarded**. The sweep still degrades to *fewer ids* and
   the only signal is a stderr line sitting above a confident one-line answer.
-  Deleting a redirect that is not there would fix nothing.
+  Deleting a redirect that is not there would fix nothing. **And this is the
+  smaller of that command's two defects** — a peer session found a structural
+  one underneath it, re-measured here and recorded as defect 5.
 
 **what the skill got wrong** — eight, none fixed here: this commit is scoped to
 this file.
@@ -615,7 +617,22 @@ this file.
    drops them or this particular dispatch restricted them is **not established
    from here**. One datum in the other direction, committed in the tree:
    `repo-24`'s gate line records "subagent has no `Skill` tool", which agrees
-   with `ticket-reviewer.md`'s declaration rather than contradicting it.
+   with `ticket-reviewer.md`'s declaration rather than contradicting it. **It is
+   the strongest evidence the two agent types differ** — the reviewer's delivered
+   set matched its declaration on the entry it was asked about, where the
+   builder's does not.
+
+   **Answered 2026-09-07 — fold the prose correction into `repo-21`**, which
+   already rewrites `dispatching.md`. That is against the recommendation, which
+   was to file the reproduction as its own ticket, **and the objection is not
+   retired by the answer**: `repo-21` will be correcting a sentence whose
+   underlying cause is unestablished, which is the eighth session's entry 5 in
+   this row's own terms — *rewriting prose does not re-check it*. So both halves
+   travel to whoever builds `repo-21`. **Nobody has probed the reviewer's
+   delivered tool set**, only its behaviour on one entry, so "the harness
+   delivers less than the frontmatter declares" remains an **observation of one
+   agent type**, not a finding about both. The check that would convert it is a
+   reviewer asked to print its own function schema, and it costs one dispatch.
 2. **There is a rule against reporting a verification you did not run, and none
    against reporting a *determination* you did not establish.** `dl-40`'s Build
    step 1 reads, verbatim, "**Determine the cause before changing anything.**"
@@ -641,16 +658,46 @@ this file.
    **recording an answer on a sibling branch buys evaporation-safety with
    schedule coupling**, and the sibling you pick is a scheduling decision, not
    a filing convenience.
-5. **The id-sweep can under-report and the page treats its output as an
-   answer.** Mechanism corrected above. Measured here: a sweep returned
-   `repo-26` as the highest id while `repo-27` sat in an open PR's diff — #170,
-   open against `main` today — and re-running immediately returned `repo-27`.
-   **This session reserved an id another session already held**, and caught it
-   only because the filing agent was killed and the state was re-checked on
-   re-dispatch. The page should say to read the loop's **per-PR output**, not
-   only its maximum. Same family as the `tools/*/docs/work` pathspec in _What
-   went right_: **a command that fails by returning less, rather than by
-   failing.**
+5. **The id-sweep on `concurrency.md` has two defects, and the one the session
+   noticed is the smaller.** Found by a peer session; **every measurement below
+   was re-run here** rather than relayed.
+
+   **The structural half: for a `repo-` prefix the snippet's `git ls-tree` half
+   reads zero, permanently.** Substituting the prefix into the documented
+   command literally gives
+   `git ls-tree origin/main tools/repo/docs/work/ --name-only`, and there is no
+   `tools/repo` — `origin/main` has `tools/downloader` and `tools/planner` and
+   nothing else. Repo-wide tickets live in `docs/work/`, which the snippet never
+   names: that path returns **26** ids, highest `repo-26`. So **the command
+   cannot see the merged half of the `repo-` board at all**, and the open-PR
+   loop is the only half doing any work. This is the first fix; it is not a
+   transient.
+
+   **The transient half is the discarded exit status**, corrected under _Two
+   supplied claims_ above. It sits on top of the structural one, which is why a
+   sweep can be wrong twice over.
+
+   **Two collisions in one session, from one command.** The sweep returned
+   `repo-26` as highest while `repo-27` sat in an open PR's diff (#170, open
+   against `main`); this session reserved `repo-27` on that basis; the filing
+   agent then died to a rate limit and only the re-check on resume caught it.
+   The replacement filing took `repo-28` — **and collided again**, with a peer's
+   #171, which had been commitless minutes earlier. It is now `repo-29` (#172),
+   and the rename is visible in the tree: **#172's branch is still named
+   `repo-28-anchor-citations` while its title and its file say `repo-29`.** The
+   second collision was caught only because an agent read the **per-PR lines**
+   rather than the maximum, which is what the page should ask for.
+
+   **And a timing property no fix addresses.** A sweep taken minutes earlier
+   sees a claimant that does not exist yet. Reading per-PR output fixes the
+   silent-failure half and nothing fixes the race except **sessions telling each
+   other**, which is what resolved this one — `concurrency.md` already says to
+   ask a peer which ids it holds, and this is the measurement behind that
+   sentence rather than a new rule. The defect belongs to the peer session,
+   which holds the reproduction and is filing it; recorded here, not filed here.
+   Same family as the `tools/*/docs/work` pathspec in _What went right_: **a
+   command that fails by returning less, rather than by failing** — and this one
+   does it twice, structurally and transiently.
 6. **Step 2's decision-grep was wrong in both directions for the fourth session
    running** — re-run here over this batch's six candidates, which is the
    cheapest check on this page. Four matches. Three true
