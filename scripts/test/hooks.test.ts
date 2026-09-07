@@ -1,11 +1,12 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
 
 /**
- * The two `PreToolUse` Bash hooks, exercised the way the harness runs them: a
- * JSON document on stdin, a verdict in the exit code.
+ * The `PreToolUse` Bash hooks, exercised the way the harness runs them: a JSON
+ * document on stdin, a verdict in the exit code.
  *
  * They are shell, so nothing else here checks them — `npm run check` does not
  * read `.sh`, and until this file existed the only evidence either hook worked
@@ -22,6 +23,7 @@ import { expect, test } from "vitest";
 const REPO = path.resolve(import.meta.dirname, "../..");
 const TREE_GREP = path.join(REPO, ".claude", "hooks", "check-tree-grep.sh");
 const PR_TITLE = path.join(REPO, ".claude", "hooks", "check-pr-title.sh");
+const MAIN_WRITES = path.join(REPO, ".claude", "hooks", "check-main-writes.sh");
 
 interface HookRun {
   readonly status: number;
@@ -29,12 +31,20 @@ interface HookRun {
   readonly stderr: string;
 }
 
-/** `shell: false` and an argv array, per the repo-wide rule. */
-function run(hook: string, command: string): HookRun {
+/**
+ * `shell: false` and an argv array, per the repo-wide rule.
+ *
+ * `projectDir` is the checkout the hook sees as `CLAUDE_PROJECT_DIR`. It
+ * defaults to this repo and is overridden only by `check-main-writes.sh`'s
+ * bare-push cases, which read HEAD out of it: pointing those at the real
+ * checkout would make the expected verdict depend on whichever branch the
+ * suite happens to be running from, and CI runs it from `main`.
+ */
+function run(hook: string, command: string, projectDir: string = REPO): HookRun {
   const result = spawnSync("bash", [hook], {
     input: JSON.stringify({ tool_input: { command } }),
     encoding: "utf8",
-    env: { ...process.env, CLAUDE_PROJECT_DIR: REPO },
+    env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir },
     shell: false,
   });
   return { status: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
@@ -131,8 +141,8 @@ interface Settings {
   };
 }
 
-test("both hooks are wired into the PreToolUse Bash matcher", () => {
-  // Both run; neither replaces the other. A second matcher entry would work
+test("every hook is wired into the PreToolUse Bash matcher", () => {
+  // All of them run; none replaces another. A second matcher entry would work
   // equally well, so this asserts the commands are reachable under `Bash`
   // rather than the shape of the entry that carries them.
   const settings = JSON.parse(
@@ -141,8 +151,12 @@ test("both hooks are wired into the PreToolUse Bash matcher", () => {
   const commands = settings.hooks.PreToolUse.filter((entry) => entry.matcher === "Bash").flatMap(
     (entry) => entry.hooks.map((hook) => hook.command),
   );
-  expect(commands.some((command) => command.endsWith("check-pr-title.sh"))).toBe(true);
-  expect(commands.some((command) => command.endsWith("check-tree-grep.sh"))).toBe(true);
+  for (const script of ["check-pr-title.sh", "check-tree-grep.sh", "check-main-writes.sh"]) {
+    expect(
+      commands.some((command) => command.endsWith(script)),
+      script,
+    ).toBe(true);
+  }
 });
 
 /**
@@ -252,4 +266,209 @@ test("check-pr-title still reads a title out of a quoted span", () => {
   // stripped text into the extraction and the title becomes unfindable, turning
   // every real invocation into the rejection above.
   expect(isSilent(run(PR_TITLE, `${PHRASE} --title "feat(repo): x"`))).toBe(true);
+});
+
+/**
+ * check-main-writes.sh — repo-15 tier 1, decision A1.
+ *
+ * The threats it is answerable for are the ones the deny list's globs miss, so
+ * the cases below are the deny list's gaps rather than a re-test of what
+ * `.claude/settings.json` already refuses. Measured against that file at build
+ * time, `Bash(git push * main*)` and `Bash(git push *:main*)` need a literal
+ * " main" or ":main", so `+main`, `refs/heads/main` and a bare `git push` all
+ * slip them; `Bash(gh pr merge *)` needs an argument, so a bare `gh pr merge`
+ * slips it too.
+ *
+ * The allowed cases are not filler. A hook that wrongly blocks trains everyone
+ * to route around it, and routing around it works — so every blocked shape here
+ * is paired with the nearest shape that must stay silent.
+ */
+
+/** Split for the same reason `PHRASE` is: so the literal never sits at the */
+/** start of a line in this file, where the hook under test would read it as an */
+/** invocation if anything ever rewrote this file through a heredoc. */
+const MERGE = ["gh", "pr", "merge"].join(" ");
+const PUSH = ["git", "push"].join(" ");
+
+/** A checkout whose HEAD is a known branch. No commit is needed: */
+/** `git symbolic-ref` answers on an unborn branch, which is what the hook reads. */
+function checkoutOn(branch: string): string {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "main-writes-")));
+  const init = spawnSync("git", ["init", "-b", branch, dir], { encoding: "utf8", shell: false });
+  expect(init.status, init.stderr).toBe(0);
+  return dir;
+}
+
+test("check-main-writes refuses a pull request merge, including the bare form", () => {
+  // Bare is the one that matters: `Bash(gh pr merge *)` is an anchored prefix
+  // with a trailing `*`, and `gh pr merge` with no argument opens an
+  // interactive picker. Whether the real matcher covers it was not settled —
+  // see the hook's header — so the hook covers it either way.
+  for (const command of [
+    `${MERGE} 129 --squash`,
+    `${MERGE} 129 --auto --squash`,
+    MERGE,
+    `${MERGE} --repo owner/other 7`,
+    `cd /tmp && ${MERGE} 129`,
+  ]) {
+    const result = run(MAIN_WRITES, command);
+    expect(result.status, command).toBe(2);
+    expect(result.stderr, command).toContain("owner's decision");
+  }
+});
+
+test("check-main-writes refuses every spelling of main the deny list's globs miss", () => {
+  for (const command of [
+    `${PUSH} origin +main`,
+    `${PUSH} origin refs/heads/main`,
+    `${PUSH} origin +refs/heads/main`,
+    `${PUSH} origin HEAD:refs/heads/main`,
+    // Already denied by a permission rule; here as the second layer, because
+    // the deny list is a file the agent it constrains can edit.
+    `${PUSH} origin main`,
+    `${PUSH} --force origin main`,
+    `${PUSH} origin HEAD:main`,
+    `${PUSH} origin :main`,
+  ]) {
+    const result = run(MAIN_WRITES, command);
+    expect(result.status, command).toBe(2);
+    expect(result.stderr, command).toContain("explicit refspec targeting main");
+  }
+});
+
+test("check-main-writes reads HEAD for a push with no refspec, rather than guessing", () => {
+  // The command string cannot say where a bare push lands, so the hook asks the
+  // checkout. One positional counts as none: `git push origin` still leaves the
+  // branch implicit.
+  const onMain = checkoutOn("main");
+  for (const command of [PUSH, `${PUSH} origin`, `${PUSH} --force`, `${PUSH} -u origin`]) {
+    const result = run(MAIN_WRITES, command, onMain);
+    expect(result.status, command).toBe(2);
+    expect(result.stderr, command).toContain("HEAD is main");
+  }
+});
+
+test("check-main-writes leaves a bare push alone when HEAD is not main", () => {
+  // The other half of the branch read. Without it the hook would refuse the
+  // ordinary push every builder here makes, which is the failure mode that
+  // teaches people to route around a hook.
+  const onFeature = checkoutOn("repo-15-fixture");
+  for (const command of [PUSH, `${PUSH} origin`, `${PUSH} -u origin`]) {
+    expect(isSilent(run(MAIN_WRITES, command, onFeature)), command).toBe(true);
+  }
+});
+
+test("check-main-writes leaves an ordinary branch push alone", () => {
+  for (const command of [
+    `${PUSH} -u origin repo-15-deny-list-hook`,
+    `${PUSH} --force origin my-feature`,
+    `${PUSH} origin HEAD:my-feature`,
+    // A near miss on the destination test. `main-thing` is not `main`, and a
+    // substring check would refuse it.
+    `${PUSH} origin main-thing`,
+    `${PUSH} origin mainline`,
+    `${PUSH} origin feature:feature`,
+    `${PUSH} origin --delete my-feature`,
+  ]) {
+    expect(isSilent(run(MAIN_WRITES, command)), command).toBe(true);
+  }
+});
+
+test("check-main-writes reads each invocation's own arguments, not the whole line", () => {
+  // `main` after `&&` belongs to the echo. Matching across the operator would
+  // block a correct push because of a word in an unrelated command.
+  expect(isSilent(run(MAIN_WRITES, `${PUSH} origin my-feature && echo main`))).toBe(true);
+  expect(isSilent(run(MAIN_WRITES, `echo main; ${PUSH} origin my-feature`))).toBe(true);
+  // And the reverse: a real one after an operator is still found.
+  expect(run(MAIN_WRITES, `echo hi && ${PUSH} origin +main`).status).toBe(2);
+});
+
+test("check-main-writes ignores a command that only mentions the phrase in prose", () => {
+  // Build step 3's case, and it is not hypothetical: repo-15's own ticket file
+  // contains every dangerous string here as prose, so a substring test blocks
+  // reading the ticket back. check-pr-title.sh's first live run was exactly
+  // this failure, against a heredoc.
+  for (const command of [
+    `echo "${MERGE} 129 --squash"`,
+    `echo "(${MERGE} 129) is denied"`,
+    `grep -n "${PUSH} origin main" docs/work/repo-15-deny-list-does-not-protect-itself.md`,
+    `x; "note \\"${MERGE} 129\\" done"`,
+    `printf 'see (${PUSH} origin +main) for details'`,
+  ]) {
+    expect(isSilent(run(MAIN_WRITES, command)), command).toBe(true);
+  }
+});
+
+test("check-main-writes does not block a heredoc that quotes the phrases in prose", () => {
+  const command = `cat > /tmp/f.md <<'EOF'\n"run \\"${MERGE} 129\\" to land it"\n"or \\"${PUSH} origin +main\\", which is refused"\nEOF`;
+  expect(isSilent(run(MAIN_WRITES, command))).toBe(true);
+});
+
+test("check-main-writes over-blocks an unquoted heredoc line, and that is pinned", () => {
+  // NOT an assertion that this is right. It pins the one shape where the hook
+  // refuses something harmless, so the trade is met here rather than in a
+  // refusal nobody expected. The boundary rule works per line, so an *unquoted*
+  // mention at the start of a heredoc body line is indistinguishable from an
+  // invocation; check-pr-title.sh has had the identical shape since it shipped.
+  // Quoting the mention makes it silent, which the case above already proves.
+  const fenced = `cat > /tmp/f.md <<'EOF'\n    ${PUSH} origin +main\nEOF`;
+  expect(run(MAIN_WRITES, fenced).status).toBe(2);
+  // The reason it costs little: the shapes a document actually contains are
+  // either quoted or harmless.
+  expect(
+    isSilent(run(MAIN_WRITES, `cat > /tmp/f.md <<'EOF'\n${PUSH} -u origin <branch>\nEOF`)),
+  ).toBe(true);
+});
+
+test("check-main-writes misses a quoted refspec, which is the direction to miss in", () => {
+  // Also pinned rather than claimed. The quote strip replaces a quoted span
+  // before the argument scan runs, so these are invisible to it. Both are
+  // refused by the ruleset on `main` regardless, and over-blocking is the
+  // costlier error — see the hook's header.
+  expect(isSilent(run(MAIN_WRITES, `${PUSH} origin "main"`))).toBe(true);
+  expect(isSilent(run(MAIN_WRITES, `${PUSH} origin '+main'`))).toBe(true);
+});
+
+test("check-main-writes does not expand a glob while tokenising", () => {
+  // The argument scan word-splits, which is also globbing unless it is turned
+  // off. With globbing on, `*` becomes the hook's own working directory
+  // listing — and this repo's root contains no `main`, so the bug would hide
+  // here and surface somewhere else.
+  expect(isSilent(run(MAIN_WRITES, `${PUSH} origin *`))).toBe(true);
+});
+
+test("check-main-writes stays out of the way of commands that cannot push", () => {
+  const onMain = checkoutOn("main");
+  for (const command of [`${PUSH} --dry-run origin main`, `${PUSH} --help`, `${PUSH} -n`]) {
+    expect(isSilent(run(MAIN_WRITES, command, onMain)), command).toBe(true);
+  }
+  for (const command of ["gh pr list --state open", "gh pr view 129", "git status"]) {
+    expect(isSilent(run(MAIN_WRITES, command)), command).toBe(true);
+  }
+});
+
+test("check-main-writes says what to do instead, rather than only refusing", () => {
+  // Both existing hooks do this, and the reason is in repo-15: a hook that says
+  // "denied" trains the reader to route around it, and routing around it works.
+  expect(run(MAIN_WRITES, `${MERGE} 129`).stderr).toContain("ask for the merge");
+  expect(run(MAIN_WRITES, `${PUSH} origin +main`).stderr).toContain("open a pull request");
+});
+
+test("check-main-writes carries its limits in its header, not only in the ticket", () => {
+  // repo-15 `Done when` 5. The header is the only place the next editor
+  // reliably reads, and each of these is a fact that makes the hook look
+  // stronger than it is if it is missing.
+  const header = fs.readFileSync(MAIN_WRITES, "utf8");
+  for (const fact of [
+    // the ruleset requires a pull request and then requires nobody on it
+    "required_approving_review_count: 0",
+    // indirection defeats a hook that reads a command string
+    "base64 -d",
+    // it cannot protect itself, and repo-15 §1 stays uncovered under A1
+    "unregister this hook",
+    // `gh api` is untouched on purpose — decision B1, not an oversight
+    "decision B1",
+  ]) {
+    expect(header, fact).toContain(fact);
+  }
 });

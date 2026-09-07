@@ -3,7 +3,7 @@ id: repo-15
 tool: repo
 title: The deny list cannot express what it is protecting, and it does not protect itself
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -485,3 +485,124 @@ visibility` returns `PUBLIC`. Tier 3's "one command, irreversible as a
   coverage tables above are still the `origin/main@f5d5a0e` measurement and Build
   step 1 still says to re-take them. This branch is bookkeeping across four
   tickets whose decisions were answered in one sitting.
+
+- **2026-09-07 — built, A1 + B1, off `origin/main@e9054c5`.**
+  `.claude/hooks/check-main-writes.sh` (new, registered in
+  `.claude/settings.json` under the existing `PreToolUse` `Bash` matcher
+  alongside `check-pr-title.sh` and `check-tree-grep.sh`), and its cases in
+  `scripts/test/hooks.test.ts`. `status: ready` → `done`.
+
+  **Build step 1 was re-taken and the coverage table survived the move from
+  `f5d5a0e` to `e9054c5` unchanged.** The matcher reports 11 deny rules, 7 of
+  them `Bash(…)`, **0** mentioning `.claude`/`settings`/`hooks` and **0**
+  `Edit(`/`Write(` rules — so §1 is uncovered at the tip exactly as it was at
+  filing. Every verdict in the tier 1–3 tables reproduced, including the two
+  gaps found while filing: `git push origin +main` and
+  `git push origin refs/heads/main` are still `ALLOWED` by the globs, and bare
+  `git push` and bare `gh pr merge` still are too.
+
+  **The ruleset was re-read** (`gh ruleset list` → `20870721`;
+  `gh ruleset view 20870721`) and is unchanged in every load-bearing field:
+  active, bypass never, `ref_name: [include: [~DEFAULT_BRANCH]]`, `deletion`,
+  `non_fast_forward`, and `pull_request` with
+  `required_approving_review_count: 0`, `require_last_push_approval: false`,
+  `dismiss_stale_reviews_on_push: false`. `gh repo view` still reports
+  `PUBLIC`. **One field is visible now that the 2026-09-01 transcript does not
+  show: `require_extra_approval_for_unattributed_changes: true`.** It is not
+  recorded here as new — it may simply be newly printed by `gh` — and it does
+  not move the finding: it governs commits GitHub cannot attribute to a user,
+  not a normally-attributed pull request, which still needs nobody.
+
+  **Verdicts, per `Done when` line.**
+
+  1. **Met.** A combined check ran each tier-1 threat through both the deny
+     matcher and the real hook (stdin JSON, exit code), against a fixture
+     checkout whose HEAD is `main` so the bare-push rows have a determinate
+     answer: **12 tier-1 threats, 0 uncovered.** The four the deny list misses
+     (`gh pr merge` bare, `+main`, `refs/heads/main`, bare `git push`) are
+     covered by the hook alone; the two `gh api` rows by the permission rule
+     alone, per B1. **One tier-1 row is deliberately not covered and is not
+     claimed to be**: "editing `.github/workflows/` so a required check passes
+     trivially" is a `Write`/`Edit` act, and the decision table puts
+     workflow-edit coverage under A2. A1 is a `Bash` matcher; it cannot see it.
+  2. **Met, and it failed first — twice, and the second red is the one that
+     counts.** With the hook file absent and the `settings.json` entry reverted,
+     13 of 31 failed; but the allowed-command cases failed there for the wrong
+     reason (bash exits 127 on a missing file, so "silent" is false). So the
+     hook was replaced with a two-line script that does nothing but `exit 0` —
+     the shape of a dead guard — and the suite reported **7 failed, 24 passed**:
+     every refusing assertion red, every allowed-command assertion green. That
+     asymmetry is repo-26's lesson applied to this hook, and it is the evidence
+     that the tests detect a hook that stops refusing rather than only a hook
+     that stops existing. Restored, then **33 passed**.
+  3. `n/a`, as the 2026-09-07 entry above already records.
+  4. **Met** by that entry; the repo-13 half stays `n/a`.
+  5. **Met**, and asserted by a test rather than by inspection: the header
+     carries `required_approving_review_count: 0`, the indirection limit, the
+     self-edit limit and the note that `gh api` is untouched by decision B1.
+  6. `npm run check` and `npm run format` — see the gate list at the end.
+  7. `npm run status -- --show repo-15` and `--json` — same.
+
+  **What the brief had wrong: the test's home.** Build step 5 and `Done when` 2
+  say the test goes under `packages/core/test/`, on the reasoning that its
+  repo-wide scans are "the precedent for a test that asserts on files outside
+  any package". That was the best precedent available on 2026-09-01 and is no
+  longer the closest one: **`scripts/test/hooks.test.ts` did not exist then**.
+  repo-22 added it, and it already does precisely what step 5 describes — drives
+  a hook script with fixture JSON on stdin and asserts the exit code — with a
+  `run()` helper, an `isSilent()` helper and a settings-wiring assertion this
+  work extends rather than duplicates. It is also in the `repo` vitest project,
+  which exists for "repo tooling, which belongs to no tool and ships in no
+  image". The cases went there. Putting them in `packages/core/test/` would have
+  copied the harness into a package that has nothing to do with hooks, and left
+  the three hooks tested in two places. **Recorded rather than done quietly,
+  because it is a `Done when` line: the substance of the line is met and the
+  path is not.**
+
+  **The `settings.local.json` probe was attempted and is inconclusive — the
+  ticket's `gh pr merge` question stays unmeasured.** The "Unmeasured" section
+  suggests settling whether `Bash(gh pr merge *)` covers the bare form by
+  testing a harmless analogue in a throwaway `settings.local.json`. A throwaway
+  file denying `Bash(zzrepo15probe foo *)` was written into this worktree and
+  `zzrepo15probe foo bar` was then run as the **positive control**. It was not
+  refused — it reached the shell and returned 127, "command not found" — so the
+  file had not been loaded into the running session and the probe could not
+  distinguish "the rule does not match" from "the rule was never read". No
+  conclusion is drawn from it. The file was deleted and
+  `git status --porcelain` is empty. **No denied command was attempted**, and
+  the real matcher's behaviour was not read. The hook blocks the bare form
+  either way, so this changes the size of the gap it closes, not whether it
+  closes one.
+
+  **Two behaviours of the hook are pinned by tests as trades rather than left to
+  be discovered**, both measured:
+
+  - It **over-blocks** an _unquoted_ mention at the start of a heredoc body
+    line — a heredoc whose body is `gh pr merge 129 --squash`, or
+    `git push origin +main`, or the same indented as a fenced code block, all
+    exit 2. `check-pr-title.sh` has had the identical shape since it shipped.
+    A quoted mention is silent, and so is a harmless push.
+  - It **misses** a quoted refspec: `git push origin "main"` and
+    `git push origin '+main'` are allowed, because the quote strip removes the
+    span before the argument scan sees it. Both are refused by the ruleset
+    regardless, and over-blocking is the costlier error — repo-15's own honest
+    limits say so.
+
+  **Not folded in, though it was free, and named here so the deferral is not
+  silent:** the hook could also refuse `gh api` calls naming a merge or
+  branch-protection path, as a second layer under the two tier-1 `gh api` rows
+  that today rest on the editable `Bash(gh api *)` rule alone. It would be
+  strictly additive — it can only block, never permit — and it is ~4 lines.
+  **It was left out because it is the first half of option B2's request parser,
+  which was declined**, and because this ticket names "B2 without
+  self-protection" as the one combination to refuse. `Done when` 1 is met
+  without it. If the owner wants it, it is a small edit to this file and two
+  tests; it is an open option, not a defect.
+
+  **The objection A1 carries is unchanged by having built it, and is worth
+  restating from inside the code:** this hook is a tracked file in
+  `.claude/hooks/`, referenced by a tracked `settings.json`, and neither is
+  named by any deny rule, any `Edit`/`Write` rule, any hook or any CI job. An
+  agent that can edit either has no hook. §1 remains uncovered. The header says
+  so in the file, in those terms, so the next reader does not mistake this for
+  protection it is not.

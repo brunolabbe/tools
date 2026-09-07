@@ -3,7 +3,7 @@ id: repo-26
 tool: repo
 title: No test runs a script as a process, so a dead entry point is invisible
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -246,3 +246,71 @@ open`, and Build step 4 is marked `n/a` because it was conditional on (c).
   four tickets' decisions in one sitting and implements none of them. The next
   reader should treat this as a brief whose open question is closed, not as work
   in progress.
+
+- **2026-09-07 — closed as already built. `status: ready` → `done`.** Every step
+  of this Build landed on `main` with **repo-22 / PR #161**, before the decision
+  above was even recorded; this ticket then sat `ready` describing work that was
+  already merged. Nothing was implemented here and **the Build steps above are
+  left exactly as written** — they are the brief repo-22 satisfied, not a
+  to-do list. Closed from the repo-15 branch because that was the session
+  already holding `docs/work/`.
+
+  **Verified against this branch's tip, off `origin/main@e9054c5`, not
+  relayed.** Every coordinate below was re-resolved by `grep` after the branch
+  was cut, because line numbers move:
+
+  - The rejecting process-level test is `scripts/test/commit-message.test.ts:304`,
+    `run as a process, a bad message is rejected` — it spawns the script with
+    `shell: false` and asserts `status` 1 and `not a conventional commit` on
+    stderr. That is `Done when` line 1 for the one entry point option (a)
+    covers.
+  - Its accepting half is at `scripts/test/commit-message.test.ts:312`, and is
+    **labelled weak in a comment in the file**: "a dead entry point also exits
+    0, so this pairs with the test above rather than standing in for it". That
+    is Build step 2 and `Done when` line 3.
+  - The guard itself is `scripts/commit-message.mjs:317`, spelled
+    `pathToFileURL(process.argv[1]).href` — the correct comparison, not the
+    broken concatenation.
+  - Build step 3's sweep returns nothing:
+    `command grep -n 'file://\${' scripts/*.mjs` exits 1 with no output across
+    all four scripts (`citations.mjs`, `commit-message.mjs`, `next-id.mjs`,
+    `status.mjs`). Run with `command grep` rather than the devcontainer's
+    ignore-file-honouring wrapper, so "no matches" is a fact about the tree.
+    The step expected an empty result and got one.
+
+  **`Done when` line 2 was the one line never measured outside repo-22's own
+  branch, and it was re-measured here.** The claim is that replacing the
+  entry-point condition with `if (false)` fails at least one test.
+
+  - **Positive control first**, because a red is not evidence until the harness
+    is shown able to be green: unmutated,
+    `npx vitest run scripts/test/commit-message.test.ts` → `Tests 27 passed
+(27)`, exit 0.
+  - Mutated `scripts/commit-message.mjs:317` to `if (false) {`, same command →
+    `Tests 1 failed | 26 passed (27)`, failing exactly
+    **`run as a process, a bad message is rejected`** with
+    `AssertionError: expected '' to contain 'not a conventional commit'`. That
+    is precisely what this line predicted from repo-22's branch — one named
+    failure, the other 26 green.
+  - Restored with `git checkout -- scripts/commit-message.mjs`; line 317 reads
+    the `pathToFileURL` form again, `git status --porcelain -- scripts/commit-message.mjs`
+    is empty, and the spec is back to `27 passed`.
+
+  Only that one spec file was run, deliberately: it is the narrowest thing that
+  can fail, and the whole `scripts/test/` directory costs roughly twenty times
+  as much for identical evidence.
+
+  **The objection recorded with the decision is not retired by closing this.**
+  The set in (a) is still invisible and unenforced — it is a judgement made at
+  the call site, written down nowhere a machine reads — so a future hook that
+  shells out to a new script still inherits the gap with nothing noticing.
+  **This branch is itself the first test of that**, and it passes for a reason
+  worth writing down rather than by luck: repo-15 adds
+  `.claude/hooks/check-main-writes.sh`, a third hook under the `PreToolUse`
+  `Bash` matcher — but it invokes only `jq`, `sed`, `grep` and
+  `git symbolic-ref`. It names `scripts/commit-message.mjs` exactly once, inside
+  the advice text it prints on a refusal, and never runs it. So the set in (a)
+  is unchanged and is still exactly `scripts/commit-message.mjs`. **Had the new
+  hook called a script, nothing here would have said so** — which is the
+  objection, demonstrated rather than restated. (b) remains the option that
+  closes that hole, declined on cost.
