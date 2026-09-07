@@ -1140,3 +1140,155 @@ All three from the 2026-09-05/06 batch:
   Model column turns compliance into something a reader can audit at a glance.
 - **What an interruption cost.** A replaced agent sits in its own row beside its
   replacement instead of vanishing into a total.
+
+## Eleventh session — 2026-09-07
+
+**Written by a builder (Sonnet 5, dispatched explicitly) from the orchestrator's
+own account of a batch it ran on Opus 5 (1M context), with no gate on this
+branch** — the orchestrator states it is the only participant who watched the
+session end to end and will verify this row itself, so no `ticket-reviewer` was
+dispatched against it. What could be checked from this worktree, against the six
+branches and `origin/main`, was checked rather than transcribed; the rest is
+marked as supplied.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **6 pull requests against `origin/main`, one merged.** `#175` (`docs/dl-44-dl-45-decisions`, decision records for `dl-44`/`dl-45`) · `#176` (`repo-30-id-sweep-repo-tickets`, a second round on `repo-30` — its first fix had already merged the same day as `#174`/`24e5bf7` and left `status: ready`, re-verified here: `docs/work/repo-30-the-id-sweep-cannot-see-repo-tickets.md:6` "status: ready" still reads that way on `main`, because the sweep's own exit-code test had never observed what it claimed to — see item 2) · `#177` (`docs/repo-decisions-2026-09-07`, four decision records: `repo-15`, `repo-16`, `repo-26`, `repo-29`) · `#178` (`dl-43-gate-progress-on-what-actually-happened`, built, plus filed `dl-46`) · `#179` (`repo-21-orchestration-skill-loop`, `repo-21` + `repo-28`, **merged as `9b426c8`**, the base this row is measured against) · `#180` (`repo-windows-ci`, filed `repo-31`, `status: needs-decision`). The supplied summary reads **"5 tickets built + 2 bookkeeping branches + 1 filing."** The two bookkeeping branches (`#175`, `#177`) and the one filing (`#180`) match the diffs exactly. **The five built tickets do not reconcile**: `git diff --name-only origin/main...<branch>` on all six names exactly four built tickets — `repo-21`, `repo-28` (both `#179`), `repo-30` (`#176`), `dl-43` (`#178`) — and `dl-46` is filed, not built, on its own branch's own diff. Re-run here, `npm run status --ready` returns exactly the four tickets this batch built or attempted (`dl-43`, `dl-44`, `dl-45`, `repo-30`) plus the four it recorded decisions for (`repo-15`, `repo-16`, `repo-26`, `repo-29`) — this batch touched every ticket that was `ready` or `needs-decision` on the board at once, which is worth recording on its own. Left as an unreconciled count rather than silently rounded to five |
+| `agents` / `dispatches` | **13 agents** — 1 seam-mapper, 7 builder dispatches across the 6 branches (one each, except `#180`'s filing, which took two: an Opus builder killed by a session rate limit before committing anything, and a Sonnet replacement that filed `repo-31` — the tenth session's same shape, a builder round lost to the session itself rather than to the work), and 5 ticket-reviewers (`#175`–`#179`; none dispatched against `#180`, consistent with a filing having no implementation to gate). Total dispatches-and-wakes `not recorded` beyond this table |
+| `builder rounds` | Not given as a count. Qualitatively: `dl-43` (gate rounds, a CI fix, and filing `dl-46`), `repo-21`/`repo-28` (a fold-in plus a stall recovery — item 1) and `repo-30` (a CI fix after its first gate, run as its own commit range `6a5944b...4e1e325`) each took more than one round; the two decision-record branches and `#180`'s filing read as single-pass. One round was lost outright rather than spent: `#180`'s first builder was killed by a session rate limit having produced nothing, and had to be re-dispatched from zero |
+| `gates` | **5 gate agents, covering every branch but `#180`'s filing.** Pass structure as supplied: `dl-43` ×4 plus an out-of-band e2e check; `repo-30` ×3 on its still-open branch (one of them volunteering a finding against an earlier pass of itself — item 2); `repo-21`/`repo-28` 2, verified here against the merged tree — `CONCERNS` at `928e3ac`, `PASS` at `5065aed`; the two decision-record gates (`#175`, `#177`) are not stated as counts. **Returned findings:** at least 3 of 5 (`dl-43`, `repo-21`/`28`, `repo-30`) — the two decision-record gates are not stated to have found anything, so this is "at least 3," not "exactly 3" |
+| `wrong findings` | **None refuted this session, per the supplied data.** What happened instead runs the same direction the eighth and tenth sessions already recorded: a reviewer found a gap in its own earlier verification and wrote it into its own record unprompted, rather than being caught by a builder or a later gate — `repo-30`'s reviewer, on its still-open branch: *"my `6a5944b` gate's 'verified' line for Done-when 2 had the same blind spot this CI run exposed… Recorded here rather than silently carried forward."* A third instance of the same shape, changing no verdict |
+| `subagent tokens` | **2,635,387 across the 12 agents that reported; 1 (the killed `#180` Opus builder) reported nothing** — summed here from the per-agent figures supplied, matching the orchestrator's own "~2.64 M" to within rounding: seam-mapper 75,025 · `dl-43` builder 464,151 · `dl-43` reviewer 289,790 · `repo-21`/`28` builder 370,737 · `repo-21`/`28` reviewer 246,492 · `repo-30` builder 276,923 · `repo-30` reviewer 221,284 · 4-record builder (`#177`) 171,000 · 4-record reviewer 130,087 · `dl-44`/`45` builder 114,913 · `dl-44`/`45` reviewer 113,707 · `#180` replacement builder 161,278. Split on these floors: builders **59.2%** · gates **38.0%** · intake **2.8%** |
+| `cost` | **≈ $47.96** at the 2026-09-02 rate of $0.0182/1k — an arithmetic conversion of a set of floors with one agent's spend entirely unmeasured, so a floor and not a bill, same caveat as the ninth and tenth sessions' cost rows |
+
+**what the skill got wrong** — seven, none fixed on this branch, which is scoped
+to this file alone:
+
+1. **A stalled exchange can be a message sent and never received, not only a
+   pair that agreed and stopped.** `SKILL.md`'s documented case (2026-09-04) is
+   two agents each treating the record as the other's move. This session's
+   version is narrower: `repo-28`'s reviewer answered an open question about
+   literal pipes breaking a two-column markdown table into five cells, chose to
+   reword rather than escape — and **the answer never reached the builder**.
+   Both then reported the exchange closed, accurately, from where each stood:
+   the reviewer had sent its answer, the builder had done everything not
+   blocked on it. `npm run status` read `done`, the branch was pushed, and
+   nothing went red. The existing discriminator —
+   `git show <branch>:<ticket-path> | grep '^## Review'`, empty — caught it
+   **unaltered**, because it tests the artefact on the remote rather than
+   either agent's account of it.
+   `docs/work/repo-21-the-orchestration-skill-outgrew-its-loop.md:1360` "not evidence of a delivered one"
+   states the generalisation directly — a claim about a channel has to be
+   checked from outside it, and the orchestrator is the only participant
+   standing there. No rule needed changing; the value is in the reproduction,
+   not a fix.
+2. **Two verifications that share an environment are one verification.**
+   `repo-30`'s exit-code test, on its still-open second branch (`#176`), passed
+   three times on the builder's machine and twice on the reviewer's, and had
+   never once observed what its own name described: a default
+   `actions/checkout` creates no remote-tracking refs, so `git ls-tree
+   origin/main` dies with exit 128 before `gh` is ever spawned. Both machines
+   carried the same assumption — a checkout with `origin/main` already
+   present — so five agreeing runs were five instances of one blind spot, not
+   five independent checks. The reviewer volunteered the correction against its
+   own prior gate record, unasked: *"my `6a5944b` gate's 'verified' line for
+   Done-when 2 had the same blind spot this CI run exposed… Recorded here
+   rather than silently carried forward."* Changed no verdict — the production
+   code was always correct — only what either party had actually proved.
+3. **Add e2e to the "narrowest thing that can fail" guidance, with its inverse
+   stated beside it.** `dl-43`'s builder skipped the e2e suites, reasoning that
+   the unit suites already covered the analysing panel's features. CI
+   disagreed: `tools/downloader/e2e/sniffer/mse-page.spec.ts:102` "toHaveCount(5)"
+   — the five-stages-at-once list this ticket exists to
+   remove — asserted the exact defect the ticket fixed. Its own diagnosis is
+   the guidance's missing half: *"a test's value is not the feature it covers,
+   it is the assertions it makes… A component rewrite invalidates every
+   assertion about its markup, wherever that assertion lives, and grep finds
+   those; reasoning about coverage does not."* Two minutes of
+   `grep -rn "listitem" e2e/` would have found it before CI did.
+4. **The pre-merge look has to read job conclusions, not run conclusions, and
+   a `cancelled` run can be hiding a real failure underneath it.** `main` was
+   red on `windows-latest` for most of a day after `repo-25` (`#168`,
+   `4bc3e66`) merged: that push's own run was **cancelled** — superseded by the
+   next merge landing on top of it — so it never reported a `test` conclusion
+   at all, and the two merges immediately after were markdown-only, so
+   `ci.yml`'s `changes`-gated matrix **skipped** `test` on both while each run
+   still read `success`. Only the ungated `schedule` trigger ran the real
+   matrix, and it failed. `dl-43`'s own Log names the identical mechanism
+   independently, on the same sha: *"the push CI run at `24e5bf7` reported
+   success while the scheduled run at the same sha failed on windows-latest,
+   because `ci.yml`'s test matrix is gated by its `changes` job and that merge
+   was markdown-only… a suite that does not run is indistinguishable from a
+   suite that passes."* The orchestrator read the run list early in this
+   session, saw the `cancelled` rows, called them routine, and reported `main`
+   green — the exact misread this page already warns against, made by the
+   agent that had just relayed the warning.
+5. **Counting red jobs over-counts a single defect.** The orchestrator's own
+   mid-session framing — "Windows is the dominant source of red — 7 of 8
+   failures were Windows-only" — went to the owner as-is. `repo-31`'s filing
+   (`#180`), reading each failed job's log rather than its conclusion,
+   established that **all eight failures fail on the identical assertion** —
+   `scripts/test/citations.test.ts:1319` "This record exists at that rev and cited something different there",
+   reached from `scripts/test/citations.test.ts:1318` "expect(pinned.stdout).toMatch(" — one unfixed regression
+   in the repo's own citation checker, counted eight times by run count. Its
+   own distinction is the reusable one: *"'Windows is the dominant source of
+   red' and 'the team has looked at eight different Windows failures' are
+   different claims, and only the first is true."* Classify failures by cause
+   before characterising a platform, not after.
+6. **A relayed fact is a claim even when it feels like recall.** Three of the
+   orchestrator's own relayed facts about
+   `.claude/skills/orchestrate-tickets/reference/records.md` changed under
+   checking this session, each settled by a builder's command rather than by
+   one the orchestrator ran first: it said "this branch's `records.md`" (wrong
+   — the file lives on `main`, untouched by any branch in this batch),
+   corrected to "repo-21's `records.md`" (wrong again, for the same reason —
+   repo-21 edits the file, it does not own it), and paraphrased its
+   withdraw-in-place rule loosely enough that a builder went and read the real
+   text and implemented something more prescriptive than the paraphrase asked
+   for. Builders corrected the orchestrator this way five times across the
+   session, every time producing something sharper than what was sent — the
+   ninth and tenth sessions' "Relaying" entries holding again, this time on
+   the page that names the rule.
+7. **An answered decision with no carrier needs its own dispatch, and this
+   session shows it scales.** The eighth session's row named the pattern for
+   one decision on one sibling branch; this session ran it twice at once —
+   `#175` carries `dl-44` and `dl-45`'s answered decisions, `#177` carries four
+   (`repo-15`, `repo-16`, `repo-26`, `repo-29`) on a single branch. Both were
+   cheap and both worked: the four-decision branch cost 171,000 builder tokens
+   and converted four `needs-decision` tickets off the blocked list in one
+   round — re-run here, `npm run status --ready` no longer withholds any of the
+   four. The new datum is that the pattern does not need one branch per
+   decision to hold.
+
+**Owner decisions taken: 11, three against a written recommendation — and, on
+the three re-checked here, each produced a better artefact than the
+recommendation would have.**
+
+- **`repo-28`: `standard` → `sonnet`, against the ticket's own filed
+  recommendation** to leave it at `inherit`. Confirmed in the ticket's own
+  Decision section: *"Whose recommendation it overrode — This ticket's own."*
+- **`repo-30`: fold the `next-id.mjs` script lift into this branch now,
+  against both the builder's and the orchestrator's recommendation** to file
+  it separately. Confirmed on the still-open branch: *"This was folded in
+  against the recommendation of both the builder and the orchestrator, who
+  each argued for a separate ticket; the repo's owner was given that argument
+  in those terms and chose to fold it in."* What the recommendation would have
+  produced was an untested twenty-line snippet; what shipped is a script
+  behind a mutation-verified 8-guard test suite (seven at first pass, an
+  eighth added once CI found the gap the seven missed).
+- **`repo-13`: amend a `done` ticket in place, against the orchestrator's
+  recommendation** to record the answer on `repo-16` only and leave the closed
+  ticket alone. Confirmed on `repo-16`'s still-open branch — and worth
+  flagging precisely, because it is not the mismatch it first looked like:
+  **the amendment itself has not happened yet.** `repo-16`'s own text says so —
+  *"Not done on this branch: the amendment is repo-16's build work"* — and
+  `docs/work/repo-13-codeql-false-positives-recur.md` is unchanged on `main`
+  and on every branch checked in this batch. The decision is recorded; its
+  reproduction is deferred to whoever builds `repo-16`.
+
+**Also worth carrying forward, not concluding from.** This batch's own numbers
+are the first data built under repo-28's newly merged `standard`→`sonnet`
+mapping. Two Sonnet builder dispatches ran under it this session — `#180`'s
+replacement filing (161,278 tokens) and this row's own dispatch — and a filing
+is not a representative `standard` build, so this is a datum for the next
+session to add to, not a second trial.
