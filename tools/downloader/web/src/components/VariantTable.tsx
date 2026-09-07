@@ -1,6 +1,6 @@
 import { useId } from "react";
 import type { MediaVariant } from "@downloader/contract";
-import { sortVariantRows, toVariantRows } from "../lib/variants.ts";
+import { toDisplayRows } from "../lib/variants.ts";
 
 interface VariantTableProps {
   variants: readonly MediaVariant[];
@@ -18,7 +18,7 @@ export function VariantTable({
   onSelect,
 }: VariantTableProps): React.JSX.Element {
   const groupName = useId();
-  const rows = sortVariantRows(toVariantRows(variants));
+  const { rows, showLanguage } = toDisplayRows(variants);
 
   return (
     <div className="tablewrap">
@@ -31,6 +31,9 @@ export function VariantTable({
             <th scope="col">Quality</th>
             <th scope="col">Video</th>
             <th scope="col">Audio</th>
+            {/* Present only when two renditions disagree on it, which is the
+                only time it separates anything (dl-40). */}
+            {showLanguage && <th scope="col">Language</th>}
             <th scope="col">Bitrate</th>
             <th scope="col">Size</th>
             <th scope="col">Delivery</th>
@@ -74,6 +77,7 @@ export function VariantTable({
                     </span>
                   )}
                 </td>
+                {showLanguage && <td>{row.language === "" ? "—" : row.language}</td>}
                 <td>{row.bitrate}</td>
                 <td>
                   {row.size}

@@ -33,6 +33,19 @@ export interface VariantRow {
   audio: RowAudio;
   /** Audio lives at a separate URL and will be muxed in. */
   needsMux: boolean;
+  /**
+   * BCP-47 tag of the audio this rendition carries, `""` when the manifest named
+   * none. Rendered as a column only when two variants disagree on it — see
+   * `toDisplayRows` (dl-40).
+   */
+  language: string;
+  /**
+   * The video codec exactly as the manifest declared it, e.g. `avc1.64001f`.
+   * Not rendered: `videoCodec` above is the short family name a person reads.
+   * It is carried so `toDisplayRows` can tell two rows apart that `shortCodec`
+   * has flattened onto the same word (dl-40).
+   */
+  videoCodecFull: string;
   height: number;
   bitrateBps: number;
 }
@@ -86,6 +99,8 @@ export function toVariantRow(variant: MediaVariant): VariantRow {
     hasVideo: variant.hasVideo,
     audio,
     needsMux: hasSeparateAudio,
+    language: variant.language ?? "",
+    videoCodecFull: variant.hasVideo ? (variant.videoCodec ?? "") : "",
     height: variant.height ?? 0,
     bitrateBps: variant.bitrateBps ?? 0,
   };
@@ -108,15 +123,129 @@ export function sortVariantRows(rows: readonly VariantRow[]): VariantRow[] {
 }
 
 /**
+ * Everything the table renders, joined into one string. Two rows with the same
+ * key are the same row as far as anyone looking at the screen is concerned —
+ * which is the dl-40 defect when the variants behind them are not the same
+ * rendition.
+ *
+ * It has to list the rendered columns rather than the underlying fields: the
+ * point is what reaches the screen, so `1.3 Mbps` and `1.3 Mbps` are one key
+ * even when the two `bitrateBps` differ by 400 bps.
+ */
+function displayKey(row: VariantRow, withLanguage: boolean): string {
+  return [
+    row.quality,
+    row.fps,
+    row.videoCodec,
+    row.audioCodec,
+    row.bitrate,
+    row.size,
+    String(row.sizeIsEstimate),
+    row.protocol,
+    row.audio,
+    String(row.needsMux),
+    withLanguage ? row.language : "",
+  ].join("\u0000");
+}
+
+function groupByKey(rows: readonly VariantRow[], withLanguage: boolean): Map<string, VariantRow[]> {
+  const groups = new Map<string, VariantRow[]>();
+  for (const row of rows) {
+    const key = displayKey(row, withLanguage);
+    const group = groups.get(key);
+    if (group === undefined) groups.set(key, [row]);
+    else group.push(row);
+  }
+  return groups;
+}
+
+/** What the picker should put on screen, and what it had to do to get there. */
+export interface DisplayRows {
+  rows: VariantRow[];
+  /**
+   * Render the Language column? Only true when at least two variants disagree,
+   * because a single-language video would otherwise grow a column of identical
+   * cells (dl-40).
+   */
+  showLanguage: boolean;
+  /** How many rows were dropped as redundant paths. See `toDisplayRows`. */
+  collapsed: number;
+}
+
+/**
+ * The rows the picker shows, with rows that differ only in something it cannot
+ * render either made distinguishable or removed (dl-40).
+ *
+ * A manifest is free to declare a rung many times over and have this table
+ * render every one of them as the same line, and it happens for three unrelated
+ * reasons. Which one is in front of the user is read off the variants rather
+ * than assumed, because the answers pull in opposite directions:
+ *
+ *  - **the audio language differs** → surface it, as a column, for this probe
+ *    only;
+ *  - **the codec profiles differ** → stop shortening `avc1.4d401f` and
+ *    `avc1.64001f` onto the same `H.264`, but only for the rows that collide.
+ *    `H.264` is the right answer nearly always, which is why `shortCodec`
+ *    exists;
+ *  - **nothing renderable differs** → collapse, see the note below.
+ */
+export function toDisplayRows(variants: readonly MediaVariant[]): DisplayRows {
+  const rows = sortVariantRows(toVariantRows(variants));
+  const showLanguage = new Set(rows.map((row) => row.language)).size > 1;
+
+  for (const group of groupByKey(rows, showLanguage).values()) {
+    if (group.length < 2) continue;
+    const declared = new Set(group.map((row) => row.videoCodecFull));
+    if (declared.size < 2 || declared.has("")) continue;
+    for (const row of group) row.videoCodec = row.videoCodecFull;
+  }
+
+  // Collapse-and-drop, and what is dropped is a real capability: rows still
+  // identical here differ only in their `url`, and in HLS a rendition declared
+  // more than once at more than one host is a failover path — the next server a
+  // player would try when the first one fails (RFC 8216 §6.2.4). That is what
+  // the reported video turned out to be, established by probing it: within a
+  // rung the entries agreed on every attribute, on the scheme, on every path
+  // segment and on the query, and differed in the hostname alone.
+  //
+  // They are discarded rather than kept because there is nowhere to keep them:
+  // `MediaVariant` carries a single `url` and the engine downloads from exactly
+  // that, so an alternate would be a field nothing reads. **dl-45 is the ticket
+  // for keeping them** — alternates on the variant and the engine failing over —
+  // and dl-40 deliberately did not wait for it. The survivor is the first the
+  // manifest declared for that rung, which is its primary rather than a mirror.
+  //
+  // Nothing here assumes how many. The reported manifest mirrored every rung
+  // exactly twice; the fixture varies it from one to three precisely so that
+  // number cannot creep into this code.
+  //
+  // This is the *picker's* half. Exact duplicates — the same URL twice, which is
+  // what the reported video's other doubling was — are dropped a layer earlier,
+  // in the yt-dlp tier, because those are noise for every consumer and not just
+  // for the table.
+  const kept = new Map<string, VariantRow>();
+  for (const row of rows) {
+    const key = displayKey(row, showLanguage);
+    if (!kept.has(key)) kept.set(key, row);
+  }
+
+  return { rows: [...kept.values()], showLanguage, collapsed: rows.length - kept.size };
+}
+
+/**
  * Default selection: the highest-quality variant that already carries audio,
  * falling back to the highest-quality one overall.
  *
  * `"present"` only — a variant nobody inspected is not *preferred* as the
  * default, but it is still reached by the `anyVideo` fallback below, which is
  * what a lone direct file takes (dl-42).
+ *
+ * Chosen from `toDisplayRows`, not from `variants`, so it can never name a row
+ * the picker collapsed away — that would leave the radio group with nothing
+ * checked and the download button pointed at an invisible rendition (dl-40).
  */
 export function pickDefaultVariantId(variants: readonly MediaVariant[]): string | null {
-  const rows = sortVariantRows(toVariantRows(variants));
+  const { rows } = toDisplayRows(variants);
   const withAudio = rows.find((row) => row.hasVideo && row.audio === "present" && !row.needsMux);
   const anyVideo = rows.find((row) => row.hasVideo);
   return withAudio?.id ?? anyVideo?.id ?? rows[0]?.id ?? null;

@@ -432,6 +432,51 @@ function mapSubtitles(
  * Pure JSON → `ProbeResult` mapping, split out from the process handling so it
  * can be tested against checked-in extractor output with no binary present.
  */
+/**
+ * Drops formats that describe the same stream twice, keeping the first (dl-40).
+ *
+ * **Why a site sends the same stream twice.** Some players ask their backend
+ * for "play options" and get back a small map whose keys name a delivery choice
+ * — the reported video's had two, and both values were the same URL, character
+ * for character. yt-dlp walks every key, fetches that one manifest once per
+ * key, and emits a full ladder per key with the key's name prefixed onto each
+ * `format_id`. Ten streams arrive as twenty formats, twenty distinct
+ * `format_id`, ten distinct URLs, one `manifest_url`. Nothing upstream is
+ * wrong: the site really did offer the same thing under two names, and yt-dlp
+ * really did report what it was given. Deduplicating is ours to do, and is
+ * done here rather than filed upstream.
+ *
+ * **Keyed on the whole mapped variant except its id, not on the URL alone.**
+ * The two are the same thing for the case above — measured against the reported
+ * video's own capture, `id` is the *only* field that differs inside a
+ * duplicated pair — but they part company on a format list where a video-only
+ * and an audio-only entry share one manifest URL and differ in their codecs.
+ * Keyed on the URL, that pair would collapse into one and the engine would lose
+ * the stream it was going to mux; keyed on everything, it survives. So this
+ * drops exact duplicates and nothing else, and a format that differs in any way
+ * a caller could act on is not an exact duplicate.
+ *
+ * This is not the picker's row collapse. Mirrors of one rendition on two hosts
+ * are *different* URLs and survive here; they are one row later because a
+ * person cannot choose between two spellings of the same rendition, which is a
+ * presentation question. Both layers are needed: without this one the probe
+ * result carries the duplicates for every consumer, not just the table.
+ */
+function dropDuplicateFormats(variants: readonly MediaVariant[]): MediaVariant[] {
+  const seen = new Set<string>();
+  const kept: MediaVariant[] = [];
+  for (const variant of variants) {
+    const { id: _id, ...rest } = variant;
+    // Entries sorted, so two variants built through different branches of
+    // `optional()` cannot look different merely by key order.
+    const key = JSON.stringify(Object.entries(rest).toSorted(([a], [b]) => a.localeCompare(b)));
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(variant);
+  }
+  return kept;
+}
+
 export function mapYtDlpInfo(
   info: YtDlpInfo,
   sourceUrl: string,
@@ -529,7 +574,7 @@ export function mapYtDlpInfo(
     } satisfies MediaVariant;
   });
 
-  const variants = unsorted.toSorted(compareVariantQuality);
+  const variants = dropDuplicateFormats(unsorted).toSorted(compareVariantQuality);
 
   const headers: Record<string, string> = {
     ...info.http_headers,

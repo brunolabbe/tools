@@ -1,0 +1,47 @@
+{
+  "provenance": "Generated, not written: the parser named in `producer` run over `source`. The `derived variant fixtures` tests in resolvers/test re-run it and fail if this file ever stops matching.",
+  "producer": "parseHls",
+  "source": "hls-master-two-profiles.m3u8",
+  "baseUrl": "https://cdn.example.com/hls/2026/master.m3u8",
+  "variants": [
+    {
+      "id": "hls-0",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/0/index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "720p · H.264 + AAC",
+      "videoCodec": "avc1.64001f",
+      "audioCodec": "mp4a.40.2",
+      "width": 1280,
+      "height": 720,
+      "bitrateBps": 1425600
+    },
+    {
+      "id": "hls-1",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/1/index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "720p · H.264 + AAC",
+      "videoCodec": "avc1.42c01f",
+      "audioCodec": "mp4a.40.2",
+      "width": 1280,
+      "height": 720,
+      "bitrateBps": 1425600
+    },
+    {
+      "id": "hls-2",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/2/index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "360p · H.264 + AAC",
+      "videoCodec": "avc1.64001e",
+      "audioCodec": "mp4a.40.2",
+      "width": 640,
+      "height": 360,
+      "bitrateBps": 765600
+    }
+  ]
+}

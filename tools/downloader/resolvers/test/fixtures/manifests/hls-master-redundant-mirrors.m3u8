@@ -1,0 +1,76 @@
+#EXTM3U
+# The reported dl-40 shape: one ladder, each rung declared once per CDN mirror,
+# distinguishable only by hostname.
+#
+# Established by a live probe of the reported video on 2026-09-06, not inferred:
+# within a rung the two entries were byte-identical on BANDWIDTH, CODECS,
+# RESOLUTION and FRAME-RATE, their URIs agreed on scheme, every path segment and
+# the query, and only the host differed. The manifest declared ten streams, not
+# the twenty the picker showed — the other doubling happens a layer up, in the
+# yt-dlp tier, and is fixtured separately in ytdlp/balancer-duplicate-ladder.json.
+#
+# The five EXT-X-STREAM-INF attribute lines are ffmpeg 6.1.1's own output, byte
+# for byte — its hlsenc muxer wrote them, not a person:
+#
+#   ffmpeg -f lavfi -i "testsrc2=size=1280x720:rate=30:duration=6" \
+#          -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=6" \
+#          -filter_complex "[0:v]split=5[a][b][c][d][e];[a]scale=1280:720[v0];\
+#            [b]scale=848:480[v1];[c]scale=640:360[v2];[d]scale=424:240[v3];\
+#            [e]scale=256:144[v4]" \
+#          -map "[v0]" -map 1:a -map "[v1]" -map 1:a -map "[v2]" -map 1:a \
+#          -map "[v3]" -map 1:a -map "[v4]" -map 1:a \
+#          -c:v libx264 -profile:v main -pix_fmt yuv420p -c:a aac -b:a 64k \
+#          -b:v:0 1300k -b:v:1 680k -b:v:2 560k -b:v:3 350k -b:v:4 210k \
+#          -var_stream_map "v:0,a:0 v:1,a:1 v:2,a:2 v:3,a:3 v:4,a:4" \
+#          -f hls -hls_time 2 -hls_playlist_type vod \
+#          -hls_segment_filename "%v/seg%d.ts" -master_pl_name master.m3u8 \
+#          "%v/index.m3u8"
+#
+# How much of that to trust: the CODECS strings are real — `avc1.4d401f` down to
+# `avc1.4d400d` are the profile and level x264 actually chose per rung, which is
+# why they differ down the ladder. BANDWIDTH is ffmpeg's arithmetic rather than a
+# measurement off the segments; checked against all five rungs, hlsenc writes
+# round(1.1 * (video target + audio target)). Nothing here depends on those
+# numbers being physically accurate. What they buy over a hand-typed file is
+# rungs that differ from one another the way a real ladder's do, so a collapse
+# test cannot pass by collapsing everything.
+#
+# **The mirror count varies per rung on purpose: 3, 2, 2, 1, 2.** The reported
+# manifest had exactly two everywhere, and a fixture that copied that would let
+# an implementation hardcode "two" and stay green. Nothing in the picker may
+# assume a count — including 1, a rung whose mirror is simply absent.
+#
+# Hostnames are invented. The real ones are not recorded anywhere in this
+# repository, deliberately, and neither is the video.
+#
+# Two attributes the reported manifest carried that hlsenc writes at no setting:
+# FRAME-RATE (so these rows show "—" for fps where the report showed 30) and
+# PROGRAM-ID (which this parser does not read). Neither can change a collapse
+# decision: both are identical within a rung, and the normal-ladder fixture
+# hls-master-multibitrate.m3u8 covers the fps column.
+#EXT-X-VERSION:3
+
+#EXT-X-STREAM-INF:BANDWIDTH=1500400,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-a.cdn.example/0/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=1500400,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-b.cdn.example/0/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=1500400,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-c.cdn.example/0/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=818400,RESOLUTION=848x480,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-a.cdn.example/1/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=818400,RESOLUTION=848x480,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-b.cdn.example/1/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=686400,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"
+https://vod-a.cdn.example/2/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=686400,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"
+https://vod-b.cdn.example/2/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=455400,RESOLUTION=424x240,CODECS="avc1.4d4015,mp4a.40.2"
+https://vod-a.cdn.example/3/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=301400,RESOLUTION=256x144,CODECS="avc1.4d400d,mp4a.40.2"
+https://vod-a.cdn.example/4/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=301400,RESOLUTION=256x144,CODECS="avc1.4d400d,mp4a.40.2"
+https://vod-b.cdn.example/4/index.m3u8

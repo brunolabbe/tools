@@ -19,7 +19,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import type { MediaVariant } from "@downloader/contract";
 import { VariantTable } from "../src/components/VariantTable.tsx";
 import { pickDefaultVariantId } from "../src/lib/variants.ts";
-import { variant, variants } from "./fixtures.ts";
+import { parsedVariants, variant, variants } from "./fixtures.ts";
 
 afterEach(cleanup);
 
@@ -268,4 +268,63 @@ test("an empty rendition list still renders a table with only its header", () =>
   mount([]);
   expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(1);
   expect(within(screen.getByRole("table")).queryAllByRole("radio")).toHaveLength(0);
+});
+
+/**
+ * dl-40, at the level a person sees: what the table does with renditions that
+ * differ only in something it has no column for. The lists come from real
+ * resolvers over real sources (`parsedVariants`), not from the builders above,
+ * because "rows that look the same" is a property of what sites publish.
+ */
+function headers(): string[] {
+  return within(screen.getByRole("table"))
+    .getAllByRole("columnheader")
+    .map((cell) => cell.textContent ?? "");
+}
+
+test("mirrors of a rendition render as one row per rung", () => {
+  const list = parsedVariants("manifests/hls-master-redundant-mirrors");
+  // Ten declared over five rungs, in unequal numbers: 3, 2, 2, 1, 2.
+  expect(list).toHaveLength(10);
+
+  mount(list);
+  expect(radios()).toHaveLength(5);
+  const cells = within(screen.getByRole("table"))
+    .getAllByRole("rowheader")
+    .map((cell) => cell.textContent ?? "");
+  expect(cells).toEqual(["1280×720", "848×480", "640×360", "424×240", "256×144"]);
+  // No language anywhere in this manifest, so no column for it either.
+  expect(headers()).not.toContain("Language");
+});
+
+test("a per-language ladder keeps its rows and grows the column that explains them", () => {
+  mount(parsedVariants("manifests/hls-master-per-language-ladder"));
+
+  expect(radios()).toHaveLength(4);
+  expect(headers()).toEqual([
+    "Quality",
+    "Video",
+    "Audio",
+    "Language",
+    "Bitrate",
+    "Size",
+    "Delivery",
+  ]);
+  const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+  expect(rows.map((row) => row.textContent)).toEqual([
+    expect.stringContaining("eng"),
+    expect.stringContaining("fra"),
+    expect.stringContaining("eng"),
+    expect.stringContaining("fra"),
+  ]);
+});
+
+test("an ordinary ladder renders exactly the columns it always did", () => {
+  // The regression that matters: a normal five-rung ladder must not gain a
+  // column or lose a row. Two of these rungs are both 1920×1080 and differ only
+  // in bitrate — which is visible, so both must survive.
+  mount(parsedVariants("manifests/hls-master-multibitrate"));
+
+  expect(radios()).toHaveLength(5);
+  expect(headers()).toEqual(["Quality", "Video", "Audio", "Bitrate", "Size", "Delivery"]);
 });

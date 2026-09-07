@@ -461,3 +461,105 @@ describe("weighing a rendition (dl-30)", () => {
     expect(calls).toHaveLength(7);
   });
 });
+
+/**
+ * dl-40: the same stream arriving twice because the site offered it under two
+ * names, established by a live probe of the reported video rather than reasoned
+ * from the code.
+ *
+ * The fixture's ladder, codecs, frame rate, bitrates, `format_id` grammar and
+ * emission order are the reported capture's own; every URL and identifying
+ * field is regenerated, and it is assembled from an allowlist of keys rather
+ * than by stripping a copy, so nothing identifying survives by being forgotten.
+ * The mirror count is varied per rung — the real one had two everywhere, and a
+ * fixture repeating that would let an implementation hardcode two.
+ */
+describe("duplicate formats from a play-options balancer (dl-40)", () => {
+  const info = fixture("balancer-duplicate-ladder");
+  const probe = mapYtDlpInfo(info, "https://videos.example.com/watch/reported-video", "yt-dlp", {});
+
+  test("twenty formats over ten URLs become ten variants", () => {
+    expect(info.formats).toHaveLength(20);
+    expect(new Set(info.formats?.map((format) => format.url)).size).toBe(10);
+
+    expect(probe.variants).toHaveLength(10);
+    expect(new Set(probe.variants.map((variant) => variant.url)).size).toBe(10);
+  });
+
+  test("what survives is the first the extractor listed, and the mirrors are kept", () => {
+    // The duplicate pair differs in `format_id` alone, so which one survives is
+    // only a question of stability: yt-dlp's own order, first wins.
+    expect(probe.variants.every((variant) => variant.id.startsWith("default-"))).toBe(true);
+
+    // Mirrors are *not* duplicates — different URLs, and each is a failover
+    // path. They stay here and become one row in the picker, which is a
+    // presentation question and not this layer's.
+    const rung = probe.variants.filter((variant) => variant.height === 720);
+    expect(rung).toHaveLength(3);
+    expect(new Set(rung.map((variant) => new URL(variant.url).host)).size).toBe(3);
+  });
+
+  test("nothing is dropped merely for sharing a URL", () => {
+    // The guard that keeps this from being a URL-keyed dedup: a video-only and
+    // an audio-only format at one manifest URL are a real pair the engine muxes,
+    // and merging them would silently produce a silent file.
+    const shared = "https://vod-a.cdn.example/dash/reported/manifest.mpd";
+    const paired = mapYtDlpInfo(
+      {
+        id: "x",
+        title: "x",
+        duration: 100,
+        formats: [
+          {
+            format_id: "video",
+            url: shared,
+            protocol: "http_dash_segments",
+            vcodec: "avc1.640028",
+            acodec: "none",
+            height: 1080,
+            width: 1920,
+          },
+          {
+            format_id: "audio",
+            url: shared,
+            protocol: "http_dash_segments",
+            vcodec: "none",
+            acodec: "mp4a.40.2",
+            abr: 128,
+          },
+        ],
+      },
+      "https://videos.example.com/watch/x",
+      "yt-dlp",
+      {},
+    );
+    expect(paired.variants).toHaveLength(2);
+    expect(new Set(paired.variants.map((variant) => variant.url)).size).toBe(1);
+  });
+});
+
+/**
+ * The same guard the manifest fixtures have: `balancer-duplicate-ladder.variants.json`
+ * is what the web picker's suite reads, because that suite cannot import this
+ * package. Regenerate it from the mapper when this fails; never edit the JSON to
+ * match a new expectation.
+ */
+describe("derived variant fixtures (dl-40)", () => {
+  test("balancer-duplicate-ladder.variants.json is what mapYtDlpInfo returns today", () => {
+    const raw = readFileSync(
+      new URL("./fixtures/ytdlp/balancer-duplicate-ladder.variants.json", import.meta.url),
+      "utf8",
+    );
+    const record = JSON.parse(raw) as { producer: string; source: string; variants: unknown };
+    expect(record.producer).toBe("mapYtDlpInfo");
+    expect(record.source).toBe("balancer-duplicate-ladder.json");
+    expect(
+      mapYtDlpInfo(
+        fixture("balancer-duplicate-ladder"),
+        "https://videos.example.com/watch/reported-video",
+        "ytdlp",
+        {},
+      ).variants,
+    ).toEqual(record.variants);
+  });
+});

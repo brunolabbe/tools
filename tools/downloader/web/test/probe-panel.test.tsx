@@ -19,7 +19,7 @@ import userEvent from "@testing-library/user-event";
 import type { JobOptions, ProbeResult } from "@downloader/contract";
 import { ProbePanel } from "../src/components/ProbePanel.tsx";
 import { pickDefaultVariantId } from "../src/lib/variants.ts";
-import { probe, variants } from "./fixtures.ts";
+import { parsedVariants, probe, variants } from "./fixtures.ts";
 
 afterEach(cleanup);
 
@@ -115,6 +115,22 @@ test("the header names what was found and which resolver found it", () => {
   expect(screen.getByText("direct")).toBeDefined();
   expect(screen.getByText("cached")).toBeDefined();
   expect(screen.getByText(/12:34 · 3 renditions/u)).toBeDefined();
+});
+
+test("the count over the table counts the rows the table shows (dl-40)", () => {
+  // Ten declared, five rendered: "10 renditions" above five rows is the same
+  // defect as ten identical rows, told from the other end. What was merged is
+  // said out loud rather than silently dropped from the count.
+  mount(probe({ variants: parsedVariants("manifests/hls-master-redundant-mirrors") }));
+
+  expect(screen.getByText(/5 renditions · 5 duplicate paths merged/u)).toBeDefined();
+  expect(within(screen.getByRole("table")).getAllByRole("radio")).toHaveLength(5);
+});
+
+test("a ladder with nothing to merge says nothing about merging", () => {
+  mount(probe({ variants: parsedVariants("manifests/hls-master-multibitrate") }));
+
+  expect(screen.getByText(/12:34 · 5 renditions$/u)).toBeDefined();
 });
 
 test("a fresh probe is not labelled cached", () => {

@@ -1,0 +1,78 @@
+{
+  "provenance": "Generated, not written: the parser named in `producer` run over `source`. The `derived variant fixtures` tests in resolvers/test re-run it and fail if this file ever stops matching.",
+  "producer": "parseHls",
+  "source": "hls-master-multibitrate.m3u8",
+  "baseUrl": "https://cdn.example.com/hls/2026/master.m3u8",
+  "variants": [
+    {
+      "id": "hls-1",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/v9/prog_index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "1080p60 · H.264 + AAC",
+      "videoCodec": "avc1.64002a",
+      "audioCodec": "mp4a.40.2",
+      "width": 1920,
+      "height": 1080,
+      "fps": 60,
+      "bitrateBps": 7676642
+    },
+    {
+      "id": "hls-2",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/v8/prog_index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "1080p60 · H.264 + AAC",
+      "videoCodec": "avc1.64002a",
+      "audioCodec": "mp4a.40.2",
+      "width": 1920,
+      "height": 1080,
+      "fps": 60,
+      "bitrateBps": 5993827
+    },
+    {
+      "id": "hls-0",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/v5/prog_index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "540p60 · H.264 + AAC",
+      "videoCodec": "avc1.640020",
+      "audioCodec": "mp4a.40.2",
+      "width": 960,
+      "height": 540,
+      "fps": 60,
+      "bitrateBps": 2168183
+    },
+    {
+      "id": "hls-3",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/v3/prog_index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "360p · H.264 + AAC",
+      "videoCodec": "avc1.64001e",
+      "audioCodec": "mp4a.40.2",
+      "width": 640,
+      "height": 360,
+      "fps": 30,
+      "bitrateBps": 1268994
+    },
+    {
+      "id": "hls-4",
+      "protocol": "hls",
+      "url": "https://cdn.example.com/hls/2026/v2/prog_index.m3u8",
+      "hasVideo": true,
+      "hasAudio": true,
+      "label": "270p · H.264 + AAC",
+      "videoCodec": "avc1.64001e",
+      "audioCodec": "mp4a.40.2",
+      "width": 480,
+      "height": 270,
+      "fps": 30,
+      "bitrateBps": 901004
+    }
+  ]
+}

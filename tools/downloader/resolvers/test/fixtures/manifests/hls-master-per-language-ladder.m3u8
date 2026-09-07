@@ -1,0 +1,52 @@
+#EXTM3U
+# A guard on dl-40's collapse: one ladder per audio language, which repeats every
+# rung exactly as a mirrored master does — but here the repeated rows are a real
+# choice, so they must be told apart rather than collapsed.
+#
+# ffmpeg 6.1.1 wrote every line below (its hlsenc muxer, unedited):
+#
+#   ffmpeg -f lavfi -i "testsrc2=size=1280x720:rate=25:duration=6" \
+#          -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=6" \
+#          -f lavfi -i "sine=frequency=330:sample_rate=48000:duration=6" \
+#          -filter_complex "[0:v]split=4[a][b][c][d];[a]scale=1280:720[v0];\
+#            [b]scale=640:360[v1];[c]scale=1280:720[v2];[d]scale=640:360[v3]" \
+#          -map "[v0]" -map "[v1]" -map "[v2]" -map "[v3]" -map 1:a -map 2:a \
+#          -c:v libx264 -profile:v main -pix_fmt yuv420p -c:a aac -b:a 96k \
+#          -b:v:0 1200k -b:v:1 600k -b:v:2 1200k -b:v:3 600k \
+#          -var_stream_map "v:0,agroup:aud_en v:1,agroup:aud_en \
+#            v:2,agroup:aud_fr v:3,agroup:aud_fr \
+#            a:0,agroup:aud_en,language:eng,name:English,default:yes \
+#            a:1,agroup:aud_fr,language:fra,name:Francais" \
+#          -f hls -hls_time 2 -hls_playlist_type vod \
+#          -hls_segment_filename "%v/seg%d.ts" -master_pl_name master.m3u8 \
+#          "%v/index.m3u8"
+#
+# The two BANDWIDTH values inside a rung are identical because the rung is the
+# same encode twice — which is what makes the two rows indistinguishable in the
+# picker, and why nothing short of reading LANGUAGE separates them. (hlsenc
+# computes BANDWIDTH as round(1.1 * (video target + audio target)) rather than
+# measuring the segments, so "identical" here follows from identical targets;
+# see the note in hls-master-redundant-cdns.m3u8.)
+#
+# **This is not the reported video's shape, and that is the point.** The live
+# probe on 2026-09-06 found its manifest carried no EXT-X-MEDIA at all, so no
+# variant had a language and a language ladder was never the cause. This fixture
+# exists because the collapse that fixes the reported video would eat a real
+# choice if it ever met one of these: two rows of a rung, identical on every
+# rendered column, that a person genuinely has to choose between. A language
+# ladder with the audio muxed into each variant (EXT-X-MEDIA with no URI) reaches
+# the same code path, since `language` is read off the rendition either way.
+#EXT-X-VERSION:3
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="group_aud_en",NAME="audio_4",DEFAULT=YES,LANGUAGE="eng",URI="English/index.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="group_aud_fr",NAME="audio_5",DEFAULT=NO,LANGUAGE="fra",URI="Francais/index.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1425600,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2",AUDIO="group_aud_en"
+0/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=765600,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2",AUDIO="group_aud_en"
+1/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=1425600,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2",AUDIO="group_aud_fr"
+2/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=765600,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2",AUDIO="group_aud_fr"
+3/index.m3u8

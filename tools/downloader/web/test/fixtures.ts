@@ -20,6 +20,9 @@
  * mock data proves the mock renders.
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { z } from "zod";
 import type {
   AppErrorPayload,
   ErrorCode,
@@ -98,6 +101,52 @@ export function variants(): MediaVariant[] {
       label: "Audio only · AAC",
     }),
   ];
+}
+
+/**
+ * The variants a resolver really produced from a real source, named by the
+ * fixture's path under the resolvers suite — `manifests/…` for something
+ * `parseHls` read, `ytdlp/…` for something `mapYtDlpInfo` mapped. For the dl-40
+ * rows that differ only in a field the table cannot show.
+ *
+ * Everything else in this file is built here, and for those shapes that is
+ * right — a builder says what the test is about. It is wrong for this one: the
+ * claim under test is "the rows a real source really produced", and a
+ * hand-written list of near-identical literals is the author agreeing with
+ * themselves. So the sources live in the resolvers suite beside the command that
+ * produced each one, and this reads what a resolver made of them.
+ *
+ * The `.variants.json` files are generated, and the resolvers suite fails if one
+ * stops matching its producer — so they cannot drift into being hand-written
+ * fixtures with extra steps. They are read rather than imported because
+ * importing `@downloader/resolvers` into a jsdom test would pull playwright in
+ * behind it.
+ *
+ * Still parsed through `mediaVariantSchema`, like every builder above.
+ */
+export function parsedVariants(fixture: string): MediaVariant[] {
+  const file = join(resolverFixtureDir(), `${fixture}.variants.json`);
+  const record: unknown = JSON.parse(readFileSync(file, "utf8"));
+  return z.object({ variants: z.array(mediaVariantSchema) }).parse(record).variants;
+}
+
+/**
+ * Found by walking up from the working directory, not with `import.meta.url`.
+ * Half of this suite runs under jsdom, where vite rewrites that URL to an
+ * `http:` one rooted at the vitest root — so `new URL("../..", import.meta.url)`
+ * resolves to an absolute path that does not exist, and the same helper works
+ * in one test file and fails in another for no visible reason.
+ */
+function resolverFixtureDir(): string {
+  const suffix = join("tools", "downloader", "resolvers", "test", "fixtures");
+  let dir = process.cwd();
+  for (;;) {
+    const candidate = join(dir, suffix);
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) throw new Error(`no ${suffix} at or above ${process.cwd()}`);
+    dir = parent;
+  }
 }
 
 export function probe(overrides: Partial<ProbeResult> = {}): ProbeResult {

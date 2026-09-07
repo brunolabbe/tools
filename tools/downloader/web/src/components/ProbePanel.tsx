@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import type { JobOptions, ProbeResult } from "@downloader/contract";
 import { formatDuration } from "../lib/format.ts";
-import { pickDefaultVariantId } from "../lib/variants.ts";
+import { pickDefaultVariantId, toDisplayRows } from "../lib/variants.ts";
 import { Preview } from "./Preview.tsx";
 import { VariantTable } from "./VariantTable.tsx";
 
@@ -38,6 +38,10 @@ export function ProbePanel({
   }, [probe]);
 
   const subtitleLanguages = [...new Set(probe.subtitles.map((track) => track.language))];
+  // The same pure call the table makes, because this line counts what the table
+  // shows: saying "20 renditions" above five rows is the dl-40 defect wearing a
+  // different hat.
+  const { rows: shownRows, collapsed } = toDisplayRows(probe.variants);
 
   function submit(): void {
     const options: JobOptions = {
@@ -74,7 +78,8 @@ export function ProbePanel({
 
       <p className="muted">
         {probe.durationSec ? `${formatDuration(probe.durationSec)} · ` : ""}
-        {probe.variants.length} rendition{probe.variants.length === 1 ? "" : "s"}
+        {shownRows.length} rendition{shownRows.length === 1 ? "" : "s"}
+        {collapsed > 0 ? ` · ${collapsed} duplicate path${collapsed === 1 ? "" : "s"} merged` : ""}
         {probe.subtitles.length > 0
           ? ` · ${probe.subtitles.length} subtitle track${probe.subtitles.length === 1 ? "" : "s"}`
           : ""}
