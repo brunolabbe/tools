@@ -1156,12 +1156,95 @@ export function parseArgs(argv) {
   return { file, ...options };
 }
 
+/**
+ * The same directory, whatever the caller spelled it.
+ *
+ * `git rev-parse` answers with the path git resolved; `path.resolve` answers
+ * with the path the caller typed. Comparing those two strings is the defect
+ * `locateRecord` exists to undo, so the comparison itself has to run both sides
+ * through one canonicaliser rather than trusting either — and specifically
+ * through `realpathSync.native`, the variant that expands a Windows 8.3 short
+ * name where the JS implementation leaves it alone.
+ *
+ * @param {string} a
+ * @param {string} b
+ */
+function sameDirectory(a, b) {
+  // Both sides are usually git's own answer for the same directory, in which
+  // case they are byte-identical and no syscall can disagree. Taken first so
+  // the common path — including the Windows short-name case this fixes, where
+  // the cwd and the record's directory are the same directory spelled one
+  // way — cannot be lost to a `realpath` that refuses the string.
+  if (a === b) return true;
+  try {
+    return fs.realpathSync.native(a) === fs.realpathSync.native(b);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Name the record the way **git** names it, so `git show <rev>:<path>` finds it.
+ *
+ * This was `path.relative(repo, path.resolve(file))`, and string arithmetic
+ * between a path git printed and a path Node resolved is only sound while the
+ * filesystem admits one spelling of each. It does not always. Where the two
+ * spellings differ the subtraction escapes the repository instead of landing
+ * inside it; `makeReader` then asks for `<rev>:../../..`, git has no such entry,
+ * the reader returns `null`, and `--rev` **silently stops reporting drift**. The
+ * failure is a missing paragraph rather than an error, which is how it survived
+ * eight completed matrix runs before anyone read one.
+ *
+ * Measured two ways (repo-33). On `windows-latest`, `os.tmpdir()` hands back the
+ * 8.3 short name `C:\Users\RUNNER~1\…` while git resolves the long
+ * `C:/Users/runneradmin/…`, and the subtraction produced
+ * `..\..\..\..\..\RUNNER~1\…\drift.md`. On Linux, a directory reached through a
+ * symlink produces `../link/drift.md` — the same mechanism, one spelling of the
+ * filesystem's choosing rather than Windows'.
+ *
+ * So ask git, from the record's own directory. That closes the general case
+ * rather than the two observed ones, and it settles the separator question for
+ * free: git always answers in forward slashes, the only spelling `<rev>:<path>`
+ * accepts, where `path.relative` answers in the platform's.
+ *
+ * **The arithmetic stays as the fallback, and that is not defensiveness.** A
+ * record does not have to live in the repository being checked — this script's
+ * own suite checks fixture records in a temp directory against this repo — and
+ * for one of those a `..`-path is the honest answer, because there is no in-tree
+ * name to give. So git's prefix is taken only when the record's directory
+ * belongs to the *same* repository; otherwise a record in some other checkout
+ * would resolve to a plausible path in the wrong tree, which is the exact
+ * failure this whole script exists to catch.
+ *
+ * @param {string} repo
+ * @param {string} file
+ * @returns {string}
+ */
+export function locateRecord(repo, file) {
+  const resolved = path.resolve(file);
+  const arithmetic = path.relative(repo, resolved);
+  let answer;
+  try {
+    answer = execFileSync("git", ["rev-parse", "--show-toplevel", "--show-prefix"], {
+      cwd: path.dirname(resolved),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).split("\n");
+  } catch {
+    return arithmetic;
+  }
+  if (!sameDirectory(answer[0].trim(), repo)) return arithmetic;
+  // `--show-prefix` is empty at the root and otherwise already ends in a slash,
+  // so the basename appends without a separator of this file's choosing.
+  return `${answer[1].trim()}${path.basename(resolved)}`;
+}
+
 function main() {
   const { file, rev, section, requireAnchors } = parseArgs(process.argv.slice(2));
 
   const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   const markdown = fs.readFileSync(file, "utf8");
-  const relative = path.relative(repo, path.resolve(file));
+  const relative = locateRecord(repo, file);
 
   // The record at the rev, when there is one. `makeReader` already returns null
   // for a path a commit does not have, which is the ordinary case for a gate

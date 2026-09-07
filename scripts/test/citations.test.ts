@@ -11,6 +11,7 @@ import {
   extractDeclarations,
   extractSections,
   FLAGS,
+  locateRecord,
   makeResolver,
   parseArgs,
   recordDrift,
@@ -1326,6 +1327,104 @@ test("--rev names which record it read, and says when that record cited somethin
 
   cleanup();
 });
+
+/**
+ * The separator half of repo-33, and the half that runs on Windows.
+ *
+ * `--rev` reads the record out of a commit with `git show <rev>:<path>`, which
+ * accepts forward slashes and nothing else. The path used to be produced by
+ * `path.relative`, whose output takes the *platform's* separator — so on
+ * Windows this asked for `<rev>:docs\work\record.md`, found nothing, and
+ * reported no drift rather than an error. Asserting the shape here is what
+ * fails on a Windows runner if that arithmetic ever comes back; it cannot fail
+ * on Linux, where both spellings agree, so this is deliberately a claim about
+ * the *contract* rather than a reproduction.
+ */
+test("locateRecord names the record the way git does — repo-relative, forward slashes", () => {
+  expect(locateRecord(REPO, path.join(REPO, "scripts", "test", "citations.test.ts"))).toBe(
+    "scripts/test/citations.test.ts",
+  );
+  // A record at the root has no prefix at all, which is the case `--show-prefix`
+  // answers with an empty line — the one an unguarded concatenation would turn
+  // into a leading slash.
+  expect(locateRecord(REPO, path.join(REPO, "package.json"))).toBe("package.json");
+});
+
+/**
+ * The fallback, asserted rather than left implicit, because it is the half that
+ * a "just ask git" fix breaks if nobody writes it down. A record outside the
+ * repository being checked has no in-tree name, and the honest answer is the
+ * `..`-path — not a plausible-looking path resolved against some other checkout
+ * the record happens to sit in. Most of this file's own CLI tests depend on it:
+ * they check fixture records under `os.tmpdir()` with the cwd set to this repo.
+ */
+test("a record outside the repo keeps its ..-path rather than borrowing another tree's", () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-outside-")));
+  const outside = path.join(dir, "record.md");
+  fs.writeFileSync(outside, "## Review\n");
+
+  expect(locateRecord(REPO, outside)).toBe(path.relative(REPO, outside));
+  expect(locateRecord(REPO, outside).startsWith("..")).toBe(true);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * The other half of repo-33, reproduced on a platform that is not Windows.
+ *
+ * The defect is not really about slashes: it is that subtracting a path git
+ * printed from a path Node resolved is only sound while the filesystem admits
+ * one spelling of each. The Windows runner admits two — `os.tmpdir()` returns
+ * the 8.3 short `C:\Users\RUNNER~1\…` and git resolves the long
+ * `C:/Users/runneradmin/…` — and the subtraction escaped the repository
+ * entirely, printing `..\..\..\..\..\RUNNER~1\…\drift.md` and losing the drift
+ * paragraph with no error anywhere.
+ *
+ * A symlinked directory is the same divergence on POSIX, so the mechanism is
+ * reproducible here rather than only on a runner nobody can debug. The
+ * precondition is asserted rather than assumed, because a fixture where the two
+ * spellings happen to agree would pass this test while proving nothing.
+ *
+ * **Skipped on Windows on purpose.** Producing a diverging spelling there means
+ * short names or case, not links, and whether git resolves a junction the way
+ * it resolves a symlink is not something this repo can measure from Linux. The
+ * Windows coverage for this mechanism is the `--rev` test above — the one that
+ * actually caught it — plus the forward-slash contract asserted just before.
+ */
+test.skipIf(process.platform === "win32")(
+  "a record reached through a symlinked directory is still located inside its repo",
+  () => {
+    const { dir, before, cleanup } = withGrowingRecord();
+    const link = `${dir}-link`;
+    fs.symlinkSync(dir, link, "junction");
+
+    const viaLink = path.join(link, "drift.md");
+    const toplevel = spawnSync("git", ["-C", link, "rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+    }).stdout.trim();
+    // The reproduction only exists while git and Node disagree. Before the fix
+    // this subtraction is what the script used, and it yields `../<link>/drift.md`.
+    expect(path.relative(toplevel, viaLink)).not.toBe("drift.md");
+
+    const linked = spawnSync("node", [CLI, viaLink, "--rev", before], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    // Named as git names it, not as the caller happened to spell it: no `..`
+    // can appear, because a path that leaves the repository is a path `git show`
+    // will never resolve.
+    expect(linked.stdout).toMatch(/^2 references in drift\.md, /);
+    expect(linked.stdout).toMatch(
+      /This record exists at that rev and cited something different there/,
+    );
+    expect(linked.status).toBe(EXIT.unresolvable);
+
+    // Unlinked, not `rm -r`d: the link and its target are different things, and
+    // only one of them is this test's to delete twice.
+    fs.unlinkSync(link);
+    cleanup();
+  },
+);
 
 /**
  * Why the obvious fix is the wrong one, pinned rather than left in a comment. A
