@@ -541,6 +541,47 @@ restate it.** The missing-path instance is the third comment on #148.
    extract each `20[0-9]{2}-[0-9]{2}-[0-9]{2}` occurrence with its sentence from
    the merge-base, and `grep` each in the new tree. **This is the line that
    protects against a cleanup that hits its size target by deleting evidence.**
+
+   > **Amended by the build, 2026-09-07, and the line above is left exactly as it
+   > was written.** A third home is admitted, and only one:
+   > **`reference/dispatching.md`, for a measurement whose instruction is dispatch
+   > mechanics.** Not "or elsewhere in the skill" — three named files, closed the
+   > way the original was closed, and a fourth needs its own amendment.
+   >
+   > **Why, and it is a defect in this line rather than a concession to the
+   > branch: the line contradicts itself, and did before any of this was built.**
+   > Its primary clause says _"somewhere in the skill"_ and its checkable
+   > procedure says _"`grep` each in the new tree"_ — both of which already admit
+   > `dispatching.md`. Only the em-dash apposition excludes it. Three readings of
+   > four passed; the amendment resolves the one that disagreed, in favour of the
+   > line's own opening words.
+   >
+   > **What is actually checked is the count, and it did not move: 29 of 29
+   > dated measurements from the merge-base survive.** Two of them —
+   > `182 records, one distinct value` and repo-17's `~94% of the bill` — live in
+   > `dispatching.md` because the three `resolvedModel` reading routes moved there
+   > as dispatch mechanics, and a measurement follows the instruction it supports.
+   > Nothing was deleted, which is what the bolded sentence above exists to
+   > protect.
+   >
+   > **Honest accounting of the change, because a branch amending its own
+   > acceptance owes one: this is mixed, not uniformly harder.** It is _tighter_
+   > than the procedure clause — _"the new tree"_ is the whole repository, so a
+   > measurement surviving only in some ticket file would have passed it, and the
+   > amendment bounds the search to the skill directory and adds a count. It is
+   > _looser_ than the apposition, by one named file. **Rejected on the way, with
+   > a command behind it**: moving the two into `history.md`'s tenth-session row
+   > would satisfy the letter most cheaply, and `27,800` / `87,596` / `100–330`
+   > each appear in exactly one file across this skill, so there is no precedent
+   > for a measurement with two homes — and Gate 2 above already ruled that _"a
+   > figure restated in three places is three places to go stale."_
+   >
+   > Surfaced by the gate as its one `med` finding, reproduced by both sides
+   > independently, and settled between builder and reviewer with the reviewer
+   > taking this remedy over its own recommendation. **The finding stands as a
+   > finding: it is recorded here because it was found, not only because it was
+   > repaired.**
+
 7. **Defect 4 is gone and did not come back.**
    `grep -n 'resolvedModel' SKILL.md` returns either nothing, or only lines that
    say the field _is_ returned and is invisible to the dispatching model — never a
@@ -1135,6 +1176,16 @@ unanchored, 0 unresolvable`. **The check would have caught defect 1**, in the
   cache-read figure. All **29** dated measurements from the merge-base survive
   somewhere in the skill; the per-measurement check is in the report. Flagged
   rather than absorbed, because it is a deviation from an acceptance line.
+
+  **Settled by the gate, and the acceptance line was the thing at fault.** This
+  came back as the gate's single `med`, reproduced by both sides with the same
+  command. The remedy is under `Done when` 6 itself: the line contradicts its own
+  opening clause and its own checkable procedure, both of which already admit
+  `dispatching.md`, and it is amended in place — original text untouched — to
+  name that one file for dispatch-mechanics measurements and no other. The
+  reviewer recommended simply accepting the deviation and took this instead.
+  **Not "flagged" any more, and not waived either: fixed where a future reader
+  will hit it rather than in a Log they would have to find.**
 
 - **The four undated `measured` claims were dated from `git log -S`, and the column
   says so.** `Relaying`'s table has a date in every row; where the page recorded
