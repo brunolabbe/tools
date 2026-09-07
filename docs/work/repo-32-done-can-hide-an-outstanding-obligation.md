@@ -116,6 +116,35 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
 3. **Whichever:** amend `docs/01-TICKETS.md` where it says a ticket moves to
    `done` in the commit that earns it, since that sentence is the one that reads
    as though `done` meant nothing is left.
+4. **Answer "what makes somebody look at an informational CI failure", inside
+   this mechanism rather than beside it.** Added 2026-09-07 on the owner's
+   decision, not part of the original filing — see the Log entry of that date
+   for the provenance and the cost. Concretely: `windows-latest` is now
+   non-blocking ([repo-31](./repo-31-the-windows-leg-is-almost-all-red.md)), it
+   is red for repo-33 (`docs/work/repo-33-citations-loses-the-record-path.md`, unmerged at the time of writing, on `origin/repo-33-citations-windows-paths`),
+   and nothing forces anyone to notice. "`windows-latest` is red for repo-33" is
+   an `awaiting` line, so the field is the nearest mechanism this repo has. The
+   build has to decide **what it attaches to**, and that is the part with no
+   obvious answer — every instance in "The reproduction" hangs an obligation on
+   the ticket that incurred it, and this one belongs to no ticket at all: it is
+   a standing condition of the repository. Three shapes worth costing before
+   picking, none of them free:
+   - `awaiting` on repo-31, which incurred it. Cheapest, and wrong the moment
+     repo-33 merges and the leg goes green for a reason repo-31 knows nothing
+     about.
+   - `awaiting` on repo-33, the ticket whose merge closes it. Fits the field's
+     grain — an obligation closed by an event — but reverses its direction: this
+     one is not "repo-33 is unfinished", it is "the board is unfinished until
+     repo-33 lands".
+   - A board line owned by no ticket. Honest about what it is, and the largest
+     change: it means `status.mjs` renders something computed from more than
+     frontmatter, which is the thing adr/003 spent a whole record making sure
+     was derivable.
+
+   **This step must not turn the leg back into a gate.** repo-31's answer was
+   "run it, report it, do not gate merges on it", and a mechanism here that
+   fails CI would re-litigate that decision from inside another ticket — which
+   the "render only" answer in step 2 already forbids for every other case.
 
 ## Done when
 
@@ -130,6 +159,12 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
 4. `docs/01-TICKETS.md` says what `done` does and does not promise.
 5. `npm run check` passes and `npm run format` has been run, since this ticket's
    work is `.md` and `.mjs`.
+6. Build step 4 is answered rather than deferred: the standing "`windows-latest`
+   is red and nobody owns it" condition is either carried by the mechanism, with
+   what it attaches to written down, or explicitly declared out of scope with a
+   reason. **Not left as the third bullet of a Build step**, which is how it
+   would go missing. The meaning of `awaiting` (the three readings above) is put
+   to the owner before the parser is written, and the answer recorded here.
 
 ## Log
 
@@ -206,32 +241,84 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
   pointed out that they are not all the same shape, and it is right; the
   distinction is worth having before anybody designs a field around it.
 
-  1. **Whether `if: failure()` fires in a step of a job carrying a job-level
-     `continue-on-error`.** Observable on the branch's own **pull-request** run,
-     because `ci.yml` triggers on `pull_request` — so it is not post-merge at
-     all. It is still exactly this ticket's shape for the reason the "Why"
-     section gives rather than the one its examples give: the proof is not
-     available **to the agent that closes the ticket**, which stops before
-     opening the pull request and writes `status: done` before any run exists.
-  2. **Whether the workflow parses.** Was in the same class, and is now closed:
-     `actionlint` v1.7.12 answers it locally, run independently by both the
-     builder and the gate. An obligation that turns out to be answerable by a
-     tool nobody had reached for is the good outcome, and it is worth noticing
-     that what closed it was a second reader, not a mechanism.
-  3. **Whether `main` still carries no `required_status_checks`.** Not this
-     ticket's shape at all. Merging does not unlock it — `gh api` is denied in
-     the development container, and it would still be denied afterwards. It is
-     blocked by a permission decision the repo made on purpose, which is a
-     different thing from an observation that does not exist yet.
+  **The facts, which nobody disputes:**
 
-  **The design consequence, which is the reason this is here.** If `awaiting`
-  reads as "wait for the merge", it fits (3) badly and (1) only by accident.
-  The class this ticket is actually about is **"the proof is not available to
-  whoever is closing this"** — the "Why" section already says exactly that, in
-  those words, while all three of its examples happen to be post-merge ones. A
-  builder who takes the field's meaning from the examples rather than from the
-  premise will write something narrower than the ticket. Instance (1) is
-  nonetheless the one to write an `awaiting` line for first, because it is
-  hours old rather than the six days repo-13's lines went unseen, and its
-  closure is imminent and directly observable — which is what `Done when` 2
-  needs.
+  1. **Whether `if: failure()` fires in a step of a job carrying a job-level
+     `continue-on-error`.** The answer exists as soon as the branch's own
+     **pull-request** run happens, because `ci.yml` triggers on `pull_request`.
+     Nothing about it waits for a merge. What it does wait for is somebody
+     opening the pull request — which the agent that wrote `status: done` is
+     told not to do.
+  2. **Whether the workflow parses.** Was in the same state and is now closed:
+     `actionlint` v1.7.12 answers it locally, run independently by the builder
+     and by the gate. An obligation that turns out to be answerable by a tool
+     nobody had reached for is the good outcome, and what closed it was a second
+     reader rather than a mechanism.
+  3. **Whether `main` still carries no `required_status_checks`.** Needs
+     `gh api`, which `.claude/settings.json` denies. **Merging does not unlock
+     it** and neither does anything else available here; it is blocked by a
+     permission decision the repo made on purpose.
+
+  **The classification is disputed, and it is this ticket's own decision rather
+  than a builder's.** Three readings collided on this batch and none of us can
+  settle it:
+
+  - The **gate** and the **orchestrator** read (1) and (2) as _blocked by local
+    tooling_ rather than by a merge, and therefore not what `awaiting` is for,
+    with only (3) genuinely this ticket's shape.
+  - The **builder** read (1) as this ticket's shape, from the "Why" section's
+    own words — "the proof is not available to the person finishing it, by
+    construction" — on the grounds that the person finishing it stops before
+    the pull request, so no run exists at the moment `done` is written.
+  - Nobody argued it, but (3) sits oddly in **either** reading: an obligation
+    that no event will ever close is not "waiting" for anything, and a field
+    called `awaiting` that carries it is recording a permanent condition in a
+    slot shaped for a temporary one.
+
+  **So the question for the owner, at build time, is what `awaiting` means**,
+  and the answer decides the field rather than describing it: is it _waiting on
+  an event that will happen_ (the three original instances, and (1) only if
+  opening a pull request counts as the event), or _the proof is not available to
+  whoever is closing this_ (which admits (1) plainly and makes (3) a misuse), or
+  _anything a `done` ticket still owes_ (which admits all three and makes the
+  field's name wrong)? All three of this page's original instances satisfy every
+  reading, which is exactly why the filing did not have to choose — and why the
+  builder must. Put it to the owner with those options before writing the
+  parser, not after.
+
+  Whichever is chosen, **(1) is the instance to write the first `awaiting` line
+  against**, because it is hours old rather than the six days repo-13's lines
+  went unseen and its closure is imminent and directly observable — which is
+  what `Done when` 2 needs from a first case.
+
+- **2026-09-07, later** — **Build step 4 and `Done when` 6 were added on the
+  owner's decision, and they are not part of the original filing.** Recorded
+  with provenance because a Build step that appears without one reads as
+  something the filer wanted.
+
+  What happened: repo-31's build surfaced that its answer (keep `windows-latest`,
+  informational) leaves nobody owning a red that no longer gates, and carried
+  that up as an open decision with three options — **file it as its own `repo-`
+  chore** (the builder's recommendation, listed first), fold it into this
+  ticket, or accept it as recorded. **The owner chose to fold it in here**,
+  overriding that recommendation, on the reasoning that the `awaiting` field is
+  the nearest mechanism this repo has and "`windows-latest` is red for repo-33"
+  is precisely an `awaiting` line.
+
+  **The cost the owner accepted, stated plainly: it widens a ticket that was
+  deliberately held back for its own batch.** This page is rated `hard` and
+  changes strictly parsed frontmatter that gates CI; step 4 adds a question with
+  no obvious answer — what a repository-wide obligation attaches to, when every
+  instance in "The reproduction" attaches to the ticket that incurred it. The
+  alternative kept this ticket's scope fixed at the price of a fifth open
+  `repo-` ticket about a condition that will disappear the moment repo-33
+  merges. Both were put; this is the one chosen.
+
+  Also from repo-31's gate, and worth having here rather than only there: the
+  "fourth instance" paragraph above was rewritten. It had presented three
+  unverifiable claims as one uniform instance; the gate pointed out they are
+  three different shapes, and it was right about the facts. The **classification**
+  is where the gate, the orchestrator and the builder disagreed, so it is
+  recorded above as a question for the owner rather than settled here — it
+  decides what `awaiting` means, which is this ticket's decision to make and not
+  a reviewer's.

@@ -564,6 +564,20 @@ kills the process tree"` was run: 1 passed, and the marker file contained
   is this branch's own. `actionlint` is not in this repository's dependency tree
   and is not added by this change — it installs in seconds when wanted.
 
+  **The wider correction, and the one worth carrying out of this ticket:** the
+  entry above said the workflow "was reviewed by eye" because there is no YAML
+  parser in this repository's dependency tree. The first half was true and the
+  second half was the wrong conclusion to draw from it. **A validator is a
+  `curl` away.** `actionlint` ships a static binary from its release page; the
+  gate reached for it and also for `js-yaml` via `npm install js-yaml --no-save`
+  into a scratch directory, and both worked here. Nothing about this container
+  prevented either — the network is reachable, and the absence of a tool from
+  `package.json` is a statement about this repository's dependencies, not about
+  what a session can run. The rule that generalises: **an unverified claim
+  should say what was tried, not what was installed.** "There is no parser here"
+  was a fact that read as an excuse, and a second reader spent thirty seconds
+  disproving it.
+
   **Still unverified, and unchanged:** whether `if: failure()` actually fires in
   a step of a job carrying a job-level `continue-on-error`. `actionlint` does
   not evaluate expressions against a runtime, and nothing here runs Actions.
