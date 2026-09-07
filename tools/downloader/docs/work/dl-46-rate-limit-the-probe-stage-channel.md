@@ -102,6 +102,23 @@ branch answer three unrelated questions.
    still the behaviour you want when the reason is a limit rather than a drop; if
    it is, say so in the Log rather than leaving it looking unconsidered.
 
+5. **`GET /api/thumbnail/:token` needs the same call, and it is the same
+   question.** It is the other client-facing route with no bucket, and dl-44
+   changed what a miss costs it: it used to answer from a `Map`, and now falls
+   through to SQLite and a file read
+   ([`api/src/routes/thumbnail.ts:25 "Why it is still not rate limited"`](../../api/src/routes/thumbnail.ts)).
+   The exposure, as dl-44's gate measured it: **up to 512 KB per request,
+   unlimited requests per minute, per valid token, for up to
+   `fileRetentionHours` (default 6 h)**. Mitigated but not closed — the token is
+   a 256-bit capability, a malformed one is rejected on shape before the
+   database is touched, and the response is `private, max-age=300`. Step 1's
+   question applies unchanged, and `fileBucketKey` is the same precedent: what
+   this protects is one image rather than the service, so the token is the
+   likelier key. **Answered as "leave it for now" on dl-44 by the owner, on the
+   condition that it be carried here rather than left implicit** — so this step
+   is inherited work, not a new finding, and the route's own docblock is the
+   honest statement of the exposure in the meantime.
+
 **Do not raise `MAX_CHANNELS` instead.** It is not the defence — that is written
 into its own docblock now, in the words this ticket is quoting — and raising it
 only raises the number of sockets an attacker has to hold.
@@ -119,6 +136,13 @@ only raises the number of sockets an attacker has to hold.
 - `npm run check` and `npm test -- --project downloader` pass.
 
 ## Log
+
+- **2026-09-07 — Build step 5 added from dl-44**, which persisted thumbnail
+  bytes to disk and so changed what a miss on `/api/thumbnail/:token` costs. The
+  owner answered dl-44's rate-limit question as "leave it, and fold the
+  follow-up into dl-46"; the measured exposure travels with it in the step
+  above. Nothing else here is touched — status, decision and scope are
+  unchanged, and no part of this ticket has been implemented.
 
 - **2026-09-07 — filed** out of dl-43's gate, which found the exhaustion and
   carried it as a finding. The cheap fire-and-forget half was repaired inside

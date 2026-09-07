@@ -41,8 +41,8 @@ import type { AppLogger } from "../logger.ts";
 import { probeForClient } from "../probe-out.ts";
 import type { SsrfGuard } from "../ssrf.ts";
 import { urlsInProbeResult } from "../ssrf.ts";
-import { captureThumbnail, withThumbnailPath } from "../thumbnails.ts";
-import type { ThumbnailStore } from "../thumbnails.ts";
+import { captureThumbnail, persistThumbnail, withThumbnailPath } from "../thumbnails.ts";
+import type { CapturedThumbnail, ThumbnailStore } from "../thumbnails.ts";
 import type { JobEventHub } from "./events.ts";
 import { createFileToken } from "./tokens.ts";
 import { chooseVariant } from "./variant-selection.ts";
@@ -239,13 +239,14 @@ export class JobOrchestrator {
     // The re-probe is unconditional (rule 1 above), so the credentials needed to
     // fetch the preview are in hand right here and the token below is one this
     // run minted — nothing depends on the probe cache still holding anything.
-    const thumbnailPath = await captureThumbnail({
+    const captured = await captureThumbnail({
       probe,
       guard,
       fetchImpl: this.#options.fetchImpl,
       store: this.#options.thumbnails,
       logger: log,
     });
+    const thumbnailPath = captured?.path ?? null;
 
     // A field write, not a state change: the job is already in the right state.
     // The preview rides along with the variant snapshot for the same reason it
@@ -287,6 +288,11 @@ export class JobOrchestrator {
 
     // --- completed -------------------------------------------------------
     const result = this.#publish(jobId, outcome);
+    // Before the transition, so a client that sees `completed` is looking at a
+    // preview that already outlives the in-memory store. The bytes are the ones
+    // captured above rather than a re-read of that store, because a download
+    // may well have taken longer than `THUMBNAIL_TTL_MS` (dl-44).
+    await this.#persist(jobId, captured, log);
     const done = store.transition(
       jobId,
       "completed",
@@ -305,6 +311,33 @@ export class JobOrchestrator {
       transcodes: outcome.transcodes.length,
       attempts: done.attempts,
     });
+  }
+
+  /**
+   * Writes the captured preview beside the finished file, and records where.
+   *
+   * **Never fails the job.** A download that produced a file is complete
+   * whatever happened to a decorative image, and the only cost of the write
+   * failing is that the preview goes back to being a ten-minute one. Logged at
+   * `warn` rather than `debug` because, unlike a capture failure, this is our
+   * disk and our bug rather than a hostile page.
+   */
+  async #persist(jobId: string, captured: CapturedThumbnail | null, log: AppLogger): Promise<void> {
+    if (captured === null) return;
+    const { store, engine } = this.#options;
+    try {
+      const path = await persistThumbnail({
+        storage: engine.storage,
+        jobId,
+        thumbnail: captured.thumbnail,
+      });
+      store.saveThumbnail(
+        { token: captured.token, jobId, path, contentType: captured.thumbnail.contentType },
+        this.#iso(),
+      );
+    } catch (error: unknown) {
+      log.warn("could not persist the preview image beside the file", { error: String(error) });
+    }
   }
 
   async #probe(sourceUrl: string, signal: AbortSignal, log: AppLogger): Promise<ProbeResult> {

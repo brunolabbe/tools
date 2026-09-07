@@ -11,6 +11,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { Storage } from "@downloader/engine";
 import type { DownloadEngine, DownloadOutcome, DownloadRequest } from "@downloader/engine";
 import { AppError } from "@downloader/contract";
 import type { MediaVariant, ProbeResult, Resolver, ResolveOptions } from "@downloader/contract";
@@ -101,18 +102,23 @@ export interface StubEngineOptions {
 export function createStubEngine(options: StubEngineOptions): DownloadEngine & { calls: number } {
   const root = options.storageRoot;
   let calls = 0;
+  // The real `Storage`, not a `{ root }` cast: the API builds paths under
+  // `out/<jobId>/` through it now — `persistThumbnail` does — so a stub that
+  // only carried `root` would be testing a different layout from production.
+  // `collectGarbage` is still overridden below; nothing here sweeps by age.
+  const storage = new Storage({ storageDir: root, fileRetentionHours: 6 });
 
   const engine = {
     // `/api/health` stats this path before calling ffmpeg available, so it has
     // to be a real executable. Node's own binary is the one guaranteed to
     // exist wherever the tests run; the stub never actually runs it.
     config: { ffmpegPath: process.execPath } as DownloadEngine["config"],
-    storage: { root } as DownloadEngine["storage"],
+    storage,
     get calls() {
       return calls;
     },
     async init(): Promise<void> {
-      await fs.mkdir(path.join(root, "out"), { recursive: true });
+      await storage.init();
     },
     async download(request: DownloadRequest): Promise<DownloadOutcome> {
       const call = calls++;
@@ -162,7 +168,7 @@ export function createStubEngine(options: StubEngineOptions): DownloadEngine & {
       return { removedOutDirs: [], removedTmpDirs: [], freedBytes: 0 };
     },
     async removeJob(jobId: string): Promise<void> {
-      await fs.rm(path.join(root, "out", jobId), { recursive: true, force: true });
+      await storage.removeJob(jobId);
     },
   } satisfies DownloadEngine & { calls: number };
 

@@ -407,10 +407,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
           },
         }),
   });
+  const now = options.now ?? (() => new Date());
   const events = new JobEventHub(options.now);
   const probeCache = new ProbeCache({ ttlMs: config.probeCacheTtlMs });
   const probeStages = new ProbeStageHub(options.now);
-  const thumbnails = new ThumbnailStore();
+  // On the injected clock like every other expiring thing here, so a test can
+  // reach the far side of `THUMBNAIL_TTL_MS` without waiting ten minutes.
+  const thumbnails = new ThumbnailStore({ now: () => now().getTime() });
 
   let shuttingDown = false;
   const queue = new InProcessJobQueue({
@@ -425,7 +428,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     },
   });
 
-  const now = options.now ?? (() => new Date());
   const orchestrator = new JobOrchestrator({
     store,
     engine,
@@ -683,33 +685,46 @@ function reconcileInterruptedJobs(context: AppContext): void {
  */
 export const TOKEN_ROW_GRACE_MS = 30 * 24 * 3_600_000;
 
-/** Retention sweep: expired output dirs, orphaned tmp dirs, and stale token rows. */
-function startRetentionSweep(context: AppContext, intervalMs: number): NodeJS.Timeout {
-  const sweep = async (): Promise<void> => {
-    try {
-      const nowMs = context.now().getTime();
-      const nowIso = context.now().toISOString();
+/**
+ * One pass of the retention sweep: expired output dirs, orphaned tmp dirs, and
+ * stale token rows.
+ *
+ * Exported so a test can run exactly one pass against a clock it controls,
+ * rather than standing up the timer and waiting `gcIntervalMs` for it. Swallows
+ * its own failures for the same reason it always did — a sweep that throws on
+ * one bad directory must not stop the next tick.
+ */
+export async function runRetentionSweep(context: AppContext): Promise<void> {
+  try {
+    const nowMs = context.now().getTime();
+    const nowIso = context.now().toISOString();
 
-      // Delete the file, keep the row: see TOKEN_ROW_GRACE_MS.
-      for (const token of context.store.expiredTokens(nowIso)) {
-        await context.engine.removeJob(token.jobId);
-        context.store.markSwept(token.token, nowIso);
-      }
-
-      for (const token of context.store.prunableTokens(
-        new Date(nowMs - TOKEN_ROW_GRACE_MS).toISOString(),
-      )) {
-        context.store.deleteToken(token);
-      }
-
-      const report = await context.engine.collectGarbage(nowMs);
-      context.logger.debug("retention sweep complete", { ...report });
-    } catch (error: unknown) {
-      context.logger.warn("retention sweep failed", { error: String(error) });
+    // Delete the file, keep the row: see TOKEN_ROW_GRACE_MS.
+    for (const token of context.store.expiredTokens(nowIso)) {
+      await context.engine.removeJob(token.jobId);
+      context.store.markSwept(token.token, nowIso);
+      // `removeJob` took the whole `out/<jobId>/` directory, so the preview
+      // image went with the file it depicts. Its row is dropped rather than
+      // kept the way a file token's is: there is no better answer to preserve —
+      // a missing preview renders as no preview either way (dl-44).
+      context.store.removeThumbnailsForJob(token.jobId);
     }
-  };
 
-  const timer = setInterval(() => void sweep(), intervalMs);
+    for (const token of context.store.prunableTokens(
+      new Date(nowMs - TOKEN_ROW_GRACE_MS).toISOString(),
+    )) {
+      context.store.deleteToken(token);
+    }
+
+    const report = await context.engine.collectGarbage(nowMs);
+    context.logger.debug("retention sweep complete", { ...report });
+  } catch (error: unknown) {
+    context.logger.warn("retention sweep failed", { error: String(error) });
+  }
+}
+
+function startRetentionSweep(context: AppContext, intervalMs: number): NodeJS.Timeout {
+  const timer = setInterval(() => void runRetentionSweep(context), intervalMs);
   // The sweep must never be the reason the process stays alive.
   timer.unref?.();
   return timer;

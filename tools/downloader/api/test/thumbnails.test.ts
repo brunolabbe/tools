@@ -11,17 +11,26 @@
  * where no socket should be opened at all.
  */
 
+import fsp from "node:fs/promises";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import os from "node:os";
+import nodePath from "node:path";
 import { AppError } from "@downloader/contract";
 import type { ProbeResult } from "@downloader/contract";
+import { Storage } from "@downloader/engine";
 import { afterEach, describe, expect, test } from "vitest";
 import { createGuardedFetch } from "../src/guarded-fetch.ts";
 import { createLogger } from "../src/logger.ts";
 import { createSsrfGuard } from "../src/ssrf.ts";
 import type { SsrfGuard } from "../src/ssrf.ts";
-import { captureThumbnail, ThumbnailStore } from "../src/thumbnails.ts";
+import {
+  captureThumbnail,
+  persistThumbnail,
+  readPersistedThumbnail,
+  ThumbnailStore,
+} from "../src/thumbnails.ts";
 import { probeResult } from "./helpers.ts";
 
 const logger = createLogger({ level: "silent" });
@@ -105,7 +114,7 @@ async function capture(
 ): Promise<{ path: string | null; store: ThumbnailStore }> {
   const guard = overrides.guard ?? permissiveGuard();
   const store = overrides.store ?? new ThumbnailStore();
-  const path = await captureThumbnail({
+  const captured = await captureThumbnail({
     probe: probeWithThumbnail(url),
     guard,
     fetchImpl: createGuardedFetch(guard),
@@ -114,7 +123,10 @@ async function capture(
     ...(overrides.maxBytes === undefined ? {} : { maxBytes: overrides.maxBytes }),
     ...(overrides.timeoutMs === undefined ? {} : { timeoutMs: overrides.timeoutMs }),
   });
-  return { path, store };
+  // `captureThumbnail` returns the bytes as well since dl-44, so the job
+  // pipeline can persist them long after the store's TTL. These tests are about
+  // the capture itself, so they go on reading the path they always did.
+  return { path: captured?.path ?? null, store };
 }
 
 describe("captureThumbnail", () => {
@@ -340,5 +352,63 @@ describe("ThumbnailStore", () => {
 
     expect(store.size).toBe(2);
     expect(store.get(first)).toBeNull();
+  });
+});
+
+describe("the copy that goes on disk", () => {
+  let root: string | undefined;
+
+  afterEach(async () => {
+    if (root !== undefined) await fsp.rm(root, { recursive: true, force: true });
+    root = undefined;
+  });
+
+  async function storage(): Promise<Storage> {
+    root = await fsp.mkdtemp(nodePath.join(os.tmpdir(), "downloader-thumb-"));
+    const store = new Storage({ storageDir: root, fileRetentionHours: 6 });
+    await store.init();
+    return store;
+  }
+
+  test("the bytes land inside the job's own out directory, which is what the sweep deletes", async () => {
+    // The whole retention design in one assertion: the path is under
+    // `out/<jobId>/`, so `Storage.removeJob` and `Storage.collectGarbage` both
+    // already take it and nothing new has to know when to.
+    const store = await storage();
+    const written = await persistThumbnail({
+      storage: store,
+      jobId: "job-7",
+      thumbnail: { contentType: "image/gif", bytes: GIF },
+    });
+
+    expect(written).toBe(nodePath.join(store.outDir("job-7"), "preview.gif"));
+    expect(await readPersistedThumbnail(store, written)).toEqual(GIF);
+
+    await store.removeJob("job-7");
+    expect(await readPersistedThumbnail(store, written)).toBeNull();
+  });
+
+  test("a path outside the storage root is refused rather than answered", async () => {
+    // A row naming somewhere else was not written by this process, so "no
+    // preview" would be the wrong answer — it would hide the bug. `files.ts`
+    // re-confines its own recorded path at the point of use for the same reason.
+    const store = await storage();
+    const outside = nodePath.join(store.root, "..", "escape.gif");
+    await expect(readPersistedThumbnail(store, outside)).rejects.toMatchObject({
+      code: "INTERNAL",
+    });
+  });
+
+  test("a content type outside the allowlist is refused rather than given an extension", async () => {
+    // Unreachable through `captureThumbnail`, which allowlists before storing.
+    // Asserted so the two lists cannot drift into writing an unnamed file.
+    const store = await storage();
+    await expect(
+      persistThumbnail({
+        storage: store,
+        jobId: "job-8",
+        thumbnail: { contentType: "image/svg+xml", bytes: GIF },
+      }),
+    ).rejects.toMatchObject({ code: "INTERNAL" });
   });
 });

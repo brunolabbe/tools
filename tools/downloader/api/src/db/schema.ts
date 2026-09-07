@@ -69,6 +69,28 @@ const MIGRATIONS: readonly string[] = [
   // case the UI has to render anyway, since a probe that found no image is the
   // common one.
   `ALTER TABLE jobs ADD COLUMN thumbnail_path TEXT;`,
+
+  // 4 — where a completed job's preview image was written on disk (dl-44).
+  //
+  // The in-memory store the token was minted against holds the bytes for ten
+  // minutes; the file it depicts lives six hours. This row is how the same
+  // token keeps resolving for the other five and fifty, and across a restart.
+  //
+  // No `expires_at` column, deliberately. The bytes sit inside `out/<job_id>/`,
+  // so the retention sweep that deletes the file deletes them too — a second
+  // expiry recorded here could only ever disagree with the first. The row is
+  // cleaned up with the sweep, and cascades if the job itself is deleted.
+  `
+  CREATE TABLE thumbnail_files (
+    token        TEXT PRIMARY KEY,
+    job_id       TEXT NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
+    path         TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+  ) STRICT;
+
+  CREATE INDEX thumbnail_files_job ON thumbnail_files (job_id);
+  `,
 ];
 
 export function migrate(db: Database): void {
