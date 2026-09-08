@@ -1195,9 +1195,9 @@ unresolvable, 15 unchecked, 0 evidence — of 31 references`, both at exit 2. Si
   record to the number of failing references it may hold, not a `Set` of paths.
   Exceed the number and the run prints `WORSE` and fails; fall below it and the
   entry is `STALE` and the number must be tightened. So both jaws bite, and the
-  hole reproduced above — break a record, append it to the list in the same
-  change, exit 0 in silence — is closed by construction, because an entry now has
-  to name a count somebody wrote down.
+  literal hole reproduced above — with bare paths, _any_ addition silenced
+  _anything_ — no longer works, because an entry has to name a count somebody
+  wrote down.
 
   **The cost was accepted knowingly rather than discovered.** An unrelated branch
   that shifts a cited file drives a grandfathered record's count up and turns this
@@ -1319,3 +1319,89 @@ GRANDFATHERED entry allows 28`, exit 1, naming two off-by-one repoints. A
   so in the confident register both times. A count that cannot go down is a worse
   thing to be wrong about than a diff, which is the argument for the ratchet
   arriving from the direction nobody planned.
+
+- **2026-09-08 — gate 2, on the new surface only: one `med`, and it is a
+  correction to what this page claimed rather than to what was built.** The
+  entry above said the silencing hole was "closed by construction". It was not.
+  The ratchet catches error and mis-provisioning; **a number that is exactly
+  right is always silent, so a deliberate silencer still gets through.**
+
+  Reproduced here rather than accepted, three runs on one record, each one a
+  command:
+
+  - **A.** Break a citation in a passing record and add that record to
+    `GRANDFATHERED` at its exact new count — `3 enforced, 0 failing; 60
+grandfathered`, **exit 0**. Silent, and silent for ever after: `STALE` fires
+    only on `failing < allowed`, never on `==`, so an exact-match entry is
+    permanently indistinguishable from inherited debt.
+  - **B.** Break a _second_ citation in the same record, entry untouched —
+    `WORSE tools/planner/docs/work/pl-2-container-image.md — 2 moved — 2 failing,
+and its GRANDFATHERED entry allows 1`, **exit 1**. This is the ratchet
+    working, and it is why the change was worth making.
+  - **C.** Raise that entry from 1 to 2 in the same change — **exit 0**,
+    absorbed, the record gone from the output entirely.
+
+  **What does defend, so the finding is not overstated.** Over-provisioning is
+  caught: adding a record at a round buffer number it does not need gives
+  `STALE … now holds 1 failing reference(s), not 10 — tighten the number`, exit
+  1, on the very next run. So a lazy silencer is caught and only an exact one is
+  not.
+
+  **It cannot be closed here, and that is structural rather than an oversight.**
+  This gate reads the checkout and never the history — `ci.yml`'s `check` job
+  takes a depth-1 clone with no `fetch-depth`, checked rather than assumed — so
+  there is no previous value of a number to compare against. **What the count
+  actually buys is a legible diff, not a machine guarantee**: silencing a record
+  used to be one appended path and is now a number somebody has to write, or an
+  existing number somebody has to raise, in a file whose whole purpose a reviewer
+  knows. That is a real improvement and it is a different claim from the one the
+  entry above made.
+
+  Both the gate's docblock and that entry are corrected in this commit. **The
+  framing was the defect; the mechanism does what it does.**
+
+  **Open decision, for the owner and not for either agent in this loop.** The
+  residual is now disclosed; whether to spend anything on it is a call with two
+  defensible answers and a real cost either way:
+
+  - **A. Accept it as the norm's residue and stop here.** Free. The disclosure
+    above is the whole mitigation, and the argument is that a deliberate silencer
+    is a person choosing to lie in a diff, which no in-tree check catches — the
+    same reason `.claude/settings.json`'s deny list is documented as a guardrail
+    and not a boundary.
+  - **B. Require a justification beside each entry** — a reason string the gate
+    refuses to accept as empty. Cheap, and it converts a silent number into a
+    sentence somebody has to write and a reviewer can disbelieve. It does not
+    stop anyone; it raises the cost of not being noticed.
+  - **C. Make a history-aware check**, in a job that fetches more than one
+    commit, comparing each entry against the base branch's value. The only option
+    that actually closes it, and the most expensive: it needs a second checkout
+    depth, it cannot live in `check` as that job is configured, and it is a new
+    failure mode on every branch whose base has moved.
+
+  **Recommended: B.** A is honest but spends the disclosure and nothing else; C
+  buys a guarantee against a threat model — an agent deliberately concealing a
+  regression from its own gate — that nothing else in this repo defends against
+  either, at the price of a new CI shape. B is the one whose cost matches the
+  risk.
+
+  **Everything else on the new surface checked out**, and two of the checks are
+  worth naming because they were done independently rather than re-run from this
+  page: the `"model: sonnet"` fragment really does occur exactly twice in
+  `ticket-reviewer.md`, and simulating the fold-in by running
+  `--require-anchors --require-distinct-anchors` over
+  `orchestrate-tickets/SKILL.md` gives `exit 16` on a file this branch never
+  touched — so keeping the flags separate was necessary and not merely tidy. And
+  the no-worse-than-base claim was corroborated by a third method: grep the whole
+  corpus for citations naming the three files whose line numbers this branch
+  moved, then check each of those 11 records.
+
+  **One thing this page got wrong while checking the finding, recorded because it
+  is the same shape one level down.** Reading `repo-31`'s failing count off the
+  checker's summary line gave 1, while the gate counts 4. Both are right: the
+  summary line carries the six _states_, and an indistinct anchor is not a state
+  — it is `verified` with a policy attached, so it appears in the exit line
+  (`N anchor(s) not distinct`) and in the per-citation output, and nowhere in the
+  summary. That is deliberate and consistent with how a stale evidence
+  declaration is reported, but a reader who greps the summary line for a total
+  will be short by exactly the indistinct count.

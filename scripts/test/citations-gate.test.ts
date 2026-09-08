@@ -302,3 +302,33 @@ test("every grandfathered path is a record this repo actually has", () => {
 test("no grandfathered entry allows zero failures", () => {
   expect([...GRANDFATHERED].filter(([, allowed]) => allowed < 1)).toEqual([]);
 });
+
+/**
+ * The residual, pinned so it cannot be rediscovered as a surprise or removed as
+ * a bug. `STALE` fires on `failing < allowed` and `WORSE` on `failing >
+ * allowed`; an exact match is excused, which means a number that is exactly
+ * right silences a fresh regression permanently.
+ *
+ * That is not closable here — this reads the checkout and never the history, and
+ * `ci.yml`'s `check` job takes a depth-1 clone, so there is no previous value of
+ * a number to compare against. What the count buys is a legible diff rather than
+ * a machine guarantee, and repo-29's Log carries the open question of whether to
+ * spend anything further on it. The assertion below is that disclosure in
+ * executable form.
+ */
+test("an entry whose number exactly matches the debt is silent, which is the residual", () => {
+  const { dir, cleanup } = withRepo({ "docs/work/b.md": BARE });
+  try {
+    const scope = { records: ["docs/work/*.md"], section: "Review" };
+    const exact = gate(dir, scope, new Map([["docs/work/b.md", 1]]));
+    expect(exact.failed).toHaveLength(0);
+    expect(exact.regressed).toHaveLength(0);
+    expect(exact.staleEntries).toHaveLength(0);
+
+    // One either side of it, so the test says where the silence begins and ends.
+    expect(gate(dir, scope, new Map([["docs/work/b.md", 0]])).regressed).toHaveLength(1);
+    expect(gate(dir, scope, new Map([["docs/work/b.md", 2]])).staleEntries).toHaveLength(1);
+  } finally {
+    cleanup();
+  }
+});

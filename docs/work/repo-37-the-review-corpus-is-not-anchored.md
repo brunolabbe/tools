@@ -20,7 +20,7 @@ repo-29 built the gate and did not pay the debt. That was the owner's answer —
 the mechanism was the deliverable — but the debt has to have a home or the answer
 evaporates into a comment in a script. This is the home.
 
-`scripts/citations-gate.mjs:212 "const FAILING = new Set"` enforces anchors on
+`scripts/citations-gate.mjs:238 "const FAILING = new Set"` enforces anchors on
 every work record's `## Review` section. **59 of the 63 records that have such a
 section are exempted by name**, each with the number of failing references it is
 allowed to hold. Measured on repo-29's branch:

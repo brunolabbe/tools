@@ -129,9 +129,8 @@ export const SCOPE = {
  * **The number is the ratchet, and it is why this is a Map and not a Set.** A
  * record may hold the failures its entry names and no more. Exceed it and the
  * run says `WORSE` and fails; drop below it and the entry is `STALE` and must be
- * tightened. So the list moves one way, and — the case that earned the number —
- * **appending a record to it no longer silences a break in it**, because the
- * entry has to name a count somebody wrote down.
+ * tightened. So the list moves one way as records are repaired, and a break in a
+ * listed record is caught the moment it takes that record past its number.
  *
  * That was a real hole, not a hypothetical: with bare paths, breaking an anchor
  * in a passing record and adding that record here in the same change gave
@@ -140,6 +139,33 @@ export const SCOPE = {
  * **accepted knowingly by the owner on 2026-09-08**, on the reasoning that the
  * failure is already happening and is better loud than silent. repo-29's Log
  * carries the decision and the measurement behind it.
+ *
+ * ## What the ratchet does not defend against, stated because an earlier draft
+ * ## of this docblock implied it did
+ *
+ * **A number that is exactly right is always silent, so a deliberate silencer
+ * still gets through.** Reproduced by repo-29's gate, three runs on one record:
+ *
+ *   A. break a citation in a passing record and add that record here at its
+ *      exact new count — `3 enforced, 0 failing`, **exit 0**, and silent for
+ *      ever after;
+ *   B. break a second citation in it, entry untouched — `WORSE … 2 failing, and
+ *      its GRANDFATHERED entry allows 1`, **exit 1**;
+ *   C. raise the entry from 1 to 2 in the same change — **exit 0**, absorbed.
+ *
+ * B is the ratchet working. A and C are the residual, and it cannot be closed
+ * here: this reads the checkout and never the history — `ci.yml`'s `check` job
+ * takes a depth-1 clone, so there is no previous value of a number to compare
+ * against. **What the count buys is not a machine guarantee but a legible diff**:
+ * silencing a record used to be one appended path and is now a number somebody
+ * has to write, or an existing number somebody has to raise, in a file whose
+ * whole purpose a reviewer knows. It defends against carelessness — including a
+ * lazy round buffer, which `STALE` catches on the next run — and it does not
+ * defend against intent.
+ *
+ * Whether to go further is an open question in repo-29's Log, not a gap somebody
+ * forgot: a per-entry justification, or a history-aware check in a job that
+ * fetches more than one commit, are both real options with real costs.
  *
  * **Adding to it is not the way past a red gate.** A new `## Review` section
  * comes with anchors; that is what `.claude/skills/review-ticket/SKILL.md` now
