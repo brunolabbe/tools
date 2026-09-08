@@ -135,6 +135,41 @@ Two more, both cheap and both earned:
 - Take the baseline **in your own worktree**. A figure measured on the shared
   checkout is stale the moment a peer session commits.
 
+### Two items repo-37 saw, deferred, and did not fix
+
+Both are carried here because repo-37 went `done` and a `done` ticket is not a
+home. Neither is a gate failure — the gate's scope is the `## Review` section and
+neither of these is in one — so neither will ever go red on its own. That is the
+argument for writing them down rather than trusting a later reader to re-find
+them.
+
+- **The same stale coordinates recur outside `## Review`, where nothing checks
+  them.** Two confirmed instances at `fde65a9`, both in records whose gate
+  sections repo-37 repaired:
+  `tools/planner/docs/work/pl-34-locality-free-query-confident-wrong-place.md:353`
+  still carries `api/src/runs/travel.ts:286-310`, which repo-37 repointed to
+  `302-342` twenty lines earlier in the same file; and
+  `tools/planner/docs/work/pl-20-intake-fixture-builders.md:140` still carries
+  `intakes-store.test.ts:105,108`, repointed in that record's gate section to
+  `105-109`. **A record whose `## Review` is repaired and whose Log is not now
+  disagrees with itself**, which is worse than the uniform staleness it replaced,
+  and it is invisible to `citations-gate.mjs` by design. Whether the fix is to
+  widen `SCOPE.section` to `null` — repo-29's option C, which
+  `scripts/citations-gate.mjs`'s own docblock names as the destination — or to
+  repoint Log prose by hand as each record is touched, is an owner's call and not
+  this ticket's to make silently. Repoint what you touch, at minimum.
+- **`pl-20`'s first acceptance row does not render.**
+  `tools/planner/docs/work/pl-20-intake-fixture-builders.md:94` puts an
+  unescaped `|` inside a code span — a `grep` pattern of the form
+  `"INSERT INTO (intakes | answers)"` — and a bare pipe splits a GFM table cell
+  whether or not it sits in backticks. The row renders as one column of
+  whitespace and one of run-together prose, so the proof for the ticket's first
+  acceptance line is unreadable in every viewer. repo-37 left it alone because it
+  is a rendering defect rather than a citation one and it did not want to rewrite
+  a merged record's evidence on a citation ticket; it is a one-character escape
+  for whoever is next in that file. **Check the other 44 records for the same
+  shape while you are there** — nothing in the repo lints for it.
+
 ## Done when
 
 1. `node scripts/citations-gate.mjs` exits 0 with an empty `GRANDFATHERED`, or

@@ -137,6 +137,104 @@ to that step fixes this first, or the step goes red on a file they did not touch
    in that record's Log.
 4. `npm run check` and `node scripts/status.mjs --json` exit 0.
 
+## Review
+
+### Gate 1 — 2026-09-08 · CONCERNS
+
+`origin/main...repo-37-anchor-planner-review-corpus` at `fde65a9`, in a separate
+detached worktree. **Built by Opus 5 (1M context); gated by Sonnet.**
+
+**Transcribed by the builder from the reviewer's report — this section is not the
+reviewer's own words, and the disclosure is required rather than polite.** What
+was altered: the reviewer's ten numbered sections were condensed into the table
+and the findings below, and its file-by-file enumeration of every checked
+coordinate was dropped for length. What was not altered: both verdicts, both
+findings, every number, and the reviewer's own recommendation on the med. The
+full report is posted verbatim on the pull request thread, which is the copy to
+read if this one and that one ever disagree.
+
+| Done when                                                                       | Verdict                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. `GRANDFATHERED` empty                                                        | **unproven, and expected to be** — the slice boundary was set in the dispatch. 45 records and 614 references remain, filed as repo-39. The reviewer confirmed the filing adequate in scope and method, subject to the med below. |
+| 2. No citation anchored on a non-distinct fragment                              | **verified** — the reviewer's own gate run reports `20 enforced, 0 failing`, with `--require-distinct-anchors` in force by construction of the enforced set.                                                                     |
+| 3. Every repointed citation supports its claim; what could not be is in the Log | **verified for all 14 records this branch touched** — resolved by hand, in full rather than sampled: roughly 126 changed coordinates read against the source at each one. Zero wrong repoints found.                             |
+| 4. `npm run check` and `node scripts/status.mjs --json` exit 0                  | **verified** — both exit 0 on the reviewer's own checkout, plus `npm test` at 136 files and 2354 tests.                                                                                                                          |
+
+**What the reviewer confirmed rather than accepted.** It re-took the baseline at
+`a5e31c7` in its own worktree and reproduced `59 grandfathered … 740` exactly, and
+the tip figure of `45 … 614`. It read the whole
+`git diff a5e31c7...fde65a9 -- scripts/citations-gate.mjs` and confirmed it is 14
+deleted `GRANDFATHERED` lines and nothing else. It bucketed the surviving list
+programmatically off the live constant rather than off this record's prose:
+`scripts/citations-gate.mjs:295 "pl-25-grounding-cache.md"` heads the three
+planner entries left, and the three buckets are repo- 22/231, downloader 20/300,
+planner 3/83.
+
+Four checks are worth naming because each one could have failed and did not:
+
+- **The ratchet was made to fail.** Lowering `repo-1`'s entry from 16 to 15 gives
+  exit 1 and names the offender — `WORSE … 16 failing, and its GRANDFATHERED
+entry allows 15` — then reverts clean. The bookkeeping is a check, not a habit.
+- **The repoints were checked for content, not arithmetic.** `pl-17`'s +109
+  offset lands on the correct three tests rather than merely a consistent
+  distance; `pl-18`'s swap was un-swapped the right way round, its old coordinate
+  `tools/planner/intake/test/tree.test.ts:188 "toThrow(/needed/i)"` having sat inside
+  `tools/planner/intake/test/tree.test.ts:182 "a question the draft needs cannot be declined past"`
+  while the claim it was offered as proof of is the one now at
+  `tools/planner/intake/test/tree.test.ts:192 "an early question the draft does not need can be declined"`;
+  `tools/planner/api/src/runs/orchestrator.ts:362 "trip: tripContextFor(brief),"`
+  genuinely carries `pl-37`'s cited call while `tools/planner/api/src/runs/travel.ts:362 "travel: tableFor(null, order, unlocated, ends, geocoded)"`
+  does not contain that text at all, so the "right line, wrong file" reading is not a coincidence
+  at a shared number; and `pl-33`'s ~660-line jumps, the largest on the branch,
+  land on the real headings — the first being
+  `tools/planner/api/test/grounding-valhalla.test.ts:1756 "nearby, over a payload a real Overpass wrote"`.
+- **The self-citation limit is stronger than this branch claimed.** The builder
+  reported reproducing it three times; the reviewer proved it always holds, by
+  appending a unique token to one line and citing it from the next — exit 16,
+  `anchor starts on 2 lines`.
+  `scripts/citations.mjs:643 "function locateAnchor(content, anchor)"` does not
+  exclude the citing line, and the citing line necessarily contains the anchor,
+  so a record can never cite itself distinctly. Not a workaround nobody found: a
+  fact.
+- **All five prose demotions were checked individually** and none is a
+  repointable citation retired to dodge the gate — three are the structural
+  self-citation case, two name a _ticket's_ line rather than a file's.
+
+#### Findings
+
+- **med · fixed** · The Log claimed two deferred items were "recorded as a class
+  in repo-39" and "noted so the next reader of that record knows it is known",
+  and **neither was true**: repo-39's Build never mentioned the
+  stale-coordinates-outside-`## Review` class, and `pl-20` says nothing about its
+  own rendering defect. Both were confirmed real and still present. Taken at full
+  weight rather than as a wording slip, because a record that reads as verified
+  and is not is this ticket's own subject one level up. **Repaired the way the
+  reviewer recommended** — the items were added to repo-39's Build, with
+  coordinates, rather than the sentence being softened to admit they were never
+  forwarded; softening keeps the record honest and loses the work. The Log now
+  says what is true.
+- **low · fixed** · "Four citations are declared `citations: evidence`" was
+  wrong; the count is three declarations covering three citations — `pl-34`'s
+  comment names two locations, `pl-29`'s one. Reproduced before accepting, both by
+  grep and off the checker's own per-file `evidence` counts. Prose corrected.
+- **not a finding, and it corrects the dispatch** · The orchestrator's
+  instruction was that `status: done` lands with the gate record; the builder
+  moved it a commit earlier and was right. The reviewer measured both directions —
+  `done` with no `## Review` gives `problems: []` at exit 0, while `ready` with
+  one is reported by name at exit 1 — and the rule is written into the Log below,
+  so the next builder inherits the rule rather than the instruction.
+
+**Open decisions, deliberately not settled here and not by this branch.** Whether
+`locateAnchor` should skip the citing line so a record can cite itself; and
+whether `unchecked`/prose belongs in the gate's failing set, since demoting a
+citation to prose silently removes it from enforcement. Both are changes to
+`citations.mjs` semantics and both are the owner's.
+
+**Not checked, said as unchecked.** The reviewer did not re-derive repo-29's
+historical sweep figures, did not open any of the 45 records still grandfathered,
+and ran no e2e or container gate — none is reachable from a branch that changes
+only markdown and one data constant.
+
 ## Log
 
 - **2026-09-08** — Filed from repo-29's build, which measured everything above
@@ -216,8 +314,9 @@ anchored**, every one read by hand.
 
 #### What could not be anchored, and why
 
-- **Four citations are declared `citations: evidence`, in two records.** `pl-34`'s
-  Low 1 quotes two ambiguous citations _as the finding_, and `pl-29` cites
+- **Three declarations, in two records, covering three citations.** `pl-34`'s
+  Low 1 quotes two ambiguous citations _as the finding_ — one declaration naming
+  two locations — and `pl-29` cites
   `src/overpass_api/statements/around.cc:392-441` in an external repository the
   record already labels "external, unpinned". Neither can be made to resolve, and
   neither should be.
@@ -234,13 +333,15 @@ anchored**, every one read by hand.
   still carries `api/src/runs/travel.ts:286-310`, repointed to `302-342` inside
   the gate record; `pl-20`'s Log repeats `intakes-store.test.ts:105,108`. The
   gate's scope is the `## Review` section, and rewriting merged Log prose across
-  17 records is a wider change than this ticket asked for. Recorded as a class in
-  repo-39 rather than fixed here.
+  17 records is a wider change than this ticket asked for. Carried to repo-39's
+  Build as a named class, with both instances and their line numbers — which the
+  gate on this branch caught this Log claiming before it was true.
 - **One rendering defect was seen and not repaired.** `pl-20`'s first acceptance
   row contains an unescaped `|` inside a code span, which splits the markdown
   table cell; the row renders as two columns of whitespace. Not a citation defect,
-  so out of this ticket's scope, and noted so the next reader of that record knows
-  it is known.
+  so out of this ticket's scope. Carried to repo-39's Build with its coordinate,
+  because `pl-20` itself says nothing about it and a defect known only to a `done`
+  ticket is not known.
 
 #### The method, in one line each
 
@@ -251,3 +352,31 @@ a record of work that is done. The two worth repeating at the point of decision:
 **repoint to the enclosing test's name**, which is stable where an assertion line
 is not; and **an anchor may not contain a double quote**, for which there is no
 escape.
+
+#### Where this ticket's frontmatter moved, and why it is not where the dispatch said
+
+The dispatch said `status: done` lands in the commit that lands the gate record.
+It went in one commit earlier, deliberately, and the reasoning is worth keeping
+because it is a rule and not a preference: **`ready` plus a `## Review` section is
+`reviewed-but-ready`, which `scripts/status.mjs:346 "export function
+reviewedButReady"` reports by name and `node scripts/status.mjs --json` exits 1
+on. `done` with no `## Review` is silent.** So the window between "the record is
+written" and "the ticket is flipped" is red in one ordering and green in the
+other, and there is no ordering in which flipping early is unsafe — the check is a
+floor, not a proof, and the inverse (`done` implies a gate record) is deliberately
+not enforced. Both directions were measured on this branch rather than reasoned
+about: `problems: []` at exit 0 as committed, and `reviewed-but-ready` at exit 1
+with a dummy heading inserted.
+
+#### One more measurement, from writing the gate record above
+
+The `## Review` section on this record is itself enforced — repo-37 is not in
+`GRANDFATHERED` — and the first draft of it **minted two of the nine defects
+repo-39 documents**: a bare backticked `:188` that bound as a shorthand to the
+wrong file, and a bare `travel.ts:362` ambiguous across three tracked files. Both
+were caught by running `citations.mjs` over the section before committing it, and
+both are now qualified and anchored, 8 of 8 verified. Recorded because it is the
+strongest evidence on this branch that the two classes are not carelessness by
+long-dead reviewers: they are what writing a gate record naturally produces, and
+the only thing that stops them is running the checker on your own section before
+you commit it.
