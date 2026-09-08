@@ -663,7 +663,7 @@ kills the process tree"` was run: 1 passed, and the marker file contained
   And it went red for the predicted reason, not a new one: `gh run view
 34166115140 --log-failed` shows the same
   `citations.test.ts > --rev names which record it read…` assertion,
-  `expected '2 references in ..\..\..\..\..\RUNNER…'`, which repo-33 fixes on
+  `expected '2 references in ..\..\..\..\..\RUNNER…'`, which repo-36 fixes on
   its own branch. The prediction that this leg would be red on this pull request
   was written into #187's body before the run existed, so nobody would read the
   red as a regression.
@@ -707,6 +707,7 @@ kills the process tree"` was run: 1 passed, and the marker file contained
   — including two quoted artifacts that would become false if edited:
   `node scripts/next-id.mjs repo` genuinely printed `next free: repo-33`, and the
   commit subject quoted in the Review block genuinely ends `(repo-33)`. Only
-  present-tense pointers were renumbered, here and in repo-32's Build section.
+  present-tense pointers were renumbered: the entry above naming the ticket that
+  fixes the red assertion, and repo-32's Build section.
   A reader hitting `repo-33` above should read it as "the ticket now called
   repo-36", never as the peer's ADR-004 ticket.
