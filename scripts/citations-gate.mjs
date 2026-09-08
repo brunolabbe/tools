@@ -292,7 +292,6 @@ export const GRANDFATHERED = new Map([
   ["tools/downloader/docs/work/dl-44-persist-the-thumbnail-beside-the-file.md", 4],
   ["tools/downloader/docs/work/dl-45-keep-the-failover-mirrors.md", 23],
   ["tools/downloader/docs/work/dl-46-rate-limit-the-probe-stage-channel.md", 10],
-  ["tools/planner/docs/work/pl-10-plan-view-and-provenance.md", 17],
   ["tools/planner/docs/work/pl-25-grounding-cache.md", 23],
   ["tools/planner/docs/work/pl-28-valhalla-adapter.md", 38],
   ["tools/planner/docs/work/pl-32-vite-config-test.md", 22],
