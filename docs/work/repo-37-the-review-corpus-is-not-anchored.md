@@ -20,7 +20,7 @@ repo-29 built the gate and did not pay the debt. That was the owner's answer —
 the mechanism was the deliverable — but the debt has to have a home or the answer
 evaporates into a comment in a script. This is the home.
 
-`scripts/citations-gate.mjs:244 "const FAILING = new Set"` enforces anchors on
+`scripts/citations-gate.mjs:258 "const FAILING = new Set"` enforces anchors on
 every work record's `## Review` section. **59 of the 63 records that have such a
 section are exempted by name**, each with the number of failing references it is
 allowed to hold. Measured on repo-29's branch:
@@ -92,6 +92,32 @@ run of ids — and for each slice:
   bookkeeping for you.
 - Say in the Log what you could not anchor and why, rather than picking a
   fragment to satisfy yourself.
+
+**Do not grep the checker's output for a state name.** Two of its six
+per-citation labels are not their state: `unresolvable` prints as `FAIL` and
+`verified` as `ok`. A sweep filtering on `MOVED|UNRESOLVABLE` silently drops
+every unresolvable citation and prints a smaller number that looks like an
+answer — which is how repo-29's own gate under-counted this corpus by ten
+citations across two records. Grep the marks, or read the summary line, which
+names every state. `citations-gate.mjs` prints state names instead, so the two
+tools do not agree on labels and a filter written for one is wrong for the
+other.
+
+**A second known instance, and it is the wrong-file shorthand class rather than
+the weak-anchor one.** `repo-6`'s record writes two bare shorthands — a line number in backticks with
+no filename, twice — in a paragraph about `scripts/status.mjs` — but the nearest qualified
+citation above them names `.github/workflows/ci.yml`, so both bind to the
+workflow. They were `unchecked` for as long as that file was shorter than 401
+lines, which read as loud enough. repo-29's branch took `ci.yml` past 414 lines
+and **both went quiet**: the first now resolves to an `echo` inside a shell block
+and reports `unanchored`, which is indistinguishable from a citation nobody has
+got round to anchoring. (Their coordinates are described rather than quoted; a
+backticked bare number is itself a shorthand, so writing them here would mint two
+more of exactly the defect.) Qualifying them is not mechanical — the symbols the
+record names (`const repoRoot = DEFAULT_ROOT`, the `run()` helper) are not in
+`status.mjs` today, so somebody has to decide what a merged record's dated claim
+should point at, which is this ticket's judgement and not a repoint. `repo-6`
+carries no `## Review` section, so no gate will ever raise it.
 
 **One known instance outside this scope, recorded here so it is not lost.**
 `.claude/skills/orchestrate-tickets/SKILL.md:115 "model: sonnet"` anchors on a

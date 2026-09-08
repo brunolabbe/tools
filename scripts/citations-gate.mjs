@@ -76,7 +76,13 @@
  * repo's tooling answers without a build step.
  *
  * Usage:
- *   node scripts/citations-gate.mjs
+ *   node scripts/citations-gate.mjs [--against <ref>]
+ *
+ * `--against` is the ratchet's memory: it compares this tree's `GRANDFATHERED`
+ * with the one at `ref` and fails on any entry whose number went up, an absent
+ * entry counting as zero. Without it this reads only the current tree, which is
+ * the right default for a local run and is exactly why an accurate number could
+ * silence a regression until the owner asked for this.
  */
 
 import { execFileSync } from "node:child_process";
@@ -140,38 +146,46 @@ export const SCOPE = {
  * failure is already happening and is better loud than silent. repo-29's Log
  * carries the decision and the measurement behind it.
  *
- * ## What the ratchet does not defend against
+ * ## What the ratchet does not defend against on its own
  *
- * Stated because an earlier draft of this docblock implied it defended against
- * all of it.
+ * Stated because an earlier draft of this docblock claimed more than it had.
  *
- * **A number that is exactly right is always silent, so a deliberate silencer
- * still gets through.** Reproduced by repo-29's gate, three runs on one record:
+ * **A number that is exactly right is silent to `gate` alone**, and that is what
+ * an entry *means* rather than a bug in it. Reproduced by repo-29's gate, three
+ * runs on one record:
  *
  *   A. break a citation in a passing record and add that record here at its
- *      exact new count — `3 enforced, 0 failing`, **exit 0**, and silent for
- *      ever after;
+ *      exact new count — `3 enforced, 0 failing`, **exit 0**;
  *   B. break a second citation in it, entry untouched — `WORSE … 2 failing, and
  *      its GRANDFATHERED entry allows 1`, **exit 1**;
  *   C. raise the entry from 1 to 2 in the same change — **exit 0**, absorbed.
  *
- * B is the ratchet working. A and C are the residual, and it cannot be closed
- * here: this reads the checkout and never the history — `ci.yml`'s `check` job
- * takes a depth-1 clone, so there is no previous value of a number to compare
- * against. **What the count buys is not a machine guarantee but a legible diff**:
- * silencing a record used to be one appended path and is now a number somebody
- * has to write, or an existing number somebody has to raise, in a file whose
- * whole purpose a reviewer knows. It defends against carelessness — including a
- * lazy round buffer, which `STALE` catches on the next run — and it does not
- * defend against intent.
+ * B is the in-tree ratchet working. **A and C are what `compareAgainst` is
+ * for**, and both now fail: `RAISED … its GRANDFATHERED entry went from 0 to 1`
+ * and `from 4 to 5`, exit 1, because an entry's previous value is a fact about
+ * the base branch and nothing in the current tree can supply it. The owner chose
+ * that over a per-entry justification string on the reasoning that anyone
+ * willing to paste a number will also write a sentence, and accepted its cost
+ * knowingly: **a legitimate increase now has to be argued for in review instead
+ * of landing quietly.** There is deliberately no escape hatch for one.
  *
- * Whether to go further is an open question in repo-29's Log, not a gap somebody
- * forgot: a per-entry justification, or a history-aware check in a job that
- * fetches more than one commit, are both real options with real costs. The
- * second is not hypothetical here — this workflow's `changes` job already takes
- * `fetch-depth: 0` for exactly that reason, and says so — but it is a different
- * job, and moving this step into one that fetches a history is a change to when
- * the gate runs and not only to what it checks.
+ * ## What is left, which is smaller and still real
+ *
+ * - **This branch's own 59 entries are not covered**, and cannot be: the commit
+ *   they are compared against has no copy of this file, so the first run reports
+ *   `No history compared` and passes. That is the bootstrap, it is printed
+ *   rather than assumed, and it happens exactly once — but it means the initial
+ *   list is only as good as the review that read it.
+ * - **A push straight to `main` compares `main` with itself and finds nothing.**
+ *   Pushing to `main` is denied and this repo squash-merges, so the pull request
+ *   run is the gate; a direct push would be outside more rules than this one.
+ * - **A raise that survives review on the base branch is inherited as
+ *   legitimate** by every branch cut afterwards. That is the intended shape —
+ *   the check moves the decision to a human, it does not make it — and it is why
+ *   the failure message says to repair the citations rather than the number.
+ * - **`--against` is not passed by a local run**, which says `No history
+ *   compared` on stdout. Silence there would be the worst of both, so it is
+ *   stated on every run, clean ones included.
  *
  * **Adding to it is not the way past a red gate.** A new `## Review` section
  * comes with anchors; that is what `.claude/skills/review-ticket/SKILL.md` now
@@ -242,6 +256,118 @@ export const GRANDFATHERED = new Map([
 
 /** The states that fail this gate. `unanchored` is here; that is the whole point. */
 const FAILING = new Set(["unanchored", "moved", "unresolvable"]);
+
+/** This file, as git names it — the thing `--against` reads an older copy of. */
+export const SELF = "scripts/citations-gate.mjs";
+
+/**
+ * The `GRANDFATHERED` entries as a source file spells them.
+ *
+ * **Parsed textually rather than imported, and that is not laziness.** The copy
+ * being compared against is a git blob from another commit; importing it would
+ * mean writing it somewhere and resolving its own `./citations.mjs` import
+ * against that location, which either pollutes `scripts/` with a file the linter
+ * and formatter would pick up, or fails outright from a temp directory. A regex
+ * over a literal this file also owns is the smaller risk, and this function is
+ * pinned against the live constant by a test so the two cannot drift.
+ *
+ * Returns `null` when the file carries no `GRANDFATHERED` block at all, which is
+ * a real state rather than an error: it is what every commit before this gate
+ * existed looks like.
+ *
+ * @param {string} source
+ * @returns {Map<string, number> | null}
+ */
+export function parseGrandfathered(source) {
+  const block = /export const GRANDFATHERED = new Map\(\[([\s\S]*?)\n\]\);/.exec(source);
+  if (block === null) return null;
+  /** @type {Map<string, number>} */
+  const out = new Map();
+  for (const entry of block[1].matchAll(/\[\s*"([^"]+)"\s*,\s*(\d+)\s*\]/g)) {
+    out.set(entry[1], Number(entry[2]));
+  }
+  return out;
+}
+
+/**
+ * What this tree's `GRANDFATHERED` allows that `ref`'s did not.
+ *
+ * **This is the memory the ratchet does not otherwise have, and without it the
+ * ratchet is silent against anyone willing to type an accurate number.** A count
+ * that exactly matches a record's failures is excused by design — that is what
+ * makes an entry mean "this much inherited debt" — so a citation broken in the
+ * same change that adds the record at its new count, or that raises an existing
+ * record's number by one, passes at exit 0 and goes on passing. Both were
+ * reproduced against the live corpus before this was written. Neither is
+ * reachable from the current tree alone; both are obvious the moment the
+ * previous value of the number is in hand.
+ *
+ * **An addition is an increase.** A record absent from the base is allowed 0
+ * there, so appending it at any count is caught by the same comparison rather
+ * than by a rule of its own. That is the norm this file already stated in prose
+ * — adding to the list is not the way past a red gate — finally enforced.
+ *
+ * **Lowering a number, or deleting an entry, is always allowed**, because that
+ * is the ratchet turning the way it is meant to.
+ *
+ * Two outcomes are reported rather than swallowed and are not failures: a ref
+ * whose tree has no copy of this file — every commit before this gate landed, so
+ * the branch that introduces it has nothing to compare against — and no ref at
+ * all, which is the ordinary local run.
+ *
+ * A ref that does not resolve **is** an error. Treating an unfetched ref as
+ * "nothing to compare" is how this check would report success having compared
+ * nothing, and in CI it means a shallow clone rather than a typo.
+ *
+ * @param {string} repo
+ * @param {string} ref
+ * @param {Map<string, number>} current
+ */
+export function compareAgainst(repo, ref, current = GRANDFATHERED) {
+  const git = (...args) =>
+    execFileSync("git", ["-C", repo, ...args], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+
+  try {
+    git("rev-parse", "--verify", "--quiet", `${ref}^{commit}`);
+  } catch {
+    throw new Error(
+      `--against ${ref}: no such commit. In CI that means the checkout was shallow — this\n` +
+        `needs \`fetch-depth: 0\`, which ci.yml's changes job already sets and check now does too.`,
+    );
+  }
+
+  let source;
+  try {
+    // stderr ignored on purpose: git's own "exists on disk, but not in <ref>" is
+    // the ordinary bootstrap case here, and printing it beside this run's own
+    // explanation of the same thing reads as an error when it is not one.
+    source = execFileSync("git", ["-C", repo, "show", `${ref}:${SELF}`], {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return {
+      skipped: `${ref} has no ${SELF}, so there is no earlier list to compare against`,
+      raised: [],
+    };
+  }
+
+  const base = parseGrandfathered(source);
+  if (base === null) {
+    throw new Error(
+      `--against ${ref}: ${SELF} exists there but carries no GRANDFATHERED block this can read.\n` +
+        `Rather than assume it was empty — which would report every entry as new — this stops.`,
+    );
+  }
+
+  const raised = [];
+  for (const [record, allowed] of current) {
+    const was = base.get(record) ?? 0;
+    if (allowed > was) raised.push({ record, was, now: allowed });
+  }
+  return { skipped: null, raised };
+}
 
 /**
  * Every record the scope names, from the index rather than the filesystem, so
@@ -404,15 +530,30 @@ const countLine = (counts) =>
     .map((state) => `${counts[state]} ${state}`)
     .join(", ");
 
+const USAGE = "usage: node scripts/citations-gate.mjs [--against <ref>]";
+
 function main() {
-  if (process.argv.length > 2) {
-    process.stderr.write("usage: node scripts/citations-gate.mjs\n");
-    process.exitCode = 1;
-    return;
+  const argv = process.argv.slice(2);
+  let against = null;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] !== "--against") {
+      process.stderr.write(`unknown argument ${argv[i]}\n${USAGE}\n`);
+      process.exitCode = 1;
+      return;
+    }
+    // A flag that takes a value must consume one, or it swallows nothing and
+    // reports success having compared against undefined — repo-14, one flag over.
+    against = argv[++i];
+    if (against === undefined) {
+      process.stderr.write(`--against needs a value\n${USAGE}\n`);
+      process.exitCode = 1;
+      return;
+    }
   }
 
   const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   const { inScope, failed, excused, regressed, staleEntries, debt } = gate(repo);
+  const history = against === null ? null : compareAgainst(repo, against, GRANDFATHERED);
 
   const scope = SCOPE.section === null ? "every citation" : `the "${SCOPE.section}" section`;
   process.stdout.write(
@@ -446,13 +587,38 @@ function main() {
     process.stdout.write(`  STALE ${entry.record} — ${entry.why}\n`);
   }
 
+  for (const entry of history?.raised ?? []) {
+    process.stdout.write(
+      `  RAISED ${entry.record} — its GRANDFATHERED entry went from ${entry.was} to ${entry.now}` +
+        ` against ${against}\n`,
+    );
+  }
+
   const enforced = inScope.length - excused.length - regressed.length;
   process.stdout.write(
     `\n${enforced} enforced, ${failed.length + regressed.length} failing; ` +
       `${excused.length} grandfathered, holding ${countLine(debt) || "nothing"}.\n`,
   );
+  // Said on every run, including the clean ones. A comparison that quietly did
+  // not happen is the one thing worse than not having it: the line below is how
+  // a CI log distinguishes "nothing went up" from "nothing was checked".
+  process.stdout.write(
+    history === null
+      ? `No history compared — pass --against <ref> to check the list only grew smaller.\n`
+      : history.skipped !== null
+        ? `No history compared — ${history.skipped}.\n`
+        : `${GRANDFATHERED.size} entr(y/ies) compared against ${against}: ` +
+          `${history.raised.length} raised.\n`,
+  );
 
-  if (failed.length === 0 && regressed.length === 0 && staleEntries.length === 0) return;
+  if (
+    failed.length === 0 &&
+    regressed.length === 0 &&
+    staleEntries.length === 0 &&
+    (history?.raised.length ?? 0) === 0
+  ) {
+    return;
+  }
 
   const advice = [];
   if (failed.length > 0) {
@@ -479,6 +645,15 @@ function main() {
         `passes, or the scope no longer reaches it, or it now holds less debt than the number claims.\n` +
         `Delete or tighten each. A waiver nobody has to keep true is a rubber stamp — the same rule\n` +
         `citations.mjs applies to an evidence declaration that excuses a citation which now passes.`,
+    );
+  }
+  if ((history?.raised.length ?? 0) > 0) {
+    advice.push(
+      `${history.raised.length} GRANDFATHERED entr(y/ies) allow more than they did at ${against}.\n` +
+        `An entry only ever goes down. Going up means a record got worse and the number was moved to\n` +
+        `match it, or a record was appended to silence a break in it — the two ways a count that is\n` +
+        `accurate can still hide a regression, and the reason this comparison exists. Repair the\n` +
+        `citations instead; the anchor on each one says where it went.`,
     );
   }
   process.stderr.write(`\n${advice.join("\n\n")}\n`);

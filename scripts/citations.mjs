@@ -1376,6 +1376,17 @@ function main() {
     // `--require-anchors` made that conditionally false and nothing re-read it,
     // which is this branch's own thesis turning up inside the file arguing it.)
     // `unanchored` sets the width; the rest are padded.
+    //
+    // **Two of these six labels are not their state's name**, and that has
+    // caught a reader: `unresolvable` prints as `FAIL` and `verified` as `ok`,
+    // so grepping this output for a state name silently drops the worst class
+    // of all. It happened during repo-29's gate — a sweep counting
+    // `^  (MOVED|UNRESOLVABLE)` reported one record with failures where there
+    // were four, and read as a clean result because the number it printed was
+    // confident. Grep the marks, not the states, or read the summary line, which
+    // does name every state. `citations-gate.mjs` prints the state name instead,
+    // which is the right choice there and one more reason not to grep across the
+    // two.
     const mark = {
       verified: "ok",
       moved: "MOVED",

@@ -268,7 +268,7 @@ cannot be taken first.**
 - The step belongs in the `check` job, which is filtered by nothing and so sees a
   markdown-only change, beside the board gate that is already there:
 
-  `.github/workflows/ci.yml:115` "node scripts/status.mjs --json"
+  `.github/workflows/ci.yml:129` "node scripts/status.mjs --json"
 
 ### D. Enforce where a citation carries a verdict — chosen, as the first slice
 
@@ -925,7 +925,7 @@ unresolvable, 7 unchecked, 0 evidence — of 19 references`. The renumber did no
 
   - `scripts/citations-gate.mjs` runs `citations.mjs`'s checks with
     `--require-anchors` over a _set_ of records. **The scope is data, not
-    logic** — `scripts/citations-gate.mjs:114 "export const SCOPE"` holds the
+    logic** — `scripts/citations-gate.mjs:120 "export const SCOPE"` holds the
     pathspecs and the section name, so option C is `section: null` and no other
     line changes. That is the "shape it so C can widen it" instruction taken
     literally: there is no rule about `## Review` anywhere in the mechanism.
@@ -933,7 +933,7 @@ unresolvable, 7 unchecked, 0 evidence — of 19 references`. The renumber did no
     edit to a constant rather than to YAML, and so the loop is testable. 13 tests
     in `scripts/test/citations-gate.test.ts`.
   - One CI step in the `check` job, beside repo-21's:
-    `.github/workflows/ci.yml:158 "node scripts/citations-gate.mjs"`.
+    `.github/workflows/ci.yml:190 "node scripts/citations-gate.mjs --against"`.
   - A record with **no** `## Review` section is out of scope rather than an
     error, which is the one place this deliberately disagrees with
     `citations.mjs --section`. That flag refuses a name matching nothing for a
@@ -1005,7 +1005,7 @@ grandfathered, holding 47 unresolvable, 49 moved, 639 unanchored` at exit 0 on
   not by the checker, which is precisely what `Done when` 3 forbids: an anchor
   occurring on more than a handful of lines verifies nothing while reporting that
   it did. Repointed to
-  `.github/workflows/ci.yml:294 "&& ', informational' || ''"`, a fragment that
+  `.github/workflows/ci.yml:326 "&& ', informational' || ''"`, a fragment that
   occurs once. **The sweep described above would have refused the old anchor**,
   which is the one point in its favour worth carrying to option B.
 
@@ -1405,3 +1405,153 @@ and its GRANDFATHERED entry allows 1`, **exit 1**. This is the ratchet
   summary. That is deliberate and consistent with how a stale evidence
   declaration is reported, but a reader who greps the summary line for a total
   will be short by exactly the indistinct count.
+
+- **2026-09-08 — one more trap, found in the gate's own verification rather than
+  in the code under review, and it is the ticket's thesis at one more remove.**
+  Gate 2 corroborated the no-regressions claim with a method better than either
+  of the builder's: grep the whole corpus for citations naming the files this
+  branch moved, then check each of those records. It reported one record with
+  breaks. Re-run here it gives four — `repo-18` 26, `repo-1` 8, `repo-29` 5,
+  `repo-21` 2 — and all four are pre-existing, so the conclusion held and the
+  count did not.
+
+  **The cause is a legibility trap in `citations.mjs`'s own output, and it is
+  now commented where a grepper hits it.** Two of the six per-citation labels are
+  not their state's name: `unresolvable` prints as **`FAIL`** and `verified` as
+  **`ok`**. A sweep grepping `^ (MOVED|UNRESOLVABLE)` therefore drops every
+  unresolvable citation — the worst class — and prints a smaller number with no
+  indication anything was missed. That is the same shape as the defect this
+  whole ticket describes: a check that reports confidently while a class of
+  failure is invisible to it, one layer up from a coordinate.
+
+  **`citations-gate.mjs` prints the state name for the same fact**, so the two
+  tools label one thing two ways. Left as is — upper case meaning "always a
+  failure" is repo-18's deliberate design and the gate's state names are the
+  right choice in a per-record listing — but the mismatch is now stated in both
+  places rather than discoverable only by being caught by it.
+
+  **Where this leaves the no-regressions claim: three independent methods now
+  agree**, and the third is the reviewer's with its filter corrected. Every
+  record carrying breaks carries exactly as many as it did at `b384033`, checked
+  per record rather than per citation, because the per-citation key changes when
+  a coordinate is repointed and cannot see a repoint that is wrong.
+
+- **2026-09-08 — the owner chose option C, the history-aware check, over the
+  justification string this branch and its gate both recommended.** Built. The
+  reasoning against B is the one both of us had already written down without
+  following it to its conclusion: **B raises the effort of silencing without
+  closing it**, and anyone willing to read an error message and paste an accurate
+  number will also write a sentence. C is the only option of the four that closes
+  both reproduced variants, because it supplies the one thing the gate lacked —
+  the previous value of a number.
+
+  **`--against <ref>` compares this tree's `GRANDFATHERED` with the copy at
+  `ref` and fails on any entry that allows more than it did, an absent entry
+  counting as zero.** So an addition is an increase, caught by the same
+  comparison rather than by a rule of its own — which is the norm the file
+  already stated in prose, finally enforced. Lowering a number or deleting an
+  entry is always allowed; that is the ratchet turning the right way.
+
+  **Watched failing first, both variants, with the output as it came.** Each was
+  run twice — without the flag, which is what shipped before this round, and with
+  it:
+
+  - **Variant A**, break a citation in the one passing record that carries a real
+    one and append it at its exact new count. Without history: **exit 0**, silent.
+    With history: `RAISED tools/planner/docs/work/pl-2-container-image.md — its
+GRANDFATHERED entry went from 0 to 1 against 68ee870`, then `60 entr(y/ies)
+compared against 68ee870: 1 raised.`, **exit 1**.
+  - **Variant C**, two real regressions in that record absorbed by appending it
+    at 2. Without history: `3 enforced, 0 failing; 60 grandfathered`, **exit 0**.
+    With history: `RAISED … went from 0 to 2`, **exit 1**.
+  - **Raising an existing entry**, `repo-31` from 4 to 5: `RAISED
+docs/work/repo-31-the-windows-leg-is-almost-all-red.md — its GRANDFATHERED
+entry went from 4 to 5 against 68ee870`, **exit 1**.
+
+  **And the negative controls, because a check that fires on everything is not a
+  check.** Lowering `repo-31` from 4 to 3 gives `0 raised` from the history
+  comparison — the `WORSE` it also prints is the in-tree jaw correctly saying the
+  record really does hold 4. Deleting an entry outright gives `58 entr(y/ies)
+compared against 68ee870: 0 raised.` A ref that does not resolve is an
+  **error**, not a skip: `--against no-such-ref: no such commit. In CI that means
+the checkout was shallow`, exit 1 — because reporting "nothing went up" after
+  comparing against nothing is the failure this whole ticket is about.
+
+  **The CI shape is the cheap one, and this is where the branch's own late
+  finding paid for itself.** `check` keeps its step and its position; only its
+  checkout gains `fetch-depth: 0`, which is **what the job fetches and not when
+  it runs**. The precedent was already in the same file — the `changes` job sets
+  it with a comment saying why — so this is an existing shape in a second job
+  rather than a new one. The step passes
+  `--against "origin/${{ github.base_ref || 'main' }}"`, so a pull request opened
+  against another branch is compared with _that_ branch and not with `main`,
+  which is the case `docs/01-TICKETS.md` warns about for a different reason.
+
+  **Two comments in `ci.yml` were made false by that one line and are fixed in
+  the same commit.** Both the `status.mjs` step and repo-21's citations step said
+  this job reads the checkout and not the history _because_ there is no
+  `fetch-depth` above. There is now. They now say they read the checkout **by
+  choice**, and that a board check consulting the log would be answering a
+  different question from the one repo-12 asked. Catching that was luck of the
+  kind this ticket exists to remove: the sentence was three lines above the line
+  that invalidated it.
+
+  **What is left after C, narrowed rather than deleted.** The disclosure the gate
+  was caught overclaiming once already is now smaller and still there:
+
+  - **This branch's own 59 entries are not covered and cannot be.** The commit
+    they would be compared against has no copy of the file, so the first run
+    prints `No history compared — origin/main has no scripts/citations-gate.mjs`
+    and passes. Printed rather than assumed, happens exactly once, and it means
+    the initial list is only as good as the review that reads it. **That is this
+    gate's own reviewer, on this branch.**
+  - A push straight to `main` compares `main` with itself. Denied and
+    squash-merged, so the pull request run is the gate.
+  - A raise that survives review on a base branch is inherited as legitimate
+    afterwards. Intended: the check moves the decision to a human rather than
+    making it, which is why the failure text says to repair the citations and not
+    the number.
+  - A local run passes no ref and says `No history compared` on stdout, on every
+    run including clean ones, so a log can tell "nothing went up" from "nothing
+    was checked".
+
+  **The pinning test was updated rather than left to disagree with itself.** It
+  asserted the residual existed; it now asserts what `gate` alone still excuses
+  and is named for that, sitting immediately above the tests for the check that
+  covers it. Nine more tests: the parser against the live constant, both
+  variants, the two ratchet-down directions, the bootstrap, the unresolvable ref,
+  an unreadable base list, and the missing flag value. 28 in that file, 284 in
+  the `repo` project.
+
+  **One thing that could not be measured here and is named as unmeasured.** There
+  is no YAML parser in this worktree and no network to fetch one, so the workflow
+  change is **not** machine-validated. What was checked instead: the new
+  `with:`/`fetch-depth: 0` block is byte-identical in indentation to the
+  `changes` job's existing one, compared with `cat -A`. A malformed workflow
+  fails on the first push, loudly, which is the cheap direction — but it is not
+  the same as having parsed it.
+
+  **One citation this branch made _quieter_, which its own check caught and which
+  is worth more than the eighteen it repointed.** `repo-6` writes two bare
+  shorthands — a backticked line number with no filename — in a paragraph about
+  `scripts/status.mjs`; the nearest qualified citation above them names
+  `.github/workflows/ci.yml`, so both bind to the workflow — repo-25's wrong-file inheritance, live on `main`. While
+  `ci.yml` was shorter than 401 lines those were past its end and reported as
+  such. This branch's CI comments took the file to 414, so the first now
+  **resolves** — to an `echo` inside a shell block — and reports `unanchored`,
+  which looks exactly like a citation nobody has anchored yet. Their coordinates
+  are described rather than quoted, because a backticked bare number is a
+  shorthand: the first draft of this paragraph minted three fresh ones, one of
+  them twice, in the two pages explaining the defect.
+
+  Nothing failed: neither state is fatal, `repo-6` has no `## Review` section, and
+  no gate here will ever read it. It is recorded because the direction is the one
+  that matters — **a loud wrong citation became a quiet one, and the cause was
+  making an unrelated file longer.** Not repaired here: the symbols the record
+  names are no longer in `status.mjs`, so qualifying the shorthands means deciding
+  what a merged record's dated claim should point at, which is judgement over
+  somebody else's evidence and belongs to repo-37, where it is now written down.
+
+  It was found only because the branch's third check ranks `unchecked` above
+  `unanchored` and flagged a transition neither of the other two would call a
+  regression — the check disagreeing with its author, one more time.

@@ -89,6 +89,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The citation gate's `--against` reads this file's own
+          # `GRANDFATHERED` list as it stood on the base branch, so this job
+          # needs a history where every other check here needs only the
+          # checkout. It is the same reason the `changes` job below sets it, and
+          # it changes what this job fetches rather than when it runs — the
+          # cheaper of the two ways to give the gate a memory, and the reason
+          # the step stays here instead of moving into a job that already had
+          # one.
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -101,10 +111,14 @@ jobs:
       # ticket still `ready` with a gate record already on it. Nothing else in
       # CI reads them.
       #
-      # **It reads the checkout, not the history.** There is no `fetch-depth`
-      # above, so this job gets a depth-1 clone and any check written against
-      # `git log` would pass here by seeing nothing — which is why repo-12's
-      # check reads the ticket's own body instead of its commits.
+      # **It reads the checkout, not the history**, which is why repo-12's check
+      # reads the ticket's own body rather than its commits. That used to be
+      # forced — this job took a depth-1 clone, so a check written against
+      # `git log` would have passed by seeing nothing. It is now a choice: the
+      # citation gate below needs the base branch's copy of one file, so the
+      # checkout above fetches a history and any step here *could* read one. This
+      # one still does not, and should not; a board check that consulted the log
+      # would be answering a different question from the one repo-12 asked.
       #
       # This lived in a `status.yml` of its own for exactly one reason: `ci.yml`
       # skipped markdown, so the pull requests whose frontmatter needed parsing
@@ -130,9 +144,10 @@ jobs:
       # this is a separate ticket, not a free extension.
       #
       # Like `status.mjs` above it, this reads the checkout rather than the
-      # history, so it is safe in this job's depth-1 clone — and like it, it needs
-      # `check` to be filtered by nothing, because the change that breaks it is
-      # usually a markdown-only one.
+      # history — by choice now rather than by necessity, since the checkout
+      # fetches one for the gate below — and like it, it needs `check` to be
+      # filtered by nothing, because the change that breaks it is usually a
+      # markdown-only one.
       - run: node scripts/citations.mjs .claude/skills/orchestrate-tickets/SKILL.md --require-anchors
       # The same check over the work records, which is the corpus the one above
       # deliberately does not reach. Scoped to each record's `## Review` section:
@@ -155,7 +170,24 @@ jobs:
       # Same depth-1 caveat as the two steps above: it reads the checkout, never
       # the history, and it needs `check` to stay filtered by nothing, because
       # the change that breaks it is a markdown-only one by construction.
-      - run: node scripts/citations-gate.mjs
+      #
+      # `--against` is the half that cannot be derived from the checkout. The
+      # `GRANDFATHERED` list is a ratchet, and a ratchet with no memory is
+      # silent against an accurate number: breaking a citation and appending
+      # its record at the new count, or raising an existing record's number to
+      # match a fresh break, both pass at exit 0 from the current tree alone.
+      # Both were reproduced on this corpus (repo-29). Comparing the list with
+      # the base branch's copy is what closes them, and the cost — a legitimate
+      # increase now has to be argued for in review rather than landing quietly
+      # — is the point of the check and was accepted as such.
+      #
+      # `github.base_ref` is the pull request's own base, so a branch opened
+      # against another branch is compared with *that* one rather than with
+      # `main`; it is empty for a push, a schedule and a dispatch, where `main`
+      # is right. On a push to `main` this compares `main` with itself and finds
+      # nothing, which is correct rather than a gap: the pull request run is the
+      # gate, and pushing straight to `main` is denied.
+      - run: node scripts/citations-gate.mjs --against "origin/${{ github.base_ref || 'main' }}"
 
   # Which files this change actually touches, because **Actions has no per-job
   # `paths` filter** — `paths-ignore` gates the whole workflow, so the only way

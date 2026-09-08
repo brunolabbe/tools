@@ -4,7 +4,16 @@ import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
 import { candidateFiles, makeReader, makeResolver } from "../citations.mjs";
-import { checkRecord, findRecords, gate, GRANDFATHERED, SCOPE } from "../citations-gate.mjs";
+import {
+  checkRecord,
+  compareAgainst,
+  findRecords,
+  gate,
+  GRANDFATHERED,
+  parseGrandfathered,
+  SCOPE,
+  SELF,
+} from "../citations-gate.mjs";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(REPO, "scripts", "citations-gate.mjs");
@@ -304,19 +313,13 @@ test("no grandfathered entry allows zero failures", () => {
 });
 
 /**
- * The residual, pinned so it cannot be rediscovered as a surprise or removed as
- * a bug. `STALE` fires on `failing < allowed` and `WORSE` on `failing >
- * allowed`; an exact match is excused, which means a number that is exactly
- * right silences a fresh regression permanently.
- *
- * That is not closable here — this reads the checkout and never the history, and
- * `ci.yml`'s `check` job takes a depth-1 clone, so there is no previous value of
- * a number to compare against. What the count buys is a legible diff rather than
- * a machine guarantee, and repo-29's Log carries the open question of whether to
- * spend anything further on it. The assertion below is that disclosure in
- * executable form.
+ * `gate` alone still cannot see an exact-match entry, and that is a property of
+ * the current tree rather than a gap: a count that matches a record's failures
+ * is what an entry *means*. The check that catches it is `compareAgainst`, and
+ * the two tests are deliberately adjacent so nobody reads this one as the whole
+ * answer — an earlier round of this ticket shipped exactly that misreading.
  */
-test("an entry whose number exactly matches the debt is silent, which is the residual", () => {
+test("gate alone excuses an entry whose number exactly matches the debt", () => {
   const { dir, cleanup } = withRepo({ "docs/work/b.md": BARE });
   try {
     const scope = { records: ["docs/work/*.md"], section: "Review" };
@@ -328,6 +331,187 @@ test("an entry whose number exactly matches the debt is silent, which is the res
     // One either side of it, so the test says where the silence begins and ends.
     expect(gate(dir, scope, new Map([["docs/work/b.md", 0]])).regressed).toHaveLength(1);
     expect(gate(dir, scope, new Map([["docs/work/b.md", 2]])).staleEntries).toHaveLength(1);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * The parser has to agree with the constant it is a parser for, or the history
+ * comparison is checking a fiction. This is the one assertion that pins a regex
+ * over source text to the value that source text evaluates to.
+ */
+test("parseGrandfathered reproduces this file's own live constant", () => {
+  const source = fs.readFileSync(path.join(REPO, SELF), "utf8");
+  expect(parseGrandfathered(source)).toEqual(GRANDFATHERED);
+});
+
+test("a file with no GRANDFATHERED block parses as null rather than as empty", () => {
+  expect(parseGrandfathered("export const SOMETHING = 1;\n")).toBeNull();
+});
+
+/**
+ * A throwaway repository with two commits, so `compareAgainst` has a real base
+ * to read this file's older copy out of.
+ *
+ * The fixture writes a *stand-in* for `citations-gate.mjs` at the path `SELF`
+ * names — the comparison reads a `GRANDFATHERED` literal out of a blob and
+ * nothing else, so a file carrying only that literal exercises exactly what is
+ * under test without dragging the real module's imports into a temp tree.
+ */
+function withHistory(before: string | null, after: string) {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-history-")));
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+    return result.stdout.trim();
+  };
+  const write = (body: string) => {
+    fs.mkdirSync(path.join(dir, path.dirname(SELF)), { recursive: true });
+    fs.writeFileSync(path.join(dir, SELF), body);
+  };
+
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "history@example.test");
+  git("config", "user.name", "history test");
+  if (before === null) fs.writeFileSync(path.join(dir, "placeholder"), "");
+  else write(before);
+  git("add", "-A");
+  git("commit", "-qm", "base");
+  const base = git("rev-parse", "HEAD");
+  write(after);
+  return { dir, base, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+const listing = (entries: [string, number][]) =>
+  `export const GRANDFATHERED = new Map([\n${entries
+    .map(([r, n]) => `  ["${r}", ${n}],`)
+    .join("\n")}\n]);\n`;
+
+/**
+ * Variant A of the two silencing routes repo-29 reproduced on the live corpus:
+ * break a citation in a passing record and append that record at its exact new
+ * count. Silent from the current tree; an increase from zero against the base.
+ */
+test("appending a record to the list is an increase from zero and is caught", () => {
+  const { dir, base, cleanup } = withHistory(
+    listing([["docs/work/a.md", 3]]),
+    listing([
+      ["docs/work/a.md", 3],
+      ["docs/work/b.md", 1],
+    ]),
+  );
+  try {
+    const result = compareAgainst(
+      dir,
+      base,
+      new Map([
+        ["docs/work/a.md", 3],
+        ["docs/work/b.md", 1],
+      ]),
+    );
+    expect(result.skipped).toBeNull();
+    expect(result.raised).toEqual([{ record: "docs/work/b.md", was: 0, now: 1 }]);
+  } finally {
+    cleanup();
+  }
+});
+
+/** Variant C: raise an existing entry to absorb a fresh regression. */
+test("raising an existing entry is caught", () => {
+  const { dir, base, cleanup } = withHistory(
+    listing([["docs/work/a.md", 3]]),
+    listing([["docs/work/a.md", 4]]),
+  );
+  try {
+    const result = compareAgainst(dir, base, new Map([["docs/work/a.md", 4]]));
+    expect(result.raised).toEqual([{ record: "docs/work/a.md", was: 3, now: 4 }]);
+  } finally {
+    cleanup();
+  }
+});
+
+/** The ratchet turning the way it is meant to must not fire. */
+test("lowering an entry, or dropping it, is not an increase", () => {
+  const { dir, base, cleanup } = withHistory(
+    listing([
+      ["docs/work/a.md", 3],
+      ["docs/work/b.md", 2],
+    ]),
+    listing([["docs/work/a.md", 1]]),
+  );
+  try {
+    expect(compareAgainst(dir, base, new Map([["docs/work/a.md", 1]])).raised).toEqual([]);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * The bootstrap case, and the reason it is not an escape hatch: it is reported,
+ * it is `skipped` rather than a silent pass, and it can only happen against a
+ * commit that predates this file — which after this branch merges is history.
+ */
+test("a base with no copy of this file is reported as skipped, not as clean", () => {
+  const { dir, base, cleanup } = withHistory(null, listing([["docs/work/a.md", 1]]));
+  try {
+    const result = compareAgainst(dir, base, new Map([["docs/work/a.md", 1]]));
+    expect(result.skipped).toMatch(/no scripts\/citations-gate\.mjs/);
+    expect(result.raised).toEqual([]);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * The one case that must never be quiet. A ref nobody fetched is a shallow
+ * clone, and answering "nothing went up" after comparing against nothing is the
+ * failure every refusal in `citations.mjs` exists to prevent.
+ */
+test("a ref that does not resolve is an error, never a skip", () => {
+  const { dir, base, cleanup } = withHistory(
+    listing([["docs/work/a.md", 1]]),
+    listing([["docs/work/a.md", 1]]),
+  );
+  try {
+    expect(base).toMatch(/^[0-9a-f]{40}$/);
+    expect(() => compareAgainst(dir, "no-such-ref", new Map())).toThrow(/no such commit/);
+  } finally {
+    cleanup();
+  }
+});
+
+/** A base that has the file but no readable list is an error for the same reason. */
+test("a base whose list cannot be read is an error rather than an assumed empty", () => {
+  const { dir, base, cleanup } = withHistory(
+    "export const NOTHING = 1;\n",
+    listing([["docs/work/a.md", 1]]),
+  );
+  try {
+    expect(() => compareAgainst(dir, base, new Map([["docs/work/a.md", 1]]))).toThrow(
+      /carries no GRANDFATHERED block/,
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test("the CLI rejects --against with no value", () => {
+  const result = spawnSync("node", [CLI, "--against"], { cwd: REPO, encoding: "utf8" });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toMatch(/--against needs a value/);
+});
+
+/**
+ * A run with no `--against` says so on stdout. A comparison that quietly did not
+ * happen is worse than not having one, because a CI log then cannot tell "nothing
+ * went up" from "nothing was checked".
+ */
+test("a run with no history says that no history was compared", () => {
+  const { dir, cleanup } = withRepo({ "docs/work/a.md": ANCHORED });
+  try {
+    const result = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
+    expect(result.stdout).toMatch(/No history compared/);
   } finally {
     cleanup();
   }
