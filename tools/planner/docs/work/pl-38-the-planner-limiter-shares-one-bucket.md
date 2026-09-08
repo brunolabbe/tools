@@ -139,7 +139,7 @@ scripts/citations.mjs` on this record now reports 0 moved.
   Pre-existing, out of this ticket's diff; reviewer offered it as optional
   ("decline freely") and the builder accepted the decline.
 - **low, escalated then repaired** ·
-  `pl-2-container-image.md:223` "rate-limiting" — `pl-2`'s Traps section
+  `pl-2-container-image.md:224` "rate-limiting" — `pl-2`'s Traps section
   still stated "No rate limiting and no `TRUST_PROXY`. `ApiConfig` has
   neither" as fact, both
   halves false since pl-16 and this ticket respectively. Raised as
@@ -338,3 +338,20 @@ Diagnostics were still running when it was reported and I have not verified it
 myself. Not settled here, not treated as true anywhere in this branch, and
 raised to the owner separately by the session that found it — noted so it is
 not lost.
+
+**2026-09-08 — PR #198's `check` job went red at `f1fd468` on one moved
+citation, caught by CI rather than by this branch's own verification.** The
+first ship reported `node scripts/citations.mjs` at exit 0 per file, which is
+looser than what CI actually runs — `citations-gate.mjs --against
+origin/main`, which enforces distinct anchors on every non-grandfathered
+record with no exception for one freshly written. This record's own edit to
+`pl-2-container-image.md` (the correction above) added a line ahead of the
+anchor it cites, shifting `pl-2-container-image.md:223` "rate-limiting" to
+`:224` — a citation that was correct the moment it was written and wrong by
+the time the commit landed, because the same commit moved what it pointed at.
+Repointed to `:224`; `node scripts/citations-gate.mjs` and `node
+scripts/citations-gate.mjs --against origin/main` both confirmed exit 0
+before pushing the fix. Second instance of this exact class in this batch —
+worth a citations.mjs pass on a record's own edits to itself, not only on
+citations into other files, whenever a commit both adds a `## Review` section
+and edits the file that section cites.
