@@ -189,33 +189,36 @@ export const SCOPE = {
  *   only the first is excused. The disclosure it replaces was correct for one
  *   day and is kept in repo-29's Log with the decision that reversed it.
  *
- *   **That probe asks about `SELF`, so renaming this file evades it**, and the
- *   evasion is one commit rather than two. Rename the script, repoint `SELF`,
- *   update `ci.yml`'s invocation, and set an entry to exactly the debt its
- *   record really holds: the probe then asks whether the base ever carried a
- *   path that genuinely never existed, answers no, and excuses the run. Found
- *   and reproduced by repo-29's fourth gate; reproduced again here before it was
- *   written down. **The inflated version is still caught** — an entry larger
- *   than the debt trips the in-tree `STALE` jaw, which reads no history at all —
- *   so it takes a rename *and* an exact count, which is the gate-2 residual and
- *   this one composing.
+ *   **Renaming this file used to evade that probe**, in one commit rather than
+ *   the deletion route's two: rename the script, repoint `SELF`, update
+ *   `ci.yml`'s invocation, and set an entry to exactly the debt its record
+ *   really holds, and the probe asked whether the base ever carried a path that
+ *   genuinely never existed, answered no, and excused the run. Found by
+ *   repo-29's fourth gate and reproduced end to end — through the attacker's own
+ *   renamed copy, invoked as CI invokes it — which reported `0 enforced, 0
+ *   failing` and `No history compared` while absorbing a second broken citation.
+ *   **`GATE_GLOB` is what closed it**, and the constant's own docblock says why a
+ *   path glob rather than a content probe.
  *
- *   Closing it means locating the base's list by content rather than by path,
- *   and the cost of that was measured rather than guessed: `git grep -l` for the
- *   list's own declaration over a whole ref runs in **38 ms** here, but returns
- *   **three** paths — this file, its test, which carries the same text in a
- *   fixture, and repo-29's own record, which quotes the search string while
- *   describing this measurement. So it needs a discriminator that neither a test
- *   fixture nor a ticket writing about it can accidentally satisfy, and scoping
- *   the search to `scripts/` merely moves the evasion to a rename out of
- *   `scripts/`. Left open on that basis, with the numbers in repo-29's Log
- *   rather than an estimate.
+ *   **The inflated version never needed it**: an entry larger than its record's
+ *   debt trips the in-tree `STALE` jaw, which reads no history at all. So the
+ *   silent route always required a rename *and* an exact count — the gate-2
+ *   residual composing with this one — and now requires editing `GATE_GLOB` too.
  *
- *   The count was **two** when first written here and three by the time it was
- *   committed, because the sentence recording it created the third match. That
- *   is not a footnote: a rule keyed on "exactly one file contains this string"
- *   is defeated by *writing about the rule*, which is a stronger argument
- *   against the naive form than the one it replaces.
+ *   The alternative considered and not taken was locating the base's list by
+ *   *content*, and it is recorded because the numbers are the argument: `git
+ *   grep -l` for the list's own declaration over a whole ref runs in **38 ms**
+ *   but returns **three** paths — this file, its test, which carries the same
+ *   text in a fixture, and repo-29's own record, which quotes the search string
+ *   while describing this measurement. That needs a discriminator neither a test
+ *   fixture nor a ticket writing about it can satisfy. The glob matches **one**
+ *   path in **2 ms** and neither of the other two.
+ *
+ *   The content count was **two** when first written here and three by the time
+ *   it was committed, because the sentence recording it created the third match.
+ *   That is not a footnote: a rule keyed on "exactly one file contains this
+ *   string" is defeated by *writing about the rule*, which is why the mechanism
+ *   above keys on a path instead.
  *
  *   **The founding 59 are not covered by any of that**, and no later check can
  *   retroactively cover them — they were written before the comparison existed.
@@ -315,6 +318,31 @@ const FAILING = new Set(["unanchored", "moved", "unresolvable"]);
 export const SELF = "scripts/citations-gate.mjs";
 
 /**
+ * Every path a gate file could plausibly live at, as a git pathspec.
+ *
+ * **The history probe uses this rather than `SELF`, and that is the whole of the
+ * rename defence.** Asking "did the base ever carry `SELF`" is defeated by
+ * renaming the file: the new path genuinely never existed there, so the answer
+ * is honestly no and the run takes the excused bootstrap path. Asking "did the
+ * base ever carry *a gate file*" is not, because the old name still matches.
+ *
+ * Measured before it was built rather than assumed, since a probe that matched
+ * too much would refuse every legitimate first run: this matches **one** path in
+ * the tree, in **2 ms**. It does not match `scripts/test/citations-gate.test.ts`,
+ * whose fixtures carry the same declaration text, nor repo-29's own record,
+ * which quotes it while describing the measurement — both of which a
+ * *content*-based probe does match, and which is why this is a path glob and not
+ * that.
+ *
+ * **It is a guardrail and not a boundary, in the same sense the repo's deny list
+ * is.** Someone renaming the file can edit this line too, and someone renaming
+ * it to a path outside the glob and editing this line evades the check — a
+ * bigger, stranger diff than the one it closes, and no in-tree constant can do
+ * better than make the diff louder.
+ */
+export const GATE_GLOB = "scripts/citations-gate*.mjs";
+
+/**
  * The `GRANDFATHERED` entries as a source file spells them.
  *
  * **Parsed textually rather than imported, and that is not laziness.** The copy
@@ -407,24 +435,30 @@ export function compareAgainst(repo, ref, current = GRANDFATHERED) {
     // commit before the branch that introduced it. Nothing to compare against,
     // reported and not fatal, and true exactly once per branch.
     //
-    // **Reset**: `ref` once had this file and no longer does. That reopens the
-    // bootstrap window — re-add the file on top with any numbers at all and the
-    // comparison finds no earlier list to object to. Reproduced in a scratch
-    // repository during repo-29's third gate: three commits, the middle one
-    // deleting this file, and `9999` sails through with zero objection. It needs
-    // a separate, prior, merged pull request that deletes the enforcement script
-    // — about the loudest diff a reviewer can be shown, and nothing like a quiet
-    // number in a 60-line Map — but "a human would probably notice" is what this
-    // gate exists to stop relying on.
+    // **Reset**: `ref` once had a gate file and no longer has one under the name
+    // this copy answers to. Two ways that happens and they are one refusal —
+    // deleting the file and re-adding it later, which repo-29's third gate
+    // reproduced with `9999` sailing through, and renaming it, which its fourth
+    // gate reproduced in a single commit. Both reopen the bootstrap window,
+    // where any number at all is accepted unchecked.
     //
-    // One `git log` separates them, and refusing the second is free.
-    const everExisted = git("log", "--oneline", "--max-count=1", ref, "--", SELF).trim() !== "";
+    // **The probe is `GATE_GLOB` and not `SELF`, which is what covers the
+    // rename**: a renamed file's own path honestly never existed at the base, so
+    // asking about it answers no; asking whether the base carried *a* gate file
+    // finds the old name. Deletion and rename are deliberately not told apart in
+    // the message — distinguishing them needs a second pattern in a second
+    // syntax, since `git ls-tree` does not honour this pathspec, and two
+    // spellings of one idea drifting apart is the defect this ticket is about.
+    // One `git log`, one refusal, both named.
+    const everExisted =
+      git("log", "--oneline", "--max-count=1", ref, "--", GATE_GLOB).trim() !== "";
     if (everExisted) {
       throw new Error(
-        `--against ${ref}: ${SELF} is missing there, but that branch's history has it —\n` +
-          `it was deleted rather than never added. Re-adding this file on top of a commit that\n` +
-          `dropped it would reopen the one window in which any GRANDFATHERED number is accepted\n` +
-          `unchecked, so this refuses instead. Restore the file on ${ref} first.`,
+        `--against ${ref}: no ${SELF} there, but that branch's history carried a file matching\n` +
+          `${GATE_GLOB} — so it was deleted, or this one has been renamed. Either reopens the one\n` +
+          `window in which any GRANDFATHERED number is accepted unchecked, so this refuses rather\n` +
+          `than excusing it. Restore the file on ${ref}, or land the rename in a change that has\n` +
+          `nothing else in it.`,
       );
     }
     // A shallow clone can answer the question above with "no history, so it
@@ -432,9 +466,9 @@ export function compareAgainst(repo, ref, current = GRANDFATHERED) {
     // exact failure this whole ticket is about. Refuse rather than guess.
     if (git("rev-parse", "--is-shallow-repository").trim() === "true") {
       throw new Error(
-        `--against ${ref}: ${SELF} is missing there and this clone is shallow, so whether it was\n` +
-          `ever present cannot be told from the history available. \`fetch-depth: 0\` is what makes\n` +
-          `that answerable.`,
+        `--against ${ref}: no ${SELF} there, and this clone is shallow — so whether a file\n` +
+          `matching ${GATE_GLOB} was ever present cannot be told from the history available.\n` +
+          `\`fetch-depth: 0\` is what makes that answerable.`,
       );
     }
     return {

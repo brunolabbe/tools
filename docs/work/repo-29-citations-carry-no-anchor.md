@@ -1775,3 +1775,64 @@ compared against 68ee870: 0 raised.`, exit 0. **That property — the legitimate
   reference counts. Every one has the same shape: a number or a sentence that
   described the tree accurately and then stopped, with nothing between it and a
   reader. That is the ticket, arriving in the ticket, for the fifth time.
+
+- **2026-09-08 — the rename bypass is closed, with a mechanism this branch had
+  not costed.** The owner chose a **path glob**, `scripts/citations-gate*.mjs`,
+  for the history probe — not the content probe this branch had priced and
+  declined. The two are different objects and the distinction is the whole
+  reason the answer was cheap: a content probe matches three paths and needs a
+  discriminator nobody has designed; a path glob anchored at the gate's own name
+  matches **one**, and matches neither the test fixture under `scripts/test/` nor
+  this record under `docs/work/`.
+
+  **Verified before building on it, because it arrived as a proposal and said so.**
+  `git ls-files -- 'scripts/citations-gate*.mjs'` → **1** path,
+  `scripts/citations-gate.mjs`, and zero matches against `test` or `docs`. The
+  history probe with that pathspec runs in **2 ms**, and against `origin/main` —
+  which never carried a gate — it is empty, which is the property the whole
+  closure depends on.
+
+  **Failed first, end to end, through the attacker's own copy rather than a
+  shim.** A scratch repository with a real `citations.mjs`, a real record holding
+  one unanchored citation, and a real gate module; then one commit that deletes
+  `scripts/citations-gate.mjs`, adds `scripts/citations-gate2.mjs` with `SELF`
+  repointed, breaks a second citation, and sets the entry to exactly the new
+  debt. Invoked as CI invokes it, `node scripts/citations-gate2.mjs --against
+
+<base>`:
+
+- **Before**, at `74c85be`: `0 enforced, 0 failing; 1 grandfathered, holding 2
+unanchored.` and `No history compared — … has no scripts/citations-gate2.mjs
+and never did`. **Exit 0.** The raise from 1 to 2 absorbed in silence.
+- **After**: `no scripts/citations-gate2.mjs there, but that branch's history
+carried a file matching scripts/citations-gate*.mjs — so it was deleted, or
+this one has been renamed.` **Exit 1.**
+
+**The three controls, all held.** A genuine first-ever bootstrap still passes —
+asserted for the third time on this branch because it is the property a
+closure here can most easily break, and this branch _is_ that commit:
+`origin/main has no scripts/citations-gate.mjs and never did`, exit 0. The
+gate-3 deletion attack stays caught. `--against 68ee870` stays at `59
+entr(y/ies) compared … 0 raised`, exit 0.
+
+**Deletion and rename share one message, deliberately.** Telling them apart
+needs a second pattern in a second syntax — `git ls-tree` does not honour this
+pathspec, checked rather than assumed — and two spellings of one idea drifting
+apart is the defect this ticket is about. One `git log`, one refusal, both
+named in the text.
+
+**What it does not do, stated because the paragraph it replaces was wrong the
+other way.** `GATE_GLOB` is a constant in the file it protects, so someone
+renaming the gate can edit it too, and a rename to a path outside the glob with
+the constant updated evades the check. That is a bigger and stranger diff than
+the one now closed, and no in-tree constant can do better than make a diff
+louder — the same sense in which this repo's deny list is documented as a
+guardrail rather than a boundary. The docblock says so where the constant is
+defined.
+
+**Two tests**, and the second is the one that matters for the next person:
+the rename refusal, written from the renamed file's point of view because that
+is the only side that can be built; and an assertion that the glob matches
+`SELF` **and nothing else in this repository**, which is what would fail loudly
+if anyone ever added `scripts/citations-gate-helpers.mjs` and quietly widened
+the probe. 32 in that file, 288 in the `repo` project.

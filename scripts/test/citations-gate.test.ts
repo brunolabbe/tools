@@ -8,6 +8,7 @@ import {
   checkRecord,
   compareAgainst,
   findRecords,
+  GATE_GLOB,
   gate,
   GRANDFATHERED,
   parseGrandfathered,
@@ -548,7 +549,12 @@ test("a base that once had this file and lost it is refused, not treated as a bo
       { record: "docs/work/a.md", was: 1, now: 9999 },
     ]);
     // Against the commit that dropped it, this must refuse rather than excuse.
-    expect(() => compareAgainst(dir, deleted, inflated)).toThrow(/deleted rather than never added/);
+    // Deletion and rename share one message on purpose — they are one refusal
+    // for one reason, and telling them apart would need a second pattern in a
+    // second syntax that could drift from the first.
+    expect(() => compareAgainst(dir, deleted, inflated)).toThrow(
+      /it was deleted, or this one has been renamed/,
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -595,6 +601,52 @@ test("a shallow clone is refused, because git log cannot answer there", () => {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+/**
+ * The rename, which is the same window as the deletion reached in one commit
+ * rather than two: rename the gate, repoint `SELF`, and the new path's history
+ * is honestly empty, so the probe used to answer "never existed" and excuse the
+ * run. Asking about `GATE_GLOB` instead is what closes it — the *old* name still
+ * matches.
+ *
+ * Written from the renamed file's point of view, which is the only one that can
+ * be built here: a base carrying a gate under a different matching name, and no
+ * `SELF` at all. That is exactly what the renamed copy sees when it looks back.
+ */
+test("a base carrying a gate under another matching name is a rename, not a bootstrap", () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-rename-")));
+  try {
+    gitIn(dir, "init", "-q", "-b", "main");
+    gitIn(dir, "config", "user.email", "rename@example.test");
+    gitIn(dir, "config", "user.name", "rename test");
+    fs.mkdirSync(path.join(dir, path.dirname(SELF)), { recursive: true });
+
+    // The base has a gate, under a name this copy does not answer to.
+    const older = path.join(path.dirname(SELF), "citations-gate-old.mjs");
+    expect(older).not.toBe(SELF);
+    fs.writeFileSync(path.join(dir, older), listing([["docs/work/a.md", 1]]));
+    gitIn(dir, "add", "-A");
+    gitIn(dir, "commit", "-qm", "a gate under its older name");
+    const base = gitIn(dir, "rev-parse", "HEAD");
+
+    expect(() => compareAgainst(dir, base, new Map([["docs/work/a.md", 2]]))).toThrow(
+      /has been renamed/,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/**
+ * The glob has to match this file and nothing else it could be confused with.
+ * A probe that matched the test fixture or a document quoting the declaration
+ * would refuse every legitimate first run — which is the failure mode a
+ * *content*-based probe has and this one does not.
+ */
+test("the glob matches this file, and not its test or a record that quotes it", () => {
+  const matched = findRecords(REPO, [GATE_GLOB]);
+  expect(matched).toEqual([SELF]);
 });
 
 test("the CLI rejects --against with no value", () => {
