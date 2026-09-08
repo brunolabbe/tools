@@ -3,7 +3,7 @@ id: pl-38
 tool: planner
 title: Behind a proxy the planner's rate limiter buckets every client together
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -77,10 +77,113 @@ costs real money — it stops being masked.
 
 1. The downloader's config comment is the argument in full.
 
-**The subnet is one setting written twice.** `TRUST_PROXY` names the CIDR that
-`compose.prod.yaml`'s `edge` network pins, and a mismatch silently reverts every
-limit to sharing one bucket — which is this ticket's own bug, reintroduced
-somewhere nothing is looking.
+**The subnet is one setting written three times, not two.** `TRUST_PROXY` names
+the CIDR that `compose.prod.yaml`'s `edge` network pins, and it is named again
+in `compose.planner.prod.yaml` once this ticket lands — a mismatch in any of
+the three silently reverts that tool's limit to sharing one bucket, which is
+this ticket's own bug, reintroduced somewhere nothing is looking. (Written as
+"twice" until the gate caught it; see the Review section.)
+
+## Review
+
+**Gate: PASS** — 2026-09-08 · `a5e31c7...bdfc10b` · built by Sonnet, gated by
+Opus, in its own worktree. Two rounds on the same branch — CONCERNS at
+`a457ce0`, PASS at `bdfc10b` after three repairs — recorded as one section
+rather than two, the way `pl-2`'s Review folds a found-and-fixed low into a
+single PASS. **Disclosure, as the owner requires:** this section is
+transcribed by the builder from the reviewer's own reports, across both
+rounds. Nothing in the reviewer's findings or dispositions was altered. What
+was changed in transcription: citations that named `a457ce0` evidence text no
+longer in the tree (the med's original comment, which was the defect) are
+repointed to the repaired line at `bdfc10b`, per the reviewer's own
+instruction, and the finding is described as raised-then-repaired rather than
+carrying two conflicting citations. Nothing was dropped from either report.
+
+| Done when                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Two clients behind the proxy get independent allowances, proved by a test that fails against `main`. | **proven** — `tools/planner/api/test/runs.test.ts:452` "expect(thirdA.statusCode).toBe(429)" (client A exhausts its own bucket) and `tools/planner/api/test/runs.test.ts:458` "expect(firstB.statusCode).toBe(202)" (client B unaffected). Fails against `main`: reviewer reproduced independently by stashing `config.ts`/`server.ts` back to `a5e31c7` — failed exactly at the second assertion, `expected 429 to be 202`. |
+| A client whose `X-Forwarded-For` arrives from outside the trusted CIDR cannot choose its own bucket. | **proven** — `tools/planner/api/test/runs.test.ts:497` "all three counted against the one real address" sits directly above the deciding assertion. Not vacuous: reviewer reproduced by setting that test's harness to `trustProxy: true` — the "obvious fix" the Traps section warns against — which failed it, `expected 429 to be 202`.                                                                                   |
+| `02-DEPLOYMENT.md` no longer tells an operator that this cannot be fixed.                            | **verified** — `docs/02-DEPLOYMENT.md:601` "Rate limiting is per-client the same way the downloader" replaces the old "no `TRUST_PROXY` to make it so" paragraph. Reviewer checked the arithmetic ("Three differences" now matches three bullets) and confirmed, from the merged compose config, that both `TRUST_PROXY` lines and the `edge` subnet are the identical string.                                               |
+
+Findings — 10 returned in the first round's defect hunt, 8 carried into this
+record, 2 dropped before write-up (reviewer's own count, not re-derived here):
+
+- **med** · `compose.prod.yaml:90` "change it here" — raised at `a457ce0`,
+  repaired at `bdfc10b`. The file's own comment said "one setting written
+  twice" (the `edge` subnet plus the downloader's `TRUST_PROXY`), and this
+  ticket's `compose.planner.prod.yaml` addition made it three without
+  updating the count. An operator resolving a subnet collision on a live host
+  by following that comment literally would fix two of three and silently
+  reintroduce this exact ticket's bug on the planner side — this ticket's own
+  Traps section, reproducing itself. Repaired: both compose files now say
+  three and cross-reference each other
+  (`compose.planner.prod.yaml:79` "named a third time"); the repair folds in
+  the malformed-vs-valid distinction from the declined low below, landed
+  where an operator resolving a collision will actually be standing.
+  Reviewer re-verified independently against `bdfc10b`.
+- **low, repaired** · this ticket's own citation had drifted: line 498 moved
+  to `tools/downloader/api/src/server.ts:506` "trustProxy: config.trustProxy"
+  (pre-existing staleness on `main`, not introduced by this branch — flagged
+  by the reviewer regardless because the file was open). Repointed; `node
+scripts/citations.mjs` on this record now reports 0 moved.
+- **low** · `tools/planner/docs/01-ARCHITECTURE.md:228` "CIDR the above" —
+  repaired. The Configuration table omitted `TRUST_PROXY` among 13 of the
+  tool's 22 env vars, not a rule violation on its own (several others were
+  already absent, `CORS_ORIGINS` included) but a judgement call the reviewer
+  flagged as the first place they would look. Added, beside
+  `RATE_LIMIT_RUNS_PER_MINUTE`.
+- **low, declined** · `02-DEPLOYMENT.md:221` "Rate limits silently" —
+  undersells the malformed-value case: reviewer measured that a malformed
+  `TRUST_PROXY` actually refuses the boot (`TypeError: invalid IP address:
+<x>`) rather than failing silently, only a valid-but-wrong value is silent.
+  Pre-existing, out of this ticket's diff; reviewer offered it as optional
+  ("decline freely") and the builder accepted the decline.
+- **low, escalated then repaired** ·
+  `pl-2-container-image.md:223` "rate-limiting" — `pl-2`'s Traps section
+  still stated "No rate limiting and no `TRUST_PROXY`. `ApiConfig` has
+  neither" as fact, both
+  halves false since pl-16 and this ticket respectively. Raised as
+  not-actionable-from-this-branch because `pl-2` was checked out live in
+  another worktree; the orchestrator confirmed that session had released it,
+  and the correction landed in this branch, cited above.
+- **fold-in call, escalated, resolved by the orchestrator** · the lifted
+  `trustProxy()` parser is byte-for-byte identical to the downloader's (`diff`
+  exit 0, reviewer's measurement) — the repo's own stated second-real-consumer
+  trigger for moving code to `packages/`. Put to the owner as leave-and-file
+  versus lift-now-in-a-separate-PR, both builder and reviewer recommending
+  leave-and-file; the owner took the recommendation. Filed as
+  [repo-40](../../../docs/work/repo-40-trust-proxy-is-a-second-consumer-with-nowhere-to-land.md)
+  — not `repo-39`, already spoken for on a pushed-but-unmerged sibling branch
+  invisible to `next-id.mjs`.
+- **informational, explicitly unverified, no action requested** · trusting the
+  whole `/24` trusts every container on the `edge` network, including a
+  request reaching the planner through its published loopback port — the
+  reviewer's reasoning, not measured (no docker daemon in either worktree).
+  Identical to the downloader's already-shipped posture; recorded so it is not
+  discovered later as a surprise.
+- **informational, explicitly unverified, from a third session, not settled
+  anywhere on this branch** · that session reported, unconfirmed, that its
+  user's actual Cloudflare tunnel may route to `host.docker.internal:8080`
+  rather than to `downloader:8080` on the `edge` network, in which case the
+  downloader's own `TRUST_PROXY` would never match the real hop and its
+  limiter would already be single-bucket in production — the same failure
+  this ticket fixes for the planner. Diagnostics were still running when
+  reported; raised to the owner separately, not treated as true here.
+- **dropped** · the `rate limited` log line now carries a visitor IP rather
+  than the tunnel's address — not a redaction violation (`redactHeaders` /
+  `redactUrl` are about credentials in headers and URLs; an IP is neither),
+  and matches the downloader's already-shipped behaviour.
+- **dropped** · `TRUST_PROXY=2` (a hop count) is not supported. Fastify only
+  honours a hop count when the config value's _type_ is `number`, and an env
+  var always arrives as a string, so it refuses the boot loudly
+  (`invalid IP address: 2`) rather than silently misbehaving. Matches the
+  downloader, and nothing documents hop counts as available here.
+
+NFR — security: the med above is the only attack-relevant finding, and its
+repair narrows nothing that was not already narrow: one `Fastify(` call in the
+tool, one reader of `request.ip` (`rate-limit.ts`), confirmed by the reviewer
+with `grep`. reliability: n/a beyond the build itself — every change after the
+first gate round is comments, markdown and one table row. performance: n/a.
 
 ## Log
 
@@ -203,3 +306,35 @@ Re-gated after the three fixes: `npm run check` — exit 0, same pre-existing
 `no-await-in-loop` warnings, none on a changed line. `npm test -- --project
 planner` — 848/848, unchanged from before these fixes (none of the three
 touched test-covered code). `npm run format` — no drift.
+
+**2026-09-08 — gate PASS at `bdfc10b`, and the orchestrator's answers to the
+two open decisions.** Reviewer re-verified all three repairs independently
+against `bdfc10b` (re-ran the grep, `citations.mjs`, `npm run check` and
+`npm test` themselves rather than trusting this Log) and returned **PASS**.
+
+- **Fold-in (open decision B):** the owner was asked with `AskUserQuestion` —
+  leave the duplicated `trustProxy()` and file a follow-up, versus lift it now
+  in a separate PR — and took the recommendation both the builder and the
+  reviewer gave: leave and file. Filed as
+  [repo-40](../../../docs/work/repo-40-trust-proxy-is-a-second-consumer-with-nowhere-to-land.md),
+  not `repo-39` — that id was already spoken for on a pushed-but-unmerged
+  sibling branch (`repo-37-anchor-planner-review-corpus`), invisible to
+  `next-id.mjs` because it reads merged tickets plus open PR diffs and that
+  branch has no PR yet.
+- **pl-2's stale Traps bullet (open decision C):** the session that had been
+  holding `pl-2` confirmed it was not blocking on this and released it, so the
+  correction was made from this branch — see `pl-2-container-image.md`'s own
+  Log entry, dated today, for what changed and why. `pl-2`'s `status` was left
+  `in-flight`, untouched; that is a separate, already-recorded question about
+  its third `Done when` line.
+
+**One thing recorded as unverified, not acted on.** A peer session reported,
+unconfirmed, that its user's actual Cloudflare tunnel may route to
+`http://host.docker.internal:8080` rather than to `downloader:8080` on the
+`edge` network — in which case the downloader's own `TRUST_PROXY:
+172.30.42.0/24` would never match the real hop and its limiter would already be
+single-bucket in production, same failure this ticket fixes for the planner.
+Diagnostics were still running when it was reported and I have not verified it
+myself. Not settled here, not treated as true anywhere in this branch, and
+raised to the owner separately by the session that found it — noted so it is
+not lost.
