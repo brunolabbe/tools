@@ -216,12 +216,12 @@ byte-for-byte against the checked-in file (identical, 5/5). None of that was tak
 from the Log. Its own `npm run check` exits 0 and its own
 `npm test -- --project downloader` is 1214 over 73 files.
 
-| Done when                                                                                                | Verdict                                                                                                                                                                                                                                                                                                                                                                                      |
-| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Two audio-only formats differing only in `format_note` stay two variants, neither the other's alternate. | **Proven** — `resolvers/test/ytdlp.test.ts:600` "two audio tracks the mapper cannot tell apart stay two variants", asserted at `resolvers/test/ytdlp.test.ts:610` "expect(probe.variants).toHaveLength(2)". Confirmed a real guard, not a vacuous one: it is one of the four that go red under mutation 1.                                                                                   |
-| The balancer fixture's real mirrors do group, and the guard is not vacuous.                              | **Proven, narrower than the line's literal wording** — `resolvers/test/ytdlp.test.ts:625` "the balancer fixture's real mirrors do group, and not via format_note" and `resolvers/test/ytdlp.test.ts:645` "format.format_note === undefined". See the note below.                                                                                                                             |
-| The engine's failover reaches a yt-dlp mirror the way it reaches an HLS one, on a fixture origin.        | **Proven** — `engine/test/mirror-failover.test.ts:232` "the engine fails over to a yt-dlp mirror exactly as it does to an HLS one (dl-47)", asserted at `engine/test/mirror-failover.test.ts:253` "expect(outcome.sizeBytes).toBeGreaterThan(1000)" and `engine/test/mirror-failover.test.ts:269` "expect(served.some((request) => request.url.endsWith". The reviewer ran this test itself. |
-| `npm run check` and `npm test -- --project downloader` pass.                                             | **Verified** — both run fresh in the reviewer's own worktree, not read off the Log: check exit 0, suite 1214/1214 over 73 files.                                                                                                                                                                                                                                                             |
+| Done when                                                                                                | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Two audio-only formats differing only in `format_note` stay two variants, neither the other's alternate. | **Proven** — `resolvers/test/ytdlp.test.ts:600` "two audio tracks the mapper cannot tell apart stay two variants", asserted at `resolvers/test/ytdlp.test.ts:611` "variant.url).toSorted()).toEqual". Confirmed a real guard, not a vacuous one: it is one of the four that go red under mutation 1.                                                                                                                                                                   |
+| The balancer fixture's real mirrors do group, and the guard is not vacuous.                              | **Proven, narrower than the line's literal wording** — `resolvers/test/ytdlp.test.ts:625` "the balancer fixture's real mirrors do group, and not via format_note" and `resolvers/test/ytdlp.test.ts:645` "format.format_note === undefined". See the note below.                                                                                                                                                                                                       |
+| The engine's failover reaches a yt-dlp mirror the way it reaches an HLS one, on a fixture origin.        | **Proven** — `engine/test/mirror-failover.test.ts:232` "the engine fails over to a yt-dlp mirror exactly as it does to an HLS one (dl-47)", asserted at `engine/test/mirror-failover.test.ts:207` "expect(record.producer).toBe" (the variant really is the tier's output) and `engine/test/mirror-failover.test.ts:272` "expect(expired.requests).toHaveLength(before.expired)" (the mirror served it and the loop stopped there). The reviewer ran this test itself. |
+| `npm run check` and `npm test -- --project downloader` pass.                                             | **Verified** — both run fresh in the reviewer's own worktree, not read off the Log: check exit 0, suite 1214/1214 over 73 files.                                                                                                                                                                                                                                                                                                                                       |
 
 **The second acceptance row is proven, and its wording predates the decision.** It
 was written in option A's vocabulary — a `format_note`-style discriminator that
@@ -480,3 +480,45 @@ two rows"`, on exactly the named assertion — 1 distinct URL for 2 variants. So
   deferred that could have been folded in: the only adjacent free work was the
   stale test comments dl-45 left pointing at a future that has now happened, and
   those are corrected here.
+
+- **2026-09-08 — the first ship reported a green citations gate against a looser
+  command than CI runs, and the `check` job was red on the PR while this ticket
+  said `done`.** Recorded because a clean-looking record would hide both halves,
+  and the second half is a hazard nothing in the brief could have warned about.
+
+  **The wrong command.** The ship report said `node scripts/citations.mjs` on
+  this ticket exits 0, and it does. **CI does not run that.** It runs
+  `node scripts/citations-gate.mjs`, which enforces `--require-distinct-anchors`
+  on every record that is not grandfathered — and a brand-new `## Review` section
+  is enforced immediately, with no grandfather entry to soften it. The looser
+  command was the condition this dispatch was given and the condition was wrong;
+  it was met exactly and proved nothing. Measured after the fact:
+  `citations-gate.mjs --against origin/main` exits **1** at `95709b7`, naming two
+  records. It is also **not part of `npm run check`** — it is a separate step of
+  CI's `check` _job_, so "check exits 0" could never have caught it either. Both
+  invocations are in the gate list at the end of this entry now.
+
+  **Three of this record's own anchors were verified but not distinct.**
+  `expect(probe.variants).toHaveLength(2)` occurs five times in `ytdlp.test.ts`,
+  and both engine assertions occur twice in `mirror-failover.test.ts`, so
+  "verified" meant in-range rather than uniquely identified — which the builder
+  had noticed and reported as a caveat instead of as a failure. Repointed onto
+  lines that are unique and, as it happens, better proof: the URL-pair assertion
+  rather than the count, and the two assertions that exist only in the dl-47
+  engine test — that the variant really is `mapYtDlpInfo`'s output, and that the
+  second alternate was never dialled.
+
+  **The other half is collateral, and it is the interesting one.** This branch
+  added ~296 lines to `tools/downloader/resolvers/test/ytdlp.test.ts` above a
+  block that a **merged, unrelated** ticket cites — `repo-34`, whose record
+  pointed at `ytdlp.test.ts:607-656` and `:597-606`. Those anchors still exist and
+  still say what repo-34 says they say; they are simply 296 lines lower, and
+  repo-34's record went red without anyone touching it. Re-resolved against this
+  tip rather than transcribed from the report that raised it — the anchors are at
+  903 and 901, and the block's endpoints moved 656 to 952 and 597 to 893, a
+  uniform shift confirmed by comparing both endpoint lines against `a5e31c7` —
+  and repointed to `:903-952` and `:893-902` in the same commit as the fix above.
+  **A branch can redden another ticket's committed record purely by adding lines
+  to a file that ticket cites**, and no gate any single ticket runs on itself will
+  show that. The repo-wide `citations-gate.mjs` is the only thing that does, which
+  is the argument for running it rather than the per-record script.
