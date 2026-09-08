@@ -24,6 +24,7 @@
     "../commit-message.mjs",
     "../status.mjs",
     "../citations.mjs",
+    "../citations-gate.mjs",
     "../next-id.mjs"
   ],
   // Restated, not inherited — the root's exclude is about the root's program.

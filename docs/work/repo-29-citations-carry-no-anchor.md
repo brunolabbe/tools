@@ -3,7 +3,7 @@ id: repo-29
 tool: repo
 title: Most citations carry no anchor text, so nothing checks what they claim
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -319,18 +319,22 @@ distinctiveness question.** See the Decision heading above.
   rule. Anything here builds on all three. ~~Do not start before it merges.~~
   Verified on `main` rather than relayed: its ticket reads `status: done` and
   `citations.mjs` carries the declaration.
-- **repo-21 (unbuilt, `status: ready`)** already proposes wiring
+- **repo-21 — ~~unbuilt, `status: ready`~~ `done` and merged 2026-09-07 (PR
+  #179, `9b426c8`), so this constraint is discharged too.** It wired
   `citations.mjs --require-anchors` into the `check` job — scoped to one file,
   `.claude/skills/orchestrate-tickets/SKILL.md`, in its build step 3:
 
   `repo-21-the-orchestration-skill-outgrew-its-loop.md:250` "Scope it to"
 
-  **That is option C arriving from another direction**, and whichever lands
-  first constrains the other: if repo-21 lands first, this ticket generalises its
-  step and inherits its comment convention rather than adding a second one; if
-  this ticket takes C or D first, repo-21's step 3 becomes redundant and should be
-  dropped from its brief rather than built twice. Neither can be built in
-  ignorance of the other.
+  **That is option C arriving from another direction**, and ~~whichever lands
+  first constrains the other~~ **it landed first**, so the constraint resolved
+  the way the first branch of this paragraph describes: this ticket's step lands
+  _beside_ a working invocation rather than racing it. The two do not overlap —
+  repo-21's reaches one skill page and deliberately no work record, and this
+  one's reaches the work records and deliberately no skill page — so its step 3
+  is neither redundant nor in need of amendment, which is what `Done when` 7
+  asks. Verified on `main` rather than relayed: repo-21's ticket reads
+  `status: done` and `ci.yml`'s `check` job carries the invocation.
 
 ### One interaction from repo-25's findings
 
@@ -848,3 +852,328 @@ unresolvable, 7 unchecked, 0 evidence — of 19 references`. The renumber did no
   file to `1 unresolvable`. Re-run the command above to see them. Left for this ticket's own gate — repairing them is its
   work, not the renumber's, and folding it in would hide a real finding inside an
   unrelated change.
+
+- **2026-09-08 — built, and the half that is not built is named first.** Option
+  D's _mechanism_ landed: `scripts/citations-gate.mjs`, its suite, a step in
+  `ci.yml`'s `check` job, and the reviewer convention that keeps the gate fed.
+  **The migration did not.** 639 unanchored citations across 56 records are
+  still unanchored, and the gate names all 59 failing records in a
+  `GRANDFATHERED` list rather than pretending otherwise. Read the next four
+  paragraphs before the rest: this entry is long because the reasons are
+  measured, not because the work is.
+
+  **The corpus was re-measured on `b384033` rather than taken from this page.**
+  The figures above were `b142a4a`'s — 353 unanchored across 42 of 46 records, of
+  418 citations under `## Review`. They have not aged well. Today the same sweep
+  gives **639 unanchored across 56 of the 63 records that carry a `## Review`
+  section, of 827 references** — the denominator doubled in five days, exactly as
+  the option C paragraph predicted it would. The full breakdown under
+  `## Review` is 37 verified, 49 moved, 639 unanchored, 47 unresolvable, 52
+  unchecked, 3 evidence. A figure of 639 was relayed to this branch by an
+  orchestrator that had not verified it; it was re-derived here from scratch and
+  it agrees to the citation.
+
+  **Only 4 of the 63 records pass, and only 1 of the 4 has a citation this
+  actually checks.** Pass means nothing under `## Review` is unanchored, moved or
+  unresolvable — which three of the four achieve by having nothing to check.
+  `dl-17` and `dl-26` report `0 references`; `repo-30` reports 2, both
+  `unchecked` prose of the "line 12" shape, which names no file and resolves
+  against nothing. **`pl-2` is the only record in the enforced set carrying a
+  real `file:line`, and it carries two.** The gate found this: an earlier draft of
+  this paragraph named the two empty records and let the reader infer that the
+  other two were checked, which is a wrong number reached by implication rather
+  than by claim — this ticket's own defect, one layer up from a citation. That
+  number decides the shape of everything below: enforcing over 63 records is not
+  a gate, it is an outage, which is what option C says about itself in its own
+  words. It also sizes what today's gate is worth on its own — nearly nothing —
+  and moves all of its value onto the records not yet written.
+
+  **What the sweep measured, and why it was reverted — this is the entry option B
+  has been waiting for, and B stays open.** An automatic anchoring sweep over
+  this exact scope was built, run and thrown away. It refuses rather than
+  guesses: an anchor is accepted only if it occurs **exactly once** in the whole
+  target file, and it is chosen by one of three rules — anchor today's content
+  where the cited lines are byte-identical to the commit that first carried the
+  record's `## Review` heading (270 citations), repoint to where the text the
+  reviewer saw has uniquely gone (116), or follow an existing anchor that has
+  moved (40). It proposed 426 repairs of 688 and refused 262, and applying it
+  took the scope from 37 verified to 463, and from 639 unanchored to 253.
+
+  **It was reverted because two of the first ten anchors inspected were false**,
+  both inside `repo-25`'s own gate record, and both would have reported
+  `verified` for ever:
+
+  - A backticked shorthand naming port 443 — a TLS **port**, quoted by that
+    record as the known false positive it exists to describe — was anchored
+    against line 443 of `citations.mjs`. The sweep minted a verified citation
+    onto a line the record was not pointing at, inside the record that documents
+    the ambiguity.
+  - A citation quoted _inside a reproduction_ of an earlier run was anchored to
+    what that line holds today, editing a dated measurement to match the tree.
+
+  There is no lexical rule that separates either from a real citation —
+  `citations.mjs`'s own docblock says so about the port — so this is not a bug in
+  the sweep to be fixed. **It is B's stated objection reproducing itself**: an
+  automated anchor that verifies the wrong thing is worse than the unanchored
+  citation it replaced. **B is not closed by this.** What it now has is the
+  distinctiveness measurement nobody had taken — a unique-fragment rule does hold
+  for 426 of 688 — plus a hard boundary: a sweep must not touch a shorthand, and
+  must not touch a citation inside a quoted reproduction. Whoever takes B starts
+  from those two lines rather than from the argument.
+
+  **What was built.**
+
+  - `scripts/citations-gate.mjs` runs `citations.mjs`'s checks with
+    `--require-anchors` over a _set_ of records. **The scope is data, not
+    logic** — `scripts/citations-gate.mjs:114 "export const SCOPE"` holds the
+    pathspecs and the section name, so option C is `section: null` and no other
+    line changes. That is the "shape it so C can widen it" instruction taken
+    literally: there is no rule about `## Review` anywhere in the mechanism.
+  - It is a script and not a shell `for` over a glob so that the widening is an
+    edit to a constant rather than to YAML, and so the loop is testable. 13 tests
+    in `scripts/test/citations-gate.test.ts`.
+  - One CI step in the `check` job, beside repo-21's:
+    `.github/workflows/ci.yml:158 "node scripts/citations-gate.mjs"`.
+  - A record with **no** `## Review` section is out of scope rather than an
+    error, which is the one place this deliberately disagrees with
+    `citations.mjs --section`. That flag refuses a name matching nothing for a
+    good reason — a typo'd section would report success having checked nothing.
+    Here the name is a constant and the record set is the variable, and dozens of
+    tickets have not been gated yet. An **ambiguous** name is still an error.
+  - **The grandfather list cannot rot into a rubber stamp**, and the rule that
+    stops it is repo-25's, one level up: a listed record that now passes, or that
+    the scope no longer reaches, is an _error_ naming the line to delete. The
+    list can only shrink, and the run prints the remaining debt on every push.
+
+  **The scope widened past this ticket's declared packages, on the owner's
+  instruction, and the question is recorded rather than the answer alone.** The
+  question, put on 2026-09-08: this gate fails _future_ gate records for a reason
+  their builder did not cause, because nothing today tells a reviewer to anchor
+  the citations it writes into a `## Review` section — and this branch is what
+  introduces that. Three answers were available: land the gate and let the first
+  reviewer after it discover the rule from a red build; hold the gate until a
+  separate ticket changes the convention; or change the convention here. **The
+  owner answered: change it here.** So `.claude/skills/review-ticket/SKILL.md`
+  step 4 now requires anchor text on every citation in the section, names the
+  parser's one hard constraint — an anchor cannot contain a double quote at all,
+  the operational line this page already carries — and step 8 tells the caller to
+  run the checker over the record _before_ committing it. That file is outside
+  this ticket's **Packages** line, and it is edited deliberately rather than as a
+  builder helping itself to scope.
+
+  **The gate was watched failing before it was believed.** Three runs, output as
+  it came:
+
+  - Anchor removed from a passing record —
+    `FAIL tools/planner/docs/work/pl-2-container-image.md — 1 unanchored, 1 verified`,
+    then an `unanchored` line naming the citation at record line 107 and the
+    reason `no anchor — nothing checked it`. **Exit 1.** (The coordinate the run
+    printed is described rather than reproduced: quoting it would mint a real
+    unanchored citation in this page, which is the dodge the filing entry at the
+    top of this Log already had to take twice.)
+  - Anchor replaced with text that is nowhere in the file — same record, `1
+moved, 1 verified`, and `anchor "not what that line says" is not in 147, and
+not anywhere in tools/downloader/api/src/routes/web.ts`. **Exit 1.**
+  - A passing record added to `GRANDFATHERED` —
+    `STALE docs/work/repo-30-the-id-sweep-cannot-see-repo-tickets.md — passes this gate now`.
+    **Exit 1.** That third one is the anti-rubber-stamp rule, and it is the one
+    that would otherwise have shipped never having run.
+
+  Reverted after each. The gate reports `4 enforced, 0 failing; 59
+grandfathered, holding 47 unresolvable, 49 moved, 639 unanchored` at exit 0 on
+  this branch.
+
+  **This branch broke six citations and repaired them, which is the tax this gate
+  makes visible.** Inserting 22 lines into `ci.yml` moved every line below them,
+  and `repo-31`'s gate record cites six of those lines with anchors. All six were
+  repointed against the tip — the anchor says where it went, so the repair is
+  arithmetic rather than judgement — and a whole-corpus before/after comparison
+  across all 121 work records now shows **no** citation whose state this branch
+  worsened. That comparison is the check rather than a reading: every reference
+  was resolved twice, once with this branch stashed and once with it applied.
+  **2,287 references before, 2,293 after** — and both numbers are given because
+  one of them is not the other: this Log entry adds six references of its own, so
+  a single figure here would be the self-counting error the entry above this one
+  records, committed in the paragraph that reports the check for it.
+
+  **A seventh was worse and earns its own line, because it is this ticket's
+  thesis arriving unbidden — again.** `repo-31` also cited line 272 of `ci.yml`
+  with the anchor `"informational"`. After the 22-line shift that citation still
+  reported **verified**, because the word occurs on five lines of `ci.yml` and one
+  of them had moved into position 272 — a _comment_, not the `name:` expression
+  the record was talking about. It was caught by checking the shift arithmetic,
+  not by the checker, which is precisely what `Done when` 3 forbids: an anchor
+  occurring on more than a handful of lines verifies nothing while reporting that
+  it did. Repointed to
+  `.github/workflows/ci.yml:294 "&& ', informational' || ''"`, a fragment that
+  occurs once. **The sweep described above would have refused the old anchor**,
+  which is the one point in its favour worth carrying to option B.
+
+  **A premise in this page's own Log was stale and is corrected above.** The "Two
+  dependencies" section said repo-21 was unbuilt at `status: ready` and reasoned
+  about which of the two would land first. repo-21 is `done` and merged (PR
+  #179), and its `--require-anchors` step is live in the `check` job, so this
+  step lands _beside_ a working invocation rather than racing it. The two do not
+  overlap — repo-21's reaches one skill page and no work record, this one's
+  reaches the work records and no skill page — so `Done when` 7 is satisfied by
+  repo-21's brief needing no amendment, checked against its file rather than
+  assumed.
+
+  **`Done when`, line by line, including the one that is not met.**
+
+  1. Met before this branch; the decision entry is above.
+  2. **Not met for the whole of D's scope, and this is the honest gap.** The
+     enforced scope reports zero unanchored at exit 0; the 59 grandfathered
+     records hold 639 unanchored citations and are excused by name. A reading of
+     "the records in the chosen scope" that means the enforced set is satisfied;
+     a reading that means every record with a `## Review` section is not.
+  3. Vacuous for a sweep — none ran, which is the finding above — and **not**
+     satisfied as a standing property, which the gate found and this line first
+     got wrong. Seven citations in `repo-31` were touched: **six were repointed
+     with their anchor text unchanged**, which the paragraph above correctly
+     calls arithmetic, and **exactly one was re-anchored**, on a fragment
+     occurring once. An earlier draft of this line said "the two … both
+     re-anchored", which overcounted the judgement by one and undercounted the
+     arithmetic by five. Nothing in the shipped tooling enforces distinctiveness
+     at all — see the gate entry below.
+  4. No evidence declaration was added or needed; the three already under
+     `## Review` in the corpus are untouched.
+  5. Met — three failing runs above, each with its output and its exit code.
+  6. Met — `npm run check` and `node scripts/status.mjs --json` both exit 0.
+  7. Met — see the repo-21 paragraph above.
+
+  **`difficulty` is still unset, and this build is a data point for whoever rates
+  it later.** The entry above records the owner's "leave it unset" and the gap it
+  leaves. The work as actually done was neither `mechanical` nor `standard`: the
+  mechanism is small, and every decision that mattered — revert the sweep,
+  grandfather rather than migrate, widen into the review skill — came from a
+  measurement that had to be taken first. Anyone rating this later should weigh
+  that rather than the diff.
+
+  **This page's own citations, re-run after writing the sentences above** — which
+  is the rule the entry above this one added, applied to itself. Before these
+  paragraphs: `6 verified, 5 moved, 1 unanchored, 0 unresolvable, 7 unchecked, 0
+evidence — of 19 references`, exit 2, and the identical line from `main`'s copy
+  of the file in this worktree — checked by stashing rather than assumed. After
+  them: `9 verified, 5 moved, 1 unanchored, 0 unresolvable, 10 unchecked, 0
+evidence — of 25 references`, still exit 2. This entry therefore adds six
+  references, three of them anchored citations that verify and three of them
+  prose, and it adds nothing to any failing class. The `moved` count had already
+  gone 4 → 5 since the entry above recorded it, from drift this branch did not
+  cause. They are the deliberate
+  demonstration the owner ruled on and they stay. This page has no `## Review`
+  section, so the gate does not read it at all; when it gains one, that section
+  is enforced and these Log citations still are not, which is exactly the line
+  option D draws.
+
+- **2026-09-08 — the gate's findings, each reproduced here before it was
+  accepted, and one of them turned out worse than reported.** Verdict CONCERNS,
+  five findings, all `med`. Four are corrections to this page or to the gate
+  script's docblock and are applied above. None changed what was built.
+
+  **1. The grandfather list is guarded in one direction only, and the docblock
+  claimed both.** Reproduced: break the anchor in the one passing record that
+  carries a real citation, add that record to `GRANDFATHERED` in the same
+  change, run the gate — `3 enforced, 0 failing; 60 grandfathered, holding 47
+unresolvable, 50 moved, 639 unanchored`, **exit 0**, no `FAIL`, no `STALE`,
+  no warning. repo-25's rule fires when an entry stops being needed; nothing
+  fires when one is added, and nothing notices a listed record getting worse.
+  The script said "the list can only shrink"; it now says which half of that is
+  enforced and which half is a norm in a comment. **Whether to close it is an
+  owner's call and is left open** — the obvious closure is a per-record count
+  that may only ratchet down, and its cost is that the count grows when an
+  _unrelated_ branch shifts a cited file, so the ratchet bills whoever moved the
+  source. Finding 4 below is that scenario happening for real, which is the
+  argument on both sides at once.
+
+  **2. The enforced set has one record with a checked citation, not two.**
+  Reproduced by running the checker on each of the four individually: `dl-17` and
+  `dl-26` report `0 references`, `repo-30` reports 2 and both are `unchecked`
+  prose, `pl-2` reports 2 and both `verified`. The paragraph above named the two
+  empty records and let the reader infer the other two were checked. Corrected
+  there, and it is worth naming the shape: a true sentence that leaves a false
+  number behind is what this whole ticket is about, arriving in the entry
+  reporting it.
+
+  **3. Nothing in the shipped tooling enforces anchor distinctiveness — the
+  `"informational"` catch above is a standing gap, not a one-off.** Read at
+  `scripts/citations.mjs:790 "const inRange = hits.filter"`: `verified` is
+  decided by whether _any_ occurrence starts inside the cited range, and the
+  full hit list is computed but used only to word the `moved` message.
+  **Reproduced rather than read**, in a throwaway repo: a record citing line 5 of
+  a file with the anchor `"informational"`, where that word occurs on lines 3 and
+  5; insert two unrelated lines at the top; the first occurrence slides into
+  position 5 and the record's real target moves to 7. Both runs report the
+  identical `ok` line for that citation, unchanged, at **exit 0** — the fixture's
+  own coordinate is described rather than quoted, because quoting it would put an
+  unresolvable citation into a throwaway repo on this page. So `Done when` 3 is a
+  rule for
+  authors that the checker cannot hold anyone to, and every anchor this repo
+  writes from now on inherits that. Not fixed here: it is a change to
+  `citations.mjs`, which has an open pull request against it (#186), and adding a
+  uniqueness requirement would reclassify existing anchors — a decision, not a
+  tidy-up. **Recommended as its own ticket**, and named here so it is not
+  rediscovered.
+
+  **4. This branch turns the merge with repo-34 red, which neither the builder
+  nor the gate predicted, and the gate's own numbers for it were measured against
+  a superseded commit.** The finding as relayed used repo-34 at `cd00fb4` and
+  reported ~6 citations in `repo-31` silently re-breaking. Re-measured here
+  against that branch's actual tip `66dfe19` — `cd00fb4` is its _first_ commit,
+  and one of the two commits after it is literally "repoint repo-31's citations":
+
+  - The merge is clean; git reports no conflict in either file both branches
+    touch.
+  - In the merged tree `repo-31` reports `20 verified, 8 moved, 0 unanchored, 0
+unresolvable, 1 unchecked — of 29 references`, exit 2 — six of the seven
+    `ci.yml` coordinates repointed on this branch need a further +3. `repo-31`
+    is grandfathered, so that costs nothing but debt, which is finding 1's hole
+    in its live form.
+  - **The part that is not silent: `node scripts/citations-gate.mjs` on the
+    merged tree exits 1.** repo-34's own record is _anchored_ — 12 verified, its
+    reviewer wrote it that way with no convention telling it to — and it is not
+    grandfathered, so this gate enforces it. Two of its citations name
+    lines 210 to 231 of `ci.yml` with the anchor `"The unit and integration suites"`, which
+    is at line 210 on repo-34's tip and at 232 in the merged tree, because this
+    branch inserted 22 lines above it. `FAIL … 2 moved, 4 unchecked, 12
+verified`.
+
+  **Neither branch is wrong against its own base**, and repo-34's reviewer
+  explicitly checked for a collision with this one and recorded that its edit
+  "sits inside the `test` job and clear of the `check` job that a sibling session
+  was sweeping concurrently on repo-29". That was right about textual conflict
+  and wrong about citation drift, and nothing either of them could run would have
+  said so — which is this ticket's thesis reproducing itself a third time, on the
+  branch that exists to fix it, between two agents who were both being careful.
+  **Whoever merges second re-runs the checker on `repo-31` and on repo-34's own
+  record and repoints.** With this gate in place, the second half of that is not
+  advice: CI says it.
+
+  **5. One re-anchoring, not two.** Diffed against `origin/main`: six of the
+  seven `repo-31` citations kept their anchor text and changed only their line
+  number; exactly one gained new anchor text. Corrected in `Done when` 3 above.
+
+  **What was not accepted.** Nothing was refuted — all five reproduce — but
+  finding 4's evidence is replaced rather than carried: its sha was two commits
+  stale, its "clean merge, silent debt" reading understates the result, and the
+  corrected version is more severe than the one filed.
+
+  **And this entry broke one of its own branch's citations while being written,
+  which is the fourth instance in four days and the shortest feedback loop yet.**
+  Rewriting the `GRANDFATHERED` docblock for finding 1 added lines to
+  `citations-gate.mjs` and pushed `SCOPE` down 15 lines, so the anchored citation
+  the entry above it makes about that constant went `verified` → `moved` inside
+  the same edit. Repointed. Caught by running the checker on this page before
+  committing, which is the only reason it is a note rather than a defect shipped
+  in the ticket that exists to prevent it.
+
+  **Counts for this entry, re-run after writing them.** Before it, the page
+  reported `9 verified, 5 moved, 1 unanchored, 0 unresolvable, 10 unchecked, 0
+evidence — of 25 references`; after, `10 verified, 5 moved, 1 unanchored, 0
+unresolvable, 15 unchecked, 0 evidence — of 31 references`, both at exit 2. Six
+  references added, one of them an anchored citation that verifies and five
+  prose, and nothing added to any failing class. The five `moved` are still the
+  deliberate demonstration the owner ruled on. Two coordinates this entry wanted
+  to quote — the throwaway fixture's, and repo-34's — are described instead,
+  because quoting them would have added one `unresolvable` and one `unanchored`
+  to the page arguing against both, which the first draft of this entry did.

@@ -188,9 +188,26 @@ is the caller's alone.
    summarised a summary, which is what the old wording of this step invited.
 
 4. **Trace every acceptance line to its proof.** One row per **Done when** line,
-   each naming the test that proves it — `file.test.ts:88`, not "covered". A line
-   with no test is a finding, and so is a test that asserts something narrower
-   than the line claims.
+   each naming the test that proves it — `file.test.ts:88 "a fragment of that
+   line"`, not "covered". A line with no test is a finding, and so is a test that
+   asserts something narrower than the line claims.
+
+   **Every citation you write into `## Review` carries anchor text**, and CI
+   enforces it — `scripts/citations-gate.mjs` runs in `ci.yml`'s `check` job over
+   every record's `## Review` section with `--require-anchors`, so a bare
+   `file.test.ts:88` in a section you commit turns the build red. Quote a
+   fragment of the line, straight double quotes, no `"` inside it: the parser's
+   anchor group admits none, and escaping one truncates the fragment at the
+   backslash and reports `moved`. Pick a quote-free substring instead.
+
+   This is not formatting. An unanchored coordinate still *resolves* — the
+   checker only confirms the file has that many lines — so a citation onto a
+   blank line, one that drifted onto unrelated code, and one that bound to the
+   wrong file entirely all report clean at exit 0. All three are measured, all
+   three came out of live review cycles, and they are why
+   [repo-29](../../../docs/work/repo-29-citations-carry-no-anchor.md) exists. An
+   anchor is the only thing here that checks the *claim* rather than the
+   coordinates.
 
    **Cite the line of the assertion, not the line of the `test(` that contains
    it.** A test whose name covers half the clause — "reaches grounding, and
@@ -278,7 +295,14 @@ is the caller's alone.
 
 8. **Commit the section, post the report, then say what would clear it.** This
    step is the caller's, and it has three acts. First write the returned section
-   into the ticket above `## Log`, verbatim, in the branch's own commit. Second,
+   into the ticket above `## Log`, verbatim, in the branch's own commit — and
+   before that commit, run `node scripts/citations.mjs <ticket> --section Review
+   --require-anchors` over it and fix what it says. That is the check CI is
+   about to run; catching it here costs one command, and catching it in CI costs
+   a push. Where a citation is deliberately unresolvable — a coordinate quoted as
+   the evidence of a finding — declare it with
+   `<!-- citations: evidence file.ts:120 -->` rather than repointing it, and the
+   declaration is itself an error if it excuses nothing. Second,
    **post the reviewer's report to the pull request thread** — `gh pr comment
    <number> --body-file <file>` — so the transcription can be audited against
    what the reviewer actually said; if the branch has no pull request yet, that
@@ -346,15 +370,19 @@ subsection per gate rather than overwriting: a record that shows only the last
 gate cannot be told from one whose earlier findings were dropped. Keep it short;
 the reasoning belongs in the Log where the author writes it.
 
+**Every `file:line` in it carries anchor text**, per step 4 — the section is the
+one part of a ticket CI checks, and `node scripts/citations-gate.mjs` is what
+checks it.
+
 ```markdown
 ## Review
 
 **Gate: CONCERNS** — 2026-08-16 · `origin/main...HEAD` · code-review at medium
 
-| Done when                                  | Proof                              |
-| ------------------------------------------ | ---------------------------------- |
-| Run over HTTP leaves a `PlanDetail`         | `api/test/runs.test.ts:142` ✓      |
-| Image ships every workspace `api` imports   | **unproven (gate)** — planner.yml  |
+| Done when                                 | Proof                                          |
+| ----------------------------------------- | ---------------------------------------------- |
+| Run over HTTP leaves a `PlanDetail`       | `api/test/runs.test.ts:142 "expect(detail)"` ✓ |
+| Image ships every workspace `api` imports | **unproven (gate)** — planner.yml              |
 
 - **med** · `Dockerfile` lists workspaces by hand in two places and nothing
   typechecks the list; the build-stage half fails differently from the runtime half.

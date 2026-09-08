@@ -134,6 +134,28 @@ jobs:
       # `check` to be filtered by nothing, because the change that breaks it is
       # usually a markdown-only one.
       - run: node scripts/citations.mjs .claude/skills/orchestrate-tickets/SKILL.md --require-anchors
+      # The same check over the work records, which is the corpus the one above
+      # deliberately does not reach. Scoped to each record's `## Review` section:
+      # a gate row's whole job is to be checkable by someone else, and
+      # `docs/01-TICKETS.md` requires it to name a test file and a line rather
+      # than "covered" — which is a claim about a line's *content*, and precisely
+      # what an unanchored citation fails to carry.
+      #
+      # **This is repo-29's option D, built as the first slice of its option C**,
+      # which the owner named as the destination. Widening it is an edit to
+      # `SCOPE` in the script, not to this file — which is why there is a script
+      # here at all rather than a shell loop over a glob.
+      #
+      # It is one line and not 63 because the records it must exempt are data:
+      # 59 of the 63 records with a `## Review` section fail today, so a gate
+      # over all of them would be an outage rather than a gate. The script names
+      # them, prints the remaining debt on every run, and errors if one of them
+      # starts passing.
+      #
+      # Same depth-1 caveat as the two steps above: it reads the checkout, never
+      # the history, and it needs `check` to stay filtered by nothing, because
+      # the change that breaks it is a markdown-only one by construction.
+      - run: node scripts/citations-gate.mjs
 
   # Which files this change actually touches, because **Actions has no per-job
   # `paths` filter** — `paths-ignore` gates the whole workflow, so the only way
