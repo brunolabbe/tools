@@ -76,6 +76,52 @@ came from asking. None would have been recorded by a session that merely
 succeeded** — and five earlier sessions had the same signal available and did not
 capture it.
 
+### Citations on this page are historical, and four of them are pinned
+
+An entry's citations are a claim about the tree that session read, and
+`scripts/citations.mjs` resolves against the working one — so a correct entry
+turns `moved` the moment its own subject merges. The twelfth session measured
+that here and proposed the checker's own `--rev` as the remedy.
+
+**`--rev` cannot pin one citation, and that is a property of this page rather
+than of the flag.** It resolves *every* citation in a record against one commit,
+which fits a gate record describing one branch; this page's entries each describe
+a different tree. Measured 2026-09-08 at `4901cd6`: the plain run reported
+`15 verified, 3 moved, 1 unanchored` and exit 2, and the same run at
+`--rev b142a4a` — the tenth session's own base — reported `7 verified, 6 moved,
+5 unresolvable`, breaking five citations to repair one.
+
+**So a citation that must stay as written is declared instead**, which is the
+mechanism `reference/records.md` already names for that case. On this page a
+`<!-- citations: evidence ... -->` declaration means *correct at the rev named
+below, deliberately not repointed*. It buys exit 0 and it costs the check — the
+script stops calling these a defect and stops checking them — so the rev is
+recorded here, and each was re-read at it with `git show <rev>:<path>` before the
+declaration was written:
+
+- The tenth session's defect 1, correct at `b142a4a`, that entry's own base:
+  `dispatching.md:206 "Probed on 2026-09-01"`
+  and `:209` "carry `ListAgents` and `SendMessage`".
+  `repo-21` has since rewritten the section around them, and the same two lines
+  are `:230` "Probed on 2026-09-01"
+  and `:233` "carry `ListAgents` and `SendMessage`"
+  today — moved, not reworded.
+- The eleventh session's `tickets` row, correct at `9b426c8`, that entry's own
+  base: `docs/work/repo-30-the-id-sweep-cannot-see-repo-tickets.md:6 "status: ready"`.
+  That line now reads `status: done`, which is the ticket landing rather than the
+  citation being wrong.
+- The eleventh session's defect 3, correct at `9b426c8`:
+  `tools/downloader/e2e/sniffer/mse-page.spec.ts:102 "toHaveCount(5)"`.
+  `dl-43` deleted the assertion, which is what that entry says it existed to do,
+  so the anchor is nowhere in the file and there is nothing to repoint it to.
+
+**The shorthand in the first of those carried no anchor, and the one it carries
+now was added here rather than by the tenth session.** It was read out of
+`b142a4a`, not out of the line that occupies that coordinate today, which is a
+different claim: an anchor taken from the current tree would have made the
+citation verify while asserting something that session never wrote. Nothing else
+on this page was repointed, reworded or withdrawn.
+
 ## Seventh session — 2026-09-03/04
 
 | Field | Value |
@@ -597,10 +643,12 @@ corrected.**
 **what the skill got wrong** — eight, none fixed here: this commit is scoped to
 this file.
 
+<!-- citations: evidence dispatching.md:206, dispatching.md:209 -->
+
 1. **The tool list an agent definition declares is not the tool list it is
    given, and `dispatching.md` states the declared one as a probed fact.**
    Under `dispatching.md:206 "Probed on 2026-09-01"`, three lines down at
-   `:209`, the page says both agent types carry `ListAgents` and `SendMessage`
+   `:209` "carry `ListAgents` and `SendMessage`", the page says both agent types carry `ListAgents` and `SendMessage`
    directly. Two builders reported this batch that they had
    no `ListAgents`, one distinguishing it from an unreliable self-report on the
    ground that it is *not in the function schema*, so invoking it would be a
@@ -1160,6 +1208,8 @@ marked as supplied.
 | `wrong findings` | **None refuted this session, per the supplied data.** What happened instead runs the same direction the eighth and tenth sessions already recorded: a reviewer found a gap in its own earlier verification and wrote it into its own record unprompted, rather than being caught by a builder or a later gate — `repo-30`'s reviewer, on its still-open branch: *"my `6a5944b` gate's 'verified' line for Done-when 2 had the same blind spot this CI run exposed… Recorded here rather than silently carried forward."* A third instance of the same shape, changing no verdict |
 | `subagent tokens` | **2,635,387 across the 12 agents that reported; 1 (the killed `#180` Opus builder) reported nothing** — summed here from the per-agent figures supplied, matching the orchestrator's own "~2.64 M" to within rounding: seam-mapper 75,025 · `dl-43` builder 464,151 · `dl-43` reviewer 289,790 · `repo-21`/`28` builder 370,737 · `repo-21`/`28` reviewer 246,492 · `repo-30` builder 276,923 · `repo-30` reviewer 221,284 · 4-record builder (`#177`) 171,000 · 4-record reviewer 130,087 · `dl-44`/`45` builder 114,913 · `dl-44`/`45` reviewer 113,707 · `#180` replacement builder 161,278. Split on these floors: builders **59.2%** · gates **38.0%** · intake **2.8%** |
 | `cost` | **≈ $47.96** at the 2026-09-02 rate of $0.0182/1k — an arithmetic conversion of a set of floors with one agent's spend entirely unmeasured, so a floor and not a bill, same caveat as the ninth and tenth sessions' cost rows |
+
+<!-- citations: evidence docs/work/repo-30-the-id-sweep-cannot-see-repo-tickets.md:6, tools/downloader/e2e/sniffer/mse-page.spec.ts:102 -->
 
 **what the skill got wrong** — seven, none fixed on this branch, which is scoped
 to this file alone:
