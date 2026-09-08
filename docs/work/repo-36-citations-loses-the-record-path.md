@@ -1,5 +1,5 @@
 ---
-id: repo-33
+id: repo-36
 tool: repo
 title: `citations.mjs --rev` stops reporting drift when git and Node spell the record's path differently
 kind: fix
@@ -9,7 +9,7 @@ depends_on: []
 difficulty: standard
 ---
 
-# repo-33 — The citations checker loses the record's own path
+# repo-36 — The citations checker loses the record's own path
 
 ## Why
 
@@ -136,7 +136,7 @@ and is not this ticket's to implement.
 - **low, found and resolved in this round** · `scripts/citations.mjs:1191-1194` (`sameDirectory`) — the `fs.realpathSync.native` comparison was never exercised by the first round's tests (the "outside the repo" test trips `locateRecord`'s outer try/catch before reaching `sameDirectory`; the symlink test called it but with operands already byte-identical, since both are git's own `--show-toplevel` answer for one cwd string). Reproduced directly (`git -C <realdir>` and `git -C <symlink-to-realdir>` both return the canonical path). The docblock at that point additionally misattributed the mechanism, describing one operand as `path.resolve`'s output rather than git's — a factually wrong comment, not just an untested branch. Builder's response: exported `sameDirectory` and added `scripts/test/citations.test.ts:1387-1416` testing it directly (false for two different directories, false on `ENOENT`, true through a symlink), corrected the docblock to state plainly that both operands are git's own output and the branch is unreached in production, and recorded five failed attempts (including a `PWD`-inheritance asymmetry that was a genuine candidate) to construct a reachable divergence. I independently reproduced the branch's own regression test (`return false` → `1 failed | 66 passed`). Two caveats the builder asked to be carried rather than overstated, and I agree with both: the branch is still unreached by `main()` itself — the new test proves the predicate's contract, not a path production takes, so this specific mechanism is **verified** at the predicate level but not exercised end-to-end; and the test does not establish that `.native` (vs. plain `realpathSync`) is actually required, since a POSIX symlink resolves under either — that half of the docblock's claim (the Windows 8.3 case) remains reasoned, not measured, same as several other claims already disclosed in the Log.
 - **dropped** · none.
 - **findings** · defect hunt returned 1 (round one); 1 carried, resolved by the builder in round two (`ab5e6fa`), 0 dropped.
-- Two corrections repo-33 makes to repo-31's account, both verified against actual git history rather than accepted on the ticket's word: the failing fixture's record sits at the repo root (`drift.md`, no subdirectory — `scripts/test/citations.test.ts:1279`), so backslash normalisation was never the actual fix; and the defective `path.relative(repo, path.resolve(file))` expression predates repo-25 (`git show 4bc3e66^:scripts/citations.mjs` line 661, display-only), with repo-25's merge (`4bc3e66`) hoisting it into a load-bearing second use rather than introducing it.
+- Two corrections repo-36 makes to repo-31's account, both verified against actual git history rather than accepted on the ticket's word: the failing fixture's record sits at the repo root (`drift.md`, no subdirectory — `scripts/test/citations.test.ts:1279`), so backslash normalisation was never the actual fix; and the defective `path.relative(repo, path.resolve(file))` expression predates repo-25 (`git show 4bc3e66^:scripts/citations.mjs` line 661, display-only), with repo-25's merge (`4bc3e66`) hoisting it into a load-bearing second use rather than introducing it.
 - NFR: security n/a (internal tooling, no user-influenced URL) · performance n/a (two extra short-lived `git` subprocess calls per invocation) · reliability ✓ (both the outer `locateRecord` try/catch and `sameDirectory`'s own try/catch fail closed to the pre-fix `..`-path rather than throwing or silently misresolving) · maintainability ✓ — the round-two docblock correction is itself the maintainability story: a wrong comment was caught and fixed rather than left to mislead the next reader, and the file now says explicitly when its own defensive branch should be deleted.
 - Invariants checked (no shell — argument arrays only, `shell: false` implied and never overridden; no `console.`; `node:` protocol throughout; no `any`; nothing needing `import type`) — clean on both files in the diff.
 
@@ -161,7 +161,7 @@ This round has no new `Done when` line of its own — it repairs a defect the ro
 - **what this round upgrades from reasoned to measured, and what it doesn't** · Two things argued in round one are now observed on a real Windows host, twice: that the fix itself works (`--rev` regression test green on `windows-latest` at both `795dd1c` and `1a774db`), and that the round-two assertion was wrong (red at `795dd1c`, confirmed by the actual CI log, not inferred). **`sameDirectory`'s `fs.realpathSync.native` vs. plain `realpathSync` claim remains unmeasured** — nothing in this round's CI run exercises that branch (still unreached in production, its own symlink test still `skipIf(win32)`), so that caveat from the `ab5e6fa` gate stands exactly as recorded there.
 - **dropped** · none.
 - **findings** · defect hunt returned 1 (the CI-discovered POSIX assumption in the round-two test); 1 carried, resolved by the builder in this round (`1a774db`), 0 dropped.
-- Citation hygiene, per the orchestrator's note on `moved` (`EXIT.moved = 2`, distinct from `unresolvable = 1`, `scripts/citations.mjs:662-667`): re-ran `node scripts/citations.mjs docs/work/repo-33-citations-loses-the-record-path.md` at the current tip — `0 moved, 0 unresolvable, exit 0`. Also ran it with `--rev ab5e6fa` per the builder's note on the prior subsection's coordinates: identical `0 moved, 0 unresolvable, exit 0`, confirming the checker cannot distinguish those now-stale coordinates from correct ones without anchor text — spot-checked five of them by hand and they do land on the wrong content, as the builder's note says.
+- Citation hygiene, per the orchestrator's note on `moved` (`EXIT.moved = 2`, distinct from `unresolvable = 1`, `scripts/citations.mjs:662-667`): re-ran `node scripts/citations.mjs docs/work/repo-36-citations-loses-the-record-path.md` at the current tip — `0 moved, 0 unresolvable, exit 0`. Also ran it with `--rev ab5e6fa` per the builder's note on the prior subsection's coordinates: identical `0 moved, 0 unresolvable, exit 0`, confirming the checker cannot distinguish those now-stale coordinates from correct ones without anchor text — spot-checked five of them by hand and they do land on the wrong content, as the builder's note says.
 - NFR: security n/a · performance n/a · reliability ✓ (the deleted assertion's failure mode was silent-until-CI, not silent-in-production — `locateRecord`'s actual behavior was never wrong) · maintainability ✓ — this round's own thesis is a maintainability lesson stated plainly in the test's docblock: an assertion added to prove a cross-platform fix carried the same class of assumption the fix removed, and the repair explains why the "obvious" replacement would have been a tautology rather than just swapping it in.
 - Invariants checked (no shell — argument arrays only; no `console.`; `node:` protocol; no `any`; nothing needing `import type`) — clean; no changes to `scripts/citations.mjs` this round, only `scripts/test/citations.test.ts`.
 
@@ -182,7 +182,7 @@ No new `Done when` line — this round corrects the round-three fix's own docblo
 - **what changed, and why it's a strict improvement** · `scripts/test/citations.test.ts:1418` "across drive roots the fallback is absolute" — the same-drive half of this test previously used an invented pair (`D:\a\_temp\…`); it now uses the two real pairs pulled from the actual failing runs' own log strings (`scripts/test/citations.test.ts:1436`, `tempRepo = "C:\\Users\\RUNNER~1\\…\\citations-rev-uh5dmk"`, and the `runneradmin` long-name counterpart), asserting `scripts/test/citations.test.ts:1438` "expect(sameDrive.startsWith" (temp-vs-temp, no `..`) and `scripts/test/citations.test.ts:1444` "expect(acrossShortName.startsWith" (short-name-vs-long-name, `..`-path) alongside the already-present cross-drive assertion at `scripts/test/citations.test.ts:1424` "expect(located.startsWith". This is a strictly better test than what it replaced: fewer invented constants, three real observed pairs instead of one real and one invented.
 - **dropped** · none.
 - **findings** · defect hunt returned 0 this round (the round was itself a correction, not a new finding); 0 carried, 0 dropped.
-- Citation hygiene: `node scripts/citations.mjs docs/work/repo-33-citations-loses-the-record-path.md` at `e3c17f8` gives `0 moved, 0 unresolvable, exit 0`. Anchoring the citations above this time, per your request — `EXIT.moved` at `scripts/citations.mjs:662` "export const EXIT = /** @type {const} */ ({" is cited here too for the same reason.
+- Citation hygiene: `node scripts/citations.mjs docs/work/repo-36-citations-loses-the-record-path.md` at `e3c17f8` gives `0 moved, 0 unresolvable, exit 0`. Anchoring the citations above this time, per your request — `EXIT.moved` at `scripts/citations.mjs:662` "export const EXIT = /** @type {const} */ ({" is cited here too for the same reason.
 - NFR: security n/a · performance n/a · reliability ✓ (no behavior change in `locateRecord`; only the round-three test's own fixture improved) · maintainability ✓ — the Log entry states the correction as a correction rather than silently rewriting round three's account, matching the standard the earlier "builder's note" paragraphs set for the coordinate fix.
 - Invariants: no changes to `scripts/citations.mjs` this round; `scripts/test/citations.test.ts` changes are argument-array-free literal strings and `path.win32` calls, no shell, no `console.`, `node:` protocol unaffected, no `any`, nothing needing `import type` — clean.
 
@@ -380,3 +380,46 @@ That is the argument for anchors, made twice over on one page. Unanchored, an of
   one, and its docblock names both run ids. The `C:` side is still a deduction
   from the assertion pair and the `RUNNER~1` strings rather than a reading of
   `TEMP`, and stays labelled that way.
+
+- **2026-09-08** — **Renumbered `repo-33` → `repo-36`, on the owner's decision.**
+  A peer session, running while this batch was open, filed a different
+  `repo-33` — `docs/work/repo-33-adr-004-rename-and-the-project-name.md`, "ADR
+  004's rename is unfiled…" — and merged it to `main` in **#192**, so `origin/main`
+  now carries a `repo-33` that is not this one. Two tickets claiming one id is
+  not cosmetic: with both present `node scripts/status.mjs --json` **exits 1**,
+  and that exit code is the board gate CI runs, so this branch could not have
+  merged as it stood. Theirs is merged and belongs to another session; all of
+  this batch's branches are unmerged and all its own, so the renumber landed
+  here. `node scripts/next-id.mjs repo` was re-run and returned `next free:
+repo-36` — `repo-34` is held by #187 and `repo-35` was taken minutes earlier by
+  `records/repo-history-tools-09`.
+
+  **`next-id.mjs` was not wrong.** The 2026-09-07 entry above records it
+  reporting `next free: repo-33` at filing time, and that was correct _then_: the
+  script reads ids out of open pull requests and merged history, and the peer's
+  ticket was in neither yet — it had not been pushed, let alone opened. The
+  window between filing an id and opening the pull request that publishes it is
+  real, it is invisible to every session in it, and nothing in the tooling closes
+  it. Nothing was misused; two sessions raced and the loser is renamed. Notably
+  `next-id.mjs` now _does_ report the collision itself, unprompted:
+  `clash: repo-33 is claimed by PR#186, merged`.
+
+  **Past commit subjects on this branch still say `(repo-33)`** and are left
+  alone — they are history across four open pull requests and could only be
+  changed by a force-push to all four. A reader seeing `fix(repo): … (repo-33)`
+  in this branch's log is looking at a commit made before the renumber, not at a
+  reference to the peer's ticket. The pull request **title** was updated, since
+  that is the line that reaches the changelog.
+
+  **Observed but deliberately not fixed here**, as it is separate work and not
+  this branch's: `scripts/status.mjs`'s duplicate-id error prints
+  `"undefined" is used by more than one ticket` rather than naming the id that
+  clashed. The message is what a reader gets when the board gate fails, and it
+  names nothing actionable — the id had to be recovered by hand. Cosmetic, real,
+  and worth its own ticket.
+
+  Gate records above quote the checker being run against this file by its old
+  `repo-33-…` path. Those paths were repointed to the new filename rather than
+  left dangling: the file is the same file and the runs did happen, but a command
+  naming a path that no longer exists is exactly the stale coordinate this ticket
+  is about.

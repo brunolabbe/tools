@@ -1330,7 +1330,7 @@ test("--rev names which record it read, and says when that record cited somethin
 });
 
 /**
- * The separator half of repo-33, and the half that runs on Windows.
+ * The separator half of repo-36, and the half that runs on Windows.
  *
  * `--rev` reads the record out of a commit with `git show <rev>:<path>`, which
  * accepts forward slashes and nothing else. The path used to be produced by
@@ -1490,7 +1490,7 @@ test.skipIf(process.platform === "win32")(
 );
 
 /**
- * The other half of repo-33, reproduced on a platform that is not Windows.
+ * The other half of repo-36, reproduced on a platform that is not Windows.
  *
  * The defect is not really about slashes: it is that subtracting a path git
  * printed from a path Node resolved is only sound while the filesystem admits

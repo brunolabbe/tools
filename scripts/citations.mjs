@@ -1209,7 +1209,7 @@ export function sameDirectory(a, b) {
  * failure is a missing paragraph rather than an error, which is how it survived
  * eight completed matrix runs before anyone read one.
  *
- * Measured two ways (repo-33). On `windows-latest`, `os.tmpdir()` hands back the
+ * Measured two ways (repo-36). On `windows-latest`, `os.tmpdir()` hands back the
  * 8.3 short name `C:\Users\RUNNER~1\…` while git resolves the long
  * `C:/Users/runneradmin/…`, and the subtraction produced
  * `..\..\..\..\..\RUNNER~1\…\drift.md`. On Linux, a directory reached through a
