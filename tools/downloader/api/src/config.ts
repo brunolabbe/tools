@@ -138,6 +138,34 @@ export interface ApiConfig {
 
   /** Per-IP token bucket on `POST /api/probe`. Zero disables it. */
   rateLimitProbePerMinute: number;
+  /**
+   * Per-IP token bucket on `GET /api/probe/:id/events`, the SSE channel that
+   * narrates an analysis. Zero disables it.
+   *
+   * Per IP rather than per probe id, which was the open question on dl-46 and
+   * was answered by the owner: a probe id is minted by the client and costs
+   * nothing to mint, so a bucket keyed on one would be a bucket an attacker
+   * refills by changing a string. The `files` route keys on a capability
+   * instead, but that is a capability *this service issued*, which a probe id
+   * is not.
+   *
+   * **Deliberately the same number as `rateLimitProbePerMinute`**, because the
+   * two endpoints are used exactly one-for-one: the web client opens the stream
+   * and then POSTs the probe it names. A client inside its probe allowance is
+   * therefore inside this one by construction, and this bucket can never be the
+   * thing that refuses it.
+   *
+   * And it is checked against the cap it defends, because a *rate* does not
+   * obviously bound a *concurrency*. A subscriber's socket is closed after
+   * `CHANNEL_TTL_MS` (180 s), so the channels one bucket key holds at once are
+   * the requests it can make in that window: a full bucket's burst plus the
+   * refill, `perMinute * (1 + 180/60)` — **40 of `MAX_CHANNELS`' 64** at this
+   * default. Under the cap, so one address cannot fill the hub alone; the burst
+   * term is easy to drop and doing so understates it by a quarter. The ceiling
+   * for this default is therefore 15, and `rate-limit.test.ts` pins the
+   * arithmetic so a bigger number has to argue with it.
+   */
+  rateLimitProbeEventsPerMinute: number;
   /** Per-IP token bucket on `POST /api/jobs`. Zero disables it. */
   rateLimitJobsPerMinute: number;
   /**
@@ -156,17 +184,32 @@ export interface ApiConfig {
    */
   rateLimitFilesPerMinute: number;
   /**
+   * Token bucket on `GET /api/thumbnail/:token`, keyed on the **thumbnail
+   * token** rather than the caller — the same choice as `files`, for the same
+   * reason: what it protects is one image rather than the service.
+   *
+   * Zero disables it. Two orders of magnitude below `files` because the client
+   * is an `<img>` rather than a video player: one request per probe result, and
+   * `private, max-age=300` on the response means a reload inside five minutes
+   * does not make another. Sixty a minute is a request a second for one image,
+   * which no viewer approaches and which caps a single token's drain at
+   * `60 * MAX_THUMBNAIL_BYTES` — about 30 MB a minute, against the unbounded
+   * figure dl-44's gate measured.
+   */
+  rateLimitThumbnailPerMinute: number;
+  /**
    * Whether `X-Forwarded-For` may name the client.
    *
    * Off by default, and that default is load-bearing rather than conservative:
-   * the probe and jobs limits above are keyed on `request.ip`, so trusting a
-   * header any client can send would turn those two into a formality. Set it to
-   * `true` — or better, to the proxy's address or CIDR — only when this process
-   * genuinely sits behind a proxy that overwrites the header.
+   * the probe, probe-events and jobs limits above are keyed on `request.ip`, so
+   * trusting a header any client can send would turn those three into a
+   * formality. Set it to `true` — or better, to the proxy's address or CIDR —
+   * only when this process genuinely sits behind a proxy that overwrites the
+   * header.
    *
-   * `rateLimitFilesPerMinute` is deliberately outside that dependency: it keys
-   * on the file token, so it means the same thing behind a proxy, behind CGNAT
-   * and with this setting off.
+   * `rateLimitFilesPerMinute` and `rateLimitThumbnailPerMinute` are deliberately
+   * outside that dependency: they key on the capability token, so they mean the
+   * same thing behind a proxy, behind CGNAT and with this setting off.
    */
   trustProxy: boolean | string;
 
@@ -194,8 +237,11 @@ export const API_DEFAULTS = {
   probeCacheTtlMs: 30_000,
   logLevel: "info",
   rateLimitProbePerMinute: 10,
+  // One-for-one with the probe above; see `rateLimitProbeEventsPerMinute`.
+  rateLimitProbeEventsPerMinute: 10,
   rateLimitJobsPerMinute: 5,
   rateLimitFilesPerMinute: 600,
+  rateLimitThumbnailPerMinute: 60,
 } as const;
 
 /**
@@ -396,12 +442,22 @@ export function loadApiConfig(
     rateLimitProbePerMinute:
       overrides.rateLimitProbePerMinute ??
       int(env["RATE_LIMIT_PROBE_PER_MINUTE"], API_DEFAULTS.rateLimitProbePerMinute, { min: 0 }),
+    rateLimitProbeEventsPerMinute:
+      overrides.rateLimitProbeEventsPerMinute ??
+      int(env["RATE_LIMIT_PROBE_EVENTS_PER_MINUTE"], API_DEFAULTS.rateLimitProbeEventsPerMinute, {
+        min: 0,
+      }),
     rateLimitJobsPerMinute:
       overrides.rateLimitJobsPerMinute ??
       int(env["RATE_LIMIT_JOBS_PER_MINUTE"], API_DEFAULTS.rateLimitJobsPerMinute, { min: 0 }),
     rateLimitFilesPerMinute:
       overrides.rateLimitFilesPerMinute ??
       int(env["RATE_LIMIT_FILES_PER_MINUTE"], API_DEFAULTS.rateLimitFilesPerMinute, { min: 0 }),
+    rateLimitThumbnailPerMinute:
+      overrides.rateLimitThumbnailPerMinute ??
+      int(env["RATE_LIMIT_THUMBNAIL_PER_MINUTE"], API_DEFAULTS.rateLimitThumbnailPerMinute, {
+        min: 0,
+      }),
     trustProxy: overrides.trustProxy ?? trustProxy(env["TRUST_PROXY"]),
     ssrfAllowHosts: overrides.ssrfAllowHosts ?? list(env["SSRF_ALLOW_HOSTS"]),
     ssrfAllowPrivateAddresses:

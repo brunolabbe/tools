@@ -8,13 +8,15 @@
  */
 
 import { ROUTES } from "@downloader/contract";
-import type { JobResponse } from "@downloader/contract";
+import type { JobResponse, ProbeEvent } from "@downloader/contract";
+import type { LightMyRequestResponse } from "fastify";
 import { describe, expect, test } from "vitest";
 import type { Harness } from "./helpers.ts";
 import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
 import { clientKey, ConcurrencyGate, RateLimiter } from "@webtools/core/rate-limit";
-import { API_DEFAULTS } from "../src/config.ts";
+import { API_DEFAULTS, loadApiConfig } from "../src/config.ts";
 import { createLogger } from "../src/logger.ts";
+import { CHANNEL_TTL_MS, MAX_CHANNELS } from "../src/probe-stages.ts";
 
 /** A clock the test moves by hand. */
 function fakeClock(startMs = 1_000_000): { now: () => number; advance: (ms: number) => void } {
@@ -641,5 +643,330 @@ describe("the download route", () => {
     } finally {
       await harness.dispose();
     }
+  });
+});
+
+/**
+ * `GET /api/probe/:id/events` — the SSE channel that narrates an analysis.
+ *
+ * dl-46. This was the one client-facing endpoint with no bucket, and
+ * subscribing is what *creates* a channel, so `MAX_CHANNELS` was spendable by
+ * anyone who could reach the port. Nothing leaks and no analysis fails when it
+ * is full — what is denied is the narration — but it was denied for the cost of
+ * holding sockets, which is what the bucket below prices.
+ *
+ * The awkward shape of these tests is the endpoint's, not a preference: an
+ * *allowed* subscribe holds its socket until the probe it names says `done`, so
+ * every allowed stream here is opened alongside the probe that terminates it.
+ * A refusal returns immediately, because the hook runs on `onRequest`.
+ *
+ * Its two helpers are below rather than inside it, which is oxlint's
+ * `consistent-function-scoping` rule and not a preference.
+ */
+
+/** A distinct, schema-valid probe id per call: `[A-Za-z0-9_-]{16,64}`. */
+function probeId(n: number): string {
+  return `probe-id-${String(n).padStart(8, "0")}`;
+}
+
+/** Opens the stage channel and runs the probe that ends it, together. */
+async function narrate(
+  harness: Harness,
+  n: number,
+  remoteAddress?: string,
+): Promise<{ stream: LightMyRequestResponse; frames: ProbeEvent[]; probeStatus: number }> {
+  const id = probeId(n);
+  const opened = harness.app.server.inject({
+    method: "GET",
+    url: ROUTES.probeEvents(id),
+    ...(remoteAddress === undefined ? {} : { remoteAddress }),
+  });
+  // A distinct URL each time, or the probe cache answers without opening a
+  // channel — and then nothing would ever terminate the stream above.
+  const probe = harness.app.server.inject({
+    method: "POST",
+    url: ROUTES.probe,
+    payload: { url: `${SOURCE_URL}/${String(n)}`, probeId: id },
+  });
+  const [stream, posted] = await Promise.all([opened, probe]);
+  return {
+    stream,
+    frames: stream.body
+      .split("\n\n")
+      .filter((chunk) => chunk.startsWith("data: "))
+      .map((chunk) => JSON.parse(chunk.slice("data: ".length)) as ProbeEvent),
+    probeStatus: posted.statusCode,
+  };
+}
+
+describe("the probe stage channel", () => {
+  test("a client over its limit gets a JSON error, not an empty event stream", async () => {
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { rateLimitProbeEventsPerMinute: 1 },
+    });
+
+    try {
+      const first = await narrate(harness, 1);
+      expect(first.stream.statusCode).toBe(200);
+      expect(String(first.stream.headers["content-type"])).toContain("text/event-stream");
+
+      // The channel count before the refused subscribe: subscribing is what
+      // creates a channel, so a hook that did not run would show one more.
+      const channelsBefore = harness.app.context.probeStages.channelCount;
+      const refused = await harness.app.server.inject({
+        method: "GET",
+        url: ROUTES.probeEvents(probeId(2)),
+      });
+
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json().error.code).toBe("RATE_LIMITED");
+      expect(refused.json().error.retryable).toBe(true);
+      // The point of the ordering: `onRequest` fires before the handler, so no
+      // streaming header was ever written and the body is an error a client can
+      // read rather than a stream that will never say anything.
+      expect(String(refused.headers["content-type"])).toContain("application/json");
+      expect(String(refused.headers["content-type"])).not.toContain("text/event-stream");
+      expect(refused.body).not.toContain("data: ");
+      // Both the header every HTTP client understands and the field the UI reads.
+      expect(Number(refused.headers["retry-after"])).toBeGreaterThan(0);
+      expect(refused.json().error.details.retryAfterSec).toBeGreaterThan(0);
+      // `scope` is for our logs; the allowlist in http-errors.ts keeps it there.
+      expect(refused.json().error.details.scope).toBeUndefined();
+      expect(refused.headers["ratelimit-limit"]).toBe("1");
+
+      expect(harness.app.context.probeStages.channelCount).toBe(channelsBefore);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("a probe whose narration was refused still completes and answers normally", async () => {
+    // The whole reason this endpoint can be refused at all: the analysis is the
+    // product and the narration is decoration over it. `POST /api/probe` has its
+    // own bucket, off in this harness, so the only refusal in play is the SSE
+    // one.
+    const resolver = new StubResolver(probeResult());
+    const harness = await createHarness({
+      resolver,
+      config: { rateLimitProbeEventsPerMinute: 1 },
+    });
+
+    try {
+      expect((await narrate(harness, 1)).stream.statusCode).toBe(200);
+
+      const refused = await harness.app.server.inject({
+        method: "GET",
+        url: ROUTES.probeEvents(probeId(2)),
+      });
+      expect(refused.statusCode).toBe(429);
+
+      const probed = await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.probe,
+        payload: { url: `${SOURCE_URL}/unnarrated`, probeId: probeId(2) },
+      });
+      expect(probed.statusCode).toBe(200);
+      // A real answer, not merely a 200: the resolver ran a second time and the
+      // response carries the analysis it produced.
+      expect(resolver.calls).toBe(2);
+      expect(probed.json().cached).toBe(false);
+      expect(probed.json().probe.title).toBe(probeResult().title);
+      expect(probed.json().probe.variants).toHaveLength(probeResult().variants.length);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("a client under its limit is unaffected, so it cannot pass by refusing everyone", async () => {
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { rateLimitProbeEventsPerMinute: 5 },
+    });
+
+    try {
+      for (let call = 1; call <= 3; call++) {
+        // oxlint-disable-next-line no-await-in-loop
+        const narrated = await narrate(harness, call);
+        expect(narrated.stream.statusCode, `call ${call}`).toBe(200);
+        expect(String(narrated.stream.headers["content-type"])).toContain("text/event-stream");
+        // A real narration, not merely a 200: the stream carried its frames and
+        // was ended by the terminator rather than by anything here.
+        expect(narrated.frames.at(-1)?.type).toBe("done");
+        expect(narrated.probeStatus).toBe(200);
+        // The advisory `RateLimit-*` headers do not survive an *allowed*
+        // subscribe: this route writes its own headers straight to `reply.raw`,
+        // which bypasses Fastify's header store. Pinned so it is a known
+        // property rather than a surprise. It costs nothing — `EventSource`
+        // exposes no response headers to the page, and a refusal is an ordinary
+        // Fastify error response that carries all of them.
+        expect(narrated.stream.headers["ratelimit-limit"]).toBeUndefined();
+      }
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("one address exhausting the channel cannot silence another", async () => {
+    // Keyed per IP, which was dl-46's open question and the owner's answer. The
+    // second address is a different customer and its narration is untouched.
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { rateLimitProbeEventsPerMinute: 1 },
+    });
+
+    try {
+      expect((await narrate(harness, 1, "203.0.113.7")).stream.statusCode).toBe(200);
+
+      const refused = await harness.app.server.inject({
+        method: "GET",
+        url: ROUTES.probeEvents(probeId(2)),
+        remoteAddress: "203.0.113.7",
+      });
+      expect(refused.statusCode).toBe(429);
+
+      expect((await narrate(harness, 3, "198.51.100.4")).stream.statusCode).toBe(200);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("the default is on, and is one subscribe per probe", async () => {
+    // A new limiter that defaulted off would leave this the only unprotected
+    // endpoint again, silently. Read off `loadApiConfig` with an empty
+    // environment rather than off `API_DEFAULTS`, so the wiring is included.
+    const shipped = loadApiConfig({}, {});
+    expect(shipped.rateLimitProbeEventsPerMinute).toBeGreaterThan(0);
+    // The endpoints are used one-for-one: the client opens the stream, then
+    // POSTs the probe it names. Equal allowances mean this bucket can never be
+    // the one that refuses a client still inside its probe allowance.
+    expect(shipped.rateLimitProbeEventsPerMinute).toBe(shipped.rateLimitProbePerMinute);
+
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { rateLimitProbeEventsPerMinute: shipped.rateLimitProbeEventsPerMinute },
+    });
+    try {
+      expect(harness.app.context.rateLimits.probeEvents.enabled).toBe(true);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("the default keeps one address under the hub's cap", () => {
+    // The arithmetic the default is chosen by, pinned so that raising either
+    // number alone has to argue with it. A rate does not obviously bound a
+    // concurrency: what makes it one here is that a subscriber's socket is
+    // closed after CHANNEL_TTL_MS, so the channels one bucket key holds at
+    // once are the requests it can make inside that window — a full bucket's
+    // burst, *plus* the refill over it. Dropping the burst term is the easy
+    // mistake and understates this by a quarter.
+    const burst = API_DEFAULTS.rateLimitProbeEventsPerMinute;
+    const refilled = API_DEFAULTS.rateLimitProbeEventsPerMinute * (CHANNEL_TTL_MS / 60_000);
+    expect(burst + refilled).toBe(40);
+    expect(burst + refilled).toBeLessThan(MAX_CHANNELS);
+  });
+});
+
+/**
+ * `GET /api/thumbnail/:token` — the other route that had no bucket.
+ *
+ * Inherited work rather than a new finding: dl-44 gave the preview images a
+ * disk copy, which turned a repeated map lookup into a repeated file read, and
+ * the owner answered its rate-limit question as "leave it, and carry it on
+ * dl-46". Keyed on the token for the same reason `/api/files/:token` is — what
+ * it protects is one image, not the service.
+ */
+describe("the thumbnail route", () => {
+  /** A 2x2 GIF. Small, real, and a member of the content-type allowlist. */
+  const GIF = Buffer.from("R0lGODlhAgACAIAAAP///wAAACH5BAAAAAAALAAAAAACAAIAAAIDRAJZADs=", "base64");
+
+  /** Puts an image in the store the way a probe would, and returns its URL. */
+  function storedImage(harness: Harness): string {
+    const token = harness.app.context.thumbnails.put({ contentType: "image/gif", bytes: GIF });
+    return ROUTES.thumbnail(token);
+  }
+
+  test("refuses past its limit, and the refusal carries none of the route's headers", async () => {
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { rateLimitThumbnailPerMinute: 2 },
+    });
+
+    try {
+      const url = storedImage(harness);
+      const get = async () => harness.app.server.inject({ method: "GET", url });
+
+      for (let call = 0; call < 2; call++) {
+        // oxlint-disable-next-line no-await-in-loop
+        const served = await get();
+        expect(served.statusCode, `call ${call}`).toBe(200);
+        expect(served.headers["content-type"]).toBe("image/gif");
+      }
+
+      const refused = await get();
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json().error.code).toBe("RATE_LIMITED");
+      expect(Number(refused.headers["retry-after"])).toBeGreaterThan(0);
+      expect(refused.json().error.details.retryAfterSec).toBeGreaterThan(0);
+      expect(refused.json().error.details.scope).toBeUndefined();
+      // `onRequest`, so the handler never ran: no image headers on a 429.
+      expect(String(refused.headers["content-type"])).toContain("application/json");
+      expect(refused.headers["cache-control"]).toBeUndefined();
+      expect(refused.headers["x-content-type-options"]).toBeUndefined();
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("one exhausted image does not spend another image's allowance", async () => {
+    // The reason the key is the token: both requests come from the same client
+    // address, and an address key would have refused the second image.
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { rateLimitThumbnailPerMinute: 1 },
+    });
+
+    try {
+      const first = storedImage(harness);
+      const second = storedImage(harness);
+      expect(first).not.toBe(second);
+
+      expect((await harness.app.server.inject({ method: "GET", url: first })).statusCode).toBe(200);
+      expect((await harness.app.server.inject({ method: "GET", url: first })).statusCode).toBe(429);
+      expect((await harness.app.server.inject({ method: "GET", url: second })).statusCode).toBe(
+        200,
+      );
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("the token never reaches the log line that records the refusal", async () => {
+    // A thumbnail token is a live capability, exactly like a file token, and
+    // the bucket key is logged. Same guard, same reason, different route.
+    const lines: string[] = [];
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { rateLimitThumbnailPerMinute: 1 },
+      logger: createLogger({ level: "warn", write: (line) => void lines.push(line) }),
+    });
+
+    try {
+      const url = storedImage(harness);
+      const token = url.slice(url.lastIndexOf("/") + 1);
+      await harness.app.server.inject({ method: "GET", url });
+      expect((await harness.app.server.inject({ method: "GET", url })).statusCode).toBe(429);
+
+      const logged = lines.join("\n");
+      expect(logged).toContain("rate limited");
+      expect(logged).not.toContain(token);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("the default is on", () => {
+    expect(loadApiConfig({}, {}).rateLimitThumbnailPerMinute).toBeGreaterThan(0);
   });
 });

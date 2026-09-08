@@ -22,60 +22,74 @@
  * used to be — for a job whose file the retention sweep has taken, that is now
  * the honest answer rather than the usual one.
  *
- * ## Why it is still not rate limited
+ * ## Why it is rate limited, and on what
  *
- * It was a decision when the answer came from a `Map`, and the reasoning has to
- * be restated now that it can reach SQLite and the disk. The other three
- * limited routes each protect something expensive: a browser probe costs ~15 s
- * and ~300 MB, a job costs a worker slot, a file is gigabytes off a disk. This
- * answers with at most 512 KB — `MAX_THUMBNAIL_BYTES`, enforced before anything
- * was stored — to a caller who had to hold an unguessable 256-bit token to get
- * anything at all. A caller without one is rejected on token *shape*, before
- * the database is touched, so scanning costs what the not-found handler costs.
+ * It was not, while the answer came from a `Map`: at most 512 KB —
+ * `MAX_THUMBNAIL_BYTES`, enforced before anything was stored — served out of
+ * memory to a caller who had to hold an unguessable 256-bit token to get
+ * anything at all. dl-44 changed what a miss costs, by falling through to
+ * SQLite and a file read, and its gate measured what that left: **up to 512 KB
+ * per request, unlimited requests per minute, per valid token, for up to
+ * `fileRetentionHours`**. The owner answered that as "leave it, and carry the
+ * follow-up on dl-46" — this is dl-46 closing it.
  *
- * What did change is that a caller holding one valid token can now cause a
- * repeated small disk read rather than a repeated map lookup, for as long as
- * the file survives. If that ever matters, `createRateLimitHook` takes an
- * optional `key` and `fileBucketKey` in `files.ts` is the worked example of
- * keying on a capability rather than an address.
+ * **Keyed on the token, as `/api/files/:token` is and for the same reason:**
+ * what this protects is one image rather than the service, and an address key
+ * would hand a leaked token a fresh allowance per address it is fetched from.
+ * `capabilityBucketKey` carries the rest, including what the malformed-token
+ * fallback does and does not buy. A caller without a well-formed token is still
+ * rejected on token *shape*, before the database is touched, so scanning costs
+ * what the not-found handler costs.
  */
 
 import { AppError, ROUTES } from "@downloader/contract";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AppContext } from "../context.ts";
 import { isWellFormedToken } from "../jobs/tokens.ts";
+import { capabilityBucketKey, createRateLimitHook } from "../rate-limit.ts";
 import { isServableContentType, readPersistedThumbnail } from "../thumbnails.ts";
 
 export function registerThumbnailRoute(app: FastifyInstance, context: AppContext): void {
-  app.get<{ Params: { token: string } }>(ROUTES.thumbnail(":token"), async (request, reply) => {
-    const { token } = request.params;
-
-    const stored = context.thumbnails.get(token);
-    if (stored !== null) return await send(reply, stored.contentType, stored.bytes);
-
-    // Rejected on shape before a database round trip, so scanning for tokens
-    // costs an attacker the same as any other 404 — the same guard, and the
-    // same reason, as `/api/files/:token`. Every token this service mints has
-    // this shape: `ThumbnailStore.put` and `createFileToken` are both 32 CSPRNG
-    // bytes as base64url.
-    if (!isWellFormedToken(token)) throw notFound();
-
-    const record = context.store.findThumbnail(token);
-    if (record === null) throw notFound();
-
-    // The database is a boundary. This value becomes a `Content-Type` header on
-    // *our* origin, and it was allowlisted when the bytes were captured — so a
-    // row saying otherwise was not written by a build that agreed with this one,
-    // and is not something to serve on trust. See `ALLOWED_CONTENT_TYPES`.
-    if (!isServableContentType(record.contentType)) throw notFound();
-
-    const bytes = await readPersistedThumbnail(context.engine.storage, record.path);
-    // The row outlived the bytes: the retention sweep took the job's output
-    // directory, and the image went with the file as intended.
-    if (bytes === null) throw notFound();
-
-    return await send(reply, record.contentType, bytes);
+  const rateLimit = createRateLimitHook({
+    limiter: context.rateLimits.thumbnail,
+    logger: context.logger,
+    scope: "thumbnail",
+    key: capabilityBucketKey,
   });
+
+  app.get<{ Params: { token: string } }>(
+    ROUTES.thumbnail(":token"),
+    { onRequest: rateLimit },
+    async (request, reply) => {
+      const { token } = request.params;
+
+      const stored = context.thumbnails.get(token);
+      if (stored !== null) return await send(reply, stored.contentType, stored.bytes);
+
+      // Rejected on shape before a database round trip, so scanning for tokens
+      // costs an attacker the same as any other 404 — the same guard, and the
+      // same reason, as `/api/files/:token`. Every token this service mints has
+      // this shape: `ThumbnailStore.put` and `createFileToken` are both 32 CSPRNG
+      // bytes as base64url.
+      if (!isWellFormedToken(token)) throw notFound();
+
+      const record = context.store.findThumbnail(token);
+      if (record === null) throw notFound();
+
+      // The database is a boundary. This value becomes a `Content-Type` header on
+      // *our* origin, and it was allowlisted when the bytes were captured — so a
+      // row saying otherwise was not written by a build that agreed with this one,
+      // and is not something to serve on trust. See `ALLOWED_CONTENT_TYPES`.
+      if (!isServableContentType(record.contentType)) throw notFound();
+
+      const bytes = await readPersistedThumbnail(context.engine.storage, record.path);
+      // The row outlived the bytes: the retention sweep took the job's output
+      // directory, and the image went with the file as intended.
+      if (bytes === null) throw notFound();
+
+      return await send(reply, record.contentType, bytes);
+    },
+  );
 }
 
 /**

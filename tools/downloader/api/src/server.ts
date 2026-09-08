@@ -473,12 +473,20 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
         perMinute: config.rateLimitProbePerMinute,
         now: () => now().getTime(),
       }),
+      probeEvents: new RateLimiter({
+        perMinute: config.rateLimitProbeEventsPerMinute,
+        now: () => now().getTime(),
+      }),
       jobs: new RateLimiter({
         perMinute: config.rateLimitJobsPerMinute,
         now: () => now().getTime(),
       }),
       files: new RateLimiter({
         perMinute: config.rateLimitFilesPerMinute,
+        now: () => now().getTime(),
+      }),
+      thumbnail: new RateLimiter({
+        perMinute: config.rateLimitThumbnailPerMinute,
         now: () => now().getTime(),
       }),
     },

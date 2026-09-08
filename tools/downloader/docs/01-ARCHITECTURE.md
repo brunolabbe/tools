@@ -291,8 +291,15 @@ the root's SPKI>`. Not a trust store: Chromium on Linux reads NSS, which
   `shell: true`.
 - **Resource limits** — timeouts on every stage, process-tree kill on cancel,
   concurrency caps, disk quota check before starting.
-- **Rate limiting** — per-IP on `/probe` and `/jobs`; browser probes are
-  expensive enough to be a trivial DoS vector otherwise.
+- **Rate limiting** — **every client-facing route has a bucket**, which since
+  [`dl-46`](./work/dl-46-rate-limit-the-probe-stage-channel.md) is a property
+  rather than a list to keep in step. Per-IP on `/probe`, `/jobs` and
+  `/probe/:id/events`, because what those protect is the service; per capability
+  token on `/files/:token` and `/thumbnail/:token`, because what those protect is
+  the one artefact the token names. Browser probes are expensive enough to be a
+  trivial DoS vector otherwise, and on the SSE channel subscribing is what
+  _creates_ a channel — so an unbucketed one let anybody fill the hub and leave
+  every other user's analysis unnarrated.
 - **There is no caller, so there is nothing that lists.** This service has no
   session, no user and no ownership column, and
   [`dl-32`](./work/dl-32-the-job-list-has-no-caller.md) settled what follows from
