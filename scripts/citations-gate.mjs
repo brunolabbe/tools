@@ -295,7 +295,6 @@ export const GRANDFATHERED = new Map([
   ["tools/planner/docs/work/pl-10-plan-view-and-provenance.md", 17],
   ["tools/planner/docs/work/pl-25-grounding-cache.md", 23],
   ["tools/planner/docs/work/pl-28-valhalla-adapter.md", 38],
-  ["tools/planner/docs/work/pl-29-detours-along-a-leg.md", 11],
   ["tools/planner/docs/work/pl-32-vite-config-test.md", 22],
 ]);
 

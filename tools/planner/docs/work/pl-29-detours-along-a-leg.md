@@ -158,7 +158,7 @@ migration 7.
 
 **What it verified:**
 
-- Read every branch of `uncheckedFor` (`itinerary/src/unchecked.ts:157-382`
+- Read every branch of `uncheckedFor` (`itinerary/src/unchecked.ts:157-382 "export function uncheckedFor(input:"`
   as reviewed) and confirmed all 13 pre-existing `UncheckedConstraintKind`s
   are pure functions of `(brief, candidates, revision.days)` — no
   counterexample. Named the specific derivations: `travel-time` off
@@ -177,7 +177,7 @@ migration 7.
   `UncheckedConstraintKind`, `UncheckedConstraint`, every literal kind string,
   plus `assertNever`/`satisfies never`/`: never`. Zero switches, exhaustiveness
   checks or per-kind mappings outside `unchecked.ts`'s own producing
-  if-chain. The one display site, `web/src/plan/PlanView.tsx:424-425`, keys
+  if-chain. The one display site, `web/src/plan/PlanView.tsx:426-428 "uncheckedConstraintKey(constraint)"`, keys
   by `uncheckedConstraintKey` (content-based since pl-27) and labels via a
   generic `humanise()` (`replaceAll("-", " ")`) — a new kind renders with zero
   code changes. Zero instances, across all four packages, of the defect class
@@ -386,6 +386,8 @@ vendor or pin — they are not paths in this tree and cannot be resolved
 locally; recorded for whoever wants to check them against whatever `master`
 is when they look:**
 
+<!-- citations: evidence src/overpass_api/statements/around.cc:392-441 -->
+
 - `src/overpass_api/statements/around.cc:392-441` (external, unpinned
   `master`) — a QL `around:` criterion with more than one coordinate pair is
   packed into a `polyline` attribute; a single pair becomes a plain
@@ -467,7 +469,7 @@ component, its dedup, its tests) and the ticket file itself.
   the Log's account of it: confirmed that salting the map key defeats
   deduplication and fails the **count** assertion —
   `expected [...] to have a length of 1 but got 2` at
-  `web/test/plan-view.test.tsx:640` — and not merely the incidental React
+  `web/test/plan-view.test.tsx:638-642 "One link, not two, for the two legs"` — and not merely the incidental React
   duplicate-key warning that mutation also produces as a side effect. A test
   that only watched the console for that warning would have been checking a
   symptom rather than the behaviour.
@@ -487,11 +489,13 @@ component, its dedup, its tests) and the ticket file itself.
 **Findings:**
 
 - **F1 · low · fixed** — `pl-35-travel-source-unattributed.md`'s Why section
-  cited `contract/src/plan.ts:114` and `contract/src/travel.ts:95`. At
+  cited `contract/src/plan.ts` line 114 and `contract/src/travel.ts` line 95. At
   `15162df` both are wrong: `travelFromPrevious: ItemTravel | null;` is at
-  `plan.ts:116`, and `provenance: Provenance;` is at `travel.ts:62` — line 95
+  `tools/planner/contract/src/plan.ts:125 "travelFromPrevious: ItemTravel | null;"`
+  (line 116 when the finding was written), and `provenance: Provenance;` is at
+  `tools/planner/contract/src/travel.ts:62 "provenance: Provenance;"` — line 95
   there lands mid-comment above an unrelated declaration. Independently
-  confirmed `travel.ts:62` before accepting the finding. Neither file is
+  confirmed `tools/planner/contract/src/travel.ts:62 "provenance: Provenance;"` before accepting the finding. Neither file is
   touched between `446b12c` and `15162df`, so the citations drifted from
   contract edits earlier in the branch's life and were never re-resolved when
   the ticket document itself was added later — the doc's own commit touched
@@ -503,12 +507,12 @@ component, its dedup, its tests) and the ticket file itself.
   attribution gaps of the same shape as pl-35 but one step earlier, where a
   `Source` is built and then discarded before anything downstream could store
   it:
-  - `api/src/runs/travel.ts:296` — `located.set(each.key,
+  - `api/src/runs/travel.ts:327 "located.set(each.key, outcome.value.coordinates);"` — `located.set(each.key,
 outcome.value.coordinates)` keeps a geocoded place's coordinates and
     drops `outcome.value.source`; `located` is typed `Map<string,
 Coordinates>`, so there is no field for the source to survive in even if
     the line kept it.
-  - `agent/src/providers/scripted-fan-out.ts:98` — every candidate is
+  - `agent/src/providers/scripted-fan-out.ts:89 "since pl-36"` (line 98 when the finding was written, before pl-36 removed the field from the proposal) — every candidate was
     stamped `provenance: MODEL_ASSERTED` regardless of whether it was written
     from a discovered `Find`, and nothing anywhere copies `Find.sources` onto
     the `Candidate` a specialist proposes from one.
