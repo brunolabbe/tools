@@ -3,7 +3,7 @@ id: repo-34
 tool: repo
 title: Three Windows-only code paths that no assertion covers, and one of them is a security control
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -151,3 +151,108 @@ repo` reported `next free: repo-33`, and `repo-33` was held at that moment by
   `repo`-scoped branch, which is the split CLAUDE.md names as the tell that
   there should have been two commits. Recorded so the deferral is visible rather
   than inferred.
+
+- **2026-09-08** — Built. Base `origin/main` at `b384033`, branch
+  `repo-34-windows-only-code-paths`.
+
+  **Step 1 — `taskkillPath`.** Added three cases to `ffmpeg-args.test.ts`
+  beside `buildTaskkillArgs`, asserting the exact string per branch (`SystemRoot`
+  wins over `windir` and the literal default; `windir` used when `SystemRoot` is
+  absent; falls back to `C:\Windows` when neither is set), built the same way
+  the function itself builds it — `path.join(...)`, which is POSIX-flavoured on
+  this host, so the assertion is checking the fallback _selection_, not the
+  Windows separator; the test's own comment says so. Shown red first as the
+  Done-when line asked: changed the fallback literal in `kill.ts` from
+  `"C:\\Windows"` to `"C:\\Win"`, ran the file, and the red was
+  `AssertionError: expected 'C:\Win/System32/taskkill.exe' to be
+'C:\Windows/System32/taskkill.exe'` on exactly the one test touching that
+  branch (27 of 28 still passed). Reverted, reran, 28/28 green.
+
+  **Step 2 — `findExecutable`.** Added `platform`/`env` parameters defaulting
+  to `process.platform`/`process.env`; the one call site (the constructor) is
+  unchanged. Five new cases in `ytdlp.test.ts` drive the `PATHEXT` branch from
+  this Linux host with a real temp directory and real files (extension found;
+  earlier `PATHEXT` entry preferred over a later one; default `PATHEXT` list
+  used when the env has none; a non-Windows platform does _not_ try extensions
+  even though the extensioned file exists; `;`-delimited `PATH` on Windows
+  versus the `:`-delimited POSIX form). Not folded in as "not worth it" — the
+  refactor was the small one the ticket predicted, so this branch of Done-when
+  2 does not apply.
+
+  **Step 3 — `assertPathInside`.** Added an optional `pathModule` parameter
+  (`typeof path`, defaulting to `node:path`); no caller passes a third
+  argument today, so both `assertRealPathInside`'s internal call and the four
+  external call sites are unchanged. Two new cases in `storage.test.ts`, driven
+  with `path.win32`: a drive-letter root with a `..\` escape, and a
+  `C:\storage-other\x` sibling-prefix case. **Shown red first, and the ticket's
+  own prediction was exact**: with the third argument dropped (i.e. calling
+  `assertPathInside(winRoot, candidate)` with no path module — the
+  pre-refactor behaviour, since the default is `node:path`, which is POSIX on
+  this host), both new cases failed with `expected function to throw an error,
+but it didn't`. Concretely: `path.relative` under POSIX treats a `..\`-style
+  candidate as one opaque path segment (backslash is not its separator), so
+  neither the `relative === ".."` check nor the `relative.startsWith("..{sep}")`
+  check ever fires — the exact "fixture never reached the Windows branch" gap
+  the ticket names. Restored the `path.win32` argument, reran, both pass.
+
+  The existing `process.platform`-branched "rejects an absolute path
+  elsewhere" test (line 76 as the ticket cited; unchanged in position) was
+  **kept, with a note** rather than removed: it is the only case in the file
+  that exercises the _default_ parameter (no injected module) against
+  whichever `node:path` the host process actually has, so on the real
+  `windows-latest` leg (repo-31: informational, still runs) it is the one
+  assertion proving the default wiring resolves to `path.win32` there — the
+  injected `path.win32` cases pass identically on every host and cannot prove
+  that. Decided, not left ambiguous.
+
+  **Step 4 — not touched.** No change to `killTreeWindows`, `killTreePosix` or
+  `killProcessTree`. The instrumentation-based measurement in this ticket's
+  "Why" was not re-run — re-running it was offered as a check for anyone
+  tempted to widen scope, and nobody was tempted; taken as read rather than
+  redone.
+
+  **Done-when 5 — `ci.yml`.** The matrix comment's claim that the cancellation
+  test is "the only execution of `taskkillPath()` anywhere" is now false (step
+  1 added a direct execution), so it was corrected: `buildTaskkillArgs` is now
+  listed alongside `taskkillPath`'s fallback chain as a pure-function case the
+  matrix doesn't exist for, and the surviving claim was narrowed to what is
+  still true — this is the only place `taskkillPath()`'s return value reaches a
+  real spawned `taskkill.exe`. Edited lines 209–224, entirely within the `test`
+  job and clear of the `check`-job region (near line 136) a sibling session was
+  sweeping concurrently on repo-29; no overlap seen in `git status`.
+
+  **Fold-in exception** — nothing found. The three refactors are independent
+  (different files, different functions) and none of the Build steps left an
+  adjacent already-specified task free; nothing folded in beyond what the ticket
+  already asked for.
+
+  **Verification cost**, measured on this branch after `npm run build` (so
+  `dist` exists and the full suite runs, not a fraction of it):
+  - `npx vitest run tools/downloader/engine/test/ffmpeg-args.test.ts` — 28
+    tests, 1 file, wall 1.14s.
+  - `npx vitest run tools/downloader/resolvers/test/ytdlp.test.ts` — 48 tests
+    (43 existing + 5 new), 1 file, wall 1.83s.
+  - `npx vitest run tools/downloader/engine/test/storage.test.ts` (narrowest
+    spec touching the security control) — 21 tests, 1 file, wall 0.96s.
+  - `npx vitest run tools/downloader/engine/test/` (its containing directory)
+    — 164 tests, 14 files, wall 34.9s — most of that is the real
+    `ffmpeg-static`/`hls-e2e` spawns this ticket explicitly left alone, not
+    anything added here.
+  - `npm test -- --project downloader` — 1204 tests, 73 files, wall ~40s.
+  - `npm test` (full repo, run once at the end since no shared config moved)
+    — 2316 tests, 135 files, wall ~41s.
+  - `npm run check` — exit 0 (lint warnings present are pre-existing
+    `no-await-in-loop` notices unrelated to this branch's files, none new).
+
+  None of these numbers are quoted from anywhere; each was run on this branch,
+  on this host, after a real `npm run build`.
+
+  **What the brief had right, in full** — nothing to correct. The three Build
+  steps, the exact fallback chain in step 1, the "pure function, no decision"
+  read on step 1, and the win32-injection shape in step 3 all matched the code
+  as found. The one place this Log adds information the ticket didn't have is
+  the literal red-test output above, which the ticket asked for but couldn't
+  have run itself.
+
+  No open decisions. Committed, pushed, PR not opened — a reviewer gates this
+  branch first per the standard process.

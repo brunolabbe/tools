@@ -72,6 +72,15 @@ describe("assertPathInside", () => {
     expect(() => assertPathInside(root, "out/../../etc/passwd")).toThrow(AppError);
   });
 
+  // This branch exercises the *default* parameter — no injected path module —
+  // against `process.platform`'s own idea of "elsewhere". On a Linux host that
+  // proves the POSIX case only; on the real `windows-latest` runner (repo-31:
+  // informational, not gating, but it still runs and reports) it is the one
+  // place in this file that proves the default wiring — `pathModule = path` —
+  // really does resolve to `path.win32` on that host, which the injected
+  // `path.win32` cases below cannot: they always pass the same way regardless
+  // of what platform runs them. Kept for that reason rather than removed as
+  // redundant with the injected cases.
   test("rejects an absolute path elsewhere", () => {
     const elsewhere = process.platform === "win32" ? "C:\\Windows\\system.ini" : "/etc/passwd";
     expect(() => assertPathInside(root, elsewhere)).toThrow(AppError);
@@ -83,6 +92,28 @@ describe("assertPathInside", () => {
 
   test("does not confuse a sibling whose name starts with the root", () => {
     expect(() => assertPathInside(root, path.join(root + "-other", "x"))).toThrow(AppError);
+  });
+
+  // The two cases above only prove the containment check on *this* host's
+  // path module (POSIX, in this repo's CI and in every worktree). Node ships
+  // `path.win32` for exactly this: driving the Windows-flavoured resolver from
+  // a Linux test, without waiting for a real Windows process. Measured before
+  // this refactor existed — `assertPathInside(winRoot, candidate)` with no
+  // third argument, i.e. hardcoded `node:path`, which is POSIX here — both of
+  // these candidates were accepted rather than rejected: backslash is not a
+  // POSIX separator, so `path.relative` never produced a leading `..\` or a
+  // `..` component for either one, and the containment check found nothing to
+  // reject. That is the exact gap this ticket names: a check that only proves
+  // itself when the fixture happens to reach the Windows branch.
+  test("rejects a Windows-style escape when driven by path.win32", () => {
+    const winRoot = "C:\\storage";
+    expect(() => assertPathInside(winRoot, "..\\secrets.txt", path.win32)).toThrow(AppError);
+  });
+
+  test("does not confuse a Windows sibling whose name starts with the root, via path.win32", () => {
+    const winRoot = "C:\\storage";
+    const sibling = path.win32.join(winRoot + "-other", "x");
+    expect(() => assertPathInside(winRoot, sibling, path.win32)).toThrow(AppError);
   });
 
   test("throws AppError with a taxonomy code, never a bare Error", () => {
