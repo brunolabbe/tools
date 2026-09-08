@@ -421,6 +421,91 @@ describe("run creation is rate-limited per client", () => {
   });
 });
 
+describe("behind a proxy (pl-38)", () => {
+  // The subnet `compose.prod.yaml` pins for `edge`, and the CIDR
+  // `compose.planner.prod.yaml` names in `TRUST_PROXY` for exactly this test's
+  // shape: one cloudflared hop, one compose-network address in front of it.
+  const TRUSTED_PROXY_CIDR = "172.30.42.0/24";
+  const PROXY_ADDRESS = "172.30.42.10";
+
+  test("two clients get independent allowances", async () => {
+    const harness = await createRunHarness({
+      config: { rateLimitRunsPerMinute: 2, trustProxy: TRUSTED_PROXY_CIDR },
+    });
+    try {
+      const intakeId = await intakeReadyToDraft(harness.app);
+      const postAs = (clientIp: string) =>
+        harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.plans,
+          payload: { intakeId },
+          remoteAddress: PROXY_ADDRESS,
+          headers: { "x-forwarded-for": clientIp },
+        });
+
+      // Client A spends its whole two-run allowance.
+      const firstA = await postAs("203.0.113.5");
+      const secondA = await postAs("203.0.113.5");
+      const thirdA = await postAs("203.0.113.5");
+      expect(firstA.statusCode).toBe(202);
+      expect(secondA.statusCode).toBe(202);
+      expect(thirdA.statusCode).toBe(429);
+
+      // Client B, behind the same proxy hop, is unaffected: a bug that maps
+      // both to the proxy's own address would have this client refused too.
+      const firstB = await postAs("203.0.113.9");
+      const secondB = await postAs("203.0.113.9");
+      expect(firstB.statusCode).toBe(202);
+      expect(secondB.statusCode).toBe(202);
+
+      await runToCompletion(harness.app, firstA.json<Run>().id);
+      await runToCompletion(harness.app, secondA.json<Run>().id);
+      await runToCompletion(harness.app, firstB.json<Run>().id);
+      await runToCompletion(harness.app, secondB.json<Run>().id);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test("a client outside the trusted CIDR cannot choose its own bucket", async () => {
+    const harness = await createRunHarness({
+      config: { rateLimitRunsPerMinute: 2, trustProxy: TRUSTED_PROXY_CIDR },
+    });
+    try {
+      const intakeId = await intakeReadyToDraft(harness.app);
+      // Not `PROXY_ADDRESS`, and outside `TRUSTED_PROXY_CIDR` — an untrusted hop
+      // naming a different `X-Forwarded-For` on every request, the way an
+      // attacker minting itself unlimited buckets would.
+      const UNTRUSTED_ADDRESS = "203.0.113.1";
+      const postWithForwardedFor = (claimedIp: string) =>
+        harness.app.server.inject({
+          method: "POST",
+          url: ROUTES.plans,
+          payload: { intakeId },
+          remoteAddress: UNTRUSTED_ADDRESS,
+          headers: { "x-forwarded-for": claimedIp },
+        });
+
+      const first = await postWithForwardedFor("10.0.0.1");
+      const second = await postWithForwardedFor("10.0.0.2");
+      const third = await postWithForwardedFor("10.0.0.3");
+
+      expect(first.statusCode).toBe(202);
+      expect(second.statusCode).toBe(202);
+      // A different claimed identity on every request and still refused: the
+      // header was ignored because the hop it arrived from is not trusted, so
+      // all three counted against the one real address's bucket.
+      expect(third.statusCode).toBe(429);
+      expect(third.json<{ error: { code: string } }>().error.code).toBe("RATE_LIMITED");
+
+      await runToCompletion(harness.app, first.json<Run>().id);
+      await runToCompletion(harness.app, second.json<Run>().id);
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
 describe("the run row", () => {
   test("counts the specialists as they answer", async () => {
     const harness = await createRunHarness();

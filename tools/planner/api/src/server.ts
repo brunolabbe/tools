@@ -245,6 +245,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
     // unrelated format on the same stream.
     logger: false,
     bodyLimit: MAX_BODY_BYTES,
+    // What makes `request.ip` mean the client rather than the proxy — and,
+    // off, what stops a client naming its own rate-limit bucket. See the note
+    // on `ApiConfig.trustProxy`.
+    trustProxy: config.trustProxy,
   });
 
   registerErrorHandling(server, context);

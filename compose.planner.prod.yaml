@@ -66,18 +66,18 @@ services:
     environment:
       LOG_LEVEL: info
 
+      # The proxy's CIDR, never `true` — same argument as the downloader's line
+      # in `compose.prod.yaml`, and the same subnet, because both tools sit
+      # behind the one `cloudflared` on the one `edge` network. `true` lets any
+      # client name its own rate-limit bucket by sending X-Forwarded-For, which
+      # makes `rateLimitRunsPerMinute` (default 5, on `POST /api/plans`)
+      # decorative. Until pl-38, `ApiConfig` had no field to put this in at all,
+      # and every client behind the tunnel shared one five-per-minute bucket for
+      # the whole hostname — see that ticket's Log if this line is ever missing
+      # again.
+      TRUST_PROXY: "172.30.42.0/24"
+
       # --- What is deliberately NOT set here ------------------------------
-      #
-      # **No `TRUST_PROXY`, and there is nothing to set it to.** `ApiConfig` has
-      # no such field — the downloader's line in `compose.prod.yaml` is
-      # downloader-specific. That is not because there is no limiter: there is
-      # one, `rateLimitRunsPerMinute` (default 5) on `POST /api/plans`. It is
-      # that `server.ts` never passes `trustProxy` to Fastify, so behind
-      # `cloudflared` every client's `request.ip` is the same compose-network
-      # address and all of them share one bucket. Five plan runs a minute for
-      # the whole hostname, not per visitor — pl-38. On an Access-gated instance
-      # with one user that is invisible; the moment you widen the policy it is
-      # the first thing you will hit.
       #
       # **No grounding endpoints.** `GROUNDING_PROVIDER` defaults to `fixtures`,
       # which answers from a checked-in table and reaches nothing. Making the

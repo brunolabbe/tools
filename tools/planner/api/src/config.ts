@@ -185,6 +185,22 @@ export interface ApiConfig {
    * out separately from the per-run budget for that reason. Zero disables it.
    */
   rateLimitRunsPerMinute: number;
+  /**
+   * Whether `X-Forwarded-For` may name the client.
+   *
+   * Off by default, and that default is load-bearing rather than conservative:
+   * `rateLimitRunsPerMinute` is keyed on `request.ip` (`clientKey`, in
+   * `@webtools/core/rate-limit`), so trusting a header any client can send would
+   * let that client mint itself as many buckets as it likes, which makes the
+   * limit decorative. Set it to `true` — or better, to the proxy's address or
+   * CIDR — only when this process genuinely sits behind a proxy that overwrites
+   * the header.
+   *
+   * Mirrors `ApiConfig.trustProxy` in the downloader
+   * (`tools/downloader/api/src/config.ts`) — same shape, same default, same
+   * argument against `true` — rather than inventing a second one (pl-38).
+   */
+  trustProxy: boolean | string;
 
   /**
    * Built UI to serve from this process, same-origin. Undefined serves nothing,
@@ -280,6 +296,24 @@ function list(raw: string | undefined): string[] {
 function logLevel(raw: string | undefined): LogLevel {
   const value = (raw ?? API_DEFAULTS.logLevel).trim().toLowerCase();
   return (LOG_LEVELS as readonly string[]).includes(value) ? (value as LogLevel) : "info";
+}
+
+/**
+ * `false` (the default), `true`, or a proxy address / CIDR / comma-separated
+ * list, which Fastify accepts verbatim and is the form worth preferring.
+ *
+ * Identical to the downloader's `trustProxy` in
+ * `tools/downloader/api/src/config.ts` — copied rather than shared, because a
+ * tool never imports from another tool and this one function is not yet a
+ * second real consumer of anything in `packages/`.
+ */
+function trustProxy(raw: string | undefined): boolean | string {
+  const value = raw?.trim() ?? "";
+  if (value === "") return false;
+  const lower = value.toLowerCase();
+  if (["1", "true", "yes", "on"].includes(lower)) return true;
+  if (["0", "false", "no", "off"].includes(lower)) return false;
+  return value;
 }
 
 /**
@@ -386,6 +420,7 @@ export function loadApiConfig(
     rateLimitRunsPerMinute:
       overrides.rateLimitRunsPerMinute ??
       int(env["RATE_LIMIT_RUNS_PER_MINUTE"], API_DEFAULTS.rateLimitRunsPerMinute, { min: 0 }),
+    trustProxy: overrides.trustProxy ?? trustProxy(env["TRUST_PROXY"]),
     // Resolved so a relative WEB_DIR means the same thing wherever the process
     // was started from.
     webDir: overrides.webDir ?? optionalPath(env["WEB_DIR"]),

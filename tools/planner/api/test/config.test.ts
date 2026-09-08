@@ -162,4 +162,18 @@ describe("loadApiConfig", () => {
   test("lets an explicit override beat the environment", () => {
     expect(loadApiConfig({ port: 1234 }, { PORT: "9100" }).port).toBe(1234);
   });
+
+  test("trustProxy defaults off, and TRUST_PROXY is kept as a CIDR rather than coerced to a boolean", () => {
+    // pl-38: off by default is load-bearing, not conservative — a limiter keyed
+    // on `request.ip` with this on unconditionally would let any client mint
+    // its own bucket via `X-Forwarded-For`. Mirrors the downloader's
+    // `trustProxy()` in `tools/downloader/api/src/config.ts`.
+    expect(loadApiConfig({}, {}).trustProxy).toBe(false);
+    expect(loadApiConfig({}, { TRUST_PROXY: "true" }).trustProxy).toBe(true);
+    expect(loadApiConfig({}, { TRUST_PROXY: "false" }).trustProxy).toBe(false);
+    // Not "1"/"true"/"yes"/"on", so it passes through as the CIDR itself —
+    // exactly what `Fastify({ trustProxy })` and `compose.planner.prod.yaml`'s
+    // `TRUST_PROXY` line both expect.
+    expect(loadApiConfig({}, { TRUST_PROXY: "172.30.42.0/24" }).trustProxy).toBe("172.30.42.0/24");
+  });
 });

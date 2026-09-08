@@ -89,3 +89,65 @@ somewhere nothing is looking.
 no rate limiter at all. It has one; what it has not got is a way to know who the
 client is. Both documents were corrected in that branch to say so and to point
 here. Not started.
+
+**2026-09-08 — built.** Mirrored the downloader's `trustProxy` exactly (Build
+step 1): a `boolean | string` in `ApiConfig`, defaulting `false`, parsed by a
+`trustProxy()` function copied from `tools/downloader/api/src/config.ts` rather
+than shared through `packages/` — the ticket asked for the same shape, not an
+extraction, and a tool never imports another tool's code. Passed straight to
+`Fastify({ trustProxy: config.trustProxy })` in `server.ts`, same as the
+downloader.
+
+`compose.planner.prod.yaml` now sets `TRUST_PROXY: "172.30.42.0/24"` — the same
+`edge` subnet the downloader's line names, since both tools share the one
+tunnel and the one compose network — and the comment block explaining why there
+was no such line is gone. `docs/02-DEPLOYMENT.md`'s `## Adding the second tool`
+no longer counts the missing trust field as one of the differences from the
+downloader's Access application; that paragraph became a short note that rate
+limiting works the same way now, with the historical context (no field existed
+before pl-38) kept for whoever reads this next.
+
+Added two tests to `tools/planner/api/test/runs.test.ts`, in a new `"behind a
+proxy (pl-38)"` describe block, both driven through `server.inject()` with
+`remoteAddress` and `X-Forwarded-For` rather than a real socket:
+
+- `"two clients get independent allowances"` — two clients behind the same
+  trusted proxy hop, distinguished only by `X-Forwarded-For`, each get their own
+  two-run bucket. Confirmed failing against unmodified `config.ts`/`server.ts`
+  (client B's requests come back 429, sharing client A's bucket at the proxy's
+  own address) — restored the fix and confirmed green.
+- `"a client outside the trusted CIDR cannot choose its own bucket"` — a request
+  from outside the trusted CIDR gets a fresh claimed `X-Forwarded-For` on every
+  call and is still refused on the third, because the header is ignored when the
+  hop is untrusted. This one already passed against unmodified code (with no
+  `trustProxy` at all, Fastify always uses the raw socket address, which is what
+  this test is checking for). To confirm it actually catches the ticket's named
+  trap rather than passing by accident, temporarily set its harness to
+  `trustProxy: true` — the "obvious fix" the Traps section warns against — and
+  reran: it failed (third request came back 202, the attacker successfully
+  minted a fresh bucket via the header). Reverted before committing. Both
+  temporary edits and reversions were run, not merely reasoned about.
+
+Also added one test to `tools/planner/api/test/config.test.ts`, alongside the
+rest of that file's one-var-per-test pattern: `TRUST_PROXY` unset stays `false`,
+`"true"`/`"false"` parse as booleans, and a CIDR (`172.30.42.0/24`) passes
+through as a string rather than being coerced — the case that matters, since a
+boolean-only parser would be the `trustProxy: true` trap by construction.
+
+Gates run: `npm run check` (lint, `oxfmt --check`, `tsc --build`) — clean, only
+pre-existing `no-await-in-loop` warnings elsewhere in the tree.
+`npx vitest run tools/planner/api/test/config.test.ts tools/planner/api/test/runs.test.ts`
+— 35/35, ~1.3–1.9 s. `npm test -- --project planner` — 848/848 across 53 files,
+~5 s. No shared config under `packages/` or `vitest.config.ts` moved, so the
+repo-wide `npm test` was not run.
+
+**Fold-in considered and not taken:** the `trustProxy()` parser is now
+byte-for-byte duplicated between the downloader's and the planner's
+`config.ts` — a second real consumer, which is normally this repo's signal to
+lift something into `packages/`. Left alone here because the ticket's Build
+step 1 explicitly said to mirror the shape rather than invent a second one, and
+`loadApiConfig` in each tool is otherwise not a shared surface — extracting one
+six-line function while leaving the two config-loading functions that call it
+entirely separate did not look like it paid for the seam it would need
+(what return type, what env-var name convention, whether a future third tool's
+default should differ). Worth a look if a third tool needs the same field.

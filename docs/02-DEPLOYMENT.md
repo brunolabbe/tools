@@ -576,7 +576,7 @@ of this page assumes.
 `planner`, path empty, one policy: action **Allow**, include **Emails** → your
 address.
 
-**That is the whole application. Do not add a Bypass rule.** Four differences
+**That is the whole application. Do not add a Bypass rule.** Three differences
 from the downloader's, and the first is not a hardening preference:
 
 - **No Bypass rule.** The one on `/api/files/*` above is bought by a 256-bit
@@ -592,26 +592,24 @@ from the downloader's, and the first is not a hardening preference:
   privacy boundary to lose, because there is not one yet. Until a user model
   lands, an Access allowlist is not a precaution around the data model — it is
   the only configuration in which that model is coherent.
-- **Rate limiting that is not per-client, and no `TRUST_PROXY` to make it so.**
-  The planner does limit plan runs — `RATE_LIMIT_RUNS_PER_MINUTE`, default 5, on
-  `POST /api/plans`. What it does not do is set `trustProxy` on Fastify, so
-  behind `cloudflared` every client's `request.ip` is the same compose-network
-  address and they all share **one** five-per-minute bucket for the whole
-  hostname. That is the "one busy user throttles everyone" failure described for
-  the downloader above, except here there is no setting that fixes it —
-  `ApiConfig` has no trust field to name the proxy with. [pl-38](./work/pl-38-the-planner-limiter-shares-one-bucket.md)
-  is the ticket. With one person behind an Access allowlist you will never
-  notice; widen the policy and it is the first thing you hit. This matters more
-  once `MODEL_PROVIDER` is something other than `scripted`, because then an
-  unauthenticated endpoint is a stranger spending your token budget, with
-  `MAX_OUTPUT_TOKENS` capping one reply and nothing capping the number of
-  replies. A Cloudflare WAF rate limiting rule is the only per-client layer
-  available until the tool grows its own.
 - **`MODEL_PROVIDER` defaults to `scripted`.** A deployment that does not set it
   looks healthy and answers from a fixed script. It is set explicitly in the
   image and again in the fragment, and `/api/health` reports `agent.provider` —
   but set it deliberately rather than relying on someone reading a health
   payload.
+
+Rate limiting is per-client the same way the downloader's is: `RATE_LIMIT_RUNS_PER_MINUTE`
+(default 5, on `POST /api/plans`) is keyed on `request.ip`, and
+[`compose.planner.prod.yaml`](../compose.planner.prod.yaml) sets `TRUST_PROXY` to
+the same `edge` subnet the downloader's line names, so behind `cloudflared` that
+means the visitor rather than the tunnel. Until pl-38 it did not —
+`ApiConfig` had no trust field at all, so every client shared one five-per-minute
+bucket for the whole hostname, and an Access allowlist with one email on it was
+the only thing hiding that. See that ticket's Log if `TRUST_PROXY` is ever
+missing from the fragment again: this matters more once `MODEL_PROVIDER` is
+something other than `scripted`, because then an unauthenticated endpoint is a
+stranger spending your token budget, with `MAX_OUTPUT_TOKENS` capping one reply
+and nothing capping the number of replies.
 
 ### 4 — Bring it up, and check the right thing
 
