@@ -116,7 +116,7 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
 3. **Whichever:** amend `docs/01-TICKETS.md` where it says a ticket moves to
    `done` in the commit that earns it, since that sentence is the one that reads
    as though `done` meant nothing is left.
-4. **Answer "what makes somebody look at an informational CI failure", inside
+4. ~~**Answer "what makes somebody look at an informational CI failure", inside
    this mechanism rather than beside it.** Added 2026-09-07 on the owner's
    decision, not part of the original filing — see the Log entry of that date
    for the provenance and the cost. Concretely: `windows-latest` is now
@@ -144,7 +144,13 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
    **This step must not turn the leg back into a gate.** repo-31's answer was
    "run it, report it, do not gate merges on it", and a mechanism here that
    fails CI would re-litigate that decision from inside another ticket — which
-   the "render only" answer in step 2 already forbids for every other case.
+   the "render only" answer in step 2 already forbids for every other case.~~
+
+   **Superseded, 2026-09-08.** Its sole instance closed: repo-36 merged
+   (`479c831`, #186) and `test (windows-latest, informational)` is green on
+   `main`. See the Log entry of that date — no live instance remains to design
+   the mechanism against, so the three-shapes question above is struck rather
+   than answered.
 
 ## Done when
 
@@ -334,3 +340,39 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
   it; the Log entries below the fold keep their original wording, since they
   record what was true when they were written. The `awaiting` design question
   step 4 poses is unchanged — only the id in it moved.
+
+- **2026-09-08, later** — **Build step 4's premise closed, and the step is
+  struck rather than answered.** Measured at `a5e31c7` today, not relayed:
+  repo-36 merged as `479c831` / #186
+  (`gh pr view 186 --json mergeCommit,mergedAt,state` → `MERGED`,
+  `2026-09-08T01:48:27Z`), and `test (windows-latest, informational)` is
+  `success` on `main` in CI run `34260766014`, alongside `changes`, `check` and
+  `test (ubuntu-latest)` all `success`
+  (`gh run view 34260766014 --json headSha,jobs` → `headSha` `a5e31c7f…`,
+  matching this branch's base).
+
+  This closes the leg that step 4 was written against without answering the
+  question it posed. The three costed shapes — attach to repo-31, attach to
+  repo-36, or a board line owned by no ticket — remain unresolved in the
+  abstract; what has changed is that no live instance survives to design the
+  mechanism against, so answering it now would be designing against a
+  hypothetical rather than the reproduction the ticket was filed with. `Done
+when` 6 is not struck: a future builder still owes an answer to "what makes
+  somebody look at an informational CI failure" in general, but building the
+  first case against a closed instance would mean re-deriving the scenario from
+  memory, which is exactly the failure mode `01-TICKETS.md`'s "A ticket carries
+  a decision or a reproduction" rule warns about. `status` stays `ready`: this
+  is a decision recorded, not the ticket built.
+
+  Recorded via `AskUserQuestion` in the dispatching session on 2026-09-08. The
+  owner's answer: drop step 4 and record the closure, rather than redesigning
+  the mechanism against a hypothetical or leaving the stale premise in place.
+
+  **One thing flagged, not fixed, and unverified by this entry's author beyond
+  reading the file:** `tools/planner/docs/work/pl-2-container-image.md` still
+  reads `status: in-flight` although its work merged as #192, and its own Log
+  argues its third `Done when` line is "true of a machine and not of a branch"
+  — a live instance of the same obligation-hiding-behind-a-status-field problem
+  this ticket exists to fix, and a candidate beyond the three in "The
+  reproduction". Left untouched here: a sibling builder is working in
+  `tools/planner/` in this same batch.
