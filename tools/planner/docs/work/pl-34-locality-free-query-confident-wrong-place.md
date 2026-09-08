@@ -183,10 +183,16 @@ from this file rather than superseded by what follows.
 
 **Findings**
 
-- **Low 1 — two ambiguous citations.** `pl-34` Log `:285` cited
+<!-- citations: evidence travel.ts:286-310, brief.ts:505 -->
+
+- **Low 1 — two ambiguous citations.** This record's own Log cited
   `travel.ts:286-310`, which `citations.mjs` resolves against three tracked
-  `travel.ts` files; `pl-37` `:60` cited `brief.ts:505`, ambiguous between
+  `travel.ts` files; pl-37's brief cited `brief.ts:505`, ambiguous between
   `contract/src/brief.ts` and `intake/src/brief.ts`. Neither miscited content.
+  (Both are quoted here as the finding's own evidence and are declared above,
+  which is why they still do not resolve; the two record-line shorthands that
+  named where each one sat were dropped by repo-37, because a work record's
+  line number is not a citation and the resolver bound them to source files.)
   **Fixed**: both qualified with their package paths. The habit behind them is
   now stated durably in
   `.claude/skills/orchestrate-tickets/reference/records.md` — a bare filename
@@ -208,8 +214,9 @@ from this file rather than superseded by what follows.
 The two that fail are the two quoted in Low 1 — they are the finding's own
 evidence, and a citation that _is_ the finding must stay as written, which is
 the exception the script documents and cannot judge for itself. The two real
-citations, `contract/src/candidate.ts:263` and
-`api/src/runs/travel.ts:286-310`, both resolve, and the second was
+citations, `contract/src/candidate.ts:263 "locality: string | null;"` and
+`api/src/runs/travel.ts:302-342 "for (const each of places.toLocate)"` (repointed
+by repo-37 from `286-310`, which the range had drifted off), both resolve, and the second was
 content-checked by hand: the range covers the `locate` loop pl-36 rewrites.
 The script gates no workflow and no hook, so this costs a reader one sentence
 rather than a red build.
