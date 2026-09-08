@@ -1836,3 +1836,31 @@ is the only side that can be built; and an assertion that the glob matches
 `SELF` **and nothing else in this repository**, which is what would fail loudly
 if anyone ever added `scripts/citations-gate-helpers.mjs` and quietly widened
 the probe. 32 in that file, 288 in the `repo` project.
+
+- **2026-09-08 — gate 5 passed with no findings, and contributed one measurement
+  that sharpens the residual rather than a defect.** The disclosure said the
+  rename bypass survives "a rename to a path outside the glob with the constant
+  updated". True, and it left open whether editing `GATE_GLOB` was one route
+  among several. The gate tested the sub-case; reproduced here rather than
+  relayed:
+
+  - rename to `scripts/gate.mjs`, **`GATE_GLOB` left alone** → **exit 1**, refused,
+    because the unedited glob still matches the _old_ filename in the base's
+    history;
+  - rename to `scripts/gate.mjs`, **`GATE_GLOB` edited to match** → **exit 0**,
+    `No history compared`.
+
+  So editing the constant is **necessary**, not merely sufficient. That is worth
+  a sentence in the docblock because it changes what the residual costs an
+  attacker: not a rename, but a rename plus an edit to the one constant whose
+  entire job is catching renames — about the strongest tell a diff here can
+  carry. The framing "a bigger, stranger diff" was generous when written and is
+  now measured.
+
+  **The glob-boundary test was verified to be a real canary rather than a test
+  that cannot fail**, which is this repo's own recorded trap: the gate added
+  `scripts/citations-gate-helpers.mjs`, staged it — necessary, since the check
+  reads the index through `git ls-files` and not the working tree — and the test
+  failed naming the extra path, then passed again once removed. Worth recording
+  because a boundary assertion nobody has watched fail is the same shape as a
+  gate nobody has watched fail.

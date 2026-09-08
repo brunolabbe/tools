@@ -335,10 +335,19 @@ export const SELF = "scripts/citations-gate.mjs";
  * that.
  *
  * **It is a guardrail and not a boundary, in the same sense the repo's deny list
- * is.** Someone renaming the file can edit this line too, and someone renaming
- * it to a path outside the glob and editing this line evades the check — a
- * bigger, stranger diff than the one it closes, and no in-tree constant can do
- * better than make the diff louder.
+ * is.** Someone renaming the file can edit this line too, and renaming it to a
+ * path outside the glob *and* editing this line evades the check — a bigger,
+ * stranger diff than the one it closes, and no in-tree constant can do better
+ * than make the diff louder.
+ *
+ * **Editing this line is necessary and not merely sufficient**, which is the
+ * difference between a residual that reads as one of several routes and one that
+ * has a tell. Measured by repo-29's fifth gate and reproduced here: renaming to
+ * `scripts/gate.mjs` while leaving this constant alone still **refuses**, exit 1,
+ * because the unedited glob goes on matching the *old* filename in the base's
+ * history. Only editing it as well reaches `No history compared` at exit 0. So
+ * the residual costs an edit to the one constant whose whole job is catching
+ * renames — which is about the strongest tell a diff in this repo can carry.
  */
 export const GATE_GLOB = "scripts/citations-gate*.mjs";
 
