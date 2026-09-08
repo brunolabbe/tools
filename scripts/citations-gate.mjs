@@ -117,79 +117,95 @@ export const SCOPE = {
 };
 
 /**
- * The records whose `## Review` section predates this gate.
+ * The records whose `## Review` section predates this gate, and **how much debt
+ * each one is allowed to hold**.
  *
  * Every one of them failed on `b384033`, the commit this gate was written
  * against. They are not excused for being old — they are excused because
- * repairing 639 unanchored citations is a migration with its own judgement in
+ * repairing 741 failing references is a migration with its own judgement in
  * every line, and holding the gate hostage to it is how enforcement never
  * arrives. Each removal from this list is a record somebody read.
+ *
+ * **The number is the ratchet, and it is why this is a Map and not a Set.** A
+ * record may hold the failures its entry names and no more. Exceed it and the
+ * run says `WORSE` and fails; drop below it and the entry is `STALE` and must be
+ * tightened. So the list moves one way, and — the case that earned the number —
+ * **appending a record to it no longer silences a break in it**, because the
+ * entry has to name a count somebody wrote down.
+ *
+ * That was a real hole, not a hypothetical: with bare paths, breaking an anchor
+ * in a passing record and adding that record here in the same change gave
+ * `3 enforced, 0 failing` at exit 0, silently. The cost of closing it is that an
+ * unrelated branch which shifts a cited file turns this red and has to repoint —
+ * **accepted knowingly by the owner on 2026-09-08**, on the reasoning that the
+ * failure is already happening and is better loud than silent. repo-29's Log
+ * carries the decision and the measurement behind it.
  *
  * **Adding to it is not the way past a red gate.** A new `## Review` section
  * comes with anchors; that is what `.claude/skills/review-ticket/SKILL.md` now
  * asks of a reviewer, and this list is the debt that convention arrived too late
  * for.
  */
-export const GRANDFATHERED = new Set([
-  "docs/work/repo-1-generated-status-tables.md",
-  "docs/work/repo-2-retire-the-status-page.md",
-  "docs/work/repo-4-fixture-ignore-pattern.md",
-  "docs/work/repo-11-stale-fixture-formatting-notes.md",
-  "docs/work/repo-12-board-shows-merged-work.md",
-  "docs/work/repo-13-codeql-false-positives-recur.md",
-  "docs/work/repo-14-citations-section-flag-is-a-no-op.md",
-  "docs/work/repo-15-deny-list-does-not-protect-itself.md",
-  "docs/work/repo-16-suppression-does-not-dismiss.md",
-  "docs/work/repo-18-citations-resolve-is-not-correct.md",
-  "docs/work/repo-19-ready-does-not-mean-startable.md",
-  "docs/work/repo-20-reviewer-setup-order-builds-the-wrong-tree.md",
-  "docs/work/repo-21-the-orchestration-skill-outgrew-its-loop.md",
-  "docs/work/repo-22-grep-is-a-wrapper.md",
-  "docs/work/repo-23-deployment-reads-as-downloader-only.md",
-  "docs/work/repo-24-quoted-scalars-render-with-quotes.md",
-  "docs/work/repo-25-citations-checker-misses-shorthand-references.md",
-  "docs/work/repo-26-no-test-runs-a-script-as-a-process.md",
-  "docs/work/repo-27-difficulty-must-change-a-dispatch.md",
-  "docs/work/repo-28-the-standard-sonnet-trial.md",
-  "docs/work/repo-31-the-windows-leg-is-almost-all-red.md",
-  "docs/work/repo-36-citations-loses-the-record-path.md",
-  "tools/downloader/docs/work/dl-15-component-render-tests.md",
-  "tools/downloader/docs/work/dl-16-e2e-through-the-sniffer.md",
-  "tools/downloader/docs/work/dl-18-pipeline-high-water-mark.md",
-  "tools/downloader/docs/work/dl-19-ffmpeg-verifies-tls.md",
-  "tools/downloader/docs/work/dl-22-web-binds-the-host-it-is-given.md",
-  "tools/downloader/docs/work/dl-23-rate-limit-the-download-route.md",
-  "tools/downloader/docs/work/dl-32-the-job-list-has-no-caller.md",
-  "tools/downloader/docs/work/dl-33-tls-fixture-certificates-fail-under-contention.md",
-  "tools/downloader/docs/work/dl-34-resolver-tiers-and-the-operator-ca.md",
-  "tools/downloader/docs/work/dl-35-content-security-policy.md",
-  "tools/downloader/docs/work/dl-36-fixture-certificate-serials-are-negative.md",
-  "tools/downloader/docs/work/dl-37-tiers-move-onto-the-terminating-proxy.md",
-  "tools/downloader/docs/work/dl-38-tls-rejection-log-does-not-track-successes.md",
-  "tools/downloader/docs/work/dl-40-twenty-rows-that-differ-invisibly.md",
-  "tools/downloader/docs/work/dl-41-preview-in-the-completed-result.md",
-  "tools/downloader/docs/work/dl-42-direct-file-claims-audio-it-never-checked.md",
-  "tools/downloader/docs/work/dl-43-gate-progress-on-what-actually-happened.md",
-  "tools/downloader/docs/work/dl-44-persist-the-thumbnail-beside-the-file.md",
-  "tools/downloader/docs/work/dl-45-keep-the-failover-mirrors.md",
-  "tools/downloader/docs/work/dl-46-rate-limit-the-probe-stage-channel.md",
-  "tools/planner/docs/work/pl-5-orchestrator-and-fan-out.md",
-  "tools/planner/docs/work/pl-10-plan-view-and-provenance.md",
-  "tools/planner/docs/work/pl-17-dockerfile-workspace-scan.md",
-  "tools/planner/docs/work/pl-18-destination-asked-early.md",
-  "tools/planner/docs/work/pl-20-intake-fixture-builders.md",
-  "tools/planner/docs/work/pl-24-grounding-seam-and-fixtures.md",
-  "tools/planner/docs/work/pl-25-grounding-cache.md",
-  "tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md",
-  "tools/planner/docs/work/pl-27-travel-time-reaches-the-composer.md",
-  "tools/planner/docs/work/pl-28-valhalla-adapter.md",
-  "tools/planner/docs/work/pl-29-detours-along-a-leg.md",
-  "tools/planner/docs/work/pl-31-vite-config-in-no-tsconfig-project.md",
-  "tools/planner/docs/work/pl-32-vite-config-test.md",
-  "tools/planner/docs/work/pl-33-overpass-payload-and-notability.md",
-  "tools/planner/docs/work/pl-34-locality-free-query-confident-wrong-place.md",
-  "tools/planner/docs/work/pl-36-more-osm-attribution-gaps.md",
-  "tools/planner/docs/work/pl-37-locate-cannot-see-the-trip.md",
+export const GRANDFATHERED = new Map([
+  ["docs/work/repo-1-generated-status-tables.md", 16],
+  ["docs/work/repo-11-stale-fixture-formatting-notes.md", 4],
+  ["docs/work/repo-12-board-shows-merged-work.md", 8],
+  ["docs/work/repo-13-codeql-false-positives-recur.md", 30],
+  ["docs/work/repo-14-citations-section-flag-is-a-no-op.md", 6],
+  ["docs/work/repo-15-deny-list-does-not-protect-itself.md", 3],
+  ["docs/work/repo-16-suppression-does-not-dismiss.md", 12],
+  ["docs/work/repo-18-citations-resolve-is-not-correct.md", 23],
+  ["docs/work/repo-19-ready-does-not-mean-startable.md", 23],
+  ["docs/work/repo-2-retire-the-status-page.md", 4],
+  ["docs/work/repo-20-reviewer-setup-order-builds-the-wrong-tree.md", 10],
+  ["docs/work/repo-21-the-orchestration-skill-outgrew-its-loop.md", 2],
+  ["docs/work/repo-22-grep-is-a-wrapper.md", 14],
+  ["docs/work/repo-23-deployment-reads-as-downloader-only.md", 4],
+  ["docs/work/repo-24-quoted-scalars-render-with-quotes.md", 16],
+  ["docs/work/repo-25-citations-checker-misses-shorthand-references.md", 12],
+  ["docs/work/repo-26-no-test-runs-a-script-as-a-process.md", 4],
+  ["docs/work/repo-27-difficulty-must-change-a-dispatch.md", 5],
+  ["docs/work/repo-28-the-standard-sonnet-trial.md", 1],
+  ["docs/work/repo-31-the-windows-leg-is-almost-all-red.md", 4],
+  ["docs/work/repo-36-citations-loses-the-record-path.md", 28],
+  ["docs/work/repo-4-fixture-ignore-pattern.md", 3],
+  ["tools/downloader/docs/work/dl-15-component-render-tests.md", 57],
+  ["tools/downloader/docs/work/dl-16-e2e-through-the-sniffer.md", 6],
+  ["tools/downloader/docs/work/dl-18-pipeline-high-water-mark.md", 26],
+  ["tools/downloader/docs/work/dl-19-ffmpeg-verifies-tls.md", 20],
+  ["tools/downloader/docs/work/dl-22-web-binds-the-host-it-is-given.md", 4],
+  ["tools/downloader/docs/work/dl-23-rate-limit-the-download-route.md", 5],
+  ["tools/downloader/docs/work/dl-32-the-job-list-has-no-caller.md", 29],
+  ["tools/downloader/docs/work/dl-33-tls-fixture-certificates-fail-under-contention.md", 20],
+  ["tools/downloader/docs/work/dl-34-resolver-tiers-and-the-operator-ca.md", 9],
+  ["tools/downloader/docs/work/dl-35-content-security-policy.md", 17],
+  ["tools/downloader/docs/work/dl-36-fixture-certificate-serials-are-negative.md", 8],
+  ["tools/downloader/docs/work/dl-37-tiers-move-onto-the-terminating-proxy.md", 9],
+  ["tools/downloader/docs/work/dl-38-tls-rejection-log-does-not-track-successes.md", 13],
+  ["tools/downloader/docs/work/dl-40-twenty-rows-that-differ-invisibly.md", 6],
+  ["tools/downloader/docs/work/dl-41-preview-in-the-completed-result.md", 7],
+  ["tools/downloader/docs/work/dl-42-direct-file-claims-audio-it-never-checked.md", 8],
+  ["tools/downloader/docs/work/dl-43-gate-progress-on-what-actually-happened.md", 19],
+  ["tools/downloader/docs/work/dl-44-persist-the-thumbnail-beside-the-file.md", 4],
+  ["tools/downloader/docs/work/dl-45-keep-the-failover-mirrors.md", 23],
+  ["tools/downloader/docs/work/dl-46-rate-limit-the-probe-stage-channel.md", 10],
+  ["tools/planner/docs/work/pl-10-plan-view-and-provenance.md", 17],
+  ["tools/planner/docs/work/pl-17-dockerfile-workspace-scan.md", 5],
+  ["tools/planner/docs/work/pl-18-destination-asked-early.md", 10],
+  ["tools/planner/docs/work/pl-20-intake-fixture-builders.md", 7],
+  ["tools/planner/docs/work/pl-24-grounding-seam-and-fixtures.md", 8],
+  ["tools/planner/docs/work/pl-25-grounding-cache.md", 23],
+  ["tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md", 10],
+  ["tools/planner/docs/work/pl-27-travel-time-reaches-the-composer.md", 1],
+  ["tools/planner/docs/work/pl-28-valhalla-adapter.md", 38],
+  ["tools/planner/docs/work/pl-29-detours-along-a-leg.md", 11],
+  ["tools/planner/docs/work/pl-31-vite-config-in-no-tsconfig-project.md", 8],
+  ["tools/planner/docs/work/pl-32-vite-config-test.md", 22],
+  ["tools/planner/docs/work/pl-33-overpass-payload-and-notability.md", 8],
+  ["tools/planner/docs/work/pl-34-locality-free-query-confident-wrong-place.md", 6],
+  ["tools/planner/docs/work/pl-36-more-osm-attribution-gaps.md", 12],
+  ["tools/planner/docs/work/pl-37-locate-cannot-see-the-trip.md", 11],
+  ["tools/planner/docs/work/pl-5-orchestrator-and-fan-out.md", 12],
 ]);
 
 /** The states that fail this gate. `unanchored` is here; that is the whole point. */
@@ -230,7 +246,7 @@ export function findRecords(repo, pathspecs) {
  * @param {(file: string) => string[] | null} read
  * @param {(file: string) => {path: string} | {error: string}} resolve
  */
-export function checkRecord(repo, record, section, read, resolve) {
+export function checkRecord(repo, record, section, read, resolve, requireDistinct = true) {
   const markdown = fs.readFileSync(path.join(repo, record), "utf8");
 
   let chosen = null;
@@ -256,7 +272,16 @@ export function checkRecord(repo, record, section, read, resolve) {
   /** @type {Record<string, number>} */
   const counts = {};
   for (const r of results) counts[r.state] = (counts[r.state] ?? 0) + 1;
-  const failures = results.filter((r) => FAILING.has(r.state));
+
+  // An indistinct anchor is `verified` and still a failure here, which is the
+  // one place a state and a verdict come apart. `citations.mjs` keeps the state
+  // because how many lines a fragment occupies is a fact about the fragment;
+  // this gate supplies the policy, exactly as it does for `unanchored`.
+  const indistinct = requireDistinct
+    ? results.filter((r) => r.state === "verified" && (r.occurrences ?? 1) > 1)
+    : [];
+  if (indistinct.length > 0) counts.indistinct = indistinct.length;
+  const failures = [...results.filter((r) => FAILING.has(r.state)), ...indistinct];
 
   return {
     record,
@@ -266,6 +291,10 @@ export function checkRecord(repo, record, section, read, resolve) {
     counts,
     failures,
     stale,
+    // The number the grandfather list ratchets on. Declarations have already
+    // been applied, so a citation a record legitimately declares as evidence is
+    // not counted against it.
+    failing: failures.length + stale.length,
     passed: failures.length === 0 && stale.length === 0,
   };
 }
@@ -275,7 +304,7 @@ export function checkRecord(repo, record, section, read, resolve) {
  *
  * @param {string} repo
  * @param {{records: string[], section: string | null}} scope
- * @param {Set<string>} grandfathered
+ * @param {Map<string, number>} grandfathered
  */
 export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
   const read = makeReader(repo, null);
@@ -284,6 +313,7 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
   const inScope = [];
   const failed = [];
   const excused = [];
+  const regressed = [];
   /** @type {Record<string, number>} */
   const debt = {};
 
@@ -292,36 +322,52 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
     if (result.skipped) continue;
     inScope.push(result);
     if (result.passed && result.error == null) continue;
-    if (grandfathered.has(record)) {
-      excused.push(result);
-      for (const [state, n] of Object.entries(result.counts ?? {})) {
-        if (FAILING.has(state)) debt[state] = (debt[state] ?? 0) + n;
-      }
+    if (!grandfathered.has(record)) {
+      failed.push(result);
       continue;
     }
-    failed.push(result);
+    const allowed = grandfathered.get(record) ?? 0;
+    // The ratchet. A listed record may hold the debt its entry names and no
+    // more — so appending a record to the list no longer silences a break in
+    // it, because the entry has to name a number somebody wrote down, and a
+    // record that got worse exceeds it.
+    if (result.failing > allowed) {
+      regressed.push({ ...result, allowed });
+      continue;
+    }
+    excused.push(result);
+    for (const [state, n] of Object.entries(result.counts ?? {})) {
+      if (FAILING.has(state) || state === "indistinct") debt[state] = (debt[state] ?? 0) + n;
+    }
   }
 
   // repo-25's rule, one level up: a waiver that excuses nothing has outlived
-  // what it was for. A grandfathered record that now passes, or that the scope
-  // no longer reaches at all, is an entry to delete — and saying so is what
-  // keeps the list shrinking without anybody remembering to prune it.
-  const reached = new Set(inScope.map((r) => r.record));
-  const staleEntries = [...grandfathered]
-    .filter((record) => !reached.has(record) || excused.every((r) => r.record !== record))
-    .map((record) => ({
-      record,
-      why: reached.has(record)
-        ? "passes this gate now"
-        : "is no longer a record with a matching section",
-    }));
+  // what it was for. Three ways an entry can: the record passes outright, the
+  // scope no longer reaches it, or it now holds *less* debt than its number
+  // claims — which is the other jaw of the ratchet, and the one that makes the
+  // list tighten as records are repaired rather than drift loose.
+  const reached = new Map(inScope.map((r) => [r.record, r]));
+  const staleEntries = [];
+  for (const [record, allowed] of grandfathered) {
+    const result = reached.get(record);
+    if (result === undefined) {
+      staleEntries.push({ record, why: "is no longer a record with a matching section" });
+    } else if (result.passed && result.error == null) {
+      staleEntries.push({ record, why: "passes this gate now" });
+    } else if (result.failing < allowed) {
+      staleEntries.push({
+        record,
+        why: `now holds ${result.failing} failing reference(s), not ${allowed} — tighten the number`,
+      });
+    }
+  }
 
-  return { inScope, failed, excused, staleEntries, debt };
+  return { inScope, failed, excused, regressed, staleEntries, debt };
 }
 
 /** The `state: count` half of a record's line, worst first and zeroes dropped. */
 const countLine = (counts) =>
-  ["unresolvable", "moved", "unanchored", "unchecked", "evidence", "verified"]
+  ["unresolvable", "moved", "unanchored", "indistinct", "unchecked", "evidence", "verified"]
     .filter((state) => (counts[state] ?? 0) > 0)
     .map((state) => `${counts[state]} ${state}`)
     .join(", ");
@@ -334,19 +380,25 @@ function main() {
   }
 
   const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
-  const { inScope, failed, excused, staleEntries, debt } = gate(repo);
+  const { inScope, failed, excused, regressed, staleEntries, debt } = gate(repo);
 
   const scope = SCOPE.section === null ? "every citation" : `the "${SCOPE.section}" section`;
   process.stdout.write(
-    `citation gate — ${scope} of ${inScope.length} record(s), anchors required\n\n`,
+    `citation gate — ${scope} of ${inScope.length} record(s), distinct anchors required\n\n`,
   );
 
-  for (const result of failed) {
+  for (const result of [...failed, ...regressed]) {
     if (result.error != null) {
       process.stdout.write(`  FAIL ${result.record}\n         ${result.error.split("\n")[0]}\n`);
       continue;
     }
-    process.stdout.write(`  FAIL ${result.record} — ${countLine(result.counts)}\n`);
+    const worse =
+      result.allowed === undefined
+        ? ""
+        : ` — ${result.failing} failing, and its GRANDFATHERED entry allows ${result.allowed}`;
+    process.stdout.write(
+      `  ${result.allowed === undefined ? "FAIL " : "WORSE"} ${result.record} — ${countLine(result.counts)}${worse}\n`,
+    );
     for (const f of result.failures) {
       const range = f.start === f.end ? `${f.start}` : `${f.start}-${f.end}`;
       const where = f.file === null ? `:${range}` : `${f.file}:${range}`;
@@ -362,28 +414,38 @@ function main() {
     process.stdout.write(`  STALE ${entry.record} — ${entry.why}\n`);
   }
 
-  const enforced = inScope.length - excused.length;
+  const enforced = inScope.length - excused.length - regressed.length;
   process.stdout.write(
-    `\n${enforced} enforced, ${failed.length} failing; ` +
+    `\n${enforced} enforced, ${failed.length + regressed.length} failing; ` +
       `${excused.length} grandfathered, holding ${countLine(debt) || "nothing"}.\n`,
   );
 
-  if (failed.length === 0 && staleEntries.length === 0) return;
+  if (failed.length === 0 && regressed.length === 0 && staleEntries.length === 0) return;
 
   const advice = [];
   if (failed.length > 0) {
     advice.push(
       `${failed.length} record(s) failed. Every citation under a \`## Review\` heading must carry a\n` +
-        `fragment of the line it points at — \`file.ts:120 "a fragment of the line"\` — and must still\n` +
-        `resolve. Run \`node scripts/citations.mjs <record> --section Review --require-anchors\` for the\n` +
-        `full per-citation output on one of them. Adding a record to GRANDFATHERED is not the fix:\n` +
-        `that list is repo-29's migration debt, and it only shrinks.`,
+        `fragment of the line it points at — \`file.ts:120 "a fragment of the line"\` — that fragment must\n` +
+        `occur only once in that file, and the citation must still resolve. Run\n` +
+        `\`node scripts/citations.mjs <record> --section Review --require-anchors --require-distinct-anchors\`\n` +
+        `for the full per-citation output on one of them.`,
+    );
+  }
+  if (regressed.length > 0) {
+    advice.push(
+      `${regressed.length} grandfathered record(s) hold more failing references than their entry allows.\n` +
+        `Repair the citations. **Raising the number in GRANDFATHERED is not the fix** — that list is\n` +
+        `repo-29's migration debt and it ratchets one way, which is the whole reason it carries counts\n` +
+        `rather than bare paths. If an unrelated edit of yours moved a line these records cite, the\n` +
+        `repair is to repoint them: the anchor says where it went.`,
     );
   }
   if (staleEntries.length > 0) {
     advice.push(
-      `${staleEntries.length} GRANDFATHERED entr(y/ies) in scripts/citations-gate.mjs excuse nothing and\n` +
-        `should be deleted. A waiver nobody has to keep true is a rubber stamp — the same rule\n` +
+      `${staleEntries.length} GRANDFATHERED entr(y/ies) in scripts/citations-gate.mjs are wrong: the record\n` +
+        `passes, or the scope no longer reaches it, or it now holds less debt than the number claims.\n` +
+        `Delete or tighten each. A waiver nobody has to keep true is a rubber stamp — the same rule\n` +
         `citations.mjs applies to an evidence declaration that excuses a citation which now passes.`,
     );
   }

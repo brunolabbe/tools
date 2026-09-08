@@ -810,7 +810,13 @@ test("the docblock usage line, USAGE, and FLAGS name the same set of flags", () 
  * a test that checks the working one proves nothing.
  */
 test("parseArgs consumes a flag's value instead of mistaking it for the ticket file", () => {
-  const expected = { file: "ticket.md", rev: "HEAD", section: null, requireAnchors: false };
+  const expected = {
+    file: "ticket.md",
+    rev: "HEAD",
+    section: null,
+    requireAnchors: false,
+    requireDistinct: false,
+  };
   expect(parseArgs(["--rev", "HEAD", "ticket.md"])).toEqual(expected);
   expect(parseArgs(["ticket.md", "--rev", "HEAD"])).toEqual(expected);
   expect(parseArgs(["ticket.md"])).toEqual({
@@ -818,6 +824,7 @@ test("parseArgs consumes a flag's value instead of mistaking it for the ticket f
     rev: null,
     section: null,
     requireAnchors: false,
+    requireDistinct: false,
   });
 });
 
@@ -829,7 +836,13 @@ test("parseArgs consumes a flag's value instead of mistaking it for the ticket f
  * because only one of them can be wrong.
  */
 test("parseArgs treats --require-anchors as a flag with no value", () => {
-  const expected = { file: "ticket.md", rev: null, section: null, requireAnchors: true };
+  const expected = {
+    file: "ticket.md",
+    rev: null,
+    section: null,
+    requireAnchors: true,
+    requireDistinct: false,
+  };
   expect(parseArgs(["--require-anchors", "ticket.md"])).toEqual(expected);
   expect(parseArgs(["ticket.md", "--require-anchors"])).toEqual(expected);
   // And it composes with a flag that does take one, in any order.
@@ -1700,4 +1713,139 @@ test("extractCitations marks a shorthand nearby only inside its own paragraph", 
     "shorthand:7=true",
     "shorthand:8=false",
   ]);
+});
+
+/**
+ * repo-29 finding 3. `verified` means *some* occurrence of the anchor starts
+ * inside the cited range, never that only one does — so a fragment matching five
+ * lines verifies that one of them is in range and not which. The live instance
+ * was `repo-31` anchoring a `ci.yml` citation on `"informational"`, a word on
+ * five lines of that file: an unrelated 22-line insertion slid a *comment* into
+ * the cited position and the citation went on reporting `ok`.
+ *
+ * The fixture below is that failure with nothing else in it, and the assertion
+ * that matters is the second one — the citation is still `verified` while
+ * pointing at the wrong occurrence, which is why the state cannot be what
+ * carries the policy.
+ */
+test("a non-distinct anchor still reports verified after a different occurrence slides in", () => {
+  const before = ["const a = 1;", "// informational", "const b = 2;", "// informational"];
+  // Two lines, so the *first* occurrence lands exactly on the cited line 4 while
+  // the one the record meant moves to 6.
+  const after = ["// added", "// added", ...before];
+  const citation = cite({ start: 4, end: 4, anchor: "informational" });
+
+  const wasRight = checkCitations([citation], () => before)[0];
+  expect(wasRight?.state).toBe("verified");
+  expect(wasRight?.foundAt).toEqual([4]);
+  expect(wasRight?.occurrences).toBe(2);
+
+  const nowWrong = checkCitations([citation], () => after)[0];
+  expect(nowWrong?.state).toBe("verified");
+  expect(nowWrong?.foundAt).toEqual([4]);
+  expect(nowWrong?.occurrences).toBe(2);
+  // The line it now names is not the one the record was written about.
+  expect(after[3]).toBe("// informational");
+  expect(before[3]).toBe("// informational");
+  expect(after[5]).toBe("// informational");
+});
+
+test("an anchor that occurs once carries an occurrence count of one", () => {
+  const results = checkCitations([cite({ start: 2, end: 2, anchor: "only here" })], () => [
+    "const a = 1;",
+    "// only here",
+  ]);
+  expect(results[0]?.state).toBe("verified");
+  expect(results[0]?.occurrences).toBe(1);
+});
+
+/**
+ * A throwaway repository, so the citations resolve against a tree the test owns
+ * rather than against this one — an anchored citation into a real repo file goes
+ * stale the next time anybody edits it.
+ */
+function withDistinctnessRepo(record: string): { dir: string; file: string; cleanup: () => void } {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-distinct-")));
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+  };
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "distinct@example.test");
+  git("config", "user.name", "distinct test");
+  fs.mkdirSync(path.join(dir, "src"));
+  fs.writeFileSync(
+    path.join(dir, "src", "a.ts"),
+    ["const a = 1;", "// informational", "const b = 2;", "// informational", ""].join("\n"),
+  );
+  const file = path.join(dir, "r.md");
+  fs.writeFileSync(file, record);
+  git("add", "-A");
+  git("commit", "-qm", "the tree");
+  return { dir, file, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+/**
+ * The flag's whole contract, and it is `--require-anchors`' contract restated:
+ * it changes the exit code and nothing else. The per-citation lines have to come
+ * back byte-identical, because a flag that repainted `ok` as `FAIL` would
+ * destroy the one property these states have — that a citation's state is a fact
+ * about the record and not about the caller's policy.
+ */
+test("--require-distinct-anchors changes the exit code and not one citation line", () => {
+  const { dir, file, cleanup } = withDistinctnessRepo('Proof: `src/a.ts:4 "informational"`.\n');
+  try {
+    const lax = spawnSync("node", [CLI, file], { cwd: dir, encoding: "utf8" });
+    const strict = spawnSync("node", [CLI, file, "--require-distinct-anchors"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+
+    expect(lax.status).toBe(0);
+    expect(strict.status).toBe(EXIT.indistinct);
+    expect(marks(strict.stdout)).toEqual(marks(lax.stdout));
+    expect(strict.stdout).toMatch(/distinct anchors required/);
+    expect(strict.stderr).toMatch(/starts on more than one line/);
+    expect(lax.stderr).toBe("");
+  } finally {
+    cleanup();
+  }
+  expect(fs.existsSync(dir)).toBe(false);
+});
+
+/**
+ * The bit has to be its own, for the reason every other bit here is: a run that
+ * fails two ways has to be able to say both.
+ */
+test("the indistinct bit combines with the unanchored one", () => {
+  const { dir, file, cleanup } = withDistinctnessRepo(
+    'One `src/a.ts:4 "informational"`, and one bare `src/a.ts:1`.\n',
+  );
+  try {
+    const result = spawnSync(
+      "node",
+      [CLI, file, "--require-anchors", "--require-distinct-anchors"],
+      { cwd: dir, encoding: "utf8" },
+    );
+    expect(result.status).toBe(EXIT.unanchored | EXIT.indistinct);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * A distinct anchor passes under the flag, which is the half that proves the
+ * test above is measuring the fragment rather than the flag.
+ */
+test("a distinct anchor passes under --require-distinct-anchors", () => {
+  const { dir, file, cleanup } = withDistinctnessRepo('Proof: `src/a.ts:3 "const b"`.\n');
+  try {
+    const result = spawnSync("node", [CLI, file, "--require-distinct-anchors"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+  } finally {
+    cleanup();
+  }
 });

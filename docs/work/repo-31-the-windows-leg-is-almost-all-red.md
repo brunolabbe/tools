@@ -100,7 +100,7 @@ above. It arrived with repo-25 (PR #168, merge commit `4bc3e66`, merged
 `` `scripts/test/citations.test.ts` ``. The failing assertion is
 `` `scripts/test/citations.test.ts:1319` "This record exists at that rev and cited something different there" ``,
 reached from
-`` `scripts/test/citations.test.ts:1318` "expect(pinned.stdout).toMatch(" ``.
+`` `scripts/test/citations.test.ts:1331` "expect(pinned.stdout).toMatch(/line 99 is past end of file" ``.
 The mechanism looks like a POSIX-path assumption in the repo's own tooling
 (`scripts/citations.mjs` computes a path relative to the repo root and prints it
 unchanged; on Windows that string carries backslashes and the printed preview

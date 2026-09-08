@@ -14,8 +14,8 @@ depends_on: []
 
 `scripts/citations.mjs` resolves a record's citations against one tree. Which
 tree is a property of the **run**, not of the citation:
-`scripts/citations.mjs:1108` "[--rev <sha>] [--section <name>]" is the whole of
-the interface, and `scripts/citations.mjs:532` "export function makeReader(repo, rev)"
+`scripts/citations.mjs:1178` "usage: node scripts/citations.mjs" is the whole of
+the interface, and `scripts/citations.mjs:562` "export function makeReader(repo, rev)"
 takes the rev once and hands back a reader every citation in the record shares.
 
 That is right for a gate record, which describes one branch. It has no answer at
@@ -88,7 +88,7 @@ if it is not written down.
 
 ### 1. Both naive spellings of a per-citation rev already fail, silently and differently
 
-`@` is already a path character — `scripts/citations.mjs:154` "(?<file>(?:" — so
+`@` is already a path character — `scripts/citations.mjs:184` "(?<file>(?:" — so
 a rev suffix is not free syntax. Measured, by putting each spelling in a scratch
 record and running the checker over it:
 
@@ -101,14 +101,14 @@ record and running the checker over it:
 The first shape is the dangerous one: a citation nothing counts is invisible
 rather than wrong, which is the failure mode this script exists to refuse. The
 third is the subtler one — it keeps the citation and downgrades it from checked
-to unchecked, because `scripts/citations.mjs:146` "const ANCHOR" allows at most
+to unchecked, because `scripts/citations.mjs:176` "const ANCHOR" allows at most
 one space between the location and its quoted fragment. **So the syntax has to
 be designed, not guessed at**, and whichever is chosen has to be rejected loudly
 when it is written wrong.
 
 ### 2. `unanchored` is not a failure, so it cannot be declared — and adding an anchor creates one
 
-`scripts/citations.mjs:810` "const FAILING = new Set(" holds `unresolvable`,
+`scripts/citations.mjs:864` "const FAILING = new Set(" holds `unresolvable`,
 `moved` and `unchecked`, and `unanchored` is deliberately not among them. Two
 consequences that pull against each other:
 

@@ -104,8 +104,8 @@ from the one that wrote the branch, in its own worktree.
   `cloudflared`'s `condition: service_healthy` on the planner is satisfiable
   rather than a config error at boot.
 - **verified** · the internal half of the "one hostname, two paths" argument:
-  `tools/downloader/api/src/routes/web.ts:147` "prefix" and
-  `tools/planner/api/src/routes/web.ts:65` "prefix" both mount at the root, and
+  `tools/downloader/api/src/routes/web.ts:147` "prefix:" and
+  `tools/planner/api/src/routes/web.ts:65` "prefix:" both mount at the root, and
   neither `vite.config.ts` sets `base`.
 - **unverified, external** · that Cloudflare Tunnel's Path field matches without
   stripping. `WebFetch` is blocked by the container firewall and the reviewer

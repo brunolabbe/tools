@@ -470,7 +470,7 @@ was its own anchor.** Round four of that same record was the first written with
 anchors. Four of them quoted lines containing double quotes and escaped the inner
 ones; the parser takes straight quotes only —
 
-`scripts/citations.mjs:146` "const ANCHOR = String.raw"
+`scripts/citations.mjs:176` "const ANCHOR = String.raw"
 
 — so each anchor terminated at the escape and matched nothing. Reconstructed here
 on a scratch record carrying those four anchors in the escaped form: `3 verified,
@@ -1097,7 +1097,7 @@ unresolvable, 50 moved, 639 unanchored`, **exit 0**, no `FAIL`, no `STALE`,
 
   **3. Nothing in the shipped tooling enforces anchor distinctiveness — the
   `"informational"` catch above is a standing gap, not a one-off.** Read at
-  `scripts/citations.mjs:790 "const inRange = hits.filter"`: `verified` is
+  `scripts/citations.mjs:827 "const inRange = hits.filter"`: `verified` is
   decided by whether _any_ occurrence starts inside the cited range, and the
   full hit list is computed but used only to word the `moved` message.
   **Reproduced rather than read**, in a throwaway repo: a record citing line 5 of
@@ -1177,3 +1177,145 @@ unresolvable, 15 unchecked, 0 evidence — of 31 references`, both at exit 2. Si
   to quote — the throwaway fixture's, and repo-34's — are described instead,
   because quoting them would have added one `unresolvable` and one `unanchored`
   to the page arguing against both, which the first draft of this entry did.
+
+- **2026-09-08 — the owner closed both gaps the gate found, and the seam between
+  them was measured rather than argued.** Findings 1 and 3 above were left open
+  as owner decisions; both were answered "close it". Neither is a norm any more.
+
+  **The premise this branch gave for deferring finding 3 was wrong, not stale,
+  and that is worth the distinction.** The Log entry above says the distinctness
+  rule was not built because "PR #186 is open against `citations.mjs`". Checked
+  here rather than relayed: #186 merged as `479c831`, and `479c831` is an
+  **ancestor of this branch's own base** — so that file was already settled when
+  the objection was written. It was not a fact that expired; it was never true
+  during this branch. An unverified premise offered as a reason to defer work is
+  the same failure this ticket is about, one level up from a coordinate.
+
+  **1 · The grandfather list ratchets now.** `GRANDFATHERED` is a `Map` from
+  record to the number of failing references it may hold, not a `Set` of paths.
+  Exceed the number and the run prints `WORSE` and fails; fall below it and the
+  entry is `STALE` and the number must be tightened. So both jaws bite, and the
+  hole reproduced above — break a record, append it to the list in the same
+  change, exit 0 in silence — is closed by construction, because an entry now has
+  to name a count somebody wrote down.
+
+  **The cost was accepted knowingly rather than discovered.** An unrelated branch
+  that shifts a cited file drives a grandfathered record's count up and turns this
+  red. The owner's reasoning: finding 4 is that failure already happening, and it
+  is better loud than silent.
+
+  **The second jaw fired on this branch before any test did, which is the
+  demonstration that matters.** Repointing eight citations broken by the
+  `citations.mjs` edit below took `repo-36`'s debt from 30 to 28, and the run
+  answered `STALE docs/work/repo-36-citations-loses-the-record-path.md — now
+holds 28 failing reference(s), not 30 — tighten the number`, exit 1. Nobody
+  arranged that.
+
+  **2 · A distinct-anchor rule exists and is enforced.**
+  `scripts/citations.mjs:1178 "usage: node scripts/citations.mjs"` now advertises
+  `--require-distinct-anchors`, which fails a run where a _verified_ anchor's
+  fragment starts on more than one line of the file it points at. It sets its own
+  exit bit (16) and **changes no citation's state**, which is `--require-anchors`'
+  contract restated for the same reason: a citation's state is a fact about the
+  record, and whether a weak anchor is tolerable is the caller's policy.
+
+  **It is a separate flag rather than part of `--require-anchors`, and that was a
+  measurement, not caution.** repo-21's live CI step runs `--require-anchors` over
+  `orchestrate-tickets/SKILL.md`, and that file anchors a citation on
+  `"model: sonnet"` — a fragment occurring twice in `ticket-reviewer.md`. Folding
+  the rule into the existing flag would have turned that step red on a file
+  nothing here touched: the exact failure this ticket exists to stop shipping,
+  committed by the branch fixing it. Recorded in repo-37's Build so whoever
+  tightens that step fixes the anchor first.
+
+  **The seam the orchestrator asked to be watched did not close.** The worry was
+  that a uniqueness rule would push records onto the grandfather list at the
+  moment that list was made harder to add to. Measured before either was built:
+  across the whole enforced set exactly **one** anchor failed the new rule —
+  `pl-2` anchoring on `"prefix"`, which occurs twice in the downloader's
+  `web.ts`. It was repaired by adding one character, to `"prefix:"`. The
+  grandfathered set is **59 records before and after**, so nothing was pushed onto
+  the list and nothing had to be loosened. Had it gone the other way this entry
+  would say so instead of saying it was fine.
+
+  **What the two changes cost the corpus.** Total debt behind the list is now
+  **741 failing references** across the same 59 records: 639 unanchored, 49
+  moved, 47 unresolvable, and 6 indistinct anchors the new rule found. The gate
+  reports `4 enforced, 0 failing; 59 grandfathered, holding 47 unresolvable, 49
+moved, 639 unanchored, 6 indistinct` at exit 0.
+
+  **3 · A fifth instance of this ticket's thesis, caused by the fix for the
+  third.** Adding ~60 lines to `citations.mjs` moved every line below them and
+  broke **eight** anchored citations across `repo-35` and `repo-36`. Every one
+  named where it had gone, so the repair was arithmetic; all eight are repointed,
+  and the whole-corpus before/after over 121 records shows nothing worsened. One
+  of the eight was also indistinct — `repo-35` anchored the usage string on
+  `"[--rev <sha>] [--section <name>]"`, which the docblock repeats — and was
+  re-anchored on a fragment occurring once rather than merely repointed.
+
+  **And a sixth, in a ticket filed by this very entry.** repo-38 cited
+  `repo-30`'s transcription note anchored on `"Transcription note, by the
+builder"`. That record carries three such notes — a fact repo-38's own sentence
+  states — so the anchor was ambiguous and the new flag refused it before the
+  ticket was committed. The rule caught the page arguing for the rule, in the
+  hour it was written.
+
+  **4 · Two tickets filed**, because a measurement with no home evaporates:
+
+  - [repo-37](./repo-37-the-review-corpus-is-not-anchored.md) — the 741-reference
+    migration, `ready`, `difficulty: hard`. It carries the corpus figures, the
+    reverted sweep's two false anchors and the two boundaries that sweep earned
+    (never a shorthand, never a citation inside a quoted reproduction), the
+    331-drifted measurement, and **finding 2's correction** that today's enforced
+    surface is one record and two citations. That last one weakens the argument
+    for having stopped where this branch stopped, and it is in the ticket for
+    that reason.
+  - [repo-38](./repo-38-two-documents-disagree-on-who-writes-the-review.md) — the
+    `## Review` authorship contradiction, `needs-decision`. Both quotations were
+    read from `origin/main` here rather than relayed, and the shape is sharper
+    than the relay: the two documents **agree** the reviewer must not write the
+    record and give the same reason, and differ only on whether the _caller_ or
+    the _builder_ does — which is why nobody reading one against the other has
+    noticed. Today's behaviour is unchanged on the owner's instruction, and the
+    two documents are deliberately not reconciled on this branch.
+
+  Ids taken from `node scripts/next-id.mjs repo`, which reported `next free:
+repo-37`. That sweep is a snapshot: repo-29's own Log records losing an id to a
+  peer session between the sweep and the commit, so if either number is claimed
+  elsewhere these files move and the branch keeps its name.
+
+  **5 · Merge order, decided by the owner and not by this branch: repo-34 lands
+  first, then this rebases onto it.** No rebase or repoint has been done here —
+  repo-34's tip is still moving, and coordinates repointed against a moving tip
+  are the defect this ticket describes. When it merges, both `repo-31`'s `ci.yml`
+  citations and repo-34's own gate record need repointing, and the second of
+  those is a red build rather than silent debt because repo-34's record is
+  anchored and not grandfathered.
+
+  **6 · The verification this branch had been reporting with was wrong twice,
+  and the ratchet is what exposed it.** Every earlier entry above cites a
+  "whole-corpus before/after comparison … no citation whose state this branch
+  worsened". That check keyed each citation on `record:line|file:start-end`, and
+  it has two blind spots, both found here rather than reasoned about:
+
+  - **A record line that moves hides a regression.** Appending a Log entry above a
+    citation changes its record line, so the key changes and the citation reads
+    as _new_ rather than as changed. Re-keying on the target and the anchor
+    instead — what a reader means by "the same citation" — immediately turned up
+    a seventh broken citation the earlier runs had reported as six.
+  - **Repointing changes the key too, so a _wrong_ repoint is invisible.** Fix a
+    coordinate to 1301, then delete a line above it, and the citation is broken
+    again at a key that never existed on the base. Both diffs reported clean.
+    **What caught it was the gate**: `WORSE
+docs/work/repo-36-citations-loses-the-record-path.md … 30 failing, and its
+GRANDFATHERED entry allows 28`, exit 1, naming two off-by-one repoints. A
+    third check that counts broken citations _per record_ rather than matching
+    them one to one then found six more in `repo-35`, which the gate could not
+    see because that record has no `## Review` section.
+
+  All of them are repaired; the two independent checks and the gate now agree.
+  The point worth keeping is not the eight repairs, it is that **the bespoke
+  check this branch trusted was weaker than the gate it was building**, and said
+  so in the confident register both times. A count that cannot go down is a worse
+  thing to be wrong about than a diff, which is the argument for the ratchet
+  arriving from the direction nobody planned.

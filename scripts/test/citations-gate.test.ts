@@ -112,11 +112,87 @@ test("a grandfathered record is excused and its debt is counted, not hidden", ()
   const { dir, cleanup } = withRepo({ "docs/work/a.md": ANCHORED, "docs/work/b.md": BARE });
   try {
     const scope = { records: ["docs/work/*.md"], section: "Review" };
-    const result = gate(dir, scope, new Set(["docs/work/b.md"]));
+    const result = gate(dir, scope, new Map([["docs/work/b.md", 1]]));
     expect(result.failed).toHaveLength(0);
+    expect(result.regressed).toHaveLength(0);
     expect(result.excused.map((r) => r.record)).toEqual(["docs/work/b.md"]);
     expect(result.debt).toEqual({ unanchored: 1 });
     expect(result.staleEntries).toHaveLength(0);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * The ratchet, and the hole it closes. Before the list carried counts, breaking
+ * a record and adding it to the list in the same change gave exit 0 in silence —
+ * reproduced against the real corpus in repo-29's Log, and this is that shape
+ * with two records in it. An entry has to name a number somebody wrote down, so
+ * a record that got worse exceeds it and cannot hide behind a fresh line.
+ */
+test("a grandfathered record holding more than its entry allows fails", () => {
+  const two = "## Review\n\nBoth bare: `src/tls.ts:2` and `src/tls.ts:3`.\n";
+  const { dir, cleanup } = withRepo({ "docs/work/b.md": two });
+  try {
+    const scope = { records: ["docs/work/*.md"], section: "Review" };
+    const result = gate(dir, scope, new Map([["docs/work/b.md", 1]]));
+    expect(result.excused).toHaveLength(0);
+    expect(result.regressed.map((r) => [r.record, r.failing, r.allowed])).toEqual([
+      ["docs/work/b.md", 2, 1],
+    ]);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * The other jaw. A record repaired part-way holds less debt than its number
+ * claims, and the number has to come down in the same change — otherwise the
+ * list drifts loose and stops meaning anything, which is repo-25's
+ * stale-declaration rule generalised from "excuses nothing" to "excuses more
+ * than it needs to".
+ */
+test("a grandfathered record holding less than its entry allows must be tightened", () => {
+  const { dir, cleanup } = withRepo({ "docs/work/b.md": BARE });
+  try {
+    const scope = { records: ["docs/work/*.md"], section: "Review" };
+    const result = gate(dir, scope, new Map([["docs/work/b.md", 5]]));
+    expect(result.excused.map((r) => r.record)).toEqual(["docs/work/b.md"]);
+    expect(result.staleEntries).toEqual([
+      {
+        record: "docs/work/b.md",
+        why: "now holds 1 failing reference(s), not 5 — tighten the number",
+      },
+    ]);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * repo-29 finding 3, at the gate rather than at the checker. `citations.mjs`
+ * calls a non-distinct anchor `verified` because the state is a fact about the
+ * record; the policy that it is not good enough lives here, which is the same
+ * split `unanchored` already uses.
+ */
+test("an anchor that is not unique in its target fails the gate although it is verified", () => {
+  const record = '## Review\n\nProof: `src/tls.ts:2 "depth"`.\n';
+  const { dir, cleanup } = withRepo({ "docs/work/a.md": record });
+  try {
+    const [read, resolve] = checkers(dir);
+    // Two lines of the fixture carry the word, so the fragment cannot say which.
+    fs.writeFileSync(
+      path.join(dir, "src", "tls.ts"),
+      ["// depth", "  // Defence in depth: the store is pinned.", "return true;", ""].join("\n"),
+    );
+    const result = checkRecord(dir, "docs/work/a.md", "Review", read, resolve);
+    expect(result.counts).toMatchObject({ verified: 1, indistinct: 1 });
+    expect(result.passed).toBe(false);
+    expect(result.failing).toBe(1);
+
+    const lax = checkRecord(dir, "docs/work/a.md", "Review", read, resolve, false);
+    expect(lax.passed).toBe(true);
+    expect(lax.failing).toBe(0);
   } finally {
     cleanup();
   }
@@ -126,7 +202,7 @@ test("a record that is not grandfathered fails the gate", () => {
   const { dir, cleanup } = withRepo({ "docs/work/a.md": ANCHORED, "docs/work/b.md": BARE });
   try {
     const scope = { records: ["docs/work/*.md"], section: "Review" };
-    const result = gate(dir, scope, new Set());
+    const result = gate(dir, scope, new Map());
     expect(result.failed.map((r) => r.record)).toEqual(["docs/work/b.md"]);
   } finally {
     cleanup();
@@ -137,7 +213,7 @@ test("a grandfathered record that now passes is reported stale, so the list can 
   const { dir, cleanup } = withRepo({ "docs/work/a.md": ANCHORED });
   try {
     const scope = { records: ["docs/work/*.md"], section: "Review" };
-    const result = gate(dir, scope, new Set(["docs/work/a.md"]));
+    const result = gate(dir, scope, new Map([["docs/work/a.md", 1]]));
     expect(result.staleEntries).toEqual([
       { record: "docs/work/a.md", why: "passes this gate now" },
     ]);
@@ -150,7 +226,7 @@ test("a grandfathered record the scope no longer reaches is reported stale too",
   const { dir, cleanup } = withRepo({ "docs/work/a.md": ANCHORED });
   try {
     const scope = { records: ["docs/work/*.md"], section: "Review" };
-    const result = gate(dir, scope, new Set(["docs/work/gone.md"]));
+    const result = gate(dir, scope, new Map([["docs/work/gone.md", 1]]));
     expect(result.staleEntries).toEqual([
       { record: "docs/work/gone.md", why: "is no longer a record with a matching section" },
     ]);
@@ -164,7 +240,7 @@ test("an untracked record cannot fail the gate", () => {
   try {
     fs.writeFileSync(path.join(dir, "docs", "work", "scratch.md"), BARE);
     const scope = { records: ["docs/work/*.md"], section: "Review" };
-    expect(gate(dir, scope, new Set()).failed).toHaveLength(0);
+    expect(gate(dir, scope, new Map()).failed).toHaveLength(0);
   } finally {
     cleanup();
   }
@@ -192,9 +268,9 @@ test("the CLI exits non-zero and names the record when a record fails", () => {
   try {
     const result = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
     expect(result.status).toBe(1);
-    expect(result.stdout).toMatch(/FAIL docs\/work\/b\.md/);
+    expect(result.stdout).toMatch(/FAIL\s+docs\/work\/b\.md/);
     expect(result.stdout).toMatch(/unanchored/);
-    expect(result.stderr).toMatch(/Adding a record to GRANDFATHERED is not the fix/);
+    expect(result.stderr).toMatch(/occur only once in that file/);
   } finally {
     cleanup();
   }
@@ -213,6 +289,16 @@ test("the CLI rejects an argument rather than ignoring it", () => {
  */
 test("every grandfathered path is a record this repo actually has", () => {
   const records = new Set(findRecords(REPO, SCOPE.records));
-  const missing = [...GRANDFATHERED].filter((record) => !records.has(record));
+  const missing = [...GRANDFATHERED.keys()].filter((record) => !records.has(record));
   expect(missing).toEqual([]);
+});
+
+/**
+ * An entry allowing zero failures excuses nothing and would sit there for ever
+ * looking like it excused something — the rubber stamp this list is shaped to
+ * refuse. The gate reports such a record `STALE` at runtime; this catches it
+ * without waiting for a run over the whole corpus.
+ */
+test("no grandfathered entry allows zero failures", () => {
+  expect([...GRANDFATHERED].filter(([, allowed]) => allowed < 1)).toEqual([]);
 });

@@ -192,13 +192,24 @@ is the caller's alone.
    line"`, not "covered". A line with no test is a finding, and so is a test that
    asserts something narrower than the line claims.
 
-   **Every citation you write into `## Review` carries anchor text**, and CI
-   enforces it — `scripts/citations-gate.mjs` runs in `ci.yml`'s `check` job over
-   every record's `## Review` section with `--require-anchors`, so a bare
-   `file.test.ts:88` in a section you commit turns the build red. Quote a
-   fragment of the line, straight double quotes, no `"` inside it: the parser's
-   anchor group admits none, and escaping one truncates the fragment at the
-   backslash and reports `moved`. Pick a quote-free substring instead.
+   **Every citation you write into `## Review` carries anchor text, and the
+   fragment must occur only once in the file it points at.** CI enforces both —
+   `scripts/citations-gate.mjs` runs in `ci.yml`'s `check` job over every
+   record's `## Review` section with `--require-anchors
+   --require-distinct-anchors` — so a bare `file.test.ts:88` in a section you
+   commit turns the build red, and so does `"const"`.
+
+   Two constraints on the fragment, both of which have bitten somebody here:
+
+   - **No `"` inside it.** The parser's anchor group admits none, so escaping
+     one truncates the fragment at the backslash and the citation reports
+     `moved`. Pick a quote-free substring.
+   - **Quote enough of the line to be unique.** `verified` means *some*
+     occurrence of your fragment starts inside the range you named — not that
+     only one does. A one-word anchor keeps saying `ok` after an unrelated edit
+     slides a different occurrence onto the cited line, which is exactly how
+     `repo-31`'s `"informational"` citation survived pointing at a comment it had
+     nothing to do with.
 
    This is not formatting. An unanchored coordinate still *resolves* — the
    checker only confirms the file has that many lines — so a citation onto a
@@ -297,7 +308,7 @@ is the caller's alone.
    step is the caller's, and it has three acts. First write the returned section
    into the ticket above `## Log`, verbatim, in the branch's own commit — and
    before that commit, run `node scripts/citations.mjs <ticket> --section Review
-   --require-anchors` over it and fix what it says. That is the check CI is
+   --require-anchors --require-distinct-anchors` over it and fix what it says. That is the check CI is
    about to run; catching it here costs one command, and catching it in CI costs
    a push. Where a citation is deliberately unresolvable — a coordinate quoted as
    the evidence of a finding — declare it with
