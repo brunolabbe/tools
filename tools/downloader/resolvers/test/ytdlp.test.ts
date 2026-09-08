@@ -597,6 +597,13 @@ describe("stage narration (dl-43)", () => {
 // `findExecutable` reads `process.platform` and `process.env` by default, so
 // its `PATHEXT` branch is otherwise unreachable from this (Linux) test host.
 // `platform`/`env` are parameters specifically so it can be driven here.
+//
+// `findExecutable` still uses the statically imported `join` from `node:path`
+// (POSIX-flavoured on this host) to build each candidate, even when
+// `platform: "win32"` is passed — only `process.platform`/`process.env` are
+// injected, not the path module. So these cases assert extension *selection*
+// only; they are not proof of Windows path joining the way
+// `ffmpeg-args.test.ts`'s `taskkillPath` cases say they are and are not.
 describe("findExecutable's PATHEXT branch (repo-34)", () => {
   let dir: string;
 

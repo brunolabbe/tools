@@ -151,7 +151,7 @@ divergent logic is already unit-testable":
 independent of the runner.**
 `` `tools/downloader/engine/src/ffmpeg/kill.ts:22` "assertion is a unit test" ``
 (docblock) /
-`` `tools/downloader/engine/test/ffmpeg-args.test.ts:295` "so children die with the parent" ``.
+`` `tools/downloader/engine/test/ffmpeg-args.test.ts:296` "so children die with the parent" ``.
 This one needs nothing from `windows-latest` and would not lose anything if it
 were dropped.
 
@@ -181,7 +181,7 @@ spawning
 `` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:735` "const killer = spawn(" ``
 via a bare `"taskkill"` resolved off `PATH`, not the absolute path `kill.ts`
 resolves), and `tools/downloader/resolvers/test/ytdlp.test.ts`'s
-`` `tools/downloader/resolvers/test/ytdlp.test.ts:392` "an abort kills the process instead of hanging" ``
+`` `tools/downloader/resolvers/test/ytdlp.test.ts:399` "an abort kills the process instead of hanging" ``
 really spawns a child Node process and really aborts it, so on `windows-latest`
 this test genuinely calls the real OS `taskkill.exe` via `PATH` lookup and
 proves the process tree actually dies. That is one real fact a pure-function
@@ -189,9 +189,9 @@ test cannot buy: whether `spawn("taskkill", [...], { shell: false })` resolved
 off `PATH` on a real Windows host does what the code assumes.
 
 **`findExecutable`'s `PATHEXT` branch is untested on any platform** —
-`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:822` "const isWindows = process.platform ===" ``
+`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:830` "const isWindows = platform ===" ``
 /
-`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:824` "const extensions = isWindows" ``
+`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:832` "const extensions = isWindows" ``
 — and unlike `taskkillPath`, it reads `process.platform` and `process.env`
 directly rather than accepting them as parameters, so making it testable
 cross-platform is a small refactor away, not free today.
@@ -201,7 +201,7 @@ cross-platform is a small refactor away, not free today.
 `` `tools/downloader/engine/src/storage.ts:20` "import path from" `` imports
 `node:path`, which _is_ `path.win32` on a real Windows process and `path.posix`
 everywhere else — not a mockable constant.
-`` `tools/downloader/engine/test/storage.test.ts:76` "const elsewhere = process.platform" ``
+`` `tools/downloader/engine/test/storage.test.ts:85` "const elsewhere = process.platform" ``
 already branches the fixture on `process.platform`, so the assertion is
 correct either way it runs — but it only _proves_ the Windows branch when it
 actually runs as a Windows process. Node ships `path.win32` for exactly this,

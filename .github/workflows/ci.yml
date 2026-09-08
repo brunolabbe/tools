@@ -213,13 +213,21 @@ jobs:
   # `taskkillPath`'s SystemRoot/windir/C:\Windows fallback chain (unit-tested
   # directly since repo-34) and `sanitizeFilename("CON")` are pure functions
   # and answer identically on Linux; their tests are not why this matrix
-  # exists. The reason is `hls-e2e.test.ts`'s "cancelling kills the process
-  # tree and leaves no artifacts", which has no `skipIf`: on this runner it
-  # spawns a real `ffmpeg-static`, takes `killTreeWindows` into a real
-  # `taskkill.exe`, and asserts nothing was orphaned. That is the only place
+  # exists. The reason is `hls-e2e.test.ts`, and it is two tests there, not
+  # one: "cancelling kills the process tree and leaves no artifacts" (an
+  # aborted job, `runner.ts`'s `onAbort`) and "a runtime size cap stops the
+  # download even when no estimate was possible" (the `SIZE_LIMIT_EXCEEDED`
+  # branch in the same file's stdout handler). Neither has a `skipIf`, so both
+  # run here; both call `terminate` -> `killQuietly` -> `killProcessTree`,
+  # which on this runner takes `killTreeWindows` into a real `taskkill.exe`
+  # and asserts nothing was orphaned. Those two are the only places
   # `taskkillPath()`'s return value is ever handed to a real spawn — the unit
-  # test above proves the path is right, this is what proves the path works —
-  # and it pins the process-tree rule in CLAUDE.md.
+  # test above proves the path is right, these are what prove the path works
+  # — and together they pin the process-tree rule in CLAUDE.md. (A prior
+  # version of this comment named only the cancellation test as "the only
+  # execution of taskkillPath() anywhere"; repo-34's gate found the second one
+  # by instrumenting `killProcessTree` and running the whole downloader
+  # project, which produced two trace lines rather than one.)
   #
   # This ran briefly path-filtered to the downloader, on the theory that every
   # Windows hazard is that tool's. It is unfiltered again: the filter was a

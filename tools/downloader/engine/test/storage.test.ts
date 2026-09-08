@@ -116,6 +116,17 @@ describe("assertPathInside", () => {
     expect(() => assertPathInside(winRoot, sibling, path.win32)).toThrow(AppError);
   });
 
+  // The two cases above only exercise the `startsWith("..\\")` clause. A
+  // cross-drive candidate (`D:\evil` against a `C:\...` root) never produces a
+  // leading `..` at all — `path.win32.relative` returns the candidate itself,
+  // absolute — so it is the `isAbsolute(relative)` clause, and only that one,
+  // that rejects it. That clause is dead code on POSIX (`path.relative` there
+  // never returns an absolute path) and was unexercised by either case above;
+  // deleting it left the full downloader suite green (repo-34 gate finding 2).
+  test("rejects a cross-drive Windows candidate, which only the isAbsolute clause catches", () => {
+    expect(() => assertPathInside("C:\\storage", "D:\\evil", path.win32)).toThrow(AppError);
+  });
+
   test("throws AppError with a taxonomy code, never a bare Error", () => {
     try {
       assertPathInside(root, "../escape");
