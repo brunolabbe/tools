@@ -133,11 +133,15 @@ assertion".
 **Gate: FAIL** — then fixed on the same branch; see the findings below and the
 Log's finding-by-finding record — 2026-09-08 · `origin/main...cd00fb4` (gate 1)
 · defect hunt with independent reproduction, no `code-review` delegate.
-Builder: Sonnet 5 (self-reported). Reviewer: `ac0e54bd5e1d5ed92`, self-reported
-as Opus 5 partway through the exchange — the different-model rule held. This
-section is authored by the builder from the reviewer's findings message plus
-the builder's own independent reproduction of every finding, per the
-coordinator's instruction — it is not a transcription of the reviewer's
+Builder: dispatched as `sonnet` by the orchestrator, from the ticket's
+`difficulty: standard`. Reviewer (`ac0e54bd5e1d5ed92`): dispatched as `opus` —
+the different-model rule held. Both values are the orchestrator's dispatch
+parameter, decided before either agent ran, not either agent's self-report of
+what it is — a record of the dispatch, not of what ran, since a fallback can
+move a model mid-run without either of us seeing it. This section is authored
+by the builder from the reviewer's findings message plus the builder's own
+independent reproduction of every finding, per the coordinator's
+instruction — it is not a transcription of the reviewer's
 report.
 
 | Done when                                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
