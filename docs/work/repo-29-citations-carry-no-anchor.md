@@ -1688,3 +1688,60 @@ compared against 68ee870: 0 raised.`, exit 0. **That property — the legitimate
   existed, so the founding list's guarantee is still that audit — enumerated not
   sampled, 59 of 59 matching, four re-derived through the CLI — and the docblock
   now says in one clause that restoring this check does not touch it.
+
+- **2026-09-08 — gate 4: one real finding, reproduced and disclosed rather than
+  closed, and the cost of closing it is measured rather than described.** The
+  restored deletion probe asks `git log` about `SELF`, so **renaming this file
+  evades it**, and unlike the deletion route that takes one commit rather than
+  two.
+
+  **Reproduced here before it was written down.** A scratch repository: an
+  honest base with the gate at `scripts/citations-gate.mjs` allowing one record
+  `1`; an attacker commit deleting it and adding `scripts/citations-gate2.mjs`
+  with `SELF` repointed. Probing as each copy would probe for itself —
+  `probe for the original name : base has it`, and
+  `probe for the renamed file  : SKIPPED — never existed, excused`. Asked about
+  the _original_ path the same base correctly reports
+  `{"raised":[{"record":"docs/work/a.md","was":1,"now":50}]}`, so the mechanism
+  is sound and it is the question that is wrong, not the answer.
+
+  **What still catches the lazy version, which is the gate's own calibration and
+  it is right.** An entry set _higher_ than its record's real debt trips the
+  in-tree `STALE` jaw, which consults no history at all. So the silent route
+  needs a rename **and** a count matching the real debt exactly — the gate-2
+  residual and this one composing — plus a `ci.yml` edit to invoke the new
+  filename. Still a visible diff, and quieter than the deletion route it
+  replaces.
+
+  **The cost of closing it, measured on this repo rather than estimated.** The
+  closure is to locate the base's list by _content_ instead of by path.
+  `git grep -l "export const GRANDFATHERED = new Map"` over a whole ref runs in
+  **38 ms**, which is nothing. It returns **two** paths — this script and its own
+  test file, which carries the same declaration inside a fixture helper — so the
+  rule "exactly one match" fails on the tree as it stands today, and the closure
+  needs a discriminator no test fixture can accidentally satisfy. Scoping the
+  search to `scripts/*.mjs` gives exactly one match in 4 ms and moves the evasion
+  one step, to a rename out of `scripts/`. **That is the whole decision: a cheap
+  probe, and a discriminator nobody has designed.** Not built, and the numbers
+  are here so whoever decides is not deciding against a description.
+
+  **Two routes the gate enumerated and cleared, recorded so they are not
+  re-walked.** A merge from a side branch does **not** hide the file: `git log`
+  finds it through the merge parent, tested directly. A squash or rewrite of the
+  base branch's own history would work, and is out of scope for any check here —
+  every gate in this repo assumes `main`'s history is trustworthy.
+
+  **The low finding is fixed rather than noted.** There was no test over the
+  shallow-clone refusal; the gate had verified it by hand against a real shallow
+  clone and said so. There is one now, and it builds a real shallow clone rather
+  than mocking one — **`--depth` is ignored for a plain local path**, so the clone
+  goes through `file://` and the test asserts `--is-shallow-repository` is `true`
+  before asserting anything else. Without that assertion the clone would come out
+  complete and the test would pass having measured nothing, which is this
+  repo's own recorded trap about tests that measure the sandbox.
+
+  **The docblock says all of it**, including that renaming evades the probe and
+  what the measured closure would cost, because the paragraph as it stood read as
+  covering the reopening case in general when it covers exactly one shape of it.
+  That is the fourth time on this branch a comment would otherwise have outlived
+  what it described.

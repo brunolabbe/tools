@@ -57,6 +57,13 @@ function withRepo(records: Record<string, string>): { dir: string; cleanup: () =
   return { dir, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
+/** `git` in a named directory. Module scope because it closes over nothing. */
+const gitIn = (dir: string, ...args: string[]) => {
+  const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+  if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+  return result.stdout.trim();
+};
+
 const checkers = (dir: string) =>
   [makeReader(dir, null), makeResolver(candidateFiles(dir, null))] as const;
 
@@ -544,6 +551,49 @@ test("a base that once had this file and lost it is refused, not treated as a bo
     expect(() => compareAgainst(dir, deleted, inflated)).toThrow(/deleted rather than never added/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/**
+ * The shallow branch, against a **real** shallow clone rather than a mock of
+ * one. `git log` over a truncated history answers "this file never existed" for
+ * a file it simply cannot see, which is the wrong answer arrived at
+ * confidently — so that case is refused rather than excused, and this is what
+ * proves the refusal is reachable.
+ *
+ * `--depth` is ignored for a plain local path, so the clone goes through
+ * `file://`; without it the clone comes out complete and the test passes for the
+ * wrong reason, having asserted nothing about shallowness at all.
+ */
+test("a shallow clone is refused, because git log cannot answer there", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-shallow-")));
+  const src = path.join(root, "src");
+  const dst = path.join(root, "dst");
+  try {
+    fs.mkdirSync(src);
+    gitIn(src, "init", "-q", "-b", "main");
+    gitIn(src, "config", "user.email", "shallow@example.test");
+    gitIn(src, "config", "user.name", "shallow test");
+    fs.mkdirSync(path.join(src, path.dirname(SELF)), { recursive: true });
+    fs.writeFileSync(path.join(src, SELF), listing([["docs/work/a.md", 1]]));
+    gitIn(src, "add", "-A");
+    gitIn(src, "commit", "-qm", "with the gate");
+    fs.rmSync(path.join(src, SELF));
+    gitIn(src, "add", "-A");
+    gitIn(src, "commit", "-qm", "and without it");
+
+    const clone = spawnSync("git", ["clone", "--depth", "1", `file://${src}`, dst], {
+      encoding: "utf8",
+    });
+    expect(clone.error).toBeUndefined();
+    expect(clone.status).toBe(0);
+    // Asserted rather than assumed: if the clone came out complete, everything
+    // below would pass while measuring the wrong thing.
+    expect(gitIn(dst, "rev-parse", "--is-shallow-repository")).toBe("true");
+
+    expect(() => compareAgainst(dst, "HEAD", new Map())).toThrow(/this clone is shallow/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 

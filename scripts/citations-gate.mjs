@@ -189,6 +189,26 @@ export const SCOPE = {
  *   only the first is excused. The disclosure it replaces was correct for one
  *   day and is kept in repo-29's Log with the decision that reversed it.
  *
+ *   **That probe asks about `SELF`, so renaming this file evades it**, and the
+ *   evasion is one commit rather than two. Rename the script, repoint `SELF`,
+ *   update `ci.yml`'s invocation, and set an entry to exactly the debt its
+ *   record really holds: the probe then asks whether the base ever carried a
+ *   path that genuinely never existed, answers no, and excuses the run. Found
+ *   and reproduced by repo-29's fourth gate; reproduced again here before it was
+ *   written down. **The inflated version is still caught** — an entry larger
+ *   than the debt trips the in-tree `STALE` jaw, which reads no history at all —
+ *   so it takes a rename *and* an exact count, which is the gate-2 residual and
+ *   this one composing.
+ *
+ *   Closing it means locating the base's list by content rather than by path,
+ *   and the cost of that was measured rather than guessed: `git grep -l` for the
+ *   list's own declaration over a whole ref runs in **38 ms** here, but returns
+ *   **two** paths — this file and its test, which carries the same text in a
+ *   fixture — so it needs a discriminator that a test fixture cannot
+ *   accidentally satisfy, and scoping the search to `scripts/` merely moves the
+ *   evasion to a rename out of `scripts/`. Left open on that basis, with the
+ *   numbers in repo-29's Log rather than an estimate.
+ *
  *   **The founding 59 are not covered by any of that**, and no later check can
  *   retroactively cover them — they were written before the comparison existed.
  *   What they rest on is an audit, and it was done: every entry compared against
