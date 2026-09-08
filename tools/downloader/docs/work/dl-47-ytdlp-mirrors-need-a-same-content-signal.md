@@ -279,6 +279,62 @@ two rows"`, on exactly the named assertion — 1 distinct URL for 2 variants. So
   wording (which the builder had already surfaced). Nothing was fixed during the
   gate and the reviewer did not touch the ticket file.
 
+### 2026-09-08 · second round, tip `6f7ae11`, base `a5e31c7` (`origin/main`)
+
+**Gate: CONCERNS, then PASS** — same reviewer, `a75a349132392436b`, running
+**Sonnet**; branch still on **Opus 5 (1M context)**. Kept as its own subsection
+rather than folded into the round above, because the round above was accurate
+about the code and wrong about whether the branch was shippable, and collapsing
+the two would hide that.
+
+**What the second round found, by checking a claim rather than re-reading the
+diff.** The first ship report said the citations gate was green. It was not:
+`node scripts/citations-gate.mjs --against origin/main` exits **1** at `95709b7`,
+and the `check` job on PR#199 was **failing** at that sha (run `34282525283`,
+confirmed live by the reviewer). Two causes, both this branch's:
+
+1. **Three anchors in the round above were verified but not distinct.**
+   `expect(probe.variants).toHaveLength(2)` occurs five times in `ytdlp.test.ts`
+   and both cited engine assertions occur twice, so "verified" meant _in range_
+   rather than _uniquely identified_ — a caveat the builder had reported instead
+   of treating as a failure. Two of them could not be repaired by quoting more,
+   because those assertion lines are byte-identical to their twins; all three
+   were repointed onto lines that are unique **and** stronger proof. The
+   acceptance table above now cites them.
+2. **This branch reddened `repo-34`, a merged and unrelated ticket**, purely by
+   adding ~296 lines to `ytdlp.test.ts` above a block that record cites. Repointed
+   in the same commit; the mechanism is written up in the Log because it is the
+   part that generalises.
+
+**Why neither the builder's gates nor the first gate caught it.** The command the
+builder ran, and was told to run, was `scripts/citations.mjs` on its own ticket —
+the looser per-record script. CI runs `scripts/citations-gate.mjs`, which requires
+distinct anchors on any non-grandfathered record, and which is a step of CI's
+`check` **job** and not of the `check` **script**. So `npm run check` exiting 0
+was never evidence about this, and neither was the per-record run.
+
+**Verified at `6f7ae11` by the reviewer, independently, not read off the builder's
+report:** `git diff --stat 95709b7...6f7ae11` shows only the two markdown files,
+zero source or test lines; `citations-gate.mjs --against origin/main` exit 0;
+`citations.mjs --section Review --require-anchors --require-distinct-anchors` exit
+0 on both this record (8 verified, 0 moved, 0 unanchored) and repo-34's (16
+verified, 0 moved); the repo-34 anchors grepped directly at 903 and 901; each of
+the three re-anchored citations confirmed to occur exactly once by `grep -c`; and
+run `34283170862` at `6f7ae11` read live with `--json` — `changes` success,
+**`check` success**, the same job that failed at `95709b7`. `test (ubuntu-latest)`
+completed success afterwards; `test (windows-latest, informational)` is
+informational by configuration and is not a merge condition.
+
+- **findings** · 0 high, 0 medium, 2 low, both fixed in `6f7ae11` and both about
+  the record rather than the code. The grouping logic, the tests and every
+  acceptance line traced in the round above are untouched by the repair, which
+  the reviewer confirmed from the diff stat rather than taking on trust.
+- **Both rounds were settled by commands rather than by either side conceding**,
+  which is the property worth preserving: the builder reproduced each finding
+  before accepting it — including re-resolving repo-34's endpoints against its own
+  tip instead of transcribing the reviewer's line numbers — and the reviewer
+  re-ran each repair instead of reading the report of it.
+
 ## Log
 
 - **2026-09-07 — filed from dl-45, whose builder reserved this id** (`dl-47`;
