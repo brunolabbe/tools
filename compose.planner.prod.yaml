@@ -68,12 +68,16 @@ services:
 
       # --- What is deliberately NOT set here ------------------------------
       #
-      # **No `TRUST_PROXY`.** `ApiConfig` has no such field and no rate limiter
-      # to key on it — see `tools/planner/api/src/config.ts`. The downloader's
-      # line in `compose.prod.yaml` is downloader-specific and has no equivalent
-      # here. That is a gap rather than a simplification: until this tool grows
-      # its own limiter, a Cloudflare WAF rate limiting rule is the only layer
-      # there is, and the Access allowlist is what stands in for it.
+      # **No `TRUST_PROXY`, and there is nothing to set it to.** `ApiConfig` has
+      # no such field — the downloader's line in `compose.prod.yaml` is
+      # downloader-specific. That is not because there is no limiter: there is
+      # one, `rateLimitRunsPerMinute` (default 5) on `POST /api/plans`. It is
+      # that `server.ts` never passes `trustProxy` to Fastify, so behind
+      # `cloudflared` every client's `request.ip` is the same compose-network
+      # address and all of them share one bucket. Five plan runs a minute for
+      # the whole hostname, not per visitor — pl-38. On an Access-gated instance
+      # with one user that is invisible; the moment you widen the policy it is
+      # the first thing you will hit.
       #
       # **No grounding endpoints.** `GROUNDING_PROVIDER` defaults to `fixtures`,
       # which answers from a checked-in table and reaches nothing. Making the

@@ -79,6 +79,52 @@ first is not a hardening preference:
   `routes/events.ts`. Build the same thing in with the streaming rather than
   diagnosing it after.
 
+## Review
+
+**Gate: PASS** — 2026-09-08 · `4fad5f8...f82a77c` · reviewed on a different model
+from the one that wrote the branch, in its own worktree.
+
+| Done when                                                                                                      | Proof                                                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docker run` of the published image serves the UI and answers `/api/health` with the released version          | **out of this diff's scope** — closed by pl-13 and gated by `.github/workflows/planner.yml`; no code changed here that could regress it, and it was not re-run |
+| A planner-only release builds the planner image and not the downloader's                                       | **out of this diff's scope** — closed by steps 1–4 with dl-10; unrelated files                                                                                 |
+| `planner.<domain>` serves the UI behind an Access login, and an unauthenticated request never reaches the host | **not provable from a repository**, and left open rather than dodged — the Log entry below says why `in-flight` is the honest state                            |
+
+- **premise, verified** · The branch's whole claim is that the new fragment is
+  additive. The reviewer ran `docker compose config` over both merges rather
+  than trusting the Log, and diffed them: `downloader`, `cloudflared`'s existing
+  `depends_on.downloader`, the `edge` subnet, `TRUST_PROXY` and the `storage`
+  volume are byte-identical. `cloudflared.depends_on` merges as a key union —
+  `planner` joins `downloader`, it does not replace it. A downloader-only host
+  is untouched.
+- **verified** · repo-33's measurement reproduced independently: the project
+  name resolved to the reviewer's own worktree basename, not to the builder's.
+  Same mechanism, different string, which is the right thing to see.
+- **verified** · `tools/planner/Dockerfile:136` "HEALTHCHECK" — so
+  `cloudflared`'s `condition: service_healthy` on the planner is satisfiable
+  rather than a config error at boot.
+- **verified** · the internal half of the "one hostname, two paths" argument:
+  `tools/downloader/api/src/routes/web.ts:147` "prefix" and
+  `tools/planner/api/src/routes/web.ts:65` "prefix" both mount at the root, and
+  neither `vite.config.ts` sets `base`.
+- **unverified, external** · that Cloudflare Tunnel's Path field matches without
+  stripping. `WebFetch` is blocked by the container firewall and the reviewer
+  had no `WebSearch`. Recorded as unverified rather than accepted: the page's
+  conclusion does not depend on it, because both bundles collide at `/assets/…`
+  under any prefix behaviour.
+- **low, fixed on this branch** · Both the new fragment and a paragraph of
+  `02-DEPLOYMENT.md` inherited from `main` said the planner has no rate limiter.
+  It has one — `RATE_LIMIT_RUNS_PER_MINUTE`, default 5, on `POST /api/plans`.
+  What it has not got is `trustProxy`, so behind `cloudflared` every client
+  shares one bucket for the whole hostname. Confirmed by hand before acting on
+  it. Both texts now say that, and the defect is
+  [pl-38](./pl-38-the-planner-limiter-shares-one-bucket.md) rather than a
+  sentence nobody can act on. The reviewer proposed this and did not do it.
+- NFR · security: the finding above, and no new attack surface — this diff
+  touches compose, docs and tickets, no code. reliability: `cloudflared` waits on
+  both health checks before publishing either hostname, verified in the merged
+  config rather than asserted. performance: n/a.
+
 ## Log
 
 **2026-08-14 — steps 1–4 landed with dl-10.**

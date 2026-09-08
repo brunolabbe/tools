@@ -583,15 +583,21 @@ from the downloader's, and the first is not a hardening preference:
   privacy boundary to lose, because there is not one yet. Until a user model
   lands, an Access allowlist is not a precaution around the data model — it is
   the only configuration in which that model is coherent.
-- **No rate limiting, and no `TRUST_PROXY` to set.** Its `ApiConfig` has neither
-  the limiter fields nor the trust setting the downloader's has, so the
-  `TRUST_PROXY` line in `compose.prod.yaml` is downloader-specific and
-  `compose.planner.prod.yaml` has no equivalent. This matters more here, not
-  less: once `MODEL_PROVIDER` is something other than `scripted`, an
+- **Rate limiting that is not per-client, and no `TRUST_PROXY` to make it so.**
+  The planner does limit plan runs — `RATE_LIMIT_RUNS_PER_MINUTE`, default 5, on
+  `POST /api/plans`. What it does not do is set `trustProxy` on Fastify, so
+  behind `cloudflared` every client's `request.ip` is the same compose-network
+  address and they all share **one** five-per-minute bucket for the whole
+  hostname. That is the "one busy user throttles everyone" failure described for
+  the downloader above, except here there is no setting that fixes it —
+  `ApiConfig` has no trust field to name the proxy with. [pl-38](./work/pl-38-the-planner-limiter-shares-one-bucket.md)
+  is the ticket. With one person behind an Access allowlist you will never
+  notice; widen the policy and it is the first thing you hit. This matters more
+  once `MODEL_PROVIDER` is something other than `scripted`, because then an
   unauthenticated endpoint is a stranger spending your token budget, with
-  `MAX_OUTPUT_TOKENS` capping one reply and nothing at all capping the number of
-  replies. A Cloudflare WAF rate limiting rule is the only layer available until
-  the tool grows its own.
+  `MAX_OUTPUT_TOKENS` capping one reply and nothing capping the number of
+  replies. A Cloudflare WAF rate limiting rule is the only per-client layer
+  available until the tool grows its own.
 - **`MODEL_PROVIDER` defaults to `scripted`.** A deployment that does not set it
   looks healthy and answers from a fixed script. It is set explicitly in the
   image and again in the fragment, and `/api/health` reports `agent.provider` —
