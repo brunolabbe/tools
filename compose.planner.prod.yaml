@@ -1,0 +1,121 @@
+# The planner's production overlay: its released image, on the shared edge.
+#
+#   docker compose -f compose.yaml -f compose.prod.yaml -f compose.planner.prod.yaml up -d
+#
+# ## Why this is a file of its own, and not a block in compose.prod.yaml
+#
+# `docs/adr/004-one-compose-fragment-per-tool.md` is explicit about this being
+# the part that is easy to get wrong. A `planner:` block in the shared overlay
+# is a service *definition* — an image and a network are enough to start one —
+# so a downloader-only host that merged `compose.prod.yaml` would stand up the
+# planner without ever naming it. What stays in that file is what belongs to the
+# **host** rather than to any tool: the tunnel, and the network they share.
+#
+# `pl-2` step 5 predates that ADR by eight days and says "a planner service in
+# compose.prod.yaml". It is superseded here, and its Log says so.
+#
+# ## What this file deliberately does not do
+#
+# **It does not rename anything, and it sets no `name:`.** ADR 004's target
+# layout also renames `compose.yaml` to `compose.downloader.yaml` and gives every
+# fragment an explicit `name:`, because a project named after a directory
+# basename is renamed by moving a file. That half is `repo-33`, and it is not
+# free on a host that is already running: setting `name:` renames the compose
+# project, which orphans the `storage` volume holding the job database and every
+# file still inside its retention window. Additive today, migrated deliberately
+# later.
+#
+# So this fragment is opt-in and nothing that works today stops working because
+# it exists. A downloader-only host merges two files, exactly as before.
+#
+# ## The Cloudflare half is not here
+#
+# The hostname and the Access application live in the dashboard and no file in
+# this repo can hold them. `docs/02-DEPLOYMENT.md` writes them out anyway, so
+# they are reviewable. **Read `## Adding the second tool` before this file is
+# useful** — in particular, the downloader's Access policy is not a template for
+# this one, and copying it is the single most damaging mistake available here.
+
+services:
+  planner:
+    # Same pinning argument as the downloader's, for the same reason: a host
+    # following a moving tag cannot answer "what is it running", and rolling
+    # back means guessing. `/api/health` reports the version and it matches this
+    # line, because release-please stamps both.
+    image: "ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env - see docs/02-DEPLOYMENT.md}/planner:${PLANNER_TAG:?set PLANNER_TAG in .env to a released version - see docs/03-RELEASING.md}"
+    pull_policy: always
+    restart: unless-stopped
+    networks: [edge]
+
+    # Nothing in this image forks — no ffmpeg, no Chromium — so there is no
+    # reaping to do. It costs nothing to have and the Dockerfile's own comment
+    # asks for it.
+    init: true
+
+    # Loopback only, and for the same reason the downloader's is: this is for
+    # `curl` from the host when something is wrong, not how anything is served.
+    # 8090 rather than 8080 because both tools run on this machine.
+    ports:
+      - "127.0.0.1:8090:8090"
+
+    volumes:
+      # Intakes, answers and plans. `docker compose down` without `-v` leaves it
+      # alone; the database is the only copy of anything a user typed.
+      - planner_storage:/data
+
+    environment:
+      LOG_LEVEL: info
+
+      # --- What is deliberately NOT set here ------------------------------
+      #
+      # **No `TRUST_PROXY`, and there is nothing to set it to.** `ApiConfig` has
+      # no such field — the downloader's line in `compose.prod.yaml` is
+      # downloader-specific. That is not because there is no limiter: there is
+      # one, `rateLimitRunsPerMinute` (default 5) on `POST /api/plans`. It is
+      # that `server.ts` never passes `trustProxy` to Fastify, so behind
+      # `cloudflared` every client's `request.ip` is the same compose-network
+      # address and all of them share one bucket. Five plan runs a minute for
+      # the whole hostname, not per visitor — pl-38. On an Access-gated instance
+      # with one user that is invisible; the moment you widen the policy it is
+      # the first thing you will hit.
+      #
+      # **No grounding endpoints.** `GROUNDING_PROVIDER` defaults to `fixtures`,
+      # which answers from a checked-in table and reaches nothing. Making the
+      # distances real is `compose.planner.yaml` plus a `.osm.pbf`, and the
+      # procedure — including why not to automate the rebuild — is in
+      # docs/02-DEPLOYMENT.md. Merging this file does not commit a host to that.
+      #
+      # Naming `valhalla` here with `VALHALLA_URL` unset **refuses the boot**,
+      # deliberately: a service that starts without it reports healthy and then
+      # fails on its first run, as a named travel-time gap on somebody's plan.
+
+      # --- The one that costs money once it is real -----------------------
+      # `scripted` is the Dockerfile's default and is restated here because this
+      # is the file an operator reads before changing it. A real provider means
+      # outbound egress and an API key, and an endpoint that is reachable
+      # without a login is then a stranger spending a token budget:
+      # `MAX_OUTPUT_TOKENS` caps one reply and nothing caps how many.
+      MODEL_PROVIDER: "scripted"
+
+    # A Node process with SQLite behind it. Bounded so a runaway is attributable
+    # rather than taking the host down with the downloader.
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  cloudflared:
+    # Merged into the definition in `compose.prod.yaml` rather than repeating
+    # it. This is the whole reason the planner can join the edge without the
+    # shared overlay having heard of it: a host that does not merge this file
+    # gets a `cloudflared` that waits on the downloader alone.
+    depends_on:
+      planner:
+        # No public hostname until the service passes its own health check. The
+        # image carries a `HEALTHCHECK`, so this works — the downloader's
+        # equivalent is what keeps a restart from publishing twenty seconds of
+        # 502s while migrations run, and this one buys the same thing.
+        condition: service_healthy
+
+volumes:
+  planner_storage:

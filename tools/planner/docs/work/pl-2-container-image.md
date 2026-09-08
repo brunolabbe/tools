@@ -79,6 +79,52 @@ first is not a hardening preference:
   `routes/events.ts`. Build the same thing in with the streaming rather than
   diagnosing it after.
 
+## Review
+
+**Gate: PASS** — 2026-09-08 · `4fad5f8...f82a77c` · reviewed on a different model
+from the one that wrote the branch, in its own worktree.
+
+| Done when                                                                                                      | Proof                                                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docker run` of the published image serves the UI and answers `/api/health` with the released version          | **out of this diff's scope** — closed by pl-13 and gated by `.github/workflows/planner.yml`; no code changed here that could regress it, and it was not re-run |
+| A planner-only release builds the planner image and not the downloader's                                       | **out of this diff's scope** — closed by steps 1–4 with dl-10; unrelated files                                                                                 |
+| `planner.<domain>` serves the UI behind an Access login, and an unauthenticated request never reaches the host | **not provable from a repository**, and left open rather than dodged — the Log entry below says why `in-flight` is the honest state                            |
+
+- **premise, verified** · The branch's whole claim is that the new fragment is
+  additive. The reviewer ran `docker compose config` over both merges rather
+  than trusting the Log, and diffed them: `downloader`, `cloudflared`'s existing
+  `depends_on.downloader`, the `edge` subnet, `TRUST_PROXY` and the `storage`
+  volume are byte-identical. `cloudflared.depends_on` merges as a key union —
+  `planner` joins `downloader`, it does not replace it. A downloader-only host
+  is untouched.
+- **verified** · repo-33's measurement reproduced independently: the project
+  name resolved to the reviewer's own worktree basename, not to the builder's.
+  Same mechanism, different string, which is the right thing to see.
+- **verified** · `tools/planner/Dockerfile:136` "HEALTHCHECK" — so
+  `cloudflared`'s `condition: service_healthy` on the planner is satisfiable
+  rather than a config error at boot.
+- **verified** · the internal half of the "one hostname, two paths" argument:
+  `tools/downloader/api/src/routes/web.ts:147` "prefix" and
+  `tools/planner/api/src/routes/web.ts:65` "prefix" both mount at the root, and
+  neither `vite.config.ts` sets `base`.
+- **unverified, external** · that Cloudflare Tunnel's Path field matches without
+  stripping. `WebFetch` is blocked by the container firewall and the reviewer
+  had no `WebSearch`. Recorded as unverified rather than accepted: the page's
+  conclusion does not depend on it, because both bundles collide at `/assets/…`
+  under any prefix behaviour.
+- **low, fixed on this branch** · Both the new fragment and a paragraph of
+  `02-DEPLOYMENT.md` inherited from `main` said the planner has no rate limiter.
+  It has one — `RATE_LIMIT_RUNS_PER_MINUTE`, default 5, on `POST /api/plans`.
+  What it has not got is `trustProxy`, so behind `cloudflared` every client
+  shares one bucket for the whole hostname. Confirmed by hand before acting on
+  it. Both texts now say that, and the defect is
+  [pl-38](./pl-38-the-planner-limiter-shares-one-bucket.md) rather than a
+  sentence nobody can act on. The reviewer proposed this and did not do it.
+- NFR · security: the finding above, and no new attack surface — this diff
+  touches compose, docs and tickets, no code. reliability: `cloudflared` waits on
+  both health checks before publishing either hostname, verified in the merged
+  config rather than asserted. performance: n/a.
+
 ## Log
 
 **2026-08-14 — steps 1–4 landed with dl-10.**
@@ -116,3 +162,53 @@ trusting a 200. **So do not re-verify that half when picking this ticket up** �
 it is gated. What is left is genuinely steps 5 and 6: the compose service, the
 subdomain and the Access application, all of which still need the user model
 argument in the first trap resolved or accepted.
+
+**2026-09-07 — step 5 is done, in a file the brief did not name; step 6 is the
+operator's and cannot be done from here.**
+
+**The brief's step 5 is superseded.** It says "a `planner` service in
+`compose.prod.yaml`", written 2026-08-14. [adr/004](../../../docs/adr/004-one-compose-fragment-per-tool.md)
+was accepted eight days later and calls that specific move "the part that is
+easy to get wrong": a `planner:` block in the shared overlay is a service
+definition, so a downloader-only host merging `compose.prod.yaml` would stand up
+the planner without naming it. The service is therefore in a fragment of its
+own, [`compose.planner.prod.yaml`](../../../compose.planner.prod.yaml), and the
+host merges three files instead of two.
+
+Verified rather than asserted, with `docker compose config` over both merges —
+there is Docker in this environment now, which there was not on 2026-08-14:
+
+- three-file merge — `cloudflared` depends on `downloader` **and** `planner`,
+  `planner` is on `edge`, `planner_storage` is added.
+- two-file merge — `downloader` and `cloudflared` only, `storage` only. The
+  additive claim is the one worth checking and it holds.
+- `PLANNER_TAG` unset refuses the boot naming the variable, rather than
+  resolving to something nobody chose.
+
+**What ADR 004 asks for and this does not do is the rename**, now filed as
+[repo-33](../../../docs/work/repo-33-adr-004-rename-and-the-project-name.md).
+It is not a paste: `compose.yaml` sets no `name:`, so the compose project is the
+clone's directory basename, and setting the explicit `name:` the ADR requires
+renames the project under a running host and orphans the `storage` volume
+holding `jobs.db`. That is a migration with a live-data step, and bundling it
+with this would have made the diff unreadable at exactly the moment an operator
+needs to read it.
+
+**Step 6 is not done and cannot be, from a repository.** The Access application
+is a dashboard object. What was owed here was that the four differences from the
+downloader's policy stop being a trap paragraph and become the numbered step
+somebody follows, and
+[02-DEPLOYMENT.md](../../../docs/02-DEPLOYMENT.md)'s `## Adding the second tool`
+is now that walkthrough rather than the prose delta it was.
+
+**So this ticket stays `in-flight` on purpose.** Two of its three _Done when_
+lines are closed — the image was gated by pl-13, and a planner-only release
+builds only the planner. The third is "`planner.<domain>` serves the UI behind an
+Access login", which is true of a machine and not of a branch. Whoever brings the
+hostname up closes it. Marking it `done` here would be
+[repo-32](../../../docs/work/repo-32-done-can-hide-an-outstanding-obligation.md)'s
+exact failure with a live unauthenticated endpoint on the other side of it.
+
+One thing the brief got right and is worth restating: the trap about the
+downloader's policy not being a template is the most valuable paragraph in this
+ticket, and the reason it now appears in the deployment page in full.
