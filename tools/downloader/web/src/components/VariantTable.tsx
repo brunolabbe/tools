@@ -9,6 +9,19 @@ interface VariantTableProps {
 }
 
 /**
+ * What the mirror count means, in one sentence, for both the tooltip and the
+ * screen reader (dl-45).
+ *
+ * Written to close one specific misreading rather than to describe the feature:
+ * the number must not be taken for a quality grade. "Availability" is the word
+ * doing that work, and "same rendition" is there because the count is the only
+ * thing on the row that varies without the media varying with it.
+ */
+function mirrorHint(count: number): string {
+  return `Availability only: the same rendition is served from ${count} hosts, so a download can fail over if one stops answering. Not a higher-quality rendition.`;
+}
+
+/**
  * Native radios inside the row header: arrow keys move between renditions and
  * the whole label is a hit target, with no custom key handling to get wrong.
  */
@@ -90,7 +103,27 @@ export function VariantTable({
                     </span>
                   )}
                 </td>
-                <td className="muted">{row.protocol.toUpperCase()}</td>
+                <td className="muted">
+                  {row.protocol.toUpperCase()}
+                  {/* dl-45's affordance, and it lives in Delivery on purpose.
+                      A mirrored rendition is not a better rendition — it is the
+                      same one, reachable from more places — so the count sits
+                      beside the transport rather than beside the quality, and
+                      says "servers" rather than anything that could be read as
+                      a grade. dl-40 collapsed these rows precisely to stop the
+                      table implying a difference; this must not put that
+                      implication back under a new name. */}
+                  {row.mirrors > 1 && (
+                    <span className="tag" title={mirrorHint(row.mirrors)}>
+                      <span aria-hidden="true">{row.mirrors} servers</span>
+                      {/* The visible text is a fragment; a screen reader gets
+                          the whole sentence, because `title` is not reliably
+                          announced and "3 servers" on its own is exactly the
+                          ambiguity this is supposed to close. */}
+                      <span className="visually-hidden">{mirrorHint(row.mirrors)}</span>
+                    </span>
+                  )}
+                </td>
               </tr>
             );
           })}

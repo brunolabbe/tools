@@ -284,8 +284,9 @@ function headers(): string[] {
 
 test("mirrors of a rendition render as one row per rung", () => {
   const list = parsedVariants("manifests/hls-master-redundant-mirrors");
-  // Ten declared over five rungs, in unequal numbers: 3, 2, 2, 1, 2.
-  expect(list).toHaveLength(10);
+  // Five renditions over ten declarations, mirrored 3, 2, 2, 1, 2. Since dl-45
+  // the grouping is the resolver's, so this list arrives at five.
+  expect(list).toHaveLength(5);
 
   mount(list);
   expect(radios()).toHaveLength(5);
@@ -295,6 +296,70 @@ test("mirrors of a rendition render as one row per rung", () => {
   expect(cells).toEqual(["1280×720", "848×480", "640×360", "424×240", "256×144"]);
   // No language anywhere in this manifest, so no column for it either.
   expect(headers()).not.toContain("Language");
+  // And no new column: the mirror count is a mark on the Delivery cell, not a
+  // dimension of the table. A column of "1"s on every unmirrored ladder is the
+  // thing dl-40 spent a ticket removing.
+  expect(headers()).toEqual(["Quality", "Video", "Audio", "Bitrate", "Size", "Delivery"]);
+});
+
+/**
+ * dl-45's affordance, and the objection it has to answer.
+ *
+ * The owner's decision was to show the mirror count; the recommendation it
+ * overrode was to show nothing, on the grounds that dl-40 collapsed these rows
+ * precisely to stop the table implying a difference between renditions
+ * identical on every attribute but the hostname. So the count has to be
+ * unmistakably about *availability*, and that is what these assert — not that a
+ * number appears, but that the cell it appears in and the sentence attached to
+ * it say which kind of fact it is.
+ */
+function deliveryCells(): string[] {
+  return within(screen.getByRole("table"))
+    .getAllByRole("row")
+    .slice(1)
+    .map(
+      (row) => row.querySelectorAll("td")[row.querySelectorAll("td").length - 1]?.textContent ?? "",
+    );
+}
+
+test("a mirrored rendition says how many servers have it, in the Delivery cell", () => {
+  mount(parsedVariants("manifests/hls-master-redundant-mirrors"));
+
+  // The count sits with the transport, not with the quality: the row header is
+  // the resolution and it is untouched.
+  expect(deliveryCells()).toEqual([
+    expect.stringContaining("3 servers"),
+    expect.stringContaining("2 servers"),
+    expect.stringContaining("2 servers"),
+    "HLS",
+    expect.stringContaining("2 servers"),
+  ]);
+  const headerCells = within(screen.getByRole("table"))
+    .getAllByRole("rowheader")
+    .map((cell) => cell.textContent ?? "");
+  expect(headerCells.some((cell) => /server/u.test(cell))).toBe(false);
+});
+
+test("the mirror count is spelled out as availability, not as quality", () => {
+  mount(parsedVariants("manifests/hls-master-redundant-mirrors"));
+
+  // The visible fragment is two words; what a screen reader gets is the whole
+  // sentence, because "3 servers" alone is exactly the ambiguity dl-40 warned
+  // about. Asserted as text content rather than as a `title`, since `title` is
+  // not reliably announced and would leave the claim untested where it matters.
+  const sentence = screen.getByText(
+    /Availability only: the same rendition is served from 3 hosts/u,
+  );
+  expect(sentence.textContent).toMatch(/Not a higher-quality rendition\./u);
+});
+
+test("an unmirrored ladder grows no marks at all", () => {
+  // The single-host case is every other manifest in the repo, and it must look
+  // exactly as it did before dl-45.
+  mount(parsedVariants("manifests/hls-master-multibitrate"));
+
+  expect(deliveryCells().every((cell) => cell === "HLS")).toBe(true);
+  expect(screen.queryByText(/server/u)).toBeNull();
 });
 
 test("a per-language ladder keeps its rows and grows the column that explains them", () => {

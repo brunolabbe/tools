@@ -9,6 +9,14 @@ function fixture(name: string): string {
 
 const MASTER_BASE = "https://cdn.example.com/hls/2026/master.m3u8";
 
+/** Every address the parser says will serve one rendition, primary first (dl-45). */
+function addresses(variant: {
+  url: string;
+  alternateUrls?: readonly string[] | undefined;
+}): string[] {
+  return [variant.url, ...(variant.alternateUrls ?? [])];
+}
+
 describe("attribute lists", () => {
   test("keeps commas that live inside a quoted value", () => {
     const attrs = parseAttributeList(
@@ -262,47 +270,106 @@ describe("malformed input", () => {
  * than inferred — but with the mirror count varied per rung, because the
  * reported manifest had exactly two everywhere and a fixture that copied that
  * would let an implementation hardcode two.
+ *
+ * dl-45 moved where the mirror fixture's claim lands without touching the
+ * fixture itself: the `.m3u8` is byte-identical, and what changed is that the
+ * grouping now happens in this parser rather than in the picker. The other two
+ * fixtures are the guard on that — they must survive it untouched, because a
+ * grouping key that lost a field would merge a real choice into a failover path.
  */
-describe("renditions that differ only in what the picker cannot show (dl-40)", () => {
+describe("renditions that differ only in what the picker cannot show (dl-40, dl-45)", () => {
   const redundant = parseHls(
     fixture("hls-master-redundant-mirrors.m3u8"),
     "https://vod-a.cdn.example/hls/reported/master.m3u8",
   );
 
-  test("a mirrored master declares each rung once per mirror, and not the same number of times", () => {
-    expect(redundant.variants).toHaveLength(10);
-    expect(new Set(redundant.variants.map((variant) => variant.height))).toEqual(
-      new Set([720, 480, 360, 240, 144]),
-    );
-    // Every URL distinct, and the per-rung counts deliberately unequal — a rung
-    // with one mirror and a rung with three both have to work.
-    expect(new Set(redundant.variants.map((variant) => variant.url)).size).toBe(10);
-    const perRung = [720, 480, 360, 240, 144].map(
-      (height) => redundant.variants.filter((variant) => variant.height === height).length,
-    );
+  test("a mirrored master yields one variant per rung, carrying the other hosts (dl-45)", () => {
+    // This is the claim dl-45 inverted. Until it, the parser emitted one variant
+    // per *declaration* and the ten of them reached the picker, which collapsed
+    // them back to five and threw the alternates away. Now the grouping happens
+    // here, where the mirrors are known to be mirrors, and nothing is discarded.
+    expect(redundant.variants).toHaveLength(5);
+    expect(redundant.variants.map((variant) => variant.height)).toEqual([720, 480, 360, 240, 144]);
+
+    // The declared counts are unchanged — 3, 2, 2, 1, 2 — they are just counted
+    // per rendition now instead of per row. A rung with one mirror and a rung
+    // with three both have to work.
+    const perRung = redundant.variants.map((variant) => addresses(variant).length);
     expect(perRung).toEqual([3, 2, 2, 1, 2]);
+
+    // All ten addresses the manifest declared are still here, and still distinct:
+    // grouping moved them, it did not drop them.
+    const all = redundant.variants.flatMap(addresses);
+    expect(all).toHaveLength(10);
+    expect(new Set(all).size).toBe(10);
+
+    // The primary is the first the manifest declared for that rung.
+    expect(redundant.variants.map((variant) => new URL(variant.url).host)).toEqual(
+      Array.from({ length: 5 }, () => "vod-a.cdn.example"),
+    );
+  });
+
+  test("one rung at two hosts is one variant carrying the second host as an alternate", () => {
+    // The Done-when line, on the smallest rung that has a mirror at all: 480p is
+    // declared twice, and what comes out is *one* variant, not two.
+    const rung = redundant.variants.filter((variant) => variant.height === 480);
+    expect(rung).toHaveLength(1);
+    expect(rung[0]?.url).toBe("https://vod-a.cdn.example/1/index.m3u8");
+    expect(rung[0]?.alternateUrls).toEqual(["https://vod-b.cdn.example/1/index.m3u8"]);
+  });
+
+  test("hosts that disagree on an attribute are not mirrors, however small the disagreement", () => {
+    // The boundary of `groupMirrors`, and the reason the picker's collapse
+    // survives dl-45. These four entries *are* two rungs at two hosts, but each
+    // host declared its own BANDWIDTH and the two differ by 500 bps — so the key
+    // sees four renditions and groups nothing. Nothing here is wrong: the
+    // resolver refuses to assert that two entries are the same rendition when
+    // the manifest says they are not, and the table sorts it out later by
+    // rendering both as `1.5 Mbps`.
+    const jittered = parseHls(
+      fixture("hls-master-mirrors-jittered-bandwidth.m3u8"),
+      "https://vod-a.cdn.example/hls/reported/master.m3u8",
+    );
+    expect(jittered.variants).toHaveLength(4);
+    expect(jittered.variants.every((variant) => variant.alternateUrls === undefined)).toBe(true);
+    // Both hosts are present for both rungs — the point is that they arrive
+    // separately, not that one was lost.
+    expect(new Set(jittered.variants.map((variant) => new URL(variant.url).host))).toEqual(
+      new Set(["vod-a.cdn.example", "vod-b.cdn.example"]),
+    );
+    expect(new Set(jittered.variants.map((variant) => variant.bitrateBps)).size).toBe(4);
+  });
+
+  test("a rung with no mirror carries no alternates at all, rather than an empty list", () => {
+    // `[]` and absent are different claims on the wire, and the picker renders
+    // the count off this: an empty array would still say "1", but it would also
+    // put a field on every unmirrored variant in every probe.
+    const lonely = redundant.variants.filter((variant) => variant.height === 240);
+    expect(lonely).toHaveLength(1);
+    expect(lonely[0] === undefined ? true : "alternateUrls" in lonely[0]).toBe(false);
   });
 
   test("inside one rung the host is the only thing that differs at all", () => {
-    const rung = redundant.variants.filter((variant) => variant.height === 720);
-    expect(rung).toHaveLength(3);
+    const rung = redundant.variants.find((variant) => variant.height === 720);
+    expect(rung).toBeDefined();
 
-    // Compared as whole objects minus the two fields expected to differ, so a
-    // field added to MediaVariant later is covered here without anyone
-    // remembering to list it.
-    const shapes = rung.map(({ id: _id, url: _url, ...rest }) => JSON.stringify(rest));
-    expect(new Set(shapes).size).toBe(1);
-
-    // And the URLs agree on everything except the host — which is what the live
+    // The URLs agree on everything except the host — which is what the live
     // probe of the reported video found, and is why the rows were identical.
-    const urls = rung.map((variant) => new URL(variant.url));
+    const urls = addresses(rung ?? { url: "" }).map((url) => new URL(url));
+    expect(urls).toHaveLength(3);
     expect(new Set(urls.map((url) => url.host)).size).toBe(3);
     expect(new Set(urls.map((url) => `${url.protocol}${url.pathname}${url.search}`)).size).toBe(1);
+
+    // That they agree on every *attribute* is now asserted by the grouping
+    // itself — `renditionKey` compares whole variants minus `id`, `url` and
+    // `alternateUrls`, so a rung whose entries disagreed anywhere would have
+    // come out as more than one variant and the length above would have caught
+    // it. The two fixtures below are the other direction of that same guard.
 
     // Nothing in that rung carries a language — the reported manifest declared
     // no EXT-X-MEDIA at all, which is what makes it the *other* branch of dl-40
     // from the fixture below.
-    expect(rung.every((variant) => variant.language === undefined)).toBe(true);
+    expect(rung?.language).toBeUndefined();
   });
 
   test("two profiles of one rung differ in the codec string and nowhere else", () => {
@@ -314,6 +381,10 @@ describe("renditions that differ only in what the picker cannot show (dl-40)", (
     expect(rung.map((variant) => variant.videoCodec)).toEqual(["avc1.64001f", "avc1.42c01f"]);
     expect(new Set(rung.map((variant) => variant.bitrateBps)).size).toBe(1);
     expect(rung.every((variant) => variant.language === undefined)).toBe(true);
+    // And dl-45 did not swallow them: two profiles are two renditions, so the
+    // mirror grouping must leave both alone. This is the failure mode of a key
+    // that dropped a field — silently merging a real choice into an alternate.
+    expect(rung.every((variant) => variant.alternateUrls === undefined)).toBe(true);
   });
 
   test("a per-language ladder repeats the same rungs but disagrees on language", () => {
@@ -325,6 +396,9 @@ describe("renditions that differ only in what the picker cannot show (dl-40)", (
     expect(rung.map((variant) => variant.language)).toEqual(["eng", "fra"]);
     expect(new Set(rung.map((variant) => variant.bitrateBps)).size).toBe(1);
     expect(new Set(rung.map((variant) => variant.videoCodec)).size).toBe(1);
+    // Same guard as above, on the field the two rungs actually differ in: two
+    // languages are two renditions and neither is the other's failover path.
+    expect(rung.every((variant) => variant.alternateUrls === undefined)).toBe(true);
   });
 });
 
@@ -344,6 +418,7 @@ describe("derived variant fixtures (dl-40)", () => {
     "hls-master-per-language-ladder",
     "hls-master-two-profiles",
     "hls-master-multibitrate",
+    "hls-master-mirrors-jittered-bandwidth",
   ];
 
   for (const name of derived) {

@@ -167,6 +167,29 @@ describe("assertAllAllowed", () => {
     expect(urls.bestEffort).toEqual([]);
   });
 
+  test("a failover mirror is vetted like the address it stands in for (dl-45)", () => {
+    // The engine will fetch these, so a page could otherwise name any address it
+    // liked as long as it put a reachable one first — the guard would pass the
+    // primary and the download would follow the alternate straight to it.
+    const urls = urlsInProbeResult({
+      variants: [
+        {
+          url: "https://cdn.example/v.m3u8",
+          alternateUrls: ["http://169.254.169.254/latest/meta-data/", ""],
+          audioUrl: "https://cdn.example/a.m3u8",
+        },
+      ],
+      subtitles: [],
+    });
+    // Present, and in `mustPass` — the list whose refusal fails the job, not
+    // the best-effort one a blocked preview lives in.
+    expect(urls.mustPass).toEqual([
+      "https://cdn.example/v.m3u8",
+      "http://169.254.169.254/latest/meta-data/",
+      "https://cdn.example/a.m3u8",
+    ]);
+  });
+
   test("the thumbnail is accounted for, and in `bestEffort` rather than with the media", () => {
     const urls = urlsInProbeResult({
       variants: [{ url: "https://cdn.example/v.m3u8" }],

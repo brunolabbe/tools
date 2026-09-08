@@ -38,13 +38,15 @@
  *  - The engine does not re-probe. Signed URLs expire in 30–300 s (analysis §5),
  *    so the orchestrator must hand in a *fresh* variant; passing a stale one is
  *    how `VARIANT_GONE` happens.
- *  - The engine does not enforce SSRF policy on `variant.url`. Resolver output
- *    is attacker-influenced, so dl-6's guard must run before this is called.
+ *  - The engine does not enforce SSRF policy on `variant.url`, nor on
+ *    `variant.alternateUrls`, which it will fetch on a failover (dl-45).
+ *    Resolver output is attacker-influenced, so dl-6's guard must run before
+ *    this is called — `urlsInProbeResult` covers both.
  */
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { AppError, redactRequestContext } from "@downloader/contract";
+import { AppError, redactRequestContext, redactUrl } from "@downloader/contract";
 import type {
   JobOptions,
   JobProgress,
@@ -56,6 +58,7 @@ import type {
 import type { EngineConfig, EngineConfigInput } from "./config.ts";
 import { loadEngineConfig } from "./config.ts";
 import { downloadDash } from "./download/dash.ts";
+import { downloadCandidates, isHostFailure } from "./download/failover.ts";
 import { downloadHls } from "./download/hls.ts";
 import { downloadViaFfmpeg } from "./download/manifest.ts";
 import { downloadProgressive } from "./download/progressive.ts";
@@ -319,6 +322,21 @@ class Engine implements DownloadEngine {
     );
   }
 
+  /**
+   * The download, over every address the rendition has (dl-45).
+   *
+   * `variant.alternateUrls` are the other hosts an HLS master declared for this
+   * same rung, and the loop moves to the next one **only** when the failure says
+   * the host would not serve the bytes — see `isHostFailure`. A refusal that
+   * would repeat everywhere, an expired signed URL above all, propagates on the
+   * first attempt so the orchestrator's re-probe still happens; that is what
+   * "a re-probe must not be replaced by a mirror attempt" means in code.
+   *
+   * `segmentUrls` disables it. That path fetches the caller's own absolute
+   * segment URLs and never opens `variant.url` at all, so a second attempt with
+   * a different manifest address would repeat the identical requests against the
+   * host that just failed.
+   */
   async #downloadMedia(
     request: DownloadRequest,
     context: {
@@ -335,6 +353,63 @@ class Engine implements DownloadEngine {
     transcodes: TranscodeNotice[];
     alreadyInTargetContainer: boolean;
   }> {
+    const candidates =
+      request.segmentUrls === undefined
+        ? downloadCandidates(request.variant)
+        : [request.variant.url];
+    let lastError: unknown;
+
+    for (const [index, url] of candidates.entries()) {
+      try {
+        // oxlint-disable-next-line no-await-in-loop
+        return await this.#downloadFrom(request, context, url);
+      } catch (error: unknown) {
+        lastError = error;
+        const another = index + 1 < candidates.length;
+        if (!another || !isHostFailure(error)) throw error;
+        this.#logger.warn("the host would not serve this rendition; trying the next mirror", {
+          jobId: request.jobId,
+          variantId: request.variant.id,
+          code: AppError.from(error).code,
+          failed: redactUrl(url),
+          next: redactUrl(candidates[index + 1] as string),
+          remaining: candidates.length - index - 1,
+        });
+        // A mirror attempt starts the download over rather than resuming: the
+        // partial on disk came from a host that stopped answering, and nothing
+        // proves the next one is serving the same bytes at the same offsets.
+        // `-y` covers the ffmpeg paths; the progressive path resumes from the
+        // partial file by design, so it has to be cleared by hand.
+        // oxlint-disable-next-line no-await-in-loop
+        await this.storage.cleanupJob(request.jobId);
+        // oxlint-disable-next-line no-await-in-loop
+        await this.storage.createTmpDir(request.jobId);
+      }
+    }
+    throw lastError;
+  }
+
+  /**
+   * One attempt, against one address. `url` overrides `variant.url`; everything
+   * else about the variant is the same rendition wherever it is served from.
+   */
+  async #downloadFrom(
+    request: DownloadRequest,
+    context: {
+      container: OutputContainer;
+      extension: string;
+      audioOnly: boolean;
+      durationSec: number | null;
+      workDir: string;
+    },
+    url: string,
+  ): Promise<{
+    videoPath: string;
+    audioPath: string | null;
+    durationSec: number | null;
+    transcodes: TranscodeNotice[];
+    alreadyInTargetContainer: boolean;
+  }> {
     const { variant, jobId } = request;
     const options: JobOptions = request.options ?? {};
     const liveDurationSec = options.liveDurationSec ?? null;
@@ -344,7 +419,7 @@ class Engine implements DownloadEngine {
       // container. There is nothing left to remux afterwards.
       const destPath = this.storage.tmpPath(jobId, `media${context.extension}`);
       const shared = {
-        url: variant.url,
+        url,
         audioUrl: variant.audioUrl,
         destPath,
         container: context.container,
@@ -400,10 +475,10 @@ class Engine implements DownloadEngine {
     }
 
     // Progressive: plain ranged GETs, one per URL.
-    const sourceExtension = path.extname(new URL(variant.url).pathname) || context.extension;
+    const sourceExtension = path.extname(new URL(url).pathname) || context.extension;
     const videoPath = this.storage.tmpPath(jobId, `media${sourceExtension}`);
     const video = await downloadProgressive({
-      url: variant.url,
+      url,
       destPath: videoPath,
       requestContext: request.requestContext,
       signal: request.signal,
@@ -639,6 +714,7 @@ export type { DashDownloadOptions } from "./download/dash.ts";
 export { downloadDash } from "./download/dash.ts";
 export type { HlsDownloadOptions } from "./download/hls.ts";
 export { downloadHls } from "./download/hls.ts";
+export { downloadCandidates, isHostFailure } from "./download/failover.ts";
 export { classifyHttpStatus, httpRequest } from "./download/http.ts";
 export type { ManifestDownloadOptions, ManifestDownloadResult } from "./download/manifest.ts";
 export { buildManifestDownloadArgs, downloadViaFfmpeg } from "./download/manifest.ts";

@@ -1,0 +1,51 @@
+#EXTM3U
+# A mirrored ladder whose hosts disagree very slightly about BANDWIDTH.
+#
+# **Constructed, not observed — and that distinction is the reason this header
+# is long.** Every other fixture in this directory records something a live
+# probe found. This one does not: it is `hls-master-redundant-mirrors.m3u8`'s
+# reported shape with the per-host BANDWIDTH digits varied, and nobody has seen
+# this exact manifest in the wild. It is here to exercise a code path, and it
+# says so rather than borrowing the authority of the reported capture.
+#
+# **What it exercises, and why the path needs a fixture at all.** dl-45 groups
+# mirrors in the resolvers — `groupMirrors` in `resolvers/src/common.ts`, keyed
+# on every field of the mapped variant except `id`, `url` and `alternateUrls`.
+# That key is exact. Two entries that disagree anywhere, including by 500 bps of
+# declared bandwidth, are two renditions to it and are *not* grouped.
+#
+# The picker's collapse in `web/src/lib/variants.ts` keys on the *rendered*
+# columns instead, and `formatBitrate` renders 1500400 and 1500900 as the same
+# `1.5 Mbps`. So these four streams reach the table as four variants and become
+# two rows, with `collapsed` counting 2.
+#
+# Before dl-45 that case was covered incidentally: the reported manifest and the
+# yt-dlp balancer ladder both produced rows the picker had to merge, so the
+# collapse was exercised without anyone constructing anything. dl-45 grouped
+# both of those upstream — measured, `collapsed` went to 0 for every derived
+# fixture in the repo — which left dl-40's collapse assertion with nothing to
+# assert. This fixture is what keeps it honest, and it narrows what the
+# assertion claims at the same time: the picker's collapse is not a second
+# mirror grouping, it is the layer that catches renditions the table *renders*
+# identically for reasons no producer could have grouped away.
+#
+# **Why 500 bps is realistic even though this file is constructed.** BANDWIDTH
+# in an EXT-X-STREAM-INF is a per-host figure, and a CDN that measures its own
+# segments rather than copying a number will not produce byte-identical values
+# at two edges for the same rung. The reported video's manifest did copy them —
+# that capture is in `hls-master-redundant-mirrors.m3u8` and its rungs agree
+# exactly — so both shapes are plausible and the repo now has one of each.
+#
+# The attribute lines are otherwise the reported fixture's, which are ffmpeg
+# 6.1.1's own hlsenc output. Hostnames are invented, as they are there.
+#EXT-X-VERSION:3
+
+#EXT-X-STREAM-INF:BANDWIDTH=1500400,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-a.cdn.example/0/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=1500900,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2"
+https://vod-b.cdn.example/0/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=686400,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"
+https://vod-a.cdn.example/2/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=686100,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"
+https://vod-b.cdn.example/2/index.m3u8

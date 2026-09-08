@@ -15,33 +15,11 @@
       "audioCodec": "mp4a.40.2",
       "width": 1280,
       "height": 720,
-      "bitrateBps": 1500400
-    },
-    {
-      "id": "hls-1",
-      "protocol": "hls",
-      "url": "https://vod-b.cdn.example/0/index.m3u8",
-      "hasVideo": true,
-      "hasAudio": true,
-      "label": "720p · H.264 + AAC",
-      "videoCodec": "avc1.4d401f",
-      "audioCodec": "mp4a.40.2",
-      "width": 1280,
-      "height": 720,
-      "bitrateBps": 1500400
-    },
-    {
-      "id": "hls-2",
-      "protocol": "hls",
-      "url": "https://vod-c.cdn.example/0/index.m3u8",
-      "hasVideo": true,
-      "hasAudio": true,
-      "label": "720p · H.264 + AAC",
-      "videoCodec": "avc1.4d401f",
-      "audioCodec": "mp4a.40.2",
-      "width": 1280,
-      "height": 720,
-      "bitrateBps": 1500400
+      "bitrateBps": 1500400,
+      "alternateUrls": [
+        "https://vod-b.cdn.example/0/index.m3u8",
+        "https://vod-c.cdn.example/0/index.m3u8"
+      ]
     },
     {
       "id": "hls-3",
@@ -54,20 +32,10 @@
       "audioCodec": "mp4a.40.2",
       "width": 848,
       "height": 480,
-      "bitrateBps": 818400
-    },
-    {
-      "id": "hls-4",
-      "protocol": "hls",
-      "url": "https://vod-b.cdn.example/1/index.m3u8",
-      "hasVideo": true,
-      "hasAudio": true,
-      "label": "480p · H.264 + AAC",
-      "videoCodec": "avc1.4d401f",
-      "audioCodec": "mp4a.40.2",
-      "width": 848,
-      "height": 480,
-      "bitrateBps": 818400
+      "bitrateBps": 818400,
+      "alternateUrls": [
+        "https://vod-b.cdn.example/1/index.m3u8"
+      ]
     },
     {
       "id": "hls-5",
@@ -80,20 +48,10 @@
       "audioCodec": "mp4a.40.2",
       "width": 640,
       "height": 360,
-      "bitrateBps": 686400
-    },
-    {
-      "id": "hls-6",
-      "protocol": "hls",
-      "url": "https://vod-b.cdn.example/2/index.m3u8",
-      "hasVideo": true,
-      "hasAudio": true,
-      "label": "360p · H.264 + AAC",
-      "videoCodec": "avc1.4d401e",
-      "audioCodec": "mp4a.40.2",
-      "width": 640,
-      "height": 360,
-      "bitrateBps": 686400
+      "bitrateBps": 686400,
+      "alternateUrls": [
+        "https://vod-b.cdn.example/2/index.m3u8"
+      ]
     },
     {
       "id": "hls-7",
@@ -119,20 +77,10 @@
       "audioCodec": "mp4a.40.2",
       "width": 256,
       "height": 144,
-      "bitrateBps": 301400
-    },
-    {
-      "id": "hls-9",
-      "protocol": "hls",
-      "url": "https://vod-b.cdn.example/4/index.m3u8",
-      "hasVideo": true,
-      "hasAudio": true,
-      "label": "144p · H.264 + AAC",
-      "videoCodec": "avc1.4d400d",
-      "audioCodec": "mp4a.40.2",
-      "width": 256,
-      "height": 144,
-      "bitrateBps": 301400
+      "bitrateBps": 301400,
+      "alternateUrls": [
+        "https://vod-b.cdn.example/4/index.m3u8"
+      ]
     }
   ]
 }

@@ -121,9 +121,25 @@ test("the count over the table counts the rows the table shows (dl-40)", () => {
   // Ten declared, five rendered: "10 renditions" above five rows is the same
   // defect as ten identical rows, told from the other end. What was merged is
   // said out loud rather than silently dropped from the count.
-  mount(probe({ variants: parsedVariants("manifests/hls-master-redundant-mirrors") }));
+  //
+  // The yt-dlp ladder rather than the manifest one, because since dl-45 that is
+  // where the picker still has something to merge — a load balancer handing the
+  // same ladder back under several hostnames, which no parser can group by
+  // attributes because they are separate `formats` from separate responses.
+  mount(probe({ variants: parsedVariants("ytdlp/balancer-duplicate-ladder") }));
 
   expect(screen.getByText(/5 renditions · 5 duplicate paths merged/u)).toBeDefined();
+  expect(within(screen.getByRole("table")).getAllByRole("radio")).toHaveLength(5);
+});
+
+test("a manifest whose mirrors were grouped upstream reports no merge (dl-45)", () => {
+  // The other half of the same line, and the one that would be a lie: the
+  // resolver grouped this manifest's mirrors into the variants themselves, so
+  // the picker merged nothing and must not claim it did. Five rows, five
+  // renditions, no "duplicate paths merged".
+  mount(probe({ variants: parsedVariants("manifests/hls-master-redundant-mirrors") }));
+
+  expect(screen.getByText(/12:34 · 5 renditions$/u)).toBeDefined();
   expect(within(screen.getByRole("table")).getAllByRole("radio")).toHaveLength(5);
 });
 

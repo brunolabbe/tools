@@ -46,6 +46,23 @@ export interface VariantRow {
    * has flattened onto the same word (dl-40).
    */
   videoCodecFull: string;
+  /**
+   * How many hosts serve this rendition: `1` plus its `alternateUrls` (dl-45).
+   *
+   * **Availability, not quality**, and the table has to say so where it renders
+   * this — see `VariantTable`. dl-40 removed rows that implied a difference
+   * between renditions identical on every attribute but the hostname, and a
+   * count that read as "better" would put that implication straight back. It is
+   * a fact about *delivery* of one row, not a reason to prefer that row, and
+   * nothing here or in `sortVariantRows` or `pickDefaultVariantId` may order by
+   * it.
+   *
+   * It comes from the contract field the resolver populated, never from the
+   * collapse below: by the time the picker runs, mirrors have already been
+   * grouped into one variant, so counting what the picker merged would be
+   * counting something else entirely (and would be zero on a mirrored manifest).
+   */
+  mirrors: number;
   height: number;
   bitrateBps: number;
 }
@@ -101,6 +118,7 @@ export function toVariantRow(variant: MediaVariant): VariantRow {
     needsMux: hasSeparateAudio,
     language: variant.language ?? "",
     videoCodecFull: variant.hasVideo ? (variant.videoCodec ?? "") : "",
+    mirrors: 1 + (variant.alternateUrls?.length ?? 0),
     height: variant.height ?? 0,
     bitrateBps: variant.bitrateBps ?? 0,
   };
@@ -131,6 +149,12 @@ export function sortVariantRows(rows: readonly VariantRow[]): VariantRow[] {
  * It has to list the rendered columns rather than the underlying fields: the
  * point is what reaches the screen, so `1.3 Mbps` and `1.3 Mbps` are one key
  * even when the two `bitrateBps` differ by 400 bps.
+ *
+ * **`mirrors` is rendered and is deliberately not here** (dl-45). It is the one
+ * exception to the sentence above, and it has to be: keying on it would give a
+ * rendition served by three hosts its own row next to an identical rendition
+ * served by one, which is the dl-40 defect exactly — two rows a person cannot
+ * choose between, separated by something that is not a difference in the media.
  */
 function displayKey(row: VariantRow, withLanguage: boolean): string {
   return [
