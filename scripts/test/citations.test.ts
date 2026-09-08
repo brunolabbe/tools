@@ -11,9 +11,11 @@ import {
   extractDeclarations,
   extractSections,
   FLAGS,
+  locateRecord,
   makeResolver,
   parseArgs,
   recordDrift,
+  sameDirectory,
   selectSection,
   USAGE,
 } from "../citations.mjs";
@@ -1326,6 +1328,223 @@ test("--rev names which record it read, and says when that record cited somethin
 
   cleanup();
 });
+
+/**
+ * The separator half of repo-36, and the half that runs on Windows.
+ *
+ * `--rev` reads the record out of a commit with `git show <rev>:<path>`, which
+ * accepts forward slashes and nothing else. The path used to be produced by
+ * `path.relative`, whose output takes the *platform's* separator — so on
+ * Windows this asked for `<rev>:docs\work\record.md`, found nothing, and
+ * reported no drift rather than an error. Asserting the shape here is what
+ * fails on a Windows runner if that arithmetic ever comes back; it cannot fail
+ * on Linux, where both spellings agree, so this is deliberately a claim about
+ * the *contract* rather than a reproduction.
+ */
+test("locateRecord names the record the way git does — repo-relative, forward slashes", () => {
+  expect(locateRecord(REPO, path.join(REPO, "scripts", "test", "citations.test.ts"))).toBe(
+    "scripts/test/citations.test.ts",
+  );
+  // A record at the root has no prefix at all, which is the case `--show-prefix`
+  // answers with an empty line — the one an unguarded concatenation would turn
+  // into a leading slash.
+  expect(locateRecord(REPO, path.join(REPO, "package.json"))).toBe("package.json");
+});
+
+/**
+ * The fallback, asserted rather than left implicit, because it is the half that
+ * a "just ask git" fix breaks if nobody writes it down. A record outside the
+ * repository being checked has no in-tree name, and the honest answer is
+ * whatever `path.relative` gives — not a plausible-looking path resolved
+ * against some other checkout the record happens to sit in. Most of this file's
+ * own CLI tests depend on it: they check fixture records under `os.tmpdir()`
+ * with the cwd set to this repo.
+ *
+ * **This test used to assert `.startsWith("..")` and that was itself a POSIX
+ * path assumption** — the exact class of defect this ticket exists to fix,
+ * introduced by the test asserting the fix. It passed on Linux and failed on
+ * `windows-latest`, where the checkout is on `D:` and `os.tmpdir()` resolves
+ * under `C:`: two paths on different drive roots have no relative form Windows
+ * can express, so `path.relative` returns the target absolute and no `..`
+ * appears. The test below it pins that, and the assertion here is now the
+ * property rather than one platform's spelling of it.
+ */
+test("a record outside the repo is not given an in-tree name", () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-outside-")));
+  const outside = path.join(dir, "record.md");
+  fs.writeFileSync(outside, "## Review\n");
+
+  // One assertion, and deliberately only one. The fallback hands back
+  // `path.relative`'s answer as-is, whatever shape this platform gives it —
+  // which is the whole contract, and it already fails for the bug this test is
+  // named for: a `locateRecord` that borrowed an in-tree name returns
+  // `record.md`, which is not that string. Measured, by making it do exactly
+  // that: `AssertionError: expected 'record.md' to be '../../../../../tmp/…'`.
+  //
+  // **Anything added after this line is implied by it and cannot fail on its
+  // own**, which is what the removed `.startsWith("..")` really was: given the
+  // result equals `path.relative`'s output, every further claim about that
+  // output's shape is a claim about `path.relative`, not about this code. It
+  // contributed no coverage and one platform assumption. The next person
+  // tempted to strengthen this test should add a case, not an assertion.
+  expect(locateRecord(REPO, outside)).toBe(path.relative(REPO, outside));
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * Why the assertion above is not `.startsWith("..")`, measured here rather than
+ * argued from memory — and the local reproduction of a failure that only a
+ * Windows host produced.
+ *
+ * `path.win32` is Node's Windows path algebra on any platform, which is the one
+ * tool that makes a cross-drive layout testable from Linux. The constants are
+ * not invented: `D:\a\tools\tools` is read out of the failing run's own
+ * checkout step, and `C:\Users\RUNNER~1\…\Temp` is where that runner's
+ * `os.tmpdir()` resolves. Both drives are stable across runs — checked in two,
+ * `34165962251` and `34166349722` — so this is a fixed property of the runner
+ * image, not a layout that varies from one run to the next.
+ *
+ * **What this does and does not buy, stated so nobody has to guess.** It is not
+ * a test of `locateRecord`: that function uses the ambient `path` module, so its
+ * Windows behaviour cannot be driven from here, and pretending otherwise is how
+ * a test comes to prove nothing. It also would not catch someone re-adding
+ * `.startsWith("..")` above. What it does is convert a claim that was
+ * previously reasoned — "on that runner the answer is absolute, so the `..`
+ * never appears" — into one this repo has actually run, and put it somewhere
+ * that a comment's rot cannot reach. That is the whole of it, and if a reviewer
+ * decides a comment would have done, they are not wrong to strike it.
+ */
+test("across drive roots the fallback is absolute, and the property survives it", () => {
+  const repo = "D:\\a\\tools\\tools";
+  const outside = "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\citations-outside-abc\\record.md";
+  const located = path.win32.relative(repo, outside);
+
+  // CI's `expected false to be true`, reproduced on Linux.
+  expect(located.startsWith("..")).toBe(false);
+  expect(path.win32.isAbsolute(located)).toBe(true);
+  // ...and the property the fallback actually needs, holding anyway.
+  expect(path.win32.resolve(repo, located)).toBe(outside);
+
+  // The other half, and the reason the assumption survived: whether a `..`-path
+  // comes back depends on *which two paths a test subtracts*, not on the
+  // platform. This file's `--rev` fixture spawns the CLI with its cwd inside the
+  // temp directory, so both of its operands are under `C:` and the `..`-path is
+  // expressible — which is why CI's original failure string is a relative one.
+  // Only the test above crosses `D:` to `C:`, because only it compares the
+  // checkout with `os.tmpdir()`.
+  const tempRepo = "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\citations-rev-uh5dmk";
+  const sameDrive = path.win32.relative(tempRepo, `${tempRepo}\\drift.md`);
+  expect(sameDrive.startsWith("..")).toBe(false);
+  expect(sameDrive).toBe("drift.md");
+  const acrossShortName = path.win32.relative(
+    "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\citations-rev-uh5dmk",
+    `${tempRepo}\\drift.md`,
+  );
+  expect(acrossShortName.startsWith("..")).toBe(true);
+});
+
+/**
+ * `sameDirectory` is what decides whether git's answer is used or the `..`-path
+ * is, and its contract is tested here rather than only through `locateRecord`,
+ * because through `locateRecord` it is not tested at all: both values it ever
+ * compares in production are git's own `--show-toplevel` output for one
+ * directory, so they are byte-identical and only the `a === b` line runs. A
+ * gate found that, and the honest answer was to test the predicate directly and
+ * say in its docblock that the `realpath` half is unreached — not to leave a
+ * branch nothing has ever executed sitting under a comment claiming it works.
+ *
+ * The false cases matter more than the true one. A wrong `true` is the failure
+ * this whole script exists to catch — a record resolving to a plausible path in
+ * a tree that is not the one being checked.
+ */
+test("sameDirectory is false for two different directories, and for paths that do not exist", () => {
+  expect(sameDirectory(REPO, REPO)).toBe(true);
+  expect(sameDirectory(REPO, path.join(REPO, "scripts"))).toBe(false);
+  // The catch: `realpathSync` throws on a missing path, and throwing must read
+  // as "not the same", never as "same".
+  expect(sameDirectory(path.join(REPO, "no-such-dir"), path.join(REPO, "no-such-dir-2"))).toBe(
+    false,
+  );
+});
+
+/**
+ * The `realpath` half, exercised directly since nothing in production reaches
+ * it. Two spellings of one directory, which on POSIX means a symlink; skipped on
+ * Windows for the same reason the CLI symlink test below is.
+ */
+test.skipIf(process.platform === "win32")(
+  "sameDirectory sees through two spellings of one directory",
+  () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-same-")));
+    const link = `${dir}-link`;
+    fs.symlinkSync(dir, link, "junction");
+
+    // Not the fast path: the strings genuinely differ, so this is the branch.
+    expect(link).not.toBe(dir);
+    expect(sameDirectory(dir, link)).toBe(true);
+
+    fs.unlinkSync(link);
+    fs.rmSync(dir, { recursive: true, force: true });
+  },
+);
+
+/**
+ * The other half of repo-36, reproduced on a platform that is not Windows.
+ *
+ * The defect is not really about slashes: it is that subtracting a path git
+ * printed from a path Node resolved is only sound while the filesystem admits
+ * one spelling of each. The Windows runner admits two — `os.tmpdir()` returns
+ * the 8.3 short `C:\Users\RUNNER~1\…` and git resolves the long
+ * `C:/Users/runneradmin/…` — and the subtraction escaped the repository
+ * entirely, printing `..\..\..\..\..\RUNNER~1\…\drift.md` and losing the drift
+ * paragraph with no error anywhere.
+ *
+ * A symlinked directory is the same divergence on POSIX, so the mechanism is
+ * reproducible here rather than only on a runner nobody can debug. The
+ * precondition is asserted rather than assumed, because a fixture where the two
+ * spellings happen to agree would pass this test while proving nothing.
+ *
+ * **Skipped on Windows on purpose.** Producing a diverging spelling there means
+ * short names or case, not links, and whether git resolves a junction the way
+ * it resolves a symlink is not something this repo can measure from Linux. The
+ * Windows coverage for this mechanism is the `--rev` test above — the one that
+ * actually caught it — plus the forward-slash contract asserted just before.
+ */
+test.skipIf(process.platform === "win32")(
+  "a record reached through a symlinked directory is still located inside its repo",
+  () => {
+    const { dir, before, cleanup } = withGrowingRecord();
+    const link = `${dir}-link`;
+    fs.symlinkSync(dir, link, "junction");
+
+    const viaLink = path.join(link, "drift.md");
+    const toplevel = spawnSync("git", ["-C", link, "rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+    }).stdout.trim();
+    // The reproduction only exists while git and Node disagree. Before the fix
+    // this subtraction is what the script used, and it yields `../<link>/drift.md`.
+    expect(path.relative(toplevel, viaLink)).not.toBe("drift.md");
+
+    const linked = spawnSync("node", [CLI, viaLink, "--rev", before], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    // Named as git names it, not as the caller happened to spell it: no `..`
+    // can appear, because a path that leaves the repository is a path `git show`
+    // will never resolve.
+    expect(linked.stdout).toMatch(/^2 references in drift\.md, /);
+    expect(linked.stdout).toMatch(
+      /This record exists at that rev and cited something different there/,
+    );
+    expect(linked.status).toBe(EXIT.unresolvable);
+
+    // Unlinked, not `rm -r`d: the link and its target are different things, and
+    // only one of them is this test's to delete twice.
+    fs.unlinkSync(link);
+    cleanup();
+  },
+);
 
 /**
  * Why the obvious fix is the wrong one, pinned rather than left in a comment. A
