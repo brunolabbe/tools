@@ -1716,14 +1716,16 @@ compared against 68ee870: 0 raised.`, exit 0. **That property — the legitimate
   **The cost of closing it, measured on this repo rather than estimated.** The
   closure is to locate the base's list by _content_ instead of by path.
   `git grep -l "export const GRANDFATHERED = new Map"` over a whole ref runs in
-  **38 ms**, which is nothing. It returns **two** paths — this script and its own
-  test file, which carries the same declaration inside a fixture helper — so the
-  rule "exactly one match" fails on the tree as it stands today, and the closure
-  needs a discriminator no test fixture can accidentally satisfy. Scoping the
-  search to `scripts/*.mjs` gives exactly one match in 4 ms and moves the evasion
-  one step, to a rename out of `scripts/`. **That is the whole decision: a cheap
-  probe, and a discriminator nobody has designed.** Not built, and the numbers
-  are here so whoever decides is not deciding against a description.
+  **38 ms**, which is nothing. It returns **three** paths — this script, its own
+  test file, which carries the same declaration inside a fixture helper, and
+  **this record**, which quotes the search string in the act of describing the
+  measurement — so the rule "exactly one match" fails on the tree as it stands
+  today, and the closure needs a discriminator that neither a test fixture nor a
+  ticket writing about it can accidentally satisfy. Scoping the search to
+  `scripts/*.mjs` gives exactly one match in 4 ms and moves the evasion one step,
+  to a rename out of `scripts/`. **That is the whole decision: a cheap probe, and
+  a discriminator nobody has designed.** Not built, and the numbers are here so
+  whoever decides is not deciding against a description.
 
   **Two routes the gate enumerated and cleared, recorded so they are not
   re-walked.** A merge from a side branch does **not** hide the file: `git log`
@@ -1745,3 +1747,31 @@ compared against 68ee870: 0 raised.`, exit 0. **That property — the legitimate
   covering the reopening case in general when it covers exactly one shape of it.
   That is the fourth time on this branch a comment would otherwise have outlived
   what it described.
+
+- **2026-09-08 — the number in the entry above was wrong before it was
+  committed, and the entry is what made it wrong.** Gate 4's follow-up caught it
+  and it reproduces: the unscoped probe returns **three** paths, not two —
+  `scripts/citations-gate.mjs`, `scripts/test/citations-gate.test.ts`, and **this
+  record**, which quotes the search string in the act of describing the
+  measurement. Corrected in both places.
+
+  **The mechanism is this ticket's own rule, broken by the entry that relies on
+  it.** An entry near the top of this Log says: _re-run the command after writing
+  the sentence that quotes it_. The measurement was taken before the paragraph
+  reporting it existed, was true then, and was false by the time it reached a
+  commit — the paragraph created the third match. Re-run now, after writing this
+  one, it is still three, because both edits went into files that already
+  matched.
+
+  **It strengthens the argument it was supporting rather than weakening it.** A
+  closure keyed on "exactly one file in the tree contains this declaration" is
+  defeated not only by a test fixture but by _writing about the rule_ — a ticket,
+  a design note, a review comment. Three accidental matches is a better case
+  against the naive form than two was, so the open decision on the rename bypass
+  is unchanged in substance and better evidenced.
+
+  **Fourth correction on this branch of a claim that was true when measured**,
+  after the `"informational"` anchor, the two `ci.yml` comments, and the
+  reference counts. Every one has the same shape: a number or a sentence that
+  described the tree accurately and then stopped, with nothing between it and a
+  reader. That is the ticket, arriving in the ticket, for the fifth time.

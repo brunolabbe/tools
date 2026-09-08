@@ -203,11 +203,19 @@ export const SCOPE = {
  *   Closing it means locating the base's list by content rather than by path,
  *   and the cost of that was measured rather than guessed: `git grep -l` for the
  *   list's own declaration over a whole ref runs in **38 ms** here, but returns
- *   **two** paths — this file and its test, which carries the same text in a
- *   fixture — so it needs a discriminator that a test fixture cannot
- *   accidentally satisfy, and scoping the search to `scripts/` merely moves the
- *   evasion to a rename out of `scripts/`. Left open on that basis, with the
- *   numbers in repo-29's Log rather than an estimate.
+ *   **three** paths — this file, its test, which carries the same text in a
+ *   fixture, and repo-29's own record, which quotes the search string while
+ *   describing this measurement. So it needs a discriminator that neither a test
+ *   fixture nor a ticket writing about it can accidentally satisfy, and scoping
+ *   the search to `scripts/` merely moves the evasion to a rename out of
+ *   `scripts/`. Left open on that basis, with the numbers in repo-29's Log
+ *   rather than an estimate.
+ *
+ *   The count was **two** when first written here and three by the time it was
+ *   committed, because the sentence recording it created the third match. That
+ *   is not a footnote: a rule keyed on "exactly one file contains this string"
+ *   is defeated by *writing about the rule*, which is a stronger argument
+ *   against the naive form than the one it replaces.
  *
  *   **The founding 59 are not covered by any of that**, and no later check can
  *   retroactively cover them — they were written before the comparison existed.
