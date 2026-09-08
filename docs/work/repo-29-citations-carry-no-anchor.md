@@ -1949,3 +1949,50 @@ the probe. 32 in that file, 288 in the `repo` project.
   failed naming the extra path, then passed again once removed. Worth recording
   because a boundary assertion nobody has watched fail is the same shape as a
   gate nobody has watched fail.
+
+- **2026-09-08 — the repoint this branch promised landed after the merge, not
+  before it, and `main` was red in between.** The pull request said in its first
+  paragraph that #193 had to merge first and that a follow-up commit repointing
+  two records had to land before this one merged. All three pull requests merged
+  **34 seconds apart**, so the follow-up never got written, and the ordering the
+  body asked for was overtaken rather than ignored.
+
+  **What that makes false, stated plainly because this page claims the
+  opposite.** The entries above say every citation in the corpus was left no
+  worse than at this branch's base. That was true of the branch and **not true of
+  `main`** between `1eecbdb` and this commit: the gate exited **1** there.
+  Reproduced rather than taken from the report that raised it:
+
+  - `FAIL docs/work/repo-34-the-windows-only-code-paths-nothing-asserts.md — 3
+moved, 4 unchecked, 13 verified` — **the predicted case, arriving exactly as
+    predicted.** That record is anchored and not on `GRANDFATHERED`, so this
+    branch's own gate enforces it, and this branch's `ci.yml` insertion moved the
+    lines its citations name. Both the gate and this builder had said in advance
+    that this one would be a red build rather than silent debt.
+  - `WORSE docs/work/repo-31-the-windows-leg-is-almost-all-red.md — 7 failing,
+and its GRANDFATHERED entry allows 4`.
+
+  **Seven citations repointed, and the two records needed different arithmetic.**
+  repo-34's three moved by a uniform **+54** — one of them a range, `210-231` to
+  `264-285`, re-resolved against the merged file rather than shifted on faith,
+  since both branches edited `ci.yml` in different places and a uniform shift was
+  an assumption rather than a fact. repo-31's four moved by **+11** in `ci.yml`
+  and **+9** in `hls-e2e.test.ts`. Every one was arithmetic rather than judgement,
+  because every one carried an anchor saying where it had gone — which is the
+  whole argument of this ticket, cashed in on the one occasion it was needed most.
+
+  **The ratchet then did the thing it was built for, to its own author.**
+  Repairing repo-31 took it from 7 failing to 3, below the 4 its entry allowed,
+  and the run answered `STALE … now holds 3 failing reference(s), not 4 — tighten
+the number`, exit 1. Tightened to 3. **The number was not raised at any point**,
+  and `--against origin/main` reports `59 entr(y/ies) compared … 0 raised`, which
+  is the check that tells a legitimate lowering from a silencing.
+
+  **The three that remain in repo-31 are `indistinct`, not `moved`, and are
+  deliberately left.** They are self-citations whose anchors occur more than once
+  in that record — weak when written, and untouched by either merge. Re-anchoring
+  somebody else's committed gate record is repo-37's work, not a repoint's, so
+  the entry says 3 rather than 0 and the debt stays visible.
+
+  `node scripts/citations-gate.mjs` exits **0** on this branch, where it exits 1
+  on `1eecbdb`.

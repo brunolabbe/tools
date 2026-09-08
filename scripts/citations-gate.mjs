@@ -269,7 +269,7 @@ export const GRANDFATHERED = new Map([
   ["docs/work/repo-26-no-test-runs-a-script-as-a-process.md", 4],
   ["docs/work/repo-27-difficulty-must-change-a-dispatch.md", 5],
   ["docs/work/repo-28-the-standard-sonnet-trial.md", 1],
-  ["docs/work/repo-31-the-windows-leg-is-almost-all-red.md", 4],
+  ["docs/work/repo-31-the-windows-leg-is-almost-all-red.md", 3],
   ["docs/work/repo-36-citations-loses-the-record-path.md", 28],
   ["docs/work/repo-4-fixture-ignore-pattern.md", 3],
   ["tools/downloader/docs/work/dl-15-component-render-tests.md", 57],
