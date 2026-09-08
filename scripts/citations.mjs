@@ -79,7 +79,7 @@
  * `commit-message.mjs`.
  *
  * Usage:
- *   node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors]
+ *   node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors] [--require-distinct-anchors]
  *
  * `--rev` resolves the citation **targets** against a commit rather than the
  * working tree. Pinning the record to the commit the gate actually reviewed is
@@ -113,6 +113,36 @@
  * destroy the one property these states have. The default stays exit 0, because
  * turning it on for everyone fails every run against all 965 citations already
  * in the tree.
+ *
+ * `--require-distinct-anchors` makes a *verified* anchor fatal when its fragment
+ * starts on more than one line of the file it points at. Same contract as the
+ * flag above and for the same reason: it changes the exit code and nothing else,
+ * because how many lines a fragment occupies is a fact about the fragment, not a
+ * different verdict about the record.
+ *
+ * **It exists because `verified` is weaker than it reads, and that was measured
+ * rather than supposed** (repo-29). An anchor is verified when *some* occurrence
+ * of it starts inside the cited range — see `locateAnchor` — so a fragment that
+ * occurs five times verifies that one of the five is in range and not which. Two
+ * live instances: `repo-31` cited a line of `ci.yml` anchored on
+ * `"informational"`, a word on five lines of that file, and after an unrelated
+ * 22-line insertion a *comment* slid into the cited position and the citation
+ * went on reporting `ok`; and it reproduces from nothing in a four-line fixture.
+ * `Done when` 3 of repo-29 asks authors not to do this, and until this flag
+ * there was no way to hold anyone to it.
+ *
+ * **Off by default, and not folded into `--require-anchors`, which is a
+ * measurement and not caution.** repo-21's live CI step runs
+ * `--require-anchors` over `orchestrate-tickets/SKILL.md`, and that file anchors
+ * a citation on `"model: sonnet"`, which occurs twice in `ticket-reviewer.md`.
+ * Folding the rule into the existing flag would have turned that step red on a
+ * file nobody in repo-29 touched — the precise failure mode repo-29 exists to
+ * stop shipping.
+ *
+ * **A declaration cannot excuse an indistinct anchor**, and that is deliberate:
+ * `citations: evidence` waives a citation that *cannot* be made to pass, and this
+ * one always can — by quoting a longer fragment. A waiver that stands in for a
+ * one-line edit is the rubber stamp `applyDeclarations` refuses.
  *
  * **The exit code is a bitmask** (`EXIT`), because the failure classes are not
  * alike and one code cannot say which happened — a citation that cannot be
@@ -664,6 +694,7 @@ export const EXIT = /** @type {const} */ ({
   moved: 2,
   unanchored: 4,
   declaration: 8,
+  indistinct: 16,
 });
 
 /**
@@ -705,6 +736,7 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
         text: null,
         resolved: null,
         foundAt: null,
+        occurrences: null,
       };
     }
 
@@ -717,6 +749,7 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
       text: null,
       resolved: at,
       foundAt: null,
+      occurrences: null,
     });
 
     /**
@@ -757,6 +790,7 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
       text: null,
       resolved: at,
       foundAt: null,
+      occurrences: null,
     });
 
     if ("error" in resolved) return bad(resolved.error);
@@ -783,13 +817,32 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
         reason: "no anchor — nothing checked it",
         text,
         foundAt: null,
+        // Null rather than zero: nothing was searched for, which is a different
+        // fact from a fragment that was searched for and found nowhere.
+        occurrences: null,
       };
     }
 
     const hits = locateAnchor(content, c.anchor);
     const inRange = hits.filter((n) => n >= c.start && n <= c.end);
+    // `occurrences` is how many lines the fragment starts on in the whole file,
+    // which is a different question from whether one of them is in range. A
+    // `verified` anchor that matches five lines verified nothing in particular:
+    // an unrelated edit can slide a *different* occurrence into the cited
+    // position and the citation keeps reporting `ok` while pointing at the
+    // wrong thing. Measured on this repo (repo-29, finding 3) rather than
+    // supposed. Carried on the result rather than judged here, because whether
+    // it is tolerable is the caller's policy — the same split
+    // `--require-anchors` already draws.
     if (inRange.length > 0)
-      return { ...c, state: "verified", reason: null, text, foundAt: inRange };
+      return {
+        ...c,
+        state: "verified",
+        reason: null,
+        text,
+        foundAt: inRange,
+        occurrences: hits.length,
+      };
 
     const shown = normalizeAnchor(c.anchor).slice(0, 60);
     const elsewhere = `${hits.slice(0, 3).join(", ")}${hits.length > 3 ? ", …" : ""}`;
@@ -802,6 +855,7 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
           : `anchor "${shown}" is not in ${range}, and not anywhere in ${resolved.path}`,
       text,
       foundAt: hits,
+      occurrences: hits.length,
     };
   });
 }
@@ -913,10 +967,17 @@ export function applyDeclarations(results, declarations) {
  * @param {boolean} requireAnchors
  * @param {{reason: string}[]} stale
  */
-function summarize(results, requireAnchors, stale = []) {
+function summarize(results, requireAnchors, stale = [], requireDistinct = false) {
   /** @type {Record<string, number>} */
   const counts = Object.fromEntries(STATES.map((state) => [state, 0]));
   for (const r of results) counts[r.state] += 1;
+
+  // A `verified` anchor that starts on more than one line of its target. Not a
+  // state: the citation really is verified, and which lines its fragment
+  // occupies is a fact about the fragment rather than about the record — so
+  // this is counted, reported, and fatal only when the caller asks, exactly as
+  // `unanchored` is.
+  const indistinct = results.filter((r) => r.state === "verified" && (r.occurrences ?? 1) > 1);
 
   // Each class sets its own bit, so a run with two of them says two. The names
   // are carried alongside because the number alone is the thing this file spent
@@ -931,12 +992,19 @@ function summarize(results, requireAnchors, stale = []) {
   if (counts.unresolvable > 0) set("unresolvable", `${counts.unresolvable} unresolvable`);
   if (counts.moved > 0) set("moved", `${counts.moved} moved`);
   if (requireAnchors && counts.unanchored > 0) set("unanchored", `${counts.unanchored} unanchored`);
+  if (requireDistinct && indistinct.length > 0)
+    set("indistinct", `${indistinct.length} anchor(s) not distinct`);
   if (stale.length > 0) set("declaration", `${stale.length} stale evidence declaration`);
 
   return {
     ...counts,
+    indistinct,
     total: results.length,
-    failed: counts.moved + counts.unresolvable + (requireAnchors ? counts.unanchored : 0),
+    failed:
+      counts.moved +
+      counts.unresolvable +
+      (requireAnchors ? counts.unanchored : 0) +
+      (requireDistinct ? indistinct.length : 0),
     exit,
     // Deliberately never `N/N`: the pair that reads as "all fine" is the shape
     // this script printed while three citations pointed at unrelated code. The
@@ -947,7 +1015,8 @@ function summarize(results, requireAnchors, stale = []) {
       `${counts.unanchored} unanchored, ${counts.unresolvable} unresolvable, ` +
       `${counts.unchecked} unchecked, ${counts.evidence} evidence` +
       ` — of ${results.length} reference${results.length === 1 ? "" : "s"}` +
-      (requireAnchors ? ", anchors required" : ""),
+      (requireAnchors ? ", anchors required" : "") +
+      (requireDistinct ? ", distinct anchors required" : ""),
     // The number and what it meant, on one line. `exit 3` in a CI log is not
     // readable and `exit 0` is the claim a record makes about its own evidence,
     // so both get words next to them.
@@ -1095,6 +1164,7 @@ export const FLAGS = new Map([
   ["--rev", { option: "rev", takesValue: true }],
   ["--section", { option: "section", takesValue: true }],
   ["--require-anchors", { option: "requireAnchors", takesValue: false }],
+  ["--require-distinct-anchors", { option: "requireDistinct", takesValue: false }],
 ]);
 
 /**
@@ -1105,7 +1175,7 @@ export const FLAGS = new Map([
  * repo-14's open question answered by an error message.
  */
 export const USAGE =
-  "usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors]";
+  "usage: node scripts/citations.mjs <ticket-file> [--rev <sha>] [--section <name>] [--require-anchors] [--require-distinct-anchors]";
 
 /**
  * Parse argv into the ticket file and its options.
@@ -1124,13 +1194,13 @@ export const USAGE =
  * needing a fourth arm here.
  *
  * @param {string[]} argv
- * @returns {{file: string, rev: string | null, section: string | null, requireAnchors: boolean}}
+ * @returns {{file: string, rev: string | null, section: string | null, requireAnchors: boolean, requireDistinct: boolean}}
  */
 export function parseArgs(argv) {
   /** @type {string | null} */
   let file = null;
   /** @type {{rev: string | null, section: string | null, requireAnchors: boolean}} */
-  const options = { rev: null, section: null, requireAnchors: false };
+  const options = { rev: null, section: null, requireAnchors: false, requireDistinct: false };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -1254,7 +1324,7 @@ export function locateRecord(repo, file) {
 }
 
 function main() {
-  const { file, rev, section, requireAnchors } = parseArgs(process.argv.slice(2));
+  const { file, rev, section, requireAnchors, requireDistinct } = parseArgs(process.argv.slice(2));
 
   const repo = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   const markdown = fs.readFileSync(file, "utf8");
@@ -1284,7 +1354,7 @@ function main() {
     checkCitations(citations, makeReader(repo, rev), makeResolver(candidateFiles(repo, rev))),
     declarations,
   );
-  const summary = summarize(results, requireAnchors, stale);
+  const summary = summarize(results, requireAnchors, stale, requireDistinct);
 
   // Both sides named, because naming one was the whole defect: a reader who
   // passed a sha and got a verdict had no way to see which document produced it.
@@ -1306,6 +1376,17 @@ function main() {
     // `--require-anchors` made that conditionally false and nothing re-read it,
     // which is this branch's own thesis turning up inside the file arguing it.)
     // `unanchored` sets the width; the rest are padded.
+    //
+    // **Two of these six labels are not their state's name**, and that has
+    // caught a reader: `unresolvable` prints as `FAIL` and `verified` as `ok`,
+    // so grepping this output for a state name silently drops the worst class
+    // of all. It happened during repo-29's gate — a sweep counting
+    // `^  (MOVED|UNRESOLVABLE)` reported one record with failures where there
+    // were four, and read as a clean result because the number it printed was
+    // confident. Grep the marks, not the states, or read the summary line, which
+    // does name every state. `citations-gate.mjs` prints the state name instead,
+    // which is the right choice there and one more reason not to grep across the
+    // two.
     const mark = {
       verified: "ok",
       moved: "MOVED",
@@ -1335,6 +1416,15 @@ function main() {
       process.stdout.write(`             ${r.text.slice(0, 100)}\n`);
     }
     if (r.reason !== null) process.stdout.write(`             ${r.reason}\n`);
+    // Printed whatever the policy, like every other fact here: a reader judging
+    // an unanchored citation by hand wants to know its neighbour verified on a
+    // fragment that matches half the file.
+    if ((r.occurrences ?? 1) > 1) {
+      process.stdout.write(
+        `             anchor starts on ${r.occurrences} lines of ${r.resolved} — verified means one of` +
+          ` them is in range, not which one\n`,
+      );
+    }
   }
 
   process.stdout.write(`\n${summary.line}\n${summary.exitLine}\n`);
@@ -1401,6 +1491,15 @@ function main() {
     advice.push(
       `${summary.unresolvable} citation(s) cannot be right at all: the file is gone, the line is past the end, or\n` +
         `the bare name matches more than one file.`,
+    );
+  }
+  if (requireDistinct && summary.indistinct.length > 0) {
+    advice.push(
+      `${summary.indistinct.length} anchor(s) verify on a fragment that starts on more than one line of the file\n` +
+        `they point at, and --require-distinct-anchors is in force. They are true today and cannot stay\n` +
+        `true on their own: an unrelated edit can slide a different occurrence into the cited line and the\n` +
+        `citation keeps reporting ok. Quote more of the line until the fragment is unique. There is no\n` +
+        `evidence declaration for this — the fix is always available, so a waiver would be a rubber stamp.`,
     );
   }
   if (stale.length > 0) {

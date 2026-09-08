@@ -13,7 +13,7 @@ depends_on: []
 ## Why
 
 `.github/workflows/ci.yml` runs the unit-test matrix over
-`` `.github/workflows/ci.yml:264` "os: [ubuntu-latest, windows-latest]" ``, gated
+`` `.github/workflows/ci.yml:318` "os: [ubuntu-latest, windows-latest]" ``, gated
 by a `changes` job rather than an event filter — a documentation-only push still
 skips the matrix, on both `push` and `pull_request` alike. The repo's owner asked
 directly whether the Windows leg is worth keeping. This ticket is where that
@@ -100,7 +100,7 @@ above. It arrived with repo-25 (PR #168, merge commit `4bc3e66`, merged
 `` `scripts/test/citations.test.ts` ``. The failing assertion is
 `` `scripts/test/citations.test.ts:1319` "This record exists at that rev and cited something different there" ``,
 reached from
-`` `scripts/test/citations.test.ts:1318` "expect(pinned.stdout).toMatch(" ``.
+`` `scripts/test/citations.test.ts:1331` "expect(pinned.stdout).toMatch(/line 99 is past end of file" ``.
 The mechanism looks like a POSIX-path assumption in the repo's own tooling
 (`scripts/citations.mjs` computes a path relative to the repo root and prints it
 unchanged; on Windows that string carries backslashes and the printed preview
@@ -271,8 +271,8 @@ Four `gh run view` calls, as asked:
   regression reported green on `main`'s own push trigger, having never run the
   matrix.
 - The `changes` gate is real, not a guess:
-  `` `.github/workflows/ci.yml:167` "changes:" `` /
-  `` `.github/workflows/ci.yml:260` "if: needs.changes.outputs.code == 'true'" ``.
+  `` `.github/workflows/ci.yml:221` "changes:" `` /
+  `` `.github/workflows/ci.yml:314` "if: needs.changes.outputs.code == 'true'" ``.
 - Only the unfiltered `schedule` trigger ran the matrix against the regression
   and went red — run `34127289168`, 13:25 UTC, the first of the four
   citations-only failures in measurement 1's table. Everything between 11:39
@@ -296,7 +296,7 @@ mutually exclusive.
 ### A. Remove `windows-latest` from the matrix
 
 Cheapest. Deletes one array entry at
-`` `.github/workflows/ci.yml:264` "os: [ubuntu-latest, windows-latest]" ``.
+`` `.github/workflows/ci.yml:318` "os: [ubuntu-latest, windows-latest]" ``.
 
 - Ends the dominant source of red immediately — 7 of 8 failures counted here
   disappear outright, and the 8th's Windows half with them.
@@ -421,7 +421,7 @@ Written against the decision rather than an implementation.
 
 Reproduced independently rather than read: `killProcessTree`'s Windows branch is genuinely exercised by `tools/downloader/engine/test/hls-e2e.test.ts:366 "cancelling kills the process tree and leaves no artifacts"`, reached at `tools/downloader/engine/src/ffmpeg/kill.ts:98 "export async function killProcessTree"` — instrumented that function with a scratch-file `appendFileSync`, ran `npx vitest run tools/downloader/engine/test/hls-e2e.test.ts -t "cancelling kills the process tree"`, got 1 passed and a marker reading `killProcessTree 98227 linux`, then reverted (`git status --short` clean after). This is the fact the branch's central correction rests on, and it holds.
 
-`.github/workflows/ci.yml` itself: validated with two independent parsers not in this repo's dependency tree (`js-yaml` and `actionlint` v1.7.12, both fetched over network into scratch) — 0 parse errors, 0 schema/expression errors. Hand- and machine-confirmed `` `.github/workflows/ci.yml:272 "informational"` `` evaluates to the empty-string branch for `ubuntu-latest`, rendering `test (ubuntu-latest)` byte-identical to the pre-rename name; grepped every other workflow file for a reference to that job name or a `needs:` on it — none. `` `.github/workflows/ci.yml:273 "continue-on-error: ${{ matrix.os == 'windows-latest' }}"` `` and `` `.github/workflows/ci.yml:339 "failure() && runner.os == 'Windows'"` `` are syntactically and schema-valid per actionlint; GitHub's own docs for `failure()` ("Returns true when any previous step of a job fails") corroborate the branch's reasoning that job-level `continue-on-error` changes the job's reported conclusion, not a later step's view of a prior step's outcome — but this is documentation cross-reference, not an executed run, and the branch is honest that only a real pull-request run settles it.
+`.github/workflows/ci.yml` itself: validated with two independent parsers not in this repo's dependency tree (`js-yaml` and `actionlint` v1.7.12, both fetched over network into scratch) — 0 parse errors, 0 schema/expression errors. Hand- and machine-confirmed `` `.github/workflows/ci.yml:326 "&& ', informational' || ''"` `` evaluates to the empty-string branch for `ubuntu-latest`, rendering `test (ubuntu-latest)` byte-identical to the pre-rename name; grepped every other workflow file for a reference to that job name or a `needs:` on it — none. `` `.github/workflows/ci.yml:327 "continue-on-error: ${{ matrix.os == 'windows-latest' }}"` `` and `` `.github/workflows/ci.yml:393 "failure() && runner.os == 'Windows'"` `` are syntactically and schema-valid per actionlint; GitHub's own docs for `failure()` ("Returns true when any previous step of a job fails") corroborate the branch's reasoning that job-level `continue-on-error` changes the job's reported conclusion, not a later step's view of a prior step's outcome — but this is documentation cross-reference, not an executed run, and the branch is honest that only a real pull-request run settles it.
 
 The `required_status_checks` safety claim for the rename is inherited from the pre-existing 2026-08-23 `gh api` read at the top of the file, not re-verified — correctly so, since `gh api` is denied in this container and the branch does not route around the deny.
 
