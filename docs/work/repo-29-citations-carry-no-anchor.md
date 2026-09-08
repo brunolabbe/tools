@@ -437,7 +437,7 @@ Both records sit on unmerged branches, so they are named in prose rather than
 cited — the same dodge, and the same reason, as the dl-43 reproductions above.
 
 **The strongest instance is a gate record for the citation checker itself, and
-the checker cleared it.** repo-33 (branch `repo-33-citations-windows-paths`,
+the checker cleared it.** repo-36 (branch `repo-33-citations-windows-paths`,
 PR #186) fixes how `citations.mjs` names a record's own path; its gate record is
 unanchored throughout. At its tip the checker reports `7 verified, 0 moved, 29
 unanchored, 0 unresolvable, 3 unchecked, 0 evidence — of 39 references` at **exit
@@ -509,7 +509,7 @@ scope D is defined over.
 counts its own references changes what it is counting.** Two instances in the
 same batch. dl-45's record stated `32 of these 39 references`, its gate caught it,
 and a fresh run gave 34 of 41 — the paragraph carrying the numbers had added its
-own citations after the run they came from. repo-33's round-one-and-two record
+own citations after the run they came from. repo-36's round-one-and-two record
 states `10 unanchored ... of 12 references`; re-run here at that very commit it
 reports 11 of 13, for the same reason, and that one was never caught. Re-run the
 command **after** writing the sentence that quotes it.
@@ -761,7 +761,7 @@ moved` at exit 0. Run again on 2026-09-07 the same file reports **6 verified, 4
   **the answered decision was not touched**, no option was added, reopened or
   re-argued, `status` stays `ready`, `difficulty` stays unset, and nothing in this
   ticket is built. Three measurements, taken on committed gate records rather
-  than on a retrospective sweep: repo-33's (PR #186), the anchored round of the
+  than on a retrospective sweep: repo-36's (PR #186), the anchored round of the
   same record, and dl-45's (PR #189).
 
   **Every number was re-derived on this branch rather than transcribed from the
@@ -774,7 +774,7 @@ moved` at exit 0. Run again on 2026-09-07 the same file reports **6 verified, 4
     neither record declares anything.
   - The five drifted coordinates appear as **four** entries in the checker's
     output, because it previews a range at its start and two of the five are the
-    ends of one range. And the repo-33 record's own prose description of what
+    ends of one range. And the repo-36 record's own prose description of what
     they drifted onto matches the tree at `1a774db`, not at the branch tip —
     checked at both revs, and recorded because the description going stale is the
     same defect one layer up.
@@ -806,3 +806,45 @@ these 39`, uncaught in the second instance, and it is now a line in the Build
   baseline was re-run from `main`'s own copy of this file in this worktree rather
   than assumed, because the count last recorded here (`of 16 references`) predates
   the entry that added the blank-line reproduction.
+
+- **2026-09-08** — **The ticket this record's strongest instance is drawn from is
+  now `repo-36`, not `repo-33`.** A peer session filed a different `repo-33` —
+  ADR 004's compose rename — and merged it to `main` in #192 while this batch was
+  open. Two tickets on one id makes `node scripts/status.mjs --json` exit 1,
+  which is the board gate, so the batch renumbered its own; the merged one keeps
+  the id. Four references on this branch were repointed, in the Build section and
+  in the entry above: the ticket is the same ticket, the file is now
+  `docs/work/repo-36-citations-loses-the-record-path.md`, and its branch is still
+  named `repo-33-citations-windows-paths` — branch names were left alone, since
+  renaming one closes and reopens its pull request.
+
+  **The measurement quoted above was re-run after the renumber and is unchanged.**
+  At #186's new tip (`0a6bf23`, which adds the renumber's own Log entry to that
+  record and so moves every line below it), `node scripts/citations.mjs
+docs/work/repo-36-citations-loses-the-record-path.md` still reports
+  `7 verified, 0 moved, 29 unanchored, 0 unresolvable, 3 unchecked, 0 evidence —
+of 39 references` at **exit 0** — byte-identical to the figure recorded here
+  before the rename. That is worth stating rather than assuming, because it is
+  this ticket's own thesis pointed at itself: renaming the file the record
+  describes is exactly the class of change that silently invalidates a
+  coordinate, and the only reason it did not here is that none of the 39 point at
+  the ticket file itself.
+
+  Nothing else about the evidence, the answered decision or the Build section
+  moved. `status` stays `ready`, `difficulty` stays unset.
+
+  **Observed while checking that, and pre-existing rather than caused here.**
+  `node scripts/citations.mjs docs/work/repo-29-citations-carry-no-anchor.md`
+  on this branch exits **2** with `7 verified, 4 moved, 1 unanchored, 0
+unresolvable, 7 unchecked, 0 evidence — of 19 references`. The renumber did not
+  cause it: the identical line and exit code come back from the file as it stood
+  at `74b02fd`, checked by stashing the edit and re-running. The four sit in the downloader's
+  `media.ts` contract, the web `variants.ts`, `citations.mjs` itself and
+  `docs/01-TICKETS.md` — all anchored citations whose anchor text has since
+  drifted below the coordinate recorded, and none of them touching the renumber.
+  Their exact coordinates are deliberately not repeated here: writing four known-
+  stale `file:line` pairs into this page would mint four fresh citations for the
+  checker to fail on, which is how the first draft of this very entry took the
+  file to `1 unresolvable`. Re-run the command above to see them. Left for this ticket's own gate — repairing them is its
+  work, not the renumber's, and folding it in would hide a real finding inside an
+  unrelated change.
