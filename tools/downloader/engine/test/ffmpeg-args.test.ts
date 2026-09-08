@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, test } from "vitest";
 import type { MediaVariant, RequestContext } from "@downloader/contract";
 import {
@@ -12,7 +13,7 @@ import {
   joinHeaderBlob,
   normalizeHeaders,
 } from "../src/ffmpeg/headers.ts";
-import { buildTaskkillArgs } from "../src/ffmpeg/kill.ts";
+import { buildTaskkillArgs, taskkillPath } from "../src/ffmpeg/kill.ts";
 import { buildManifestDownloadArgs } from "../src/download/manifest.ts";
 
 const CONTEXT: RequestContext = {
@@ -294,5 +295,29 @@ describe("manifest download arguments", () => {
 describe("process-tree kill", () => {
   test("taskkill gets /T and /F so children die with the parent", () => {
     expect(buildTaskkillArgs(4242)).toEqual(["/PID", "4242", "/T", "/F"]);
+  });
+
+  // taskkillPath() joins with the platform's own path.join, which is
+  // POSIX-flavoured on this test host — so these assertions are built with
+  // the same `path.join` the function itself calls, checking the fallback
+  // *selection* (SystemRoot > windir > the literal default), not the
+  // separator. A Windows-exact `C:\Windows\System32\taskkill.exe` string would
+  // require `path.win32.join`, which is not what production code uses here.
+  describe("taskkillPath", () => {
+    test("SystemRoot wins when both SystemRoot and windir are set", () => {
+      expect(taskkillPath({ SystemRoot: "C:\\Windows", windir: "C:\\WINNT" })).toBe(
+        path.join("C:\\Windows", "System32", "taskkill.exe"),
+      );
+    });
+
+    test("windir is used when SystemRoot is absent", () => {
+      expect(taskkillPath({ windir: "C:\\WINNT" })).toBe(
+        path.join("C:\\WINNT", "System32", "taskkill.exe"),
+      );
+    });
+
+    test("falls back to C:\\Windows when neither is set", () => {
+      expect(taskkillPath({})).toBe(path.join("C:\\Windows", "System32", "taskkill.exe"));
+    });
   });
 });

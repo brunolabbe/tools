@@ -814,16 +814,22 @@ function sanitiseHeaderValue(value: string): string {
  * Resolves an executable without a shell. `PATH` is searched by hand because
  * `spawn` with `shell: false` will not do it for us on Windows, and shelling out
  * to `which`/`where` is exactly what this project forbids.
+ *
+ * `platform` and `env` default to the real globals; a test drives the
+ * `PATHEXT` branch from a Linux host by passing `platform: "win32"` and a
+ * fake `env` — the default call sites are unaffected.
  */
-export function findExecutable(command: string): string | undefined {
+export function findExecutable(
+  command: string,
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
   if (command.includes("/") || command.includes("\\")) {
     return existsSync(command) ? command : undefined;
   }
-  const isWindows = process.platform === "win32";
-  const entries = (process.env["PATH"] ?? "").split(isWindows ? ";" : ":");
-  const extensions = isWindows
-    ? (process.env["PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD").split(";")
-    : [""];
+  const isWindows = platform === "win32";
+  const entries = (env["PATH"] ?? "").split(isWindows ? ";" : ":");
+  const extensions = isWindows ? (env["PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD").split(";") : [""];
   for (const entry of entries) {
     if (entry === "") continue;
     for (const extension of extensions) {

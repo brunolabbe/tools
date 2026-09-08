@@ -1,9 +1,16 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AppError } from "@downloader/contract";
 import type { ProbeStageEvent, ResolveOptions } from "@downloader/contract";
-import { describe, expect, test } from "vitest";
-import { mapProtocol, mapYtDlpInfo, YtDlpResolver } from "../src/resolvers/ytdlp.ts";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import {
+  findExecutable,
+  mapProtocol,
+  mapYtDlpInfo,
+  YtDlpResolver,
+} from "../src/resolvers/ytdlp.ts";
 import type { YtDlpInfo } from "../src/resolvers/ytdlp.ts";
 
 const FAKE_BINARY = fileURLToPath(new URL("./fixtures/ytdlp/fake-ytdlp.mjs", import.meta.url));
@@ -584,5 +591,66 @@ describe("stage narration (dl-43)", () => {
       fakeResolver("unsupported").resolve(SOURCE, options({ onStage: collect })),
     ).rejects.toThrow(AppError);
     expect(seen).toEqual([{ stage: "ytdlp-run", resolver: "yt-dlp" }]);
+  });
+});
+
+// `findExecutable` reads `process.platform` and `process.env` by default, so
+// its `PATHEXT` branch is otherwise unreachable from this (Linux) test host.
+// `platform`/`env` are parameters specifically so it can be driven here.
+//
+// `findExecutable` still uses the statically imported `join` from `node:path`
+// (POSIX-flavoured on this host) to build each candidate, even when
+// `platform: "win32"` is passed — only `process.platform`/`process.env` are
+// injected, not the path module. So these cases assert extension *selection*
+// only; they are not proof of Windows path joining the way
+// `ffmpeg-args.test.ts`'s `taskkillPath` cases say they are and are not.
+describe("findExecutable's PATHEXT branch (repo-34)", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "findExecutable-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("tries each PATHEXT extension in order on a Windows platform", () => {
+    writeFileSync(path.join(dir, "mytool.EXE"), "");
+
+    expect(findExecutable("mytool", "win32", { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" })).toBe(
+      path.join(dir, "mytool.EXE"),
+    );
+  });
+
+  test("prefers the earlier PATHEXT extension when more than one candidate exists", () => {
+    writeFileSync(path.join(dir, "mytool.EXE"), "");
+    writeFileSync(path.join(dir, "mytool.BAT"), "");
+
+    expect(findExecutable("mytool", "win32", { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" })).toBe(
+      path.join(dir, "mytool.EXE"),
+    );
+  });
+
+  test("falls back to the default PATHEXT list when the env has none", () => {
+    writeFileSync(path.join(dir, "mytool.CMD"), "");
+
+    expect(findExecutable("mytool", "win32", { PATH: dir })).toBe(path.join(dir, "mytool.CMD"));
+  });
+
+  test("does not try PATHEXT extensions on a non-Windows platform", () => {
+    // Only the extensioned file exists; a POSIX search tries the bare name
+    // only, so this must not resolve even though the Windows branch would.
+    writeFileSync(path.join(dir, "mytool.EXE"), "");
+
+    expect(findExecutable("mytool", "linux", { PATH: dir })).toBeUndefined();
+  });
+
+  test("PATH entries are split on ; for Windows and : for everything else", () => {
+    writeFileSync(path.join(dir, "mytool.EXE"), "");
+
+    expect(findExecutable("mytool", "win32", { PATH: `C:\\nowhere;${dir}`, PATHEXT: ".EXE" })).toBe(
+      path.join(dir, "mytool.EXE"),
+    );
   });
 });

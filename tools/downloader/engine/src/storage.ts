@@ -122,17 +122,27 @@ export function sanitizeFilename(name: string, options: SanitizeFilenameOptions 
  *
  * Throws rather than returning a boolean: a caller that forgets to check the
  * boolean writes outside the storage directory, and there is no safe default.
+ *
+ * `pathModule` defaults to `node:path`, which *is* `path.win32` in a real
+ * Windows process — that is enough to make this a security control that
+ * behaves correctly on Windows, but not enough to let a Linux test *prove*
+ * it, since the default here is always POSIX on this host. A test drives the
+ * Windows branch directly by passing `path.win32` (repo-34).
  */
-export function assertPathInside(root: string, candidate: string): string {
-  const resolvedRoot = path.resolve(root);
-  const resolved = path.resolve(resolvedRoot, candidate);
-  const relative = path.relative(resolvedRoot, resolved);
+export function assertPathInside(
+  root: string,
+  candidate: string,
+  pathModule: typeof path = path,
+): string {
+  const resolvedRoot = pathModule.resolve(root);
+  const resolved = pathModule.resolve(resolvedRoot, candidate);
+  const relative = pathModule.relative(resolvedRoot, resolved);
 
   if (
     relative.length === 0 ||
     relative === ".." ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative)
+    relative.startsWith(`..${pathModule.sep}`) ||
+    pathModule.isAbsolute(relative)
   ) {
     throw new AppError("INTERNAL", "Refusing to use a path outside the storage directory.", {
       details: { relative },
