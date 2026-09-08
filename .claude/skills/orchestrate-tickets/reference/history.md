@@ -122,6 +122,13 @@ different claim: an anchor taken from the current tree would have made the
 citation verify while asserting something that session never wrote. Nothing else
 on this page was repointed, reworded or withdrawn.
 
+**These four are an interim, and the gap is the grammar rather than this page.**
+A declaration is a verification somebody performed, recorded with the rev it was
+performed at, where a bare `moved` records nothing — but it stops the check as
+well as the failure. `docs/work/repo-35-a-citation-cannot-be-pinned-to-a-commit.md`
+carries the reproduction and the open decision behind that, and a reader who
+arrives at either of the declarations below should arrive there.
+
 ## Seventh session — 2026-09-03/04
 
 | Field | Value |
