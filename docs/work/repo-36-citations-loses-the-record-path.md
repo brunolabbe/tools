@@ -400,9 +400,13 @@ repo-36` — `repo-34` is held by #187 and `repo-35` was taken minutes earlier b
   ticket was in neither yet — it had not been pushed, let alone opened. The
   window between filing an id and opening the pull request that publishes it is
   real, it is invisible to every session in it, and nothing in the tooling closes
-  it. Nothing was misused; two sessions raced and the loser is renamed. Notably
-  `next-id.mjs` now _does_ report the collision itself, unprompted:
-  `clash: repo-33 is claimed by PR#186, merged`.
+  it. Nothing was misused; two sessions raced and the loser is renamed. Run _before_ the renumber,
+  `node scripts/next-id.mjs repo` did surface the clash itself, unprompted —
+  `clash: repo-33 is claimed by PR#186, merged` — so the script detects a
+  collision once both sides are visible to it, even though it cannot prevent one.
+  That line is **gone at this tip**, which is the check that the renumber worked:
+  the same command now lists `PR#186 repo-36`, no `repo-33` clash, and
+  `next free: repo-37`.
 
   **Past commit subjects on this branch still say `(repo-33)`** and are left
   alone — they are history across four open pull requests and could only be
