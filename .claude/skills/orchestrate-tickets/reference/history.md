@@ -1592,12 +1592,12 @@ from this file's own sequence rather than from the dispatch, per the entry above
 
 | Field | Value |
 | --- | --- |
-| `tickets` | **5 pull requests, none merged**, every one branched off `origin/main@4fad5f8` — re-confirmed with `git merge-base` per branch, all five returning that sha — and with **zero file overlap**, measured with `git diff --name-only origin/main...<branch>` on all five (3, 4, 15, 22 and 1 paths, no path in two of them). #186 `repo-33`, filed **and** built in one branch. #187 `repo-31`, option D. #188 `dl-46`. #189 `dl-45`. #190 `repo-29`, records-only and ungated. **Board at intake, re-measured at the base**: `npm run status -- --ready` returns exactly 3 — `dl-45`, `dl-46`, `repo-29` — with `repo-31` and `repo-32` withheld as `needs-decision`. **The batch took all three, answered one of the two withheld, and filed a fifth ticket it then built**, which is a complete sweep of the board in one round. Around them: `repo-34` and `dl-47` filed new (`status: ready`, on #187's and #189's branches), and `repo-32` moved `needs-decision` → `ready` on #187's — that one was **answered, not filed**, and existed at the base. Every id and status read out of `git show` on the branch rather than from the account |
+| `tickets` | **5 pull requests, none merged**, every one branched off `origin/main@4fad5f8` — re-confirmed with `git merge-base` per branch, all five returning that sha — and with **zero file overlap**, measured with `git diff --name-only origin/main...<branch>` on all five (3, 4, 15, 22 and 1 paths, no path in two of them). #186 `repo-36`, filed **and** built in one branch. #187 `repo-31`, option D. #188 `dl-46`. #189 `dl-45`. #190 `repo-29`, records-only and ungated. **Board at intake, re-measured at the base**: `npm run status -- --ready` returns exactly 3 — `dl-45`, `dl-46`, `repo-29` — with `repo-31` and `repo-32` withheld as `needs-decision`. **The batch took all three, answered one of the two withheld, and filed a fifth ticket it then built**, which is a complete sweep of the board in one round. Around them: `repo-34` and `dl-47` filed new (`status: ready`, on #187's and #189's branches), and `repo-32` moved `needs-decision` → `ready` on #187's — that one was **answered, not filed**, and existed at the base. Every id and status read out of `git show` on the branch rather than from the account |
 | `agents` / `dispatches` | **10** agents — 1 seam-mapper, 5 builders, 4 reviewers — / total dispatches-and-wakes `not recorded` beyond the 10 spawns |
-| `builder rounds` | **Not given as a count**, and the account supplies reviewer rounds instead. What is derivable from the committed records: `repo-33` **4** gate rounds over 6 commits, `dl-45` **3** passes over 3 tips plus a separate docs-only gate on its decision record, `repo-31` recorded across 3 tips, `dl-46` **1**, `repo-29` none. **Orchestrator's fault: the account attributes none, and one is legible in the tree** — `repo-33`'s round four exists only to correct a relayed claim that the Windows runner's drive layout varies between runs, and its own record says so. It produced a strictly better test anyway; see below |
-| `gates` | **4 reviewers over 5 branches**, #190 ungated by the orchestrator's own authorisation as records-only. **Every verdict PASS**, all five records read out of `git show` rather than from the account. Findings: `repo-33` 1 in round one and 1 in round three, both resolved, 0 in round four; `repo-31` 2, both **dropped** as already fixed in a later commit on the same branch before the record was written; `dl-46` 4 returned, 2 carried and 2 dropped; `dl-45` 1 carried — the finding that narrowed the branch — plus 0 on its decision-record gate |
+| `builder rounds` | **Not given as a count**, and the account supplies reviewer rounds instead. What is derivable from the committed records: `repo-36` **4** gate rounds over 6 commits, `dl-45` **3** passes over 3 tips plus a separate docs-only gate on its decision record, `repo-31` recorded across 3 tips, `dl-46` **1**, `repo-29` none. **Orchestrator's fault: the account attributes none, and one is legible in the tree** — `repo-36`'s round four exists only to correct a relayed claim that the Windows runner's drive layout varies between runs, and its own record says so. It produced a strictly better test anyway; see below |
+| `gates` | **4 reviewers over 5 branches**, #190 ungated by the orchestrator's own authorisation as records-only. **Every verdict PASS**, all five records read out of `git show` rather than from the account. Findings: `repo-36` 1 in round one and 1 in round three, both resolved, 0 in round four; `repo-31` 2, both **dropped** as already fixed in a later commit on the same branch before the record was written; `dl-46` 4 returned, 2 carried and 2 dropped; `dl-45` 1 carried — the finding that narrowed the branch — plus 0 on its decision-record gate |
 | `wrong findings` | **Five, across four links, and none reached `main` because nothing merged.** Two are the orchestrator's relayed claims, refuted by a builder each. One is a gate's reading of `citations.mjs`'s exit codes, refuted by the builder committing its record. One is a stale count inside a gate record, caught by the gate itself. One is advice that a builder disproved by building it — see the two lists below |
-| `subagent tokens` | **2,019,787 across all 10 agents, none missing** — last-observed cumulative, so every figure is a floor and the total is a floor. `dl-45` builder 412,457 · `repo-33` builder 276,856 · `repo-31` reviewer 213,774 · `dl-46` reviewer 206,179 · `dl-45` reviewer 199,585 · `repo-31` builder 194,572 · `dl-46` builder 193,356 · `repo-33` reviewer 165,138 · `repo-29` builder 103,556 · seam-mapper 54,314. Re-added here; the supplied total is exact. Split: builders 1,180,797 (**58.5%**) · gates 784,676 (**38.8%**) · intake 54,314 (**2.7%**). By model: Opus 1,235,111, Sonnet 784,676. **It is a floor for a second reason the account states plainly** — several agents kept working after their last usage report, and a final turn that ends in a `SendMessage` delivers no usage block at all |
+| `subagent tokens` | **2,019,787 across all 10 agents, none missing** — last-observed cumulative, so every figure is a floor and the total is a floor. `dl-45` builder 412,457 · `repo-36` builder 276,856 · `repo-31` reviewer 213,774 · `dl-46` reviewer 206,179 · `dl-45` reviewer 199,585 · `repo-31` builder 194,572 · `dl-46` builder 193,356 · `repo-36` reviewer 165,138 · `repo-29` builder 103,556 · seam-mapper 54,314. Re-added here; the supplied total is exact. Split: builders 1,180,797 (**58.5%**) · gates 784,676 (**38.8%**) · intake 54,314 (**2.7%**). By model: Opus 1,235,111, Sonnet 784,676. **It is a floor for a second reason the account states plainly** — several agents kept working after their last usage report, and a final turn that ends in a `SendMessage` delivers no usage block at all |
 | `cost` | **≈ $36.76** at the 2026-09-02 rate of $0.0182/1k, recomputed here from the total above. An arithmetic conversion of floors with cache reads excluded, so a floor and not a bill — the same caveat the four rows above carry |
 
 **Every model claim in this row is on the artefact, which is new.** The account
@@ -1613,10 +1613,10 @@ it is what makes the next paragraph a checkable correction rather than an
 argument.
 
 **The supplied "no `standard`-rated ticket appeared" does not survive the
-branches, and the correction is narrow.** `repo-33`'s frontmatter reads
+branches, and the correction is narrow.** `repo-36`'s frontmatter reads
 `difficulty: standard` on its own branch, and `repo-34` is filed `standard` too.
 The claim holds *at intake* — neither existed when the board was read — and the
-outcome was fine: `repo-33` was built on Opus, which is above what
+outcome was fine: `repo-36` was built on Opus, which is above what
 `.claude/agents/builder.md:23` "Its gate is" asks for. What the claim hides is
 that its gate was **Sonnet**, where that row pairs a `standard` ticket with an
 Opus gate. **A ticket filed and built in the same dispatch cannot be governed by
@@ -1632,7 +1632,7 @@ to this file alone.
 1. **The orchestrator relayed two claims it had not measured, and a builder
    caught both.** The first: that the Windows runner's workspace drive layout
    varies between runs, inferred from a single error string without reading the
-   second run's checkout step. `repo-33`'s reviewer checked the two cited runs
+   second run's checkout step. `repo-36`'s reviewer checked the two cited runs
    itself rather than accepting the correction — both log
    `Working directory is 'D:\a\tools\tools'`. The second: an instruction to run
    `node scripts/next-id.mjs downloader`, when the script takes a **prefix**.
@@ -1641,7 +1641,7 @@ to this file alone.
    answer to a question nobody asked, and
    `scripts/next-id.mjs:29` "export const USAGE =" is the one line that says so.
    Both were one command
-   from being right. **The `repo-33` builder refused to record the first**, on
+   from being right. **The `repo-36` builder refused to record the first**, on
    the reasoning that an unmeasured "flaky" line would sit in the one ticket
    whose whole subject is a claim that went unchecked for eleven runs — and the
    round it cost produced a strictly better test than the one it replaced, three
@@ -1670,7 +1670,7 @@ to this file alone.
    counting, so run the command **after** writing the sentence that quotes it.
 4. **The step-8 stall check earned itself, on a batch that had every reason to
    think it would not.** `git show` of the ticket on the branch, piped to
-   `grep '^## Review'`, returned empty on `repo-33` while both agents considered
+   `grep '^## Review'`, returned empty on `repo-36` while both agents considered
    the exchange closed and reported finished. Verified from the tree: at
    `a1c2a83`, the branch's first commit, that grep matches nothing. It is the
    same discriminator the entry two above records catching the same shape,
@@ -1678,7 +1678,7 @@ to this file alone.
    `.claude/skills/orchestrate-tickets/SKILL.md:157` "Empty means the exchange is still open".
 5. **A gate record's own citations are this batch's most-measured defect, and
    the one anchored round is the only round in which the mechanism caught
-   anything.** #190 exists to record it. On `repo-33`'s record the checker
+   anything.** #190 exists to record it. On `repo-36`'s record the checker
    reports `7 verified, 0 moved, 29 unanchored, 0 unresolvable — of 39` at
    **exit 0**, with two distinct failures sitting inside that clean result: a
    citation onto a blank line, and five coordinates that had drifted onto
@@ -1694,7 +1694,7 @@ to this file alone.
    pick a quote-free substring rather than escaping one. The coordinates were
    right both times; only the anchor text was malformed.
 6. **A peer subagent overwrote another agent's scratch file** — `dl-46`'s
-   content inside `repo-33`'s draft pull request body. The session scratchpad is
+   content inside `repo-36`'s draft pull request body. The session scratchpad is
    shared and nothing partitions it by agent. Nothing was published and the
    builder rebuilt from the pull request's own body. **Supplied and not
    verifiable from a worktree**, which is exactly the property that makes it
@@ -1710,6 +1710,34 @@ to this file alone.
    as still saying only `cancelled`. It still
    does. **The new datum is the third instance in three consecutive sessions**,
    which retires the reading that the first two were coincidence.
+
+8. **The batch collided with a peer session on a ticket id, did not detect it
+   until five pull requests were open, and paid a four-branch renumber for it.**
+   While this batch ran, an unrelated session filed its own `repo-33` — ADR 004's
+   compose rename — and **merged it first**, in #192. The batch's `repo-33` (the
+   `citations.mjs` path fix, #186) was by then referenced across four unmerged
+   branches. Two tickets on one id is not cosmetic: `node scripts/status.mjs
+   --json` **exits 1**, and that exit code is the whole board gate CI runs, so
+   #186 could not have merged as it stood. The merged ticket kept the id and the
+   batch's was renumbered to `repo-36` on 2026-09-08, touching #186, #187, #190
+   and #191 — one tracked file rename, a frontmatter id, two source comments,
+   `ci.yml`'s explanatory comment, a Build section, and eleven references on this
+   page. **Nothing was misused and `next-id.mjs` was not wrong.** It reads
+   `origin/main` plus the diffs of *open* pull requests; the peer's ticket was in
+   neither when this batch filed, so `next free: repo-33` was the correct answer
+   to the question the script can ask. **The window between taking an id and
+   opening the pull request that publishes it is invisible to every session
+   inside it**, and nothing in the tooling closes it — the more parallel sessions,
+   the likelier the collision, and this page's own premise is more of them. Two
+   smaller costs worth recording: the renumber's first draft of a Log entry
+   **minted a fresh unresolvable citation** by quoting four known-stale
+   `file:line` pairs as prose, caught only by re-running `citations.mjs`; and
+   `scripts/status.mjs`'s duplicate-id error prints
+   `"undefined" is used by more than one ticket` **without naming the id**, so
+   the clash had to be recovered by hand — cosmetic, real, observed and
+   deliberately left unfixed as separate work. Note also that the pre-merge CI
+   paragraph below pins #186 at `d0869fd`; the renumber moved that branch, so
+   that reading is correct as taken and must be re-run against the new tip.
 
 **Folding in unscoped work paid, and was still right to revert — both halves
 belong in the record.** The owner's decision to fold the yt-dlp tier's mirror

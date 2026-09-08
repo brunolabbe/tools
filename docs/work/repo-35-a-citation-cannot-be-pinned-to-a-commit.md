@@ -214,6 +214,13 @@ Written against the decision, not against an implementation.
   another ticket's Log are not covered by it; nothing in this session's reading
   of the open branches named a `repo-35`.
 
+  (**`repo-33` was renumbered to `repo-36` the next day**, after a peer session
+  filed a different `repo-33` — ADR 004's compose rename — and merged it in #192
+  ahead of #186. The measurement above is left as it was taken: `next-id.mjs`
+  really did print `next free: repo-35` and really did name `repo-33` as held,
+  and it was right on both counts at the time. `repo-35` is unaffected either
+  way; only the id of the ticket it names in passing moved.)
+
   **`status: needs-decision`, not `ready`, and this is a deviation from the
   dispatch, which asked for `ready`.** `docs/01-TICKETS.md:134` "is a ticket's first state"
   defines that state as a filing that is complete and not dispatchable because it
