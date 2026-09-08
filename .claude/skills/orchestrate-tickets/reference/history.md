@@ -1792,3 +1792,116 @@ reasoned.
   script disagreed, including the `10 of 12` nobody else caught. An
   evidence-recording dispatch with no gate is not a lesser dispatch; it was the
   one that measured.
+
+## Fourteenth session — 2026-09-08
+
+**Written by the orchestrator that ran the batch, not by a records-only
+dispatch.** The errors below are mostly its own and the account is first-hand for
+that reason. Every branch fact was re-read with `git show` against
+`origin/main@b384033` rather than taken from an agent's report; where a figure is
+an agent's and was not re-derived, it says so.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **2** taken from `ready` to a gated branch — `repo-34` → #193, `repo-29` → #194 — plus **2 filed** from inside `repo-29`'s branch (`repo-37`, the 741-reference migration; `repo-38`, the `## Review` authorship conflict). Neither pull request merged during the session. **The intake that produced this board was the second one**: the first read a stale working tree and is recorded below |
+| `agents` / `dispatches` | **8** agents — 2 seam-mappers, 4 builders (**2 killed within a minute**), 2 reviewers — / **24** dispatches-and-wakes (8 spawns, 16 `SendMessage`). The wake count is the honest half: 16 relays against 8 spawns, and the two reviewers were never messaged by the orchestrator at all after their first dispatch except to re-scope a gate |
+| `builder rounds` | **~14**, of which **4 were the orchestrator's fault** — the highest fault share this page has recorded. Two whole builder dispatches were lost to a stale board; one round went to a relayed count the builder had already written correctly; and two rounds (a revert, then a restore) went to an option cost the orchestrator invented for a mechanism it had not read |
+| `gates` | **6 completed passes over 2 reviewers** — 1 on `repo-34`, 5 on `repo-29` — and **5 returned findings**. Verdicts: `repo-34` FAIL at `cd00fb4` (regraded from a proposed CONCERNS after the reviewer corrected **its own** grading); `repo-29` CONCERNS ×4 then **PASS** at `345d639`. The `repo-29` reviewer then died to a session rate limit, after delivering its PASS |
+| `wrong findings` | **3, none reached a commit, but one reached the user.** A gate's merge arithmetic was computed against `cd00fb4`, `repo-34`'s *first* commit rather than its tip — the builder caught it and the corrected finding was **worse** than the one filed. A gate's corpus sweep grepped for `UNRESOLVABLE` where `citations.mjs` prints that state as `FAIL`, silently undercounting two records — the builder caught that too. A builder's own `git grep` count of "two paths" was three by the time it committed, because the sentence recording it created the third match — the gate caught that one. **The first of the three was relayed to the user by the orchestrator before it was refuted** |
+| `subagent tokens` | **1,891,252 across the 6 agents that reported, and 2 agents missing from it.** `repo-29` builder 666,943 · `repo-29` reviewer 572,706 · `repo-34` builder 338,693 · `repo-34` reviewer 177,234 · seam-mapper (second) 73,894 · seam-mapper (first, wasted) 61,782. The two killed builders **never reported** — an agent stopped with `TaskStop` delivers no usage block, so the cost of the stale-board dispatch is structurally unmeasurable and the total is a floor for that reason as well as the usual one. Split: builders 1,005,636 · gates 749,940 · intake 135,676, of which **61,782 (46% of intake) was spent mapping a board that did not exist** |
+| `cost` | **≈ $34.42** at the 2026-09-02 rate of $0.0182/1k, recomputed from the total above. A floor over a floor: cache reads excluded, two agents absent, and the rate is six days old |
+
+### What the skill got wrong
+
+**1 · Step 1's intake is actively misleading in a shared checkout, and it cost
+two builder dispatches.** The loop says `gh pr list` first, then
+`npm run status -- --ready`, and to `git fetch` again immediately before
+dispatching. All three were done. **None of them helps**, because `git fetch`
+moves remote refs while `npm run status` computes the board from the **ticket
+files in the working tree** — and in a checkout shared with live peer sessions
+that tree sits wherever the last session left it. It was eight commits behind.
+`--ready` returned `dl-45`, `dl-46` and `repo-29`; the first two had merged hours
+earlier as `1f0f440` and `e26b393`, and `repo-31`, reported `needs-decision`, had
+been answered and merged as `ff0c8fb`. Two Opus builders were dispatched against
+finished work. Both independently spotted it inside a minute — one named the
+cause exactly — and were killed.
+
+The evidence was in the session's **first** command: the fetch printed
+`f8340b1..b384033 main -> origin/main`. A derived view was believed over the raw
+ref movement, and the failure is silent because the stale board is internally
+consistent. **Step 1 should say to compare `git log --oneline -1 HEAD` against
+`origin/main` and treat the board as unread when they differ**, and to read
+ticket state with `git show origin/main:<path>` where they do. It should also say
+not to refresh the shared checkout to fix this while `ListAgents` shows live
+peers — the fix for one session's staleness is another session's reverting index.
+
+**2 · There is no stopping rule for a ticket whose deliverable is a mechanism.**
+_Do not cap the gate count_ is right for a defect hunt and wrong here.
+`repo-29` shipped an enforcement gate, and each round found a smaller hole **in
+the enforcement itself**: a grandfather list guarded only in the shrink
+direction, then no distinctness check, then a bootstrap window reopened by
+delete-and-re-add, then a rename bypass, then a self-invalidating count. Every one
+was real, every one was reproduced by both sides, and every one was worth
+closing. It still ran **seven builder rounds and five gates** on a branch that
+had been landable since round two, and it is the single largest line in the
+batch at 1.24 M tokens across its two agents. **A mechanism ticket hardens
+without a natural floor**, because the mechanism is also the thing being
+attacked. The stopping rule has to be named at dispatch — a severity floor, a
+round budget, or "disclose below this bar" — and this skill offers none.
+
+**3 · The relay table has no row for a mechanism the *orchestrator* invents.**
+Its closest row covers relaying an option's stated mechanism out of a ticket. The
+failure here was one layer up: putting an option to the owner and **describing a
+cost for it that had never been measured**. The bootstrap closure was presented
+as needing an explicit flag that would fail the branch and require a follow-up.
+The builder had already built a closure that did neither, and reverted it rather
+than keep a declined mechanism on the grounds its own version was cheaper —
+writing the distinction into the Log with *"if that distinction changes the
+answer it is the owner's to change"*. It did. The decision was re-put and
+reversed, at the cost of a revert round and a restore round. **The rule to add:
+an option you construct yourself is a claim you are making, and it needs a
+measurement or an explicit "unverified" exactly as a relayed one does.** The
+builder's refusal to quietly keep the better code is the only reason the error
+surfaced at all.
+
+**4 · Step 9 assumes the gate record gets committed, and nothing checks it.**
+`repo-29` reached an **open pull request** carrying five gate rounds with **no
+`## Review` section in its ticket at all**, because every report arrived as a
+message rather than as a section. The skill already supplies the exact test — the
+stalled-exchange row's `git show <branch>:<ticket-path>` piped to
+`grep '^## Review'` — and the orchestrator never ran it, because that row frames
+it as a test for a *stalled exchange* rather than as a per-branch precondition for
+opening a pull request. It should be both. The builder raised the gap itself at PR
+time; nothing in the loop would otherwise have caught it before merge.
+
+**5 · Nothing covers a single agent lost permanently mid-batch.**
+[worktree-hygiene.md](worktree-hygiene.md) handles _when every agent dies at
+once_. Here one reviewer hit a session rate limit and terminated **after**
+delivering its final PASS, leaving a live branch, an open pull request and no
+reviewer. It happened to be harmless. Had it died one round earlier the branch
+would have been mid-exchange with an unreachable counterparty, and the loop's
+answer — findings go builder-to-reviewer directly — has no fallback for that.
+
+### What went right, and is worth copying
+
+- **Both reviewers corrected themselves against the rubric rather than defending
+  a verdict.** `repo-34`'s was told its FAIL looked like CONCERNS by the severity
+  table; it re-read `docs/01-TICKETS.md` itself, found the flaw was in **its own
+  grading** — it had marked an acceptance line `unproven` when it had measured the
+  claim and found it **false**, which the table grades `high` — and kept FAIL on a
+  clause it could defend, saying it would rather lose the verdict than keep it on a
+  bad footing. The orchestrator's rubric reading was the thing that was wrong.
+- **Every finding on both sides was reproduced by the other before it was
+  acted on**, in both directions, across all six gates. Two findings changed
+  direction as a result and one got *worse* on correction.
+- **A gate ran the control instead of reasoning about it, three times.** It
+  verified a shallow-clone refusal against a real `git clone --depth 1`; it proved
+  a glob-boundary canary by actually adding the file and watching it go red — and
+  the builder noted the staging detail that makes that test meaningful, since the
+  check reads the index and an unstaged sibling leaves it green; and it
+  established that an evasion **required** editing the one constant meant to catch
+  it, by testing the case without that edit, which turned a generous calibration
+  into a measured one.
+- **The full 59-entry audit was the right call and is the guarantee.** A gate
+  enumerated every founding grandfather entry — 59 of 59 honest — precisely
+  because that list is the one set the shipped mechanism can never check.
