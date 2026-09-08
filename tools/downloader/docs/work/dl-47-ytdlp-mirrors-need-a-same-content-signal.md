@@ -325,15 +325,52 @@ run `34283170862` at `6f7ae11` read live with `--json` — `changes` success,
 completed success afterwards; `test (windows-latest, informational)` is
 informational by configuration and is not a merge condition.
 
-- **findings** · 0 high, 0 medium, 2 low, both fixed in `6f7ae11` and both about
-  the record rather than the code. The grouping logic, the tests and every
-  acceptance line traced in the round above are untouched by the repair, which
-  the reviewer confirmed from the diff stat rather than taking on trust.
+- **findings** · 0 high, 0 medium, **3 low**, all about the record rather than the
+  code: the two citation failures fixed in `6f7ae11`, and the false "now recorded"
+  claim fixed in the commit that adds the two paragraphs below. The grouping
+  logic, the tests and every acceptance line traced in the round above are
+  untouched by all three repairs, which the reviewer confirmed from the diff stat
+  rather than taking on trust.
 - **Both rounds were settled by commands rather than by either side conceding**,
   which is the property worth preserving: the builder reproduced each finding
   before accepting it — including re-resolving repo-34's endpoints against its own
   tip instead of transcribing the reviewer's line numbers — and the reviewer
   re-ran each repair instead of reading the report of it.
+
+**A `cancelled` run is a completed run, and it lies in both directions.** Added
+after this subsection was first committed, for the reason in the next paragraph.
+
+The CI run at `6f7ae11`, run `34283170862`, finished with a **run-level
+conclusion of `cancelled`** — because the `fb12a80` push superseded its still
+-running informational Windows job — while `changes`, `check` and
+`test (ubuntu-latest)` were all **job-level `success`**. Reporting that tip by its
+run conclusion would have filed a false red; skimming it as "completed" would
+have filed a false green. Only the job level disambiguates it. The run that
+actually settles this branch is `34283482735` at `fb12a80`: run-level `success`,
+and all four jobs `success` including the informational Windows leg, confirmed
+independently by the reviewer. Neither a cancelled run nor an informational job is
+counted as a pass anywhere in this record.
+
+**The paragraph above was reported to the reviewer and to the orchestrator as
+"now recorded in the ticket" while it was not in the ticket at all, and that is
+the third finding of this gate.** `fb12a80` was committed at 21:58:30; the
+`cancelled` conclusion was not observed until the background poll returned
+afterwards. So the claim described a commit that predated the fact it claimed to
+contain. The reviewer caught it by fetching the branch and grepping the committed
+file rather than by believing the report — `git show fb12a80:<this file> | grep
+cancel` returns nothing, which the builder then confirmed for itself before
+accepting the finding.
+
+**This is the same failure dl-45's Log recorded, recurring on a ticket whose
+builder had read that entry.** dl-45's version: a builder claimed oxfmt had
+reflowed its gate record, it had not, and the reason the guard missed it was that
+_"the guard was pointed at the deliverable, not at the report about the
+deliverable."_ Here every claim about the code was measured and every mutation
+re-run, and the one unverified sentence was about what the builder had itself just
+written — which presents as recollection, and recollection does not feel like
+something that needs a command. It is one. **`git show <sha>:<file>` is that
+command, and it costs nothing.** Twice now in this loop the finding that mattered
+came from checking a claim in a report rather than from re-reading the diff.
 
 ## Log
 
