@@ -171,29 +171,37 @@ export const SCOPE = {
  *
  * ## What is left, which is smaller and still real
  *
- * - **A base with no copy of this file is excused, and that window is not
- *   single-use.** It is what the branch introducing this gate hits: nothing to
- *   compare against, `No history compared` printed rather than assumed, and the
- *   founding 59 entries accepted unchecked. An earlier draft said this "happens
- *   exactly once". **That is false, and it was falsified rather than argued**
- *   — a scratch repository with three commits, the middle one deleting this
- *   file and the third re-adding it with `9999` where an honest `1` had been,
- *   takes the same excused path and reports zero raised. So the window reopens
- *   once per continuous stretch of history in which this file exists.
+ * - **A base that never had this file is excused, and has to be.** It is what
+ *   the branch introducing this gate hits: nothing to compare against, `No
+ *   history compared` printed rather than assumed, and the founding 59 entries
+ *   accepted unchecked. That window cannot be closed without failing the commit
+ *   that opens it, and it stays open exactly as long as there is no earlier list
+ *   — which is once, for one branch, ever.
  *
- *   **Disclosed rather than closed, by the owner on 2026-09-08.** The first step
- *   of that route is a separately merged pull request deleting the whole
- *   citation-enforcement script, which is louder than anything this check
- *   defends against — and the branch introducing the gate is itself inside the
- *   window, so a defence would have shipped alongside the follow-up to remove
- *   it. The reasoning is the practical bar, not the mechanism: **the mechanism
- *   does not defend against this.**
+ *   **What used to be here as well, and is not any more: the same window
+ *   reopening.** An earlier draft said the bootstrap "happens exactly once";
+ *   that was falsified rather than argued, by three commits in a scratch
+ *   repository — an honest list, a commit deleting this file outright, and a
+ *   third re-adding it with `9999` where the `1` had been. The third compared
+ *   against the second reported `raised: []`. It now refuses, because
+ *   `compareAgainst` asks `git log` whether the base's history ever carried this
+ *   file: never had it is a bootstrap, had it and lost it is a deletion, and
+ *   only the first is excused. The disclosure it replaces was correct for one
+ *   day and is kept in repo-29's Log with the decision that reversed it.
  *
- *   What the founding 59 rest on instead is an audit, and it was done: every
- *   entry compared against what its record actually holds, **59 of 59 matching
- *   exactly**, none allowing more debt than exists, four re-derived through the
- *   `citations.mjs` CLI to rule out the audit script itself being the broken
- *   thing. That is the guarantee for the one list `--against` can never check.
+ *   **The founding 59 are not covered by any of that**, and no later check can
+ *   retroactively cover them — they were written before the comparison existed.
+ *   What they rest on is an audit, and it was done: every entry compared against
+ *   what its record actually holds, **59 of 59 matching exactly**, none allowing
+ *   more debt than exists, four re-derived through the `citations.mjs` CLI to
+ *   rule out the audit script itself being the broken thing. That is their whole
+ *   guarantee and restoring this check does not touch it.
+ * - **A shallow clone cannot answer "did this file ever exist here", and is
+ *   refused rather than guessed at.** `git log` over a truncated history says
+ *   "never" for a file it simply cannot see, which is the wrong answer arrived
+ *   at confidently — this ticket's entire subject. Unreachable in this repo's CI,
+ *   where the checkout is deep on purpose, and kept because the failure it
+ *   prevents is silent.
  * - **A push straight to `main` compares `main` with itself and finds nothing.**
  *   Pushing to `main` is denied and this repo squash-merges, so the pull request
  *   run is the gate; a direct push would be outside more rules than this one.
@@ -365,8 +373,44 @@ export function compareAgainst(repo, ref, current = GRANDFATHERED) {
       stdio: ["ignore", "pipe", "ignore"],
     });
   } catch {
+    // The file is absent at `ref`, and the two ways that happens are not alike.
+    //
+    // **Genuine bootstrap**: `ref` predates this gate entirely, which is every
+    // commit before the branch that introduced it. Nothing to compare against,
+    // reported and not fatal, and true exactly once per branch.
+    //
+    // **Reset**: `ref` once had this file and no longer does. That reopens the
+    // bootstrap window — re-add the file on top with any numbers at all and the
+    // comparison finds no earlier list to object to. Reproduced in a scratch
+    // repository during repo-29's third gate: three commits, the middle one
+    // deleting this file, and `9999` sails through with zero objection. It needs
+    // a separate, prior, merged pull request that deletes the enforcement script
+    // — about the loudest diff a reviewer can be shown, and nothing like a quiet
+    // number in a 60-line Map — but "a human would probably notice" is what this
+    // gate exists to stop relying on.
+    //
+    // One `git log` separates them, and refusing the second is free.
+    const everExisted = git("log", "--oneline", "--max-count=1", ref, "--", SELF).trim() !== "";
+    if (everExisted) {
+      throw new Error(
+        `--against ${ref}: ${SELF} is missing there, but that branch's history has it —\n` +
+          `it was deleted rather than never added. Re-adding this file on top of a commit that\n` +
+          `dropped it would reopen the one window in which any GRANDFATHERED number is accepted\n` +
+          `unchecked, so this refuses instead. Restore the file on ${ref} first.`,
+      );
+    }
+    // A shallow clone can answer the question above with "no history, so it
+    // never existed", which is the wrong answer arrived at confidently — the
+    // exact failure this whole ticket is about. Refuse rather than guess.
+    if (git("rev-parse", "--is-shallow-repository").trim() === "true") {
+      throw new Error(
+        `--against ${ref}: ${SELF} is missing there and this clone is shallow, so whether it was\n` +
+          `ever present cannot be told from the history available. \`fetch-depth: 0\` is what makes\n` +
+          `that answerable.`,
+      );
+    }
     return {
-      skipped: `${ref} has no ${SELF}, so there is no earlier list to compare against`,
+      skipped: `${ref} has no ${SELF} and never did, so there is no earlier list to compare against`,
       raised: [],
     };
   }

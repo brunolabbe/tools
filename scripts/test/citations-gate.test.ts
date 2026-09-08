@@ -496,6 +496,57 @@ test("a base whose list cannot be read is an error rather than an assumed empty"
   }
 });
 
+/**
+ * The reset, which is the bootstrap window reopened rather than a new hole.
+ * Delete this file in one commit, re-add it on top with any numbers at all, and
+ * the comparison used to take the same "nothing to compare against" path as a
+ * genuine first run — reproduced in a scratch repository during repo-29's third
+ * gate, where `9999` sailed through with no objection.
+ *
+ * One `git log` tells the two apart: a base that never had the file is a
+ * bootstrap, a base whose history has it is a deletion. Only the first is
+ * excused, and this asserts both sides of that.
+ */
+test("a base that once had this file and lost it is refused, not treated as a bootstrap", () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-reset-")));
+  const git = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(`git ${args.join(" ")}\n${result.stderr}`);
+    return result.stdout.trim();
+  };
+  const write = (body: string) => {
+    fs.mkdirSync(path.join(dir, path.dirname(SELF)), { recursive: true });
+    fs.writeFileSync(path.join(dir, SELF), body);
+  };
+  try {
+    git("init", "-q", "-b", "main");
+    git("config", "user.email", "reset@example.test");
+    git("config", "user.name", "reset test");
+
+    write(listing([["docs/work/a.md", 1]]));
+    git("add", "-A");
+    git("commit", "-qm", "an honest list");
+    const honest = git("rev-parse", "HEAD");
+
+    fs.rmSync(path.join(dir, SELF));
+    git("add", "-A");
+    git("commit", "-qm", "the enforcement file is deleted");
+    const deleted = git("rev-parse", "HEAD");
+
+    write(listing([["docs/work/a.md", 9999]]));
+    const inflated = new Map([["docs/work/a.md", 9999]]);
+
+    // Against the commit that still has it, the inflation is plainly an increase.
+    expect(compareAgainst(dir, honest, inflated).raised).toEqual([
+      { record: "docs/work/a.md", was: 1, now: 9999 },
+    ]);
+    // Against the commit that dropped it, this must refuse rather than excuse.
+    expect(() => compareAgainst(dir, deleted, inflated)).toThrow(/deleted rather than never added/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the CLI rejects --against with no value", () => {
   const result = spawnSync("node", [CLI, "--against"], { cwd: REPO, encoding: "utf8" });
   expect(result.status).toBe(1);

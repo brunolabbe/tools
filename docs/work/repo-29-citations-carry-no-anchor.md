@@ -1621,3 +1621,70 @@ the checkout was shallow`, exit 1 — because reporting "nothing went up" after
   commit removed, which is this ticket's genre exactly, and it is left here so
   that whoever touches that neighbourhood next has it named rather than has to
   notice it.
+
+- **2026-09-08 — the bootstrap decision was re-put and the answer moved, because
+  the cost it was first weighed against was wrong.** The closure the entry above
+  records as reverted is **restored**. Same mechanism, un-reverted rather than
+  redesigned.
+
+  **The error was in the relay, and it is recorded as that rather than as
+  anybody's oversight.** When the option was put to the owner it was described as
+  needing an explicit `--bootstrap` flag, with this branch's own CI run requiring
+  it and a follow-up to remove it after merge. That description was of a
+  mechanism the describer had not seen. The one that existed uses `git log` to
+  separate a base that never had this file from one that lost it, plus a refusal
+  where a shallow clone makes that question unanswerable, and it does **not**
+  fail this branch — `origin/main` genuinely never had the file, so the
+  legitimate path is untouched. The owner declined one object and this branch had
+  built another.
+
+  **What made the difference visible was refusing to keep the code.** The
+  previous entry could have folded the closure in quietly on the grounds that it
+  was cheaper than the thing declined; it reverted instead and wrote the
+  distinction down as the owner's to weigh. That note is what got the decision
+  re-put. A builder keeping a declined mechanism because its own version is
+  better is the failure being avoided, and avoiding it is what surfaced the
+  mis-costing — which is the argument for the rule, since the rule cost a round
+  and bought a corrected decision.
+
+  **Failed first, with the attack that found the hole, both states run rather
+  than summarised.** Three commits in a scratch repository: an honest
+  `["docs/work/a.md", 1]`; a commit deleting `scripts/citations-gate.mjs`
+  outright; a third re-adding it with `9999`.
+
+  - **Before**, at the reverted tip — against the first commit
+    `{"skipped":null,"raised":[{"record":"docs/work/a.md","was":1,"now":9999}]}`,
+    and against the deletion
+    `{"skipped":"… has no scripts/citations-gate.mjs …","raised":[]}`. **9999
+    through.**
+  - **After** — against the first commit, unchanged. Against the deletion it
+    throws: `scripts/citations-gate.mjs is missing there, but that branch's
+history has it — it was deleted rather than never added. Re-adding this file
+on top of a commit that dropped it would reopen the one window in which any
+GRANDFATHERED number is accepted unchecked, so this refuses instead.`
+
+  **And the negative control that matters more than the attack, because failing
+  it would break this branch.** A genuine first-ever bootstrap must still pass,
+  and does: `No history compared — origin/main has no scripts/citations-gate.mjs
+and never did, so there is no earlier list to compare against`, **exit 0**. The
+  wording gained `and never did`, which is the whole of the new distinction
+  showing up in the output. An ordinary comparison is untouched: `59 entr(y/ies)
+compared against 68ee870: 0 raised.`, exit 0. **That property — the legitimate
+  case still passes — is exactly what separated this mechanism from the one the
+  owner declined**, so it is asserted here rather than assumed, and pinned by a
+  test that drives both sides.
+
+  **The disclosure is narrowed again, in the same paragraph, because it was about
+  to be false.** It said in those words that _the mechanism does not defend
+  against this_. It does now, so that sentence is gone rather than left to read
+  true — the third time on this branch that a comment would otherwise have
+  survived the thing it described. What it says instead is what is actually left:
+  a base that never had the file is excused **and has to be**, since closing that
+  would fail the commit that opens it; a shallow clone is refused rather than
+  guessed at; and the reopening case is closed with the reason.
+
+  **The 59/59 audit is credited exactly as before and is not made redundant.**
+  No later check can retroactively cover entries written before the comparison
+  existed, so the founding list's guarantee is still that audit — enumerated not
+  sampled, 59 of 59 matching, four re-derived through the CLI — and the docblock
+  now says in one clause that restoring this check does not touch it.
