@@ -297,7 +297,6 @@ export const GRANDFATHERED = new Map([
   ["tools/planner/docs/work/pl-28-valhalla-adapter.md", 38],
   ["tools/planner/docs/work/pl-29-detours-along-a-leg.md", 11],
   ["tools/planner/docs/work/pl-32-vite-config-test.md", 22],
-  ["tools/planner/docs/work/pl-36-more-osm-attribution-gaps.md", 12],
 ]);
 
 /** The states that fail this gate. `unanchored` is here; that is the whole point. */

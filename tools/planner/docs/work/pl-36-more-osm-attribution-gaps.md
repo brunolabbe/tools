@@ -139,7 +139,7 @@ subsection with it.
 
 - **high** · the taxonomy acceptance line is unanswered. Resolved in round 2:
   `model-asserted`, permanently, with the argument in the Log.
-- **low** · `travel-measure.test.ts:334,335,370` carry literal NUL bytes, which
+- **low** · `travel-measure.test.ts:353-417 "names the geocoder that placed its ends"` carried literal NUL bytes on its gazetteer keys, which
   make plain `grep` return nothing on the file. Correct as `placeIdentity()`
   output — the gate mutation-tested the fixtures twice and they are
   load-bearing, not tautological — but rewritten as `placeIdentity(place(...))`
@@ -166,7 +166,7 @@ caveat Gate 1 carries, and for the same reason.
 What it reproduced rather than took on trust:
 
 - **Both new tests mutation-tested in both directions.** Deleting
-  `<RouteReading …>` at `PlanView.tsx:235` reddened the positive test; deleting
+  `<RouteReading …>` at `PlanView.tsx:235 "<RouteReading reading="` reddened the positive test; deleting
   the `reading.length === 0` guard reddened the negative. Neither is vacuous.
 - **`revision()`'s fourth parameter defaults such that every pre-existing caller
   is unchanged** — the fixture-builder change this Log flagged as the one item
@@ -203,12 +203,12 @@ the sha I was given. `git diff --stat origin/main...72f68ea` shows the branch's 
 12-file, 1020-line change (3 non-merge commits: `cc970dd`, `4c7be18`, `fc91c93`).
 All line numbers below are against this tree.
 
-| Done when                                                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                   |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A geocoded place's `Source` survives from `locate` to somewhere a reader can see it                                                                  | proven — `api/test/travel-measure.test.ts:302-384` (three tests: both ends geocoded, neither, one of two), rendering side proven by `web/test/plan-view.test.tsx:717-763`                                                                                                                                                                               |
-| A decision recorded for discovery-derived candidate provenance, and a find's sources reach it, or a reasoned argument that it stays `model-asserted` | proven — the reasoned-refusal path was taken (Log, "The decision"); enforced at `agent/src/ask.ts:71-76` (`candidateProposalSchema` omits `provenance`) and `agent/src/orchestrator.ts:367,373` (`accept` stamps `MODEL_ASSERTED` on both `provenance` and `cost.provenance`); self-certification closure proven by `agent/test/fan-out.test.ts:85-121` |
-| Whatever is rendered follows pl-29 Build step 6's copy rule                                                                                          | proven — `web/src/plan/Provenance.tsx:111` copy unchanged, asserted at `web/test/plan-view.test.tsx:690` for the new `RouteReading` section specifically                                                                                                                                                                                                |
-| `npm run check` and `npm test -- --project planner` pass                                                                                             | verified — ran both: `npm run check` exits 0; planner project reports 53 files, 823 tests passing, matching the Log. Also ran full `npm test` (115 files, 1772 tests passing), which exercises `packages/core/test/host-resolution.test.ts` against this branch — it passes and this branch touches nothing that scan covers                            |
+| Done when                                                                                                                                            | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A geocoded place's `Source` survives from `locate` to somewhere a reader can see it                                                                  | proven — `api/test/travel-measure.test.ts:312-417 "what a measured leg cites"` (three tests: both ends geocoded, neither, one of two), rendering side proven by `web/test/plan-view.test.tsx:717-763 "credits both OSM services"`                                                                                                                                                                                                                                                                                                                                         |
+| A decision recorded for discovery-derived candidate provenance, and a find's sources reach it, or a reasoned argument that it stays `model-asserted` | proven — the reasoned-refusal path was taken (Log, "The decision"); enforced at `agent/src/ask.ts:71-76 "export const candidateProposalSchema"` (`candidateProposalSchema` omits `provenance`) and `agent/src/orchestrator.ts:367 "{ ...proposal.cost, provenance: MODEL_ASSERTED }"` / `agent/src/orchestrator.ts:373 "provenance: MODEL_ASSERTED,"` (`accept` stamps `MODEL_ASSERTED` on both `provenance` and `cost.provenance`); self-certification closure proven by `agent/test/fan-out.test.ts:85-121 "a model does not get to say its own candidate was checked"` |
+| Whatever is rendered follows pl-29 Build step 6's copy rule                                                                                          | proven — `web/src/plan/Provenance.tsx:111 "is something we read at a source"` copy unchanged, asserted at `web/test/plan-view.test.tsx:700 "findByText(/background on this route/i)).toBeDefined()"` for the new `RouteReading` section specifically                                                                                                                                                                                                                                                                                                                      |
+| `npm run check` and `npm test -- --project planner` pass                                                                                             | verified — ran both: `npm run check` exits 0; planner project reports 53 files, 823 tests passing, matching the Log. Also ran full `npm test` (115 files, 1772 tests passing), which exercises `packages/core/test/host-resolution.test.ts` against this branch — it passes and this branch touches nothing that scan covers                                                                                                                                                                                                                                              |
 
 **Independently reproduced, not just read:**
 
@@ -216,16 +216,16 @@ All line numbers below are against this tree.
   tree. Against `--rev 80bfc64` one citation fails, which the Log's own pinning
   instructions already predict — not a defect.
 - No literal NUL bytes remain in `travel-measure.test.ts`, confirming the round-2 fix.
-- `KEY_SEPARATOR` at `api/src/grounding/place-key.ts:79` is the NUL escape, matching
+- `KEY_SEPARATOR` at `api/src/grounding/place-key.ts:81 "export const KEY_SEPARATOR"` is the NUL escape, matching
   the separator reused in `citations()` and in the dedup keys.
 - `costEstimateSchema` is a `.refine`d `ZodObject`, which has no `.omit` — confirms
   why `cost.provenance` is overwritten rather than schema-omitted.
 - No read of `Place.coordinates.latitude` anywhere under `web/src` — confirms the
   load-bearing premise for hanging the citation on the leg rather than on `Place`.
-- `discoveryBlock` in `agent/src/prompt.ts:229-243` renders name, kind, coordinates
+- `discoveryBlock` in `agent/src/prompt.ts:229-243 "function discoveryBlock"` renders name, kind, coordinates
   and tags, never a URL — confirms the premise behind leaving discovery-derived
   provenance `model-asserted`.
-- The corridor-endpoint `locate` at `api/src/runs/discovery.ts:484-499` does still
+- The corridor-endpoint `locate` at `api/src/runs/discovery.ts:520-530 "coordinates: outcome.value.coordinates"` does still
   discard `outcome.value.source` — the disclosed deferral is accurately described.
 - The PR title passes `node scripts/commit-message.mjs --text`.
 
