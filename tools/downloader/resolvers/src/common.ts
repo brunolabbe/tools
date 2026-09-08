@@ -6,6 +6,8 @@
  * same way — three subtly different label formats would read as three bugs.
  */
 
+import type { MediaVariant } from "@downloader/contract";
+
 /**
  * Drops `undefined` entries so an object literal can be spread into a type
  * compiled with `exactOptionalPropertyTypes`, where `{ width: undefined }` is
@@ -350,4 +352,103 @@ export function subtitleFormat(hint: string | undefined): "vtt" | "srt" | "ttml"
     if (pattern.test(claims)) return format;
   }
   return "unknown";
+}
+
+/**
+ * One address a producer found, paired with the *source's own* claim that it
+ * carries the same content as another address (dl-45, dl-47).
+ */
+export interface MirrorCandidate {
+  readonly variant: MediaVariant;
+  /**
+   * A token two candidates share **only when the source itself says they are
+   * one rendition**, or `undefined` when the source says nothing — and then the
+   * candidate is never grouped, however identical it looks.
+   *
+   * This field exists because the two producers do not share this half of the
+   * rule and must not appear to. dl-45 grouped the HLS parser's mirrors on the
+   * key below alone, then briefly reused it for the yt-dlp tier, and the gate
+   * found it merging two genuinely different audio tracks: the key is read off
+   * a mapped `MediaVariant`, `mapYtDlpInfo` is lossy, and *absence of visible
+   * difference* is not *sameness*. There is deliberately no default — a third
+   * producer must answer this question rather than inherit HLS's answer by
+   * omitting an argument.
+   */
+  readonly sameContentAs: string | undefined;
+}
+
+/**
+ * Everything about a variant except *where it is* — its identity as a
+ * rendition.
+ *
+ * Read off the built variant rather than off whatever the producer parsed, and
+ * by exclusion rather than by listing the fields that matter, for the same
+ * reason the dl-40 test compares whole objects: a field added to `MediaVariant`
+ * later is part of this key without anyone remembering to add it, and the
+ * failure mode of forgetting would be two genuinely different renditions
+ * silently merged into one. `id` and `url` are the two that must not count —
+ * `id` is positional and `url` is the thing mirrors differ in — and
+ * `alternateUrls` cannot count because it is what `groupMirrors` computes.
+ *
+ * Sorted so the key depends on the fields' contents and not on the order the
+ * builder happened to insert them.
+ *
+ * **Necessary, never sufficient.** Two candidates group only when this key
+ * matches *and* their `sameContentAs` matches, which is what stops a lossy
+ * mapping from reading its own blind spot as evidence.
+ */
+function renditionKey(variant: MediaVariant): string {
+  const entries = Object.entries(variant)
+    .filter(([key]) => key !== "id" && key !== "url" && key !== "alternateUrls")
+    .toSorted(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+  return JSON.stringify(entries);
+}
+
+/**
+ * Collapses one rendition served from several hosts into a single variant
+ * carrying the rest as `alternateUrls` (dl-45 for the manifest parser, dl-47
+ * for the yt-dlp tier).
+ *
+ * This is the *resolvers'* half and the only place the grouping may happen. The
+ * picker's collapse in `web/src/lib/variants.ts` is a presentation decision made
+ * on rendered columns, so a mirror count read off it would be a count of what
+ * the table could not tell apart rather than of what the source declared — and
+ * by the time the picker runs, the mirrors have already crossed the wire as
+ * separate variants, which is the thing dl-45 exists to stop.
+ *
+ * Order is the source's: the first declaration of a rendition is the primary,
+ * and the alternates follow in declaration order, because that is the order a
+ * player would try them in (RFC 8216 6.2.4).
+ *
+ * An address declared twice inside one group is dropped rather than kept as its
+ * own alternate — the same host is not a second server, and retrying it is the
+ * failure the engine's failover exists to avoid.
+ *
+ * Shared by two producers because the *fold* is one rule — who is primary, what
+ * an alternate list may contain, and that a repeated address is never one — and
+ * two copies of that would drift. What is deliberately not shared is the
+ * evidence: see `MirrorCandidate.sameContentAs`.
+ */
+export function groupMirrors(candidates: readonly MirrorCandidate[]): MediaVariant[] {
+  const groups = new Map<string, { primary: MediaVariant; urls: string[] }>();
+  let unvouched = 0;
+  for (const { variant, sameContentAs } of candidates) {
+    // No evidence, no grouping: a key nothing else can ever equal, so the
+    // variant passes through on its own.
+    const key =
+      sameContentAs === undefined
+        ? `unvouched ${unvouched++}`
+        : JSON.stringify(["vouched", sameContentAs, renditionKey(variant)]);
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, { primary: variant, urls: [variant.url] });
+    } else if (!group.urls.includes(variant.url)) {
+      group.urls.push(variant.url);
+    }
+  }
+
+  return [...groups.values()].map(({ primary, urls }) => {
+    const alternateUrls = urls.slice(1);
+    return alternateUrls.length === 0 ? primary : { ...primary, alternateUrls };
+  });
 }

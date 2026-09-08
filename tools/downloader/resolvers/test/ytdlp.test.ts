@@ -485,12 +485,20 @@ describe("duplicate formats from a play-options balancer (dl-40)", () => {
   const info = fixture("balancer-duplicate-ladder");
   const probe = mapYtDlpInfo(info, "https://videos.example.com/watch/reported-video", "yt-dlp", {});
 
-  test("twenty formats over ten URLs become ten variants", () => {
+  test("twenty formats over ten URLs become five rungs carrying ten addresses", () => {
     expect(info.formats).toHaveLength(20);
     expect(new Set(info.formats?.map((format) => format.url)).size).toBe(10);
 
-    expect(probe.variants).toHaveLength(10);
-    expect(new Set(probe.variants.map((variant) => variant.url)).size).toBe(10);
+    // Two layers, in this order. dl-40 drops the ten exact duplicates the
+    // play-options keys produced; dl-47 then folds each rung's mirrors into one
+    // variant. Ten addresses still reach the engine — five as primaries and
+    // five as failover paths — and none of them is lost.
+    expect(probe.variants).toHaveLength(5);
+    const addresses = probe.variants.flatMap((variant) => [
+      variant.url,
+      ...(variant.alternateUrls ?? []),
+    ]);
+    expect(new Set(addresses).size).toBe(10);
   });
 
   test("what survives is the first the extractor listed, and the mirrors are kept", () => {
@@ -499,11 +507,18 @@ describe("duplicate formats from a play-options balancer (dl-40)", () => {
     expect(probe.variants.every((variant) => variant.id.startsWith("default-"))).toBe(true);
 
     // Mirrors are *not* duplicates — different URLs, and each is a failover
-    // path. They stay here and become one row in the picker, which is a
-    // presentation question and not this layer's.
+    // path. Since dl-47 they are kept on the rung that declared them instead of
+    // reaching the picker as separate rows.
     const rung = probe.variants.filter((variant) => variant.height === 720);
-    expect(rung).toHaveLength(3);
-    expect(new Set(rung.map((variant) => new URL(variant.url).host)).size).toBe(3);
+    expect(rung).toHaveLength(1);
+    expect(rung[0]?.alternateUrls).toEqual([
+      "https://vod-b.cdn.example/hls/reported/720p/index.m3u8",
+      "https://vod-c.cdn.example/hls/reported/720p/index.m3u8",
+    ]);
+    const hosts = [rung[0]?.url, ...(rung[0]?.alternateUrls ?? [])].map(
+      (url) => new URL(url ?? "").host,
+    );
+    expect(new Set(hosts).size).toBe(3);
   });
 
   test("nothing is dropped merely for sharing a URL", () => {
@@ -542,6 +557,287 @@ describe("duplicate formats from a play-options balancer (dl-40)", () => {
     );
     expect(paired.variants).toHaveLength(2);
     expect(new Set(paired.variants.map((variant) => variant.url)).size).toBe(1);
+  });
+});
+
+/**
+ * dl-47: the tier keeps its failover mirrors, and does so only where yt-dlp
+ * itself says two addresses are one format.
+ *
+ * The pair of tests below is the whole ticket, and each is the other's guard.
+ * dl-45 briefly grouped this tier on "nothing visibly differs", which merged two
+ * genuinely different audio tracks, so a grouping test that passes on its own
+ * proves nothing here — the question is always *what it refuses to group*.
+ */
+describe("mirrors are grouped only on a positive same-content signal (dl-47)", () => {
+  /** The dl-45 gate's reproduction, verbatim: two tracks the mapper cannot tell apart. */
+  const LANGUAGE_TRACKS: YtDlpInfo = {
+    id: "two-languages",
+    title: "Two languages, neither tagged",
+    duration: 100,
+    formats: [
+      {
+        format_id: "audio-en",
+        url: "https://cdn.example/audio-en.m4a",
+        protocol: "https",
+        vcodec: "none",
+        acodec: "mp4a.40.2",
+        abr: 128,
+        format_note: "English",
+      },
+      {
+        format_id: "audio-fr",
+        url: "https://cdn.example/audio-fr.m4a",
+        protocol: "https",
+        vcodec: "none",
+        acodec: "mp4a.40.2",
+        abr: 128,
+        format_note: "French",
+      },
+    ],
+  };
+
+  test("two audio tracks the mapper cannot tell apart stay two variants", () => {
+    // The defect this ticket exists to prevent. `format_note` is where yt-dlp
+    // puts `English` / `French` / `commentary` when it has no `language`, and
+    // `MediaVariant` has nowhere to keep it — so these two map to byte-identical
+    // variants and a key built on "nothing differs" merges them. Losing the
+    // *choice* is dl-40's old complaint; what grouping would add is worse, since
+    // the discarded URL becomes a live failover target and a host failure on the
+    // English track would download French audio under the row the user picked.
+    const probe = mapYtDlpInfo(LANGUAGE_TRACKS, "https://videos.example.com/watch/x", "yt-dlp", {});
+
+    expect(probe.variants).toHaveLength(2);
+    expect(probe.variants.map((variant) => variant.url).toSorted()).toEqual([
+      "https://cdn.example/audio-en.m4a",
+      "https://cdn.example/audio-fr.m4a",
+    ]);
+    // Neither carries the other, which is the assertion a merge would break.
+    expect(probe.variants.every((variant) => variant.alternateUrls === undefined)).toBe(true);
+
+    // And the premise is checked rather than assumed: the two really are
+    // indistinguishable once mapped, so this passes because of the signal and
+    // not because some other field happened to separate them.
+    const [first, second] = probe.variants;
+    expect({ ...first, id: "", url: "" }).toEqual({ ...second, id: "", url: "" });
+  });
+
+  test("the balancer fixture's real mirrors do group, and not via format_note", () => {
+    const probe = mapYtDlpInfo(
+      fixture("balancer-duplicate-ladder"),
+      "https://videos.example.com/watch/reported-video",
+      "yt-dlp",
+      {},
+    );
+    expect(probe.variants).toHaveLength(5);
+    expect(probe.variants.map((variant) => variant.alternateUrls?.length ?? 0)).toEqual([
+      2, 1, 1, 0, 1,
+    ]);
+
+    // Not vacuous, in the direction dl-47's Done-when names. That line was
+    // written for the option this ticket did *not* take — option A keyed on the
+    // discarded `format_note`, and a discriminator present on every format would
+    // have disabled the grouping while every other assertion stayed green. The
+    // fixture carries none at all, so nothing here is being separated or joined
+    // by that field: the signal doing the work is the `format_id` family.
+    const info = fixture("balancer-duplicate-ladder");
+    expect(info.formats?.length).toBeGreaterThan(0);
+    expect(info.formats?.every((format) => format.format_note === undefined)).toBe(true);
+
+    // Not vacuous in the direction option B actually risks either: if the signal
+    // were always present, grouping would collapse back to dl-45's key and the
+    // test above would fail. Both halves are pinned, which is why they are a
+    // pair.
+  });
+
+  test("an id that merely ends in a number is not a family", () => {
+    // The signal is yt-dlp's own disambiguation of a `format_id` collision —
+    // `-0`, `-1`, … from zero — not "the id ends in a digit". `hls-1080` and
+    // `hls-720` would share the stem `hls` under a looser reading; measured
+    // against yt-dlp 2025.09.26, an id with no collision carries no suffix at
+    // all, so neither of these is evidence of anything.
+    const probe = mapYtDlpInfo(
+      {
+        id: "ladder",
+        title: "ladder",
+        duration: 100,
+        formats: [
+          {
+            format_id: "hls-1080",
+            url: "https://vod-a.example/1080/index.m3u8",
+            protocol: "m3u8_native",
+            vcodec: "avc1.640028",
+            acodec: "mp4a.40.2",
+            height: 1080,
+            width: 1920,
+            tbr: 3000,
+          },
+          {
+            format_id: "hls-720",
+            url: "https://vod-b.example/1080/index.m3u8",
+            protocol: "m3u8_native",
+            vcodec: "avc1.640028",
+            acodec: "mp4a.40.2",
+            height: 1080,
+            width: 1920,
+            tbr: 3000,
+          },
+        ],
+      },
+      "https://videos.example.com/watch/x",
+      "yt-dlp",
+      {},
+    );
+
+    // Identical once mapped — dl-45's key alone would merge them — and left
+    // alone because neither id is a disambiguated one.
+    expect(probe.variants).toHaveLength(2);
+    expect(probe.variants.every((variant) => variant.alternateUrls === undefined)).toBe(true);
+  });
+
+  test("a family with a hole in its indices is not evidence", () => {
+    // Fails closed. `YoutubeDL` numbers a collision `0..n-1`; `x-1` and `x-3`
+    // did not come from that, so they are not grouped. The cost of being wrong
+    // here is a lost failover path, never an invented one.
+    const probe = mapYtDlpInfo(
+      {
+        id: "holes",
+        title: "holes",
+        duration: 100,
+        formats: [
+          {
+            format_id: "x-1",
+            url: "https://vod-a.example/index.m3u8",
+            protocol: "m3u8_native",
+            vcodec: "avc1.640029",
+            acodec: "mp4a.40.2",
+            height: 144,
+            tbr: 209,
+          },
+          {
+            format_id: "x-3",
+            url: "https://vod-b.example/index.m3u8",
+            protocol: "m3u8_native",
+            vcodec: "avc1.640029",
+            acodec: "mp4a.40.2",
+            height: 144,
+            tbr: 209,
+          },
+        ],
+      },
+      "https://videos.example.com/watch/x",
+      "yt-dlp",
+      {},
+    );
+
+    expect(probe.variants).toHaveLength(2);
+    expect(probe.variants.every((variant) => variant.alternateUrls === undefined)).toBe(true);
+  });
+
+  test("a family whose members differ in a mapped field is still two renditions", () => {
+    // Measured against yt-dlp 2025.09.26 on a local origin (2026-09-08): a
+    // master declaring two rungs of the *same* BANDWIDTH and different
+    // RESOLUTION emits `209-0` and `209-1` — the same disambiguated shape the
+    // real mirrors have. So the family is never sufficient on its own, and the
+    // mapped variants must agree as well. This is the case that keeps the
+    // conjunction honest.
+    const probe = mapYtDlpInfo(
+      {
+        id: "same-bitrate",
+        title: "same-bitrate",
+        duration: 100,
+        formats: [
+          {
+            format_id: "209-0",
+            url: "https://vod-a.example/small/index.m3u8",
+            protocol: "m3u8_native",
+            vcodec: "avc1.42c01e",
+            acodec: "none",
+            width: 160,
+            height: 120,
+            tbr: 209,
+          },
+          {
+            format_id: "209-1",
+            url: "https://vod-b.example/large/index.m3u8",
+            protocol: "m3u8_native",
+            vcodec: "avc1.42c01e",
+            acodec: "none",
+            width: 320,
+            height: 240,
+            tbr: 209,
+          },
+        ],
+      },
+      "https://videos.example.com/watch/x",
+      "yt-dlp",
+      {},
+    );
+
+    expect(probe.variants).toHaveLength(2);
+    expect(probe.variants.every((variant) => variant.alternateUrls === undefined)).toBe(true);
+  });
+
+  test("no rendition carries an alternate on its own host", () => {
+    // The engine's failover exists to try a *different* server, so an alternate
+    // equal to the primary's address is a retry against the machine that just
+    // failed. Two things stop that independently: `dropDuplicateFormats` runs
+    // first, and `groupMirrors` refuses a URL already in the group.
+    const probe = mapYtDlpInfo(
+      fixture("balancer-duplicate-ladder"),
+      "https://videos.example.com/watch/reported-video",
+      "yt-dlp",
+      {},
+    );
+
+    for (const variant of probe.variants) {
+      const alternates = variant.alternateUrls ?? [];
+      expect(alternates).not.toContain(variant.url);
+      expect(new Set(alternates).size).toBe(alternates.length);
+    }
+  });
+
+  test("deduplicating before grouping is what keeps two families from becoming two rows", () => {
+    // dl-47 Build step 2 requires the grouping to run after
+    // `dropDuplicateFormats`, and the reason it gives — an exact duplicate
+    // becoming its own rendition's alternate — is guarded twice over, so the
+    // balancer fixture comes out identical under either order. Measured on
+    // 2026-09-08 by swapping the two calls in the compiled mapper.
+    //
+    // This is the shape where the order really does decide the answer: two
+    // play-options families over *overlapping but unequal* address sets. Group
+    // first and each family folds separately, both electing `vod-a` as primary,
+    // and the dedup that follows cannot merge them because their alternates now
+    // differ — two rows for one rendition, which is dl-40's defect rebuilt out
+    // of dl-47's field. Deduplicate first and there is one.
+    const probe = mapYtDlpInfo(
+      {
+        id: "overlapping",
+        title: "overlapping",
+        duration: 100,
+        formats: (["default-209-0", "default-209-1", "m3u8-209-0", "m3u8-209-1"] as const).map(
+          (format_id, index) => ({
+            format_id,
+            url: `https://vod-${["a", "b", "a", "c"][index] ?? "a"}.example/144p/index.m3u8`,
+            protocol: "m3u8_native",
+            vcodec: "avc1.640029",
+            acodec: "mp4a.40.2",
+            height: 144,
+            tbr: 209,
+          }),
+        ),
+      },
+      "https://videos.example.com/watch/x",
+      "yt-dlp",
+      {},
+    );
+
+    // The assertion that is sensitive to the order: no two variants may name the
+    // same primary address. Under the wrong order this is 1 distinct URL for 2
+    // variants.
+    expect(new Set(probe.variants.map((variant) => variant.url)).size).toBe(probe.variants.length);
+    expect(probe.variants).toHaveLength(2);
+    expect(probe.variants[0]?.alternateUrls).toEqual(["https://vod-b.example/144p/index.m3u8"]);
   });
 });
 

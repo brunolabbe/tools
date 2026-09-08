@@ -38,10 +38,12 @@ import { toAbortError } from "../abort.ts";
 import {
   buildLabel,
   compareVariantQuality,
+  groupMirrors,
   optional,
   resolveUrl,
   subtitleFormat,
 } from "../common.ts";
+import type { MirrorCandidate } from "../common.ts";
 import type { MediaSegment } from "../manifest/hls.ts";
 import { createFetchSizeProbe } from "../size-probe.ts";
 import { measureVariantSizes } from "../size-sample.ts";
@@ -464,19 +466,93 @@ function mapSubtitles(
  * presentation question. Both layers are needed: without this one the probe
  * result carries the duplicates for every consumer, not just the table.
  */
-function dropDuplicateFormats(variants: readonly MediaVariant[]): MediaVariant[] {
+function dropDuplicateFormats(candidates: readonly MirrorCandidate[]): MirrorCandidate[] {
   const seen = new Set<string>();
-  const kept: MediaVariant[] = [];
-  for (const variant of variants) {
-    const { id: _id, ...rest } = variant;
+  const kept: MirrorCandidate[] = [];
+  for (const candidate of candidates) {
+    const { id: _id, ...rest } = candidate.variant;
     // Entries sorted, so two variants built through different branches of
     // `optional()` cannot look different merely by key order.
     const key = JSON.stringify(Object.entries(rest).toSorted(([a], [b]) => a.localeCompare(b)));
     if (seen.has(key)) continue;
     seen.add(key);
-    kept.push(variant);
+    kept.push(candidate);
   }
   return kept;
+}
+
+/**
+ * A `format_id` that yt-dlp had to disambiguate: a stem, then a trailing
+ * decimal index. Lazy, so `default-1257-0` splits after the bitrate and not
+ * after `default`.
+ */
+const DISAMBIGUATED_FORMAT_ID = /^(?<family>.+?)-(?<index>\d+)$/u;
+
+/**
+ * The tier's answer to `MirrorCandidate.sameContentAs`: a positive signal that
+ * yt-dlp itself emitted several formats under one `format_id` (dl-47).
+ *
+ * **What the signal is.** When two or more formats reach `YoutubeDL` carrying
+ * the same `format_id`, it appends `-0`, `-1`, … to tell them apart. A trailing
+ * index is therefore the *extractor* saying it produced these as one format and
+ * the *downloader* saying it could not, which is a claim about content made by
+ * the source rather than an absence of difference observed by us. That is the
+ * whole distinction dl-47 turns on: dl-45's key asks "is anything visibly
+ * different?", and a lossy mapper answers "no" for two different audio tracks.
+ *
+ * **Measured, not read off the grammar.** yt-dlp 2025.09.26, generic extractor,
+ * against a local ffmpeg-generated origin (2026-09-08):
+ *
+ * | master playlist declares | `format_id`s emitted |
+ * | --- | --- |
+ * | one rung at two hosts, identical attributes | `209-0`, `209-1` |
+ * | two rungs at two hosts, same BANDWIDTH, different RESOLUTION | `209-0`, `209-1` |
+ * | two rungs at two hosts, different BANDWIDTH | `209`, `353` |
+ * | two `EXT-X-MEDIA` audio renditions, NAME English / French | `aud-English`, `aud-French` |
+ *
+ * Rows one and three are why this works; row four is why the reproduction stays
+ * two variants — real language tracks get distinct ids from their `NAME`. **Row
+ * two is why this signal is never enough on its own**: two genuinely different
+ * renditions also collide. `groupMirrors` requires the mapped variants to match
+ * as well, and that conjunction is what makes row two safe.
+ *
+ * **Why the index set must be exactly 0..n-1.** That is the shape `YoutubeDL`'s
+ * disambiguation produces — observed in row one above and in
+ * `balancer-duplicate-ladder.json`'s `default-1257-0/1/2`, which came from a
+ * live capture. An id that merely ends in a number (`hls-1080`) does not, so it
+ * gets no evidence and is never grouped. The check fails closed: a family with
+ * a hole stops being evidence, which loses a failover path and never invents
+ * one.
+ *
+ * **What this does not claim.** A source that gives two genuinely different
+ * tracks the same `format_id` *and* nothing else `mapYtDlpInfo` keeps would
+ * still merge. Nothing has been observed doing that, and at that point the
+ * source offers no evidence of a difference anywhere.
+ */
+function mirrorEvidence(
+  formats: readonly YtDlpFormat[],
+): (format: YtDlpFormat) => string | undefined {
+  const indices = new Map<string, Set<number>>();
+  for (const format of formats) {
+    const groups = DISAMBIGUATED_FORMAT_ID.exec(format.format_id ?? "")?.groups;
+    const family = groups?.["family"];
+    const index = groups?.["index"];
+    if (family === undefined || index === undefined) continue;
+    const seen = indices.get(family) ?? new Set<number>();
+    seen.add(Number(index));
+    indices.set(family, seen);
+  }
+  // Distinct non-negative integers all below the count is exactly `0..n-1`.
+  const complete = new Set(
+    [...indices]
+      .filter(([, seen]) => [...seen].every((index) => index < seen.size))
+      .map(([family]) => family),
+  );
+
+  return (format) => {
+    const family = DISAMBIGUATED_FORMAT_ID.exec(format.format_id ?? "")?.groups?.["family"];
+    return family !== undefined && complete.has(family) ? family : undefined;
+  };
 }
 
 export function mapYtDlpInfo(
@@ -519,7 +595,9 @@ export function mapYtDlpInfo(
     .toSorted((a, b) => (b.abr ?? b.tbr ?? 0) - (a.abr ?? a.tbr ?? 0));
   const bestAudio = audioOnly[0];
 
-  const unsorted: MediaVariant[] = usable.map((format) => {
+  const vouchesFor = mirrorEvidence(usable);
+
+  const unsorted: MirrorCandidate[] = usable.map((format) => {
     const videoCodec = realCodec(format.vcodec);
     const ownAudioCodec = realCodec(format.acodec);
     const hasVideo = videoCodec !== undefined || typeof format.height === "number";
@@ -540,7 +618,7 @@ export function mapYtDlpInfo(
     const bitrateBps =
       (bitrateOf(format) ?? 0) + (pairedAudio === undefined ? 0 : (bitrateOf(pairedAudio) ?? 0));
 
-    return {
+    const variant = {
       id: format.format_id ?? format.url ?? "0",
       protocol: mapProtocol(format.protocol),
       url: format.url ?? "",
@@ -574,9 +652,15 @@ export function mapYtDlpInfo(
         language: format.language,
       }),
     } satisfies MediaVariant;
+
+    return { variant, sameContentAs: vouchesFor(format) };
   });
 
-  const variants = dropDuplicateFormats(unsorted).toSorted(compareVariantQuality);
+  // The order is load-bearing and is Build step 2 of dl-47. An exact duplicate
+  // reaching the grouping would become its own rendition's "alternate" — a
+  // mirror on the same host, which is precisely the retry the engine's failover
+  // exists to avoid. Deduplicate first, group what is left, sort last.
+  const variants = groupMirrors(dropDuplicateFormats(unsorted)).toSorted(compareVariantQuality);
 
   const headers: Record<string, string> = {
     ...info.http_headers,
