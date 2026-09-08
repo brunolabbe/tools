@@ -139,8 +139,8 @@ Findings, all four, with what happened to each:
   own reader, one step further out. The `note` field says deferred, not refused.
 - **`--show` on a dropped ticket prints `unblocked`** (low) — **not fixed, and
   out of scope.** `describeTicket` reads `depends_on` only and never the
-  ticket's own status — `scripts/status.mjs:279`, the
-  `.filter((dependency) => dependency.status !== "done")` — so it answers "is
+  ticket's own status — `scripts/status.mjs:586 "export function describeTicket"`, the
+  `.filter((dependency) => dependency.status !== "done")` it then held — so it answers "is
   anything blocking it" for a ticket that
   is not pickable at all. **Pre-existing**: `--show pl-1` does the same thing on
   `origin/main`, untouched by this branch. Being surfaced separately; no ticket
@@ -156,7 +156,7 @@ Findings, all four, with what happened to each:
   repo-3 was filed from the branch that read this section, which is the loop
   closing rather than an inconsistency.
 
-- **`tools/planner/agent/src/grounding.ts:48` promises pl-26 forward**
+- **`tools/planner/agent/src/grounding.ts:48 "which is why this ticket did not need the guard"` promises pl-26 forward**
   (informational) — **no change.** The id leads to the file and the file answers
   the question, which is what a forward reference is for. The `note` above also
   serves that reader.
@@ -176,25 +176,31 @@ therefore what proves the new `note:` key parses rather than being rejected by
 What it established that gate 1 had not:
 
 - **`note` is read in exactly five places in `scripts/status.mjs`**, enumerated
-  at the source rather than inferred: `:41` the field schema, `:125` the typedef,
-  `:188` the normalization (`ticket.note ??= null`), `:331` `renderMarkdown`, and
-  `:473` `printTicket`. Two of those are display sites, and `OPEN` at `:48`
+  at the source rather than inferred:
+  `scripts/status.mjs:41 "note: { required: false },"` the field schema,
+  `scripts/status.mjs:230 "note: string | null,"` the typedef,
+  `scripts/status.mjs:428 "ticket.note ??= null;"` the normalization,
+  `scripts/status.mjs:650 "ticket.note ?? ticket.title,"` `renderMarkdown`, and
+  `scripts/status.mjs:879-887 "function printTicket"` `printTicket`. Two of those are
+  display sites, and `OPEN` at `scripts/status.mjs:78 "const OPEN = new Set"`
   excludes `dropped` — which is why the note reaches `--show` and no listing.
 - **The mechanism is right rather than accidentally right.** It flipped pl-26 to
   `ready` in a throwaway tree and rendered the result: `--ready` prints the title
   (that path uses `ticket.title`), while `--markdown`'s open-tickets table prints
-  the note in the "What it is" column via `:331`'s `ticket.note ?? ticket.title`.
+  the note in the "What it is" column via
+  `scripts/status.mjs:650 "ticket.note ?? ticket.title,"`.
   That is the failure the revival instruction above now names.
 - **`--ready`, the default view and `--markdown` are byte-identical between
   `2f3988d` and `37cc23c`.** The `note:` line moved `--show` and nothing else.
 
 Findings, all three, all fixed here:
 
-- **The revival instruction left the `note` in place** (`:40`) — **fixed here.**
+- **The revival instruction left the `note` in place** (this record's own Build
+  section, in the paragraph that says the way back is two edits) — **fixed here.**
   Followed literally it produced exactly the row gate 2 rendered. The way back is
   now two edits, and says which.
 - **Finding 2 of gate 1 named `describeTicket` with no `file:line`** — **fixed
-  here.** It is `scripts/status.mjs:279`. That bullet also says no ticket was
+  here.** It is `scripts/status.mjs:586 "export function describeTicket"`. That bullet also says no ticket was
   filed from here, so the citation is the whole handle the next reader gets.
 - **Gate 1's "`--json` differs by exactly 1 line" was unscoped** — **fixed
   here.** It was true of `2f3988d`, which is the commit gate 1 read; the `note:`
