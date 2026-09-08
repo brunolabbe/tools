@@ -75,6 +75,9 @@ services:
       # and every client behind the tunnel shared one five-per-minute bucket for
       # the whole hostname — see that ticket's Log if this line is ever missing
       # again.
+      #
+      # This value is `compose.prod.yaml`'s `edge` subnet, named a third time —
+      # see the `networks.edge.ipam` comment there. Change all three together.
       TRUST_PROXY: "172.30.42.0/24"
 
       # --- What is deliberately NOT set here ------------------------------

@@ -225,6 +225,7 @@ All via environment, parsed and validated once at boot with zod, `api` only.
 | `RUN_TOKEN_BUDGET`           | —          | Hard ceiling per run; degrade the roster rather than exceed it |
 | `MAX_CONCURRENT_RUNS`        | `2`        | Each run is itself a fan-out                                   |
 | `RATE_LIMIT_RUNS_PER_MINUTE` | `5`        | Runs one client may start. Zero disables it (pl-16)            |
+| `TRUST_PROXY`                | `false`    | CIDR the above trusts to name a client; never `true` (pl-38)   |
 
 ## Key decisions and why
 

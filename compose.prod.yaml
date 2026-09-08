@@ -87,7 +87,10 @@ networks:
     ipam:
       config:
         # Fixed, so `TRUST_PROXY` above can name it. If this collides with a
-        # subnet already on the host, change both together — they are one
-        # setting written twice, and a mismatch silently reverts every rate
-        # limit to sharing a single bucket.
+        # subnet already on the host, change it here and everywhere it is named
+        # — this file's own `TRUST_PROXY` above, plus `compose.planner.prod.yaml`'s
+        # if that fragment is merged too (pl-38). It is one setting written three
+        # times, not two, since the planner joined this network, and a mismatch
+        # in any one of them silently reverts that tool's rate limit to sharing a
+        # single bucket rather than refusing to boot.
         - subnet: 172.30.42.0/24

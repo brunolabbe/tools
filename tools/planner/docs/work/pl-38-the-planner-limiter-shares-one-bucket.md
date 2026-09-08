@@ -21,7 +21,7 @@ enforced by an `onRequest` hook. The limiter is per-client by construction:
 **`request.ip` is not the client behind a reverse proxy, and nothing here makes
 it one.** `tools/planner/api/src/server.ts:243` "const server = Fastify({" never passes
 `trustProxy`. The downloader's equivalent,
-`tools/downloader/api/src/server.ts:498` "trustProxy: config.trustProxy", does, and `ApiConfig` here has no such field to pass.
+`tools/downloader/api/src/server.ts:506` "trustProxy: config.trustProxy", does, and `ApiConfig` here has no such field to pass.
 
 So on the deployed shape — the planner behind `cloudflared`, which is the only
 shape `compose.planner.prod.yaml` describes — every request arrives from one
@@ -151,3 +151,55 @@ six-line function while leaving the two config-loading functions that call it
 entirely separate did not look like it paid for the seam it would need
 (what return type, what env-var name convention, whether a future third tool's
 default should differ). Worth a look if a third tool needs the same field.
+
+**2026-09-08 — gate: CONCERNS, one med addressed, one low declined, two low
+fixed.** `a8349ad3e884bee1e` reviewed `a5e31c7...a457ce0`, reproduced both
+control experiments independently (fix stashed → the new tests fail exactly as
+this Log claims; `trustProxy: true` in the untrusted-CIDR test → it fails
+exactly as designed to), and verified the CIDR mechanics against the installed
+Fastify/`proxy-addr` directly rather than by reading. Full findings: 1 med, 4
+low, 2 dropped, 1 informational-only.
+
+Reproduced and fixed:
+
+- **med, `compose.prod.yaml:90`** — its own comment said "one setting written
+  twice" (the subnet plus the downloader's `TRUST_PROXY`); this branch made it
+  a third, in `compose.planner.prod.yaml`, without updating the count. An
+  operator resolving a subnet collision by following that comment literally
+  would fix the first two and miss the third, silently reintroducing this
+  ticket's own bug on the planner side. Fixed: both compose files' comments
+  now say three, and `compose.planner.prod.yaml`'s `TRUST_PROXY` line points
+  back at `compose.prod.yaml`'s, closing the one-directional cross-reference
+  the gate also named.
+- **low, ticket citation** — `tools/downloader/api/src/server.ts:498` had moved
+  to `:506` (pre-existing staleness on `main`, not introduced by this branch).
+  Repointed; `node scripts/citations.mjs tools/planner/docs/work/pl-38-...md`
+  now reports `3 verified, 0 moved`, exit 0.
+- **low, `01-ARCHITECTURE.md` Configuration table** — added a `TRUST_PROXY` row
+  beside `RATE_LIMIT_RUNS_PER_MINUTE`.
+
+Declined: **low, `docs/02-DEPLOYMENT.md:221`** ("Rate limits silently stop
+working if `TRUST_PROXY` is wrong" undersells the malformed-value case, which
+actually refuses the boot). Pre-existing, out of this ticket's diff, and the
+gate offered it as optional ("decline freely"). A malformed `TRUST_PROXY`
+failing loudly is true and is not this ticket's own claim to fix.
+
+Not mine to act on: **low, `pl-2`'s Traps section** still states "no rate
+limiting and no `TRUST_PROXY`" as fact, and both halves are now false. `pl-2`
+is a live, in-flight ticket held by another session
+(`/workspaces/tools/.claude/worktrees/pl-2-planner-compose-service`) — editing
+its brief from here risks colliding with that session's own work. The gate
+already escalated this to the orchestrator as an open decision rather than
+telling me to change it; agreed with that handling.
+
+Agreed with the gate's judgment on the fold-in call (leave the duplicated
+`trustProxy()` parser alone on this branch; the orchestrator decides whether to
+lift it later) and on the two dropped findings (the log line now carrying a
+visitor IP is not a redaction violation; `TRUST_PROXY=2` refusing the boot is
+correct, matches the downloader, and nothing documents hop counts as
+available). No action taken on either.
+
+Re-gated after the three fixes: `npm run check` — exit 0, same pre-existing
+`no-await-in-loop` warnings, none on a changed line. `npm test -- --project
+planner` — 848/848, unchanged from before these fixes (none of the three
+touched test-covered code). `npm run format` — no drift.
