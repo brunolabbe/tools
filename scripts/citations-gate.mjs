@@ -140,8 +140,10 @@ export const SCOPE = {
  * failure is already happening and is better loud than silent. repo-29's Log
  * carries the decision and the measurement behind it.
  *
- * ## What the ratchet does not defend against, stated because an earlier draft
- * ## of this docblock implied it did
+ * ## What the ratchet does not defend against
+ *
+ * Stated because an earlier draft of this docblock implied it defended against
+ * all of it.
  *
  * **A number that is exactly right is always silent, so a deliberate silencer
  * still gets through.** Reproduced by repo-29's gate, three runs on one record:
@@ -165,7 +167,11 @@ export const SCOPE = {
  *
  * Whether to go further is an open question in repo-29's Log, not a gap somebody
  * forgot: a per-entry justification, or a history-aware check in a job that
- * fetches more than one commit, are both real options with real costs.
+ * fetches more than one commit, are both real options with real costs. The
+ * second is not hypothetical here — this workflow's `changes` job already takes
+ * `fetch-depth: 0` for exactly that reason, and says so — but it is a different
+ * job, and moving this step into one that fetches a history is a change to when
+ * the gate runs and not only to what it checks.
  *
  * **Adding to it is not the way past a red gate.** A new `## Review` section
  * comes with anchors; that is what `.claude/skills/review-ticket/SKILL.md` now
