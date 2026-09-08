@@ -236,7 +236,7 @@ jobs:
   # every one of the 11. All of them failed on the *same* assertion, in this
   # repository's own `scripts/citations.mjs` checker making a POSIX path
   # assumption — not eleven Windows problems, one unfixed tooling regression
-  # (repo-33) holding a veto over every unrelated merge. So the leg keeps the
+  # (repo-36) holding a veto over every unrelated merge. So the leg keeps the
   # signal and loses the veto.
   #
   # Two things this deliberately is not. It is **not** removal: the paragraph

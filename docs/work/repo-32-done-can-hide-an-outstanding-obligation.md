@@ -121,8 +121,8 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
    decision, not part of the original filing — see the Log entry of that date
    for the provenance and the cost. Concretely: `windows-latest` is now
    non-blocking ([repo-31](./repo-31-the-windows-leg-is-almost-all-red.md)), it
-   is red for repo-33 (`docs/work/repo-33-citations-loses-the-record-path.md`, unmerged at the time of writing, on `origin/repo-33-citations-windows-paths`),
-   and nothing forces anyone to notice. "`windows-latest` is red for repo-33" is
+   is red for repo-36 (`docs/work/repo-36-citations-loses-the-record-path.md`, unmerged at the time of writing, on `origin/repo-33-citations-windows-paths`),
+   and nothing forces anyone to notice. "`windows-latest` is red for repo-36" is
    an `awaiting` line, so the field is the nearest mechanism this repo has. The
    build has to decide **what it attaches to**, and that is the part with no
    obvious answer — every instance in "The reproduction" hangs an obligation on
@@ -130,12 +130,12 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
    a standing condition of the repository. Three shapes worth costing before
    picking, none of them free:
    - `awaiting` on repo-31, which incurred it. Cheapest, and wrong the moment
-     repo-33 merges and the leg goes green for a reason repo-31 knows nothing
+     repo-36 merges and the leg goes green for a reason repo-31 knows nothing
      about.
-   - `awaiting` on repo-33, the ticket whose merge closes it. Fits the field's
+   - `awaiting` on repo-36, the ticket whose merge closes it. Fits the field's
      grain — an obligation closed by an event — but reverses its direction: this
-     one is not "repo-33 is unfinished", it is "the board is unfinished until
-     repo-33 lands".
+     one is not "repo-36 is unfinished", it is "the board is unfinished until
+     repo-36 lands".
    - A board line owned by no ticket. Honest about what it is, and the largest
      change: it means `status.mjs` renders something computed from more than
      frontmatter, which is the thing adr/003 spent a whole record making sure
@@ -322,3 +322,15 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
   recorded above as a question for the owner rather than settled here — it
   decides what `awaiting` means, which is this ticket's decision to make and not
   a reviewer's.
+
+- **2026-09-08** — Step 4 of the Build above, and its three costed options, named
+  `repo-33` as the ticket whose merge turns the `windows-latest` leg green. That
+  ticket was renumbered to **`repo-36`** —
+  `docs/work/repo-36-citations-loses-the-record-path.md`, still on branch
+  `repo-33-citations-windows-paths` (#186) — after a peer session filed and
+  merged a different `repo-33` (ADR 004's compose rename, #192). Two tickets
+  claiming one id makes `node scripts/status.mjs --json` exit 1, and that is the
+  board gate. The Build section was repointed because a future builder acts on
+  it; the Log entries below the fold keep their original wording, since they
+  record what was true when they were written. The `awaiting` design question
+  step 4 poses is unchanged — only the id in it moved.

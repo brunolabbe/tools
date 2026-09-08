@@ -690,3 +690,23 @@ kills the process tree"` was run: 1 passed, and the marker file contained
 
   No change to `.github/workflows/ci.yml` in this commit, and none needed —
   the implementation is what was measured.
+
+- **2026-09-08** — **The `citations.mjs` regression this ticket points at is now
+  `repo-36`, not `repo-33`.** A peer session filed a different `repo-33` — ADR
+  004's compose rename — and merged it to `main` in #192 while this batch was
+  open, so `origin/main` carries a `repo-33` that is not the one referred to
+  above. Two tickets on one id makes `node scripts/status.mjs --json` exit 1,
+  which is the board gate, so the batch's own ticket was renumbered rather than
+  the merged one. `ci.yml`'s comment on this branch was repointed to `(repo-36)`
+  in the same change; the branch it lives on is still named
+  `repo-33-citations-windows-paths`, and branch names were deliberately left
+  alone because renaming one closes and reopens its pull request.
+
+  **Everything above this entry is left exactly as written.** The Review block
+  and the earlier Log entries record what was known at the time under the old id
+  — including two quoted artifacts that would become false if edited:
+  `node scripts/next-id.mjs repo` genuinely printed `next free: repo-33`, and the
+  commit subject quoted in the Review block genuinely ends `(repo-33)`. Only
+  present-tense pointers were renumbered, here and in repo-32's Build section.
+  A reader hitting `repo-33` above should read it as "the ticket now called
+  repo-36", never as the peer's ADR-004 ticket.

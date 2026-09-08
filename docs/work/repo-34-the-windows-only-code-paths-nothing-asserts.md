@@ -134,6 +134,9 @@ assertion".
   (option D). Id taken as `repo-34` on instruction: `node scripts/next-id.mjs
 repo` reported `next free: repo-33`, and `repo-33` was held at that moment by
   a builder whose branch was not yet pushed, so the script could not see it.
+  (That ticket was renumbered to `repo-36` on 2026-09-08, after a peer
+  session's own `repo-33` merged first in #192; the measurement above is left as
+  it was taken.)
   `repo-34` was checked free by grep over both ticket roots on this branch.
 
   Filed rather than folded into repo-31's branch for two reasons, both concrete.
