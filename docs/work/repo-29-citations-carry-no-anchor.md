@@ -1555,3 +1555,69 @@ the checkout was shallow`, exit 1 — because reporting "nothing went up" after
   It was found only because the branch's third check ranks `unchecked` above
   `unanchored` and flagged a transition neither of the other two would call a
   regression — the check disagreeing with its author, one more time.
+
+- **2026-09-08 — gate 3: one `med`, falsified rather than argued, and disclosed
+  rather than closed on the owner's answer.** The docblock claimed the bootstrap
+  window — a base with no copy of this file, which reports `No history compared`
+  and passes — "happens exactly once". It does not. It reopens once per
+  continuous stretch of history in which the file exists.
+
+  **The reproduction, with its steps rather than a summary of them.** A scratch
+  repository, three commits: the first carrying a real gate with an honest
+  `["docs/work/a.md", 1]`; the second **deleting `scripts/citations-gate.mjs`
+  outright**; the third re-adding it with `9999` in place of the `1`. Comparing
+  the third against the first gives
+  `{"raised":[{"record":"docs/work/a.md","was":1,"now":9999}]}` — caught.
+  Comparing it against the second gives
+  `{"skipped":"… has no scripts/citations-gate.mjs …","raised":[]}` — **9999
+  through, zero objection**, on the same code path as an ordinary first run. Run
+  here as well as by the gate, and it is why the claim above is now narrowed in
+  place instead of restated.
+
+  **Answered by the owner: disclose, do not build a defence.** Two facts decided
+  it, and both belong on the page rather than in a transcript. The route's first
+  step is a **separately merged pull request deleting the whole
+  citation-enforcement script** — louder than anything this check defends
+  against, which is the gate's own calibration and it is right. And the branch
+  introducing the gate is _itself_ inside the window, so a defence would have
+  shipped together with the follow-up to remove it. **The reasoning is the
+  practical bar, not the mechanism: the mechanism does not defend against this**,
+  and the docblock now says so in those words.
+
+  **Disclosed here as a builder's note, because this branch had already built the
+  closure before the answer arrived.** It was a `git log` distinguishing a base
+  that never had the file from one that lost it, plus a refusal on a shallow
+  clone where that question cannot be answered; it passed its tests and did _not_
+  fail this branch, because `origin/main` genuinely never had the file. **It is
+  reverted, not kept** — the option the owner declined was described as failing
+  this branch, and mine did not, so the two are not the same object and the
+  difference is recorded rather than resolved by keeping the code. If that
+  distinction changes the answer it is the owner's to change; a builder holding
+  on to a declined mechanism because its own version is cheaper is the thing this
+  note exists to not be.
+
+  **What the disclosure rests on, and it is not the mechanism.** Every one of the
+  59 founding entries was audited by the gate against what its record actually
+  holds — enumerated, not sampled — and **59 of 59 matched exactly**, with none
+  allowing more debt than its record has and four re-derived through the
+  `citations.mjs` CLI to rule out the audit script itself being the broken thing.
+  Those 59 are the one list `--against` can never check, so that audit is their
+  whole guarantee and it is written down here for that reason.
+
+  **The caveat the entry above left standing is discharged, by someone with a
+  route this worktree did not have.** That entry recorded the workflow change as
+  **not** machine-validated — no YAML parser here, no network to fetch one — and
+  offered a `cat -A` indentation comparison as the named substitute. The gate had
+  network: `js-yaml` parses `.github/workflows/ci.yml` cleanly, and `actionlint`
+  v1.7.12 returns **0 errors and 0 warnings**. Read the earlier caveat as
+  discharged rather than as still open. The substitute was labelled a substitute
+  at the time, which is the only reason this is a discharge and not a correction.
+
+  **One thing left undone on purpose.** A third comment in `ci.yml` still calls
+  this job's clone "depth-1" after the checkout stopped being one. The gate
+  raised it explicitly as _not_ a finding — the paragraph under it carves out
+  `--against` correctly, so no reader is misled — and this round was scoped to
+  documentation about the residual. It is a true sentence about a state the same
+  commit removed, which is this ticket's genre exactly, and it is left here so
+  that whoever touches that neighbourhood next has it named rather than has to
+  notice it.

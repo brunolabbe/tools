@@ -171,11 +171,29 @@ export const SCOPE = {
  *
  * ## What is left, which is smaller and still real
  *
- * - **This branch's own 59 entries are not covered**, and cannot be: the commit
- *   they are compared against has no copy of this file, so the first run reports
- *   `No history compared` and passes. That is the bootstrap, it is printed
- *   rather than assumed, and it happens exactly once — but it means the initial
- *   list is only as good as the review that read it.
+ * - **A base with no copy of this file is excused, and that window is not
+ *   single-use.** It is what the branch introducing this gate hits: nothing to
+ *   compare against, `No history compared` printed rather than assumed, and the
+ *   founding 59 entries accepted unchecked. An earlier draft said this "happens
+ *   exactly once". **That is false, and it was falsified rather than argued**
+ *   — a scratch repository with three commits, the middle one deleting this
+ *   file and the third re-adding it with `9999` where an honest `1` had been,
+ *   takes the same excused path and reports zero raised. So the window reopens
+ *   once per continuous stretch of history in which this file exists.
+ *
+ *   **Disclosed rather than closed, by the owner on 2026-09-08.** The first step
+ *   of that route is a separately merged pull request deleting the whole
+ *   citation-enforcement script, which is louder than anything this check
+ *   defends against — and the branch introducing the gate is itself inside the
+ *   window, so a defence would have shipped alongside the follow-up to remove
+ *   it. The reasoning is the practical bar, not the mechanism: **the mechanism
+ *   does not defend against this.**
+ *
+ *   What the founding 59 rest on instead is an audit, and it was done: every
+ *   entry compared against what its record actually holds, **59 of 59 matching
+ *   exactly**, none allowing more debt than exists, four re-derived through the
+ *   `citations.mjs` CLI to rule out the audit script itself being the broken
+ *   thing. That is the guarantee for the one list `--against` can never check.
  * - **A push straight to `main` compares `main` with itself and finds nothing.**
  *   Pushing to `main` is denied and this repo squash-merges, so the pull request
  *   run is the gate; a direct push would be outside more rules than this one.
