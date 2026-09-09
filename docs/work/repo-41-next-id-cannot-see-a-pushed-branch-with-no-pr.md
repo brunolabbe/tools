@@ -125,6 +125,30 @@ implying the race is closed by covering state 3.
 - A new row lands in `scripts/test/next-id.test.ts`, verified failing against
   the guard it tests before the guard existed.
 
+## Review
+
+**Gate: PASS** — 2026-09-09 · initial gate at `origin/main...f6df0f8`, re-gated after fixes through `f63db55` · reviewer's own defect hunt (`ticket-reviewer` subagent, no nested `code-review` dispatch), medium depth
+
+Initial gate at `f6df0f8` was **FAIL** on one high finding. The builder reproduced both findings independently and fixed them at `2ee209d`; I re-verified both fixes independently before this PASS. `f63db55` added only the owner's ruling on the clash-noise decision, which changed no code — I read that commit and it does not affect the verdict below.
+
+| Done when                                                                                                                           | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The reproduction in the Why section, or an equivalent fixture, no longer reports `next free` on an id a pushed branch already holds | `scripts/test/next-id.test.ts:277 "expect(nextFree(result)).toBe(40)"` (proven) — plus verified live: at the branch tip, `node scripts/next-id.mjs pl` reports `branch/pl-17-image-closure` and `branch/worktree-pl-19-pin-through-the-browser`, both genuinely pushed with no open PR, ids matching each branch's real diff; the same command under `origin/main`'s script shows neither row                                                                                                                                                                                                                 |
+| The Log states, in one sentence each, which of the four states this fix covers and which it does not                                | proven — this ticket's own Log carries one bullet per state, each one sentence, covered/not-covered stated plainly; corroborated by the mirrored table at `.claude/skills/orchestrate-tickets/reference/concurrency.md:243 "yes since repo-41"` and `:244 "no, and no sweep of a remote ever will"`                                                                                                                                                                                                                                                                                                           |
+| A new row lands in `scripts/test/next-id.test.ts`, verified failing against the guard it tests before the guard existed             | verified — I reran all 7 claimed mutations myself against the unmodified `branchSources`: dropping the wiring (4 failed/17 passed), the branch name as claim (3/18), the `unread:` note (3/18), `render`'s notes (1/20), the merge-base fallback (1/20 — the assertion at `scripts/test/next-id.test.ts:716 "const sources = branchSources({ cwd: peer, rev:"` is the one that reddens), `ls-remote`→`for-each-ref` (the fixture-case assertion reproduces exactly), and three-dot→`ls-tree -r` (3/18). I also reran the finished 21-test file against `origin/main`'s `next-id.mjs`: **6 failed, 15 passed** |
+
+- **high, fixed** · this branch's edit to `docs/01-TICKETS.md` reflowed a paragraph by one line, shifting `docs/work/repo-29-citations-carry-no-anchor.md`'s `## Review` citation off its line — a break `npm run check` cannot see and `scripts/citations-gate.mjs` (CI's own step, `.github/workflows/ci.yml:190 "citations-gate.mjs"`) catches. Not unique to this branch: three of four branches in this batch broke the same coordinate independently, each caught by its own gate. Fixed at `2ee209d` by re-pointing repo-29's citation forward one line, in this branch's own commit. Re-verified by me at `f63db55`: `node scripts/citations-gate.mjs` → exit 0, `23 enforced, 0 failing`; `--against origin/main` → exit 0, `0 raised`.
+- **low, fixed** · the ticket's Log first claimed "five new cases" and a "5 failed, 15 passed" fail-first baseline; the file actually gained six new tests, and replaying the finished spec against `origin/main`'s script gives 6 failed, not 5. Fixed at `2ee209d` — the Log now explains why (the sixth, orphan-branch case was written after that baseline run, once the no-merge-base hazard was found) and carries the re-measured figure, which I independently reproduced.
+- **dropped** · none — this gate ran its own defect hunt directly (I am the `ticket-reviewer` subagent; no nested `code-review` dispatch), and found nothing beyond the two findings above.
+- **findings** · 2 returned, 2 carried (both fixed and re-verified before this PASS), 0 dropped.
+- NFR: security n/a (no shell invocation added; `spawnSync` with argument arrays throughout, matching the file's existing pattern) · performance — measured ~0.28s added per sweep, matching the `ls-remote` round-trip cost recorded at decision time · reliability ✓ (the no-merge-base fallback is exercised by its own fixture test and by my independent orphan-branch reproduction below) · maintainability — the Log's self-correction on both findings, explained rather than merely patched, is itself the maintainability story here.
+
+**Independently reproduced, not just re-read.** I built my own orphan-branch fixture — a bare remote plus `git checkout --orphan`, outside the branch's own test file — and called `branchSources` directly against it: confirmed the real 128 "no merge base" failure, confirmed the fallback fires, confirmed the sweep still answers rather than dying, and confirmed the over-claim (a file the orphan branch actually deletes) is disclosed in the returned note rather than absorbed silently. I also ran the tool against the live remote for both the `pl` and `repo` prefixes at the branch tip and against `origin/main`'s version side by side: for `repo`, a currently pushed, PR-less branch (confirmed via `gh pr list`) produces new `branch/…` rows and clashes on this branch's version and none on `origin/main`'s, while `next free: repo-44` is unchanged in both, because every currently PR-less branch on today's board holds an id already merged; the `pl` case is where the visible rows and the clash set differ in kind, not just in count.
+
+**Reasoned, not measured — Windows.** `vitest.config.ts:53 "testTimeout: 30_000"` and the recorded 9194 ms / 71 ms ratio (~130×) are as the ticket states. I measured the two new real-git tests locally at 101 ms and 71 ms (close to the ticket's 105/84 ms; ordinary spawn variance) and extrapolated ~13.1 s / ~9.2 s against the 30 s budget — comfortable, but an extrapolation of a ratio measured on a different test's spawn count, not a Windows run. Neither I nor the builder can run `windows-latest` to confirm directly.
+
+**Not a finding, confirmed implemented as described.** The clash-noise decision (a `branch/…` row clashing with `merged` on a stale, squash-merged branch) is the ticket's own settled decision; I did not re-open it. The specific clash counts move with the remote — I measured 6 clash lines from 3 stale branches on a live `pl` sweep the same day the ticket's Log recorded 5 from 2 — that is the remote changing, not the mechanism, and the mechanism matches `concurrency.md`'s description exactly.
+
 ## Log
 
 **2026-09-08 — filed jointly, from pl-38's branch.** Found by the orchestrator
@@ -389,3 +413,24 @@ from a different test's spawn count applied to these two.** Neither the builder
 nor the gate can run `windows-latest`, and both said so rather than reporting a
 clean result. If either case ever goes flaky there, this is the paragraph that
 predicted where.
+**2026-09-09 — transcription note, by the builder.** The `## Review` section
+above is the reviewer's own text, requested as the section it wanted committed
+and committed as sent. I asked for it rather than composing one from its
+messages, which would have put my words over its name — the same reason
+repo-30's Log gives. **Nothing was altered**, including the coordinates: all six
+resolve, verified against the real committed file rather than against the
+reviewer's scratch copy —
+`node scripts/citations.mjs … --section Review --require-anchors --require-distinct-anchors`
+→ `6 verified, 0 moved, 0 unanchored`, exit 0, after `oxfmt` had run on it.
+
+**The one hazard worth recording, because it is structural and neither of us
+had it at first.** A `## Review` section is inserted **above** `## Log`, so its
+own height shifts every Log line beneath it — which means a `file:line` citation
+into _this_ file cannot be pre-resolved by either party: the value depends on the
+length of a section that has not been written yet. I flagged it before the
+reviewer drafted, it kept every coordinate pointed at other files and stated the
+four-state and fail-first claims in prose, and it then dry-ran the checker
+against a spliced scratch copy rather than trusting care alone. That is why this
+section needed no repair on landing. A gate record that cites its own ticket by
+line number is a `citations-gate.mjs` failure waiting for whoever formats the
+file next.
