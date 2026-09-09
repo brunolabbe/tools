@@ -190,7 +190,7 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
 **PASS.** Reviewed by a `ticket-reviewer` subagent on Sonnet; the branch was
 built on Opus, so the two halves of this section were written by different
 models. Transcribed by the builder, which is the model under review, per
-`docs/01-TICKETS.md:349 "So the reviewer reports and the builder writes"`.
+`docs/01-TICKETS.md:350 "So the reviewer reports and the builder writes"`.
 
 | `Done when`                                                        | Verdict                                                                 | What proves it                                                                                                                                                                         |
 | ------------------------------------------------------------------ | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

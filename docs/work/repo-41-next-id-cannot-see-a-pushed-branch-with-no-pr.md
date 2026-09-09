@@ -340,14 +340,13 @@ longer than the four it replaced, which pushed every later line in that file
 down by one — including line 293, which
 `docs/work/repo-29-citations-carry-no-anchor.md:549` cites by number with the
 anchor `"So the reviewer reports and the builder writes"`. The gate went red,
-`1 moved`, exit 1, and `npm run check` stayed 0 throughout. Confirmed by hand:
-that sentence is at `:293` in `git show origin/main:docs/01-TICKETS.md` and at
-`:294` here. Fixed by bumping repo-29's citation to `:294` in this branch,
-because this branch is what moved the line — not by rewording the paragraph
-back to four lines, which would tune this file's prose to protect a coordinate
-in another and leave the same trap for the next editor. Now: gate exit 0,
-`23 enforced, 0 failing`, and `--against origin/main` reports
-`45 entr(y/ies) compared, 0 raised`, so the grandfathered list did not grow.
+`1 moved`, exit 1, and `npm run check` stayed 0 throughout. Fixed by bumping
+repo-29's citation forward, in this branch's own commit, because this branch is
+what moved the line — not by rewording the paragraph back to four lines, which
+would tune this file's prose to protect a coordinate in another and leave the
+same trap for the next editor. **The number that fix carries has since changed
+twice; see the rebase note at the end of this Log rather than trusting a value
+quoted here.**
 
 **The general lesson, since this is the second time the class has landed:** a
 markdown edit that changes a paragraph's _line count_ is a code change to every
@@ -434,3 +433,88 @@ against a spliced scratch copy rather than trusting care alone. That is why this
 section needed no repair on landing. A gate record that cites its own ticket by
 line number is a `citations-gate.mjs` failure waiting for whoever formats the
 file next.
+
+**2026-09-09 — rebased onto `origin/main@16d9874`, and the coordinate
+re-derived rather than re-applied.** repo-32 (#204), repo-42 (#205) and
+repo-43 (#206) merged while this branch was open. repo-32 was the first of the
+three branches in this batch that all edit `docs/01-TICKETS.md`, so its shift
+landed first and this branch's was suddenly computed against a tree that no
+longer existed. PR #207 went conflicting — **history shape, not content**, and
+anticipated rather than a defect.
+
+**The number, measured on the rebased tree and not taken from anyone:** the
+anchor `"So the reviewer reports and the builder writes"` is at
+`docs/01-TICKETS.md:350`. So `docs/work/repo-29-citations-carry-no-anchor.md:549`
+now cites `:350`. It has been three different values in two days —
+
+| tree                                            | line    |
+| ----------------------------------------------- | ------- |
+| `origin/main@435ee35`, before any of this batch | 293     |
+| this branch alone on that base                  | 294     |
+| `origin/main@16d9874`, after repo-32 landed     | 349     |
+| this branch rebased on top of that              | **350** |
+
+— and **both sides of the merge conflict were wrong**: `HEAD` offered `:349`
+(right for `main`, blind to this branch's own fold-in) and this branch offered
+`:294` (right for the old base, blind to repo-32's). The orchestrator supplied
+349 as a measured fact and explicitly said not to take it on faith; it was
+right to, because the answer is 350. Verified unique in that file
+(`grep -c` → 1) before resolving.
+
+**Every citation in the `## Review` section re-resolved after the rebase**, not
+assumed: `6 verified, 0 moved, 0 unanchored`, exit 0, anchors and distinctness
+required. Four of the six point at files nothing in the three merges touched;
+`ci.yml:190` and both `concurrency.md` coordinates were the ones genuinely at
+risk and all three still resolve.
+
+**What was deliberately _not_ edited.** The rebase rewrote every commit sha, so
+the `## Review` section's references to `2ee209d` and `f63db55` name commits
+that no longer exist. They are **left exactly as the reviewer wrote them** — a
+gate record is that agent's text, and silently rewriting shas inside somebody
+else's verdict is the edit a gate record exists to forbid. The mapping is
+`f6df0f8 → aaf5b27`, `2ee209d → 1d814f3`, `f63db55 → fa56b47`, `78f2ba9 →
+a18d736`; nothing in the section's findings, verdict or measurements changed,
+only the names history gave them.
+
+**The shape, since this batch hit it three times and that makes it a pattern
+rather than an incident.** A committed record that cites a line by number in a
+file other branches also edit is a claim with a shelf life measured in merges.
+Three of four branches here broke the same coordinate independently, each found
+by its own gate — which is the system working, but it cost three rebases to
+repair one sentence. The cheap fix is the anchor text, which is why
+`citations-gate.mjs` demands one: `:350` will rot again and
+`"So the reviewer reports and the builder writes"` will not, so the checker can
+always tell you the new number. **Whoever merges after this branch will get 350
+wrong too, and should re-derive rather than copy it from this table.**
+
+**Same rebase — a second record broken by the same one line, found only because
+the gate's output was read by name.** After the rebase,
+`node scripts/citations-gate.mjs` came back **exit 1**, and the failing record
+was not this ticket and not repo-29: it was
+`docs/work/repo-32-done-can-hide-an-outstanding-obligation.md`, whose own
+`## Review` section cites the _same_ sentence at `docs/01-TICKETS.md:349`.
+repo-32 only merged an hour ago, so that record did not exist on the base this
+branch was cut from and no earlier run of this gate could have seen it.
+
+Confirmed as this branch's doing rather than inherited breakage:
+`git show origin/main:docs/work/repo-32-…md` cites `:349`, and
+`git show origin/main:docs/01-TICKETS.md` has the anchor at `:349` — correct on
+`main`, broken only once this branch's extra line sits on top. Re-pointed to
+`:350`, the same measured value repo-29 got, in this branch's own commit for the
+same reason. **This adds a seventh file to the diff**, which is a scope change
+worth stating plainly rather than letting a reviewer discover.
+
+**The habit this earned, and it is the whole point of the instruction to read
+the record's name.** `exit 1` alone would have sent me to repo-29, which was
+already correct; the failing record was one I had never touched and had no
+reason to suspect. A gate that names what failed is worth more than one that
+returns a number, and a builder who reads only the number will fix the wrong
+file and re-run into the same red.
+
+So the count for this batch is not three branches breaking one coordinate. It is
+**one coordinate, cited from three separate records** — repo-29's, repo-32's,
+and whatever repo-38 carries — each shifting the others every time one of them
+edits `docs/01-TICKETS.md`. That is not a rebase problem to be solved by
+sequencing merges; it is what a line number costs when three records point at
+one sentence. The anchor text is the durable half, which is why
+`citations-gate.mjs` requires it.
