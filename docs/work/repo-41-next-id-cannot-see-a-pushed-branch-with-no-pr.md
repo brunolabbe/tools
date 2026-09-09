@@ -335,3 +335,57 @@ that touches `docs/` done.
 decision entry above: it does not close the id race. A peer's local, unpushed
 branch is unreachable, a pushed branch you have not fetched is read by name
 only, and no command run at time T sees a claim made at T+1.
+
+**2026-09-09 — the clash-noise question, put to the owner and settled.** The
+build raised one decision it would not take itself, because it is about output
+legibility and the ticket delegated the sweep's _shape_, not its noise budget.
+Recorded in full so the next reader finds a decision rather than an oversight:
+
+> **Question.** A `branch/…` row whose id `merged` already holds prints as a
+> `clash:`. Most of those are stale branches whose work has squash-merged and
+> which nobody deleted. Is that noise worth its signal?
+>
+> - **(a) Leave it, documented.** Every line printed is true, and a squash
+>   merge leaves a branch unrelated to `main` by ancestry, so no cheap test
+>   distinguishes a stale branch from one genuinely duplicating a merged id.
+> - **(b) Suppress a `branch/…` row whose ids `merged` already holds.** Quieter,
+>   and it blinds the tool to the case it exists to catch.
+> - **(c) Keep the row, stop calling branch-vs-`merged` a clash.** Keeps the
+>   information, loses the "this branch should be deleted" signal.
+>
+> **Answer: (a).** `idsIn`'s own docblock already decides this tie —
+> over-reporting a claim costs a reader one glance, under-reporting one is the
+> entire failure the script exists to prevent — and (b) trades that the wrong
+> way.
+
+**Provenance, stated because it cannot be verified from inside a builder's
+sandbox.** This is a **relay**: the orchestrator says it put the three options
+to the repo owner as framed above and that the owner chose (a). Nothing in this
+worktree can confirm that an owner was asked or answered, so it is recorded as
+a relayed decision and not as an owner signature. It changed no code — (a) is
+what was already built and already recommended — so if the relay were wrong the
+cost would be a stale paragraph, not a wrong tool. **It overrode nobody**, which
+is the only reason it is safe to record on a relay at all; an answer that
+_reversed_ the recommendation would deserve a direct confirmation before
+anything moved.
+
+**The clash counts in the entry above are a snapshot of the remote, not a
+property of the tool.** That entry recorded five clash lines from two stale
+branches on a `pl` sweep. Measured again the same day by the orchestrator and
+independently by the gate: **six clash lines from three stale branches**. Nothing
+changed in the code between those runs — branches were pushed to `origin` in
+between, which is precisely the state this ticket taught the sweep to see. **A
+different count is not a regression**, and any future reader comparing against a
+number in this Log is comparing against a remote that no longer exists. The
+mechanism is what is stable, and it is described in `concurrency.md`.
+
+**Windows remains extrapolated, not run — recorded as reasoned rather than
+measured.** The gate independently confirmed the arithmetic (`testTimeout` is
+`30_000` in `vitest.config.ts`; the recorded 9194 ms / 71 ms ratio is ~130×) and
+measured the two new real-git cases locally at 101 ms and 71 ms against my
+105 ms and 84 ms — ordinary spawn variance. That extrapolates to ~13.1 s and
+~9.2 s against a 30 s timeout, which is comfortable. **It is still a ratio taken
+from a different test's spawn count applied to these two.** Neither the builder
+nor the gate can run `windows-latest`, and both said so rather than reporting a
+clean result. If either case ever goes flaky there, this is the paragraph that
+predicted where.
