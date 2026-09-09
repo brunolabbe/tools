@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.0](https://github.com/brunolabbe/tools/compare/downloader-v0.3.0...downloader-v0.4.0) (2026-09-09)
+
+
+### Features
+
+* **downloader:** carry a rendition's failover mirrors and use them (dl-45) ([#189](https://github.com/brunolabbe/tools/issues/189)) ([1f0f440](https://github.com/brunolabbe/tools/commit/1f0f440294f9815f1370430affcdfc4e7cea75fb))
+* **downloader:** gate the analyse and download progress on real events (dl-43) ([#178](https://github.com/brunolabbe/tools/issues/178)) ([277a182](https://github.com/brunolabbe/tools/commit/277a1820d15bb7706140ebae5ec1db55fdb8cb9a))
+* **downloader:** persist the thumbnail beside the file so the preview outlives the store (dl-44) ([#183](https://github.com/brunolabbe/tools/issues/183)) ([8e51232](https://github.com/brunolabbe/tools/commit/8e51232a3d73539ec1972d260d2f8136f938fd2e))
+* **downloader:** show the preview in a completed download's result panel (dl-41) ([#158](https://github.com/brunolabbe/tools/issues/158)) ([b228efb](https://github.com/brunolabbe/tools/commit/b228efb0660dac9a20286e85142e5d2c35e67949))
+
+
+### Fixes
+
+* **downloader:** group the yt-dlp tier's mirrors on a same-content signal (dl-47) ([#199](https://github.com/brunolabbe/tools/issues/199)) ([742b175](https://github.com/brunolabbe/tools/commit/742b1752dd2336ab5fc8297d780a6eaf5e0152f3))
+* **downloader:** rate-limit the probe stage channel and the thumbnail route (dl-46) ([#188](https://github.com/brunolabbe/tools/issues/188)) ([e26b393](https://github.com/brunolabbe/tools/commit/e26b393492838cf8f288eb079bd3a7db686be2ae))
+* **downloader:** scope the TLS-rejection correlation to endpoints, not hosts (dl-38) ([#160](https://github.com/brunolabbe/tools/issues/160)) ([d6d201e](https://github.com/brunolabbe/tools/commit/d6d201e7e74aafe8af138fcd3eeaa9e2be412f14))
+* **downloader:** stop the direct tier claiming audio it never checked (dl-42) ([#159](https://github.com/brunolabbe/tools/issues/159)) ([53b57ad](https://github.com/brunolabbe/tools/commit/53b57adafdccf92b9871daac428c2abf0c532f31))
+* **downloader:** stop the picker listing one rendition many times (dl-40) ([#169](https://github.com/brunolabbe/tools/issues/169)) ([1514e43](https://github.com/brunolabbe/tools/commit/1514e43497953674ef51655264bbeb7d05013bb7))
+
 ## [0.3.0](https://github.com/brunolabbe/tools/compare/downloader-v0.2.0...downloader-v0.3.0) (2026-09-05)
 
 
