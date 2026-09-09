@@ -58,7 +58,7 @@ It is also the tool's first artifact. Today the planner exists only as a
 
 ## Traps
 
-**The downloader's Access policy is not a template.** Four differences, and the
+**The downloader's Access policy is not a template.** Three differences, and the
 first is not a hardening preference:
 
 - **No Bypass rule.** The downloader's on `/api/files/*` is bought by a 256-bit
@@ -69,15 +69,23 @@ first is not a hardening preference:
   visitor shares one store and can read and edit everyone's trips. Until a user
   model lands, an Access allowlist is not a precaution around the data model; it
   is the only configuration in which that model is coherent.
-- **No rate limiting and no `TRUST_PROXY`.** `ApiConfig` has neither. This
-  matters more once `CHAT_PROVIDER` is real: an open endpoint is a stranger
-  spending a token budget, with `MAX_OUTPUT_TOKENS` capping one reply and
-  nothing capping the number of replies. A Cloudflare WAF rate limiting rule is
-  the only layer available until the tool grows its own.
 - **Streaming replies will meet Cloudflare's 100-second idle timeout.** The
   downloader survives it only because of the 15-second heartbeat in
   `routes/events.ts`. Build the same thing in with the streaming rather than
   diagnosing it after.
+
+Rate limiting is no longer a difference from the downloader's: this bullet used
+to read "No rate limiting and no `TRUST_PROXY`. `ApiConfig` has neither," which
+this Traps section carried as fact from 2026-08-14 until now, past both halves
+going false under it. `rateLimitRunsPerMinute` landed with pl-16 (`ApiConfig`
+at `tools/planner/api/src/config.ts:187`, default 5 at `:247`, read from
+`RATE_LIMIT_RUNS_PER_MINUTE` at `:422`, wired into the run queue at
+`tools/planner/api/src/server.ts:237`, enforced on `POST /api/plans` by
+`routes/plans.ts:56-57`), and
+`TRUST_PROXY` landed with [pl-38](./pl-38-the-planner-limiter-shares-one-bucket.md).
+The token-budget argument this bullet made still holds — an open endpoint is
+still a stranger spending `MAX_OUTPUT_TOKENS`'s budget once `MODEL_PROVIDER` is
+real — it is just no longer this ticket's gap to name.
 
 ## Review
 
@@ -212,3 +220,18 @@ exact failure with a live unauthenticated endpoint on the other side of it.
 One thing the brief got right and is worth restating: the trap about the
 downloader's policy not being a template is the most valuable paragraph in this
 ticket, and the reason it now appears in the deployment page in full.
+
+**2026-09-08 — the Traps section's rate-limiting bullet corrected, from
+pl-38's branch.** "No rate limiting and no `TRUST_PROXY`. `ApiConfig` has
+neither" had been true when this section was written on 2026-08-14 and stayed
+in the file after both halves stopped being true — rate limiting landed with
+pl-16, before pl-38's own gate even started, and the second half closed on
+pl-38 itself. The `## Review` section above already reflected the corrected
+world (`f82a77c`'s gate ran after pl-16), so the ticket had been contradicting
+itself: a Traps bullet asserting a gap forty lines above a Review section that
+did not see one. `status` is left `in-flight` — that is a separate, already
+recorded question about the third `Done when` line being true of a machine
+rather than a branch, and this correction does not touch it. Made from
+pl-38's worktree rather than this ticket's own, because pl-2 was not checked
+out live at the time; flagged and cleared with the session that had been
+holding it before this edit was made.
