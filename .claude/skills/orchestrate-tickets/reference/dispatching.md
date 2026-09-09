@@ -226,10 +226,17 @@ section transcribed verbatim and `citations-gate.mjs` failed it anyway — a
 indistinct, because `scripts/citations.mjs`'s anchor check counts a fragment's
 occurrences across the whole file (`occurrences: hits.length`, `locateAnchor`
 run over the full content) with no exclusion for the line doing the citing.
-Repairing that — a full path instead of a bare `:NNN`, a named section instead of
-a self-citation — touches no verdict, row or severity in the section, so it is
-not the builder editing the model under review's own judgement. Make that repair
-and commit it; do not read it as breaking verbatim, and do not leave the next
+**Repairing that means not citing the ticket's own file at all — a full path
+does not help.** Indistinctness comes from the anchor occurring twice in the
+*target* file: once at the cited line, once inside the citation quoting it. A
+full repo-relative path changes which file resolves, not how many times the
+anchor occurs there, so it stays indistinct (measured: a self-citation by full
+path still reports `anchor starts on 2 lines`, `1 anchor(s) not distinct`).
+Name the section, the date or the heading instead of a coordinate when citing
+the ticket's own file — a cross-file citation is unaffected and needs no
+change. That repair touches no verdict, row or severity in the section, so it
+is not the builder editing the model under review's own judgement. Make it and
+commit it; do not read it as breaking verbatim, and do not leave the next
 builder caught between an unsatisfiable rule and a red gate.
 
 ### Addressing, which is where this loop actually failed

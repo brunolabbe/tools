@@ -348,3 +348,61 @@ origin/main` exits 1 at this tip. `repo-29`'s own already-committed `## Review`
 --project repo` (288/288, 6/6) all still green; `node
 scripts/citations-gate.mjs --against origin/main` still exits 1, unchanged,
   because the `high` is deliberately untouched.
+
+- **2026-09-09, owner's rulings** — Both open decisions this ticket's gate
+  exchange escalated are answered by the repo owner, relayed by the
+  orchestrator with provenance for each, since neither agent in this exchange
+  can verify authority from inside its own sandbox.
+
+  **Ruling 1, on the `high`: repair the coordinate (option a).** Options put
+  to the owner were the two the reviewer framed: repoint the citation inside
+  the other ticket's own already-committed gate record, or shrink the
+  paragraph that moved it back to its original height. The owner chose to
+  repoint it, matching the reviewer's own recommendation. Two supporting facts
+  the orchestrator measured and put to the owner alongside the question: the
+  splice warning this repo's own records reference carries is about softening
+  a verdict, not correcting a coordinate; and a sibling branch in the same
+  batch already does the identical repair to the identical file, unremarked.
+  Repointed the one citation, touching nothing else in that record. Both forms
+  of the citation gate went from exit 1, naming that record, to exit 0 with
+  nothing named — reproduced independently by both agents in this exchange.
+
+  **Ruling 2, on the `med`: verbatim wins (option a of the reviewer's three).**
+  `.claude/skills/orchestrate-tickets/reference/dispatching.md`'s "Send the
+  findings in full; the builder writes the section down" section had argued
+  the opposite of what this ticket just settled — that verbatim transcription
+  was nowhere in the rule. Corrected it: the reviewer's returned section is
+  what gets committed, unedited; completeness governs a different, earlier
+  question, what has to reach the builder before it commits anything. Both
+  measured historical examples that section carried were kept intact —
+  every concrete fact, every citation, every quoted test name — and only the
+  evaluative conclusion drawn from one of them ("the section was correct") was
+  reversed, which is what the ruling licenses and nothing more.
+
+  Folded in the evidence the orchestrator asked for: a self-citing `## Review`
+  section fails the distinctness check even when transcribed verbatim, because
+  the anchor-occurrence count runs over the whole file with no exclusion for
+  the line doing the citing. Verified the mechanism myself in
+  `scripts/citations.mjs` before writing it down, and initially wrote the wrong
+  first-listed repair for it (a full path in place of a bare line number) —
+  the reviewer reproduced that a full path does not change the occurrence
+  count and stays indistinct, and corrected it to the repair that actually
+  works: not citing the ticket's own file at all. Fixed in the same file.
+
+  **Tried twice to trim the `dispatching.md` correction below the "paragraph
+  or two" the orchestrator asked for, and it did not shrink.** Both attempts
+  landed back near the same size, because leaving either historical example's
+  stated conclusion standing would have left the section directly
+  contradicting the rule it was being corrected to state — an internally
+  contradictory governing document being a worse outcome than a longer diff.
+  Flagged the size to both the reviewer and the orchestrator before
+  proceeding rather than deciding alone that it was fine; the reviewer read
+  the whole section afterward and said it had not drifted and would not have
+  trimmed it further.
+
+  Gates re-verified at each step: `npm run check` exit 0, `npx vitest run
+--project repo` 288/288 across 6 files, `node scripts/status.mjs --json`
+  exit 0, and both `node scripts/citations-gate.mjs` and the same command with
+  `--against origin/main` at exit 0 with `23 enforced, 0 failing` and nothing
+  raised — the condition that had failed every round since it first
+  appeared.
