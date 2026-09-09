@@ -336,10 +336,11 @@ the rules in this repo's `CLAUDE.md` files and `.claude/rules/` that each exist
 because something once went wrong.
 
 **The model that wrote the code does not gate it.** The skill dispatches a
-subagent on the other of Opus and Sonnet, and the caller appends what comes back
-without editing it. A model reading its own work re-runs the reasoning that
-produced it, so the blind spot is correlated and a second pass mostly re-derives
-the first one's confidence.
+subagent on the other of Opus and Sonnet, and what it returns is appended to the
+ticket without editing it — who does the appending is stated once, below, not
+here. A model reading its own work re-runs the reasoning that produced it, so
+the blind spot is correlated and a second pass mostly re-derives the first
+one's confidence.
 
 **The builder commits the gate, in the branch under review** — not the reviewer.
 A reviewer works in a worktree that is thrown away once its record is pushed and
@@ -348,7 +349,11 @@ written into nothing: the finding travels back as a message and the record does
 not travel at all. `repo-1` went through
 two gates and neither existed in the repo afterwards, which is how it was
 noticed. So the reviewer reports and the builder writes the section down, with
-the date, the verdict, and **both halves named above**:
+the date, the verdict, and **both halves named above**. The rule itself, and the
+disclosure note it now requires of the builder, are stated in
+[`.claude/skills/review-ticket/SKILL.md`](../.claude/skills/review-ticket/SKILL.md)
+— this page names the shape of the record, not the fullest account of who
+writes it or why:
 
 - **The acceptance table** — one row per `Done when` line, each naming the test
   that proves it (`file.test.ts:88`, not "covered"), with the verdict from the

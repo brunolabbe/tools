@@ -13,10 +13,10 @@ and only one of them is already built — so this skill runs `code-review` for t
 first question and spends its own effort on the rest.
 
 The output is a `## Review` section **committed to the ticket file by the
-caller**, because `docs/01-TICKETS.md` already holds that the file is the unit of
+builder**, because `docs/01-TICKETS.md` already holds that the file is the unit of
 work from brief to record. A verdict that lives in a terminal scrollback is not a
 record — and neither is one written into a worktree that is about to be deleted,
-which is the sharper version of the same rule and the reason the caller commits
+which is the sharper version of the same rule and the reason the builder commits
 it rather than the reviewer.
 
 **Unless the pull request only *files* a ticket**, in which case the record goes
@@ -110,27 +110,43 @@ exists to protect. To see what is running, `ListAgents`. To probe one that looks
 stalled, send it a message (see `orchestrate-tickets`, which explains why a quiet
 worktree is not a liveness signal). To end a runaway, `TaskStop`.
 
-**The subagent returns the `## Review` section as text; the caller commits it to
-the ticket, on the branch under review, verbatim.** It returns it rather than
-writing it, and that is the correction repo-1 forced: a reviewer works in a
-worktree that is thrown away when it reports, so a section written *there* was
-written into nothing. Two consecutive gates on repo-1 left no trace in the repo
-at all, and the failure is silent in the worst way — the caller saw a
-correctly-formatted gate, believed it was recorded, and only the third reviewer
-thought to ask what a later reader could check it against.
+**The subagent returns the `## Review` section as text; the builder commits it to
+the ticket, on the branch under review, verbatim, and discloses its own
+authorship.** It returns it rather than writing it, and that is the correction
+repo-1 forced: a reviewer works in a worktree that is thrown away when it
+reports, so a section written *there* was written into nothing. Two consecutive
+gates on repo-1 left no trace in the repo at all, and the failure is silent in
+the worst way — the caller saw a correctly-formatted gate, believed it was
+recorded, and only the third reviewer thought to ask what a later reader could
+check it against.
 
-So the caller writes it into `tools/<tool>/docs/work/<id>-*.md` above `## Log`,
+**The builder, not the caller that dispatched the reviewer, is the one who
+commits it** — in a dispatched loop those are two different sessions, and it is
+the builder who already holds write access to the branch. That costs the
+independence a separate transcriber would buy: the subject of the review
+becomes its own transcriber, and the disclosure note below plus the posted
+report (step 8) are what is left standing in its place.
+
+So the builder writes it into `tools/<tool>/docs/work/<id>-*.md` above `## Log`,
 in the branch's own commit, then runs `npx oxfmt` on the ticket file — markdown is
 formatted in this repo, and an unformatted table fails `npm run check`, which is
 the merge gate. Formatting is not a rewrite and does not conflict with committing
 it verbatim: it pads table cells to column width and touches nothing else.
 
-**Verbatim is the whole point, and it is now the caller who could break it.**
+**Verbatim is the whole point, and it is now the builder who could break it.**
 Under the old wording a caller that edited the section had "handed the review back
-to the model under review"; under this one the caller is transcribing a verdict on
-its own work, which is the same hazard with a longer reach. Change nothing —
+to the model under review"; under this one the builder is transcribing a verdict
+on its own work, which is the same hazard with a longer reach. Change nothing —
 not a severity, not a row, not a hedge. If you disagree with a row, say so in the
 Log under your own name, and leave the row standing.
+
+**The disclosure note is required, not a habit.** Alongside the section, say in
+as many words that you transcribed it and name what you altered or dropped from
+the reviewer's text — "nothing" is a fine answer and still has to be said,
+because the note, not an assumption of good faith, is what a later reader checks
+the section against. Before this ticket the note had appeared three times in the
+corpus, all on one ticket (`repo-30`) and nowhere else — a habit one builder had,
+not a rule every builder followed.
 
 **Then post the reviewer's report to the pull request thread** — see step 8. That
 is what makes the transcription checkable: the section in the ticket and the
@@ -143,8 +159,8 @@ opinion, it is two gates and no rule saying which one counts.
 
 ## Steps
 
-These are the reviewing subagent's steps, not the caller's — except step 8, which
-is the caller's alone.
+These are the reviewing subagent's steps, not the builder's — except step 8, which
+is the builder's alone.
 
 1. **Read the ticket** — `tools/<tool>/docs/work/<id>-*.md`. Its **Done when**
    lines are the acceptance criteria; its **Build** steps and traps are what the
@@ -177,7 +193,7 @@ is the caller's alone.
    **Two findings that are one mechanism may share a bullet** — say so in it
    ("two findings, one mechanism") so the arithmetic still reconciles against the
    `findings` line below. Merging is a presentation choice and a reasonable one;
-   merging silently is how a count stops adding up, and the caller is then left
+   merging silently is how a count stops adding up, and the builder is then left
    guessing whether one was dropped.
 
    This paragraph is here because it has already happened twice, in consecutive
@@ -302,11 +318,13 @@ is the caller's alone.
 
 7. **Decide the gate by the rule below, not by feel**, and **return** the section
    as text. Do not write it to the ticket yourself: your worktree is discarded
-   when you report, so a file you edit here goes nowhere. The caller commits it.
+   when you report, so a file you edit here goes nowhere. The builder commits it.
 
 8. **Commit the section, post the report, then say what would clear it.** This
-   step is the caller's, and it has three acts. First write the returned section
-   into the ticket above `## Log`, verbatim, in the branch's own commit — and
+   step is the builder's, and it has three acts. First write the returned section
+   into the ticket above `## Log`, verbatim, in the branch's own commit, together
+   with the disclosure note — say that you transcribed it and name what you
+   altered or dropped from the reviewer's text, "nothing" included — and
    before that commit, run `node scripts/citations.mjs <ticket> --section Review
    --require-anchors --require-distinct-anchors` over it and fix what it says. That is the check CI is
    about to run; catching it here costs one command, and catching it in CI costs
@@ -425,5 +443,5 @@ have.
 
 It does not fix what it finds unasked. The reviewing subagent fixes nothing at
 all — a model asked to both judge and repair is back on the wrong side of the
-split this skill exists to draw — and the caller proposes the work in step 8
+split this skill exists to draw — and the builder proposes the work in step 8
 rather than starting it.

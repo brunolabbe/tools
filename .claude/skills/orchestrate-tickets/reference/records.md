@@ -138,10 +138,11 @@ discarded. So:
     base, or a `main` commit.
 
   **A committed record can be spliced by a later edit, and nothing here catches
-  it.** `review-ticket` spends several paragraphs protecting "the caller commits
-  the gate record **verbatim**", and frames the threat as the caller editing a
-  reviewer's words. The realistic threat is different: a *later* agent, appending
-  something unrelated, splicing into the record it is not touching.
+  it.** `review-ticket` spends several paragraphs protecting "the builder commits
+  it to the ticket, on the branch under review, **verbatim**" (repo-38), and
+  frames the threat as the builder editing a reviewer's words. The realistic
+  threat is different: a *later* agent, appending something unrelated, splicing
+  into the record it is not touching.
 
   The mechanism, verified in this repo: an agent anchored its insertion on the
   bare string `## The gate on this filing`, which also appears **backticked inside
