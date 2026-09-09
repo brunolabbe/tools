@@ -120,9 +120,10 @@ for a builder to commit — name them for their branch and gate number.
 parallel builders, other sessions on the same machine, and unmerged branches all
 draw from it. Assign ids yourself when two builders might file tickets.
 
-**The next free id is the union of the files on `main` and the files in every open
-PR.** Not `git log --all`, not `ls docs/work/`, not the PR list — each of those
-misses a different half, and both halves were hit within one session:
+**The next free id is the union of the files on `main`, the files in every open
+PR, and the files on every branch the remote has.** Not `git log --all`, not
+`ls docs/work/`, not the PR list — each of those misses a different half, and
+both halves were hit within one session:
 
 - `git log --all | grep '(pl-N)'` over commit **subjects** missed `pl-29`, because
   a ticket is routinely *filed* in a commit whose subject names a different
@@ -132,23 +133,30 @@ misses a different half, and both halves were hit within one session:
   mirror reason: they live in PRs titled for `dl-18` and `dl-19`. A peer session
   reached for `dl-20` on exactly that reasoning.
 
-Commit subjects and PR titles both lie, in opposite directions. Only the file list
-is reliable — and the ticket format keeps that list in **two** roots, `docs/work/`
-for `repo-` and `tools/*/docs/work/` for a tool prefix, so a sweep that reads one
-of them answers from half the namespace without saying so:
+Commit subjects and PR titles both lie, in opposite directions. **Branch names
+are the same kind of claim and lie the same way** — repo-41's reproduction is
+`docs/work/repo-39-….md` sitting on a branch called
+`repo-37-anchor-planner-review-corpus`, so a sweep of branch *names* would have
+answered `repo-39` and been just as wrong. Only the file list is reliable — and
+the ticket format keeps that list in **two** roots, `docs/work/` for `repo-` and
+`tools/*/docs/work/` for a tool prefix, so a sweep that reads one of them answers
+from half the namespace without saying so:
 
 ```bash
 node scripts/next-id.mjs <prefix>     # repo, dl, pl …
 ```
 
 It prints **every claimant with its source**, then any id two sources both hold,
-then the first free one:
+then anything it could not read in full, then the first free one:
 
 ```
 merged repo-29
 merged repo-30
 PR#174 repo-31
-clash: repo-31 is claimed by PR#174, PR#175
+branch/repo-31-a-peer-pushed-this repo-31
+clash: repo-31 is claimed by PR#174, branch/repo-31-a-peer-pushed-this
+unread: branch wip-not-fetched-here is on origin at 9c1f0ab, which is not in this
+  checkout — only its name was read; run `git fetch origin` and re-run for its files
 next free: repo-32
 ```
 
@@ -156,6 +164,21 @@ The maximum alone is what made two real collisions unreadable — `26` with no
 source cannot be told from `26` while somebody is already sitting on 27. Above
 the merged high-water mark, every id belongs to somebody, and the point is to see
 who.
+
+**Read `unread:` as "this answer is short by an unknown amount".** A branch the
+remote has but your checkout has not fetched cannot have its files read at all —
+measured, `git cat-file` and `git diff` both exit 128 on such a sha — so only its
+name is scanned, and a branch named `wip-…` holding a ticket file contributes
+nothing. `git fetch origin` and re-run before you rely on the number.
+
+**Expect `branch/…` rows to clash with `merged`, and do not read that as a
+defect.** Measured 2026-09-09 on a `pl` sweep: five clash lines, all true, all
+from two branches whose work had already squash-merged and which nobody deleted.
+A squash merge leaves the branch unrelated to `main` by ancestry, so no cheap
+test tells "stale" from "genuinely duplicating a merged id", and the script's own
+rule decides it — over-reporting a claim costs one glance, under-reporting one is
+the failure the whole page is about. A `branch/…`/`merged` clash usually means
+that branch should be deleted.
 
 **It was a fenced snippet on this page until repo-30, and it was wrong the whole
 time.** That is the argument for it being a file: the work is mechanical, it must
@@ -174,6 +197,10 @@ verified by removing each one in turn, not by assertion.
 | break ties by input order | two rows holding one id swap between runs |
 | swallow a failing `gh pr list` | the merged half alone, exit 0 — which is the original defect exactly |
 | drop the advice on a missing default rev | `fatal: Not a valid object name origin/main` and nothing else, which is what every CI runner and every shallow clone gets |
+| drop the branch source (repo-41) | a **pushed branch with no pull request** is in neither of the other two sources, so a ticket file already committed and pushed on one is handed out as free. Measured on `main` at `a5e31c7`: `next free: repo-39` while `docs/work/repo-39-….md` was on `repo-37-anchor-planner-review-corpus` |
+| read `refs/remotes/origin/*` instead of `ls-remote` | wrong in both directions at once — a plain `git fetch` does not prune, so it keeps branches the remote deleted (**twelve refs against the remote's five**, measured), and it cannot see a branch pushed since your last fetch at all |
+| `ls-tree` a branch instead of diffing it | every ticket file the branch *contains* becomes a claim, so `main` itself and every long-lived branch cut from it re-report the whole merged set and clash on every id |
+| drop the `unread:` line | a branch the remote has and this checkout has not fetched claims nothing at all if its name carries no id — silently, which is the defect wearing one more costume |
 
 **The codes are each child's own, so which one you see says which command
 failed — and on a fresh checkout that is `git`, not `gh`.** A default
@@ -205,6 +232,21 @@ real one. A branch is not a claim until it has a commit, and no command run at
 time T sees a claim made at T+1. Which makes the next paragraph load-bearing
 rather than polite.
 
+**repo-41 closed one of the four states and left the one that incident was
+open.** Say the four out loud, because "the sweep now reads branches" is exactly
+the sentence that gets read as a lock:
+
+| where an id can be claimed | seen? |
+| --- | --- |
+| merged on `origin/main` | yes — `git ls-tree` over both ticket roots |
+| a file in an open pull request's diff | yes — `gh pr diff --name-only` |
+| a file on a **pushed branch with no pull request** | yes since repo-41 — `git ls-remote --heads` plus a three-dot diff per head, **provided that branch's commit has been fetched here**; if it has not, only its name is read and an `unread:` line says so |
+| a peer's **local, unpushed** branch | **no, and no sweep of a remote ever will.** This is the state the 2026-09-06/07 collisions actually were |
+
+So the coordination below is not a belt on top of a working lock. It is the only
+thing that covers the fourth row, and the fourth row is the one that has actually
+bitten.
+
 **When another session shares the repo, say which ids you hold and ask what it
 holds.** A message costs almost nothing (see below) and a collision costs a
 rename across a file, a branch and every commit that mentions it.
@@ -216,11 +258,13 @@ coordinate for five sessions without naming either, which is most of why it did
 not happen — `git worktree list` shows you that a peer *exists*, and only these
 two let you ask it anything.
 
-**And do it early, because the file-list rule cannot see a peer's unmerged work.**
-The union-of-files command above is still the right way to pick an id, and it is
-still blind to a branch that exists only in another session's worktree: in the
-third session a peer held `dl-26` — invisible on `main`, invisible in every PR
-title — and it was an id this session had already handed to a builder. Nothing
+**And do it early, because the file-list rule cannot see a peer's unpushed work.**
+The union-of-files command above is still the right way to pick an id, and since
+repo-41 it does see a peer's branch **once that branch is pushed and fetched
+here**. It is still blind to one that exists only in another session's worktree:
+in the third session a peer held `dl-26` — invisible on `main`, invisible in every
+PR title, and it would still be invisible today — and it was an id this session
+had already handed to a builder. Nothing
 broke only because that builder did not need it. The message is what finds this,
 so send it as soon as `git worktree list` or `gh pr list` shows work that is not
 yours.
