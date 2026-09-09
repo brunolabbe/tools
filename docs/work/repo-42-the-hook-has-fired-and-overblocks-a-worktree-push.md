@@ -319,6 +319,75 @@ safe to take, the same way repo-15 re-read the ruleset rather than assuming it.
   `--project` name covers it before relying on `npm test -- --project <name>`
   instead).
 
+## Review
+
+**Gate: PASS** — 2026-09-09 · `origin/main (435ee35)...b4c695a` · self-run defect
+hunt (ticket-reviewer) at medium
+
+| Done when                                                                | Proof                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Decision answered and recorded in the ticket                             | ✓ — this record's own "Decision — answered 2026-09-09 by the repo owner" section states the answer as (c) and says in the same paragraph that it overrode the ticket's own recommendation, with (a) left labelled "Recommended — not chosen" so the override stays visible. Named by section rather than by coordinate: see the builder's note below               |
+| Test reproduces the worktree false positive (red) then passes (green)    | `scripts/test/hooks.test.ts:350 "leaves a push with no refspec alone"` and `scripts/test/hooks.test.ts:376 "consults no checkout at all"` — **verified**: reverted the hook to `origin/main`'s copy and reran; `2 failed`, `31 passed`, 33 total, first failure named the split-directory pair; restored the fix, `33 passed (33)` at both `4f8f29b` and `b4c695a` |
+| Header's two stale claims read true against the shipped code             | `.claude/hooks/check-main-writes.sh:92 "IT HAS NOW BEEN OBSERVED TO FIRE"` and `.claude/hooks/check-main-writes.sh:144 "IT OVER-BLOCKS IN ONE PLACE THAT IS KNOWN"` — **verified** true, including the round-2 repair below                                                                                                                                        |
+| `npm run check` green, `npx vitest run scripts/test/hooks.test.ts` green | **verified** directly at `b4c695a`: exit 0, 33/33                                                                                                                                                                                                                                                                                                                  |
+
+- **resolved** · `.claude/hooks/check-main-writes.sh:92 "IT HAS NOW BEEN OBSERVED TO FIRE"`
+  — flagged as low in round 1: "what is now verified is that this file loads"
+  outran its cited (direct-drive) evidence. `b4c695a` separates the two evidence
+  trails, grounds registration in an actual harness-generated interception
+  (`PreToolUse:Bash hook error: [...]`, observed independently by both the
+  builder and this reviewer), and additionally surfaces and repairs a genuine
+  self-contradiction in the ticket's own filed evidence — the `## Why` section's
+  opening claim to have watched the hook refuse something, against its own
+  "No guardrail was circumvented" paragraph, which states that the live command
+  was the two-positional form and confirms directly that the no-refspec branch
+  is never reached for it — that neither of us had named before reproducing it.
+  Verified:
+  `git diff 4f8f29b...b4c695a -- .claude/hooks/check-main-writes.sh` touches only
+  `#` lines; `bash -n`, `npm run check`,
+  `npx vitest run scripts/test/hooks.test.ts` all green at `b4c695a`.
+- **findings** · self-run defect hunt at medium returned 1 across both rounds; 1
+  resolved, 0 dropped.
+- NFR: security ✓ · performance n/a · reliability ✓ · maintainability ✓ (now
+  stronger — the header separates evidence classes explicitly, which is itself a
+  maintainability improvement over round 1).
+
+**Builder's note on this record, added when committing it.** The gate asked for
+it verbatim, and it is verbatim in every verdict but not in every coordinate.
+Three mechanical repairs, none of which changes a finding:
+
+- Its second row carried the red-run counts as a single string containing a
+  pipe, inside a table cell. A pipe ends the cell, so the proof would have been
+  silently truncated at exactly the number that matters. The counts are spelled
+  around it now.
+- Several citations used the bare shorthand a chat message can afford — a
+  line number with no path in front of it. `scripts/citations.mjs` resolves that
+  shorthand against whichever file was last named, which here would have bound
+  hook and test coordinates to this ticket. Each is respelled with its full path
+  and an anchor, or dropped for prose.
+- **Every citation that pointed at this file has been replaced by a named
+  section rather than a coordinate, and that is not tidying.** The gate requires
+  each anchor to be distinct within the file it resolves against, and an anchor
+  quoted into a record's own `## Review` section necessarily occurs twice in
+  that record — once where it is cited and once in the citation. Measured before
+  committing: the first draft of this section scored `9 verified, 7 unanchored`
+  with `4 anchor(s) not distinct`, and all four were self-citations. A record
+  cannot cite itself by coordinate under this gate, so it does not.
+
+`node scripts/citations-gate.mjs` was run to exit 0 before this was committed,
+which matters more than usual here: repo-42 is not in that file's grandfather
+list, so this section is one of the minority the gate actually enforces, and a
+first draft of it failed the build.
+
+I also owe the gate a correction of my own. I told it that its citation into the
+test file had "moved twice" and needed re-resolving against `b4c695a`. It had
+not moved at all: `git diff 4f8f29b b4c695a -- scripts/test/hooks.test.ts` is
+empty, because round two touched only the hook and this ticket, and the line it
+quoted still reads exactly as quoted. I asserted that without running the command
+that would have settled it — which is the failure this whole record exists to
+catch, committed by the person writing the record. The gate ran the command and
+corrected me.
+
 ## Log
 
 - 2026-09-09: Built option (c). `.claude/hooks/check-main-writes.sh` no longer
@@ -362,13 +431,18 @@ refspec"` and `"leaves a bare push alone when HEAD is not main"`). `run()`
 
   **What the brief had wrong, or left to be found:**
 
-  - Its line-number citations were all still exact. Re-resolved against
-    `origin/main@435ee35` before anything was edited, per the rule that
-    coordinates move: `:70`, `:87`, `:89`, `:99`, `:120`, `:192-193`, `:197-201`
-    and `:223-225` in the hook, and `:37-51`, `:43`, `:43-49` and `:339-359` in
-    the test, every one landing on the line the ticket said it did. Recorded
-    because "I re-checked and they held" is a result, and the alternative
-    reading — that nobody checked — is indistinguishable from silence.
+  - Its line-number citations were all still exact. All twelve were re-resolved
+    against `origin/main@435ee35` before anything was edited, per the rule that
+    coordinates move — eight into the hook and four into the test — and every one
+    landed on the line the ticket said it did. Recorded because "I re-checked and
+    they held" is a result, and the alternative reading, that nobody checked, is
+    indistinguishable from silence. The coordinates themselves are deliberately
+    not repeated here as citations: they resolve against the base and not against
+    this tip, so writing them in citation shape would make
+    `scripts/citations.mjs` bind them to whatever file was last named and report
+    a verified reading of the wrong file. That is not hypothetical — the first
+    draft of this entry did exactly that, and the checker resolved all twelve
+    against `vitest.config.ts`.
   - The ruleset re-read that (c) was made conditional on turned up a parameter
     the hook's coverage table did not carry:
     `require_extra_approval_for_unattributed_changes: true`. It does not bear on
