@@ -1395,6 +1395,236 @@ test("--markdown lists a ticket waiting on a decision as open, carrying its stat
 });
 
 // ---------------------------------------------------------------------------
+// An obligation a `done` ticket still carries (repo-32)
+// ---------------------------------------------------------------------------
+
+// `done` used to say two different things — "nothing is left" and "the work is
+// finished but one acceptance line waits on a proof that only exists after a
+// merge" — and the board could not tell them apart, because both are
+// `status: done` and both are absent from every view. repo-13 sat six days in
+// the second state and was closed only because a sibling ticket happened to be
+// filed against the same subject.
+//
+// The field is a **reminder, not a gate**: the owner's answer on 2026-09-07 was
+// render only, because these obligations are open by construction and the
+// person holding one frequently cannot close it. So none of these cases moves
+// `--json`'s exit code, and one below asserts that directly.
+
+test("awaiting is optional, and absent reads as null rather than missing", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { status: "done" }) });
+  expect(readTickets(root)[0]?.awaiting).toBe(null);
+});
+
+test("a ticket carrying an obligation carries what closes it onto the record", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done", awaiting: "the alert state after the merge" }),
+  });
+  expect(readTickets(root)[0]?.awaiting).toBe("the alert state after the merge");
+});
+
+// Unlike every other optional scalar, `awaiting` **is** its text: `note` absent
+// means "use the title" and `difficulty` absent means "inherit", but an
+// `awaiting` with nothing after it records no obligation and would render a
+// board line that says nothing. So both spellings of empty are a named failure
+// with a one-keystroke remedy, rather than being folded into "unset".
+//
+// This is a malformed *value*, which is a different thing from an *unclosed
+// obligation*: the owner's "never a CI failure" answer is about the second, and
+// the case further down proves the second still exits 0.
+test("an awaiting with nothing after it is a named failure, not an unset field", () => {
+  expect(() => parseFrontmatter(pl("pl-1", { status: "done", awaiting: "" }), "t.md")).toThrow(
+    /"awaiting" is present but empty/,
+  );
+});
+
+test("awaiting spelled out as null is the same empty field, and named the same way", () => {
+  expect(() => parseFrontmatter(pl("pl-1", { status: "done", awaiting: "null" }), "t.md")).toThrow(
+    /"awaiting" is present but empty/,
+  );
+});
+
+test("the error carries the file and line, and says to delete the line rather than pad it", () => {
+  let message = "";
+  try {
+    parseFrontmatter(pl("pl-1", { status: "done", awaiting: "" }), "t.md");
+  } catch (error) {
+    message = (error as Error).message;
+  }
+  expect(message).toContain("t.md:9");
+  expect(message).toMatch(/delete the line/);
+});
+
+// Free from `rejectQuoted`, and asserted because a new field is exactly where
+// the YAML habit repo-24 is about comes back.
+test("a quoted awaiting is rejected like every other scalar", () => {
+  expect(() =>
+    parseFrontmatter(pl("pl-1", { status: "done", awaiting: '"the security tab"' }), "t.md"),
+  ).toThrow(/"awaiting" is quoted/);
+});
+
+// The centrepiece: the state the ticket was filed about. A `done` ticket is
+// absent from every board view, so before this section existed there was
+// nowhere at all for the obligation to appear.
+test("the default view surfaces an obligation on a done ticket, which is otherwise absent", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1"),
+    [at("pl-2")]: pl("pl-2", {
+      status: "done",
+      awaiting: "the alert reads dismissed on the security tab",
+    }),
+  });
+  const { stdout, status } = run([], root);
+  expect(status).toBe(0);
+  expect(stdout).toContain("awaiting — 1");
+  expect(stdout).toContain("! pl-2   the alert reads dismissed on the security tab");
+});
+
+// The heading is conditional, not a permanent empty section: the board's
+// ordinary state is that nothing is owed, and a heading over nothing trains a
+// reader to skip it.
+test("a board owing nothing prints no awaiting section at all", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1"),
+    [at("pl-2")]: pl("pl-2", { status: "done" }),
+  });
+  expect(run([], root).stdout).not.toContain("awaiting");
+});
+
+// Not restricted to `done`. An obligation on open work is already visible in
+// the sense that the ticket has a row, but the row says the title and not what
+// is owed, and a rule keyed on status would need an author to know it.
+test("an obligation on open work is surfaced too, beside the row that does not say it", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "in-flight", awaiting: "the container gate on main" }),
+  });
+  const { stdout } = run([], root);
+  expect(stdout).toContain("» pl-1   the pl-1 thing");
+  expect(stdout).toContain("! pl-1   the container gate on main");
+});
+
+// A reminder, not a gate. This is the assertion that keeps the owner's answer
+// true: `ci.yml`'s ticket gate is `node scripts/status.mjs --json`'s exit code
+// and nothing else, so an unclosed obligation failing CI would block unrelated
+// work for a reason nobody could act on — repo-24's failure mode, one field
+// over.
+test("an unclosed obligation is not a problem, so --json exits 0 and says nothing", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done", awaiting: "the alert state after the merge" }),
+  });
+  const { stdout, stderr, status } = run(["--json"], root);
+  expect(status).toBe(0);
+  expect(stderr).toBe("");
+  expect(JSON.parse(stdout).problems).toEqual([]);
+});
+
+// The `--json` contract: the key is on every ticket, `null` when nothing is
+// owed, under the same name it has in the frontmatter. A consumer that has to
+// discriminate "absent" from "nothing owed" has the defect the board had.
+test("--json carries awaiting on every ticket, null where nothing is owed", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done", awaiting: "the security tab, after the merge" }),
+    [at("pl-2")]: pl("pl-2"),
+  });
+  const { tickets } = JSON.parse(run(["--json"], root).stdout);
+  expect(tickets.map((t: { id: string; awaiting: string | null }) => [t.id, t.awaiting])).toEqual([
+    ["pl-1", "the security tab, after the merge"],
+    ["pl-2", null],
+  ]);
+});
+
+// `--show`'s closing line is where an agent decides what to do, and on a closed
+// ticket it read `done — nothing to pick up` whatever the ticket still owed.
+// That sentence is the defect in one line.
+test("--show on a done ticket that owes something does not stop at nothing to pick up", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done", awaiting: "the alert state after the merge" }),
+  });
+  const { stdout, status } = run(["--show", "pl-1"], root);
+  expect(status).toBe(0);
+  expect(closingLine(stdout)).toBe(
+    "  done — nothing to pick up; still awaiting the alert state after the merge",
+  );
+  expect(stdout).toContain("awaiting    the alert state after the merge");
+});
+
+test("--show reports an em dash for a ticket that owes nothing", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { status: "done" }) });
+  const { stdout } = run(["--show", "pl-1"], root);
+  expect(stdout).toContain("awaiting    —");
+  expect(closingLine(stdout)).toBe("  done — nothing to pick up");
+});
+
+// Both halves on one line, because a `dropped` ticket can carry its reason and
+// an obligation at once and neither may swallow the other.
+test("--show keeps a dropped ticket's note and its obligation on the same line", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", {
+      status: "dropped",
+      note: "deferred, not refused",
+      awaiting: "the image gate on main",
+    }),
+  });
+  expect(closingLine(run(["--show", "pl-1"], root).stdout)).toBe(
+    "  dropped — nothing to pick up (deferred, not refused); still awaiting the image gate on main",
+  );
+});
+
+// The markdown is what gets pasted into a pull request body, so a projection
+// that dropped the obligation would put the board and the paste in
+// disagreement — which is the thing adr/003 removed.
+test("--markdown carries the obligation, on a tool whose tickets are all closed", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done", awaiting: "the alert state after the merge" }),
+  });
+  const { stdout, status } = run(["--markdown", "--tool", "planner"], root);
+  expect(status).toBe(0);
+  expect(stdout).toContain("None. Every ticket this tool has is closed.");
+  expect(stdout).toContain("### Awaiting");
+  expect(stdout).toContain("the alert state after the merge");
+});
+
+test("--markdown says nothing about awaiting when nothing is owed", () => {
+  const root = repoWith({ [at("pl-1")]: pl("pl-1", { status: "done" }) });
+  expect(run(["--markdown", "--tool", "planner"], root).stdout).not.toContain("Awaiting");
+});
+
+// Narrowed with the view, like `--ready`'s withheld notice and unlike
+// `problems`: a reader who asked about one tool is being told what that tool
+// owes, not handed a fact about the whole graph.
+test("the awaiting section is narrowed by --tool along with the view", () => {
+  const root = repoWith({
+    [at("pl-1")]: pl("pl-1", { status: "done", awaiting: "the planner's image gate" }),
+    [atRepo("repo-9")]: repoTicket("repo-9", { status: "done", awaiting: "the repo's own gate" }),
+  });
+  const { stdout } = run(["--tool", "planner"], root);
+  expect(stdout).toContain("the planner's image gate");
+  expect(stdout).not.toContain("the repo's own gate");
+});
+
+// The rule has to be where an author reads it, for the reason the quoting rule
+// does — and the second half is the one that rots: a field nobody clears is a
+// second projection with the defect adr/003 rejected.
+test("the ticket format documents the field and says who clears it", () => {
+  const format = fs.readFileSync(path.join(REPO, "docs", "01-TICKETS.md"), "utf8");
+  expect(format).toMatch(/\|\s*`awaiting`\s*\|/);
+  expect(format).toMatch(/delete[sd]? the line/i);
+});
+
+// The real board, and the case the mechanism was built against: repo-16's
+// `Done when` 6 is genuinely outstanding — the dismissal step runs only on a
+// push to `main`, so there is no "after" until it merges, and `gh api` is
+// denied here besides. It is the first `awaiting` line in the repo, and this
+// test is what keeps it from being the last time anybody looked at it.
+test("the repo's own board surfaces at least one real outstanding obligation", () => {
+  // `typeof === "string"` rather than `!== null`: before the field existed the
+  // property was `undefined` on every ticket, which passes `!== null` for all of
+  // them and made this case green while proving nothing. It has to be able to
+  // fail first, and with the field absent it does.
+  const owed = readTickets(REPO).filter((t) => typeof t.awaiting === "string");
+  expect(owed.map((t) => t.id)).toContain("repo-16");
+});
+
+// ---------------------------------------------------------------------------
 // A reader that stops reading
 // ---------------------------------------------------------------------------
 

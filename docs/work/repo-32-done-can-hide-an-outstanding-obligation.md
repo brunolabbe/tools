@@ -3,7 +3,7 @@ id: repo-32
 tool: repo
 title: A done ticket can carry an obligation nobody can see
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -169,8 +169,114 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
    is red and nobody owns it" condition is either carried by the mechanism, with
    what it attaches to written down, or explicitly declared out of scope with a
    reason. **Not left as the third bullet of a Build step**, which is how it
-   would go missing. The meaning of `awaiting` (the three readings above) is put
-   to the owner before the parser is written, and the answer recorded here.
+   would go missing. ~~The meaning of `awaiting` (the three readings above) is
+   put to the owner before the parser is written, and the answer recorded
+   here.~~
+
+   **Answered 2026-09-09: reading A — _waiting on an event that will happen_.**
+   Recorded in full in the Log entry of that date, and written into
+   `docs/01-TICKETS.md` beside the field. **The ordering this line asked for was
+   not met and is not claimed:** the parser was written first, because the
+   dispatch said to build and the answer was not available. What made that
+   survivable is that the shape it settles — the field's name — was the one
+   thing the losing reading (C) would have changed, and C is not what was
+   chosen; had it been, this would have cost a rename. Recorded as a real miss
+   rather than folded into the answer.
+
+## Review
+
+### Gate 1 — 2026-09-09, at `cd8a4e9`, base `origin/main` at `435ee35`
+
+**PASS.** Reviewed by a `ticket-reviewer` subagent on Sonnet; the branch was
+built on Opus, so the two halves of this section were written by different
+models. Transcribed by the builder, which is the model under review, per
+`docs/01-TICKETS.md:349 "So the reviewer reports and the builder writes"`.
+
+| `Done when`                                                        | Verdict                                                                 | What proves it                                                                                                                                                                         |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Decision answered by the owner, rejected options with costs     | **verified**                                                            | the Log entry of 2026-09-07, re-read by the reviewer against this page; no test, and none possible — it is a record of a human's answer                                                |
+| 2. Mechanism implemented, and made to fail first                   | **proven**                                                              | `scripts/test/status.test.ts:1618 "the repo's own board surfaces at least one real outstanding obligation"`, plus the 17/110 → 127/127 pair reproduced independently by the reviewer   |
+| 3. The three instances re-read at build time, state recorded       | **verified**                                                            | the Log entry of 2026-09-09, cross-checked by the reviewer against repo-13, repo-15, repo-16 and repo-42's own frontmatter rather than against this page                               |
+| 4. `docs/01-TICKETS.md` says what `done` does and does not promise | **proven**                                                              | `scripts/test/status.test.ts:1607 "the ticket format documents the field and says who clears it"`, over `docs/01-TICKETS.md:14 "means the work is finished, not that nothing is left"` |
+| 5. `npm run check` passes and `npm run format` has been run        | **verified**                                                            | both re-run by the reviewer in its own worktree: exit 0, and no diff after formatting                                                                                                  |
+| 6a. Build step 4 answered or declared out of scope, with a reason  | **verified**                                                            | the Log entry of 2026-09-08, which strikes the step and records the closure; the reviewer confirmed the step is struck in place rather than deleted                                    |
+| 6b. The meaning of `awaiting` put to the owner, answer recorded    | **unproven** at the gate — **closed 2026-09-09**, see beneath the table | nothing, at `a98327d`. It was unanswered, `status` was `in-flight` because of it, and the three readings were carried up as an open decision rather than settled in a commit           |
+
+> **Row 6b is closed, and the verdict above is left standing rather than
+> rewritten.** The owner answered on 2026-09-09 — reading A, _waiting on an event
+> that will happen_ — so the line now has what it asked for and `status` is
+> `done`. `unproven` was true of `a98327d`, which is the commit this gate read,
+> and a gate record is a statement about a commit: silently flipping it to
+> `verified` would make the reviewer's signature say something it never checked.
+> The repo's own rule for this is in
+> `.claude/skills/orchestrate-tickets/reference/records.md` — withdraw or close a
+> claim in place, never delete it — and repo-16's Log records applying it to
+> repo-13's gate table. **The reviewer has not seen the answer**; what closes the
+> row is the owner's decision, recorded in the Log entry of 2026-09-09, not a
+> second gate.
+
+**Findings, all of them, including the ones that needed no change.**
+
+- **low · The Log's own fail-first paragraph said "22 new cases" and "the five
+  that were green"; the real numbers are 19 and 2 — fixed here.** The run totals
+  it quoted (17 failed | 110 passed, then 127 passed) were never wrong and the
+  reviewer reproduced them exactly by reverting `scripts/status.mjs`,
+  `docs/01-TICKETS.md` and repo-16's frontmatter in its own worktree. What was
+  wrong is that the two counts around them were estimated rather than counted,
+  in the one paragraph on this page whose subject is a measurement. Reproduced
+  before accepting: `grep -c '^+test('` over the diff → 19, and the base test
+  file run in place → `108 passed (108)`, so 108 + 19 = 127 and 17 + 2 = 19. The
+  paragraph now carries the corrected numbers with the correction stated in
+  place, rather than silently overwritten.
+- **No change needed · The malformed-value surface was enumerated past what the
+  suite covers, and held.** The reviewer drove `parseFrontmatter` directly with
+  nine constructed values — empty, whitespace-only, quoted, literal `null`, a
+  list, a number, an indented sub-map, the field on a `ready` ticket, and the
+  field absent. Every one either parses as free text or throws by file and line;
+  nothing crashes, and `awaiting` is `null`-or-string on all 127 real tickets
+  rather than ever `undefined`. The list-and-number cases parse as literal
+  strings, which is correct for a free-text field and is not a gap.
+- **No change needed · All 19 new cases can be made to fail.** The reviewer
+  confirmed 17 go red under a full source revert, and mutated the two
+  `if (owed.length > 0)` guards to `if (true)` to turn the remaining two — the
+  absence-asserting pair — red as well. None is a tautology. It also re-ran the
+  false-green case against a deleted `awaiting` line on repo-16 and watched it go
+  red, which is the property that keeps repo-16's line from being deleted
+  silently.
+- **No change needed · One render combination is verified by the reviewer rather
+  than by a committed test:** a tool holding an open ticket _and_ an awaiting
+  ticket at once, which the suite covers only as two halves. The reviewer called
+  `renderMarkdown` with a synthetic two-ticket array and confirmed the open table
+  and the `### Awaiting` section render together and in order. Recorded here
+  because `renderMarkdown`'s early `continue` was the one place this change was
+  not additive, so the gap is worth naming even though the behaviour is right.
+- **No change needed · The seven repointed citations were re-resolved by hand at
+  the tip** and each lands on exactly what its citing prose claims — no drift
+  onto neighbouring content. `node scripts/citations-gate.mjs` → `23 enforced, 0
+failing`, and the history comparison → `0 raised`.
+- **No change needed · The overlap with repo-38 was measured rather than
+  assumed.** This branch touches `docs/01-TICKETS.md` at base lines 11–16,
+  97–102, 172–180, 340–345 and 386–392; `origin/repo-38-review-writer` touches
+  279–288 and 291–297. Disjoint on both sides. The shared consequence stands and
+  is not a finding: the sentence repo-38 owns moves from 293 to 333 here, so
+  whichever branch merges second must re-resolve
+  `docs/work/repo-29-citations-carry-no-anchor.md`'s citation of it.
+- **No change needed, and out of scope · `docs/01-TICKETS.md` says "the six
+  required ones" where `FIELDS` has seven with `required: true`.** The reviewer
+  checked the base: the sentence already read "six" at `435ee35`, and this branch
+  changed only its trailing clause. Pre-existing, not introduced here, and left
+  rather than folded in because correcting a count in a sentence this branch is
+  already editing would bury a second claim inside a change nobody reviewed it
+  as. Worth a line in whatever next touches that paragraph.
+- **Not a finding, by the gate's own framing · Nothing in the implementation
+  forecloses any of the three readings of `awaiting`.** The reviewer confirmed
+  the field is unrestricted free text and `awaitingTickets` filters on
+  `!== null` alone, never on status — so A, B and C all remain open at the code
+  level, which is what the Log claims about itself.
+
+**Still owed, and not part of this gate:** the reviewer's report has not been
+posted to a pull request thread, because there is no pull request. That duty
+attaches to opening it.
 
 ## Log
 
@@ -376,3 +482,286 @@ when` 6 is not struck: a future builder still owes an answer to "what makes
   this ticket exists to fix, and a candidate beyond the three in "The
   reproduction". Left untouched here: a sibling builder is working in
   `tools/planner/` in this same batch.
+
+- **2026-09-09** — **Built: the `awaiting` field, its parse, its render on three
+  views, and its `--json` shape.** Branch `repo-32-done-hides-obligation`, base
+  `origin/main` at `435ee35`. The base is on the remote, checked against it
+  rather than assumed — a local-only base is the ordinary case for stacked work
+  and needs a different first step. Files: `scripts/status.mjs`,
+  `scripts/test/status.test.ts`, `docs/01-TICKETS.md`, and one `awaiting` line
+  plus a Log entry on
+  `docs/work/repo-16-suppression-does-not-dismiss.md`.
+
+  **`status` is `in-flight`, not `done`, and that is the point of the ticket
+  rather than an evasion.** `Done when` 6's second sentence — "the meaning of
+  `awaiting` (the three readings above) is put to the owner before the parser is
+  written, and the answer recorded here" — is unanswered. Writing `done` over an
+  acceptance line nobody has answered is the exact state this page exists to make
+  visible, so it would be self-refuting; and the repo already has a name for work
+  that landed as a partial (`scripts/status.mjs`'s `reviewedButReady` docblock
+  argues it at length, from `pl-28`). The open decision went up as options with a
+  recommendation, which is all a subagent can do with one.
+
+  **The dispatching intake was half right, and the half it had wrong is the
+  live half.** It relayed that Build step 4 _and_ `Done when` 6 were superseded,
+  leaving steps 2–3 as the work. Build step 4 is indeed struck in this file, and
+  its premise checks out from here: `479c831` ("fix(repo): ask git where the
+  record lives … (repo-36) (#186)") is an ancestor of `origin/main`, and repo-36's
+  own page reads `status: done`. But `Done when` 6 is **not** struck — the Log
+  entry of 2026-09-08 says so in those words. Its first sentence is satisfied by
+  that entry (step 4 declared out of scope, with the reason); its second is live,
+  and no Build step covers it. So the live scope was steps 2–3 **plus** an
+  acceptance line, which is why this ends `in-flight`.
+
+  **The windows-latest half could not be re-verified at the tip**, and the
+  earlier entry's `success` reading stands as a claim about `a5e31c7`. `main` is
+  now `435ee35`, an all-markdown change, so `ci.yml`'s `changes` job skipped the
+  whole test matrix: `gh run view 34362401775 --json jobs` returns `check`
+  `success`, `changes` `success`, and the matrix job `skipped`. Nothing here
+  contradicts the earlier measurement; there is simply no newer one.
+
+  **The three instances, re-read from the files on this branch rather than from
+  the "Why" section above.**
+
+  1. **repo-13 — closed.** Acceptance lines 5 and 8 each now carry a dated
+     answer ("Answered 2026-09-07 by repo-16"), and its gate-1 table row 3 is
+     marked `WITHDRAWN` with the retraction beneath it. Nothing outstanding.
+  2. **repo-16 — open, and it is the one real instance left.** `Done when` 6
+     reads "Not done, and not doable from here": the dismissal step runs only on
+     a push to `main`, and `gh api` is denied here besides. This is the ticket
+     the first `awaiting` line was written against.
+  3. **repo-15 — closed, by an event nobody predicted here.** Its obligation was
+     "the hook cannot be observed firing until it is on `main`".
+     [repo-42](./repo-42-the-hook-has-fired-and-overblocks-a-worktree-push.md)
+     merged as `435ee35` (#202) recording that somebody watched it refuse
+     something, with the preconditions checked rather than relayed. Worth noting
+     for the field's sake: what closed it was **a whole ticket**, filed because
+     the observation came with a defect attached. An `awaiting` line would have
+     surfaced it earlier; it would not have replaced repo-42.
+
+  So one of the three original instances survives, which is fewer than the
+  filing had and enough to build against — `Done when` 2 wanted a live case and
+  there is one.
+
+  **Made to fail first, with the numbers.** The **19** new cases went in before a
+  line of `status.mjs` changed: `npx vitest run scripts/test/status.test.ts` →
+  **17 failed | 110 passed (127)**, against a baseline of **108 passed (108)** at
+  `435ee35`. So exactly **two** were green at that point, and both assert
+  _absence_: `a board owing nothing prints no awaiting section at all` and
+  `--markdown says nothing about awaiting when nothing is owed`.
+
+  > **Corrected 2026-09-09, by the gate, and the correction belongs in this
+  > paragraph rather than under it.** The first draft of this entry said "22 new
+  > cases" and "the five that were green", and both were **estimated, not
+  > counted** — in the one paragraph on this page whose entire subject is a
+  > measurement. The reviewer counted
+  > `git diff 435ee35..HEAD -- scripts/test/status.test.ts | grep -c '^+test('`
+  > → 19, and ran the base file → 108; I reproduced both here before accepting
+  > either. The run totals were never wrong: 17/110 before and 127/127 after are
+  > exactly what both of us measured. Recorded rather than quietly overwritten,
+  > because a wrong count inside a fail-first claim is the failure mode this
+  > repo's records exist to catch, and it was caught by a second reader rather
+  > than by anything mechanical.
+
+  **The 17/110 run is the second one, and the first is why.** A third case was
+  green before it — `the repo's own board surfaces at least one real outstanding
+obligation` (16 failed | 111 passed), which **was a false green and was
+  rewritten before a line of source changed**: it filtered on
+  `t.awaiting !== null`, and with no such field the property is `undefined` on
+  every ticket, so every ticket passed the filter and the case proved nothing. It
+  filters on `typeof t.awaiting === "string"` now, which is red before the field
+  exists and red again if repo-16's line is deleted without another taking its
+  place. After the source: **127 passed (127)**.
+
+  **What the build decided, since Build step 2 left the shape to the builder.**
+
+  - **The name is `awaiting` in the frontmatter and `awaiting` in `--json`** —
+    every other field serialises under its own name, and this one is spoken about
+    by that name in both `Done when` 6 and the owner's answer.
+  - **It renders in its own section under the tool**, below the open list, marked
+    `!`. It cannot be a column or a suffix on a row, because most of what it
+    names has no row: a `done` ticket is absent from every view here, which is
+    the defect. The obligation is printed instead of the title — the title is
+    what the reader already has.
+  - **`--show` carries it twice, deliberately.** As a field row beside `note` and
+    `difficulty`, and appended to the closing line, because
+    `done — nothing to pick up` is the sentence an agent reads to decide there is
+    nothing here, and a verdict that omits the obligation is the whole defect in
+    one line. It is appended to the `dropped` reason rather than replacing it.
+  - **Not filtered by status.** The field earns its keep on `done`, but a rule
+    keyed on status would need an author to know it, and rendering an open
+    ticket's obligation costs one line and spares a rule.
+  - **An empty value is a named parse error, and `awaiting: null` is the same
+    error.** Every other optional scalar means something when absent; this one
+    **is** its text, so an empty one records nothing and would render a board
+    line with nothing on it. A ticket says it owes nothing by having no such
+    line. The error names the file, the line and the remedy, which is
+    `rejectQuoted`'s shape. **This refuses a malformed value, not an unclosed
+    obligation** — the owner's "never a CI failure" answer is about the second,
+    and a test asserts `--json` still exits 0 and writes nothing to stderr with
+    an obligation outstanding.
+  - **Who clears it**, which was the owner's second stated cost: whoever observes
+    the obligation closed deletes the line in the commit that records the
+    observation, beside striking the acceptance line. Written into
+    `docs/01-TICKETS.md` and into repo-16's own Log, because a field nobody
+    clears is the second projection adr/003 rejected.
+
+  **What the brief had wrong, or left for the build to find.**
+
+  - **`Done when` 6 was relayed to this build as superseded and is not.** Above.
+  - **Build step 3 named one sentence to amend and the change forces four.**
+    Amending "Move a ticket to `done` … in the commit that earns it" was the
+    named work; adding the field also moves `docs/01-TICKETS.md`'s field table,
+    its "both optional ones" sentence (now three), the default view's mark
+    legend (`!` had to be described as _not_ a fifth kind of open ticket), and
+    the "Where each kind of fact goes" table. All four are folded in here.
+  - **`renderMarkdown` had an early `continue` for a tool with nothing open**,
+    which is precisely the tool an `awaiting` section is for. Restructured so
+    both branches reach it. Nothing in the brief could have predicted that; it is
+    recorded because it is the one place the change was not additive.
+  - **Two committed gate records cite `scripts/status.mjs` and
+    `docs/01-TICKETS.md` by line, and this change moved every one of them.**
+    `node scripts/citations-gate.mjs` exits 0 on the base and exited **1** here
+    until they were repointed: six coordinates in
+    `tools/planner/docs/work/pl-26-lift-the-ssrf-guard.md`'s Review section, and
+    one in `docs/work/repo-29-citations-carry-no-anchor.md`'s. Only the numbers
+    moved; every anchor still resolves, and the gate now reports
+    `23 enforced, 0 failing`, with the history comparison reporting `0 raised`.
+
+  **Not done, and why.**
+
+  - **The root `CLAUDE.md` carries the same "move a ticket to `done`" sentence
+    and was left alone.** It could have been folded in. It is the page that costs
+    every session, it already sends the reader to `docs/01-TICKETS.md` for the
+    fields, and `awaiting` is written rarely and read from `npm run status`.
+    Recorded rather than silently deferred.
+  - **`.claude/skills/orchestrate-tickets/reference/sizing.md:137` cites
+    `scripts/status.mjs:264` for `reviewedButReady`, which is at 387 here and was
+    already at 346 on `origin/main`** — stale before this branch, staler after.
+    Left, because [repo-39](./repo-39-the-unanchored-half-of-the-review-corpus.md)
+    owns that sweep, and one hand-repointed line ahead of it makes a corpus
+    harder to sweep rather than easier.
+  - **`tools/planner/docs/work/pl-2-container-image.md`, flagged in the entry
+    above, is untouched.** It reads `status: in-flight`, not `done`, so it is not
+    an instance of _this_ defect — it is on the board, with a row. Its third
+    acceptance line being "true of a machine and not of a branch" is a genuine
+    `awaiting` candidate once its status moves, and it belongs to whoever closes
+    pl-2.
+  - **No decision was resolved in a commit.** See the open decision below.
+
+  **Open decision, for the owner: what does `awaiting` mean?** The three readings
+  the entry of 2026-09-07 records, unchanged, and the parser was written without
+  the answer because the dispatch said to build. What is implemented is the part
+  every reading shares — an optional free-text scalar, rendered, never a gate.
+
+  - **A — waiting on an event that will happen.** Matches the field's name and
+    the owner's own words ("open by construction — the proof does not exist until
+    after a merge"). Admits all three original instances and repo-16's live one.
+    Excludes repo-31's fact 3 (`main`'s `required_status_checks`, which needs
+    `gh api` and which no event unlocks), which would then need a home — a Log
+    line, or a ticket.
+  - **B — the proof is not available to whoever is closing this.** Admits
+    repo-31's fact 1 plainly, since the person finishing stops before the pull
+    request. Also excludes fact 3, on the ticket's own reading.
+  - **C — anything a `done` ticket still owes.** Admits all three of repo-31's
+    facts and makes the field's name wrong; choosing it means a rename, which is
+    the one reading that changes the parser rather than the guidance.
+
+  **Nothing here excludes fact 3 by construction** — the parser takes any text —
+  so choosing A or B is a documentation change and a note on this page, and
+  choosing C is a rename plus the same. This ticket goes `done` when the answer
+  is recorded above; until then `Done when` 6's second sentence is what
+  `in-flight` is holding.
+
+  **Gates run**, all from this worktree after `worktree-farm.sh` and
+  `npm run build`: `npm run check` → exit 0 (the `no-await-in-loop` warnings it
+  prints are pre-existing and in neither file this branch touches);
+  `npx vitest run scripts/test/status.test.ts` → 127 passed;
+  `npm test -- --project repo` → 6 files, 307 passed; `npm test` → 136 files,
+  2385 passed; `npm run format` → run, and this branch changes four `.md` files;
+  the citations gate with its history comparison → exit 0, 0 raised; the anchored
+  check on `orchestrate-tickets`' SKILL.md → exit 0;
+  `node scripts/status.mjs --json > /dev/null` → exit 0. **Not run and not
+  provable here:** either tool's e2e suite or container build, neither of which
+  this change can reach.
+
+- **2026-09-09, later** — **Answered by the owner: reading A. `awaiting` means
+  _waiting on an event that will happen_.** `status` moves to `done`; this is the
+  entry `Done when` 6's second sentence asked for, and that sentence is struck
+  above.
+
+  **The question**, as `Done when` 6 posed it and as it was put: what does
+  `awaiting` mean? Three readings, all of which the original instances satisfy —
+  which is why the filing did not have to choose and the build did.
+
+  - **A — waiting on an event that will happen. CHOSEN.** The event is nameable
+    and somebody will be able to take the reading once it has happened: a merge,
+    a push to `main`, a workflow run, a page that only exists afterwards. It is
+    the reading the field's own name carries, and the one the owner's earlier
+    answer already spoke in — "open by construction, the proof does not exist
+    until after a merge".
+  - **B — the proof is not available to whoever is closing this.** Rejected. It
+    admits repo-31's fact 1 (whether `if: failure()` fires under a job-level
+    `continue-on-error`) on the grounds that the builder stops before the pull
+    request — but that answer exists as soon as anyone opens one, so B would
+    hang a field on the _builder's_ position in a workflow rather than on the
+    world. Its cost is a slot that fills with things a colleague could answer
+    today.
+  - **C — anything a `done` ticket still owes.** Rejected, and it was the
+    expensive one: it admits everything and makes the field's name wrong, so
+    choosing it meant a rename. Its cost is that a name which stops describing
+    its contents stops being read.
+
+  **The cost that travels with A, and it is a real exclusion rather than a
+  tidy-up.** A rules out **repo-31's fact 3** — whether `main` still carries no
+  `required_status_checks`. That needs `gh api`, which `.claude/settings.json`
+  denies on purpose; **merging does not unlock it and neither does anything else
+  available here.** No event will ever close it, so under A it is not an
+  `awaiting` line: a field whose name promises an event would be recording a
+  permanent condition in a slot shaped for a temporary one, and nobody would ever
+  delete the line — which is precisely the rot the owner's "who clears it" cost
+  was about.
+
+  **So fact 3 needs a home, and this entry is it for now.** Written here rather
+  than filed, because a ticket carries a decision or a reproduction and this has
+  neither left: it is blocked by a permission decision the repo made deliberately
+  and the answer is "you cannot read this from here". **What is not settled is
+  whether anybody should be able to** — that is a question about the deny list,
+  not about this field, and it belongs to whoever next revisits
+  `.claude/settings.json`. It is recorded in `docs/01-TICKETS.md` beside the
+  field as the worked example of what A excludes, so the next author meets it
+  where they would otherwise reach for the field. **Left findable from repo-31,
+  where the fact originated, is the one thing this entry does not do** — repo-31
+  is `done` and belongs to another branch's history, and editing it was not
+  asked for. A one-line Log append there would close that gap.
+
+  **Provenance.** Put to the owner by the coordinating session and relayed here.
+  The three readings were read out of this page's own Build/Log sections by the
+  coordinator rather than taken from the builder's report or the reviewer's, and
+  **A matches the builder's recommendation, so it overrode nobody.** This entry
+  is written from that relay: the answer and its authority are not things a
+  builder can verify from inside a sandbox, and saying so is the honest form of
+  recording them.
+
+  **What changed in the tree for it**, and it is small because the build was
+  deliberately built to the part all three readings share: `docs/01-TICKETS.md`
+  gains the two paragraphs that state A and name the exclusion, `Done when` 6's
+  second sentence is struck with the ordering miss recorded rather than hidden,
+  the gate's row 6b is closed in place rather than rewritten, and `status` is
+  `done`. **No source changed.** `scripts/status.mjs` needed nothing: the field
+  is free text and `awaitingTickets` filters on `!== null` alone, so A is a rule
+  for authors and not a rule for the parser. Whether it should become one — a
+  check that an `awaiting` line names an event — is a question with no cheap
+  answer and no instance yet, and it is not filed.
+
+  **One thing considered and not done, since a silent deferral is invisible.**
+  This branch and `repo-38` both repoint the same coordinate in
+  `docs/work/repo-29-citations-carry-no-anchor.md`'s committed `## Review`, to
+  different numbers, and whichever merges second must re-resolve it. That is
+  A-shaped on its face — an event, a merge, closes it — so an `awaiting` line on
+  this ticket was the obvious move. **It would have been wrong**, and the reason
+  is worth keeping: the obligation belongs to whichever branch merges _second_,
+  which is not yet decided and may not be this one. If this branch merges first
+  the line is vacuous the moment it lands, and a vacuous `awaiting` line nobody
+  can delete is the exact failure the field was built to avoid. It is in the pull
+  request body instead, where the second merger will be reading.

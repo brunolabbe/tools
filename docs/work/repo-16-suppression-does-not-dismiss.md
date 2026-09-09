@@ -7,6 +7,7 @@ status: done
 milestone: null
 depends_on: [repo-13]
 difficulty: hard
+awaiting: Done when 6 — the security tab shows alert 2 dismissed, after a push to main
 ---
 
 # repo-16 — Inline suppression does not dismiss; decide what carries it
@@ -828,3 +829,17 @@ fixture ids inside repo-3, repo-6, repo-7 and repo-8's records, not filed
 tickets. **repo-14 and repo-15 are claimed by in-flight work in other
 worktrees** and so appear in neither list — relayed by the repo owner, and the
 reason this ticket is 16 rather than 14.
+
+- **2026-09-09, by [repo-32](./repo-32-done-can-hide-an-outstanding-obligation.md)** —
+  an `awaiting` line was added to this ticket's frontmatter, and it is the only
+  edit made here. This ticket's `Done when` 6 is one of the three instances
+  repo-32 was filed off, and the mechanism it builds is a field on a `done`
+  ticket that `npm run status` renders — so its first line goes on the instance
+  that is still genuinely outstanding, which is this one. Nothing else on this
+  page changed: the acceptance line already says what it needs, and the field
+  restates it where a reader of the board will see it.
+
+  **Whoever reads the security tab and finds alert 2 dismissed closes both
+  halves in one commit** — strike `Done when` 6 with the date, and delete the
+  `awaiting` line. A field nobody clears is the second projection adr/003
+  rejected, so the deletion is not optional bookkeeping.
