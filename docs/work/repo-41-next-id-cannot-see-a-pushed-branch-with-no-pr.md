@@ -215,9 +215,10 @@ is on the remote before branching.
 **What landed.** `branchSources()` in `scripts/next-id.mjs`, a third row in
 `collect()`'s `sources` beside `merged` and `PR#…`, labelled `branch/<name>`;
 `render()` gained an optional third argument for lines the sweep could not read,
-printed between the clashes and `next free`. Five new cases in
-`scripts/test/next-id.test.ts` (15 → 21), of which two drive real git against a
-fixture remote built in a `mkdtemp`.
+printed between the clashes and `next free`. **Six** new cases in
+`scripts/test/next-id.test.ts` (15 → 21, confirmed by `grep -c '^test('` on
+both sides), of which two drive real git against a fixture remote built in a
+`mkdtemp`.
 
 **Each guard watched failing on its own, not merely "the suite is green" — and
 that includes the two `concurrency.md` rows that are about a _choice_ rather
@@ -233,11 +234,23 @@ than a deletion, which the first pass had reasoned about instead of running:**
 | `ls-remote --heads` → `for-each-ref refs/remotes/origin/` | the fixture-remote case, `expected undefined to deeply equal [ 'some-unrelated-slug' ]` — the local mirror does not have the branch                                                             |
 | the three-dot diff → `ls-tree -r <sha>`                   | 3 failed, 18 passed, including `expected [ { source: 'branch/trunk', id: 1 } ] to deeply equal []` — the trunk head re-reporting a merged id, which is the exact noise the diff exists to avoid |
 
-Before any of it was written the five cases were run against the unmodified
-script and came back **5 failed, 15 passed**, each for the right reason —
-`branchSources is not a function`, `expected undefined to deeply equal [...]`,
+Before any of it was written the first five cases were run against the
+unmodified script and came back **5 failed, 15 passed of 20**, each for the
+right reason — `branchSources is not a function`,
+`expected undefined to deeply equal [...]`,
 `expected [] to have a length of 1`, `expected [Function] to throw`, and the
 five-row transcript coming back as three rows.
+
+**The sixth case, the orphan branch, is not in that run and was never in it.**
+It did not exist yet: the no-merge-base hazard was found _after_ the diff shape
+was implemented, so its case was written later and shown red by its own
+mutation instead — force the fallback to rethrow, and it is the one test that
+goes red (the fifth table row above). Re-running the finished file of 21
+against `git show origin/main:scripts/next-id.mjs` gives **6 failed, 15
+passed**, not 5, because that sixth case also calls `branchSources`. The first
+draft of this entry wrote "five new cases" and "5 failed, 15 passed" as though
+one run covered all six, which read as a claim about a run nobody made; the
+gate on this branch caught it and both numbers above are re-measured.
 
 **Two things the brief did not have, both measured rather than reasoned.**
 
@@ -294,6 +307,29 @@ sentence that is no longer true. On this branch the same four are `:322` and
 scripts/test/next-id.test.ts --project repo` → 21 passed, `npx vitest run
 --project repo` → 294 passed in 6 files, `npm test` → 2372 passed in 136 files.
 `node scripts/citations.mjs` on this ticket → exit 0, 4 unanchored and 0 moved.
+
+**The gate the build missed, and the one-line fix it earned.** `npm run check`
+does **not** run `scripts/citations-gate.mjs`; CI does, at `ci.yml:190`, as
+`node scripts/citations-gate.mjs --against "origin/${{ github.base_ref || 'main' }}"`.
+The five-line paragraph this branch rewrote in `docs/01-TICKETS.md` is one line
+longer than the four it replaced, which pushed every later line in that file
+down by one — including line 293, which
+`docs/work/repo-29-citations-carry-no-anchor.md:549` cites by number with the
+anchor `"So the reviewer reports and the builder writes"`. The gate went red,
+`1 moved`, exit 1, and `npm run check` stayed 0 throughout. Confirmed by hand:
+that sentence is at `:293` in `git show origin/main:docs/01-TICKETS.md` and at
+`:294` here. Fixed by bumping repo-29's citation to `:294` in this branch,
+because this branch is what moved the line — not by rewording the paragraph
+back to four lines, which would tune this file's prose to protect a coordinate
+in another and leave the same trap for the next editor. Now: gate exit 0,
+`23 enforced, 0 failing`, and `--against origin/main` reports
+`45 entr(y/ies) compared, 0 raised`, so the grandfathered list did not grow.
+
+**The general lesson, since this is the second time the class has landed:** a
+markdown edit that changes a paragraph's _line count_ is a code change to every
+`file:line` below it. `npm run check` cannot see it. Run
+`node scripts/citations-gate.mjs --against origin/main` before calling a branch
+that touches `docs/` done.
 
 **What this does not do**, restated at the end so it is not lost in the
 decision entry above: it does not close the id race. A peer's local, unpushed
