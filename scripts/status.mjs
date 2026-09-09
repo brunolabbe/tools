@@ -47,6 +47,14 @@ const FIELDS = {
   // work and the orchestrator deliberately has not — see repo-17 and
   // `.claude/agents/builder.md`.
   difficulty: { required: false },
+  // Optional, and the only field that describes what a ticket still owes rather
+  // than what it is: the obligation a `done` ticket carries when one acceptance
+  // line names a proof that does not exist until after a merge — an alert
+  // state, a hook firing on `main`, a workflow no branch can run. Both readings
+  // of `done` used to be absent from the board in the same way, and the ticket
+  // most in need of the reminder is the one that has just dropped off it. See
+  // repo-32, and `awaitingTickets` for what the board does with it.
+  awaiting: { required: false },
 };
 
 const KINDS = ["work-package", "fix", "chore"];
@@ -132,6 +140,7 @@ export function parseFrontmatter(text, file) {
     if (key in fields) throw new Error(`${file}:${i + 1}: "${key}" is set twice`);
     fields[key] =
       key === "depends_on" ? parseList(value, file, i + 1) : parseScalar(value, key, file, i + 1);
+    if (key === "awaiting") rejectEmpty(fields[key], file, i + 1);
   }
 
   for (const [key, { required }] of Object.entries(FIELDS)) {
@@ -184,6 +193,38 @@ function rejectQuoted(value, what, file, line) {
   );
 }
 
+/**
+ * Refuse an `awaiting` that carries no obligation (repo-32).
+ *
+ * Every other optional scalar has a meaning when it is absent — `note` falls
+ * back to the title, `difficulty` to the orchestrator's model — so `parseScalar`
+ * folding an empty value and a literal `null` into the same `null` is right for
+ * them. `awaiting` **is** its text: the field exists to say what a ticket still
+ * owes and what would close it, so an empty one records nothing and would render
+ * a board line with nothing on it. Both spellings of empty are therefore named
+ * here rather than read as "unset", and the remedy is a deleted line.
+ *
+ * **This refuses a malformed _value_, which is a different thing from an
+ * unclosed _obligation_.** The owner's answer on 2026-09-07 was render only —
+ * an outstanding `awaiting` is never a `problem` and never fails CI, because
+ * these obligations are open by construction and the person holding one
+ * frequently cannot close it. That answer is about the second thing. This check
+ * can only fire on a line somebody has just written, and it names the file, the
+ * line and the way out, which is the shape `rejectQuoted` already uses.
+ *
+ * @param {unknown} value Already through `parseScalar`.
+ * @param {string} file Repo-relative path, for the error message.
+ * @param {number} line
+ */
+function rejectEmpty(value, file, line) {
+  if (value !== null) return;
+  throw new Error(
+    `${file}:${line}: "awaiting" is present but empty. It carries what the ticket still owes and ` +
+      `what would close it, so an empty one records nothing — write the obligation, or delete the ` +
+      `line. Omitting it is how a ticket says it owes nothing.`,
+  );
+}
+
 /** @param {string} value @param {string} key @param {string} file @param {number} line @returns {string | null} */
 function parseScalar(value, key, file, line) {
   const trimmed = value.trim();
@@ -227,7 +268,7 @@ function parseList(value, file, line) {
  * file twice to answer one boolean is the kind of thing that goes stale.
  *
  * @param {string} [repoRoot]
- * @returns {Array<{id: string, tool: string, title: string, kind: string, status: string, milestone: string | null, depends_on: string[], note: string | null, difficulty: string | null, file: string, number: number, reviewed: boolean}>}
+ * @returns {Array<{id: string, tool: string, title: string, kind: string, status: string, milestone: string | null, depends_on: string[], note: string | null, difficulty: string | null, awaiting: string | null, file: string, number: number, reviewed: boolean}>}
  */
 export function readTickets(repoRoot = DEFAULT_ROOT) {
   const tickets = [];
@@ -427,6 +468,10 @@ function validate(fields, tool, entry, file) {
   ticket.number = Number(match.groups.number);
   ticket.note ??= null;
   ticket.difficulty ??= null;
+  // Always present, `null` when nothing is owed. A `--json` consumer that had to
+  // tell an absent key from a null one would be re-deriving exactly the
+  // distinction this field exists to record.
+  ticket.awaiting ??= null;
   return ticket;
 }
 
@@ -529,6 +574,41 @@ export function withheldFromReady(tickets) {
         message: `${ticket.file}: withheld from --ready — ${reason}`,
       };
     });
+}
+
+/**
+ * What the board still owes, which no other view can show (repo-32).
+ *
+ * `npm run status` could not tell "done, nothing left" from "done, but one
+ * acceptance line waits on something nobody can do yet". Both are `status:
+ * done`, and a `done` ticket is absent from every view here — so the ticket most
+ * in need of the reminder is the one that has just dropped off the board.
+ *
+ * Not a hypothetical and not a lapse: it is the normal end state of an
+ * acceptance line naming a proof that exists only **after a merge**. Three
+ * tickets landed in it in one batch, written by three different agents, and one
+ * of them (repo-13) sat six days before a sibling filing happened to close it.
+ * The repo had already rejected "somebody will remember" as a mechanism —
+ * adr/003 is the argument, and an obligation recorded only in a `done` ticket's
+ * prose is exactly the hand-kept projection it refuses.
+ *
+ * **Never a `problem`, and that is the owner's decision rather than an
+ * oversight.** It does not enter `problems`, does not reach stderr and does not
+ * move `--json`'s exit code, which is the whole of `ci.yml`'s ticket gate. These
+ * obligations are open by construction and whoever holds one frequently cannot
+ * close it, so gating on one would block unrelated work for a reason nobody
+ * could act on — repo-24 is the recorded case of a frontmatter change failing
+ * the board on sound work, and that is what this must not become.
+ *
+ * **Not filtered by status.** The field earns its keep on `done`, but a rule
+ * keyed on status would need an author to know it, and an open ticket's row says
+ * its title rather than what it owes. Rendering every one costs a line and
+ * spares a rule.
+ *
+ * @param {ReturnType<typeof readTickets>} tickets
+ */
+export function awaitingTickets(tickets) {
+  return tickets.filter((ticket) => ticket.awaiting !== null);
 }
 
 /**
@@ -637,23 +717,39 @@ export function renderMarkdown(tickets) {
     );
     if (open.length === 0) {
       lines.push("None. Every ticket this tool has is closed.", "");
-      continue;
+    } else {
+      lines.push(
+        table(
+          ["Ticket", "Kind", "Status", "Milestone", "What it is"],
+          open.map((ticket) => [
+            `[${ticket.id}](${ticket.file})`,
+            ticket.kind,
+            ticket.status,
+            ticket.milestone ?? "—",
+            ticket.note ?? ticket.title,
+          ]),
+        ),
+        "",
+        `${closed.length} closed ticket${closed.length === 1 ? "" : "s"} not listed.`,
+        "",
+      );
     }
-    lines.push(
-      table(
-        ["Ticket", "Kind", "Status", "Milestone", "What it is"],
-        open.map((ticket) => [
-          `[${ticket.id}](${ticket.file})`,
-          ticket.kind,
-          ticket.status,
-          ticket.milestone ?? "—",
-          ticket.note ?? ticket.title,
-        ]),
-      ),
-      "",
-      `${closed.length} closed ticket${closed.length === 1 ? "" : "s"} not listed.`,
-      "",
-    );
+    // After the closed count rather than before it, and reached on both
+    // branches: the tool whose tickets are *all* closed is the one this section
+    // is for, and the early `continue` that used to stand here skipped it.
+    // Conditional, because a heading over nothing teaches a reader to skip it.
+    const owed = awaitingTickets(mine);
+    if (owed.length > 0) {
+      lines.push(
+        "### Awaiting",
+        "",
+        table(
+          ["Ticket", "Status", "What closes it"],
+          owed.map((ticket) => [`[${ticket.id}](${ticket.file})`, ticket.status, ticket.awaiting]),
+        ),
+        "",
+      );
+    }
   }
   return lines.join("\n").trimEnd();
 }
@@ -869,6 +965,21 @@ function renderView(all, problems, flags, values, repoRoot) {
           : ` (waits on ${ticket.depends_on.join(", ")})`;
       process.stdout.write(`  ${mark} ${ticket.id.padEnd(6)} ${ticket.title}${blocked}\n`);
     }
+
+    // repo-32. Its own section, below the open list, because most of what it
+    // names is not in that list at all — a `done` ticket has no row here, which
+    // is the defect. `!` rather than a status mark: the other four say what a
+    // ticket is, and this says what somebody still owes. The obligation is
+    // printed instead of the title, since the title is what the reader already
+    // has and what closes it is what they do not. Narrowed by `--tool` with the
+    // view it sits in, unlike `problems`.
+    const owed = awaitingTickets(mine);
+    if (owed.length > 0) {
+      process.stdout.write(`\n  awaiting — ${owed.length}\n\n`);
+      for (const ticket of owed) {
+        process.stdout.write(`  ! ${ticket.id.padEnd(6)} ${ticket.awaiting}\n`);
+      }
+    }
   }
 
   if (flags.has("prs")) printOpenPullRequests(repoRoot);
@@ -886,6 +997,7 @@ function printTicket({ ticket, blockers, missing }) {
     ["depends on", ticket.depends_on.length === 0 ? "nothing" : ticket.depends_on.join(", ")],
     ["note", ticket.note ?? "—"],
     ["difficulty", ticket.difficulty ?? "—"],
+    ["awaiting", ticket.awaiting ?? "—"],
     ["file", ticket.file],
   ]) {
     process.stdout.write(`  ${key.padEnd(11)} ${value}\n`);
@@ -910,7 +1022,15 @@ function printTicket({ ticket, blockers, missing }) {
   if (!OPEN.has(ticket.status)) {
     const why = ticket.status === "dropped" && ticket.note !== null ? ` (${ticket.note})` : "";
     const stale = holding.length === 0 ? "" : `; depends_on still lists ${holding.join(", ")}`;
-    process.stdout.write(`\n  ${ticket.status} — nothing to pick up${why}${stale}\n\n`);
+    // repo-32, and this is the sentence the ticket was filed about: `done —
+    // nothing to pick up` was printed whatever the ticket still owed, on the
+    // line an agent reads to decide there is nothing here. The row four lines
+    // above is not enough — the closing line is the verdict, and a verdict that
+    // omits the obligation is the same "somebody will remember" adr/003
+    // refused. Appended to the pair above rather than replacing them: a
+    // `dropped` ticket can carry its reason and an obligation at once.
+    const owed = ticket.awaiting === null ? "" : `; still awaiting ${ticket.awaiting}`;
+    process.stdout.write(`\n  ${ticket.status} — nothing to pick up${why}${stale}${owed}\n\n`);
     return;
   }
   // Before the pair below, because `unblocked` is exactly the lie `--ready` was

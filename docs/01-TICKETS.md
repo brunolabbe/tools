@@ -11,6 +11,17 @@ run, and stored nowhere. [adr/003](./adr/003-the-status-page-is-generated.md) an
 its amendment are why. Move a ticket to `done` by editing the ticket, in the
 commit that earns it.
 
+**`done` means the work is finished, not that nothing is left.** An acceptance
+line can name a proof that only exists **after a merge** — an alert state, a hook
+firing on `main`, a workflow whose trigger filter keeps it off every branch but
+the default one — and the person finishing the work cannot supply it, by
+construction. That obligation goes in `awaiting`, below, so that something other
+than memory surfaces it; three tickets ended in exactly that state in one batch
+and one of them sat six days
+([repo-32](./work/repo-32-done-can-hide-an-outstanding-obligation.md)). What
+`done` never means is that an acceptance line was skipped: a line nothing proves
+and nobody is waiting on is `unproven`, and that belongs in the gate.
+
 That is the whole point of the format. Splitting a plan across a roadmap row, a
 brief and a status entry means three places to keep in sync by hand, and they
 drift the moment anything interesting happens.
@@ -97,6 +108,7 @@ wrong in the brief. This is what a future reader actually needs.
 | `depends_on` | Ticket ids that must land first                                               |
 | `note`       | Optional. What the status view shows instead of the title                     |
 | `difficulty` | Optional. `mechanical` · `standard` · `hard` — how much judgement it needs    |
+| `awaiting`   | Optional. What this ticket still owes, and what would close it                |
 
 **A value runs to the end of its line and is taken literally, so wrapping one in
 quotes is neither required nor permitted.** This is not YAML. A title opening
@@ -172,9 +184,37 @@ statement. The mapping from a value to a model lives in
 ticket ever names a model — see
 [repo-17](./work/repo-17-a-ticket-declares-its-difficulty.md).
 
-**These fields are parsed, and strictly** — the six required ones and both
+**`awaiting` is what the ticket still owes, written for the reader who no longer
+has a row to read.** It carries the obligation and the observation that closes
+it, in a sentence: `awaiting: Done when 6 — alert 2 reads dismissed on the
+security tab after a push to main`. `npm run status` prints it in its own
+`awaiting` section under the tool, `--show` puts it on the closing line so that
+`done — nothing to pick up` cannot be the last thing an agent reads, and `--json`
+carries it on every ticket, `null` where nothing is owed.
+
+**It is a reminder and never a gate.** An outstanding `awaiting` is not a
+`problem`, does not reach stderr and does not move `--json`'s exit code, which is
+the whole of CI's ticket check. These obligations are open by construction and
+whoever holds one frequently cannot close it, so failing the board on one would
+block unrelated work for a reason nobody could act on — the failure mode
+[repo-24](./work/repo-24-quoted-scalars-render-with-quotes.md) is the recorded
+case of. What _is_ a parse error is the field carrying nothing: `awaiting:` and
+`awaiting: null` are both named by file and line, because unlike every other
+optional field this one **is** its text, and a ticket says it owes nothing by
+having no such line.
+
+**Whoever observes the obligation closed deletes the line, in the commit that
+records the observation** — beside striking the acceptance line it belongs to.
+That sentence is the field's whole defence: a projection nobody clears is the
+second store adr/003 refused to bring back, and this one would rot in the same
+way. Prefer the ticket that owes the thing over the ticket whose merge supplies
+it; where an obligation belongs to no ticket at all, it is a ticket worth filing
+rather than a line worth hanging somewhere convenient.
+
+**These fields are parsed, and strictly** — the six required ones and all three
 optional ones. `scripts/status.mjs` fails by file and line on a key nobody has
-agreed on, a `status`, `kind` or `difficulty` outside the lists above, or an `id`
+agreed on, a `status`, `kind` or `difficulty` outside the lists above, an
+`awaiting` with nothing after it, or an `id`
 that disagrees with its own filename. A parser that
 shrugs at what it does not understand reports a clean status view having read
 half the tickets.
@@ -340,6 +380,7 @@ is named.
 | What you want to say                          | Where it goes                                              |
 | --------------------------------------------- | ---------------------------------------------------------- |
 | A ticket is done, or blocked, or open         | its own frontmatter. `npm run status` is the view over it  |
+| What a done ticket still owes, after a merge  | its `awaiting` field, deleted by whoever observes it       |
 | What a piece of work did, and got wrong       | that ticket's `## Log`                                     |
 | Whether the work was checked, and by whom     | that ticket's `## Review`                                  |
 | A gap a tool still has                        | the ticket that closes it — and if there is none, file one |
@@ -386,7 +427,9 @@ everything withheld, stdout says `nothing is ready and unblocked`, which is also
 what a finished board says.
 
 The default view marks the same distinction: `•` startable, `·` queued behind a
-dependency, `?` waiting on a decision, `»` picked up.
+dependency, `?` waiting on a decision, `»` picked up. Below those, `!` in its own
+`awaiting` section is not a fifth kind of open ticket — it is what a ticket still
+owes, and most of what it names is `done` and has no row above.
 
 ## The agent preamble
 
