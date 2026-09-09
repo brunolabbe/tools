@@ -168,20 +168,25 @@ stays because the failure mode is silent.
 
 ### Send the findings in full; the builder writes the section down
 
-**Do not tell the reviewer to send a `## Review` block for the builder to paste
-verbatim.** An orchestrator did exactly that on 2026-09-03 and it was wrong —
-`docs/01-TICKETS.md:239` is explicit that *"the reviewer reports and the builder
-writes the section down"*, with the date, the verdict, an acceptance table naming a
-test per `Done when` line, and a bullet per finding including the ones needing no
-change. Verbatim transcription is nowhere in that rule, and the reason it is not is
-the same one a reviewer discovers the hard way: **a reviewer's worktree is thrown
-away, so a section authored there is authored into nothing.** The record has to be
-written where it will survive.
+**Tell the reviewer to send a `## Review` block for the builder to commit
+verbatim — that is the rule, settled by the owner on repo-38 (2026-09-09), and
+this page used to argue the opposite.** An orchestrator instructed exactly that
+on 2026-09-03, on a reading of `docs/01-TICKETS.md:294`'s *"the reviewer reports
+and the builder writes the section down"* that this page called wrong, on the
+theory that the sentence left room for the builder to compose the section from
+raw findings rather than commit the reviewer's own text. That theory does not
+survive the owner's ruling: the reviewer returns the section as text and the
+builder commits it unedited, because a reviewer's worktree is thrown away when
+it reports, so a section authored there is authored into nothing. The record has
+to be written where it will survive, by the one still holding write access —
+verbatim, because the builder is also the model under review, and letting it
+compose its own verdict is the one thing the split between reviewer and builder
+exists to prevent.
 
-**The hazard the verbatim instruction was reaching for is real, but it is a
-different one: a record must never carry findings or verdicts its writer never
-received.** Both halves of that were measured the same afternoon, and the contrast
-is the whole lesson.
+**Verbatim is the rule; a narrower hazard sits beside it and is still real: a
+record must never carry findings or verdicts its writer never received.** Both
+halves of that were measured the same afternoon, and the contrast is the whole
+lesson.
 
 - A reviewer sent the orchestrator a literal block and sent the **builder** a prose
   narration of the same six attacks. The builder refused to compose the record from
@@ -191,23 +196,41 @@ is the whole lesson.
 - A sibling reviewer sent its builder two complete findings reports, then said "go
   ahead and write the section". The builder wrote a compliant section: date,
   verdict, both passes and their shas, `capture-rules.test.ts:359` and two more per
-  acceptance row, a bullet per finding. The reviewer flagged it as "not verbatim".
-  **The section was correct**, and it did something a pasted block could not — it
-  attributed which side measured what, because by then the builder had run
-  experiments the reviewer had not seen when it wrote its report.
+  acceptance row, a bullet per finding. The reviewer flagged it as "not verbatim",
+  **and the owner's ruling on repo-38 says the reviewer was right to flag it**: the
+  attribution this measurement shows — which side measured what, from experiments
+  the reviewer had not seen when it wrote its report — is a reason to send the
+  reviewer that detail so it can fold it into its own returned section, not a
+  reason to let the model under review author the record itself.
 
-So the test is **not** "are these the reviewer's exact words". It is **"was every
-finding and verdict in this section actually received"**. What the gate prompt
-should require is therefore about completeness, not form:
+So the test **is** "are these the reviewer's exact words", for the section that
+gets committed — that is what "verbatim" settled to mean on repo-38. Completeness
+answers a different, earlier question, about what has to reach the builder before
+it commits anything: **was every finding and verdict the reviewer holds actually
+sent**. A gate prompt needs both:
 
 - **Send findings in full, not a summary** — every finding, its evidence, its
   disposition, and the acceptance verdicts with their test citations. A builder
-  cannot write down what it was not told.
+  cannot write down what it was not told, and once it has been told, it commits
+  what the reviewer returned rather than composing its own version of it.
 - **Do not authorise the commit before the findings are complete.** Ordering is
   what bit here: "ship it, my findings follow" is a race the builder cannot see,
   where "here are my findings, then ship" is one message.
 - **A builder that refuses to fabricate a record is doing its job**, not being
   obstinate. Budget the round rather than pressing it.
+
+**"Verbatim" cannot mean byte-identical when the section cites its own ticket,
+and repairing that is not a violation of it.** repo-42's reviewer handed over a
+section transcribed verbatim and `citations-gate.mjs` failed it anyway — a
+`## Review` section that cites its own ticket file by coordinate is structurally
+indistinct, because `scripts/citations.mjs`'s anchor check counts a fragment's
+occurrences across the whole file (`occurrences: hits.length`, `locateAnchor`
+run over the full content) with no exclusion for the line doing the citing.
+Repairing that — a full path instead of a bare `:NNN`, a named section instead of
+a self-citation — touches no verdict, row or severity in the section, so it is
+not the builder editing the model under review's own judgement. Make that repair
+and commit it; do not read it as breaking verbatim, and do not leave the next
+builder caught between an unsatisfiable rule and a red gate.
 
 ### Addressing, which is where this loop actually failed
 

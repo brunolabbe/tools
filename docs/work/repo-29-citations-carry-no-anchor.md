@@ -546,7 +546,10 @@ line is checkable whichever option is taken.
 dispatched `sonnet`, builder `opus`
 
 **Written by the builder, which is the model under review**, per
-`docs/01-TICKETS.md:350 "So the reviewer reports and the builder writes"`. The
+`docs/01-TICKETS.md`'s "So the reviewer reports and the builder writes the
+section down" sentence (repo-38: cited by line four times across three
+branches in two days, `293` → `294` → `349` → `350` — named here without one
+so it cannot go stale again; not mechanically checked as a result). The
 reviewer returned five reports as messages and its worktree is gone — it hit a
 session rate limit after delivering the PASS — so this is a transcription with
 attribution rather than a verbatim block. **All five reports are posted to PR
