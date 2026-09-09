@@ -23,9 +23,10 @@ they name **different people** as the writer of the record.
 sentence is that the subagent returns the section as text and **the caller**
 commits it to the ticket, verbatim.
 
-`docs/01-TICKETS.md:293 "So the reviewer reports and the builder writes"` — the
-sentence finishes "the section down", and the writer it names is **the
-builder**.
+`docs/01-TICKETS.md:294 "So the reviewer reports and the builder writes"`
+(`:293` as originally filed; moved one line by this ticket's own build, see the
+2026-09-09 Log entry) — the sentence finishes "the section down", and the
+writer it names is **the builder**.
 
 **They agree on the negative and differ on the positive**, which is why nobody has
 noticed. Both say the reviewer must not write it, both give the same reason —
@@ -160,8 +161,8 @@ them.
   coordinator, not defaulted.
 
 - **2026-09-09** — Built option A. Both cited line numbers still held against
-  `origin/main` at dispatch (`SKILL.md:113`, `docs/01-TICKETS.md:293`); re-checked
-  with `grep -n` before editing either.
+  `origin/main` at dispatch (`.claude/skills/review-ticket/SKILL.md:113`,
+  `docs/01-TICKETS.md:293`); re-checked with `grep -n` before editing either.
 
   `.claude/skills/review-ticket/SKILL.md` now states the rule: the builder — not
   "the caller" — commits the `## Review` section, verbatim, and discloses its own
@@ -173,18 +174,26 @@ them.
   "nothing" — matching the ticket's Build step 1 instruction.
 
   **Wider than the single cited sentence, and here is why.** "The caller"
-  described the committer in twelve places through the page, not one — the
-  opening summary (`:15-20` pre-edit), the repo-1 narrative, both halves of step
-  7/8's procedure, the merged-bullet note in step 3, and the closing paragraph.
-  Fixing only `:113` and leaving the other eleven would have left the same
-  contradiction one level down: two statements in the _same_ file disagreeing
-  about who commits, which is the exact defect this ticket exists to remove.
-  Left two "caller" uses alone on purpose, both genuinely about the _dispatching_
-  role rather than the committing one — the ticket-id/sha/range hand-off
-  (`:93`) and the historical "old wording" quote (`:138`) — since the dispatcher
-  (typically the orchestrator, per `orchestrate-tickets` step 4) and the
-  committer (the builder) are different roles today and only the second one is
-  this ticket's subject.
+  described the committer in twelve base occurrences through the page (of
+  fifteen total pre-edit) — the opening summary (`:15-20` pre-edit), two of the
+  repo-1 narrative's three, both halves of step 7/8's procedure, the
+  merged-bullet note in step 3, and the closing paragraph. Fixing only `:113`
+  and leaving the other eleven would have left the same contradiction one level
+  down: two statements in the _same_ file disagreeing about who commits, which
+  is the exact defect this ticket exists to remove.
+
+  **Three "caller" uses were left alone on purpose**, all genuinely about the
+  _dispatching_ role rather than the committing one: the ticket-id/sha/range
+  hand-off (`:93`), the historical "old wording" quote (`:138`), and, inside the
+  repo-1 narrative itself, "the caller saw a correctly-formatted gate, believed
+  it was recorded" (`:119` at the tip — that sentence's wording is untouched by
+  this edit, only reflowed by the paragraphs added around it). `:119` reads as
+  the dispatcher who oversaw the pre-fix process and was misled by it, not as a
+  claim about who commits today, which is why it was left standing alongside
+  `:93` and `:138` rather than folded into the eleven that changed. (Caught by
+  the gate on this build, which read the diff and found this paragraph had
+  undercounted the survivors as two and mis-filed `:119` among the changed
+  places — corrected here rather than in a new round.)
 
   `docs/01-TICKETS.md`'s `:293` sentence stays exactly as filed. One sentence
   was added right after it, pointing at `SKILL.md` for the rule and the
@@ -226,3 +235,63 @@ appends"` across the repo: two hits were this ticket's own brief (quoting
   alone — **108 tests, 1 file, all passed**. Did not run `npm test` in full:
   this ticket touched no shared config, only prose in three governing documents
   and the ticket file itself.
+
+- **2026-09-09, later** — Gate on `c8e1f51` came back FAIL (2 med, 3 low). I
+  reproduced every finding before acting on any of them.
+
+  **Fixed, med** — `docs/01-TICKETS.md:282` said "the caller appends what comes
+  back", five lines above "the builder commits the gate" and twelve above this
+  ticket's own new pointer sentence — the one file left naming two actors for
+  one act, and this branch is what removed the last governing document that
+  still supported the "caller" reading, so it went from merely-imprecise to the
+  sole surviving statement of it. Fixed by dropping the actor from the clause
+  entirely rather than naming one, since the paragraph's subject is which model
+  gates, not who commits: "what it returns is appended to the ticket without
+  editing it — who does the appending is stated once, below, not here."
+
+  **Not acted on, med** — `.claude/skills/orchestrate-tickets/reference/
+dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
+  contradicts `SKILL.md`'s now-authoritative verbatim requirement. Confirmed
+  real and pre-existing at `origin/main`, sharpened rather than created by this
+  branch: `docs/01-TICKETS.md` now delegates the rule to `SKILL.md` by name, so
+  `dispatching.md`'s claim resolves through that pointer into a page that
+  requires verbatim four times. Reviewer correctly named this contract-adjacent
+  and escalated it to the orchestrator as an open decision rather than asking
+  either of us to settle it — verbatim transcription vs. completeness-of-receipt
+  is a real tradeoff with measured evidence on both sides
+  (`dispatching.md:186-197`), and neither a builder nor a reviewer gets to pick.
+  Left both documents exactly as they stood.
+
+  **Fixed, low** — the Log's survivor count was wrong: it said "two" `caller`
+  uses were left deliberately and listed "the repo-1 narrative" among the
+  places changed, when one of that narrative's three `caller` mentions
+  (`.claude/skills/review-ticket/SKILL.md:119`, unchanged text, only reflowed)
+  survived alongside its `:93` and `:138`. Corrected the count to three and
+  named `:119`'s own reason — it reads as the dispatcher who oversaw the
+  pre-fix process, not a claim about who commits today.
+
+  **Fixed, low** — `node scripts/citations.mjs` on this ticket exited 1: the
+  bare filename `SKILL.md` at line 113 in the Log's dispatch line was ambiguous
+  across three tracked files of that name. Qualified it to
+  `.claude/skills/review-ticket/SKILL.md:113`. Fixing `:282` above then moved
+  `docs/01-TICKETS.md:293`'s sentence down to `:294`, which the checker caught
+  as `MOVED` on the next run — this ticket's own Why-section citation
+  (`:26` in this file) and re-cited it at `:294`, noting it was `:293` as
+  originally filed. Re-ran the checker after both fixes: **exit 0, 0 moved, 0
+  unresolvable, 21 references** (up from 15 as filed, since fixing the ambiguous
+  name rebound four shorthand references that had been silently resolving
+  against the wrong file). **Then repeated the same mistake writing this very
+  entry** — three more bare `SKILL.md:*` coordinates, caught by re-running the
+  checker rather than by care; qualified all three the same way.
+
+  **Deferred, low, on the reviewer's own recommendation** — the pointer loop
+  between `.claude/skills/review-ticket/SKILL.md:126` and
+  `docs/01-TICKETS.md`'s disclaimer. Fixed anyway, since it was one sentence:
+  `SKILL.md`'s tradeoff paragraph no longer points back to `docs/01-TICKETS.md`
+  at all, so there is nothing left to loop with.
+
+  Re-ran the full gate set after all five fixes: `npm run format` (no
+  additional diff beyond the three touched files), `npm run check` exit 0,
+  `node scripts/status.mjs --json` exit 0, `npx vitest run --project repo` —
+  **288 tests, 6 files, all still passing** — and `node scripts/citations.mjs`
+  on this ticket — exit 0.

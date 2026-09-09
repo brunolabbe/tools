@@ -122,11 +122,10 @@ check it against.
 
 **The builder, not the caller that dispatched the reviewer, is the one who
 commits it** — in a dispatched loop those are two different sessions, and it is
-the builder who already holds write access to the branch.
-`docs/01-TICKETS.md` weighs that tradeoff; this page states what it settled on:
-the independence a separate transcriber would buy is spent, and the disclosure
-note below plus the posted report (step 8) are what is left standing in its
-place.
+the builder who already holds write access to the branch. That costs the
+independence a separate transcriber would buy: the subject of the review
+becomes its own transcriber, and the disclosure note below plus the posted
+report (step 8) are what is left standing in its place.
 
 So the builder writes it into `tools/<tool>/docs/work/<id>-*.md` above `## Log`,
 in the branch's own commit, then runs `npx oxfmt` on the ticket file — markdown is

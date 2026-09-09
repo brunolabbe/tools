@@ -336,10 +336,11 @@ the rules in this repo's `CLAUDE.md` files and `.claude/rules/` that each exist
 because something once went wrong.
 
 **The model that wrote the code does not gate it.** The skill dispatches a
-subagent on the other of Opus and Sonnet, and the caller appends what comes back
-without editing it. A model reading its own work re-runs the reasoning that
-produced it, so the blind spot is correlated and a second pass mostly re-derives
-the first one's confidence.
+subagent on the other of Opus and Sonnet, and what it returns is appended to the
+ticket without editing it — who does the appending is stated once, below, not
+here. A model reading its own work re-runs the reasoning that produced it, so
+the blind spot is correlated and a second pass mostly re-derives the first
+one's confidence.
 
 **The builder commits the gate, in the branch under review** — not the reviewer.
 A reviewer works in a worktree that is thrown away once its record is pushed and
