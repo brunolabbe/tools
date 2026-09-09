@@ -34,17 +34,28 @@ interface HookRun {
 /**
  * `shell: false` and an argv array, per the repo-wide rule.
  *
- * `projectDir` is the checkout the hook sees as `CLAUDE_PROJECT_DIR`. It
- * defaults to this repo and is overridden only by `check-main-writes.sh`'s
- * bare-push cases, which read HEAD out of it: pointing those at the real
- * checkout would make the expected verdict depend on whichever branch the
- * suite happens to be running from, and CI runs it from `main`.
+ * `projectDir` is the checkout the hook sees as `CLAUDE_PROJECT_DIR`; `cwd` is
+ * the checkout the command is notionally issued from, sent as the payload's
+ * `cwd` field and used as the spawned process's working directory, which is
+ * what the real harness does.
+ *
+ * They default to the same directory, and that default is exactly the
+ * assumption repo-42 found baked into every case here: under worktree
+ * isolation the harness keeps `CLAUDE_PROJECT_DIR` on the shared root while
+ * `cwd` follows Claude into the worktree, so a test that never separates them
+ * cannot see a hook that reads the wrong one. Pass both to separate them.
  */
-function run(hook: string, command: string, projectDir: string = REPO): HookRun {
+function run(
+  hook: string,
+  command: string,
+  projectDir: string = REPO,
+  cwd: string = projectDir,
+): HookRun {
   const result = spawnSync("bash", [hook], {
-    input: JSON.stringify({ tool_input: { command } }),
+    input: JSON.stringify({ cwd, tool_input: { command } }),
     encoding: "utf8",
     env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir },
+    cwd,
     shell: false,
   });
   return { status: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
@@ -336,26 +347,48 @@ test("check-main-writes refuses every spelling of main the deny list's globs mis
   }
 });
 
-test("check-main-writes reads HEAD for a push with no refspec, rather than guessing", () => {
-  // The command string cannot say where a bare push lands, so the hook asks the
-  // checkout. One positional counts as none: `git push origin` still leaves the
-  // branch implicit.
+test("check-main-writes leaves a push with no refspec alone, whatever any checkout's HEAD says", () => {
+  // repo-42, option (c): the bare-push branch is gone, so no arrangement of
+  // directories produces a refusal for a command that names no destination.
+  //
+  // The four rows are the ones the deleted branch refused, and the directory
+  // pairs are the three arrangements that mattered to it. The first is the
+  // split the harness's own worktree isolation creates — the shared root on
+  // `main`, the command running in a worktree that is not — and it is the false
+  // positive repo-42 measured live, so it leads. The second is the case the
+  // hook was written for and no longer answers, held instead by ruleset
+  // 20870721's `pull_request` rule, which reads the ref that arrives on the
+  // wire rather than the refspec the client typed.
   const onMain = checkoutOn("main");
-  for (const command of [PUSH, `${PUSH} origin`, `${PUSH} --force`, `${PUSH} -u origin`]) {
-    const result = run(MAIN_WRITES, command, onMain);
-    expect(result.status, command).toBe(2);
-    expect(result.stderr, command).toContain("HEAD is main");
+  const onFeature = checkoutOn("repo-42-fixture");
+  for (const [projectDir, cwd] of [
+    [onMain, onFeature],
+    [onMain, onMain],
+    [onFeature, onFeature],
+  ]) {
+    for (const command of [PUSH, `${PUSH} origin`, `${PUSH} --force`, `${PUSH} -u origin`]) {
+      const where = `${command} (CLAUDE_PROJECT_DIR=${projectDir}, cwd=${cwd})`;
+      expect(isSilent(run(MAIN_WRITES, command, projectDir, cwd)), where).toBe(true);
+    }
   }
 });
 
-test("check-main-writes leaves a bare push alone when HEAD is not main", () => {
-  // The other half of the branch read. Without it the hook would refuse the
-  // ordinary push every builder here makes, which is the failure mode that
-  // teaches people to route around a hook.
-  const onFeature = checkoutOn("repo-15-fixture");
-  for (const command of [PUSH, `${PUSH} origin`, `${PUSH} -u origin`]) {
-    expect(isSilent(run(MAIN_WRITES, command, onFeature)), command).toBe(true);
-  }
+test("check-main-writes consults no checkout at all, which is what makes the case above hold", () => {
+  // The behavioural test above passes for two different reasons — a hook that
+  // reads the *right* directory would also pass it — so this pins the stronger
+  // property option (c) actually bought: the verdict is a function of the
+  // command string alone. A future editor re-adding a branch read has to delete
+  // this line to do it.
+  //
+  // Split at `set -uo pipefail` so the header stays free to *discuss* the
+  // branch it dropped and the variable it stopped reading — the assertion is
+  // about the executable half, not about the prose above it.
+  const source = fs.readFileSync(MAIN_WRITES, "utf8");
+  const start = source.indexOf("set -uo pipefail");
+  expect(start, "the header/body marker moved").toBeGreaterThan(-1);
+  const body = source.slice(start);
+  expect(body).not.toContain("symbolic-ref");
+  expect(body).not.toContain("CLAUDE_PROJECT_DIR");
 });
 
 test("check-main-writes leaves an ordinary branch push alone", () => {
