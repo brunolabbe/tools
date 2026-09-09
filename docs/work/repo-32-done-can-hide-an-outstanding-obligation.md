@@ -3,7 +3,7 @@ id: repo-32
 tool: repo
 title: A done ticket can carry an obligation nobody can see
 kind: chore
-status: in-flight
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -169,8 +169,19 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
    is red and nobody owns it" condition is either carried by the mechanism, with
    what it attaches to written down, or explicitly declared out of scope with a
    reason. **Not left as the third bullet of a Build step**, which is how it
-   would go missing. The meaning of `awaiting` (the three readings above) is put
-   to the owner before the parser is written, and the answer recorded here.
+   would go missing. ~~The meaning of `awaiting` (the three readings above) is
+   put to the owner before the parser is written, and the answer recorded
+   here.~~
+
+   **Answered 2026-09-09: reading A — _waiting on an event that will happen_.**
+   Recorded in full in the Log entry of that date, and written into
+   `docs/01-TICKETS.md` beside the field. **The ordering this line asked for was
+   not met and is not claimed:** the parser was written first, because the
+   dispatch said to build and the answer was not available. What made that
+   survivable is that the shape it settles — the field's name — was the one
+   thing the losing reading (C) would have changed, and C is not what was
+   chosen; had it been, this would have cost a rename. Recorded as a real miss
+   rather than folded into the answer.
 
 ## Review
 
@@ -179,17 +190,30 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
 **PASS.** Reviewed by a `ticket-reviewer` subagent on Sonnet; the branch was
 built on Opus, so the two halves of this section were written by different
 models. Transcribed by the builder, which is the model under review, per
-`docs/01-TICKETS.md:333 "So the reviewer reports and the builder writes"`.
+`docs/01-TICKETS.md:349 "So the reviewer reports and the builder writes"`.
 
-| `Done when`                                                        | Verdict      | What proves it                                                                                                                                                                         |
-| ------------------------------------------------------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Decision answered by the owner, rejected options with costs     | **verified** | the Log entry of 2026-09-07, re-read by the reviewer against this page; no test, and none possible — it is a record of a human's answer                                                |
-| 2. Mechanism implemented, and made to fail first                   | **proven**   | `scripts/test/status.test.ts:1618 "the repo's own board surfaces at least one real outstanding obligation"`, plus the 17/110 → 127/127 pair reproduced independently by the reviewer   |
-| 3. The three instances re-read at build time, state recorded       | **verified** | the Log entry of 2026-09-09, cross-checked by the reviewer against repo-13, repo-15, repo-16 and repo-42's own frontmatter rather than against this page                               |
-| 4. `docs/01-TICKETS.md` says what `done` does and does not promise | **proven**   | `scripts/test/status.test.ts:1607 "the ticket format documents the field and says who clears it"`, over `docs/01-TICKETS.md:14 "means the work is finished, not that nothing is left"` |
-| 5. `npm run check` passes and `npm run format` has been run        | **verified** | both re-run by the reviewer in its own worktree: exit 0, and no diff after formatting                                                                                                  |
-| 6a. Build step 4 answered or declared out of scope, with a reason  | **verified** | the Log entry of 2026-09-08, which strikes the step and records the closure; the reviewer confirmed the step is struck in place rather than deleted                                    |
-| 6b. The meaning of `awaiting` put to the owner, answer recorded    | **unproven** | nothing. It is unanswered, `status` is `in-flight` because of it, and the three readings are carried up as an open decision rather than settled in a commit                            |
+| `Done when`                                                        | Verdict                                                                 | What proves it                                                                                                                                                                         |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Decision answered by the owner, rejected options with costs     | **verified**                                                            | the Log entry of 2026-09-07, re-read by the reviewer against this page; no test, and none possible — it is a record of a human's answer                                                |
+| 2. Mechanism implemented, and made to fail first                   | **proven**                                                              | `scripts/test/status.test.ts:1618 "the repo's own board surfaces at least one real outstanding obligation"`, plus the 17/110 → 127/127 pair reproduced independently by the reviewer   |
+| 3. The three instances re-read at build time, state recorded       | **verified**                                                            | the Log entry of 2026-09-09, cross-checked by the reviewer against repo-13, repo-15, repo-16 and repo-42's own frontmatter rather than against this page                               |
+| 4. `docs/01-TICKETS.md` says what `done` does and does not promise | **proven**                                                              | `scripts/test/status.test.ts:1607 "the ticket format documents the field and says who clears it"`, over `docs/01-TICKETS.md:14 "means the work is finished, not that nothing is left"` |
+| 5. `npm run check` passes and `npm run format` has been run        | **verified**                                                            | both re-run by the reviewer in its own worktree: exit 0, and no diff after formatting                                                                                                  |
+| 6a. Build step 4 answered or declared out of scope, with a reason  | **verified**                                                            | the Log entry of 2026-09-08, which strikes the step and records the closure; the reviewer confirmed the step is struck in place rather than deleted                                    |
+| 6b. The meaning of `awaiting` put to the owner, answer recorded    | **unproven** at the gate — **closed 2026-09-09**, see beneath the table | nothing, at `a98327d`. It was unanswered, `status` was `in-flight` because of it, and the three readings were carried up as an open decision rather than settled in a commit           |
+
+> **Row 6b is closed, and the verdict above is left standing rather than
+> rewritten.** The owner answered on 2026-09-09 — reading A, _waiting on an event
+> that will happen_ — so the line now has what it asked for and `status` is
+> `done`. `unproven` was true of `a98327d`, which is the commit this gate read,
+> and a gate record is a statement about a commit: silently flipping it to
+> `verified` would make the reviewer's signature say something it never checked.
+> The repo's own rule for this is in
+> `.claude/skills/orchestrate-tickets/reference/records.md` — withdraw or close a
+> claim in place, never delete it — and repo-16's Log records applying it to
+> repo-13's gate table. **The reviewer has not seen the answer**; what closes the
+> row is the owner's decision, recorded in the Log entry of 2026-09-09, not a
+> second gate.
 
 **Findings, all of them, including the ones that needed no change.**
 
@@ -660,3 +684,84 @@ obligation` (16 failed | 111 passed), which **was a false green and was
   `node scripts/status.mjs --json > /dev/null` → exit 0. **Not run and not
   provable here:** either tool's e2e suite or container build, neither of which
   this change can reach.
+
+- **2026-09-09, later** — **Answered by the owner: reading A. `awaiting` means
+  _waiting on an event that will happen_.** `status` moves to `done`; this is the
+  entry `Done when` 6's second sentence asked for, and that sentence is struck
+  above.
+
+  **The question**, as `Done when` 6 posed it and as it was put: what does
+  `awaiting` mean? Three readings, all of which the original instances satisfy —
+  which is why the filing did not have to choose and the build did.
+
+  - **A — waiting on an event that will happen. CHOSEN.** The event is nameable
+    and somebody will be able to take the reading once it has happened: a merge,
+    a push to `main`, a workflow run, a page that only exists afterwards. It is
+    the reading the field's own name carries, and the one the owner's earlier
+    answer already spoke in — "open by construction, the proof does not exist
+    until after a merge".
+  - **B — the proof is not available to whoever is closing this.** Rejected. It
+    admits repo-31's fact 1 (whether `if: failure()` fires under a job-level
+    `continue-on-error`) on the grounds that the builder stops before the pull
+    request — but that answer exists as soon as anyone opens one, so B would
+    hang a field on the _builder's_ position in a workflow rather than on the
+    world. Its cost is a slot that fills with things a colleague could answer
+    today.
+  - **C — anything a `done` ticket still owes.** Rejected, and it was the
+    expensive one: it admits everything and makes the field's name wrong, so
+    choosing it meant a rename. Its cost is that a name which stops describing
+    its contents stops being read.
+
+  **The cost that travels with A, and it is a real exclusion rather than a
+  tidy-up.** A rules out **repo-31's fact 3** — whether `main` still carries no
+  `required_status_checks`. That needs `gh api`, which `.claude/settings.json`
+  denies on purpose; **merging does not unlock it and neither does anything else
+  available here.** No event will ever close it, so under A it is not an
+  `awaiting` line: a field whose name promises an event would be recording a
+  permanent condition in a slot shaped for a temporary one, and nobody would ever
+  delete the line — which is precisely the rot the owner's "who clears it" cost
+  was about.
+
+  **So fact 3 needs a home, and this entry is it for now.** Written here rather
+  than filed, because a ticket carries a decision or a reproduction and this has
+  neither left: it is blocked by a permission decision the repo made deliberately
+  and the answer is "you cannot read this from here". **What is not settled is
+  whether anybody should be able to** — that is a question about the deny list,
+  not about this field, and it belongs to whoever next revisits
+  `.claude/settings.json`. It is recorded in `docs/01-TICKETS.md` beside the
+  field as the worked example of what A excludes, so the next author meets it
+  where they would otherwise reach for the field. **Left findable from repo-31,
+  where the fact originated, is the one thing this entry does not do** — repo-31
+  is `done` and belongs to another branch's history, and editing it was not
+  asked for. A one-line Log append there would close that gap.
+
+  **Provenance.** Put to the owner by the coordinating session and relayed here.
+  The three readings were read out of this page's own Build/Log sections by the
+  coordinator rather than taken from the builder's report or the reviewer's, and
+  **A matches the builder's recommendation, so it overrode nobody.** This entry
+  is written from that relay: the answer and its authority are not things a
+  builder can verify from inside a sandbox, and saying so is the honest form of
+  recording them.
+
+  **What changed in the tree for it**, and it is small because the build was
+  deliberately built to the part all three readings share: `docs/01-TICKETS.md`
+  gains the two paragraphs that state A and name the exclusion, `Done when` 6's
+  second sentence is struck with the ordering miss recorded rather than hidden,
+  the gate's row 6b is closed in place rather than rewritten, and `status` is
+  `done`. **No source changed.** `scripts/status.mjs` needed nothing: the field
+  is free text and `awaitingTickets` filters on `!== null` alone, so A is a rule
+  for authors and not a rule for the parser. Whether it should become one — a
+  check that an `awaiting` line names an event — is a question with no cheap
+  answer and no instance yet, and it is not filed.
+
+  **One thing considered and not done, since a silent deferral is invisible.**
+  This branch and `repo-38` both repoint the same coordinate in
+  `docs/work/repo-29-citations-carry-no-anchor.md`'s committed `## Review`, to
+  different numbers, and whichever merges second must re-resolve it. That is
+  A-shaped on its face — an event, a merge, closes it — so an `awaiting` line on
+  this ticket was the obvious move. **It would have been wrong**, and the reason
+  is worth keeping: the obligation belongs to whichever branch merges _second_,
+  which is not yet decided and may not be this one. If this branch merges first
+  the line is vacuous the moment it lands, and a vacuous `awaiting` line nobody
+  can delete is the exact failure the field was built to avoid. It is in the pull
+  request body instead, where the second merger will be reading.

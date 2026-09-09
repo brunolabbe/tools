@@ -192,6 +192,22 @@ security tab after a push to main`. `npm run status` prints it in its own
 `done — nothing to pick up` cannot be the last thing an agent reads, and `--json`
 carries it on every ticket, `null` where nothing is owed.
 
+**It means _waiting on an event that will happen_, and the name is exact.** The
+event is nameable — a merge, a push to `main`, a workflow run, a look at a page
+that only exists afterwards — and somebody will be able to take the reading once
+it has happened. That is the whole test, and it was answered by the repo's owner
+rather than assumed
+([repo-32](./work/repo-32-done-can-hide-an-outstanding-obligation.md), which
+records the two readings that lost and what each would have cost).
+
+**So an obligation that _no_ event will ever close is not an `awaiting` line**,
+however outstanding it is. The worked case: whether `main` carries no
+`required_status_checks` needs `gh api`, which `.claude/settings.json` denies on
+purpose — merging does not unlock it and neither does anything else, so a field
+whose name promises an event would be recording a permanent condition in a slot
+shaped for a temporary one, and nobody would ever delete the line. Those go in
+the Log, or in a ticket of their own if there is still something to decide.
+
 **It is a reminder and never a gate.** An outstanding `awaiting` is not a
 `problem`, does not reach stderr and does not move `--json`'s exit code, which is
 the whole of CI's ticket check. These obligations are open by construction and
