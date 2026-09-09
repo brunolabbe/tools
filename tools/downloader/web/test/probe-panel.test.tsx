@@ -118,17 +118,32 @@ test("the header names what was found and which resolver found it", () => {
 });
 
 test("the count over the table counts the rows the table shows (dl-40)", () => {
-  // Ten declared, five rendered: "10 renditions" above five rows is the same
-  // defect as ten identical rows, told from the other end. What was merged is
+  // Four declared, two rendered: "4 renditions" above two rows is the same
+  // defect as four identical rows, told from the other end. What was merged is
   // said out loud rather than silently dropped from the count.
   //
-  // The yt-dlp ladder rather than the manifest one, because since dl-45 that is
-  // where the picker still has something to merge — a load balancer handing the
-  // same ladder back under several hostnames, which no parser can group by
-  // attributes because they are separate `formats` from separate responses.
+  // The jittered manifest, and it is now the *only* fixture in the repo that
+  // makes this line appear — measured across all six derived fixtures on
+  // 2026-09-08, every other one reports `collapsed=0`. The yt-dlp balancer
+  // ladder used to stand here and stopped when dl-47 taught that tier to group
+  // its own mirrors, exactly as dl-45 predicted it would. These four rungs
+  // differ in a **real number the table does not render** — declared BANDWIDTH
+  // a few hundred bps apart — so no producer may ever group them and this case
+  // cannot follow the other one upstream.
+  mount(probe({ variants: parsedVariants("manifests/hls-master-mirrors-jittered-bandwidth") }));
+
+  expect(screen.getByText(/2 renditions · 2 duplicate paths merged/u)).toBeDefined();
+  expect(within(screen.getByRole("table")).getAllByRole("radio")).toHaveLength(2);
+});
+
+test("a tier whose mirrors were grouped upstream reports no merge (dl-47)", () => {
+  // The other half of the same line for the second producer. Ten addresses
+  // arrived from the balancer, the tier folded them into five renditions
+  // carrying their own failover paths, and the picker merged nothing — so it
+  // must not claim it did.
   mount(probe({ variants: parsedVariants("ytdlp/balancer-duplicate-ladder") }));
 
-  expect(screen.getByText(/5 renditions · 5 duplicate paths merged/u)).toBeDefined();
+  expect(screen.getByText(/12:34 · 5 renditions$/u)).toBeDefined();
   expect(within(screen.getByRole("table")).getAllByRole("radio")).toHaveLength(5);
 });
 

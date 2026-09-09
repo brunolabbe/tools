@@ -3,7 +3,7 @@ id: dl-47
 tool: downloader
 title: The yt-dlp tier's failover mirrors need a same-content signal
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: [dl-45]
 difficulty: hard
@@ -88,7 +88,26 @@ audio under the row the user chose for English**. Serving content the user did
 not select is a different class of defect from not offering it, and it is the
 one this ticket must not ship.
 
-## Decision — open, not settled
+## Decision — answered 2026-09-08 by the owner, not open
+
+**The answer is B: require a positive same-content signal.** Group only where the
+source itself vouches for it — the `format_id` family the balancer fixture
+exhibits as `default-209-0` / `default-209-1`.
+
+**The reasoning the owner accepted** is this section's own: it is the difference
+between "no evidence they differ" and "evidence they are the same", and A is a
+denylist of one that stops the known merge without establishing that no unknown
+merge remains.
+
+**"B with A as a fallback" was offered as a separate option and was not chosen**,
+so there was no authority to fall back to A. Had no reliable positive signal
+survived contact with the fixtures, the answer was to stop and report it as an
+open decision — not to implement A quietly, and not to widen into A's shape "just
+in case". The signal did survive, and was measured rather than reasoned; see the
+Log entry for 2026-09-08.
+
+**Build step 1 is answered by this**, and the three options are left below as
+they stood when the question was put:
 
 **What signal licenses the claim that two yt-dlp formats are the same
 rendition?** Both options were named by the dl-45 gate; neither was chosen, and
@@ -121,8 +140,9 @@ identity, and the wrong answer is silent.
 
 ## Build
 
-1. **Answer the decision above first.** Everything else depends on it, and A and
-   B produce different shapes for the shared code.
+1. ~~**Answer the decision above first.**~~ **Answered 2026-09-08: option B.**
+   Everything else depends on it, and A and B produce different shapes for the
+   shared code.
 2. Group the tier's mirrors on that signal, in `mapYtDlpInfo`, **after**
    `dropDuplicateFormats` — an exact duplicate reaching the grouping would
    become its own rendition's "alternate", which is a mirror on the same host
@@ -156,6 +176,202 @@ identity, and the wrong answer is silent.
   HLS one — driven by a fixture origin, not a mocked retry counter.
 - `npm run check` and `npm test -- --project downloader` pass.
 
+## Review
+
+### 2026-09-08 · tip `d685563`, base `a5e31c7` (`origin/main`)
+
+**Gate: PASS** — `ticket-reviewer` subagent, agent id `a75a349132392436b`, running
+**Sonnet**; the branch was built on **Opus 5 (1M context)**. The pairing is a fact
+about this dispatch rather than an inference: both halves were fixed when each
+agent was dispatched, and nothing else in the branch records either, since the
+`Co-Authored-By` trailer is built once per session tree from the orchestrator's
+model and the `Generated with Claude Code` footer names none.
+
+**Transcribed by the builder, which is the subject of the review.** The reviewer
+has no `Write` or `Edit` tool and its worktree is discarded, so its message is the
+only record and this section is the builder's transcription of it. Disclosed
+because the owner ruled on 2026-09-08 that under this loop the disclosure is
+required rather than a courtesy. **What was altered:** nothing was dropped or
+softened; the reviewer's prose is condensed, its two notes are reproduced in full
+below including the one that corrects the builder, and every coordinate cited here
+was re-resolved against `d685563` before this was committed rather than copied
+across.
+
+**The reviewer verified rather than re-read, and how far it went is the part worth
+keeping.** It set up per the standard order and confirmed
+`git log --oneline -1` = `d685563` and `git diff --stat a5e31c7...HEAD` before
+running anything. It then **built its own local HTTP origin from scratch, with
+hand-written playlists rather than this branch's fixtures**, and ran all four rows
+of the `format_id` table against its own `yt-dlp 2025.09.26`. **All four
+reproduced, including row 2** — same BANDWIDTH, different RESOLUTION →
+`209-0`/`209-1`, the observation the whole design rests on. So the empirical claim
+is confirmed twice, by two agents, on two independently constructed origins; that
+is a stronger statement than agreement and it is the one a later reader wants.
+
+It also re-ran all four mutations against the real source (reverting each, tree
+clean afterwards), swapped the two calls in `ytdlp.ts` itself, enumerated all six
+derived fixtures through `toDisplayRows`, and regenerated
+`balancer-duplicate-ladder.variants.json` from `mapYtDlpInfo` and diffed it
+byte-for-byte against the checked-in file (identical, 5/5). None of that was taken
+from the Log. Its own `npm run check` exits 0 and its own
+`npm test -- --project downloader` is 1214 over 73 files.
+
+| Done when                                                                                                | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Two audio-only formats differing only in `format_note` stay two variants, neither the other's alternate. | **Proven** — `resolvers/test/ytdlp.test.ts:600` "two audio tracks the mapper cannot tell apart stay two variants", asserted at `resolvers/test/ytdlp.test.ts:611` "variant.url).toSorted()).toEqual". Confirmed a real guard, not a vacuous one: it is one of the four that go red under mutation 1.                                                                                                                                                                   |
+| The balancer fixture's real mirrors do group, and the guard is not vacuous.                              | **Proven, narrower than the line's literal wording** — `resolvers/test/ytdlp.test.ts:625` "the balancer fixture's real mirrors do group, and not via format_note" and `resolvers/test/ytdlp.test.ts:645` "format.format_note === undefined". See the note below.                                                                                                                                                                                                       |
+| The engine's failover reaches a yt-dlp mirror the way it reaches an HLS one, on a fixture origin.        | **Proven** — `engine/test/mirror-failover.test.ts:232` "the engine fails over to a yt-dlp mirror exactly as it does to an HLS one (dl-47)", asserted at `engine/test/mirror-failover.test.ts:207` "expect(record.producer).toBe" (the variant really is the tier's output) and `engine/test/mirror-failover.test.ts:272` "expect(expired.requests).toHaveLength(before.expired)" (the mirror served it and the loop stopped there). The reviewer ran this test itself. |
+| `npm run check` and `npm test -- --project downloader` pass.                                             | **Verified** — both run fresh in the reviewer's own worktree, not read off the Log: check exit 0, suite 1214/1214 over 73 files.                                                                                                                                                                                                                                                                                                                                       |
+
+**The second acceptance row is proven, and its wording predates the decision.** It
+was written in option A's vocabulary — a `format_note`-style discriminator that
+could be "always present" and so silently disable the grouping. **B never reads
+that field**, so there is no such discriminator to disable and the literal claim
+has nothing to bite on. The vacuity risk B actually carries is structural: could
+the family-plus-`renditionKey` signal spuriously merge, or spuriously refuse? That
+is covered by the paired merge/refusal tests and by mutations 1 and 3, which the
+reviewer reproduced. The assertion the line literally asks for,
+`resolvers/test/ytdlp.test.ts:645` "format.format_note === undefined", does hold —
+the reviewer independently checked the fixture JSON and found all twenty
+`format_note` fields absent — it just proves less than the line assumed.
+The builder surfaced this in the Log before anyone asked; the reviewer confirms
+that read is accurate. It is recorded rather than quietly restated as though the
+literal claim had been met.
+
+**One correction to the builder's Log, made on the reviewer's note and
+re-measured before accepting it.** The mutation table said dropping the
+`renditionKey` conjunct turns "the whole resolvers suite red". Re-run over
+`resolvers/test/`: **25 failed, 310 passed, of 335**, across four files
+(`hls.test.ts` 17, `size-sample.test.ts` 5, `direct.test.ts` 2, `ytdlp.test.ts`
+
+1. — the same 25 the reviewer measured. The substance holds and the wording did
+   not; the table now carries the measured number and the entry says it was
+   corrected.
+
+- **Ordering, both halves reproduced.** The reviewer swapped
+  `groupMirrors(dropDuplicateFormats(...))` in `ytdlp.ts` and ran the file:
+  **54/55 passed**, including both balancer tests, which is the builder's claim
+  that the two orders are byte-identical on those cases. The single failure was
+  exactly `"deduplicating before grouping is what keeps two families from becoming
+two rows"`, on exactly the named assertion — 1 distinct URL for 2 variants. So
+  the order is load-bearing for the reason found here, not the reason the brief
+  gave, and the test asserts the property that actually moves.
+- **Collapse producers enumerated, not sampled** — all six derived fixtures
+  through `toDisplayRows`, matching the Log's table exactly: only
+  `hls-master-mirrors-jittered-bandwidth` is non-zero, at declared 4, rows 2,
+  `collapsed` 2.
+- **Repo invariants swept.** `contract` untouched, confirmed from
+  `git diff --name-only a5e31c7...d685563`; only `resolvers`, `engine` (test),
+  `web` (test) and this ticket changed. No bare `Error`, no `console`, no `any` in
+  the three changed source files. No cross-tool import — `common.ts` imports
+  `MediaVariant` from `@downloader/contract`, in-tool. No new spawn, fetch or
+  network code in the changed non-test files: the grouping is a pure data
+  transformation, so the SSRF and redaction invariants are **not applicable here
+  rather than skipped**.
+- **Branch coverage.** The reviewer walked the conditionals in `common.ts`,
+  `ytdlp.ts` and `manifest/hls.ts` and found every branch exercised by an existing
+  test or by one of the mutations; no untested conditional was found.
+- **Residual hole confirmed as documented**, in `mirrorEvidence`'s docblock and in
+  the Log's unmeasured section: a source giving two genuinely different tracks the
+  same `format_id` _and_ nothing else the mapper keeps would still merge them.
+- **findings** · 0 high, 0 medium, 0 low. Two informational notes, both recorded
+  above: the mutation-4 count (corrected in the Log) and the acceptance-line-2
+  wording (which the builder had already surfaced). Nothing was fixed during the
+  gate and the reviewer did not touch the ticket file.
+
+### 2026-09-08 · second round, tip `6f7ae11`, base `a5e31c7` (`origin/main`)
+
+**Gate: CONCERNS, then PASS** — same reviewer, `a75a349132392436b`, running
+**Sonnet**; branch still on **Opus 5 (1M context)**. Kept as its own subsection
+rather than folded into the round above, because the round above was accurate
+about the code and wrong about whether the branch was shippable, and collapsing
+the two would hide that.
+
+**What the second round found, by checking a claim rather than re-reading the
+diff.** The first ship report said the citations gate was green. It was not:
+`node scripts/citations-gate.mjs --against origin/main` exits **1** at `95709b7`,
+and the `check` job on PR#199 was **failing** at that sha (run `34282525283`,
+confirmed live by the reviewer). Two causes, both this branch's:
+
+1. **Three anchors in the round above were verified but not distinct.**
+   `expect(probe.variants).toHaveLength(2)` occurs five times in `ytdlp.test.ts`
+   and both cited engine assertions occur twice, so "verified" meant _in range_
+   rather than _uniquely identified_ — a caveat the builder had reported instead
+   of treating as a failure. Two of them could not be repaired by quoting more,
+   because those assertion lines are byte-identical to their twins; all three
+   were repointed onto lines that are unique **and** stronger proof. The
+   acceptance table above now cites them.
+2. **This branch reddened `repo-34`, a merged and unrelated ticket**, purely by
+   adding ~296 lines to `ytdlp.test.ts` above a block that record cites. Repointed
+   in the same commit; the mechanism is written up in the Log because it is the
+   part that generalises.
+
+**Why neither the builder's gates nor the first gate caught it.** The command the
+builder ran, and was told to run, was `scripts/citations.mjs` on its own ticket —
+the looser per-record script. CI runs `scripts/citations-gate.mjs`, which requires
+distinct anchors on any non-grandfathered record, and which is a step of CI's
+`check` **job** and not of the `check` **script**. So `npm run check` exiting 0
+was never evidence about this, and neither was the per-record run.
+
+**Verified at `6f7ae11` by the reviewer, independently, not read off the builder's
+report:** `git diff --stat 95709b7...6f7ae11` shows only the two markdown files,
+zero source or test lines; `citations-gate.mjs --against origin/main` exit 0;
+`citations.mjs --section Review --require-anchors --require-distinct-anchors` exit
+0 on both this record (8 verified, 0 moved, 0 unanchored) and repo-34's (16
+verified, 0 moved); the repo-34 anchors grepped directly at 903 and 901; each of
+the three re-anchored citations confirmed to occur exactly once by `grep -c`; and
+run `34283170862` at `6f7ae11` read live with `--json` — `changes` success,
+**`check` success**, the same job that failed at `95709b7`. `test (ubuntu-latest)`
+completed success afterwards; `test (windows-latest, informational)` is
+informational by configuration and is not a merge condition.
+
+- **findings** · 0 high, 0 medium, **3 low**, all about the record rather than the
+  code: the two citation failures fixed in `6f7ae11`, and the false "now recorded"
+  claim fixed in the commit that adds the two paragraphs below. The grouping
+  logic, the tests and every acceptance line traced in the round above are
+  untouched by all three repairs, which the reviewer confirmed from the diff stat
+  rather than taking on trust.
+- **Both rounds were settled by commands rather than by either side conceding**,
+  which is the property worth preserving: the builder reproduced each finding
+  before accepting it — including re-resolving repo-34's endpoints against its own
+  tip instead of transcribing the reviewer's line numbers — and the reviewer
+  re-ran each repair instead of reading the report of it.
+
+**A `cancelled` run is a completed run, and it lies in both directions.** Added
+after this subsection was first committed, for the reason in the next paragraph.
+
+The CI run at `6f7ae11`, run `34283170862`, finished with a **run-level
+conclusion of `cancelled`** — because the `fb12a80` push superseded its still
+-running informational Windows job — while `changes`, `check` and
+`test (ubuntu-latest)` were all **job-level `success`**. Reporting that tip by its
+run conclusion would have filed a false red; skimming it as "completed" would
+have filed a false green. Only the job level disambiguates it. The run that
+actually settles this branch is `34283482735` at `fb12a80`: run-level `success`,
+and all four jobs `success` including the informational Windows leg, confirmed
+independently by the reviewer. Neither a cancelled run nor an informational job is
+counted as a pass anywhere in this record.
+
+**The paragraph above was reported to the reviewer and to the orchestrator as
+"now recorded in the ticket" while it was not in the ticket at all, and that is
+the third finding of this gate.** `fb12a80` was committed at 21:58:30; the
+`cancelled` conclusion was not observed until the background poll returned
+afterwards. So the claim described a commit that predated the fact it claimed to
+contain. The reviewer caught it by fetching the branch and grepping the committed
+file rather than by believing the report — `git show fb12a80:<this file> | grep
+cancel` returns nothing, which the builder then confirmed for itself before
+accepting the finding.
+
+**This is the same failure dl-45's Log recorded, recurring on a ticket whose
+builder had read that entry.** dl-45's version: a builder claimed oxfmt had
+reflowed its gate record, it had not, and the reason the guard missed it was that
+_"the guard was pointed at the deliverable, not at the report about the
+deliverable."_ Here every claim about the code was measured and every mutation
+re-run, and the one unverified sentence was about what the builder had itself just
+written — which presents as recollection, and recollection does not feel like
+something that needs a command. It is one. **`git show <sha>:<file>` is that
+command, and it costs nothing.** Twice now in this loop the finding that mattered
+came from checking a claim in a report rather than from re-reading the diff.
+
 ## Log
 
 - **2026-09-07 — filed from dl-45, whose builder reserved this id** (`dl-47`;
@@ -177,3 +393,225 @@ identity, and the wrong answer is silent.
   synthetic — a realistic yt-dlp shape, not a captured one — and no site has
   been observed serving two same-bitrate language tracks with neither tagged.
   Establishing that would strengthen the ticket and nobody has done it.
+
+- **2026-09-08 — built, on option B.** Branch
+  `dl-47-ytdlp-mirrors-need-a-same-content-signal`, off `origin/main` at
+  `a5e31c7`. `npm run check` exits 0; `npm test -- --project downloader` is
+  **1214 passing over 73 files**. Packages touched: `resolvers`, `engine` (test
+  only), `web` (test only). **`contract` was not touched** — B needed no new
+  field on `MediaVariant`, so the cross-package question the brief flagged never
+  had to be asked.
+
+  **The signal, and it was measured rather than read off the grammar.** yt-dlp
+  appends `-0`, `-1`, … to a `format_id` when several formats reach `YoutubeDL`
+  carrying the same one. A trailing index is therefore the _extractor_ saying it
+  emitted these as one format and the _downloader_ saying it could not tell them
+  apart — a claim about content made by the source, which is exactly what
+  option B asks for. Run against yt-dlp 2025.09.26, generic extractor, on a
+  local ffmpeg-generated origin over loopback:
+
+  | master playlist declares                                     | `format_id`s emitted        |
+  | ------------------------------------------------------------ | --------------------------- |
+  | one rung at two hosts, identical attributes                  | `209-0`, `209-1`            |
+  | two rungs at two hosts, same BANDWIDTH, different RESOLUTION | `209-0`, `209-1`            |
+  | two rungs at two hosts, different BANDWIDTH                  | `209`, `353`                |
+  | two `EXT-X-MEDIA` audio renditions, NAME English / French    | `aud-English`, `aud-French` |
+
+  Row one is the balancer shape and row three is the control. **Row four is the
+  one that decides whether B is honest**: real language tracks get distinct ids
+  from their `NAME`, so the reproduction's `audio-en` / `audio-fr` is a faithful
+  shape and not a straw man. **Row two is why the signal is never sufficient on
+  its own** — two genuinely different renditions collide into the same family —
+  so the implementation requires the mapped variants to match _as well_, and
+  that conjunction is what makes row two safe. A family-only rule would have
+  reintroduced the defect from the other side, and nothing in the brief predicted
+  it. The fourth constraint, that a family's indices must be exactly `0..n-1`, is
+  what keeps `hls-1080` / `hls-720` from sharing the stem `hls`; it fails closed,
+  losing a failover path rather than inventing one.
+
+  **Where the code lives (Build step 3): lifted, but only the half that is
+  genuinely shared.** `groupMirrors` and `renditionKey` are in
+  `resolvers/src/common.ts` again, and both producers call them — but the
+  argument is now `MirrorCandidate[]`, pairing each variant with the source's own
+  `sameContentAs` token. The _fold_ is one rule for both (first declaration is
+  primary, alternates in declaration order, an address repeated inside a group is
+  dropped) and two copies of that would drift; the _evidence_ is not, and the
+  field is required with no default precisely so a third producer cannot inherit
+  HLS's answer by omitting an argument. That is the shape dl-45's revert was
+  waiting for: this is the second real consumer, and the two producers share
+  everything except the one thing the gate found them wrongly sharing. HLS passes
+  a constant, `MASTER_PLAYLIST_VOUCHES`, whose docblock records that the evidence
+  is RFC 8216 6.2.4 and therefore a property of the format rather than of any
+  entry.
+
+  **What the brief had wrong, and it is Build step 2.** The step requires the
+  grouping to run after `dropDuplicateFormats` and gives a reason: an exact
+  duplicate reaching the grouping would become its own rendition's alternate, a
+  mirror on the same host. **That reason does not hold, because the hazard is
+  guarded twice.** `groupMirrors` independently refuses a URL already in its
+  group, so the same-host alternate cannot happen in either order. Measured on
+  2026-09-08 by swapping the two calls in the compiled mapper and running both:
+  on the balancer fixture, on an exact duplicate inside one family, and on two
+  families over the _same_ address set, the two orders produce **byte-identical
+  output**, and no variant carries an alternate on its own host under either.
+
+  **The ordering is still load-bearing, for a different reason, and that is
+  worth more than the one the brief gave.** The shape that separates them is two
+  play-options families over _overlapping but unequal_ address sets — `default-*`
+  at hosts a and b, `m3u8-*` at hosts a and c. Group first and each family folds
+  on its own, both electing host a as primary, and the dedup that follows can no
+  longer merge them because their `alternateUrls` now differ: **two rows for one
+  rendition, which is dl-40's defect rebuilt out of dl-47's own field.**
+  Deduplicate first and there is one. So the step is right and its justification
+  is not; the test written for it asserts the property that actually moves — no
+  two variants may name the same primary address — rather than the same-host one,
+  which passes under both orders and would have proved nothing.
+
+  **Done when, line by line.**
+
+  - _Two audio-only formats differing only in `format_note` stay two variants._
+    `resolvers/test/ytdlp.test.ts` — "two audio tracks the mapper cannot tell
+    apart stay two variants". The reproduction verbatim, plus an assertion that
+    the two really are byte-identical once mapped, so it cannot pass because some
+    other field separated them.
+  - _The balancer fixture's real mirrors do group, and the guard is not
+    vacuous._ Same file — "the balancer fixture's real mirrors do group, and not
+    via format_note". Ten addresses become five renditions carrying 3/2/2/1/2
+    hosts. **The `format_note` half of this line was written in option A's
+    vocabulary and proves something narrower under B**: A keyed on the discarded
+    `format_note`, so a discriminator present on every format would have disabled
+    grouping while everything stayed green. B does not read that field at all, so
+    the assertion now says only that the fixture is not being separated or joined
+    by it. The vacuity guard B actually needs is structural and is the pair of
+    tests itself — one asserts a merge, the other asserts a refusal, and no
+    single mutation can satisfy both. That was checked, not argued: see the red
+    runs below.
+  - _The engine's failover reaches a yt-dlp mirror the same way it reaches an HLS
+    one._ `engine/test/mirror-failover.test.ts` — "the engine fails over to a
+    yt-dlp mirror exactly as it does to an HLS one (dl-47)". The variant is read
+    from `balancer-duplicate-ladder.variants.json`, which `mapYtDlpInfo`
+    generates and the resolvers suite re-verifies, with only its three CDN hosts
+    repointed onto a dead port, the fixture origin and the 403 origin. A real
+    ECONNREFUSED, a real MP4 that ffmpeg re-decodes, the mirror's own request log
+    as the evidence, and the 403 origin asserted at zero requests so the loop is
+    shown to stop. A hand-written `alternateUrls` would have proved only that the
+    engine reads a field.
+  - _`npm run check` and `npm test -- --project downloader` pass._ Both above.
+
+  **Red-checked, because every claim here is about what the code refuses to do
+  and a refusal is invisible when it breaks.** Four mutations, each run against
+  `resolvers/test/ytdlp.test.ts` (55 tests):
+
+  | mutation                                             | result                                                                |
+  | ---------------------------------------------------- | --------------------------------------------------------------------- |
+  | evidence always present (B collapses to dl-45's key) | 4 red, including the reproduction; the balancer tests stay green      |
+  | evidence never present (grouping disabled)           | 5 red, including the balancer grouping and the derived-fixture guard  |
+  | drop the `0..n-1` density check                      | 2 red — the `hls-1080` case and the holed family                      |
+  | drop the `renditionKey` conjunct from `groupMirrors` | 25 red across 4 files of the 335-test resolvers project, HLS included |
+
+  The first two are the pair that pins B in both directions at once.
+
+  **The last row said "the whole resolvers suite goes red" when this entry was
+  first written, and that was an overstatement corrected on the gate's note.**
+  Re-measured over `resolvers/test/`: **25 failed, 310 passed, of 335**, in
+  `hls.test.ts` (17), `size-sample.test.ts` (5), `direct.test.ts` (2) and
+  `ytdlp.test.ts` (1). The substance holds — the conjunct is load-bearing for
+  both producers, and HLS breaks hardest — but "the whole suite" is not what the
+  run reported, and a mutation's blast radius stated larger than it is reads as
+  verified when it is not. The reviewer measured the same 25 independently.
+
+  **The collapse still has a producer — confirmed, not assumed (Build step 5).**
+  Every derived fixture in the repo, measured through `toDisplayRows` on
+  2026-09-08:
+
+  | fixture                                 | declared | rows | `collapsed` |
+  | --------------------------------------- | -------- | ---- | ----------- |
+  | `hls-master-mirrors-jittered-bandwidth` | 4        | 2    | **2**       |
+  | `hls-master-multibitrate`               | 5        | 5    | 0           |
+  | `hls-master-per-language-ladder`        | 4        | 4    | 0           |
+  | `hls-master-redundant-mirrors`          | 5        | 5    | 0           |
+  | `hls-master-two-profiles`               | 3        | 3    | 0           |
+  | `ytdlp/balancer-duplicate-ladder`       | 5        | 5    | 0           |
+
+  So dl-40's collapse has exactly one fixture left, and it is the permanent one —
+  rows differing in a real number the table does not render, which no producer
+  may ever group. This is the state dl-45 measured during its fold-in and called
+  a gap; it is not a gap now because `hls-master-mirrors-jittered-bandwidth`
+  exists specifically for it. The stale comments that said the yt-dlp ladder was
+  "on its way upstream" have been corrected in place rather than left to read as
+  still true, and `probe-panel.test.tsx`'s dl-40 assertion moved onto the
+  jittered manifest, which is now the only fixture that can produce the
+  "N duplicate paths merged" string at all.
+
+  **The derived fixture was regenerated from the mapper, never by hand**, by
+  running `mapYtDlpInfo` over `balancer-duplicate-ladder.json` and rewriting only
+  the `variants` array; the guard test in `ytdlp.test.ts` re-runs the producer and
+  would fail if it had been edited. Ten variants became five, and
+  `presentation-helpers.test.ts` and `probe-panel.test.tsx` moved with it exactly
+  as Build step 4 predicted.
+
+  **Two small things the brief has wrong, neither load-bearing.** The Why says
+  the fixture is "ten formats over five rungs at two hosts": it is **twenty**
+  formats in the file, ten after dl-40's dedup, and the 720p rung has **three**
+  hosts, not two. The count of ten is the post-dedup number and the host count is
+  simply wrong; `default-1257-0/1/2` is in the fixture.
+
+  **What is not measured, named as unmeasured.** No live site was probed for this
+  ticket — the yt-dlp measurements above are against a loopback origin serving
+  playlists this branch wrote, which establishes the `format_id` grammar and
+  nothing about how any real extractor behaves. The residual hole in B is stated
+  in the code and repeated here: a source that gives two genuinely different
+  tracks the _same_ `format_id` **and** nothing else `mapYtDlpInfo` keeps would
+  still merge them. Nothing has been observed doing that; at that point the
+  source offers no evidence of a difference anywhere, which is the honest bound
+  on what any signal read out of yt-dlp's output can achieve.
+
+  **Cost.** `engine/test/mirror-failover.test.ts` goes from 33.9 s over four
+  tests to 45.2 s over five, all of the difference being ffmpeg's own
+  `-reconnect_delay_max 10` against the dead primary — the same eleven seconds
+  dl-45 measured and documented, not anything this ticket added. Nothing was
+  deferred that could have been folded in: the only adjacent free work was the
+  stale test comments dl-45 left pointing at a future that has now happened, and
+  those are corrected here.
+
+- **2026-09-08 — the first ship reported a green citations gate against a looser
+  command than CI runs, and the `check` job was red on the PR while this ticket
+  said `done`.** Recorded because a clean-looking record would hide both halves,
+  and the second half is a hazard nothing in the brief could have warned about.
+
+  **The wrong command.** The ship report said `node scripts/citations.mjs` on
+  this ticket exits 0, and it does. **CI does not run that.** It runs
+  `node scripts/citations-gate.mjs`, which enforces `--require-distinct-anchors`
+  on every record that is not grandfathered — and a brand-new `## Review` section
+  is enforced immediately, with no grandfather entry to soften it. The looser
+  command was the condition this dispatch was given and the condition was wrong;
+  it was met exactly and proved nothing. Measured after the fact:
+  `citations-gate.mjs --against origin/main` exits **1** at `95709b7`, naming two
+  records. It is also **not part of `npm run check`** — it is a separate step of
+  CI's `check` _job_, so "check exits 0" could never have caught it either. Both
+  invocations are in the gate list at the end of this entry now.
+
+  **Three of this record's own anchors were verified but not distinct.**
+  `expect(probe.variants).toHaveLength(2)` occurs five times in `ytdlp.test.ts`,
+  and both engine assertions occur twice in `mirror-failover.test.ts`, so
+  "verified" meant in-range rather than uniquely identified — which the builder
+  had noticed and reported as a caveat instead of as a failure. Repointed onto
+  lines that are unique and, as it happens, better proof: the URL-pair assertion
+  rather than the count, and the two assertions that exist only in the dl-47
+  engine test — that the variant really is `mapYtDlpInfo`'s output, and that the
+  second alternate was never dialled.
+
+  **The other half is collateral, and it is the interesting one.** This branch
+  added ~296 lines to `tools/downloader/resolvers/test/ytdlp.test.ts` above a
+  block that a **merged, unrelated** ticket cites — `repo-34`, whose record
+  pointed at `ytdlp.test.ts:607-656` and `:597-606`. Those anchors still exist and
+  still say what repo-34 says they say; they are simply 296 lines lower, and
+  repo-34's record went red without anyone touching it. Re-resolved against this
+  tip rather than transcribed from the report that raised it — the anchors are at
+  903 and 901, and the block's endpoints moved 656 to 952 and 597 to 893, a
+  uniform shift confirmed by comparing both endpoint lines against `a5e31c7` —
+  and repointed to `:903-952` and `:893-902` in the same commit as the fix above.
+  **A branch can redden another ticket's committed record purely by adding lines
+  to a file that ticket cites**, and no gate any single ticket runs on itself will
+  show that. The repo-wide `citations-gate.mjs` is the only thing that does, which
+  is the argument for running it rather than the per-record script.

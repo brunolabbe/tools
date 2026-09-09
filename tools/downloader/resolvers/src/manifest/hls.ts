@@ -33,6 +33,7 @@ import type { DrmInfo, DrmSystem, MediaVariant, SubtitleTrack } from "@downloade
 import {
   buildLabel,
   compareVariantQuality,
+  groupMirrors,
   optional,
   resolveUrl,
   splitCodecs,
@@ -290,6 +291,24 @@ function buildSubtitles(renditions: Rendition[], baseUrl: string): SubtitleTrack
 }
 
 /**
+ * This parser's answer to `MirrorCandidate.sameContentAs`, and it is one
+ * constant for every entry in a master rather than a per-entry computation
+ * (dl-45, dl-47).
+ *
+ * The evidence is the *format*, not the entry: two `EXT-X-STREAM-INF` entries
+ * that agree on every attribute are one Variant Stream by RFC 8216 6.2.4, and
+ * `buildMasterVariant` maps every attribute this parser reads. So the master
+ * playlist itself vouches for all of them equally, and grouping here is decided
+ * by the attributes alone — which is exactly what a constant token means.
+ *
+ * yt-dlp's format list carries no equivalent guarantee, which is why it
+ * computes a token per format instead. That asymmetry is the whole of dl-47:
+ * the safety dl-45 relies on is a property of the manifest format and not of
+ * the key.
+ */
+const MASTER_PLAYLIST_VOUCHES = "EXT-X-STREAM-INF";
+
+/**
  * Parses an HLS master playlist or a single media playlist. Callers rarely know
  * which one they fetched — the difference is one tag — so both are handled here.
  *
@@ -384,7 +403,10 @@ export function parseHls(text: string, baseUrl: string): ParsedManifest {
 
   if (streams.length > 0) {
     const variants = groupMirrors(
-      streams.map((stream) => buildMasterVariant(stream, audioGroups, baseUrl)),
+      streams.map((stream) => ({
+        variant: buildMasterVariant(stream, audioGroups, baseUrl),
+        sameContentAs: MASTER_PLAYLIST_VOUCHES,
+      })),
     ).toSorted(compareVariantQuality);
     // A master playlist carries no ENDLIST of its own, so liveness is unknowable
     // here; it is decided by whichever media playlist gets fetched next.
@@ -419,66 +441,6 @@ export function parseHls(text: string, baseUrl: string): ParsedManifest {
   };
 
   return { variants: [variant], subtitles, drm, isLive, ...optional({ durationSec }) };
-}
-
-/**
- * Everything about a variant except *where it is* — its identity as a
- * rendition.
- *
- * Read off the built variant rather than off the `EXT-X-STREAM-INF` attribute
- * list, and by exclusion rather than by listing the fields that matter, for the
- * same reason the dl-40 test compares whole objects: a field added to
- * `MediaVariant` later is part of this key without anyone remembering to add it,
- * and the failure mode of forgetting would be two genuinely different renditions
- * silently merged into one. `id` and `url` are the two that must not count —
- * `id` is positional and `url` is the thing mirrors differ in — and
- * `alternateUrls` cannot count because it is what this function computes.
- *
- * Sorted so the key depends on the fields' contents and not on the order the
- * builder happened to insert them.
- */
-function renditionKey(variant: MediaVariant): string {
-  const entries = Object.entries(variant)
-    .filter(([key]) => key !== "id" && key !== "url" && key !== "alternateUrls")
-    .toSorted(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
-  return JSON.stringify(entries);
-}
-
-/**
- * Collapses a rung declared once per CDN host into one variant carrying the
- * rest as `alternateUrls` (dl-45).
- *
- * This is the *resolver's* half and the only place the grouping may happen. The
- * picker's collapse in `web/src/lib/variants.ts` is a presentation decision made
- * on rendered columns, so a mirror count read off it would be a count of what
- * the table could not tell apart rather than of what the manifest declared —
- * and by the time the picker runs the mirrors have already crossed the wire as
- * separate variants, which is the thing dl-45 exists to stop.
- *
- * Order is the manifest's: the first declaration of a rung is the primary, and
- * the alternates follow in declaration order, because that is the order a player
- * would try them in (RFC 8216 §6.2.4).
- *
- * An address declared twice inside one rung is dropped rather than kept as its
- * own alternate — the same host is not a second server, and retrying it is the
- * failure the engine's failover exists to avoid.
- */
-function groupMirrors(variants: readonly MediaVariant[]): MediaVariant[] {
-  const groups = new Map<string, { primary: MediaVariant; urls: string[] }>();
-  for (const variant of variants) {
-    const key = renditionKey(variant);
-    const group = groups.get(key);
-    if (group === undefined) {
-      groups.set(key, { primary: variant, urls: [variant.url] });
-    } else if (!group.urls.includes(variant.url)) {
-      group.urls.push(variant.url);
-    }
-  }
-
-  return [...groups.values()].map(({ primary, urls }) => {
-    const alternateUrls = urls.slice(1);
-    return alternateUrls.length === 0 ? primary : { ...primary, alternateUrls };
-  });
 }
 
 function buildMasterVariant(
