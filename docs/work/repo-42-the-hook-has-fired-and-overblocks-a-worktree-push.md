@@ -3,7 +3,7 @@ id: repo-42
 tool: repo
 title: check-main-writes.sh has now fired, and over-blocks a bare push from a worktree
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -165,9 +165,11 @@ worktree case, because neither ever separates "the directory
 
 ## Build
 
-**This ticket does not fix the hook.** The fix is a real decision (below) and
-this dispatch is the reproduction and the record. Whoever picks this ticket up
-next:
+**The filing dispatch did not fix the hook** — the fix was a real decision
+(below) and that dispatch was the reproduction and the record. A second
+dispatch, 2026-09-09, carried the steps out once the owner had answered. They
+are kept as written rather than rewritten in the past tense; the Log says what
+each one turned into.
 
 1. **Settle the decision below first**, via `AskUserQuestion` if you can ask, or
    as an open decision in your report if you cannot — never by assumption.
@@ -188,13 +190,67 @@ next:
    "a miss is the side to err on") in view when weighing it against a new false
    positive.
 
-## Decision — open, not to be settled here
+## Decision — answered 2026-09-09 by the repo owner
 
-Three options were named; none was picked. Recommendation first, with the
-grounds that changed since the header was written.
+**Settled. Recorded here in full, because a decision that only exists in a
+commit message is one the next reader has to reconstruct.**
+
+**The question put to the owner:** how should `check-main-writes.sh` handle a
+bare push from a worktree, given that it currently refuses one because it reads
+`HEAD` from `CLAUDE_PROJECT_DIR` — the shared root, which is on `main`?
+
+**The options offered** were this ticket's own three, read out of this file
+rather than summarised: (a) read `HEAD` from the payload's `cwd`; (b) leave the
+read where it is and document a second known over-block; (c) drop the bare-push
+branch entirely. "Defer" was offered as a fourth.
+
+**The answer: (c) — drop the bare-push branch of this hook entirely.**
+
+**This overrode this ticket's own recommendation**, which was (a), marked
+"Recommended" in the option list below. The list is kept as filed, with the
+recommendation label intact, so the override is visible rather than tidied away.
+
+**The condition (c) rested on, now discharged.** Option (c) was named with the
+caveat that "it was not measured here whether the ruleset's coverage extends to
+a bare push with no refspec at all". It was re-read before the build, not
+assumed — `gh ruleset view 20870721` on 2026-09-09 (that command is not denied;
+`gh api` is), enforcement active, bypass never,
+`ref_name: [exclude: []] [include: [~DEFAULT_BRANCH]]`, rules `deletion`,
+`non_fast_forward`, and `pull_request` with `required_approving_review_count: 0`
+and `require_extra_approval_for_unattributed_changes: true`.
+
+The conclusion drawn from it, stated as a conclusion rather than a measurement:
+**dropping the branch leaves no gap.** A refspec is client-side syntax. What
+reaches GitHub is a ref update naming `refs/heads/main`, and the ruleset matches
+on the ref name that arrives, so a `pull_request` rule under `~DEFAULT_BRANCH`
+refuses a direct push landing on `main` whether the client spelled it `main`,
+`+main`, `refs/heads/main`, or nothing at all — the "no refspec" distinction
+exists only on the client side and never reaches the server's matcher. The
+header's coverage table being written for explicit refspecs was a limitation of
+how it was worded, not of what the ruleset covers.
+
+Two things fell out of that reading and are recorded because they cut against
+keeping the branch, not for it:
+
+- The bare-push branch was the **weakest** row this hook ever held, not the
+  strongest. A bare push reaches `main` only when `HEAD` is `main` _and_
+  `push.default` sends it there; meanwhile a `push.default = upstream` or a
+  configured `remote.origin.push` can send a bare push from a _feature_ branch
+  straight to `main`, which the deleted branch read as safe and waved through.
+  It was wrong in both directions, and only the false-positive direction had
+  ever been noticed.
+- **Unmeasured, and it is the load-bearing gap:** nobody has watched the server
+  refuse a push to `main`. Settling it would mean attempting one, which this
+  ticket's own restraint forbids. The conclusion is read off the ruleset's
+  semantics. It is recorded in the hook's header as the thing to falsify if the
+  row is ever restored — and if it is restored, by option (a), never by reading
+  `CLAUDE_PROJECT_DIR` again.
+
+The three options as filed follow. Recommendation first, with the grounds that
+changed since the header was written.
 
 **(a) Read `HEAD` from where the command actually runs, not from
-`CLAUDE_PROJECT_DIR`.** Recommended. This is not the general "indirection
+`CLAUDE_PROJECT_DIR`.** Recommended — **not chosen**. This is not the general "indirection
 defeats it" case the header already accepts (`cd elsewhere && git push`,
 `.claude/hooks/check-main-writes.sh:192-196`) — Claude Code's own hook payload
 already carries the answer. Fetched from the current hooks reference
@@ -222,7 +278,7 @@ real Claude Code harness does, or whether the test has to fake it structurally
 instead — that is implementation work, not part of this ticket's reproduction.
 
 **(b) Leave the read as `CLAUDE_PROJECT_DIR` and document the worktree case as
-a second known over-block**, beside the heredoc one. Cheapest, and consistent
+a second known over-block**, beside the heredoc one. **Not chosen.** Cheapest, and consistent
 with the header's stated posture that a false positive here is the side to
 err on (`.claude/hooks/check-main-writes.sh:66-68`) — except this one is not
 rare like the heredoc case (`.claude/hooks/check-main-writes.sh:95-96`, "costs
@@ -234,7 +290,7 @@ but named because it costs nothing to implement and nothing was broken by
 choosing it — the explicit-refspec form the hook's own message recommends is
 unaffected either way.
 
-**(c) Drop the bare-push branch of this hook entirely.** The header already
+**(c) Drop the bare-push branch of this hook entirely. Chosen.** The header already
 notes the push rows are double-covered by ruleset 20870721 on the remote
 (`.claude/hooks/check-main-writes.sh:26-40`) — the server refuses a
 non-fast-forward or a deletion against the default branch regardless of this
@@ -264,6 +320,89 @@ safe to take, the same way repo-15 re-read the ruleset rather than assuming it.
   instead).
 
 ## Log
+
+- 2026-09-09: Built option (c). `.claude/hooks/check-main-writes.sh` no longer
+  reads any checkout: the bare-push branch, the `positional` counter that only
+  that branch used, and the opening `cd "${CLAUDE_PROJECT_DIR:-.}"` that only
+  that branch needed are all gone, so the verdict is now a function of the
+  command string alone. The explicit-refspec scan, the quote strip, the segment
+  split and the `gh pr merge` half are untouched. The header is rewritten in
+  three places: the "NEVER BEEN OBSERVED TO FIRE" section now records that it
+  has fired once and that the firing was a false positive — its registration
+  inference was correct, its refusal was not; the "EXACTLY ONE PLACE ... KNOWN
+  RATHER THAN LATENT" heading now reads as one found so far, naming this ticket
+  as the counterexample the old wording did not survive; and a new section
+  states the bare-push non-coverage as a decision, with its reasoning and its
+  unmeasured gap.
+
+  Two tests replace the two the fix invalidates (`"reads HEAD for a push with no
+refspec"` and `"leaves a bare push alone when HEAD is not main"`). `run()`
+  gained a fourth parameter, `cwd`, defaulting to `projectDir`; it is sent as
+  the payload's `cwd` field and used as the spawned process's working directory,
+  which is what the real harness does. That default is precisely the assumption
+  this ticket found baked into every case in the file. The behavioural test
+  drives four no-refspec spellings across three directory arrangements, leading
+  with the split one — `CLAUDE_PROJECT_DIR` on `main`, cwd on a feature branch —
+  because that is the false positive that was measured live. A second test
+  asserts on the script's executable half, split at `set -uo pipefail` so the
+  header stays free to discuss what it dropped, that it contains neither
+  `symbolic-ref` nor `CLAUDE_PROJECT_DIR`: the behavioural test alone would also
+  pass for a hook that read the _right_ directory, and the property option (c)
+  actually bought is that it reads none.
+
+  Red then green, read as test counts rather than only as a wall clock.
+  `npx vitest run scripts/test/hooks.test.ts` against the unfixed hook:
+  `2 failed | 31 passed (33)`, with the failure message naming the split pair
+  (`CLAUDE_PROJECT_DIR=/tmp/main-writes-RwWWko, cwd=/tmp/main-writes-6LStyI` —
+  two distinct temporary checkouts, so it is the worktree case that went red and
+  not merely the same-directory case). After the fix: `33 passed (33)`. The
+  `--project` that covers this spec is `repo` — read off `vitest.config.ts:33-34`
+  (`name: "repo"`, `include: ["scripts/test/**/*.test.ts"]`) rather than
+  inferred from the name.
+
+  **What the brief had wrong, or left to be found:**
+
+  - Its line-number citations were all still exact. Re-resolved against
+    `origin/main@435ee35` before anything was edited, per the rule that
+    coordinates move: `:70`, `:87`, `:89`, `:99`, `:120`, `:192-193`, `:197-201`
+    and `:223-225` in the hook, and `:37-51`, `:43`, `:43-49` and `:339-359` in
+    the test, every one landing on the line the ticket said it did. Recorded
+    because "I re-checked and they held" is a result, and the alternative
+    reading — that nobody checked — is indistinguishable from silence.
+  - The ruleset re-read that (c) was made conditional on turned up a parameter
+    the hook's coverage table did not carry:
+    `require_extra_approval_for_unattributed_changes: true`. It does not bear on
+    the push question at all. It does qualify the _merge_ sentence the header
+    leans on — "requires a pull request and then requires NO HUMAN ON IT" —
+    which is that section's whole argument for why the merge half is uniquely
+    held by this file. The header now carries the full 2026-09-09 listing and
+    states the qualifier as unmeasured, because settling whether it ever fires
+    on this repo's commits would mean merging something to find out.
+  - Option (c) was filed as sidestepping "the whole class of false positive"
+    without noticing that the branch was also _under_-blocking. A bare push
+    reaches `main` only when `HEAD` is `main` and `push.default` sends it there,
+    whereas `push.default = upstream`, or a configured `remote.origin.push`, can
+    send a bare push from a feature branch to `main` — which the deleted branch
+    read as safe and waved through. The case for (c) is stronger than the ticket
+    argued, not weaker.
+  - The coordinates in the "Why" section above are now historical. They describe
+    the pre-fix file and resolve against `origin/main@435ee35`; the lines they
+    name do not exist at this ticket's tip, by design, since the fix deleted
+    them. They are left as filed because a reproduction rewritten to point at
+    the code that replaced it stops being a reproduction. (`citations-gate.mjs`
+    scopes itself to `## Review` sections, so nothing enforces them either way.)
+
+  **Deliberately not folded in, and it was adjacent:** the harness's own
+  worktree-isolation guard refused two commands during this build — a compound
+  `git init` into the scratchpad, and a `printf`-into-the-hook reproduction
+  whose only mention of git was inside a JSON string literal ("feeds
+  check-main-writes.sh text naming git in a plain command"). That is a third
+  over-block of exactly this ticket's shape: a guard reading a command string
+  and refusing prose. It is not folded in because it is not this repo's code —
+  `.claude/hooks/` holds four files and none of them is that guard, so it is the
+  harness's built-in and nothing in this tree can change it. Neither refusal was
+  routed around: the direct-drive reproduction was taken through the vitest
+  suite instead, which sends the identical payloads through `spawnSync`.
 
 - 2026-09-08: Filed from a builder dispatch that was told explicitly not to fix
   the hook. Reproduced both halves by driving

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # PreToolUse hook: refuse the commands that put code on `main` without a human —
-# `gh pr merge` in any spelling, and the `git push` spellings that reach `main`
-# past the deny list's globs.
+# `gh pr merge` in any spelling, and the `git push` spellings that name `main`
+# explicitly and get past the deny list's globs. A push that names no
+# destination at all is out of scope on purpose; see repo-42, below.
 #
 # This is repo-15's tier 1, and only tier 1: decision A1, answered 2026-09-07.
 # See docs/work/repo-15-deny-list-does-not-protect-itself.md for the threat
@@ -18,26 +19,47 @@
 #     git push origin refs/heads/main  same reason
 #     git push                         bare, from a checkout tracking main
 #
-# and `Bash(gh pr merge *)` needs an argument, so bare `gh pr merge` — which
+# The first two are what this hook's push half is for. The third is NOT — it
+# was, until repo-42; see its own section below.
+#
+# And `Bash(gh pr merge *)` needs an argument, so bare `gh pr merge` — which
 # opens an interactive picker — is allowed by that glob too. (Whether the real
 # matcher reads a trailing `*` as requiring an argument was NOT settled: see
 # "unmeasured", below.)
 #
 # WHAT THE REMOTE ACTUALLY REFUSES, WHICH IS NOT WHAT IT LOOKS LIKE
 #
-# Ruleset 20870721 on brunolabbe/tools, re-read 2026-09-07, enforcement active,
-# bypass never, condition `ref_name: [include: [~DEFAULT_BRANCH]]`:
+# Ruleset 20870721 on brunolabbe/tools, re-read 2026-09-09 with
+# `gh ruleset view 20870721` — enforcement active, bypass never, condition
+# `ref_name: [exclude: []] [include: [~DEFAULT_BRANCH]]`:
 #
 #     deletion, non_fast_forward,
-#     pull_request: [required_approving_review_count: 0]
+#     pull_request: [allowed_merge_methods: [merge squash rebase]]
+#                   [dismiss_stale_reviews_on_push: false]
+#                   [require_code_owner_review: false]
+#                   [require_extra_approval_for_unattributed_changes: true]
 #                   [require_last_push_approval: false]
+#                   [required_approving_review_count: 0]
+#                   [required_review_thread_resolution: false]
+#                   [required_reviewers: []]
 #
 # So the push rows above are double-covered — the server refuses them too, and
-# this hook closes them for legibility rather than because they are live. The
-# merge row is the opposite: **`required_approving_review_count: 0`**, and
-# `require_last_push_approval: false`. The server requires a pull request and
-# then requires NO HUMAN ON IT. `gh pr merge` is held by the deny rule and by
-# this file, and by nothing else anywhere.
+# this hook closes the explicit ones for legibility rather than because they are
+# live. The merge row is the opposite: **`required_approving_review_count: 0`**,
+# and `require_last_push_approval: false`. The server requires a pull request
+# and then requires NO HUMAN ON IT. `gh pr merge` is held by the deny rule and
+# by this file, and by nothing else anywhere.
+#
+# One qualifier on that, added at the 2026-09-09 re-read and stated as
+# unmeasured: `require_extra_approval_for_unattributed_changes: true` is a
+# parameter the 2026-09-07 reading did not carry. It asks for an approval on
+# changes GitHub cannot attribute to an account. Whether it ever fires on this
+# repo's commits — authored under the owner's own address, with an agent
+# `Co-Authored-By` trailer — was NOT tested, and testing it would mean merging
+# something to find out. Read the "requires NO HUMAN ON IT" sentence as holding
+# for attributed changes, which is every commit anyone here has made, and do not
+# read this parameter as a second human in the loop until somebody has watched
+# it stop a merge.
 #
 # THE LIMITS, WHICH ARE THE CEILING OF THE MECHANISM AND NOT BUGS TO FIX
 #
@@ -67,36 +89,93 @@
 #     trains everyone to route around it, and routing around it works. The push
 #     half is double-covered by the ruleset anyway.
 #
-#   - IT HAS NEVER BEEN OBSERVED TO FIRE, AND THAT WAS TRUE THROUGHOUT ITS OWN
-#     BUILD AND GATE. A session resolves its PreToolUse hook set once, from the
-#     settings that were in force when it started — in practice the shared root
-#     checkout's `.claude/settings.json`, which is on `main`. A hook registered
-#     only on an unmerged branch is therefore not loaded, including by the
-#     session writing it. Measured three ways before this landed: the two
-#     commands the test suite pins as must-block (`git push origin +main`,
+#   - IT HAS NOW BEEN OBSERVED TO FIRE, ONCE, AND IT WAS WRONG WHEN IT DID.
+#     Until it reached `main` it never fired at all, and that was true
+#     throughout its own build and gate: a session resolves its PreToolUse hook
+#     set once, from the settings in force when it started — in practice the
+#     shared root checkout's `.claude/settings.json`, which is on `main` — so a
+#     hook registered only on an unmerged branch is not loaded, including by the
+#     session writing it. That was measured three ways before this landed: the
+#     two commands the test suite pins as must-block (`git push origin +main`,
 #     `git push origin refs/heads/main`) ran unblocked against a scratch local
 #     remote; a heredoc shape this file exits 2 on when driven directly
 #     completed normally as a real Bash call; and the build session's own
 #     transcript records `hook_success` for `check-tree-grep.sh` and **zero**
-#     records of any kind for this file. The sibling firing in the same
-#     transcript is the control: the mechanism is live, this hook is simply not
-#     in the set. It is EXPECTED to register once this is on `main` — inferred
-#     from that sibling evidence, NOT verified, and it should not be written up
-#     as verified until somebody watches it refuse something. Until then, treat
-#     every claim in this header about what the hook refuses as a claim about
-#     what the script does when driven directly, which is what its tests drive.
+#     records of any kind for this file. That section then said the hook was
+#     EXPECTED to register once this was on `main`, called that an inference
+#     rather than a verification, and asked not to be written up as verified
+#     "until somebody watches it refuse something".
 #
-#   - IT OVER-BLOCKS IN EXACTLY ONE PLACE, AND IT IS KNOWN RATHER THAN LATENT.
-#     The quote strip and the boundary rule work per line, so an UNQUOTED
-#     mention at the start of a heredoc body line reads as an invocation and is
-#     refused — measured: a heredoc whose body line is `gh pr merge 129
-#     --squash`, or `git push origin +main`, or the same indented as a fenced
-#     code block, all exit 2. check-pr-title.sh has had the identical shape
-#     since it shipped. It costs nothing in practice because markdown here is
-#     written with the Write/Edit tools rather than piped through a heredoc, and
-#     a quoted mention is silent either way — but write a document containing
-#     these commands through `cat <<EOF` and this hook will stop you. That is
-#     the trade, stated so it is met in a comment rather than in a refusal.
+#     Somebody did, 2026-09-08, and it is repo-42. The registration inference
+#     was correct — the hook loads and refuses. The refusal was a false
+#     positive: it stopped a legitimate `git push origin` from a builder's
+#     feature-branch worktree, because the deleted bare-push branch read HEAD
+#     out of `CLAUDE_PROJECT_DIR`, which under worktree isolation is the shared
+#     root and is on `main`. See
+#     docs/work/repo-42-the-hook-has-fired-and-overblocks-a-worktree-push.md for
+#     the reproduction, which was made by driving this script with crafted JSON
+#     on stdin rather than by attempting a real push.
+#
+#     What is now verified is that this file loads and that its exit code is
+#     honoured. What is still only pinned by its tests is every specific claim
+#     below about WHICH strings it refuses: those are claims about what the
+#     script does when driven directly, which is what the tests drive.
+#
+#   - IT OVER-BLOCKS IN ONE PLACE THAT IS KNOWN, AND HAS HAD ONE MORE THAT WAS
+#     LATENT UNTIL IT FIRED. Read the count as "one that anybody has found so
+#     far", not as a proof that there is only one; the previous wording said
+#     "EXACTLY ONE PLACE, AND IT IS KNOWN RATHER THAN LATENT" and repo-42 is the
+#     counterexample it did not survive.
+#
+#     The known one: the quote strip and the boundary rule work per line, so an
+#     UNQUOTED mention at the start of a heredoc body line reads as an
+#     invocation and is refused — measured: a heredoc whose body line is `gh pr
+#     merge 129 --squash`, or `git push origin +main`, or the same indented as a
+#     fenced code block, all exit 2. check-pr-title.sh has had the identical
+#     shape since it shipped. It costs nothing in practice because markdown here
+#     is written with the Write/Edit tools rather than piped through a heredoc,
+#     and a quoted mention is silent either way — but write a document
+#     containing these commands through `cat <<EOF` and this hook will stop you.
+#     That is the trade, stated so it is met in a comment rather than in a
+#     refusal.
+#
+#     The latent one, now closed rather than documented: the bare-push branch,
+#     which fired on the ordinary path for every worktree-isolated dispatch in
+#     this repo. It was deleted rather than repaired — the next section is why.
+#
+# THE ONE PUSH SHAPE THIS DELIBERATELY DOES NOT JUDGE
+#
+# A `git push` that names no destination — bare, or `git push origin` with the
+# branch still implicit — is not this hook's business. repo-42 decision (c),
+# answered by the repo owner 2026-09-09, over this ticket's own recommendation
+# that the branch be repaired instead by reading the payload's `cwd`.
+#
+# The branch that used to be here asked a checkout for `git symbolic-ref HEAD`
+# and refused when the answer was `main`. It read the WRONG checkout: the script
+# began by `cd`-ing to `CLAUDE_PROJECT_DIR`, which the harness deliberately
+# leaves on the shared root when Claude enters a worktree. Every builder and
+# reviewer in this repo is dispatched with `isolation: "worktree"`, so the
+# refusal fired on the normal path, not on an exotic one.
+#
+# Deleting it costs no coverage, and that is a conclusion about the wire, not
+# about the client. A refspec is client-side syntax; what reaches GitHub is a
+# ref update naming `refs/heads/main`, and ruleset 20870721 above matches on
+# `ref_name ~DEFAULT_BRANCH` with a `pull_request` rule, enforcement active,
+# bypass never. A direct push landing on `main` is refused there whether the
+# client spelled it `main`, `+main`, `refs/heads/main` or nothing at all. The
+# bare form was in fact the WEAKEST row this hook ever held: a bare push only
+# reaches `main` when HEAD is `main` AND `push.default` sends it there, while a
+# `push.default = upstream` (or a configured `remote.origin.push`) can send a
+# bare push from a FEATURE branch straight to `main` — which the deleted branch
+# read as safe and waved through. It was refusing the wrong cases in both
+# directions.
+#
+# Not measured, and it is the load-bearing gap in the paragraph above: nobody
+# has watched the server refuse a push to `main`, because settling that would
+# mean attempting one. It is read off the ruleset's own semantics. If that
+# reading is ever falsified, the row to restore is this one, and it should be
+# restored by reading `.cwd` from the hook payload — option (a) — not by
+# reading `CLAUDE_PROJECT_DIR` again.
 #
 #   - `gh api` IS NOT TOUCHED HERE, and that is decision B1 rather than an
 #     oversight. `gh api -X PUT repos/o/r/pulls/N/merge` and the branch-
@@ -117,8 +196,11 @@
 # attempting a real merge. This hook blocks the bare form either way, so the
 # answer changes the size of the gap it closes, not whether it closes one.
 set -uo pipefail
-cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 
+# No `cd` and no directory read of any kind: the verdict is a function of the
+# command string alone. That is repo-42's decision (c) expressed in code — the
+# one thing this file used a checkout for was the deleted bare-push branch, and
+# a `cd` left behind after it is an invitation to re-add one.
 cmd="$(jq -r '.tool_input.command // empty')"
 [ -n "$cmd" ] || exit 0
 
@@ -166,11 +248,9 @@ while IFS= read -r segment; do
       ;;
   esac
 
-  positional=0
   # shellcheck disable=SC2086 # word splitting is the tokenisation; globbing is off
   for token in $args; do
     case "$token" in -*) continue ;; esac
-    positional=$((positional + 1))
 
     # Reduce a refspec to what it writes on the remote: drop a leading `+`
     # (force), keep only the right-hand side of a `src:dst` pair, and drop the
@@ -184,21 +264,10 @@ while IFS= read -r segment; do
     fi
   done
 
-  # No refspec means the push goes wherever the CURRENT branch is configured to
-  # go, which the command string cannot tell you. Ask the checkout. One
-  # positional counts as none here, because it is the remote (`git push origin`)
-  # and still leaves the branch implicit.
-  #
-  # This reads HEAD in CLAUDE_PROJECT_DIR, which is where an agent's bare push
-  # runs in practice but is not guaranteed to be the cwd of the command — a
-  # `cd elsewhere && git push` is one more instance of the indirection limit
-  # above. On any failure to read HEAD it stays silent, per "under-block on
-  # purpose".
-  if [ -z "$block_push" ] && [ "$positional" -le 1 ]; then
-    if branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" && [ "$branch" = "main" ]; then
-      block_push="a bare push from a checkout whose HEAD is main"
-    fi
-  fi
+  # A push with no refspec is deliberately NOT judged here — repo-42's decision
+  # (c). See "THE ONE PUSH SHAPE THIS DELIBERATELY DOES NOT JUDGE" above for why
+  # dropping it costs no coverage, and why the branch that used to be here was a
+  # false positive on every worktree-isolated dispatch in this repo.
 done <<<"$segments"
 
 if [ "$block_merge" -eq 1 ]; then
