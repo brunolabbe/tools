@@ -35,6 +35,7 @@ import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
 import {
+  branchSources,
   claims,
   clashes,
   collect,
@@ -49,26 +50,65 @@ const REPO = path.resolve(import.meta.dirname, "../..");
 const CLI = path.join(REPO, "scripts", "next-id.mjs");
 
 /**
+ * The scripted board's stand-in for an object store.
+ *
+ * The branch half of the sweep needs shas: `ls-remote` returns them and
+ * `cat-file` and `diff` are then handed them back. Making them derivable —
+ * `sha-<branch>` — lets the fake answer a question *about an object* without
+ * owning one. A fixture branch must therefore not itself contain `sha-`.
+ */
+const shaOf = (name: string) => `sha-${name}`;
+const branchIn = (arg: string) => arg.replace(/^.*sha-/u, "").replace(/\^\{commit\}$/u, "");
+
+/**
  * A fake command runner over a scripted board.
  *
  * Keyed by the first two argv words, which is enough to tell `git ls-tree` from
- * `gh pr list` from `gh pr diff` without pretending to parse either CLI.
+ * `git ls-remote` from `gh pr list` from `gh pr diff` without pretending to
+ * parse either CLI.
  */
 function runner(board: {
   work?: string[];
   tools?: string[];
   prs?: Record<string, string[]>;
-  fails?: { on: "git" | "pr list" | "pr diff"; status: number; partial?: string[] };
+  /** Branch name → the files that branch adds over `rev`, as a diff lists them. */
+  branches?: Record<string, string[]>;
+  /** Branches the remote names but whose commit this checkout does not hold. */
+  unfetched?: string[];
+  fails?: {
+    on: "git" | "ls-remote" | "pr list" | "pr diff";
+    status: number;
+    partial?: string[];
+  };
 }) {
   const fails = board.fails;
   return (command: string, args: string[]): string => {
-    const die = (status: number) => {
+    const die = (status: number, message?: string) => {
       // The shape that matters: a failure may already have written some of its
       // output. A runner that hands that partial text back is the defect.
-      throw Object.assign(new Error(`${command} exited ${status}`), { exit: status });
+      throw Object.assign(new Error(message ?? `${command} exited ${status}`), { exit: status });
     };
     if (command === "git") {
       if (fails?.on === "git") die(fails.status);
+      if (args[0] === "ls-remote") {
+        if (fails?.on === "ls-remote") die(fails.status);
+        return `${Object.keys(board.branches ?? {})
+          .map((name) => `${shaOf(name)}\trefs/heads/${name}`)
+          .join("\n")}\n`;
+      }
+      if (args[0] === "cat-file") {
+        const name = branchIn(args[2] ?? "");
+        // Real git's exact wording, because the script matches on it to tell
+        // "this branch was never fetched" from "this repository is broken", and
+        // a fake that invents its own phrasing would prove the wrong thing.
+        if ((board.unfetched ?? []).includes(name)) {
+          die(128, `fatal: Not a valid object name ${shaOf(name)}^{commit}`);
+        }
+        return "";
+      }
+      if (args[0] === "diff") {
+        return `${(board.branches?.[branchIn(args.at(-1) ?? "")] ?? []).join("\n")}\n`;
+      }
       const recursive = args.includes("-r");
       return `${(recursive ? (board.tools ?? []) : (board.work ?? [])).join("\n")}\n`;
     }
@@ -195,6 +235,117 @@ test("equal ids order by source, whatever order the sources arrived in", () => {
   );
   expect(one).toEqual(other);
   expect(one.map((r) => r.source)).toEqual(["PR#901", "PR#903"]);
+});
+
+/**
+ * Case 9 — repo-41: a pushed branch carrying no open pull request.
+ *
+ * The transcript in repo-41's Why, as a fixture. On `main` at `a5e31c7` the
+ * sweep printed `next free: repo-39` while `docs/work/repo-39-….md` was already
+ * committed and pushed on `repo-37-anchor-planner-review-corpus` — a branch that
+ * had not merged and had no pull request, so neither of the two sources the tool
+ * read could see it.
+ *
+ * The branch's *name* is deliberately not enough here, which is the whole point:
+ * it says `repo-37` and the file it holds says `repo-39`. A sweep that read
+ * branch names would still have answered 39 and still been wrong, for the same
+ * reason `concurrency.md` gives about commit subjects and pull request titles.
+ */
+test("a pushed branch with no pull request claims the ids in its diff, not just its name", () => {
+  const result = sweep({
+    work: ["docs/work/repo-37-a.md", "docs/work/repo-38-b.md"],
+    prs: { "197": ["docs/work/repo-38-b.md"] },
+    branches: {
+      "repo-37-anchor-planner-review-corpus": [
+        "docs/work/repo-39-the-unanchored-half-of-the-review-corpus.md",
+      ],
+      // `main` is a head like any other, and its diff against `rev` is empty —
+      // which is why the source is a diff and not an `ls-tree`. A tree listing
+      // would re-report every merged id here and clash with `merged` on all of
+      // them.
+      main: [],
+    },
+  });
+  expect(rows(result)).toEqual([
+    "branch/repo-37-anchor-planner-review-corpus repo-37",
+    "merged repo-37",
+    "PR#197 repo-38",
+    "merged repo-38",
+    "branch/repo-37-anchor-planner-review-corpus repo-39",
+  ]);
+  // The `Done when` line: 39 was the answer before, and it was taken.
+  expect(nextFree(result)).toBe(40);
+  expect(render(result, "repo")).toContain("next free: repo-40");
+});
+
+/**
+ * The honest half of case 9, and the reason the fix does not claim to close the
+ * race: `ls-remote` names a branch whose commit this checkout does not hold, and
+ * no amount of local git can read that branch's files.
+ *
+ * So the branch still becomes a source — its *name* is a claim, and a coarse
+ * claim beats none — and the run says out loud that it read only the name. The
+ * assertion on `nextFree` is deliberate: `repo-45` is in that branch's diff and
+ * is still handed out. That is the limit, written down rather than implied.
+ */
+test("a branch the remote names but this checkout has not fetched is reported, not dropped", () => {
+  const sources = collect("repo", {
+    run: runner({
+      work: ["docs/work/repo-30-b.md"],
+      branches: { "repo-44-a-peer-just-pushed": ["docs/work/repo-45-also-held.md"] },
+      unfetched: ["repo-44-a-peer-just-pushed"],
+    }),
+  });
+  const branch = sources.find((source) => source.source.startsWith("branch/"));
+  expect(branch?.paths).toEqual(["repo-44-a-peer-just-pushed"]);
+  expect(branch?.note).toMatch(/repo-44-a-peer-just-pushed/u);
+  expect(branch?.note).toMatch(/git fetch origin/u);
+
+  const result = claims(sources, "repo");
+  expect(rows(result)).toEqual(["merged repo-30", "branch/repo-44-a-peer-just-pushed repo-44"]);
+  expect(nextFree(result)).toBe(45);
+});
+
+/**
+ * The sharpest case, and the one that decides where the note lives.
+ *
+ * A branch named `wip-…` holding `docs/work/repo-50-….md`, not yet fetched,
+ * claims **no id at all** — the name carries none and the files cannot be read.
+ * If the warning were folded into a source label it would print only when that
+ * source produced a row, so this exact branch would be silent, which is the
+ * defect the ticket is about wearing one more costume. It is a line of its own
+ * instead, and it survives an empty board.
+ */
+test("an unread branch is printed even when it claimed no id at all", () => {
+  const sources = collect("repo", {
+    run: runner({
+      branches: { "wip-no-id-in-the-name": ["docs/work/repo-50-invisible.md"] },
+      unfetched: ["wip-no-id-in-the-name"],
+    }),
+  });
+  const notes = sources.flatMap((source) => (source.note ? [source.note] : []));
+  expect(notes).toHaveLength(1);
+
+  const out = render(claims(sources, "repo"), "repo", notes);
+  expect(out).toContain("wip-no-id-in-the-name");
+  expect(out).toContain("next free: repo-1");
+});
+
+/**
+ * The branch source gets the same refusal every other source has: a failing
+ * `git ls-remote` stops the sweep rather than answering from the two sources
+ * that did work. Offline, that is what happens, and a confident short answer is
+ * exactly the failure this file exists for.
+ */
+test("a failing ls-remote stops the sweep rather than answering from merged and PRs alone", () => {
+  expect(() =>
+    sweep({
+      work: ["docs/work/repo-30-b.md"],
+      prs: { "901": ["docs/work/repo-99-held.md"] },
+      branches: { "repo-44-x": [] },
+      fails: { on: "ls-remote", status: 128 },
+    }),
+  ).toThrowError(/exited 128/u);
 });
 
 /**
@@ -333,6 +484,28 @@ function cli(args: string[], over: { cwd?: string; PATH?: string } = {}) {
  * silently provides neither command and the sweep's *first* call is the one
  * that dies, which is a different test than the one that is written.
  */
+/**
+ * A fixture-repository command that insists it worked.
+ *
+ * Shared by the two cases below that build a real remote, and asserted rather
+ * than ignored: a fixture step that fails quietly leaves the case measuring a
+ * repository it did not build. Identity on the flags because these are made
+ * inside a `mkdtemp`, where no user config is guaranteed.
+ */
+const runGit = (cwd: string, args: string[]) => {
+  const result = spawnSync(
+    "git",
+    ["-c", "user.email=t@example.com", "-c", "user.name=t", ...args],
+    {
+      cwd,
+      encoding: "utf8",
+    },
+  );
+  expect(result.error).toBeUndefined();
+  expect(result.status, `git ${args.join(" ")}\n${result.stderr}`).toBe(0);
+  return result.stdout;
+};
+
 function pathWithout(missing: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-path-"));
   const entries = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
@@ -422,4 +595,134 @@ test("the CLI reports usage and exits 1 with no prefix", () => {
   const result = cli([]);
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(/usage: node scripts\/next-id\.mjs/u);
+});
+
+/**
+ * Case 9 against real git, over a real remote that is a fixture.
+ *
+ * The injected-runner cases above prove `collect` wires the source up and
+ * reports it. They cannot prove the two facts that decided the sweep's shape,
+ * because a fake decides its own answers: that `git ls-remote --heads` sees a
+ * branch this checkout's `refs/remotes/` does not, and that git really does
+ * refuse to read the files of a sha it holds no object for.
+ *
+ * A **fixture** remote and not `origin`, per repo-41's Build step 3 — the real
+ * one moves, and the reproduction in that ticket's Why expires the moment a pull
+ * request opens on the branch it names.
+ *
+ * Both halves of one fixture, in order, so the branch is the same branch: the
+ * clone reads it before fetching and then after.
+ *
+ * Not through the CLI, deliberately. `collect` also calls `gh pr list`, which
+ * cannot answer about a local bare repository, so driving this end to end would
+ * need a stubbed `gh` on `PATH` and would be measuring the stub. `branchSources`
+ * is the seam the CLI itself uses, not a test-only branch.
+ */
+test("against a real fixture remote, an unfetched branch is named and a fetched one is read", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-remote-"));
+  const bare = path.join(dir, "remote.git");
+  const peer = path.join(dir, "peer");
+  const mine = path.join(dir, "mine");
+  const write = (file: string, text: string) => {
+    fs.mkdirSync(path.dirname(path.join(peer, file)), { recursive: true });
+    fs.writeFileSync(path.join(peer, file), text);
+  };
+
+  // `trunk`, not `main`: nothing here depends on the name, and this repo denies
+  // a push to `main` by hook — a fixture that also runs cleanly by hand is worth
+  // more than a realistic branch name.
+  runGit(dir, ["init", "-q", "--bare", "-b", "trunk", bare]);
+  runGit(dir, ["clone", "-q", bare, peer]);
+  write("docs/work/repo-1-seed.md", "seed\n");
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", "seed"]);
+  runGit(peer, ["push", "-q", "origin", "trunk"]);
+  runGit(dir, ["clone", "-q", bare, mine]);
+
+  // The reproduction's shape: the id is in the file, not in the branch name.
+  runGit(peer, ["checkout", "-q", "-b", "some-unrelated-slug"]);
+  write("docs/work/repo-9-held.md", "held\n");
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", "file a ticket"]);
+  runGit(peer, ["push", "-q", "origin", "some-unrelated-slug"]);
+
+  // Before `mine` fetches. The local mirror does not have the branch at all,
+  // which is the measurement that ruled out sweeping `refs/remotes/`; the remote
+  // does, and its object is absent, so only the name is readable — and in this
+  // fixture the name holds no id, which is exactly why the note has to exist.
+  expect(runGit(mine, ["for-each-ref", "--format=%(refname)", "refs/remotes/"])).not.toContain(
+    "some-unrelated-slug",
+  );
+  const before = branchSources({ cwd: mine, rev: "origin/trunk" });
+  const unread = before.find((source) => source.source === "branch/some-unrelated-slug");
+  expect(unread?.paths).toEqual(["some-unrelated-slug"]);
+  expect(unread?.note).toMatch(/some-unrelated-slug/u);
+  expect(claims(before, "repo")).toEqual([]);
+
+  // After it fetches, that branch's own diff carries `repo-9`, which no name
+  // anywhere says. `trunk` is a head too and contributes nothing, because its
+  // diff against `rev` is empty — the property that makes the trunk head
+  // self-excluding instead of a special case.
+  runGit(mine, ["fetch", "-q", "origin"]);
+  const after = branchSources({ cwd: mine, rev: "origin/trunk" });
+  const read = after.find((source) => source.source === "branch/some-unrelated-slug");
+  expect(read?.note).toBeUndefined();
+  expect(read?.paths).toContain("docs/work/repo-9-held.md");
+  expect(claims(after, "repo")).toEqual([{ source: "branch/some-unrelated-slug", id: 9 }]);
+});
+
+/**
+ * The hazard the diff choice brought with it, and the reason it has a fallback.
+ *
+ * A branch that shares no history with `rev` — `gh-pages` and its kin — makes
+ * the symmetric difference fatal, measured: `git diff --name-only
+ * origin/trunk...<sha>` returns `fatal: … no merge base`, exit 128. Left alone
+ * that takes the *whole* sweep down, so one orphan branch on the remote would
+ * turn a working tool into one that answers nothing at all.
+ *
+ * Its own fixture rather than a fourth branch on the one above, because these
+ * cases spawn real git and the Windows runner charges roughly two orders of
+ * magnitude per spawn (see the project's `testTimeout` note in
+ * `vitest.config.ts`); the case above measures 105 ms here.
+ *
+ * `peer` reads its own remote, which saves a clone: it already holds every
+ * object, and this case is about history shape rather than about what has been
+ * fetched.
+ */
+test("a branch sharing no history with the rev over-claims rather than killing the sweep", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "next-id-orphan-"));
+  const bare = path.join(dir, "remote.git");
+  const peer = path.join(dir, "peer");
+  const write = (file: string, text: string) => {
+    fs.mkdirSync(path.dirname(path.join(peer, file)), { recursive: true });
+    fs.writeFileSync(path.join(peer, file), text);
+  };
+
+  runGit(dir, ["init", "-q", "--bare", "-b", "trunk", bare]);
+  runGit(dir, ["clone", "-q", bare, peer]);
+  write("docs/work/repo-1-seed.md", "seed\n");
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", "seed"]);
+  runGit(peer, ["push", "-q", "origin", "trunk"]);
+
+  runGit(peer, ["checkout", "-q", "--orphan", "orphan-pages"]);
+  runGit(peer, ["rm", "-rq", "--cached", "."]);
+  fs.rmSync(path.join(peer, "docs/work/repo-1-seed.md"));
+  write("docs/work/repo-77-orphan.md", "page\n");
+  runGit(peer, ["add", "-A"]);
+  runGit(peer, ["commit", "-qm", "orphan"]);
+  runGit(peer, ["push", "-q", "origin", "orphan-pages"]);
+
+  const sources = branchSources({ cwd: peer, rev: "origin/trunk" });
+  const orphan = sources.find((source) => source.source === "branch/orphan-pages");
+  expect(orphan?.note).toMatch(/shares no history/u);
+  expect(orphan?.paths).toContain("docs/work/repo-77-orphan.md");
+  // The cost of the fallback, asserted rather than hidden: a two-dot diff lists
+  // every file that differs, so a file the orphan *deletes* is claimed too. Per
+  // `idsIn`'s docblock that is the cheap error, and `repo-1` is already merged,
+  // so it surfaces as a clash rather than as a lost id.
+  expect(claims(sources, "repo")).toEqual([
+    { source: "branch/orphan-pages", id: 1 },
+    { source: "branch/orphan-pages", id: 77 },
+  ]);
 });

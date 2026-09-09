@@ -3,7 +3,7 @@ id: repo-41
 tool: repo
 title: the next-id sweep cannot see a pushed branch with no pull request
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 ---
@@ -139,3 +139,163 @@ explicit instruction — running it again risks no longer showing the defect
 the moment `repo-37-anchor-planner-review-corpus` opens a pull request, which
 would make a fresh run look like a clean bill of health rather than what it
 is: the window closing. Not started.
+
+**2026-09-09 — the sweep's shape, decided and recorded before any code was
+written, as Build step 1 requires.** Every figure below was taken in this
+ticket's own worktree off `origin/main@435ee35`, with `npm run build` already
+run:
+
+| measured                                          |                                                                                                                  |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `git ls-remote --heads origin`                    | 0.286 s, **5 heads**, one network round trip, mutates nothing                                                    |
+| the same worktree's local `refs/remotes/origin/*` | **12 refs** — seven of them branches the remote no longer has, because a plain `git fetch origin` does not prune |
+| `git diff --name-only <rev>...<sha>` for one head | 0.003 s (11 files for `pl-17-image-closure`, three of them ticket files)                                         |
+| `git cat-file -e <sha>^{commit}` for one head     | 0.003 s                                                                                                          |
+| `node scripts/next-id.mjs repo` as it stood       | 2.155 s — `gh pr list` 0.714 s, `gh pr diff 203` 1.166 s, `gh pr diff 164` 1.262 s                               |
+
+So the new source costs roughly **0.32 s on a 2.2 s command**, and one more
+network round trip on a command that already made three.
+
+**Chosen: `git ls-remote --heads <remote>` for the ref list, and
+`git diff --name-only <rev>...<sha>` for each head's own files.** Four grounds,
+in the order they decided it:
+
+1. **The ref list comes from the remote, never from `refs/remotes/`.** The
+   cheap local source is wrong in both directions at once: measured above, this
+   worktree holds twelve remote-tracking refs against the remote's five, and a
+   branch a peer pushed since your last fetch is not in that list at all.
+   Reproduced in a fixture rather than argued — a second clone published
+   `some-unrelated-slug` carrying `docs/work/repo-9-held.md`, and the first
+   clone's `git for-each-ref refs/remotes/` still showed one ref while its
+   `git ls-remote --heads origin` showed two. Reading the local mirror is
+   exactly the "answering confidently from a different tree" the script's own
+   comments already refuse to do.
+2. **The claim is a file list; the branch name is only a floor.** Branch names
+   here do carry ids by convention, and a names-only sweep needs no objects at
+   all — but it does not reach this ticket's own reproduction, where
+   `docs/work/repo-39-….md` sat on a branch named
+   `repo-37-anchor-planner-review-corpus`. `concurrency.md` already says why:
+   commit subjects and pull request titles both lie about ids, and a branch
+   name is the same kind of claim. The name is read as well, because it costs
+   nothing and it catches a branch created before its ticket file was
+   committed — but it is not the source.
+3. **A diff, not a tree listing — for the same reason `gh pr diff` is a diff.**
+   `git ls-tree` over a head returns every ticket file the branch _contains_,
+   so `main` itself and both long-lived `release-please--branches--…` heads
+   would each re-report the entire merged set and clash with `merged` on every
+   id. A three-dot diff against `rev` is the branch's own contribution, which
+   makes `main` self-excluding with no special case at all.
+4. **`--heads`, so tags and `refs/pull/*` stay out.** The cost is one network
+   call whatever the head count, plus ~6 ms of local git per head, so
+   completeness over the branch namespace was not worth trading for a naming
+   convention.
+
+**Which of the four states this reaches, one sentence each, as the ticket
+asks:**
+
+- **State 1, merged on `origin/main`** — covered, unchanged, by `git ls-tree`
+  over both ticket roots.
+- **State 2, a file in an open pull request's diff** — covered, unchanged, by
+  `gh pr diff --name-only`.
+- **State 3, a file on a pushed branch with no open pull request** — covered
+  **when that branch's commit is in this checkout**, and when it is not the
+  branch is still named, its id read from the branch name, and an `unread:`
+  line printed telling you to fetch; measured in the fixture above, both
+  `git cat-file -e` and `git diff` exit 128 on a sha `ls-remote` can name but
+  the object store does not hold, so the alternative was silence.
+- **State 4, a peer's local unpushed branch** — **not covered, and no sweep of
+  the remote can cover it.** That is the state the 2026-09-06/07 incident
+  actually was, and this ticket does not close the race; it removes one of the
+  two ways to lose it.
+
+**2026-09-09 — built, on branch `repo-41-next-id-sees-pushed-branches` off
+`origin/main@435ee35`.** `git ls-remote --heads origin main` confirmed the base
+is on the remote before branching.
+
+**What landed.** `branchSources()` in `scripts/next-id.mjs`, a third row in
+`collect()`'s `sources` beside `merged` and `PR#…`, labelled `branch/<name>`;
+`render()` gained an optional third argument for lines the sweep could not read,
+printed between the clashes and `next free`. Five new cases in
+`scripts/test/next-id.test.ts` (15 → 21), of which two drive real git against a
+fixture remote built in a `mkdtemp`.
+
+**Each guard watched failing on its own, not merely "the suite is green" — and
+that includes the two `concurrency.md` rows that are about a _choice_ rather
+than a deletion, which the first pass had reasoned about instead of running:**
+
+| removed or swapped                                        | red                                                                                                                                                                                             |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sources.push(...branchSources(…))`                       | 4 failed, 17 passed                                                                                                                                                                             |
+| the branch name as a claim (`paths = [name]`)             | 3 failed, 18 passed                                                                                                                                                                             |
+| the `unread:` note                                        | 3 failed, 18 passed                                                                                                                                                                             |
+| `out.push(...notes)` in `render`                          | 1 failed, 20 passed                                                                                                                                                                             |
+| the no-merge-base fallback                                | 1 failed, 20 passed                                                                                                                                                                             |
+| `ls-remote --heads` → `for-each-ref refs/remotes/origin/` | the fixture-remote case, `expected undefined to deeply equal [ 'some-unrelated-slug' ]` — the local mirror does not have the branch                                                             |
+| the three-dot diff → `ls-tree -r <sha>`                   | 3 failed, 18 passed, including `expected [ { source: 'branch/trunk', id: 1 } ] to deeply equal []` — the trunk head re-reporting a merged id, which is the exact noise the diff exists to avoid |
+
+Before any of it was written the five cases were run against the unmodified
+script and came back **5 failed, 15 passed**, each for the right reason —
+`branchSources is not a function`, `expected undefined to deeply equal [...]`,
+`expected [] to have a length of 1`, `expected [Function] to throw`, and the
+five-row transcript coming back as three rows.
+
+**Two things the brief did not have, both measured rather than reasoned.**
+
+1. **The reproduction had already expired**, exactly as the ticket predicted it
+   would. `repo-37-anchor-planner-review-corpus` has merged and been deleted;
+   there was nothing left to re-run, which is why the fixture remote in the spec
+   is the deliverable rather than the transcript.
+2. **A diff needs a merge base, and one kind of branch has none.** An orphan
+   branch — `gh-pages` and its kin — makes `git diff --name-only <rev>...<sha>`
+   exit 128 `no merge base`, measured against a fixture, and that would have
+   taken the _whole_ sweep down: one orphan branch on the remote and the tool
+   answers nothing at all. It falls back to the two-dot diff, which over-claims
+   (a file the branch _deletes_ is listed) and says so on its own line. Nothing
+   in the ticket anticipated this; it is a hazard the chosen shape brought with
+   it and it has its own guard.
+
+**Cost, measured on this branch against the pre-change script extracted from
+`origin/main`, same repo, same minute:** 1.825 s / 1.722 s before, 2.136 s /
+1.969 s after — a delta of ~0.28 s, which is the `ls-remote` round trip and
+matches the 0.286 s taken at decision time. The per-head local work is ~6 ms.
+
+**What the fix costs a reader, stated because it will look like a defect.** A
+`repo` sweep here now prints two extra rows and two `clash:` lines, and a `pl`
+sweep prints **five clash lines**, all from two branches whose work had already
+squash-merged and which nobody deleted. Every line is true. It is not suppressed
+because a squash merge leaves a branch unrelated to `main` by ancestry, so no
+cheap test tells a stale branch from one genuinely duplicating a merged id — and
+`idsIn`'s own docblock already decides that tie: over-reporting costs a glance,
+under-reporting is the failure the script exists to prevent. `concurrency.md`
+now says so where a reader will hit it.
+
+**`concurrency.md`** gained four rows in its guard table (eight → twelve), a
+four-row table naming which of the four states the sweep reaches, an `unread:`
+line in the worked output, and the stale-clash note above. Its "union of the
+files on `main` and the files in every open PR" sentence and its "cannot see a
+peer's unmerged work" heading were both false the moment this merged and are
+corrected. `docs/01-TICKETS.md`'s one-paragraph description of the tool was
+stale in the same way and is folded in here rather than filed — it is one
+sentence, and the change in front of it is what made it wrong.
+
+**The Why section's four `scripts/next-id.mjs` coordinates are left as filed and
+are now stale, deliberately.** They resolve correctly against `origin/main`
+(checked: `node scripts/citations.mjs … --rev origin/main` prints the four lines
+the Why describes), and the prose around them describes the pre-fix file, so
+re-pointing them at the new line numbers would attach a correct coordinate to a
+sentence that is no longer true. On this branch the same four are `:322` and
+`:288` (the merged half and the default rev, both inside `collect`), `:334`
+(`gh pr list`) and `:338` (the `sources` array, with the new row pushed at
+`:352`); `branchSources` begins at `:215`. The Why's "15 tests there today" is
+21 for the same reason.
+
+**Gates**, each read from its own exit code rather than through a pipe:
+`npm run format` (588 files), `npm run check` → 0, `npx vitest run
+scripts/test/next-id.test.ts --project repo` → 21 passed, `npx vitest run
+--project repo` → 294 passed in 6 files, `npm test` → 2372 passed in 136 files.
+`node scripts/citations.mjs` on this ticket → exit 0, 4 unanchored and 0 moved.
+
+**What this does not do**, restated at the end so it is not lost in the
+decision entry above: it does not close the id race. A peer's local, unpushed
+branch is unreachable, a pushed branch you have not fetched is read by name
+only, and no command run at time T sees a claim made at T+1.
