@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/brunolabbe/tools/compare/planner-v0.5.0...planner-v0.5.1) (2026-09-09)
+
+
+### Fixes
+
+* **planner:** trust the edge proxy so the rate limiter sees each client (pl-38) ([#198](https://github.com/brunolabbe/tools/issues/198)) ([c2ace56](https://github.com/brunolabbe/tools/commit/c2ace567b1fb29cd023cebcfe4ff91dad7b5785b))
+
 ## [0.5.0](https://github.com/brunolabbe/tools/compare/planner-v0.4.0...planner-v0.5.0) (2026-09-07)
 
 
