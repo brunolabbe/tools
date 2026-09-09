@@ -1905,3 +1905,181 @@ answer — findings go builder-to-reviewer directly — has no fallback for that
 - **The full 59-entry audit was the right call and is the guarantee.** A gate
   enumerated every founding grandfather entry — 59 of 59 honest — precisely
   because that list is the one set the shipped mechanism can never check.
+
+## Fifteenth session — 2026-09-09
+
+**Written by a records-only dispatch, not by the orchestrator that ran the
+batch or by any of its builders or reviewers.** The batch was orchestrated by
+session `tools-52`, running Opus 5 (1M context); intake was 7 `ready` tickets,
+of which `repo-33` and `repo-39` were held back for a batch of their own on
+their own pages' request, leaving 4. The orchestrator's account arrived as one
+dispatch and two follow-up corrections. **Everything checkable from a worktree
+was re-read here rather than transcribed** — PR state and checks via `gh pr
+list` and `gh pr checks`, each ticket's frontmatter and committed `## Review`
+section on its own pushed branch via `git show <branch>:<path>`, and the
+citation-collision claim via `git diff` against all three branches that touch
+it. Subagent token figures, the exact round-by-round gate sequence behind two
+tickets, and the release-workflow and Windows-push-guard findings below are the
+orchestrator's own account and are marked as such; **this session's own token
+cost is not observed from here and is excluded from every total below**, per
+the orchestrator's own instruction to say which.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **4** taken from `ready` to a gated branch — `repo-32` (`difficulty: hard`, #204), `repo-38` (`difficulty: standard`, #208), `repo-41` (no `difficulty` field, #207), `repo-42` (no `difficulty` field, #205) — plus **1 filed**, `repo-43` (`difficulty: mechanical`, `status: needs-decision`, #206), confirmed on each branch's own frontmatter rather than relayed. `repo-43` carries no gate by its own ticket's framing: a filed reproduction is its own verification. All five PRs open against `main`, `MERGEABLE`, checks green — reproduced per-PR, not read off one combined claim. **`MERGEABLE` is a fact about merge order, not about correctness, and this batch is a clean demonstration**: `repo-32`, `repo-38` and `repo-41` each independently repoint the same citation — `docs/work/repo-29-citations-carry-no-anchor.md`'s pointer at `docs/01-TICKETS.md`'s "So the reviewer reports and the builder writes" line, `:293` at the shared base `435ee35`. Confirmed by diff: `repo-38` and `repo-41` both move it to `:294` and agree with each other; `repo-32` moves it to `:349` and agrees with neither. GitHub computes `MERGEABLE` against `main` as it stands right now, one branch at a time, so it reports all three clean — whichever of `repo-32` and {`repo-38`, `repo-41`} lands second will conflict on that one line and must be re-resolved against the tree it lands in, not re-applied from either branch |
+| `agents` / `dispatches` | **10** agents — 1 seam-mapper, 5 builders (`repo-32`, `repo-38`, `repo-41`, `repo-42`, `repo-43`), 4 reviewers (`repo-32`, `repo-38`, `repo-41`, `repo-42`) — / dispatches-and-wakes **not recorded** as a total; the orchestrator did not supply one and it is not recoverable from committed records for three of the four tickets — the tenth session's defect 7 (a committed record keeps the verdict and loses the pass structure) recurring, except on `repo-38`, whose Review section names all six round commits by sha directly |
+| `builder rounds` | **at least 11** gate-facing rounds across the four gated tickets, counted here from each ticket's own committed Review/Log rather than relayed: `repo-32` 1 (low, fixed in the same commit as the gate record) · `repo-38` 6 (round 6 PASS at `2371b5b`; rounds 1-5 named by sha in the record itself) · `repo-41` 2 (FAIL at `f6df0f8`, fixed at `2ee209d`, then PASS) · `repo-42` **2, not the 3 relayed** — its committed record names "round 1" (the low finding raised) and "round-2" (the repair) only, and no third round is named anywhere on the branch; corrected here rather than transcribed. Two faults are independently confirmed as the orchestrator's own rather than taken on its word: `repo-32`'s builder was dispatched to write the `awaiting` parser while `Done when` 6's second sentence still required the owner's answer *first* — the ticket's own Log calls this "a real miss rather than folded into the answer" — and the branch closes `in-flight` rather than `done` after its first two commits, needing a third (`9c86c64`) once the owner answered on 2026-09-09; and `repo-38`'s round covering "correct dispatching.md's verbatim claim" (`0635578`) is a net **+23** lines (46 insertions, 23 deletions), matching the relayed claim that a "paragraph or two" ceiling given at dispatch did not survive contact with the actual correction. The seam-mapper's own misreading of `repo-32`'s decision as "answered 2026-09-08" is not separately confirmable from a worktree — no artifact records what the seam map said — and is taken on the orchestrator's account |
+| `gates` | **11** completed passes across 4 reviewers — `repo-32` 1, `repo-38` 6, `repo-41` 2, `repo-42` 2 (corrected, see above) — all committed and read here. **All 4 returned findings** |
+| `wrong findings` | **0 reached a commit as a refuted gate finding.** Two things nearer the eighth session's glance-reading family were each caught by their own author before commit rather than by the other side. `repo-42`'s reviewer told the record it had corrected an unverified claim of its own — that a citation had "moved twice" — after actually running the diff that showed it had not moved at all; reproduced here, `git diff 4f8f29b b4c695a -- scripts/test/hooks.test.ts` is empty, agreeing with the reviewer's own correction. `repo-38`'s reviewer's own draft report cited that ticket's own Log for four consecutive rounds, which would have gone `indistinct` under the citations gate on commit; per the orchestrator's relay it found this on itself while testing an unrelated scope question, and the committed round-6 section carries no self-citation at all — confirmed here, `grep -n 'repo-38-two-documents'` against the `## Review` block of that committed file returns nothing. The four intermediate drafts were never committed, so the defect itself is the orchestrator's relay and not independently re-run here |
+| `subagent tokens` | **2,151,781** observed across the 10 agents — corrected mid-dispatch by the orchestrator from an initial 2,029,009, which had understated both `repo-38` agents. Per agent, last observed: seam-mapper 63,151 · builder `repo-32` 257,841 · reviewer `repo-32` 169,060 · builder `repo-38` 321,157 · reviewer `repo-38` 362,199 · builder `repo-41` 250,333 · reviewer `repo-41` 164,811 · builder `repo-42` 176,956 · reviewer `repo-42` 250,376 · builder `repo-43` 135,897. **This session's own tokens for writing this row are not included.** Split (arithmetic on the above, checked here): builders 1,142,184 (53.1%) · gates 946,446 (44.0%) · intake 63,151 (2.9%). `repo-38`'s pair alone is 683,356 — 31.8% of the batch — on what the orchestrator calls a two-sentence prose fix that grew a `high` nobody predicted, four of its six rounds spent on defects the repairs themselves introduced rather than on the original work. **Not the bill** — cache reads are the bulk and are not counted here |
+| `cost` | **≈ $39.16** at the 2026-09-02 rate of $0.0182/1k, an arithmetic conversion of the observed total above and not independently billed; this session's own cost is excluded |
+
+### What the skill got wrong
+
+1. **The seam-mapper's decision reading was wrong on `repo-32`, and the
+   skill's own grep fallback would not have caught it either** — this was a
+   seam-map error, not a grep error. It reported `repo-32`'s `awaiting`
+   sub-decision as "answered 2026-09-08". Confirmed false from the ticket's own
+   words: `Done when` 6's second sentence — struck out but still legible on the
+   branch as *"the meaning of `awaiting` … is put to the owner before the
+   parser is written, and the answer recorded here"* — was live and unanswered
+   at dispatch time, and the ticket's own Log calls the miss out directly:
+   *"The dispatching intake was half right, and the half it had wrong is the
+   live half."* The builder caught it because the dispatch marked the claim as
+   an unverified relay rather than fact.
+2. **The orchestrator dispatched `repo-32`'s builder to build while that
+   ticket's `Done when` 6 required the owner's answer *before* the parser was
+   written, and the skill has no step that checks a ticket's Build for an
+   ordering constraint before dispatch.** It checks for open decisions, which
+   is not the same thing — an open decision blocks a build outright; an
+   ordering constraint permits the build but binds the sequence inside it.
+   Confirmed from the ticket's own Log: *"The ordering this line asked for was
+   not met and is not claimed … Recorded as a real miss rather than folded into
+   the answer."* It was survivable only because the reading the owner
+   eventually chose (A) was not the one that would have forced a rename (C) —
+   had it been, the miss would have cost one. The branch closed `in-flight`
+   rather than `done` on its first two commits as the direct, measured
+   consequence, needing a third commit once the owner answered.
+3. **The orchestrator gave `repo-38`'s builder a "paragraph or two" ceiling on
+   the `dispatching.md` correction, invented without reading the section it
+   bounded, and the real change was net +23 lines.** Measured directly:
+   `0635578`, the commit titled "repair repo-29's moved citation and correct
+   dispatching.md's verbatim claim," is 46 insertions and 23 deletions against
+   that one file. A number was given where a condition — *stop if the
+   historical measurements would have to change* — would have been the correct
+   thing to hand a builder. The builder flagged the mismatch rather than
+   proceeding silently, and its reasoning held.
+4. **`gh ruleset view` is not on the deny list and `gh api` is**, confirmed at
+   `.claude/settings.json:8 "Bash(gh api *)"` with no matching `gh ruleset`
+   pattern anywhere in that file's `deny` array. Worth recording because
+   `repo-42`'s rejected option (c) turned on re-reading a branch-protection
+   ruleset, and the obvious route (`gh api`) is denied while a working one
+   (`gh ruleset view`) exists and is easy to miss precisely because the denied
+   one is the first thing that comes to mind.
+
+### What the batch found, kept for the record rather than under a skill defect
+
+- **The citation collision above was the batch's defining finding and it was
+  not written into any ticket.** Three of the four branches independently broke
+  the same coordinate — see the `tickets` row — because each edited
+  `docs/01-TICKETS.md` above the line the record cites, and each branch's own
+  gate found it separately rather than any of them seeing the other two.
+  `npm run check` catches none of it; `citations-gate.mjs` is its own CI step.
+  `repo-38`'s reviewer graded it `high` against the letter of the severity
+  table, which would have said `med`, on the stated grounds that it fires
+  unconditionally on push and none of that ticket's own acceptance lines could
+  see it — and disclosed the stretch in the same sentence, which the record
+  itself gives as the reason it was fixed rather than merged red.
+- **A record cannot cite itself by coordinate under the citations gate, and the
+  fix for mis-binding is not the fix for indistinctness.** Confirmed from both
+  `repo-38`'s and `repo-42`'s own committed Review sections independently: a
+  bare `:NNN` binds to whichever file was last named, so a full path repairs
+  *that*; a full path pointed at the ticket's own file still occurs twice in
+  the section that both cites and contains it, which is what a
+  distinct-anchor check catches. `repo-42`'s reviewer measured its own first
+  draft at "9 verified, 7 unanchored" with "4 anchor(s) not distinct" and
+  repointed every self-citation to a named section instead of a coordinate.
+  `repo-38`'s builder wrote the full-path repair first, its reviewer caught
+  that it did not work for the self-citation case, and the builder reproduced
+  the correction itself before committing round 6.
+- **A `## Review` section is inserted above `## Log`, so its own height shifts
+  every line beneath it, and a citation into a ticket's own file cannot be
+  pre-resolved by either party while that section is still being drafted.**
+  `repo-41` handled this best, in its own words: the reviewer "kept every
+  coordinate pointed at other files," stated the four-state and fail-first
+  claims in prose instead, and "dry-ran the checker against a spliced scratch
+  copy rather than trusting care alone" — at the real insertion point, not a
+  standalone scratch file — so the section needed no repair on landing. The
+  builder then re-ran the same check against the real committed file after
+  `oxfmt`, independently.
+- **`repo-42`'s builder found a false *negative* in the code the ticket asked
+  it to delete, where the ticket had only argued over-blocking.** Confirmed
+  from the ticket's own text: the deleted bare-push guard reaches `main` only
+  when `HEAD` reads `main` *and* `push.default` sends a bare push there; with
+  `push.default = upstream` or a configured `remote.origin.push`, a bare push
+  from a *feature* branch can reach `main` directly, and the guard "read [it]
+  as safe and waved through." The ticket's own words: "It was wrong in both
+  directions, and only the false-positive direction had ever been noticed."
+  This makes the owner's choice to drop the mechanism entirely better founded
+  than the ticket's own argument for it.
+- **The `release` workflow was reportedly red on `main` during the batch, with
+  concrete downstream damage to both release PRs.** This is the orchestrator's
+  account and is not independently reproduced here — it describes a transient,
+  time-boxed failure window that a later run superseded, and re-checking the
+  workflow's current state would not confirm or refute what happened inside
+  that window. Recorded as relayed, not as measured.
+- **A worktree nested under the shared root's own path silently resolves an
+  absolute `/workspaces/tools/...` read to the shared root's copy, with no
+  error**, which is `repo-43`'s own subject — confirmed from its ticket text,
+  filed `needs-decision` this batch rather than fixed, on the explicit
+  instruction that no fix belongs on that branch. **This session hit the same
+  family of guard once as well**, on a multi-branch `git show` loop — refused
+  verbatim as *"a worktree-isolated agent's git operations must target its own
+  worktree… Split it into plain, separate commands"* — and split into
+  sequential single-branch calls rather than finding another spelling, and
+  separately caught itself about to `Edit` the shared root's copy of this very
+  file on the first attempt, which the tool itself refused. At least a ninth
+  and tenth recorded instance of an agent not routing around either shape of
+  this trap.
+- **A record can be faithful and still be mislabelled verbatim, caught only by
+  an after-the-fact audit.** Relayed by the orchestrator, not independently
+  reproduced here since it concerns a PR comment's edit history rather than
+  the tip: `repo-38`'s reviewer audited its own posted PR comment after #208
+  was already open and found the header claimed "verbatim" for a report that
+  was in fact a faithful third-person abridgement — instructions to the
+  builder and the section block dropped, findings, verdict and measurements
+  unaltered. The builder corrected the header to say exactly that rather than
+  either leaving the mislabel or overstating the fix. The batch both settled,
+  on `repo-38`'s own branch, that verbatim wins over completeness-of-receipt,
+  and produced a live violation of that same rule in an artefact nothing
+  checks — the **committed** `## Review` section is mechanically provable
+  verbatim by diffing the two shas that bound it; the **PR comment** is not,
+  because nothing resolves it against anything. `repo-42`'s reviewer did the
+  equivalent check on its own PR comment and found it byte-identical, because
+  that builder piped the committed section out rather than retyping it —
+  piping beats transcribing, and only the former is checkable after the fact.
+
+### What went right, and is worth copying
+
+- **Every finding on every gated branch was reproduced before it was acted on,
+  in both directions**, matching the batch's own framing: `repo-32`'s reviewer
+  reproduced the builder's fail-first numbers by reverting the source in its
+  own worktree; `repo-41`'s reviewer reran all seven of the builder's claimed
+  mutations itself; `repo-42`'s builder and reviewer each drove the hook
+  script directly rather than reasoning about `CLAUDE_PROJECT_DIR` from the
+  header comment alone.
+- **Two reviewers corrected themselves on their own artefacts rather than
+  waiting to be caught** — `repo-42`'s "moved twice" retraction and `repo-38`'s
+  self-citation fix at round 5 — which is the same shape as the fourteenth
+  session's "both reviewers corrected themselves against the rubric," one
+  level down: here it is a reviewer's own report format rather than its
+  verdict.
+- **An owner override on `repo-42` was better founded than the ticket it
+  overrode**, because implementing the rejected-by-the-ticket option (c) is
+  what surfaced the false negative above; declining to patch the false
+  positive alone and instead deleting the whole mechanism closed both holes at
+  once.
+- **`repo-41`'s scratch-copy-at-the-real-insertion-point technique is now this
+  page's clearest instance of Step 10's general shape** — the fact that a
+  record about a not-yet-final file cannot be pre-verified against that file —
+  solved by simulating the final file rather than by writing carefully.
