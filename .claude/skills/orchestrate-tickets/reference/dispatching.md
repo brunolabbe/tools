@@ -171,7 +171,7 @@ stays because the failure mode is silent.
 **Tell the reviewer to send a `## Review` block for the builder to commit
 verbatim — that is the rule, settled by the owner on repo-38 (2026-09-09), and
 this page used to argue the opposite.** An orchestrator instructed exactly that
-on 2026-09-03, on a reading of `docs/01-TICKETS.md:294`'s *"the reviewer reports
+on 2026-09-03, on a reading of `docs/01-TICKETS.md:351`'s *"the reviewer reports
 and the builder writes the section down"* that this page called wrong, on the
 theory that the sentence left room for the builder to compose the section from
 raw findings rather than commit the reviewer's own text. That theory does not

@@ -23,10 +23,10 @@ they name **different people** as the writer of the record.
 sentence is that the subagent returns the section as text and **the caller**
 commits it to the ticket, verbatim.
 
-`docs/01-TICKETS.md:294 "So the reviewer reports and the builder writes"`
-(`:293` as originally filed; moved one line by this ticket's own build, see the
-2026-09-09 Log entry) — the sentence finishes "the section down", and the
-writer it names is **the builder**.
+`docs/01-TICKETS.md:351 "So the reviewer reports and the builder writes"`
+(`:293` as originally filed; `293` → `294` → `349` → `350` → `351` across four
+rebases and rounds since, per the 2026-09-09 Log entries) — the sentence
+finishes "the section down", and the writer it names is **the builder**.
 
 **They agree on the negative and differ on the positive**, which is why nobody has
 noticed. Both say the reviewer must not write it, both give the same reason —
@@ -129,7 +129,7 @@ Every finding across six rounds is resolved or dropped; nothing is carried. One 
 | Done when                                                                                             | Proof                                                                                                                                                                                                                                                                 |
 | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1. Decision recorded as a dated Log entry naming the option and the reasoning                         | **verified** — the Log entry dated 2026-09-08, later names option A over B and C with the reasoning, and its second paragraph names the disclosure answer. A second entry, 2026-09-09 owner's rulings, records both escalated decisions with their provenance         |
-| 2. Exactly one document states the rule; the other names it and points at it rather than restating it | **verified** — `grep -c caller docs/01-TICKETS.md` is 0; `docs/01-TICKETS.md:282 "what it returns is appended to the"` names no actor, and `docs/01-TICKETS.md:295 "The rule itself, and the"` points at the page that states it                                      |
+| 2. Exactly one document states the rule; the other names it and points at it rather than restating it | **verified** — `grep -c caller docs/01-TICKETS.md` is 0; `docs/01-TICKETS.md:339 "what it returns is appended to the"` names no actor, and `docs/01-TICKETS.md:352 "The rule itself, and the"` points at the page that states it                                      |
 | 3. Whether a transcription note is required is stated in whichever document holds the rule            | **verified** — `.claude/skills/review-ticket/SKILL.md:143 "The disclosure note is required, not a habit"`                                                                                                                                                             |
 | 4. `npm run check` and `node scripts/status.mjs --json` exit 0                                        | **verified** — reproduced at `2371b5b`: both exit 0, plus `--project repo` 288 tests across 6 files, `oxfmt --check` exit 0, and `citations-gate.mjs` exit 0 with and without `--against origin/main`; both halves of the status gate watched failing first at exit 1 |
 
@@ -434,3 +434,104 @@ scripts/citations-gate.mjs --against origin/main` still exits 1, unchanged,
   `--against origin/main` at exit 0 with `23 enforced, 0 failing` and nothing
   raised — the condition that had failed every round since it first
   appeared.
+
+- **2026-09-09, rebase** — `origin/main` moved to `239de07` while this branch
+  sat gated: repo-32 (#204), repo-42 (#205), repo-43 (#206), repo-41 (#207) and
+  the history row (#209) all merged first. Rebased onto it. One conflict, in
+  `docs/work/repo-29-citations-carry-no-anchor.md`, at the exact citation this
+  ticket had already repointed once — resolved by applying the owner's second
+  ruling below directly in the conflict, rather than picking either side.
+
+  **The owner ruled a third time in this exchange, relayed by the orchestrator
+  with provenance**, since neither builder nor reviewer can verify authority
+  from inside its own sandbox. Put to the owner: the sentence
+  `docs/01-TICKETS.md`'s "So the reviewer reports and the builder writes the
+  section down" had been cited by line from committed `## Review` sections in
+  three separate tickets, moved four times in two days (`293` → `294` → `349`
+  → `350`), and cost a rebase's worth of repair each time a sibling touched
+  the paragraph above it. Options were: file a separate ticket; fold a fix
+  into this rebase; leave it. **The owner chose to fold it in here.**
+
+  The orchestrator's first proposed mechanism — cite by section or anchor name
+  instead of by line — turned out not to be representable:
+  `scripts/citations.mjs`'s `DECLARED_LOCATION` pattern requires a line number
+  in all four recognised citation forms. Re-put to the owner, corrected. **The
+  owner's actual ruling: strip the `file:line` from the two citations that
+  name this sentence — `docs/work/repo-29-citations-carry-no-anchor.md:549`
+  and `docs/work/repo-32-done-can-hide-an-outstanding-obligation.md:193` — and
+  restate the reference in prose that names no line.** Done, identically in
+  both records: `` `docs/01-TICKETS.md`'s "So the reviewer reports and the
+builder writes the section down" sentence ``, with the four-value history
+  parenthesised so a future reader does not mistake a missing coordinate for
+  an oversight. No verdict, finding, severity, row or measurement in either
+  record was touched — confirmed by re-reading both records' `## Review`
+  sections end to end after the edit, not just the two changed lines.
+
+  **The cost, recorded explicitly because that is the whole value of the
+  trade: those two citations lose mechanical verification permanently.**
+  Neither will ever again be checked by `citations.mjs` for whether it still
+  points at the sentence it names — a future edit to `docs/01-TICKETS.md`
+  could delete that sentence outright and nothing here would notice. That is
+  what the owner accepted in exchange for the coordinate no longer being able
+  to rot. A future reader who wants that sentence checked again would need to
+  restore a `file:line` form and accept the churn back with it.
+
+  **Re-derived the coordinate rather than copying `351`.** The orchestrator's
+  own arithmetic said 351 and explicitly warned not to take it on faith — the
+  last two "obvious" values in this exact chain were both wrong, each correct
+  only against a tree that did not yet contain the next sibling's edit.
+  `grep -n` then `grep -c` on the rebased tree: line 351, count 1. The number
+  was right this time, but arrived at rather than accepted — and turned out
+  not to be needed for the two owner-ruled citations at all, since those no
+  longer carry a line. It was still needed elsewhere: this ticket's own `##
+Why` section (`:294` before this entry) and
+  `.claude/skills/orchestrate-tickets/reference/dispatching.md`'s citation of
+  the same sentence in its own prose (`:294` before this entry, outside any
+  `## Review` section and so never gate-enforced, but a live claim in a
+  governing document all the same). Both repointed to `:351`, uniqueness
+  verified with `grep -c` first. This ticket's own `## Why` section now also
+  records the coordinate's full history (`293` → `294` → `349` → `350` →
+  `351`) rather than the single hop it noted before, since one hop was no
+  longer the whole story.
+
+  **Fold-in, found while re-checking rather than assumed clean:** this
+  ticket's own committed `## Review` section carried two citations into
+  `docs/01-TICKETS.md` at coordinates the merged siblings had also moved
+  (`:282` → `:339`, `:295` → `:352`) — a defect the coordinator's own
+  instructions anticipated ("re-resolve your own committed section's
+  citations: five branches have merged since it was written") rather than one
+  found independently. Repointed both, verified unique first, re-ran the
+  section-scoped checker after: `7 verified, 0 moved, 0 unanchored, 0
+unresolvable, 0 unchecked — exit 0`.
+
+  **Found and reported, not fixed, per instruction:**
+  `docs/work/repo-41-next-id-cannot-see-a-pushed-branch-with-no-pr.md`'s Log
+  (lines in the high 440s and 490s, not a `## Review` section, so
+  citations-gate does not enforce it) narrates this exact coordinate's churn
+  in detail — a table of the four prior values, a sentence naming repo-29's
+  record and its line as now citing `:350`, and "Whoever merges after this
+  branch will get 350 wrong too, and should re-derive rather than copy it from
+  this table." All of that was true when repo-41 wrote it. Once
+  this branch merges, repo-29's citation no longer carries any line number at
+  all, so repo-41's narrative will describe a state that no longer holds —
+  not wrong about what happened, but read against the tree as it will be, it
+  overstates how the story ends. Left entirely untouched, per instruction: a
+  committed Log entry is not edited by a later, unrelated branch, and this
+  observation is not this branch's decision to act on.
+
+  **Re-ran everything named in the acceptance, reading the failing record's
+  name rather than trusting the exit code alone** — the specific habit
+  `repo-41`'s builder is credited with, and the reason the instruction bears
+  repeating: `npm run check` exit 0; `npx vitest run --project repo` — 313
+  tests across 6 files, all passed (the count moved from 288 because the base
+  moved, not because anything here added tests); `node
+scripts/citations-gate.mjs` exit 0, `27 enforced, 0 failing` (up from 23,
+  because more sibling tickets are now enforced too, not because anything
+  here changed); `node scripts/citations-gate.mjs --against origin/main` exit
+  0, same count, `0 raised`. No record named in either failing list, because
+  neither failed.
+
+  Force-pushed `repo-38-review-writer` after the rebase (old tip `12856ab`,
+  new tip below) and left the PR open, per instruction not to merge. Sha
+  mapping and the history-rewrite note are in the PR thread, not repeated
+  here.
