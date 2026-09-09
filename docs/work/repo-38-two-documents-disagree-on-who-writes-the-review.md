@@ -184,13 +184,13 @@ them.
 
   **Three "caller" uses were left alone on purpose**, all genuinely about the
   _dispatching_ role rather than the committing one: the ticket-id/sha/range
-  hand-off (`:93`), the historical "old wording" quote (`:138`), and, inside the
+  hand-off (`:93`), the historical "old wording" quote (`:137`), and, inside the
   repo-1 narrative itself, "the caller saw a correctly-formatted gate, believed
   it was recorded" (`:119` at the tip — that sentence's wording is untouched by
   this edit, only reflowed by the paragraphs added around it). `:119` reads as
   the dispatcher who oversaw the pre-fix process and was misled by it, not as a
   claim about who commits today, which is why it was left standing alongside
-  `:93` and `:138` rather than folded into the eleven that changed. (Caught by
+  `:93` and `:137` rather than folded into the eleven that changed. (Caught by
   the gate on this build, which read the diff and found this paragraph had
   undercounted the survivors as two and mis-filed `:119` among the changed
   places — corrected here rather than in a new round.)
@@ -266,7 +266,7 @@ dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
   uses were left deliberately and listed "the repo-1 narrative" among the
   places changed, when one of that narrative's three `caller` mentions
   (`.claude/skills/review-ticket/SKILL.md:119`, unchanged text, only reflowed)
-  survived alongside its `:93` and `:138`. Corrected the count to three and
+  survived alongside its `:93` and `:137`. Corrected the count to three and
   named `:119`'s own reason — it reads as the dispatcher who oversaw the
   pre-fix process, not a claim about who commits today.
 
@@ -277,12 +277,12 @@ dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
   `docs/01-TICKETS.md:293`'s sentence down to `:294`, which the checker caught
   as `MOVED` on the next run — this ticket's own Why-section citation
   (`:26` in this file) and re-cited it at `:294`, noting it was `:293` as
-  originally filed. Re-ran the checker after both fixes: **exit 0, 0 moved, 0
-  unresolvable, 21 references** (up from 15 as filed, since fixing the ambiguous
-  name rebound four shorthand references that had been silently resolving
-  against the wrong file). **Then repeated the same mistake writing this very
-  entry** — three more bare `SKILL.md:*` coordinates, caught by re-running the
-  checker rather than by care; qualified all three the same way.
+  originally filed. **Then repeated the same mistake writing this very entry**
+  — three more bare `SKILL.md:*` coordinates, caught by re-running the checker
+  rather than by care; qualified all three the same way. The reference count
+  kept moving while this entry was being written, so do not trust a number
+  recorded mid-edit — the number that matters is the one from the final run
+  below, after every edit in this round landed.
 
   **Deferred, low, on the reviewer's own recommendation** — the pointer loop
   between `.claude/skills/review-ticket/SKILL.md:126` and
@@ -295,3 +295,50 @@ dispatching.md:176` ("Verbatim transcription is nowhere in that rule")
   `node scripts/status.mjs --json` exit 0, `npx vitest run --project repo` —
   **288 tests, 6 files, all still passing** — and `node scripts/citations.mjs`
   on this ticket — exit 0.
+
+- **2026-09-09, round 3** — Re-gate on `2bc8d9d` closed round 1's `med` and all
+  three `low`s, and confirmed the round-1 `med` on `dispatching.md` is a live
+  escalation neither of us settles. It also found what neither of us had run:
+  the round-2 fix commit reddens CI.
+
+  **Not acted on, high** — `node scripts/citations-gate.mjs --against
+origin/main` exits 1 at this tip. `repo-29`'s own already-committed `## Review`
+  section, at line 549 of its ticket file, cites `docs/01-TICKETS.md:293` with
+  an anchor that now sits at `:294` — moved by this ticket's own Finding-1
+  fix, which added a line above it. Reproduced the exit code, the mechanism,
+  and that `c8e1f51` (before that fix) was exit 0 for the same command. This
+  gate is not part of `npm run check` and is not in this
+  ticket's own Done-when #4 — it runs separately in CI's `check` job, filtered
+  by nothing, which is exactly why a documentation-only branch can turn it red
+  while every gate this ticket names stays green. Holding per the reviewer's
+  instruction and my own agreement: repairing a coordinate inside a different,
+  already-committed ticket's gate record is contract-adjacent — this repo's own
+  `records.md` is a whole passage warning against a later agent splicing a
+  record it is not touching, and correcting a citation is a smaller version of
+  the same act, done by an agent that record was never about. Not mine or the
+  reviewer's to pick between repairing `repo-29`'s coordinate and shrinking
+  `docs/01-TICKETS.md:282-286` back to its original height. Both options are
+  with the orchestrator.
+
+  **Fixed, low** — three `:138` coordinates written in the round-2 Log entry,
+  citing `.claude/skills/review-ticket/SKILL.md`'s "old wording" quote, went
+  stale by one line in the same commit: the Finding-5 fix removed a line above
+  that sentence, from `:138` to `:137`, after the Log paragraph naming it as a
+  deliberate survivor had already been written. All three re-cited at `:137`.
+  This did not move any other line, so nothing downstream shifted again.
+
+  **Fixed, low** — the round-2 entry's "21 references" was a count taken
+  mid-edit, before the entry finished adding its own coordinates; the tip
+  reported 37. Replaced the specific number with a pointer to the final
+  checker run instead of a count restated by hand, so a future edit to this
+  entry cannot make the same claim stale again.
+
+  Re-ran `node scripts/citations.mjs` on this ticket after both `low` fixes:
+  **exit 0, 0 moved, 0 unresolvable, 37 references** (3 verified, 33
+  unanchored judged by hand, 1 unchecked prose mention of a line number with no
+  file named, which fails nothing). Did not touch `docs/work/repo-29-citations-
+carry-no-anchor.md` or `docs/01-TICKETS.md:282-286`'s height — both wait on
+  the orchestrator. `npm run check`, `node scripts/status.mjs --json` and
+  `npx vitest run --project repo` (288/288, 6/6) all still green; `node
+scripts/citations-gate.mjs --against origin/main` still exits 1, unchanged,
+  because the `high` is deliberately untouched.
