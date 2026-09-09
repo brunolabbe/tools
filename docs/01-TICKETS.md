@@ -348,7 +348,11 @@ written into nothing: the finding travels back as a message and the record does
 not travel at all. `repo-1` went through
 two gates and neither existed in the repo afterwards, which is how it was
 noticed. So the reviewer reports and the builder writes the section down, with
-the date, the verdict, and **both halves named above**:
+the date, the verdict, and **both halves named above**. The rule itself, and the
+disclosure note it now requires of the builder, are stated in
+[`.claude/skills/review-ticket/SKILL.md`](../.claude/skills/review-ticket/SKILL.md)
+— this page names the shape of the record, not the fullest account of who
+writes it or why:
 
 - **The acceptance table** — one row per `Done when` line, each naming the test
   that proves it (`file.test.ts:88`, not "covered"), with the verdict from the

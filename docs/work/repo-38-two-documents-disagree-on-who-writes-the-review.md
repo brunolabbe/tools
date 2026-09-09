@@ -3,7 +3,7 @@ id: repo-38
 tool: repo
 title: Two governing documents disagree on who writes the Review section
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -158,3 +158,71 @@ them.
 
   `difficulty: standard` was set in this same move to `ready`, by the
   coordinator, not defaulted.
+
+- **2026-09-09** — Built option A. Both cited line numbers still held against
+  `origin/main` at dispatch (`SKILL.md:113`, `docs/01-TICKETS.md:293`); re-checked
+  with `grep -n` before editing either.
+
+  `.claude/skills/review-ticket/SKILL.md` now states the rule: the builder — not
+  "the caller" — commits the `## Review` section, verbatim, and discloses its own
+  authorship. A new paragraph names the tradeoff directly (dispatcher and
+  committer are two different sessions in a dispatched loop; the builder is the
+  one already holding write access) and points at `docs/01-TICKETS.md` for the
+  costed decision. The disclosure note is now stated as required, not a habit:
+  say that you transcribed the section and name what you altered or dropped, even
+  "nothing" — matching the ticket's Build step 1 instruction.
+
+  **Wider than the single cited sentence, and here is why.** "The caller"
+  described the committer in twelve places through the page, not one — the
+  opening summary (`:15-20` pre-edit), the repo-1 narrative, both halves of step
+  7/8's procedure, the merged-bullet note in step 3, and the closing paragraph.
+  Fixing only `:113` and leaving the other eleven would have left the same
+  contradiction one level down: two statements in the _same_ file disagreeing
+  about who commits, which is the exact defect this ticket exists to remove.
+  Left two "caller" uses alone on purpose, both genuinely about the _dispatching_
+  role rather than the committing one — the ticket-id/sha/range hand-off
+  (`:93`) and the historical "old wording" quote (`:138`) — since the dispatcher
+  (typically the orchestrator, per `orchestrate-tickets` step 4) and the
+  committer (the builder) are different roles today and only the second one is
+  this ticket's subject.
+
+  `docs/01-TICKETS.md`'s `:293` sentence stays exactly as filed. One sentence
+  was added right after it, pointing at `SKILL.md` for the rule and the
+  disclosure requirement, rather than restating either — per Build step 2. Left
+  `:282`'s "the caller appends what comes back" alone: it predates and sits
+  outside this ticket's two cited sentences, and touching it would have widened
+  scope from a two-sentence fix into a document-wide terminology pass over a
+  file this ticket does not own editing rights to beyond the one line.
+
+  **Third document found stale by this change, and fixed rather than filed**
+  (fold-in): `.claude/skills/orchestrate-tickets/reference/records.md` directly
+  quoted the old SKILL.md phrasing — `"the caller commits the gate record
+**verbatim**"` — as the thing a later splice threatens. That quote, and the
+  "caller editing a reviewer's words" framing beside it, named the actor this
+  ticket just renamed. Updated both to "the builder" and cited `(repo-38)` so a
+  future reader knows why the quote does not match `SKILL.md` word-for-word (it
+  was already a paraphrase, not a literal substring, before this edit).
+
+  Checked for other stale references with
+  `grep -rn "caller commits\|caller writes\|caller who summarises\|caller
+appends"` across the repo: two hits were this ticket's own brief (quoting
+  itself, fine to leave) and two were historical `docs/work/` Log entries
+  (`repo-1`, `pl-5`) quoting wording as it stood at the time — append-only
+  records, not live rules, left untouched.
+
+  `.claude/agents/ticket-reviewer.md:83-86` already said "the builder writes the
+  `## Review` section" before this ticket; it was not the outlier and needed no
+  change. Its two remaining "caller" uses (`:153-154`) are about which model
+  gates, unrelated to who writes the record.
+
+  Gates run from a fresh worktree: `worktree-farm.sh` then `npm run build`,
+  both green, before trusting anything else. Then `npm run format` — no
+  additional diff, the three governing-doc edits plus this file stayed the only
+  modified paths. Then `npm run check` exits 0 (measured with the exit code
+  captured directly, not through a pipe). `node scripts/status.mjs --json`
+  exits 0 and reports this ticket's own entry as `"status": "done"`. Ran the
+  narrowest relevant suite twice: `npx vitest run --project repo` — **288
+  tests, 6 files, all passed** — then `npx vitest run scripts/test/status.test.ts`
+  alone — **108 tests, 1 file, all passed**. Did not run `npm test` in full:
+  this ticket touched no shared config, only prose in three governing documents
+  and the ticket file itself.
