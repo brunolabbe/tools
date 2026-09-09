@@ -191,7 +191,8 @@ last action before committing — programmatically, each cited `file:line` check
 to still hold what the record claims, after `npm run format` had run. All 18
 resolve except one, corrected here: section 2 put `"types": ["node",
 "vite/client"]` one line early in `tools/planner/web/test/tsconfig.json` — line
-14 rather than `:15`, which is where it is.
+14 rather than `tools/planner/web/test/tsconfig.json:15 "vite/client"`, which is where it
+is.
 The coordinate was off by one when the report was written — nothing moved it —
 and the line it names is the one the finding is about, so only the number
 changed. The commit that adds this section touches only this file, which no
@@ -249,8 +250,8 @@ and its `exclude` names `tools/planner/web/test/**`, neither of which reaches
 | `process.cwd()`                     | `string`              | node types real                        |
 | `resolve("a","b")` from `node:path` | `string`              | `node:` builtins resolve under Bundler |
 
-`"types": ["node", "vite/client"]` at `tools/planner/web/test/tsconfig.json:15`
-supplies this. The `web` **src** project has only `["vite/client"]`, so the test
+`"types": ["node", "vite/client"]` at
+`tools/planner/web/test/tsconfig.json:15 "vite/client"` supplies this. The `web` **src** project has only `["vite/client"]`, so the test
 project has strictly more node reach, not less.
 
 #### 3. `pl-32` and the CI gate
@@ -289,9 +290,10 @@ Spot-checks worth naming:
   `await import("../vite.config.ts")` at :24, ambient `HOST` restored in
   `afterEach` at :28-31, `expect(server?.host).toBe(false)` at :44 with the "not
   the string `localhost`" comment at :42-43, port/`strictPort` at :50-51.
-- `vitest.config.ts:55` — `include: ["tools/planner/*/test/**/*.test.{ts,tsx}"]`,
+- `vitest.config.ts:73 "tools/planner/*/test/"` — `include:
+["tools/planner/*/test/**/*.test.{ts,tsx}"]`,
   so pl-32's "no new project file is needed" is correct.
-- `tools/planner/e2e/tsconfig.json:23` —
+- `tools/planner/e2e/tsconfig.json:23 "../playwright.config.ts"` —
   `"include": ["**/*.ts", "../playwright.config.ts"]`. The comment's analogy is
   exact.
 
@@ -307,21 +309,24 @@ Spot-checks worth naming:
   `dist`: `tsc --build && vite build`, 136 modules,
   `dist/app/assets/index-DAGvF8Ts.js` at **311.61 kB**, matching the Log. No
   stray `.d.ts` beside the config afterwards.
-- **`.devcontainer/devcontainer.json` forwards 5183** — **true.** `:102`
-  `"forwardPorts": [8080, 5173, 8099, 8090, 5183]`, `:108` labels `5183`
+- **`.devcontainer/devcontainer.json` forwards 5183** — **true.**
+  `.devcontainer/devcontainer.json:102 "forwardPorts"`
+  `"forwardPorts": [8080, 5173, 8099, 8090, 5183]`,
+  `.devcontainer/devcontainer.json:108 "planner web"` labels `5183`
   "planner web". `tools/planner/Dockerfile:110` is `ENV HOST=0.0.0.0`.
 
 #### Findings
 
 **F1 — low. DOM globals are in scope for a config Vite executes in Node. No
 change requested.**
-`tools/planner/web/test/tsconfig.json:11` (`"lib": ["ES2023","DOM","DOM.Iterable"]`)
-now applies to `tools/planner/web/vite.config.ts` via `:23`. `document.title`,
+`tools/planner/web/test/tsconfig.json:11 "ES2023"` (`"lib": ["ES2023","DOM","DOM.Iterable"]`)
+now applies to `tools/planner/web/vite.config.ts` via
+`tools/planner/web/test/tsconfig.json:23 "**/*.tsx"`. `document.title`,
 `window.innerWidth` and `localStorage.getItem` all resolve inside the config.
 _Scenario:_ someone adds `define: { __W__: window.innerWidth }`; it typechecks,
 `npm run check` is green, and Vite throws `ReferenceError: window is not defined`
 while loading the config.
-_Why no change:_ identical to `tools/downloader/web/test/tsconfig.json:20`, so it
+_Why no change:_ identical to `tools/downloader/web/test/tsconfig.json:20 "**/*.tsx"`, so it
 is the repo's established pattern rather than a new deviation; the realistic
 mistake class (node APIs) is caught precisely, as measured in section 2; and
 before this branch the file was in **no** project, so nothing was caught at all.
@@ -349,7 +354,7 @@ nothing.
 
 | Done when                                                                               | Verdict  | Proof                                                                                                                                                                   |
 | --------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `include` names `../vite.config.ts`, comment says why, no other config changed          | verified | `tools/planner/web/test/tsconfig.json:17-23`; `git diff 567f9e5..df93d53 --stat` = 3 files, only that config                                                            |
+| `include` names `../vite.config.ts`, comment says why, no other config changed          | verified | `tools/planner/web/test/tsconfig.json:17-23 "walked straight past it"`; `git diff 567f9e5..df93d53 --stat` = 3 files, only that config                                  |
 | Deliberate type error fails cold `npm run check` by file, line, TS code; probe reverted | verified | independent probe -> `tools/planner/web/vite.config.ts(30,35): error TS2554`, exit 1; same probe with the line reverted -> exit 0, `error TS` count 0, file never named |
 | With no probe, cold `npm run check` green                                               | verified | cold `npm run check` exit 0, 0 `error TS`, `Building project 'tools/planner/web/test/tsconfig.json'` present                                                            |
 | `npm test` green, `npm run build -w @planner/web` still bundles                         | verified | planner project 49 files / 699 tests green; cold-`dist` build 136 modules, `index-DAGvF8Ts.js` 311.61 kB, no stray `.d.ts`                                              |

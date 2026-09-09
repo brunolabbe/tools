@@ -172,11 +172,11 @@ records nothing.
 | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/api/health` reports the grounding provider by name; a test asserts no key, no endpoint                                     | `tools/planner/api/test/health.test.ts:37` "names the grounding provider too, and says nothing else about it" ✓                                                                                                                                                                                                                         |
 | Unknown `GROUNDING_PROVIDER` yields the fixture provider, beside the `MODEL_PROVIDER` case                                   | `tools/planner/api/test/config.test.ts:47` "falls back to the fixture provider when the grounding name is unknown" ✓                                                                                                                                                                                                                    |
-| Fixture provider: located place + `Source` for a known place, `null` for unknown — both for `locate` and for a matrix cell   | `tools/planner/api/test/grounding-fixtures.test.ts:29` "finds a place the checked-in candidate sets name, with a source", `:62` "answers null — not a guess, not a throw", `:104` "measures a leg the candidate sets actually propose", `:140` "has no driving answer for a walking leg, and says so with null" ✓                       |
-| `canRunTransition` accepts `fanning-out→grounding`, `grounding→composing`, `fanning-out→composing`; rejects `grounding→done` | `tools/planner/contract/test/run.test.ts:63` "lets the fan-out reach grounding, and grounding reach the composer", `:75` "lets `fanning-out` reach `composing` without passing through `grounding`" ✓                                                                                                                                   |
+| Fixture provider: located place + `Source` for a known place, `null` for unknown — both for `locate` and for a matrix cell   | `tools/planner/api/test/grounding-fixtures.test.ts:53` "finds a place the checked-in candidate sets name, with a source", `:82` "answers null — not a guess, not a throw", `:121` "measures a leg the candidate sets actually propose", `:160` "has no driving answer for a walking leg, and says so with null" ✓                       |
+| `canRunTransition` accepts `fanning-out→grounding`, `grounding→composing`, `fanning-out→composing`; rejects `grounding→done` | `tools/planner/contract/test/run.test.ts:63` "lets the fan-out reach grounding, and grounding reach the composer", `:73` "lets `fanning-out` reach `composing` without passing through `grounding`" ✓                                                                                                                                   |
 | `npm run check` and `npm test -- --project planner` pass; suite count up; no existing test changes meaning                   | verified directly: `npm run check` exit 0; `npm test -- --project planner` → 566/566, 42 files; baseline at `origin/main` → 532/40 files (confirmed by running the suite there); the only pre-existing test files touched (`config.test.ts`, `health.test.ts`, `run.test.ts`) received insertions only, no deleted/altered assertions ✓ |
 
-- **med · fixed** · `web/src/plan/RunView.tsx:88` — the `snapshot` reducer case
+- **med · fixed** · `web/src/plan/RunView.tsx:111-112 "countsFrom(event.run)"` — the `snapshot` reducer case
   set `total`/`done` from `run.rosterSize`/`run.specialistsDone`, the fan-out's
   counters and the only ones a `Run` carries. A client landing via `snapshot`
   while `status === "grounding"` therefore rendered "5 of 5 details checked"
@@ -185,7 +185,8 @@ records nothing.
   is the more likely path in practice — a reload, not a reconnect. Both now go
   through one `countsFrom(run)` helper that answers `{ total: null, done: 0 }`
   during grounding, so the bar is indeterminate until a real frame arrives.
-- **med · fixed** · `contract/src/run.ts:288` and `api/src/routes/events.ts:24`
+- **med · fixed** · `contract/src/run.ts:306 "describes a moment that has already passed"` and
+  `tools/planner/api/src/routes/events.ts:26 "describes a moment already past"`
   — both doc comments claimed `grounding`, like `roster`, "describes a moment
   that has already passed" and that "the `Run` already carries the count", which
   the diff never made true. Narrowed to say the `Run` carries the fan-out's
