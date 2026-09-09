@@ -89,7 +89,7 @@
 #     trains everyone to route around it, and routing around it works. The push
 #     half is double-covered by the ruleset anyway.
 #
-#   - IT HAS NOW BEEN OBSERVED TO FIRE, ONCE, AND IT WAS WRONG WHEN IT DID.
+#   - IT HAS NOW BEEN OBSERVED TO FIRE, AND IT WAS WRONG EVERY TIME IT DID.
 #     Until it reached `main` it never fired at all, and that was true
 #     throughout its own build and gate: a session resolves its PreToolUse hook
 #     set once, from the settings in force when it started — in practice the
@@ -106,20 +106,40 @@
 #     rather than a verification, and asked not to be written up as verified
 #     "until somebody watches it refuse something".
 #
-#     Somebody did, 2026-09-08, and it is repo-42. The registration inference
-#     was correct — the hook loads and refuses. The refusal was a false
-#     positive: it stopped a legitimate `git push origin` from a builder's
-#     feature-branch worktree, because the deleted bare-push branch read HEAD
-#     out of `CLAUDE_PROJECT_DIR`, which under worktree isolation is the shared
-#     root and is on `main`. See
-#     docs/work/repo-42-the-hook-has-fired-and-overblocks-a-worktree-push.md for
-#     the reproduction, which was made by driving this script with crafted JSON
-#     on stdin rather than by attempting a real push.
+#     Somebody did, and the evidence for it is worth separating from the
+#     evidence for everything else in this header, because the two are not the
+#     same kind and an earlier draft of this paragraph ran them together.
 #
-#     What is now verified is that this file loads and that its exit code is
-#     honoured. What is still only pinned by its tests is every specific claim
-#     below about WHICH strings it refuses: those are claims about what the
-#     script does when driven directly, which is what the tests drive.
+#     Driving this script by hand — crafted JSON on stdin, which is how repo-42
+#     was filed and how its tests work — CANNOT establish that the harness loads
+#     it. A script piped a payload runs and exits whether or not it is
+#     registered anywhere. repo-42's filing recorded a direct drive, and its
+#     narrative and its own detail do not quite agree about the live command:
+#     it says the hook refused "a legitimate `git push origin`", and then says
+#     the agent that hit it issued `git push origin <branch>` — two positionals,
+#     which this hook demonstrably does NOT refuse. So the filing does not, on
+#     its own, carry the observation it claims.
+#
+#     What carries it is an automatic interception, seen twice on 2026-09-09
+#     during repo-42's build and gate, in two different sessions. In the build
+#     session: a bare `git push` from a worktree whose HEAD was
+#     `fix/repo-42-drop-bare-push-branch`, already in sync with its own
+#     same-named upstream — a command that could not reach `main` under
+#     `push.default = simple` and was a no-op besides — came back as
+#     `PreToolUse:Bash hook error: [$CLAUDE_PROJECT_DIR/.claude/hooks/`
+#     `check-main-writes.sh]: Refusing a bare push from a checkout whose HEAD is
+#     main.` Nobody invoked this file; the harness did. The gate reviewer
+#     reported the same prefix twice on its own scratch pushes, independently.
+#
+#     So: registration and automatic invocation are now VERIFIED, by that
+#     interception and not by the direct drive. The refusal itself was a false
+#     positive — HEAD was not `main` in either session's actual checkout, only
+#     in `CLAUDE_PROJECT_DIR`, which under worktree isolation is the shared root
+#     — and it is the exact bug the section below deletes. Every remaining claim
+#     in this header about WHICH strings are refused is still only pinned by the
+#     tests: those are claims about what the script does when driven directly.
+#     See docs/work/repo-42-the-hook-has-fired-and-overblocks-a-worktree-push.md,
+#     whose Log carries this correction as well as the original filing.
 #
 #   - IT OVER-BLOCKS IN ONE PLACE THAT IS KNOWN, AND HAS HAD ONE MORE THAT WAS
 #     LATENT UNTIL IT FIRED. Read the count as "one that anybody has found so

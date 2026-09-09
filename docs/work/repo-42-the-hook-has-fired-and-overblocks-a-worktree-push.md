@@ -392,6 +392,46 @@ refspec"` and `"leaves a bare push alone when HEAD is not main"`). `run()`
     the code that replaced it stops being a reproduction. (`citations-gate.mjs`
     scopes itself to `## Review` sections, so nothing enforces them either way.)
 
+  **A correction to this ticket's own headline claim, found at the gate and
+  repaired here.** The gate reviewer flagged, as a low finding, that the
+  header's new sentence "what is now verified is that this file loads" did not
+  follow from the evidence it cited — a direct drive of a script proves the
+  script runs, not that the harness registered it. Reproducing that finding
+  turned up something worse in the brief above: `## Why` asserts at its top that
+  "somebody has now watched it refuse something" and says what it refused was "a
+  legitimate `git push origin`", but the "No guardrail was circumvented"
+  paragraph then states that the agent which actually hit this issued
+  `git push origin <branch>` — two positionals — and confirms directly that the
+  bare-push branch is "never reached" for that form, closing with "the refusal
+  only fires for the _bare_ form, which nobody in this reproduction issued on
+  purpose". Those cannot both be true. **As filed, this ticket did not carry the
+  live observation its own title claims.**
+
+  It does now, first-hand rather than relayed. During this build, a bare
+  `git push` from this worktree — HEAD `fix/repo-42-drop-bare-push-branch`,
+  already in sync with its own same-named upstream, `push.default` unset so
+  `simple`, therefore a no-op that could not reach `main` — was refused
+  automatically:
+
+  ```
+  PreToolUse:Bash hook error: [$CLAUDE_PROJECT_DIR/.claude/hooks/check-main-writes.sh]:
+  Refusing a bare push from a checkout whose HEAD is main.
+  ```
+
+  Nothing invoked the hook; the harness did, and the `PreToolUse:Bash hook
+error:` prefix is the harness's, not this script's. That settles registration
+  and automatic invocation, which the direct drive could not, and it is
+  simultaneously a live reproduction of the false positive — HEAD was not `main`
+  in the checkout the command ran in, only in `CLAUDE_PROJECT_DIR`. The reviewer
+  reported the same prefix twice on its own scratch pushes, independently; that
+  is its observation, recorded as its own rather than restated as mine. The
+  refusal was not routed around: the branch was already pushed with the explicit
+  two-argument form before this happened, so nothing was pending.
+
+  The `## Why` section is still left as filed, for the reason given above, and
+  this entry is the correction to it. The header now separates the two evidence
+  trails instead of resting the stronger claim on the weaker one.
+
   **Deliberately not folded in, and it was adjacent:** the harness's own
   worktree-isolation guard refused two commands during this build — a compound
   `git init` into the scratchpad, and a `printf`-into-the-hook reproduction
