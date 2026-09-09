@@ -333,12 +333,18 @@ origin/main` exits 1 at this tip. `repo-29`'s own already-committed `## Review`
   checker run instead of a count restated by hand, so a future edit to this
   entry cannot make the same claim stale again.
 
-  Re-ran `node scripts/citations.mjs` on this ticket after both `low` fixes:
-  **exit 0, 0 moved, 0 unresolvable, 37 references** (3 verified, 33
-  unanchored judged by hand, 1 unchecked prose mention of a line number with no
-  file named, which fails nothing). Did not touch `docs/work/repo-29-citations-
-carry-no-anchor.md` or `docs/01-TICKETS.md:282-286`'s height — both wait on
-  the orchestrator. `npm run check`, `node scripts/status.mjs --json` and
-  `npx vitest run --project repo` (288/288, 6/6) all still green; `node
+  **Found while writing this entry, and worth a bullet of its own: a hand
+  line-wrap, not `oxfmt`, broke a citation.** While drafting the `high` bullet
+  above, I wrote the sentence with manual line breaks at roughly 80 columns to
+  match the file's style, and broke `docs/work/repo-29-citations-carry-no-anchor.md:549` across two lines at the hyphen inside its own backticks. `node scripts/citations.mjs` then parsed the fragment after the break as its own citation attempt (`no tracked file matches`) and failed. I told the reviewer `oxfmt` had caused it. **That was wrong, and the reviewer caught it.** Reproduced myself before writing this: a 354-character single-line paragraph containing the same long `file:line` span, run through `npx oxfmt` both outside and inside this tree with its own config, comes back byte-identical — `oxfmt` does not wrap prose and does not rejoin a hand-wrapped line. The break was mine, made while composing the text of an `Edit` tool call, not a formatting side effect. **The rule, correctly attributed this time: never break a `file:line` inline-code span across a line, by hand or otherwise** — nothing here will rejoin it for you, so the only fix is not making the break in the first place, or, if a long span must sit inside a wrapped paragraph, naming the file and the line number apart in prose rather than as one inline-code token.
+
+  Re-ran `node scripts/citations.mjs` on this ticket after all three fixes:
+  **exit 0, 0 moved, 0 unresolvable** (reference and unanchored counts change
+  every time this entry grows, so the number itself is not restated here —
+  the checker's own output on the tip is the count, not this sentence). Did
+  not touch `docs/work/repo-29-citations-carry-no-anchor.md` or
+  `docs/01-TICKETS.md:282-286`'s height — both wait on the orchestrator.
+  `npm run check`, `node scripts/status.mjs --json` and `npx vitest run
+--project repo` (288/288, 6/6) all still green; `node
 scripts/citations-gate.mjs --against origin/main` still exits 1, unchanged,
   because the `high` is deliberately untouched.
