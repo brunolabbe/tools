@@ -6,6 +6,7 @@ kind: fix
 status: ready
 milestone: null
 depends_on: []
+difficulty: standard
 ---
 
 # repo-38 — Two documents disagree on who writes the `## Review` section
@@ -154,3 +155,6 @@ them.
   here, deliberately — this entry and the Build section above record the
   decision; editing `SKILL.md` and `docs/01-TICKETS.md` is the next builder's
   job, not this dispatch's.
+
+  `difficulty: standard` was set in this same move to `ready`, by the
+  coordinator, not defaulted.
