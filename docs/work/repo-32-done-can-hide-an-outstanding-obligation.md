@@ -172,6 +172,88 @@ a fourth arrived on 2026-09-07 (the Log entry names it).
    would go missing. The meaning of `awaiting` (the three readings above) is put
    to the owner before the parser is written, and the answer recorded here.
 
+## Review
+
+### Gate 1 — 2026-09-09, at `cd8a4e9`, base `origin/main` at `435ee35`
+
+**PASS.** Reviewed by a `ticket-reviewer` subagent on Sonnet; the branch was
+built on Opus, so the two halves of this section were written by different
+models. Transcribed by the builder, which is the model under review, per
+`docs/01-TICKETS.md:333 "So the reviewer reports and the builder writes"`.
+
+| `Done when`                                                        | Verdict      | What proves it                                                                                                                                                                         |
+| ------------------------------------------------------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Decision answered by the owner, rejected options with costs     | **verified** | the Log entry of 2026-09-07, re-read by the reviewer against this page; no test, and none possible — it is a record of a human's answer                                                |
+| 2. Mechanism implemented, and made to fail first                   | **proven**   | `scripts/test/status.test.ts:1618 "the repo's own board surfaces at least one real outstanding obligation"`, plus the 17/110 → 127/127 pair reproduced independently by the reviewer   |
+| 3. The three instances re-read at build time, state recorded       | **verified** | the Log entry of 2026-09-09, cross-checked by the reviewer against repo-13, repo-15, repo-16 and repo-42's own frontmatter rather than against this page                               |
+| 4. `docs/01-TICKETS.md` says what `done` does and does not promise | **proven**   | `scripts/test/status.test.ts:1607 "the ticket format documents the field and says who clears it"`, over `docs/01-TICKETS.md:14 "means the work is finished, not that nothing is left"` |
+| 5. `npm run check` passes and `npm run format` has been run        | **verified** | both re-run by the reviewer in its own worktree: exit 0, and no diff after formatting                                                                                                  |
+| 6a. Build step 4 answered or declared out of scope, with a reason  | **verified** | the Log entry of 2026-09-08, which strikes the step and records the closure; the reviewer confirmed the step is struck in place rather than deleted                                    |
+| 6b. The meaning of `awaiting` put to the owner, answer recorded    | **unproven** | nothing. It is unanswered, `status` is `in-flight` because of it, and the three readings are carried up as an open decision rather than settled in a commit                            |
+
+**Findings, all of them, including the ones that needed no change.**
+
+- **low · The Log's own fail-first paragraph said "22 new cases" and "the five
+  that were green"; the real numbers are 19 and 2 — fixed here.** The run totals
+  it quoted (17 failed | 110 passed, then 127 passed) were never wrong and the
+  reviewer reproduced them exactly by reverting `scripts/status.mjs`,
+  `docs/01-TICKETS.md` and repo-16's frontmatter in its own worktree. What was
+  wrong is that the two counts around them were estimated rather than counted,
+  in the one paragraph on this page whose subject is a measurement. Reproduced
+  before accepting: `grep -c '^+test('` over the diff → 19, and the base test
+  file run in place → `108 passed (108)`, so 108 + 19 = 127 and 17 + 2 = 19. The
+  paragraph now carries the corrected numbers with the correction stated in
+  place, rather than silently overwritten.
+- **No change needed · The malformed-value surface was enumerated past what the
+  suite covers, and held.** The reviewer drove `parseFrontmatter` directly with
+  nine constructed values — empty, whitespace-only, quoted, literal `null`, a
+  list, a number, an indented sub-map, the field on a `ready` ticket, and the
+  field absent. Every one either parses as free text or throws by file and line;
+  nothing crashes, and `awaiting` is `null`-or-string on all 127 real tickets
+  rather than ever `undefined`. The list-and-number cases parse as literal
+  strings, which is correct for a free-text field and is not a gap.
+- **No change needed · All 19 new cases can be made to fail.** The reviewer
+  confirmed 17 go red under a full source revert, and mutated the two
+  `if (owed.length > 0)` guards to `if (true)` to turn the remaining two — the
+  absence-asserting pair — red as well. None is a tautology. It also re-ran the
+  false-green case against a deleted `awaiting` line on repo-16 and watched it go
+  red, which is the property that keeps repo-16's line from being deleted
+  silently.
+- **No change needed · One render combination is verified by the reviewer rather
+  than by a committed test:** a tool holding an open ticket _and_ an awaiting
+  ticket at once, which the suite covers only as two halves. The reviewer called
+  `renderMarkdown` with a synthetic two-ticket array and confirmed the open table
+  and the `### Awaiting` section render together and in order. Recorded here
+  because `renderMarkdown`'s early `continue` was the one place this change was
+  not additive, so the gap is worth naming even though the behaviour is right.
+- **No change needed · The seven repointed citations were re-resolved by hand at
+  the tip** and each lands on exactly what its citing prose claims — no drift
+  onto neighbouring content. `node scripts/citations-gate.mjs` → `23 enforced, 0
+failing`, and the history comparison → `0 raised`.
+- **No change needed · The overlap with repo-38 was measured rather than
+  assumed.** This branch touches `docs/01-TICKETS.md` at base lines 11–16,
+  97–102, 172–180, 340–345 and 386–392; `origin/repo-38-review-writer` touches
+  279–288 and 291–297. Disjoint on both sides. The shared consequence stands and
+  is not a finding: the sentence repo-38 owns moves from 293 to 333 here, so
+  whichever branch merges second must re-resolve
+  `docs/work/repo-29-citations-carry-no-anchor.md`'s citation of it.
+- **No change needed, and out of scope · `docs/01-TICKETS.md` says "the six
+  required ones" where `FIELDS` has seven with `required: true`.** The reviewer
+  checked the base: the sentence already read "six" at `435ee35`, and this branch
+  changed only its trailing clause. Pre-existing, not introduced here, and left
+  rather than folded in because correcting a count in a sentence this branch is
+  already editing would bury a second claim inside a change nobody reviewed it
+  as. Worth a line in whatever next touches that paragraph.
+- **Not a finding, by the gate's own framing · Nothing in the implementation
+  forecloses any of the three readings of `awaiting`.** The reviewer confirmed
+  the field is unrestricted free text and `awaitingTickets` filters on
+  `!== null` alone, never on status — so A, B and C all remain open at the code
+  level, which is what the Log claims about itself.
+
+**Still owed, and not part of this gate:** the reviewer's report has not been
+posted to a pull request thread, because there is no pull request. That duty
+attaches to opening it.
+
 ## Log
 
 - **2026-09-07** — Filed from repo-16's build, on the owner's decision to file
@@ -437,18 +519,35 @@ when` 6 is not struck: a future builder still owes an answer to "what makes
   filing had and enough to build against — `Done when` 2 wanted a live case and
   there is one.
 
-  **Made to fail first, with the numbers.** The 22 new cases went in before a
+  **Made to fail first, with the numbers.** The **19** new cases went in before a
   line of `status.mjs` changed: `npx vitest run scripts/test/status.test.ts` →
-  **17 failed | 110 passed (127)**. The five that were green at that point are
-  the ones asserting _absence_ (no section when nothing is owed, `--markdown`
-  silent, and so on), which is the honest count rather than a claim of 22.
-  **One of them was a false green and was rewritten before the source changed**:
-  `the repo's own board surfaces at least one real outstanding obligation`
-  filtered on `t.awaiting !== null`, and with no such field the property is
-  `undefined` on every ticket — so every ticket passed the filter and the case
-  proved nothing. It filters on `typeof t.awaiting === "string"` now, which is
-  red before the field exists and red again if repo-16's line is deleted without
-  another taking its place. After the source: **127 passed (127)**.
+  **17 failed | 110 passed (127)**, against a baseline of **108 passed (108)** at
+  `435ee35`. So exactly **two** were green at that point, and both assert
+  _absence_: `a board owing nothing prints no awaiting section at all` and
+  `--markdown says nothing about awaiting when nothing is owed`.
+
+  > **Corrected 2026-09-09, by the gate, and the correction belongs in this
+  > paragraph rather than under it.** The first draft of this entry said "22 new
+  > cases" and "the five that were green", and both were **estimated, not
+  > counted** — in the one paragraph on this page whose entire subject is a
+  > measurement. The reviewer counted
+  > `git diff 435ee35..HEAD -- scripts/test/status.test.ts | grep -c '^+test('`
+  > → 19, and ran the base file → 108; I reproduced both here before accepting
+  > either. The run totals were never wrong: 17/110 before and 127/127 after are
+  > exactly what both of us measured. Recorded rather than quietly overwritten,
+  > because a wrong count inside a fail-first claim is the failure mode this
+  > repo's records exist to catch, and it was caught by a second reader rather
+  > than by anything mechanical.
+
+  **The 17/110 run is the second one, and the first is why.** A third case was
+  green before it — `the repo's own board surfaces at least one real outstanding
+obligation` (16 failed | 111 passed), which **was a false green and was
+  rewritten before a line of source changed**: it filtered on
+  `t.awaiting !== null`, and with no such field the property is `undefined` on
+  every ticket, so every ticket passed the filter and the case proved nothing. It
+  filters on `typeof t.awaiting === "string"` now, which is red before the field
+  exists and red again if repo-16's line is deleted without another taking its
+  place. After the source: **127 passed (127)**.
 
   **What the build decided, since Build step 2 left the shape to the builder.**
 
