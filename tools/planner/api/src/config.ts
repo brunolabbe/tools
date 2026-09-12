@@ -8,8 +8,9 @@
 
 import path from "node:path";
 import process from "node:process";
-// `trustProxy` lived here until repo-40 lifted it to `@webtools/core` as the
-// planner's second consumer; see that file for the parsing rules.
+// This tool's `trustProxy` was pl-38's deliberate duplicate of the
+// downloader's; repo-40 replaced it with the shared function below, the
+// planner being its second consumer. See that file for the parsing rules.
 import { trustProxy } from "@webtools/core";
 
 export const LOG_LEVELS = ["debug", "info", "warn", "error", "silent"] as const;
