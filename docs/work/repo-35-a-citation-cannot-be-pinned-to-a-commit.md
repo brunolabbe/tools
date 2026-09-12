@@ -283,8 +283,9 @@ failing citation has two possible repairs, which is what part 5's boundary rule
 exists to decide.
 
 Part 8 is a separate defect folded in on the owner's call, **answered
-2026-09-12** in the third Log entry of that date. **No open decision remains on
-this page.**
+2026-09-12** in the third Log entry of that date. **Part 9 is a second defect,
+found during that round's gate, and it is still open** — including whether it
+belongs on this ticket at all.
 
 ### 0. The blast radius, re-measured at `8d79d8e` before any of it is written
 
@@ -561,10 +562,18 @@ nothing to migrate them to — and because the enforcement landing first turns t
 five into failures the migration then clears, which is the order that proves the
 rule works rather than asserting it.
 
-The migration touches records under `docs/work` and
-`tools/downloader/docs/work`. That is one pull request: the paths are `.md`
-records under a `docs`-typed commit, `docs` is `hidden` in
-`release-please-config.json`, so no changelog line is split across tools.
+The migration touches `.claude/skills/orchestrate-tickets/reference` (four
+locations on `history.md`, plus `records.md`'s two stale ones to delete and the
+boundary rule to write beside the syntax) and `tools/downloader/docs/work` (one
+on `dl-44`). **It touches nothing under `docs/work` — the repo-level work
+directory holds none of the five**, and an earlier draft of this sentence said it
+did, inherited from the wider scope "it goes" would have had. Both reference
+files are tracked, which is worth confirming because `.claude` is gitignored
+except by allowlist.
+
+That is one pull request: the paths are `.md` records under a `docs`-typed
+commit, `docs` is `hidden` in `release-please-config.json`, so no changelog line
+is split across tools.
 
 ### 8. A self-citation can never satisfy `--require-distinct-anchors`
 
@@ -588,16 +597,29 @@ the target line, and the checker reports `anchor starts on 2 lines of <the recor
 itself>`. Then the citing line's fragment was rewritten at five increasing
 lengths and the checker re-run on each:
 
-| Fragment length | Occurrences reported |
-| --------------- | -------------------- |
-| 18              | 3 lines              |
-| 40              | 2 lines              |
-| 80              | 2 lines              |
-| 120             | 2 lines              |
-| 160             | 2 lines              |
+| Fragment length | Checker prints | Distinct lines |
+| --------------- | -------------- | -------------- |
+| 18              | 3 lines        | 2              |
+| 40              | 2 lines        | 2              |
+| 80              | 2 lines        | 2              |
+| 120             | 2 lines        | 2              |
+| 160             | 2 lines        | 2              |
 
 It never reaches one. The file was restored and `git status --porcelain`
 confirmed empty.
+
+**The two columns differ at 18 characters, and that is not a transcription error
+— it is what part 9 is about.** The gate reproduced 2 where this table printed 3
+and said so; both numbers turned out to be right about different things. The
+18-character fragment is `Decision answered`, which also occurs in the citing
+row's own prose ("Decision answered as dated Log entry naming option and
+reasoning"), so after the rewrite that row matches twice — once in the cell text,
+once inside the anchor's quotes. At 40 characters and above the fragment is
+longer than the prose overlap, only the anchor matches, and the two columns
+agree. **Anyone reproducing this needs the fragment, not just the length**: it is
+a prefix of line 235 beginning at `Decision answered`. A length alone does not
+determine the count, which is why the original one-column table was not
+reproducible.
 
 #### What was chosen
 
@@ -660,6 +682,54 @@ than make its self-citation distinct and its reviewer independently reached the
 same conclusion. Two tickets landing opposite answers in one batch is the thing to
 avoid. The argument is kept here so a later reader can reopen it on purpose rather
 than rediscover it by accident.
+
+### 9. `occurrences` counts matches, not lines — open decision
+
+**Found by a disagreement, not by a review pass**, which is why it is recorded
+with how it surfaced: the gate reproduced the fragment-length table above and got
+2 where the table printed 3, on its own script and a plain `grep -c`. Neither
+side was wrong. Chasing which one was produced this.
+
+**The defect.** `scripts/citations.mjs:826` "const hits = locateAnchor(content, c.anchor)"
+returns **one entry per match**, and `occurrences` is `hits.length`. Two matches
+on the same line count twice. The text printed to the author says lines:
+`scripts/citations.mjs:828` "is how many lines the fragment starts on in the whole file"
+in the source, and the remediation at`scripts/citations.mjs:1498` "anchor(s) verify on a fragment that starts on more than one line of the file"
+on the terminal.
+
+**Reproduced.** With the 18-character fragment above, `locateAnchor` returns
+`[224, 224, 235]` — three matches, **two** distinct lines — because the citing row
+contains the fragment twice, once in its own prose and once inside the anchor's
+quotes. The checker prints "starts on 3 lines" for a file that has it on 2.
+
+**Why it is not cosmetic, and why it lands on this ticket rather than a
+footnote.** `occurrences` is the number `--require-distinct-anchors` fails on, so
+it is the same counter part 8's self-citation rule is written against, and a
+self-citation is precisely the shape that makes a line match twice — the citing
+row carries both the prose and the anchor. The two defects meet on one line of
+code.
+
+**The decision, which is not settled here.** The two answers are not
+interchangeable, because one changes behaviour and the other does not:
+
+- **(a) Correct the count** — deduplicate by line, so `occurrences` means what
+  three places already claim it means. **Cost: it changes gate verdicts.** A
+  record whose only duplication is two matches on one line is failing today and
+  would pass. The gate's baseline currently reports `6 indistinct` across the
+  corpus; how many of those six are this shape is **unmeasured**, and measuring it
+  is the first thing to do if (a) is chosen — it is the difference between a
+  correctness fix and a silent amnesty.
+- **(b) Correct the wording** in all three places to say matches rather than
+  lines. **Cost: none to behaviour, and it keeps a rule that fails a citation for
+  repeating a fragment on one line** — which is arguably right, since the
+  ambiguity `--require-distinct-anchors` exists to prevent is about a fragment
+  that is not unique, and twice on one line is not unique either.
+
+**And a third question that belongs to whoever answers those**: whether this
+should be part of repo-35 at all, or its own ticket. It was found here and it
+touches the same counter, which argues for folding it in; it is independent of
+pinning, which argues for splitting it. **Folding it in is not obviously right and
+this page does not assume it.**
 
 ### Not in scope
 
@@ -748,10 +818,89 @@ for the work the answers imply.
       from `history.md` under `--require-distinct-anchors`.
 
    The reproduction that makes the old advice provably false rather than merely
-   unhelpful is in Build part 8: five fragment lengths, 18 through 160, reporting
-   3 occurrences and then 2, 2, 2, 2 — never 1.
+   unhelpful is in Build part 8: five fragment lengths, 18 through 160, never
+   reaching one occurrence.
+
+7. **Added 2026-09-12, for Build part 9, and it is not yet answerable.** Whether
+   `occurrences` is deduplicated by line or the three texts that call it a line
+   count are corrected to say matches — and whether that work belongs to this
+   ticket or its own — is answered as a dated Log entry naming the option. If (a)
+   is chosen, the count of corpus records whose `indistinct` verdict is this shape
+   is measured **before** the change, not after, so an amnesty cannot be mistaken
+   for a correctness fix.
 
 ## Log
+
+- **2026-09-12** — **Two gate findings repaired, and the second of them was not a
+  defect in the ticket but a defect in the checker, found because the gate and
+  this branch disagreed about a number.** Fourth entry of the same date. No
+  decision answered; A, B, C and part 8 are untouched.
+
+  **Finding 1 — accepted, and it was mine.** Build part 7 still named `docs/work`
+  among the directories the migration touches. It does not: under "it narrows" the
+  five migrating locations are four on `history.md`, which lives under
+  `.claude/skills/orchestrate-tickets/reference`, and one on `dl-44` under
+  `tools/downloader/docs/work`. The repo-level work directory holds none of them.
+  The stale path was inherited from the wider scope "it goes" would have had —
+  when C reversed, the sentence lost `tools/planner/docs/work` and kept
+  `docs/work`, which was the wrong one to keep. Corrected, with `records.md` named
+  alongside `history.md` since the boundary rule is written there too.
+
+  **Finding 2 — not accepted as filed, and not rejected either: both numbers were
+  right.** The gate could not reproduce the fragment-length table's first row,
+  getting 2 where the table printed 3, and cross-checked with `grep -c`. Chased
+  rather than conceded, because a measurement this page prints is this page's
+  claim.
+
+  The 18-character fragment is `Decision answered`, a prefix of line 235. It also
+  occurs in the **citing row's own prose** — "Decision answered as dated Log entry
+  naming option and reasoning" — so once the anchor is rewritten to that fragment,
+  line 224 contains it twice: once in the cell text, once inside the quotes.
+  `locateAnchor` returns `[224, 224, 235]`. **Three matches, two distinct lines.**
+  The checker printed 3 and the gate counted 2, and neither was wrong: the gate
+  measured the file, this branch transcribed the tool. At 40 characters and above
+  the fragment outgrows the prose overlap and the two agree, which is why only the
+  first row diverged.
+
+  The gate's `grep -c` could not have found it either way — `locateAnchor` matches
+  against the file collapsed into one string, so it can match across a line
+  boundary, and a line-oriented grep cannot see that class of hit at all. That is
+  not a criticism of the check; it is the reason the two methods had to be
+  compared rather than one of them trusted.
+
+  **The table now prints both columns**, and says that a length alone does not
+  determine the count — the fragment does. The original one-column table was not
+  reproducible from what it wrote down, which is the defect this ticket exists to
+  prevent, committed on this ticket's own page.
+
+  **What that disagreement uncovered is Build part 9, and it is open.**
+  `occurrences` is `hits.length`, one entry per match, while three places call it a
+  line count: the source comment, and the remediation printed to the author. It is
+  the same counter `--require-distinct-anchors` fails on and therefore the same
+  counter part 8's self-citation rule is written against — and a self-citation is
+  exactly the shape that makes one line match twice, since the citing row carries
+  both the prose and the anchor. The two defects meet on one line of code.
+
+  **Left open rather than fixed here, with the options and their costs on the
+  page**: deduplicate the count, which changes gate verdicts and would quietly
+  pass records that fail today (the corpus reports `6 indistinct`; how many are
+  this shape is **unmeasured**, and measuring it first is what separates a
+  correctness fix from an amnesty), against correcting the wording in all three
+  places, which changes no behaviour and keeps a rule that is arguably right
+  anyway. **And whether part 9 belongs on this ticket at all is part of the
+  question** — it was found here and touches the same counter, but it is
+  independent of pinning. This page does not assume the answer.
+
+  **Verification.** All unpiped, `$?` read directly. `npm run check` → 0.
+  `node scripts/citations.mjs` on this file → 0.
+  `node scripts/citations-gate.mjs --against origin/main` → 0.
+  `npm test -- --project repo` → 0. The repo-43 record was overwritten with
+  `git show 1548f21^:<path>` during the reproduction and restored with
+  `git checkout --`; `git status --porcelain` empty before the commit. **One thing
+  this round got wrong and caught**: an earlier reproduction in this session left
+  that file dirty because it was restored from an in-memory copy of the _pre-fix_
+  content rather than with `git checkout --`, so the tree read modified against
+  `HEAD`. Caught by running `git status` rather than assuming the restore worked.
 
 - **2026-09-12** — **Build part 8 is answered: the checker detects the
   self-citation and prints the true remedy.** Third entry of the same date. It
