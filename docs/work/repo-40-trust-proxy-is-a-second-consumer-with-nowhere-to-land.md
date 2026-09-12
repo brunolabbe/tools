@@ -151,4 +151,57 @@ than folded in — adding a downloader end-to-end proxy-trust test is a real
 piece of work (a new integration test file, modeled on the planner's), not a
 byproduct of moving one function, and Build's three steps do not ask for it.
 Recorded here so "still cover... end to end" is read correctly: true for the
-planner, unchanged (i.e. still absent) for the downloader.
+planner, unchanged (i.e. still absent) for the downloader — **superseded by
+the entry below**, which closes that gap in this same branch on the owner's
+decision.
+
+**2026-09-12 — the owner's decision on Done-when bullet 3, and the downloader
+wiring test it produced (`repo-40-trust-proxy-downloader`).** The question:
+does `packages/core/test/trust-proxy.test.ts` discharge the ticket's "closed
+for both at once" line, or does the downloader still owe an end-to-end test?
+Options were (A) correct the line and file a `dl-` ticket, (B) add the test
+in this branch, (C) leave the line as written with nothing behind it.
+**Chosen: B, by the repository owner, on 2026-09-12, overriding both the
+gate's recommendation and the builder's, which were both (A).** The owner's
+answer makes bullet 3's acceptance line true rather than merely accurate —
+the line stays as written and the branch was raised to meet it, rather than
+the line being lowered to meet the branch.
+
+What the new test proves, and what it does not: `packages/core`'s test
+covers parsing (default, both boolean directions, CIDR/list passthrough) at
+the one place the function lives. It cannot prove that `TRUST_PROXY` reaches
+`Fastify({ trustProxy })` and thereby changes which address this tool's rate
+limiters key on — that is wiring, and the downloader had never tested it.
+`tools/downloader/api/test/trust-proxy.test.ts` (new file) exercises
+`rateLimitJobsPerMinute` through `POST /api/jobs`, behind both a trusted and
+an untrusted hop, modeled on the planner's own `describe("behind a proxy
+(pl-38)")` block in `runs.test.ts` rather than invented fresh — the two tools
+wire the identical setting into the identical Fastify option, so the shape
+should match.
+
+Made able to fail before committing, per the instruction to prove rather
+than assert it: hardcoded `server.ts`'s `trustProxy: config.trustProxy` to
+`trustProxy: false`, reran the new suite — `1 failed | 1 passed`. The
+"two clients behind a trusted proxy get independent allowances" test caught
+it (a client behind the trusted hop got refused because every request now
+collapsed onto the proxy's own address); the "outside the trusted CIDR"
+test did not go red under this particular mutation, because it exercises the
+case where the forwarded header is already ignored, which `trustProxy: false`
+does not change. Restored `server.ts` from a byte-for-byte backup and
+confirmed `git status --porcelain` reported only the new test file before
+committing. Gates on the new tip: `npm run check` 0, `--project downloader`
+74 files / 1216 tests (was 73/1214 — +1 file/+2 tests), full `npm test` 138
+files / 2400 tests (was 137/2398).
+
+**2026-09-12 — Build step 3, the downloader half
+(`repo-40-trust-proxy-downloader`, stacked on the lift).**
+`tools/downloader/api/src/config.ts` now imports `trustProxy` from
+`@webtools/core` and defines no local copy; its own doc comment was deleted
+and replaced with a two-line pointer above the import, the same pattern
+`rate-limit.ts` set. `ApiConfig.trustProxy`'s field-level doc comment is
+unchanged — it is tool-specific (what the setting does to _this_ tool's
+rate limiter), per the ticket. `@webtools/core` was already a `dependencies`
+(not `devDependencies`) entry in `tools/downloader/api/package.json` — the
+rate-limit import put it there first, so no manifest edit was needed.
+`npm run check` green; `npm test -- --project downloader`: 73 files, 1214
+tests, all passed.
