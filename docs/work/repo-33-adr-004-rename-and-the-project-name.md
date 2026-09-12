@@ -117,6 +117,55 @@ only copy of anything a user downloaded.
 
 ## Log
 
+**2026-09-12 — `Done when` #3 converted from `unproven (gate)` to verified.**
+PR [#211](https://github.com/brunolabbe/tools/pull/211) fired the run that
+neither the builder nor the reviewer could: **run `34713750829`, workflow
+`downloader`, on `6fcf4bea49baed63c70372a3de68d46f8e456b87`, conclusion
+`success`.**
+
+**The workflow's own verdict was not taken as the answer.** A workflow reports
+`success` when a job is _skipped_, and a `cancelled` run is a _completed_ run —
+either would read as green at a glance. So the `docker` job was read directly,
+`gh run view 34713750829 --json jobs`: `docker  status=completed
+conclusion=success`, alongside `e2e (direct)` and `e2e (sniffer)`, both also
+`success`. Its steps, which are the actual evidence:
+
+```
+4. Build the image                                                → success
+5. Run docker compose -f compose.downloader.yaml up -d --no-build → success
+6. Wait for the service to report healthy                         → success
+7. Run docker compose -f compose.downloader.yaml down -v          → success
+```
+
+Step 5 is the renamed fragment being found and resolved on a clean machine with
+no `.env`, and step 6 is `/api/health` answering from the container it started.
+
+**What this does not prove, stated because a pass is easy to over-read.** CI
+builds through buildx and then runs `up -d --no-build`; the README's own verb is
+`up --build`. So the compose file, the project name, the service definition and
+the boot are all proven, and the literal `--build` path is still inferred from
+the fact that the same file's `build:` section is what buildx was pointed at. It
+is a much smaller gap than the one this closes, and it is the gap.
+
+**Nor does this run prove the path-filter half of the workflow fix, and it was
+never going to.** `.github/workflows/downloader.yml` is in its own filter list
+and changed on this branch, and `tools/downloader/Dockerfile` changed too — not
+caught by the trailing `!**.md` — so there were at least three independent
+reasons this job triggered and the run does not isolate the compose-path
+filters. What it proves is exactly what the acceptance line asks, which is the
+half that needed proving. (Recorded at the reviewer's request, in its words as
+well as these: necessary but not sufficient for the filters, sufficient for the
+line.)
+
+**The gate's CONCERNS verdict now rests on nothing.** Its med closed at
+`c57a3ff`, its low at `6fcf4be`, and its single `unproven (gate)` line is this
+entry. The `## Review` section above is left exactly as raised — it was true of
+the tree and the evidence available when it was written, and a verdict that gets
+rewritten once the evidence arrives is not a record.
+
+Also green on the same sha: `security` and `pr-title`. `CI` was still
+`in_progress` when this was written and is not part of this line's proof.
+
 **2026-09-12 — the gate's low, closed.** The Review above records
 `docs/00-TOOLS.md:50` as edited beyond what the rename required, and it was
 right: `compose.prod.yaml` still exists, so listing it among the repo-wide
