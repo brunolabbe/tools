@@ -2083,3 +2083,297 @@ the orchestrator's own instruction to say which.
   page's clearest instance of Step 10's general shape** — the fact that a
   record about a not-yet-final file cannot be pre-verified against that file —
   solved by simulating the final file rather than by writing carefully.
+
+## Sixteenth session — 2026-09-12
+
+**Written by a records-only dispatch (Claude Sonnet 5, dispatched explicitly),
+transcribing the orchestrating session's own account (Claude Opus 5) of a batch
+it ran, with no `ticket-reviewer` gate on this branch — scoped to this file
+alone.** Every branch fact below was re-read from `git show` and `gh pr view`
+against the four pull requests' own remote refs (fetched as `pull/<n>/head`,
+since three of the four head branches no longer exist under
+`refs/heads` — only the pull request ref survives) rather than taken from the
+account; token figures, the exact round-by-round exchange behind each gate, and
+the "every pair differs" characterisation are the orchestrator's own and are
+marked as such. Base `main` at `8d79d8e`, confirmed as the shared merge-base of
+all four branches against `origin/main` — and, at the moment this row was
+written, `origin/main` had already moved two commits past it
+(`a7f2c86`, `d0727a2`), unrelated releases and a planner-deployment chore.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **4** taken from `ready`/`needs-decision` to a gated branch: `repo-43` (`difficulty: mechanical`, #210), `repo-33` (`difficulty: hard`, #211), `repo-40` (`difficulty: standard`, three stacked pull requests — #213 `repo-40-trust-proxy-lift`, #214 `repo-40-trust-proxy-downloader` (draft), #215 `repo-40-trust-proxy-planner` (draft, carries the ticket file and its gate record) — ordered by the draft flag rather than by base branch, per each PR's own body), `repo-35` (no `difficulty` field at dispatch, `difficulty: hard` added on the branch once its decisions were answered, #216). All four frontmatter values confirmed on their own branch tips rather than relayed. Intake read **3** `ready` (`repo-33` and `repo-39`, both `hard`; `repo-40`, `standard` — `repo-39`'s rating confirmed on `main`), **2** `needs-decision` brought in by answering them (`repo-35`, `repo-43`), and **1** excluded because a peer session held it live (`repo-38`) — which had in fact already merged as `#208` by the time this row's own base commit was cut: `8d79d8e` **is** `#208`'s merge commit, so the exclusion and the peer's landing are the same event viewed from two sides, not a contradiction. `repo-39` was offered and not chosen. Zero file overlap across the four tickets' own diffs, measured with `git diff --name-only origin/main...<branch>` (3, 22, 4, 1 paths). All six pull requests' own CI checks read green, re-run here per PR rather than from one combined figure. **`MERGEABLE` does not hold for all six as of this row, and that is a property of right now rather than of the batch's own close**: `#211` (`repo-33`) reads `DIRTY` against the current `origin/main` tip, conflicting with `d0727a2`'s compose-file edits, which landed after this batch's branches were cut; the other five still read `CLEAN`. **Two have since merged** — `#210` and `#216`, while this row was itself being written — and `#211` went `CONFLICTING` and was resolved; see item 8 |
+| `agents` / `dispatches` | **10** agents — 1 seam-mapper, 4 builders (`repo-43`, `repo-33`, `repo-40`, `repo-35`), 4 reviewers (one per ticket), 1 records-only builder (this row, resumed across the conflict episode in item 8) — / dispatches-and-wakes **not recorded**, and not supplied by the account either |
+| `builder rounds` | **Not given as a total, and this session's own self-attribution is unusually total: the first six items below are the orchestrator's own by its own account, not a builder's or a reviewer's — item 7 is this row's own finding, made while checking the orchestrator's "every pair differs" claim; item 8 was recorded at the orchestrator's direction as it happened mid-draft; item 9 was raised by the owner and checked by the orchestrator.** At least one extra round is independently visible on each of four branches — `repo-43`'s gate-record citation repair (`1548f21`, after `6c76694`'s record broke `--require-anchors`), `repo-40`'s twice-repaired gate record (`7b2596b` rewriting unanchorable coordinates to prose, after `4e030ff`'s FAIL and the owner's reversal at `a5d38be`), `repo-33`'s CONCERNS record closed by two further Log entries rather than by a rewritten verdict (`6fcf4be`, `c6c838b`), and `repo-35`'s two reversed premises (item 3 below) plus its stop-short after a gate record made `npm test` red (item 6 below, resolved by moving the section out from under `## Review` entirely) |
+| `gates` | **4 reviewers, all returned findings**, though not the same kind: `repo-43` PASS with **0 defects, 2 observations**, both resolved as not-carried; `repo-33` **CONCERNS**, 1 med + 1 low, both closed by later Log entries with the verdict left exactly as raised (*"a verdict that gets rewritten once the evidence arrives is not a record"*, in the record's own words); `repo-40` **PASS after three rounds** (FAIL → owner decision → PASS), 2 lows repaired in round 1, 1 acceptance-line high resolved by an owner override in round 2, 1 further low added in round 3; `repo-35`'s is not a `## Review` at all but **`## The gate on this filing`**, the carve-out `docs/01-TICKETS.md:281` "A gate on a pull request that only" names for a branch that only files a ticket — 5 findings raised across its own sequence of re-checks, all 5 carried, 0 dropped |
+| `wrong findings` | **0 gate findings were refuted this batch, and the schema's row does not fit what happened instead — every wrong claim this session ran orchestrator → builder, not builder/reviewer → orchestrator.** Two are reasoning errors relayed as premises and reversed by measurement (item 3), one is a measurement relayed inside a question's premise and later reversed by a bigger measurement (item 2), one is a premise a question was built on that a downstream gate then dissolved (item 4), one is a base-branch omission (item 5), and one is a ship-authority gap that a builder's own stop-short caught before anything shipped red (item 6) |
+| `subagent tokens` | **2,369,959** across the 10 agents that reported, none missing, summed here and matching the account exactly — **corrected from an earlier 2,028,628, which was a true floor when first recorded but predates both the conflict-episode rounds in item 8 and this row's own agent**: seam-mapper 79,318 · `repo-33` builder 342,100 · `repo-40` builder 304,858 · `repo-43` builder 115,620 · `repo-35` builder 381,971 · `repo-43` gate 123,963 · `repo-40` gate 193,590 · `repo-33` gate 241,812 · `repo-35` gate 335,198 · history builder (this row) 251,529. Split: builders 1,396,078 (**58.9%**) · gates 894,563 (**37.8%**) · intake 79,318 (**3.3%**). **Not the bill** — cache reads are the bulk and are not counted here, and several agents' final turns ended in a `SendMessage` that delivered no usage block, so the total remains a floor — and this row's own 251,529 is itself last-observed-before-this-correction, so it undercounts the round that produced this very sentence |
+| `cost` | **≈ $43.13** at the 2026-09-02 rate of $0.0182/1k, an arithmetic conversion of the total above and not independently billed — a floor for the same reason the row above is one |
+
+**Two things are true about this batch's model pairings, and both are kept
+rather than one standing as a correction of the other.** First, **within every
+one of the four tickets, the model that gated is not the model that built** —
+`repo-43` Haiku→Sonnet, `repo-40` Sonnet→Opus, `repo-33` Opus→Sonnet, `repo-35`
+Opus→Sonnet, 4 of 4, confirmed on each PR's own body (`#210`, `#213`/`#214`,
+`#211`, `#216`). That is the property the skill's model-pairing rule exists to
+guarantee: the checked thing does not pick its checker, and it held on every
+branch. Second, **two of the four pairings are identical to each other** —
+`repo-33` (`hard`) and `repo-35` (unrated) both landed Opus→Sonnet, also
+confirmed on their own bodies: `#211`'s "Built by **Claude Opus 5**. Gated by
+**Claude Sonnet**" and `#216`'s "Built by Claude Opus 5. Gated by Claude
+Sonnet." Nothing was mis-dispatched — Sonnet gating Opus on both is the
+correct direction for each ticket taken alone — but the two rows collapse onto
+one pairing, and why they do is its own finding, at item 7 below.
+
+### What the skill got wrong
+
+Nine items. The first six are the orchestrator's own by its own account,
+transcribed here against what each branch's own commits and Log entries show;
+the seventh was found in transcription rather than supplied; the eighth
+happened while this row was itself being drafted and is confirmed on
+`repo-33`'s own branch below rather than taken on the relay alone; the ninth
+was raised by the owner and checked here against `release-please-config.json`
+and the ticket's own text rather than accepted.
+
+1. **The gate record was the thing that broke, in three of four tickets — never
+   the code — and the mechanism is that a `## Review` section is not enforced
+   by the citations gate until it is committed.** `repo-43`'s record broke
+   `--require-anchors` the moment it landed, repaired one commit later at
+   `1548f21` ("fix self-referential citations in repo-43 gate record"), right
+   after `6c76694` added it. `repo-40`'s record was rejected on citation grounds
+   once, confirmed at `7b2596b`: two sha-prefixed coordinates into `8d79d8e`
+   "cannot carry a working anchor: the planner's copy is already deleted on this
+   branch (would resolve as 'moved'), and the downloader's goes stale the moment
+   its own branch merges," rewritten as prose instead. `repo-33`'s reviewer hit
+   the same shape and caught it before it ever reached a commit, which is why
+   it is not in the committed text and is recorded here as supplied by the
+   orchestrator rather than found in the tree: it wrote a bare `docs/02-DEPLOYMENT.md:516`
+   into its Review draft, intending it against `origin/main`, but `citations.mjs`
+   resolves a bare `file:line` against the **working tree**, not the ref named
+   in prose — and at the tip, the migration section had grown and pushed that
+   content down, so line 516 was blank. The builder measured both forms: as
+   written, `exit 4` and unanchored; rewritten as prose naming the section
+   instead of the line, `exit 0`. The corrected form is what landed. This is an
+   instance of the round-trip working, not a gap in what either agent checked —
+   neither "confirmed" nor "unconfirmed" fits it. (A different, also-real
+   finding surfaced in the same ticket — demonstrating a compose-file breakage
+   from inside a nested worktree versus outside one — and belongs with the
+   `repo-43` path-shadowing thread rather than here.)
+   Every exit-0 either agent takes before a record is committed is honest and
+   says nothing about what committing it will do.
+2. **A measurement relayed inside a question's premise reversed the question's
+   answer, and the reversal is on the branch.** `repo-35`'s Build section
+   records the correction directly: the 2026-09-08 note's "10 declaration lines
+   across 5 files, only `history.md`'s two production" is wrong on the
+   corrected count — **12 declaration lines naming 26 locations across 7
+   files, suppressing 31 citations**, of which **21 of the 26 declared
+   locations are not expressible as a rev pin**. The owner's "the evidence
+   marker goes" answer was given against the wrong number.
+3. **The orchestrator's own reasoning, sent down as a premise, was wrong twice,
+   and both reversals are on the branch.** `repo-35`'s Log names both: the
+   claim that dedupe-by-line cannot rescue a self-citation missed the case
+   where the citation points at its **own** line — `[224, 224, 235]` collapses
+   to 1 distinct line in that shape and would start passing, against 2 distinct
+   lines for a citation pointing at a different line of the same file, which
+   still fails — and "the three wording sites" was six, the branch finding a
+   sixth (`scripts/citations.mjs:595 "Every line an anchor's text starts on, in a file."`) that appeared in neither relayed list. Both reversals made
+   `Done when` items and the Order section's dependency between parts 8 and 9
+   load-bearing in a way the original premise did not predict.
+4. **A question was answered before a downstream agent dissolved its premise,
+   and the branch shows the re-ask rather than a silent substitution.**
+   `repo-35`'s reviewer found `docs/01-TICKETS.md:281 "A gate on a pull request that only"` — the carve-out for a branch that only files a ticket, with
+   `dl-29` named as the existing precedent — after the owner had already
+   answered a differently-framed question about the `ready`-plus-gate-record
+   conflict. The ticket now carries the gate under `## The gate on this filing`
+   rather than `## Review`, and `status: ready` holds with CI green:
+   "under `## Review` the suite is `1 failed | 312 passed`... under this
+   heading it is `313 passed`", both measured on the branch.
+5. **A base-branch check that is in `CLAUDE.md` and not in this skill caught a
+   real defect.** `#214` and `#215` were opened against the lift branch;
+   `CLAUDE.md:188 "Check the base branch too"` warns that a pull request opened against another feature
+   branch disappears with it while its own page still says merged. Both are
+   now based on `main` — confirmed on each PR's current `baseRefName` — with
+   ordering enforced by the draft flag rather than by the base, stated in
+   `#214`'s own body: "Ordering is enforced by the draft flag, not by the base
+   branch."
+6. **Conditional ship authority silently assumed the gates would still pass
+   after the gate record itself was committed, and did not this time.**
+   `repo-35`'s branch carries no `## Review` section and `status: ready`, not
+   `done` — confirmed on the tip. Item 4's carve-out is the resolution: the
+   record that would have tripped `reviewedButReady` was moved out from under
+   `## Review` rather than shipped red or left silently mislabelled.
+7. **`builder.md`'s model-pairing table gives `standard` an explicit gate
+   override and gives `hard` and `absent` none, so two different difficulty
+   classes collapse onto one pairing under an Opus orchestrator — found while
+   checking the account's "every pair differs," not named by it.**
+   `.claude/agents/builder.md:23 "Its gate is"` states `standard`'s Sonnet
+   builder is gated by Opus specifically because the default would gate a
+   Sonnet build with Sonnet; `:25 "a contract, a security claim, a seam with reach"`
+   pins `hard`'s builder to Opus but states no gate override, and an unrated
+   ticket inherits the orchestrator's own model with the same silence. Both
+   then fall through to `ticket-reviewer.md`'s pinned Sonnet default. This
+   batch is the collision: `repo-33` (`hard`) and `repo-35` (unrated) were
+   both built on Opus because the orchestrator itself was Opus, and both were
+   gated Sonnet by the same unstated default rather than by a rule that
+   named the pairing. The table is written as four distinct rows and behaves
+   as three whenever the orchestrator runs Opus.
+8. **The skill's loop has no step for a batch whose branches are still open
+   when someone else's work lands, and this batch hit it while this row was
+   itself being written.** After the row above was first drafted, the owner
+   merged `#210` and `#216`; `main` moved five commits past this batch's own
+   base, including a peer session's `pl-2` (`d0727a2`, `#212`) that nobody in
+   this batch knew was coming; and `repo-33` (`#211`) went `CONFLICTING`. The
+   loop ends at "open the PR" and says nothing about a branch left open while
+   the board keeps moving under it. Confirmed here on `repo-33`'s own branch
+   after the fact (fetched as `pull/211/head`), not taken on the relay alone.
+
+   **The mechanism, and it is not a pick-a-side.** Both `repo-33` and `pl-2`
+   had independently repointed the *same two citations* in
+   `pl-38-the-planner-limiter-shares-one-bucket.md`, each correct against its
+   own tree:
+
+   | anchor in `docs/02-DEPLOYMENT.md` | `pl-2` wrote | `repo-33` wrote | true in the merged tree |
+   | --- | --- | --- | --- |
+   | "Rate limiting is per-client the same way the downloader" | line 657 | line 833 | **line 889** |
+   | "Rate limits silently" | line 273 | line 231 | **line 283** |
+
+   Four numbers, and after the merge none of them was right — re-confirmed
+   directly against the merged tip (not against this row's own tree, which
+   never carries `repo-33`'s rename): its line 889 reads "Rate limiting is
+   per-client the same way the downloader's is" and its line 283 reads "Rate
+   limits silently stop working." A citation repair is only valid against the
+   tree it was measured in, so a merge conflict between two citation repairs
+   that were each correct when written cannot be resolved by picking a side
+   or keeping both — it has to be re-measured, which is what happened: run
+   against the merged file, both corrected to line 889 and line 283.
+
+   **The quieter half, and the better lesson: a clean auto-merge is not the
+   same as a correct one, and the difference is invisible to a diff.**
+   `docs/02-DEPLOYMENT.md` merged with no conflict marker at all, and it
+   holds `repo-33`'s own five-step volume-migration repair (the med finding
+   from the `gates` row above). It was in fact correct — `pl-2`'s new section
+   landed between migration steps 1 and 2, the seven-step procedure stayed
+   contiguous with its two-tool handling intact throughout, and the four
+   `compose.yaml` mentions remaining in the file are all deliberate (two
+   historical prose, two naming the old files in a pre-pull command) — but
+   `git diff` showed nothing because nothing conflicted. It had to be read
+   end to end as an operator would, not diffed, to know that it was correct.
+
+   **The thing nobody anticipated: a test from a branch that never saw this
+   one, written to survive it anyway.** `pl-2` shipped
+   `scripts/test/cloudflare-setup.test.ts`, which globs the compose fragments
+   at the repo root and finds them *by the service each one defines* rather
+   than by filename, precisely because it anticipated a rename it had no
+   visibility into. It passed on the merged tree, 15 of 15. The builder read
+   its anti-vacuity guards rather than demonstrating them red, declining to
+   mutate a shared file mid-merge, and said so rather than gloss over it; the
+   reviewer then ran the mutation itself — renaming `compose.downloader.yaml`
+   away and getting `no compose fragment defines downloader with ports:
+   expected [] to not have a length of +0`, reverted clean, `git status
+   --porcelain` empty, 15/15 restored. Two agents did two different halves of
+   the same check, and the record names which did which.
+
+   **`Done when` #3 was re-proved rather than carried forward, and the
+   re-proof caught a gap a path checklist had missed.** Its original evidence
+   was a CI run on `6fcf4be`; after the merge, the builder declined to carry
+   that verdict forward and instead re-ran the `docker` job directly on the
+   merge commit `b3b3786` — run `34718932111`, read at job and step level,
+   `conclusion success`. That mattered for a specific reason: a proposed
+   shortcut argued the merge touched none of the image build's inputs, naming
+   the root `package.json` and lockfile, but the merge *does* touch
+   `tools/downloader/api/package.json` (release-please's `0.3.0` → `0.4.0`).
+   The version bump built green on `main` at `a7f2c86` and the rename built
+   green on `6fcf4be`, but no run had covered both together until this one.
+   **The generalisable rule: a check-list of paths has to name a dependency
+   closure, not files chosen by hand.**
+9. **`repo-40` was split into three pull requests on its own ticket's
+   instruction, and the split's rationale did not hold — raised by the owner
+   and checked here against `release-please-config.json` and the ticket's own
+   text rather than accepted.** The Traps section states it as a rule:
+   `docs/work/repo-40-trust-proxy-is-a-second-consumer-with-nowhere-to-land.md:87 "This is repo-wide work that touches two tools' files, and it is not one"`
+   — "pull request… Landing all three in one branch produces the exact
+   squash-merge shape the root `CLAUDE.md` names as the tell that it should
+   have been more than one PR — split it, in whatever order keeps each PR
+   green on its own." Confirmed against `CLAUDE.md:209 "one sentence written for one of them, which is the tell that it should have been"`.
+   Neither builder nor reviewer is at fault for following a brief; nobody
+   checked whether the rule's premise applied. Read directly:
+   `release-please-config.json` names exactly two components,
+   `tools/downloader` and `tools/planner` — `packages/core` is not one — and
+   `refactor` (the type on two of the three sub-branches) carries
+   `"hidden": true`. A single branch spanning all three paths would have
+   produced no changelog line for either tool and no release; the failure the
+   split exists to prevent was not available to occur.
+
+   **Measured cost:** two extra pull requests (`#213` plus `#214`, `#215`), a
+   draft-flag sequencing to hold merge order, three sets of CI runs, and — the
+   mechanism, recurring three times and made visible here for the first
+   time — repeated merge conflicts on the one shared ticket file. **Under
+   squash-merge, a stacked branch conflicts with `main` after its own base
+   lands even though it carries the identical commits, because the squash
+   produces a new commit that is not an ancestor of the stack.** Confirmed on
+   the tree: `#214` merged one such reconciliation (`1b7a923`, after `#213`'s
+   squash `17966ac`); `#215` merged one (`7a12272`, also after `#213`'s
+   squash) and, as of this writing, reads `DIRTY`/`CONFLICTING` against `main`
+   again — a second reconciliation pending after `#214`'s own squash. All
+   three, completed or pending, land on the shared ticket-file Log rather
+   than on source. Retargeting the stack from base branches to `main` (item
+   5) is orthogonal to this — that addressed `CLAUDE.md:188`'s
+   disappearing-PR hazard and neither caused nor avoided these conflicts.
+
+   **The generalisable rule:** the Traps rule is right for a `fix` or `feat`
+   spanning two tools, which genuinely writes one sentence into two
+   changelogs — but it is stated unconditionally, when the type decides
+   whether there is a changelog at all, the same point `CLAUDE.md` already
+   makes about `docs` being hidden. Read the commit type and the component
+   list before paying for a split; if nothing reaches a changelog, the split
+   buys only independent revertability, and that has to be worth the conflict
+   rounds on its own. The same correction is being appended to `repo-40`'s own
+   ticket Log, as a correction to the brief rather than an edit to its Traps
+   section.
+
+### What went right, and is worth copying
+
+- **Every gate ran its own reproductions rather than accepting the builder's.**
+  `repo-40`'s reviewer proved behaviour identity twice — an md5 match across all
+  three copies of `trustProxy()` plus a 42-input runtime differential against
+  both tools' built output, `cases=42 mismatches=0` — and mutation-tested the
+  new parser suite, catching 8 of 10 mutations on the first pass and repairing
+  the test for the other 2, confirmed in the record's own words: "Eight other
+  mutations... were caught by the suite as first written."
+- **`repo-35`'s gate and builder measured the same blocking figure by
+  deliberately different routes and cross-checked position for position.** The
+  ticket's own Log: "measured... by the gate first, then independently here
+  through a different route, importing the checker's own `extractCitations` and
+  `checkCitations` rather than parsing CLI output per file" — and it named the
+  limit of that method rather than resting on the agreement: two faithful
+  replicas of one algorithm inherit its edge cases identically, so agreement
+  between them proves the replicas match and nothing about the algorithm.
+- **`scripts/citations.mjs:1424` "anchor starts on ${r.occurrences} lines of"
+  prints a match count beside the word "lines" and misled the builder into
+  recording a number that did not reproduce — and that miswording is the
+  reproduction that justified `repo-35`'s part 9,** rather than a defect
+  quietly patched around: "Filed as Build part 9 rather than silently
+  corrected," in the gate's own words.
+- **`repo-33`'s builder found a real answer to `records.md`'s stated regress —
+  a record cannot report its own CI status, because writing the report creates
+  a new tip nothing has measured — without contradicting the page: it split
+  where the two facts live rather than pretending the regress does not apply.**
+  After item 8's merge, both relevant trees now have job-level `docker`
+  evidence — merge commit `b3b3786` (run `34718932111`) and tip `783ab77` (run
+  `34719203897`), steps 5 and 6 `success` on both, all four workflows green on
+  the tip, confirmed here on the PR's own
+  [comment thread](https://github.com/brunolabbe/tools/pull/211#issuecomment-5648748786).
+  **It deliberately did not commit the tip result** — doing so would have
+  created a new tip whose own CI was unmeasured, pushing the same caveat one
+  commit further out, which is the regress restated rather than solved. The
+  ticket's Log keeps the claim that stays true (the gate was re-proved on the
+  merge commit); the PR thread holds the claim that decays (the tip is green
+  right now) precisely because a PR comment changes no tree. That split was the
+  builder's own call, not the orchestrator's. Paired with it, and by the same
+  builder in the same round: it read the tip's own CI runs after being told
+  they were unnecessary because the intervening commits were documentation-only
+  — "documentation-only" is a claim about a diff, not a measurement of a tree,
+  and the identical shortcut had already missed
+  `tools/downloader/api/package.json` once earlier in this round. One
+  principle, applied twice, one read each time it was invoked.
+
