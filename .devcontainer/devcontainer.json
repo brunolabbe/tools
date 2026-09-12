@@ -29,7 +29,7 @@
 
   "runArgs": [
     // ffmpeg and Chromium both fork. PID 1 does not reap, so without an init
-    // the container slowly fills with zombies — same reason compose.yaml sets
+    // the container slowly fills with zombies — same reason compose.downloader.yaml sets
     // it for production.
     "--init",
     // Chromium's renderers use POSIX shared memory; the default 64 MB /dev/shm
@@ -86,7 +86,7 @@
 
   "containerEnv": {
     // Chromium's own sandbox needs privileges this container does not have, so
-    // the container is the boundary instead — the same trade-off compose.yaml
+    // the container is the boundary instead — the same trade-off compose.downloader.yaml
     // documents for production.
     "BROWSER_NO_SANDBOX": "true",
     // The distro ffmpeg, not the ffmpeg-static download.

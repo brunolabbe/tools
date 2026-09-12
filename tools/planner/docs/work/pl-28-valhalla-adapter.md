@@ -420,6 +420,18 @@ regex could not:
 
 ## Log
 
+**2026-09-12 — F4's residual is closed by repo-33.** That finding is recorded
+above in the present tense — "merging the two lands in a **different** compose
+project" — and it stopped being true today.
+[repo-33](../../../../docs/work/repo-33-adr-004-rename-and-the-project-name.md)
+renamed `compose.yaml` to `compose.downloader.yaml` and set `name: webtools` in
+all five fragments, so merging this tool's grounding fragment with the
+downloader's is now one project and an ordinary thing to do. The instruction not
+to has been deleted from `compose.planner.yaml`'s header and from
+`docs/02-DEPLOYMENT.md`. A host that was already running under a
+basename-derived project name needs the volume migration that ticket added to
+`02-DEPLOYMENT.md`; nothing else about this ticket changed.
+
 **2026-08-23 — built, with one disclosed hole.** Steps 1–9 are implemented. Step
 3 is **half** captured, which is why this ticket is not `done`: the routing
 payload is real and the geocoder payload could not be obtained at all. Details

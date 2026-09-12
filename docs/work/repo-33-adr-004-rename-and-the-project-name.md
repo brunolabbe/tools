@@ -3,7 +3,7 @@ id: repo-33
 tool: repo
 title: ADR 004's rename is unfiled, and doing it renames the compose project under a running host
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -98,6 +98,186 @@ it is plausible to type while a rename is half-applied. The tile volumes in
 only copy of anything a user downloaded.
 
 ## Log
+
+**2026-09-12 — gate round: the migration was written for a one-tool host.**
+
+**The defect (the gate's finding 1, and it is real).** A host running _both_
+tools before this branch was a documented configuration — `origin/main`'s
+`02-DEPLOYMENT.md:516` instructs
+`-f compose.yaml -f compose.prod.yaml -f compose.planner.prod.yaml up -d`, and
+`git show origin/main:compose.planner.prod.yaml | grep -c '^name:'` returns `0`,
+so all three files derived the same basename project and both tools' volumes sat
+under it. The planner has released versions to fill `PLANNER_TAG`
+(`tools/planner/CHANGELOG.md`, 0.5.0 on 2026-09-07), so such a host is
+deployable and not merely describable. **Whether one was ever actually deployed
+is not knowable from this repository, and I am not claiming it was** — the
+procedure has to be safe for it either way.
+
+As written, the procedure was not. Step 2 stopped only the downloader's file
+set; step 4 then copied `planner_storage` while a planner container from the
+same project could still hold `planner.db` open — the torn copy the section
+warns about by name two paragraphs earlier — and step 5 verified only the
+downloader's volume, so a torn planner copy would not have been caught before
+step 6 started the stack.
+
+**The mechanism, evidenced rather than assumed.** `docker compose down --help`
+lists `--remove-orphans` — "Remove containers for services not defined in the
+Compose file" — _on `down` itself_. A flag that exists to remove them is the
+evidence that `down` does not, so a partial file set leaves the other tool's
+container running. I could not run `down` to watch it happen: there is no Docker
+daemon in this container, and the ticket forbids running it anyway.
+
+**Both of the gate's two options were taken, not one.** It offered (a) fix step
+2's stop command or (b) add the planner check to step 5, and leaned (a) as the
+source of the risk. (a) alone leaves an operator who mis-reads step 2 with no
+check that catches it; (b) alone leaves the torn copy happening and merely
+detected. They close different halves — cause and detection — and a migration
+whose failure mode is a silently empty database should have both. Step 2 now
+shows the two-tool `down` and a `docker ps --filter label=com.docker.compose.project`
+that must print nothing before continuing; step 5 repeats the byte/file
+comparison for `planner_storage`.
+
+**The rest of the section carried the same one-tool assumption, which is the
+shape rather than the instance.** Step 3's `COMPOSE_FILE` showed only the
+downloader's three fragments — a two-tool host that copied it would have brought
+up half its stack. Step 6 said to check "the job list", which is the
+downloader's; the planner's `/api/health` answers just as happily against an
+empty `planner.db`, so it now names the data to look for in each tool and says
+not to run step 7 if either is empty. Step 7 promoted the planner volume out of
+a trailing comment. Steps 2, 3, 5, 6 and 7 all changed; only step 1 needed
+nothing.
+
+Both database filenames in the new text were read out of the source rather than
+guessed: `tools/downloader/api/src/config.ts:228` `databaseFile: "jobs.db"`, and
+`tools/planner/api/src/config.ts:222` `databaseFile: "planner.db"` with
+`tools/planner/Dockerfile:115` `ENV DATABASE_PATH=/data/planner.db` confirming
+it sits at the root of the mounted volume.
+
+**A correction to how the rename's breakage was demonstrated (the gate's finding
+3, settled by the orchestrator).** "The old command fails cleanly after the
+rename" is **true only from a directory that is not nested under another
+checkout**, and any claim of it needs to say where it was run. Compose's
+default-file discovery walks _up_ the directory tree, so from a worktree under
+`/workspaces/tools/.claude/worktrees/...` a bare `docker compose config` does
+not fail at all — it silently resolves the shared root's `/workspaces/tools/compose.yaml`
+and reports `name=tools`, `build.context=/workspaces/tools`. Measured both ways,
+same command, no `COMPOSE_FILE` set in either environment:
+
+```
+$ cd /tmp/.../freshclone-xyz && docker compose config      # not nested
+no configuration file provided: not found
+
+$ cd /workspaces/tools/.claude/worktrees/agent-a46d... && docker compose config --format json | jq -r '.name, .services.downloader.build.context'
+tools
+/workspaces/tools
+```
+
+This is a second route into
+[repo-43](./repo-43-a-worktree-nested-path-shadows-the-shared-root.md)'s hazard —
+reached through Compose's own file search rather than through a typed absolute
+path — and it is that ticket's open question, not this one's. **It changes
+nothing about what ships here**: the README and the CI job both name
+`-f compose.downloader.yaml` explicitly, which is immune to the walk-up, and the
+gate confirmed that resolves correctly regardless of nesting. The claim above
+about `.github/workflows/downloader.yml` — that its old bare command "finds no
+configuration file" — holds on a CI runner, whose checkout has no compose file
+in any ancestor directory; it would not hold in a nested worktree, and that is a
+property of where it runs rather than of the fix.
+
+**2026-09-12 — done.** The rename, the split, `name: webtools` in all five
+fragments, `COMPOSE_FILE`, and the volume migration in `02-DEPLOYMENT.md`.
+
+**The premise reproduced, in this worktree.** Before any edit,
+`docker compose -f compose.yaml -f compose.prod.yaml config --format json | jq -r .name`
+printed `agent-a46d027fb77348477` — this worktree's directory basename, not
+`webtools` and not anything a human chose. Same defect the brief measured as
+`pl-2-planner-service`, which is the point: the name follows whatever directory
+the tree happens to sit in.
+
+**What the brief had wrong, or left for the builder to decide.**
+
+- **"Rename to the ADR's five files" is four renames and one split, and only one
+  of them is a `git mv`.** `compose.yaml` → `compose.downloader.yaml` is a move.
+  `compose.planner.yaml` and `compose.planner.prod.yaml` already have their
+  target names. `compose.prod.yaml` keeps its name and _loses_ content: the
+  `downloader` service block moved out into a new
+  `compose.downloader.prod.yaml`. Doing that as a `git mv` of `compose.prod.yaml`
+  and a new file for the tunnel would have made the history follow the smaller
+  half — the tunnel and the `edge` network are the bulk of that file and are
+  what still belongs to it — so the move was left where the content stayed. One
+  `git mv`, as the prompt asked, on the one file whose identity actually moved.
+
+- **`cloudflared`'s `depends_on: downloader` had to move too, and the brief does
+  not mention it.** "Reduced to the tunnel and the `edge` network alone" is not
+  achievable while the shared overlay still names a tool in a `depends_on`;
+  `compose.planner.prod.yaml` already showed the shape, so
+  `compose.downloader.prod.yaml` now mirrors it. That is what makes
+  `docker compose -f compose.prod.yaml -f compose.planner.prod.yaml` — a
+  planner-only host — resolve at all. It could not before: the shared overlay
+  carried the downloader's image and its `depends_on`, so every host got a
+  downloader whether it asked or not. The ADR claims that property; until today
+  the files did not have it.
+
+- **The `.env.prod.example` merge list was already stale in a way the brief did
+  not flag.** It documented `-f compose.yaml -f compose.prod.yaml` as "the
+  downloader, behind the tunnel", which is now three files, and it had no
+  planner-only row because there could not be one.
+
+- **`.github/workflows/downloader.yml` is not in the brief's sweep list and it is
+  the only place a stale name is a red build rather than stale prose.** Its
+  `docker` job ran a bare `docker compose up -d --no-build`, which after the
+  rename finds no configuration file; its two path filters watched
+  `compose.yaml`, so a change to the renamed fragments would not have triggered
+  the job that tests them. Both fixed, and the filters now also watch
+  `compose.downloader.prod.yaml` and `compose.prod.yaml`.
+
+- **Two closed tickets' gate records cite lines this change moves.**
+  `scripts/citations-gate.mjs` went red on pl-33 and pl-38 — three anchors in
+  `compose.planner.yaml`, one in `compose.prod.yaml` that fell off the end of
+  the shortened file, one in `compose.planner.prod.yaml` and two in
+  `02-DEPLOYMENT.md`. All seven were confirmed to resolve on `origin/main`
+  first, so they were green before and this change broke them; re-resolved
+  against the tip.
+
+**The volume migration is `02-DEPLOYMENT.md`'s
+`## Migrating the volumes onto the project name`**, seven steps: read the old
+prefix off `docker volume ls` rather than deriving it, stop the stack **without
+`-v`**, set `COMPOSE_FILE`, `docker volume create` plus a throwaway container
+doing `cp -a /from/. /to/` with the source mounted `:ro`, compare byte and file
+counts, bring up and check **the job list rather than `/api/health`** — health
+answers perfectly against an empty database, which is the failure being
+prevented — and remove the old volume later, deliberately. One fact worth having
+found: the planner's grounding volumes need no migration at all, because
+`compose.planner.yaml` has set `name: webtools` since it was written. Only
+`storage` and, on a host already running the planner's image, `planner_storage`
+move.
+
+**What was deliberately not done.**
+
+- **`tools/planner/api/src/config.ts:120` still says "which is what
+  `compose.yaml` now brings up"**, and it is wrong twice over: that file is gone,
+  and the sentence was already wrong before this ticket, since the `overpass`
+  service it describes is in `compose.planner.yaml` and never was in
+  `compose.yaml`. Left alone because a concurrent ticket (repo-40) owns that
+  file; reported to the orchestrator rather than edited, and it is a one-word
+  fix for whoever holds the file next.
+- **Closed tickets' briefs and reports naming `compose.yaml` were left standing**
+  — dl-7, dl-10, pl-2 and pl-28's F4 all describe the file as it was, and
+  rewriting a finished record to match a later tree loses the reason it was
+  written. pl-28's F4 was the one exception worth making: it asserts in the
+  present tense that merging the two fragments orphans the downloader's volume,
+  which stopped being true today, so its Log carries a dated correction rather
+  than an edit to the finding.
+
+**Not verified, and not verifiable here: nothing was ever started.** There is no
+Docker daemon in this container — `docker info` fails — so every check below is
+`docker compose config`, which is a pure parse-and-merge and needs no daemon.
+The merges resolve and report the right project name and the right service list;
+that no volume is actually orphaned by a real `up -d`, and that the `cp -a`
+migration preserves a working `jobs.db`, are unrun. Per the brief, nothing that
+could remove a volume was executed at any point: no `down`, no `down -v`, no
+`up`, no `rm`. The migration section is the procedure an operator runs, written
+and reviewed rather than rehearsed.
 
 **2026-09-07 — filed while doing pl-2's deployment half.** Not started. The
 measurement above is the only new fact: the project name really is the clone's

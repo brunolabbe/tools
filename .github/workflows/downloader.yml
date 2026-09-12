@@ -18,7 +18,9 @@ on:
     paths:
       - "tools/downloader/**"
       - "packages/**"
-      - "compose.yaml"
+      - "compose.downloader.yaml"
+      - "compose.downloader.prod.yaml"
+      - "compose.prod.yaml"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/downloader.yml"
@@ -30,7 +32,9 @@ on:
     paths:
       - "tools/downloader/**"
       - "packages/**"
-      - "compose.yaml"
+      - "compose.downloader.yaml"
+      - "compose.downloader.prod.yaml"
+      - "compose.prod.yaml"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/downloader.yml"
@@ -137,8 +141,9 @@ jobs:
           file: tools/downloader/Dockerfile
           push: false
           load: true
-          # The tag and the build arg both have to match `compose.yaml`, or the
-          # `--no-build` below starts something other than what was just built.
+          # The tag and the build arg both have to match
+          # `compose.downloader.yaml`, or the `--no-build` below starts
+          # something other than what was just built.
           tags: downloader:local
           build-args: INSTALL_YTDLP=false
           cache-from: type=gha,scope=downloader
@@ -150,7 +155,12 @@ jobs:
           # quota were that. `main`'s copy is readable from every branch, which
           # is the one that was doing the work all along.
           cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=downloader' || '' }}
-      - run: docker compose up -d --no-build
+      # `-f` and not a bare `docker compose`: there is no default
+      # `compose.yaml` here, because adr/004 gives each tool a fragment of its
+      # own. This job is the downloader's dev fragment alone — the prod ones
+      # pull a released image and want a tunnel token, neither of which a smoke
+      # test has.
+      - run: docker compose -f compose.downloader.yaml up -d --no-build
       - name: Wait for the service to report healthy
         run: |
           for attempt in $(seq 1 60); do
@@ -161,7 +171,10 @@ jobs:
             sleep 5
           done
           echo "the service never became healthy"
-          docker compose logs
+          docker compose -f compose.downloader.yaml logs
           exit 1
+      # `-v` is safe here and nowhere else: this is a throwaway runner whose
+      # volume was created sixty seconds ago. On a host, that flag is what
+      # destroys the job database — see docs/02-DEPLOYMENT.md.
       - if: always()
-        run: docker compose down -v
+        run: docker compose -f compose.downloader.yaml down -v

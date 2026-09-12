@@ -7,7 +7,7 @@ without touching the Windows host.
 
 One sandbox for the whole repo, not one per tool: it is named `webtools`, and
 its named volumes are `webtools-*`. The `downloader:local` image that
-`compose.yaml` builds is a different thing entirely — that one ships the
+`compose.downloader.yaml` builds is a different thing entirely — that one ships the
 downloader as a product, and each tool gets its own.
 
 ## Getting started
@@ -108,7 +108,8 @@ The image carries the docker **CLI** and the compose plugin, and no daemon. So
 this works:
 
 ```bash
-docker compose -f compose.yaml -f compose.prod.yaml config
+docker compose -f compose.downloader.yaml -f compose.prod.yaml \
+  -f compose.downloader.prod.yaml config
 ```
 
 which merges the deployment overlay and checks it against the schema — worth

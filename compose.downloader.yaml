@@ -1,10 +1,26 @@
-# `docker compose up --build` gives a working service on http://localhost:8080:
-# the UI, the API behind it, and a volume that keeps downloads and the job
-# database across restarts.
+# `docker compose -f compose.downloader.yaml up --build` gives a working service
+# on http://localhost:8080: the UI, the API behind it, and a volume that keeps
+# downloads and the job database across restarts.
+#
+# **The `-f` is not optional and there is no default `compose.yaml` here.**
+# `docs/adr/004-one-compose-fragment-per-tool.md` gives each tool a fragment of
+# its own and makes the list of files a host merges the only place it says which
+# tools it runs. A deployed host sets `COMPOSE_FILE` in `.env` once and goes back
+# to a bare `docker compose up -d` — see `.env.prod.example`.
 #
 # Defaults here are the single-host ones. Anything that would differ behind a
 # reverse proxy or on a shared network is called out below rather than left to
 # be discovered.
+
+# The project name, set explicitly in every fragment in this repo. Without it
+# compose names the project after the basename of the directory the host cloned
+# into, so the `storage` volume below is filed under a name nobody chose and
+# moving the checkout orphans it. Every fragment sets the *same* name, which is
+# what makes any merge of them one project rather than several.
+#
+# Changing this line on a host that is already running renames the project and
+# orphans its volumes. `docs/02-DEPLOYMENT.md` has the migration.
+name: webtools
 
 services:
   downloader:

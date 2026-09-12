@@ -47,7 +47,8 @@ honest description of a young tool rather than a gap to fill with guesses.
 | [work/](./work/)                       | Repo-wide tickets, `repo-` prefixed — the toolchain and the rules |
 
 Deployment and releasing are here rather than under a tool because the tunnel,
-the login policy, `compose.prod.yaml` and the version scheme are one story for
+the login policy, `compose.prod.yaml`'s tunnel and the version scheme are one
+story for
 whatever gets published; the downloader is their worked example, not their
 subject.
 

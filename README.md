@@ -23,8 +23,14 @@ Or the downloader as the one container that ships it, which needs no toolchain
 at all:
 
 ```bash
-docker compose up --build      # http://localhost:8080
+docker compose -f compose.downloader.yaml up --build    # http://localhost:8080
 ```
+
+The `-f` is not optional: there is no default `compose.yaml` here, because
+[adr/004](./docs/adr/004-one-compose-fragment-per-tool.md) gives each tool a
+fragment of its own and makes the list of files a host merges the only place it
+says which tools it runs. A deployed host writes that list into `COMPOSE_FILE`
+in `.env` once and goes back to a bare `docker compose up -d`.
 
 It binds to loopback on purpose — this service fetches URLs a client names, so
 publishing it on every interface by default would be handing out an open proxy.
@@ -57,8 +63,9 @@ be given the scope at all.
 echo "$TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
 ```
 
-Then run the image on its own — the same three settings `compose.yaml` explains
-at length, and the loopback bind for the same reason:
+Then run the image on its own — the same three settings
+`compose.downloader.yaml` explains at length, and the loopback bind for the same
+reason:
 
 ```bash
 docker run --init --shm-size=1g \
@@ -69,14 +76,16 @@ docker run --init --shm-size=1g \
 ```
 
 Or let compose name the version, which is what a deployment host does.
-`compose.prod.yaml` pulls instead of building and reads `GHCR_OWNER` and an
-exact `DOWNLOADER_TAG` from `.env` — it also stands up the Cloudflare Tunnel, so
-it is the whole deployment rather than a way to pull one image:
+`compose.downloader.prod.yaml` pulls instead of building and reads `GHCR_OWNER`
+and an exact `DOWNLOADER_TAG` from `.env`, and `compose.prod.yaml` stands up the
+Cloudflare Tunnel — so together they are the whole deployment rather than a way
+to pull one image. `.env.prod.example` ships the file list in `COMPOSE_FILE`,
+which is why there are no `-f` flags here:
 
 ```bash
 cp .env.prod.example .env      # GHCR_OWNER, DOWNLOADER_TAG, TUNNEL_TOKEN
-docker compose -f compose.yaml -f compose.prod.yaml pull
-docker compose -f compose.yaml -f compose.prod.yaml up -d
+docker compose pull
+docker compose up -d
 ```
 
 The tag is an exact version rather than `latest` on purpose: a host following a

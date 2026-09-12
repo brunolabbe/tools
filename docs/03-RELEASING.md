@@ -414,10 +414,15 @@ On the mini-PC, in the checkout described by [02-DEPLOYMENT.md](./02-DEPLOYMENT.
 
 ```bash
 $EDITOR .env                       # DOWNLOADER_TAG=0.2.0
-docker compose -f compose.yaml -f compose.prod.yaml pull
-docker compose -f compose.yaml -f compose.prod.yaml up -d
+docker compose pull
+docker compose up -d
 curl -s http://127.0.0.1:8080/api/health | jq .version   # expect 0.2.0
 ```
+
+The `-f` flags are in `COMPOSE_FILE` in that host's `.env` rather than on the
+command line — [adr/004](./adr/004-one-compose-fragment-per-tool.md), and
+`.env.prod.example` ships the line. A rollback is these same commands with the
+previous version, and typing them is not the moment to get a file list right.
 
 No `--build`. The host stopped building in
 [adr/002](./adr/002-releases-from-conventional-commits.md); it pulls a released

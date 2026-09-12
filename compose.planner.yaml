@@ -20,21 +20,15 @@
 # this file, and the three variables it will need are written at the bottom so
 # that whoever does pl-2 does not have to derive them.
 #
-# **The repo-wide rename** ADR 004 decided — `compose.yaml` becoming
-# `compose.downloader.yaml`, the production overlay splitting per tool — is a
-# `repo-` ticket and is not started here. This fragment is additive: merging it
-# is opt-in, and nothing that works today stops working because it exists.
-#
-# **One sharp edge that rename is carrying, and it is worth knowing before you
-# merge this file with `compose.yaml`.** ADR 004 sets `name:` explicitly because
-# a project named after a directory basename is renamed by moving a file, which
-# orphans the volumes. This fragment sets it; `compose.yaml` does not, and takes
-# the basename instead. So `-f compose.yaml -f compose.planner.yaml up -d` and a
-# bare `-f compose.yaml up -d` are **two different compose projects**, and the
-# second no longer sees the downloader's `storage` volume or the job database in
-# it. Nothing in this repo instructs that merge today, which is the only reason
-# it is latent — the `repo-` ticket must give `compose.yaml` the same `name:` in
-# the same change, and until it does, do not merge the two by hand.
+# **Merging this file with the downloader's is safe, as of repo-33.** It was not
+# always: this fragment has set `name: webtools` since it was written and the
+# old `compose.yaml` set no name at all, so it took the basename of whatever
+# directory the host cloned into — which made the two **different compose
+# projects**, and a merge that silently stopped seeing the downloader's
+# `storage` volume. Every fragment in this repo now sets the same name, so any
+# merge of them is one project. A host already running under the old
+# basename-derived name needs the volume migration in `docs/02-DEPLOYMENT.md`
+# once, before its next `up -d`.
 #
 # ## The two images are not pinned to anything this repo has run
 #
@@ -44,6 +38,9 @@
 # `compose.prod.yaml` carries the same warning for the same reason: a `pull` can
 # otherwise change a routing engine under a working deployment.
 
+# Every fragment in this repo sets the same project name, which is what makes
+# any merge of them one compose project and what keeps the tile volumes below
+# findable when the checkout moves. See `compose.downloader.yaml`'s note.
 name: webtools
 
 services:

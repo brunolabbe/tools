@@ -103,12 +103,12 @@ carrying two conflicting citations. Nothing was dropped from either report.
 | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Two clients behind the proxy get independent allowances, proved by a test that fails against `main`. | **proven** — `tools/planner/api/test/runs.test.ts:452` "expect(thirdA.statusCode).toBe(429)" (client A exhausts its own bucket) and `tools/planner/api/test/runs.test.ts:458` "expect(firstB.statusCode).toBe(202)" (client B unaffected). Fails against `main`: reviewer reproduced independently by stashing `config.ts`/`server.ts` back to `a5e31c7` — failed exactly at the second assertion, `expected 429 to be 202`. |
 | A client whose `X-Forwarded-For` arrives from outside the trusted CIDR cannot choose its own bucket. | **proven** — `tools/planner/api/test/runs.test.ts:497` "all three counted against the one real address" sits directly above the deciding assertion. Not vacuous: reviewer reproduced by setting that test's harness to `trustProxy: true` — the "obvious fix" the Traps section warns against — which failed it, `expected 429 to be 202`.                                                                                   |
-| `02-DEPLOYMENT.md` no longer tells an operator that this cannot be fixed.                            | **verified** — `docs/02-DEPLOYMENT.md:601` "Rate limiting is per-client the same way the downloader" replaces the old "no `TRUST_PROXY` to make it so" paragraph. Reviewer checked the arithmetic ("Three differences" now matches three bullets) and confirmed, from the merged compose config, that both `TRUST_PROXY` lines and the `edge` subnet are the identical string.                                               |
+| `02-DEPLOYMENT.md` no longer tells an operator that this cannot be fixed.                            | **verified** — `docs/02-DEPLOYMENT.md:833` "Rate limiting is per-client the same way the downloader" replaces the old "no `TRUST_PROXY` to make it so" paragraph. Reviewer checked the arithmetic ("Three differences" now matches three bullets) and confirmed, from the merged compose config, that both `TRUST_PROXY` lines and the `edge` subnet are the identical string.                                               |
 
 Findings — 10 returned in the first round's defect hunt, 8 carried into this
 record, 2 dropped before write-up (reviewer's own count, not re-derived here):
 
-- **med** · `compose.prod.yaml:90` "change it here" — raised at `a457ce0`,
+- **med** · `compose.prod.yaml:71` "change it here" — raised at `a457ce0`,
   repaired at `bdfc10b`. The file's own comment said "one setting written
   twice" (the `edge` subnet plus the downloader's `TRUST_PROXY`), and this
   ticket's `compose.planner.prod.yaml` addition made it three without
@@ -117,7 +117,7 @@ record, 2 dropped before write-up (reviewer's own count, not re-derived here):
   reintroduce this exact ticket's bug on the planner side — this ticket's own
   Traps section, reproducing itself. Repaired: both compose files now say
   three and cross-reference each other
-  (`compose.planner.prod.yaml:79` "named a third time"); the repair folds in
+  (`compose.planner.prod.yaml:88` "named a third time"); the repair folds in
   the malformed-vs-valid distinction from the declined low below, landed
   where an operator resolving a collision will actually be standing.
   Reviewer re-verified independently against `bdfc10b`.
@@ -132,7 +132,7 @@ scripts/citations.mjs` on this record now reports 0 moved.
   already absent, `CORS_ORIGINS` included) but a judgement call the reviewer
   flagged as the first place they would look. Added, beside
   `RATE_LIMIT_RUNS_PER_MINUTE`.
-- **low, declined** · `02-DEPLOYMENT.md:221` "Rate limits silently" —
+- **low, declined** · `02-DEPLOYMENT.md:231` "Rate limits silently" —
   undersells the malformed-value case: reviewer measured that a malformed
   `TRUST_PROXY` actually refuses the boot (`TypeError: invalid IP address:
 <x>`) rather than failing silently, only a valid-but-wrong value is silent.

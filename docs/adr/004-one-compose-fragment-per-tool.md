@@ -2,13 +2,21 @@
 
 **Status:** accepted · **Date:** 2026-08-22 · **Affects:** every tool
 
+> **Implemented 2026-09-12 by
+> [repo-33](../work/repo-33-adr-004-rename-and-the-project-name.md).** The
+> layout below is what the repository root now holds, and `name: webtools` is
+> set in all five fragments. The Context section describes the state at the date
+> above and `compose.yaml` no longer exists; the migration that setting `name:`
+> forces on a host that was already running is in
+> [02-DEPLOYMENT.md](../02-DEPLOYMENT.md#migrating-the-volumes-onto-the-project-name).
+
 ## Context
 
-[`compose.yaml`](../../compose.yaml) is the downloader's, under a name that
-claims the repository. It builds one service from the root context and mounts
-one volume. [`compose.prod.yaml`](../../compose.prod.yaml) is the deployment
-overlay: `cloudflared`, the `edge` network, and the released image pinned by tag
-instead of built from source. [00-TOOLS.md](../00-TOOLS.md) already says why
+`compose.yaml` is the downloader's, under a name that claims the repository. It
+builds one service from the root context and mounts one volume.
+[`compose.prod.yaml`](../../compose.prod.yaml) is the deployment overlay:
+`cloudflared`, the `edge` network, and the released image pinned by tag instead
+of built from source. [00-TOOLS.md](../00-TOOLS.md) already says why
 that overlay is repo-wide rather than under a tool — the tunnel, the login
 policy and the version scheme are one story for whatever gets published, and the
 downloader is their worked example rather than their subject.
@@ -171,8 +179,10 @@ lifecycle separation without buying that.
   fixture provider means no compose file is a prerequisite for working on the
   tool. A routing engine comes up once, by hand, to capture pl-28 step 3's real
   payloads; after that every test parses them offline.
-- **This is a decision, not an implementation.** The split and the rename are
-  repo-wide and want a `repo-` ticket; pl-2 steps 5 and 6 still own the planner
-  service and its Access application; pl-28 step 8 still owns the tile ops that
-  an operator will need. Nothing here touches a `<!-- generated:tickets -->`
-  region — see [003](./003-the-status-page-is-generated.md).
+- **This was a decision, not an implementation.** The split and the rename were
+  repo-wide and wanted a `repo-` ticket; that is
+  [repo-33](../work/repo-33-adr-004-rename-and-the-project-name.md), done
+  2026-09-12. pl-2 steps 5 and 6 still own the planner service and its Access
+  application; pl-28 step 8 still owns the tile ops that an operator will need.
+  Nothing here touches a `<!-- generated:tickets -->` region — see
+  [003](./003-the-status-page-is-generated.md).

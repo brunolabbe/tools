@@ -46,7 +46,7 @@ npm run e2e:downloader          # Playwright: whole stack in a real browser
 npm run e2e:downloader:sniffer  # the same, through the browser sniffer — slower
 npm run e2e:install             # once — fetches the browser the e2e run needs
 
-docker compose up --build       # the service on :8080, UI included
+docker compose -f compose.downloader.yaml up --build   # :8080, UI included
 ```
 
 Both e2e scripts build the UI themselves before starting the API, because the
