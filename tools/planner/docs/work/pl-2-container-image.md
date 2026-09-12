@@ -133,6 +133,65 @@ from the one that wrote the branch, in its own worktree.
   both health checks before publishing either hostname, verified in the merged
   config rather than asserted. performance: n/a.
 
+### Gate on the Cloudflare-setup script (0ca4d87)
+
+**Gate: CONCERNS, all three findings repaired on the branch** — 2026-09-12 ·
+`main(8d79d8e)...0ca4d87` · reviewed on a different model from the one that wrote
+the branch, in its own worktree. The reviewer mutation-tested the ingress merge,
+the apply order and the proxied-flag guard by hand rather than reading them.
+
+The three `Done when` lines are unchanged by this diff and carry the 2026-09-08
+gate's verdicts; the third is still "not provable from a repository", for the
+same reason, which is why `status` stays `in-flight`.
+
+- **med, fixed on this branch** · The docstring at `scripts/cloudflare-setup.mjs:15`
+  "never removes a rule it did not add" was the claim, and no test held the code
+  to it. Every "foreign" fixture in the suite was `downloader.example.com` —
+  which `desiredState` always also wants, since `TOOLS` carries both tools — so
+  a narrower regression that keeps only pre-existing rules **also present in
+  `desired`**, silently dropping any genuinely third-party hostname sharing the
+  tunnel, passed all eleven tests. Reproduced independently before acting on it:
+  the mutation is green on the old suite. This is not hypothetical — the account
+  this was applied to had exactly such a hostname, sharing the tunnel with
+  nothing else of ours. `scripts/test/cloudflare-setup.test.ts:63`
+  "const SHARED_TUNNEL = [" is now a fixture whose foreign rule is in no tool's
+  table, and `:84` "a hostname belonging to nobody in TOOLS survives the merge"
+  plus the rule-count case beside it both go red under the reviewer's mutation.
+- **low, fixed on this branch** · Two hostname-less rules in the _existing_
+  config: the second was silently dropped, because the merge kept
+  `existing.find(isCatchAll)` and discarded the rest — the function removing a
+  rule it did not add, in the one place it promised not to.
+  `scripts/cloudflare-setup.mjs:104` "if (catchAlls.length > 1)" makes it a
+  conflict, so the run refuses and a person decides which was meant.
+- **low, fixed on this branch** · A `desired` rule with a falsy hostname
+  produced a second catch-all, which matches everything and would swallow the
+  tunnel. Unreachable from the CLI — `desiredState` builds every hostname from a
+  subdomain and a domain — but `planIngress` is exported and general, so it
+  throws instead.
+- **found while repairing, not by the gate** · `GET /zones/:id/dns_records`
+  read one page of 500 and said nothing at the ceiling. A zone at 500+ could
+  have made the plan print `ADD` for a record that already exists on an unread
+  page. The API refuses the duplicate, so nothing corrupts — but a plan is a
+  document someone approves before `--apply`, and being wrong in it is the
+  defect. It now refuses.
+- **verified** · the apply-order invariant at `scripts/cloudflare-setup.mjs:230`
+  "export function applyOrder" holds for every partial plan the reviewer tried —
+  no access with routing, access with no ingress, empty — and inverting it fails
+  `scripts/test/cloudflare-setup.test.ts:262`
+  "expect(lastAccess).toBeLessThan(firstRouting)".
+- **verified** · `npm run check` and `npm test` exit 0 at the tip. The test file
+  is purely additive, so no existing assertion changed meaning.
+- **unverified by the reviewer, verified here** · that the script was applied to
+  a live account and read back from the API. The reviewer's sandbox has neither
+  the credential nor a route to Cloudflare and recorded the Log's claim as
+  asserted rather than confirmed, which is the right call from where it sat. It
+  was re-run after these repairs and still reports `nothing to do`.
+- NFR · security: three exact token permissions, no credential ever printed, no
+  shell invoked; Access applications created before any routing write, so the
+  hostname cannot resolve before its policy exists. reliability: idempotent, and
+  refuses rather than overwrites — now including the catch-all case.
+  performance: n/a.
+
 ## Log
 
 **2026-08-14 — steps 1–4 landed with dl-10.**

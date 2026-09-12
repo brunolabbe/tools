@@ -84,14 +84,39 @@ const isCatchAll = (rule) => !rule.hostname;
  * Returns `{ ingress, added, kept, conflicts }`. A conflict is a hostname that
  * is already routed somewhere other than where we want it: reported, never
  * rewritten, because the other destination is something somebody deployed.
+ * More than one catch-all in the existing config is a conflict too — see below
+ * for why that is a refusal rather than a tidy-up.
  */
 export function planIngress(existing, desired) {
   const rules = existing.filter((r) => !isCatchAll(r));
-  const catchAll = existing.find(isCatchAll) ?? { service: "http_status:404" };
+  const catchAlls = existing.filter(isCatchAll);
+  const catchAll = catchAlls[0] ?? { service: "http_status:404" };
 
   const added = [];
   const kept = [];
   const conflicts = [];
+
+  // A rule with no hostname matches everything, so a second one is unreachable
+  // and the tunnel's real behaviour depends on an order nobody chose. Keeping
+  // the first and dropping the rest would be this function removing a rule it
+  // did not add, which is the one thing it says it never does — so it refuses
+  // and lets a person decide which was meant.
+  if (catchAlls.length > 1) {
+    conflicts.push({
+      hostname: "(catch-all)",
+      want: "exactly one",
+      found: `${catchAlls.length} rules with no hostname`,
+    });
+  }
+
+  // Not reachable from the CLI — `desiredState` builds every hostname from a
+  // subdomain and a domain — but this is exported and general, and the failure
+  // it would otherwise produce is a second catch-all silently swallowing the
+  // tunnel. Loud beats subtle.
+  const unnamed = desired.find((d) => !d.hostname);
+  if (unnamed) {
+    throw new Error(`desired ingress rule has no hostname: ${JSON.stringify(unnamed)}`);
+  }
 
   for (const want of desired) {
     const found = rules.find((r) => r.hostname === want.hostname && !r.path);
@@ -309,7 +334,18 @@ async function main() {
   const config = await call(token, `/accounts/${accountId}/cfd_tunnel/${tunnel.id}/configurations`);
   const ingress = planIngress(config?.config?.ingress ?? [], want.ingress);
 
-  const records = await call(token, `/zones/${zoneId}/dns_records?per_page=500`);
+  const PER_PAGE = 500;
+  const records = await call(token, `/zones/${zoneId}/dns_records?per_page=${PER_PAGE}`);
+
+  // One page, deliberately — but a zone at the ceiling means a record we are
+  // about to "add" might already exist on a page nobody read, and the plan
+  // would say ADD for something that is already there. The API would refuse
+  // the duplicate, so nothing breaks; the plan would just have been wrong,
+  // which is worse in a document people approve before running --apply.
+  if (records.length >= PER_PAGE) {
+    fail(`zone has ${PER_PAGE}+ DNS records; this script reads only the first page`);
+  }
+
   const dns = planDns(records, want.dns, tunnel.id);
 
   const apps = await call(token, `/accounts/${accountId}/access/apps`);

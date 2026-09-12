@@ -49,6 +49,23 @@ const DOWNLOADER_LIVE = [
   { service: "http_status:404" },
 ];
 
+/**
+ * A tunnel that is not only ours.
+ *
+ * One tunnel per host, and a host runs more than this repo: the tunnel this
+ * script was first applied to carried an unrelated hostname pointing at a port
+ * on the machine, sharing the tunnel with nothing else of ours. That rule is
+ * the one with no other protection — a hostname in `TOOLS` would be re-added by
+ * the very next plan run, and the catch-all is asserted separately, but a
+ * third-party rule that this merge drops is gone with a 200 and no error
+ * anywhere, and the owner finds out when their service stops answering.
+ */
+const SHARED_TUNNEL = [
+  { hostname: "immich.example.com", service: "http://host.docker.internal:2283" },
+  { hostname: "downloader.example.com", service: "http://downloader:8080" },
+  { service: "http_status:404" },
+];
+
 const wantBoth = desiredState("example.com", "you@example.com").ingress;
 
 test("preserves a rule it did not add", () => {
@@ -61,6 +78,36 @@ test("preserves a rule it did not add", () => {
   expect(plan.added.map((a: { hostname: string }) => a.hostname)).toEqual(["planner.example.com"]);
   expect(plan.kept.map((k: { hostname: string }) => k.hostname)).toEqual([
     "downloader.example.com",
+  ]);
+});
+
+test("a hostname belonging to nobody in TOOLS survives the merge", () => {
+  const plan = planIngress(SHARED_TUNNEL, wantBoth);
+
+  expect(plan.ingress).toContainEqual({
+    hostname: "immich.example.com",
+    service: "http://host.docker.internal:2283",
+  });
+  // it is not ours, so it is neither added nor reported as kept — it is simply
+  // still there, which is the whole of what this script owes it.
+  expect(plan.added.map((a: { hostname: string }) => a.hostname)).toEqual(["planner.example.com"]);
+  expect(plan.kept.map((k: { hostname: string }) => k.hostname)).toEqual([
+    "downloader.example.com",
+  ]);
+  expect(plan.conflicts).toEqual([]);
+});
+
+test("the merge writes back every rule it was given, plus the one it adds", () => {
+  // Stated as a count as well as a membership, so a merge that preserved the
+  // foreign rule by *duplicating* something else still fails.
+  const plan = planIngress(SHARED_TUNNEL, wantBoth);
+
+  expect(plan.ingress).toHaveLength(SHARED_TUNNEL.length + 1);
+  expect(plan.ingress.map((r: { hostname?: string }) => r.hostname)).toEqual([
+    "immich.example.com",
+    "downloader.example.com",
+    "planner.example.com",
+    undefined,
   ]);
 });
 
@@ -215,4 +262,30 @@ test("every Access application is created before any hostname resolves", () => {
   expect(lastAccess).toBeLessThan(firstRouting);
   // and the ingress PUT is one call carrying every rule, never one per rule.
   expect(kinds.filter((k) => k === "ingress")).toHaveLength(1);
+});
+
+test("two catch-alls in the existing config is a refusal, not a tidy-up", () => {
+  // Both were reported by the gate as reachable only through a malformed tunnel
+  // config. That is the reason to refuse rather than to repair: the second rule
+  // is unreachable either way, and deciding which one was meant is not this
+  // script's call to make silently.
+  const malformed = [
+    { hostname: "downloader.example.com", service: "http://downloader:8080" },
+    { service: "http_status:404" },
+    { service: "http_status:503" },
+  ];
+
+  const plan = planIngress(malformed, wantBoth);
+
+  expect(plan.conflicts).toContainEqual({
+    hostname: "(catch-all)",
+    want: "exactly one",
+    found: "2 rules with no hostname",
+  });
+});
+
+test("a desired rule with no hostname throws rather than becoming a catch-all", () => {
+  // `desiredState` cannot produce one, but `planIngress` is exported, and a
+  // hostname-less rule matches everything: it would quietly swallow the tunnel.
+  expect(() => planIngress(DOWNLOADER_LIVE, [{ service: "http://x:1" }])).toThrow(/no hostname/);
 });
