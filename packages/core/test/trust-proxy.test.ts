@@ -39,6 +39,15 @@ describe("trustProxy", () => {
     expect(trustProxy("10.0.0.1,172.30.42.0/24")).toBe("10.0.0.1,172.30.42.0/24");
   });
 
+  test("preserves case and does not treat a word-shaped passthrough as a boolean prefix match", () => {
+    // Every other passthrough fixture above is numeric, which leaves two
+    // things unpinned: that the returned string keeps its original case
+    // rather than the lowercased copy used to classify it, and that a
+    // hostname beginning with a truthy word ("On...") is not matched by a
+    // loosened `startsWith` check against the truthy list.
+    expect(trustProxy("Onprem.Example.COM")).toBe("Onprem.Example.COM");
+  });
+
   test("trims surrounding whitespace before classifying", () => {
     expect(trustProxy("  true  ")).toBe(true);
     expect(trustProxy("  172.30.42.0/24  ")).toBe("172.30.42.0/24");
