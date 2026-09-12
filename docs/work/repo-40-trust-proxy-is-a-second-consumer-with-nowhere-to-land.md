@@ -3,7 +3,7 @@ id: repo-40
 tool: repo
 title: trustProxy() is duplicated in two tools' config.ts, and packages/core has no config-parsing home to receive it
 kind: chore
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -152,3 +152,33 @@ piece of work (a new integration test file, modeled on the planner's), not a
 byproduct of moving one function, and Build's three steps do not ask for it.
 Recorded here so "still cover... end to end" is read correctly: true for the
 planner, unchanged (i.e. still absent) for the downloader.
+
+**2026-09-12 — Build step 3, the planner half
+(`repo-40-trust-proxy-planner`, stacked on the lift, sibling of
+`repo-40-trust-proxy-downloader` rather than stacked on it — the two switches
+do not depend on each other, only on the lift).**
+`tools/planner/api/src/config.ts` now imports `trustProxy` from
+`@webtools/core` and defines no local copy; its doc comment was deleted and
+replaced with the same two-line pointer the downloader branch used. The
+field-level doc comment on `ApiConfig.trustProxy` stays, per the ticket, but
+its closing paragraph was updated in place — it described pl-38's
+"copied rather than shared" call, which repo-40 supersedes; it now says the
+function is shared since repo-40 and explains what stays tool-specific (which
+bucket this setting feeds, not the parsing). `@webtools/core` was already a
+`dependencies` entry in `tools/planner/api/package.json`. `npm run check`
+green; `npm test -- --project planner`: 53 files, 848 tests, all passed; full
+`npm test` on this branch also green (137 files, 2397 tests, matching the
+lift branch's own full run).
+
+Setting `status: done` here, as the third and last of the three Build steps
+— but flagging the sequencing this creates, since it is not this builder's
+call to resolve: `repo-40-trust-proxy-downloader` and this branch are
+siblings, both stacked on `repo-40-trust-proxy-lift` and not on each other,
+and **both independently append a Log entry at this same point in the file**.
+Landing them as two separate PRs (per Traps) means the second one merged will
+conflict on this file — trivially, two insertions at the same anchor, fixed
+by keeping both entries in landing order — but a merge conflict is a merge
+conflict and worth calling out rather than discovering at merge time. Whoever
+merges second should resolve it by keeping both Log entries, and should
+double-check that `status: done` and this closing paragraph survive on
+`main` whichever order the two PRs land in.
