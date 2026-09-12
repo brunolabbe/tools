@@ -1,52 +1,37 @@
-# Production overlay: the service, plus the Cloudflare Tunnel that fronts it.
+# The host's production overlay: the Cloudflare Tunnel, and the network the
+# tools share behind it. **It names no tool, and that is the point.**
 #
 #   cp .env.prod.example .env     # then fill in TUNNEL_TOKEN
-#   docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+#   docker compose -f compose.downloader.yaml -f compose.prod.yaml \
+#                  -f compose.downloader.prod.yaml up -d
 #
-# `compose.yaml` on its own still gives the local single-host setup. This file
-# only adds what a public hostname needs, and changes four things:
+# or, once `COMPOSE_FILE` is set in `.env`, a bare `docker compose up -d`.
 #
-#  - the image is **pulled, not built**. `compose.yaml` builds from source
-#    because that is what a developer wants; a deployed host wants a released
-#    artifact it can name and roll back to. See docs/03-RELEASING.md.
-#  - a `cloudflared` sidecar dials *out* to Cloudflare and receives requests
-#    back over that connection. The host opens no inbound port, needs no static
-#    address, and works behind CGNAT. The loopback port inherited from
-#    `compose.yaml` stays, but it is for debugging from the host — it is not
-#    how anything is served.
-#  - `TRUST_PROXY` names the compose network. Every rate limit is keyed on
-#    `request.ip`, and with a proxy in front that address is cloudflared's on
-#    every request unless the header is trusted.
-#  - the network gets an explicit subnet, because `TRUST_PROXY` has to name it
-#    and Docker's automatic allocation is not stable across recreates.
+# `docs/adr/004-one-compose-fragment-per-tool.md` is why this file holds so
+# little. A `downloader:` or `planner:` block here would be a service
+# *definition* — an image and a network are enough to start one — so any host
+# that merged the shared overlay would stand up a tool it never named. What is
+# left is what belongs to the **host**: one tunnel, and one network. Each tool's
+# released image, its `TRUST_PROXY`, and its entry in `cloudflared`'s
+# `depends_on` live in `compose.<tool>.prod.yaml`, which is the file a host
+# merges to say it runs that tool.
+#
+# `cloudflared` dials *out* to Cloudflare and receives requests back over that
+# connection. The host opens no inbound port, needs no static address, and works
+# behind CGNAT. The loopback ports the tools bind stay, but they are for
+# debugging from the host — they are not how anything is served.
 #
 # The Cloudflare half — hostname, certificate, access policy — is not in this
 # file, because it lives in the dashboard. See docs/02-DEPLOYMENT.md.
 
+# Every fragment in this repo sets the same project name, which is what makes
+# any merge of them one compose project. Left unset, compose names the project
+# after the basename of the directory the host cloned into and the volumes are
+# filed under a name nobody chose. See `compose.downloader.yaml`'s note, and
+# docs/02-DEPLOYMENT.md for the migration onto this name.
+name: webtools
+
 services:
-  downloader:
-    # A released image from the registry, pinned by version. `compose.yaml`'s
-    # `build:` section is still merged in underneath — compose has no way to
-    # unset it — which is what `pull_policy` is for: without it, `up -d` on a
-    # host that happens to have a stale local image would use that instead of
-    # pulling the version named here.
-    #
-    # DOWNLOADER_TAG is required rather than defaulted to `latest` on purpose. A
-    # host following a moving tag cannot answer "what is it running", and
-    # rolling back means guessing. `/api/health` reports the version, and it
-    # matches this line because release-please stamps both.
-    image: "ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env - see docs/02-DEPLOYMENT.md}/downloader:${DOWNLOADER_TAG:?set DOWNLOADER_TAG in .env to a released version - see docs/03-RELEASING.md}"
-    pull_policy: always
-
-    networks: [edge]
-    environment:
-      # The proxy's CIDR, never `true`. `true` lets any client name its own
-      # rate-limit bucket by sending X-Forwarded-For, which on a public hostname
-      # makes every limit in the API decorative. cloudflared overwrites that
-      # header with the real client address, so this is the one hop worth
-      # trusting — and naming it by CIDR is what stops anything else being.
-      TRUST_PROXY: "172.30.42.0/24"
-
   cloudflared:
     # Pin this to a release tag once one is known good: `latest` means a
     # `docker compose pull` can change the binary under a working deployment.
@@ -67,13 +52,9 @@ services:
       # which is gitignored, and nowhere else. Never in this file.
       TUNNEL_TOKEN: "${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env - see docs/02-DEPLOYMENT.md}"
 
-    depends_on:
-      downloader:
-        # No public hostname until the service passes its own health check.
-        # Without this a restart publishes a hostname that 502s for the twenty
-        # seconds the SQLite migrations take, which reads to a user as the site
-        # being broken rather than as it still starting.
-        condition: service_healthy
+    # There is deliberately no `depends_on` here. It is not that the tunnel does
+    # not need one — it is that this file cannot know which tools this host
+    # runs, and each tool's prod fragment adds its own entry.
 
     # It relays TCP and terminates nothing. Left unbounded it is invisible in
     # `docker stats`; bounded, a runaway is attributable.
@@ -86,11 +67,10 @@ networks:
   edge:
     ipam:
       config:
-        # Fixed, so `TRUST_PROXY` above can name it. If this collides with a
-        # subnet already on the host, change it here and everywhere it is named
-        # — this file's own `TRUST_PROXY` above, plus `compose.planner.prod.yaml`'s
-        # if that fragment is merged too (pl-38). It is one setting written three
-        # times, not two, since the planner joined this network, and a mismatch
-        # in any one of them silently reverts that tool's rate limit to sharing a
-        # single bucket rather than refusing to boot.
+        # Fixed, so the `TRUST_PROXY` settings can name it. If this collides
+        # with a subnet already on the host, change it here and everywhere it is
+        # named — `compose.downloader.prod.yaml`'s `TRUST_PROXY` and
+        # `compose.planner.prod.yaml`'s. It is one setting written three times,
+        # and a mismatch in either of them silently reverts that tool's rate
+        # limit to sharing a single bucket rather than refusing to boot.
         - subnet: 172.30.42.0/24

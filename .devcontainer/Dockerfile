@@ -64,7 +64,7 @@ RUN mkdir -p -m 0755 /etc/apt/keyrings \
 # The docker CLI and the compose plugin — `docker-ce-cli`, deliberately not
 # `docker-ce`, which is the daemon.
 #
-# What this buys: `docker compose -f compose.yaml -f compose.prod.yaml config`
+# What this buys: `docker compose -f compose.downloader.yaml ... config`
 # merges and schema-checks the deployment overlay. That overlay pins a subnet
 # and sets TRUST_PROXY to name it, and if those two ever drift apart every rate
 # limit in the API silently reverts to one shared bucket — a failure with no

@@ -7,7 +7,7 @@
 #
 #     docker build -f tools/downloader/Dockerfile .
 #
-# or let `compose.yaml` do it, which is why that file names both. This file
+# or let `compose.downloader.yaml` do it, which is why that file names both. This file
 # lives here rather than at the root because there are two tools now and their
 # images have nothing in common — see docs/adr/002-releases-from-conventional-commits.md.
 #

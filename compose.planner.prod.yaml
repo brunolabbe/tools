@@ -1,6 +1,11 @@
 # The planner's production overlay: its released image, on the shared edge.
 #
-#   docker compose -f compose.yaml -f compose.prod.yaml -f compose.planner.prod.yaml up -d
+#   docker compose -f compose.prod.yaml -f compose.planner.prod.yaml up -d
+#
+# — a planner-only host, which is two files because the shared overlay carries
+# no tool. Beside the downloader it is those two files plus the downloader's
+# two, and `COMPOSE_FILE` in `.env` is how a host stops typing the list; see
+# `.env.prod.example`.
 #
 # ## Why this is a file of its own, and not a block in compose.prod.yaml
 #
@@ -10,23 +15,18 @@
 # so a downloader-only host that merged `compose.prod.yaml` would stand up the
 # planner without ever naming it. What stays in that file is what belongs to the
 # **host** rather than to any tool: the tunnel, and the network they share.
+# `compose.downloader.prod.yaml` is this file's opposite number and is the same
+# shape — repo-33 split it out, which is what makes the planner-only merge above
+# a thing a host can express at all.
 #
 # `pl-2` step 5 predates that ADR by eight days and says "a planner service in
 # compose.prod.yaml". It is superseded here, and its Log says so.
 #
-# ## What this file deliberately does not do
+# ## It is still additive
 #
-# **It does not rename anything, and it sets no `name:`.** ADR 004's target
-# layout also renames `compose.yaml` to `compose.downloader.yaml` and gives every
-# fragment an explicit `name:`, because a project named after a directory
-# basename is renamed by moving a file. That half is `repo-33`, and it is not
-# free on a host that is already running: setting `name:` renames the compose
-# project, which orphans the `storage` volume holding the job database and every
-# file still inside its retention window. Additive today, migrated deliberately
-# later.
-#
-# So this fragment is opt-in and nothing that works today stops working because
-# it exists. A downloader-only host merges two files, exactly as before.
+# A host that does not merge this file gets no planner: no service, and a
+# `cloudflared` that does not wait on one. That was true when this file was
+# written and it is still true now that every fragment sets `name:`.
 #
 # ## The Cloudflare half is not here
 #
@@ -35,6 +35,15 @@
 # they are reviewable. **Read `## Adding the second tool` before this file is
 # useful** — in particular, the downloader's Access policy is not a template for
 # this one, and copying it is the single most damaging mistake available here.
+
+# Every fragment in this repo sets the same project name — see
+# `compose.downloader.yaml`'s note. Before repo-33 this file set none and the
+# downloader's set none either, so both took the basename of the host's clone
+# directory, while `compose.planner.yaml` set `webtools` and was therefore a
+# different project. A host that has been running under a basename-derived name
+# needs the volume migration in `docs/02-DEPLOYMENT.md` once, before its next
+# `up -d`.
+name: webtools
 
 services:
   planner:
@@ -67,7 +76,7 @@ services:
       LOG_LEVEL: info
 
       # The proxy's CIDR, never `true` — same argument as the downloader's line
-      # in `compose.prod.yaml`, and the same subnet, because both tools sit
+      # in `compose.downloader.prod.yaml`, and the same subnet, because both sit
       # behind the one `cloudflared` on the one `edge` network. `true` lets any
       # client name its own rate-limit bucket by sending X-Forwarded-For, which
       # makes `rateLimitRunsPerMinute` (default 5, on `POST /api/plans`)
@@ -77,7 +86,9 @@ services:
       # again.
       #
       # This value is `compose.prod.yaml`'s `edge` subnet, named a third time —
-      # see the `networks.edge.ipam` comment there. Change all three together.
+      # see the `networks.edge.ipam` comment there, which now names
+      # `compose.downloader.prod.yaml` as the other one. Change all three
+      # together.
       TRUST_PROXY: "172.30.42.0/24"
 
       # --- What is deliberately NOT set here ------------------------------
@@ -109,9 +120,10 @@ services:
 
   cloudflared:
     # Merged into the definition in `compose.prod.yaml` rather than repeating
-    # it. This is the whole reason the planner can join the edge without the
-    # shared overlay having heard of it: a host that does not merge this file
-    # gets a `cloudflared` that waits on the downloader alone.
+    # it, exactly as `compose.downloader.prod.yaml` does for the downloader.
+    # This is the whole reason the planner can join the edge without the shared
+    # overlay having heard of it: a host that does not merge this file gets a
+    # `cloudflared` that does not wait on a planner.
     depends_on:
       planner:
         # No public hostname until the service passes its own health check. The

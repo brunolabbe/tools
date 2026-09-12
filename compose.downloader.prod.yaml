@@ -1,0 +1,71 @@
+# The downloader's production overlay: its released image, on the shared edge.
+#
+#   docker compose -f compose.downloader.yaml -f compose.prod.yaml \
+#                  -f compose.downloader.prod.yaml up -d
+#
+# or, once `COMPOSE_FILE` is set in `.env`, a bare `docker compose up -d`.
+#
+# ## Why this is a file of its own, and not a block in compose.prod.yaml
+#
+# `docs/adr/004-one-compose-fragment-per-tool.md`: what stays in the shared
+# overlay is what belongs to the **host** rather than to any tool — the tunnel,
+# and the network the tools share. Everything that names a tool is a fragment of
+# that tool's own, so no host runs a service it did not name. This file is the
+# downloader's half and `compose.planner.prod.yaml` is the planner's; they are
+# the same shape on purpose.
+#
+# It changes three things about the service `compose.downloader.yaml` defines:
+#
+#  - the image is **pulled, not built**. That file builds from source because
+#    that is what a developer wants; a deployed host wants a released artifact it
+#    can name and roll back to. See docs/03-RELEASING.md.
+#  - `TRUST_PROXY` names the `edge` subnet. Every rate limit is keyed on
+#    `request.ip`, and with a proxy in front that address is cloudflared's on
+#    every request unless the header is trusted.
+#  - `cloudflared` waits on this service's health check before it registers.
+#
+# The loopback port inherited from `compose.downloader.yaml` stays, but it is for
+# debugging from the host — it is not how anything is served.
+
+name: webtools
+
+services:
+  downloader:
+    # A released image from the registry, pinned by version.
+    # `compose.downloader.yaml`'s `build:` section is still merged in underneath
+    # — compose has no way to unset it — which is what `pull_policy` is for:
+    # without it, `up -d` on a host that happens to have a stale local image
+    # would use that instead of pulling the version named here.
+    #
+    # DOWNLOADER_TAG is required rather than defaulted to `latest` on purpose. A
+    # host following a moving tag cannot answer "what is it running", and
+    # rolling back means guessing. `/api/health` reports the version, and it
+    # matches this line because release-please stamps both.
+    image: "ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env - see docs/02-DEPLOYMENT.md}/downloader:${DOWNLOADER_TAG:?set DOWNLOADER_TAG in .env to a released version - see docs/03-RELEASING.md}"
+    pull_policy: always
+
+    networks: [edge]
+    environment:
+      # The proxy's CIDR, never `true`. `true` lets any client name its own
+      # rate-limit bucket by sending X-Forwarded-For, which on a public hostname
+      # makes every limit in the API decorative. cloudflared overwrites that
+      # header with the real client address, so this is the one hop worth
+      # trusting — and naming it by CIDR is what stops anything else being.
+      #
+      # This is `compose.prod.yaml`'s `edge` subnet, named a second time — see
+      # the `networks.edge.ipam` comment there, which counts all three.
+      TRUST_PROXY: "172.30.42.0/24"
+
+  cloudflared:
+    # Merged into the definition in `compose.prod.yaml` rather than repeating
+    # it, exactly as `compose.planner.prod.yaml` does for the planner. This is
+    # what lets the shared overlay carry the tunnel without having heard of
+    # either tool: a host that merges only the planner's fragments gets a
+    # `cloudflared` that waits on the planner alone.
+    depends_on:
+      downloader:
+        # No public hostname until the service passes its own health check.
+        # Without this a restart publishes a hostname that 502s for the twenty
+        # seconds the SQLite migrations take, which reads to a user as the site
+        # being broken rather than as it still starting.
+        condition: service_healthy

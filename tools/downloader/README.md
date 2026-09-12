@@ -3,8 +3,8 @@
 Give it a web page URL. It finds the video stream behind the page, downloads it,
 and hands back a link to the file.
 
-> **Status: complete and deployable.** `docker compose up` gives a working
-> service on <http://localhost:8080>. `npm run status -- --tool downloader`
+> **Status: complete and deployable.** `docker compose -f compose.downloader.yaml up`
+> gives a working service on <http://localhost:8080>. `npm run status -- --tool downloader`
 > lists what is still open; [docs/work/](./docs/work/) is what each piece of
 > work did.
 
@@ -56,14 +56,18 @@ Every command below runs from the **repo root**.
 ### With Docker
 
 ```bash
-docker compose up --build      # http://localhost:8080
+docker compose -f compose.downloader.yaml up --build    # http://localhost:8080
 ```
+
+There is no default `compose.yaml`: each tool has a fragment of its own and the
+host merges the ones it wants — [adr/004](../../docs/adr/004-one-compose-fragment-per-tool.md).
 
 One container: the UI, the API behind it, ffmpeg, Chromium, and a volume that
 keeps downloads and the job database across restarts. It binds to loopback on
 purpose — this service fetches URLs a client names, so publishing it on every
-interface by default would be handing out an open proxy. `compose.yaml`
-documents what to change before putting it behind anything.
+interface by default would be handing out an open proxy.
+`compose.downloader.yaml` documents what to change before putting it behind
+anything.
 
 To reach it from outside the host,
 [docs/02-DEPLOYMENT.md](../../docs/02-DEPLOYMENT.md) puts it on a subdomain

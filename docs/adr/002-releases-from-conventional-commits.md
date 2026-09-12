@@ -41,8 +41,9 @@ cuts the tag and publishes the image. This is the manual trigger, and a better
 one than a button: the changelog and the version bump are reviewed as a diff.
 
 **Images are published to GHCR and pulled by the host**, pinned to an exact
-version in `.env`. `compose.yaml` still builds from source, because that is what
-a developer wants; `compose.prod.yaml` pulls, because a deployed host wants an
+version in `.env`. `compose.downloader.yaml` still builds from source, because
+that is what a developer wants; `compose.downloader.prod.yaml` pulls, because a
+deployed host wants an
 artifact it can name and roll back to.
 
 **The convention is enforced twice**: `.githooks/commit-msg` for immediate
@@ -99,7 +100,7 @@ pull requests — on the machine that hosts the tunnel. The pull is one command.
   exception — a core fix both tools need, with no tool-side change — the escape
   hatch is a `Release-As:` footer, documented in
   [03-RELEASING.md](../03-RELEASING.md).
-- **The root `Dockerfile` and its `compose.yaml` build arg move.** Each tool
+- **The root `Dockerfile` and its compose build arg move.** Each tool
   owns its own Dockerfile now, and the planner's is a plain Node base rather
   than Playwright's — a twentieth of the size. The consequence is that
   `INSTALL_YTDLP` stops being a knob the host can turn: it is baked when the

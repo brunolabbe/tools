@@ -3,10 +3,13 @@
 How to put a tool from this repo on `<tool>.example.com` from a machine sitting
 behind a domestic router, with authentication in front of it.
 
-The container half is [`compose.prod.yaml`](../compose.prod.yaml). The half that
-cannot be a file in this repo — the hostname, the certificate, the login policy —
-lives in the Cloudflare dashboard, and is written out below so it is reviewable
-even though it is not version controlled.
+The container half is a set of compose fragments merged on the host —
+[`compose.prod.yaml`](../compose.prod.yaml) for the tunnel and the network, plus
+one pair per tool, listed under
+[`## What the host merges`](#what-the-host-merges). The half that cannot be a
+file in this repo — the hostname, the certificate, the login policy — lives in
+the Cloudflare dashboard, and is written out below so it is reviewable even
+though it is not version controlled.
 
 **This page is repo-wide, and the downloader is its worked example rather than
 its subject** — the `downloader` in the diagram below, and in the commands that
@@ -60,7 +63,7 @@ cannot work at all.
 - A domain on Cloudflare, using Cloudflare's nameservers.
 - Docker and the Compose plugin on the host. `depends_on: condition:` needs
   Compose v2, which every current install has.
-- A checkout of this repo on the host, for the two compose files and `.env`.
+- A checkout of this repo on the host, for the compose fragments and `.env`.
   The image is **not** built here: it is pulled from GHCR at an exact version,
   which is what makes "roll back" a pull rather than a rebuild. See
   [03-RELEASING.md](./03-RELEASING.md).
@@ -172,7 +175,7 @@ hostname**:
 | Type      | `HTTP`            |
 | URL       | `downloader:8080` |
 
-`downloader:8080` is the service name from `compose.yaml` resolved on the
+`downloader:8080` is the service name from `compose.downloader.yaml` resolved on the
 compose network, which is why `cloudflared` has to share that network and does.
 `HTTP`, not `HTTPS`: the leg from `cloudflared` to the container never leaves
 the host, and giving it its own certificate would mean managing one to protect a
@@ -186,10 +189,17 @@ Set the two lines in `.env` that say which image to run — `GHCR_OWNER`, and
 `DOWNLOADER_TAG` at a released version — then:
 
 ```bash
-docker compose -f compose.yaml -f compose.prod.yaml pull
-docker compose -f compose.yaml -f compose.prod.yaml up -d
-docker compose -f compose.yaml -f compose.prod.yaml logs -f cloudflared
+docker compose pull
+docker compose up -d
+docker compose logs -f cloudflared
 ```
+
+No `-f` flags, because `.env.prod.example` ships `COMPOSE_FILE` naming the
+downloader's three fragments and you copied it in step 1. If you wrote your own
+`.env`, that line is
+`COMPOSE_FILE=compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml`,
+and every command below assumes it — spelled out, each is
+`docker compose -f compose.downloader.yaml -f compose.prod.yaml -f compose.downloader.prod.yaml ...`.
 
 No `--build`: this host pulls a released image rather than compiling one. The
 first pull is long — the downloader's image carries Playwright's Chromium and
@@ -247,7 +257,7 @@ keep working for whoever you send them to.
 ### When you want it genuinely public
 
 Widen the first application's policy — or delete it — once the app has its own
-authentication. Nothing in `compose.prod.yaml` changes. Until that exists, this
+authentication. No compose fragment changes. Until that exists, this
 is the auth layer, and leaving it on costs you a login page you see once a week.
 
 ---
@@ -273,9 +283,11 @@ the SSE stream, and a ranged file transfer.
 **Rate limits silently stop working if `TRUST_PROXY` is wrong.** Every limiter
 in the API keys on `request.ip`. Behind the tunnel that is `cloudflared`'s
 address unless `X-Forwarded-For` is trusted, so all clients would share one
-bucket — safe, but one busy user throttles everyone. `compose.prod.yaml` sets it
-to the compose subnet, which is why that subnet is pinned rather than
-auto-allocated. Set it to `true` instead and any client can name its own bucket
+bucket — safe, but one busy user throttles everyone.
+`compose.downloader.prod.yaml` sets it to the `edge` subnet that
+`compose.prod.yaml` pins, which is why that subnet is fixed rather than
+auto-allocated. `compose.planner.prod.yaml` names the same one for the same
+reason. Set it to `true` instead and any client can name its own bucket
 with a header; that is worse than leaving it off.
 
 **The progress stream survives Cloudflare only because of the heartbeat.**
@@ -311,7 +323,7 @@ address for `/api/files/*` and keep the UI where it is — not to argue about it
 ## Operating it
 
 Consider tightening these once it is reachable by more than you. The defaults in
-`compose.yaml` assume a single trusted user on a laptop:
+`compose.downloader.yaml` assume a single trusted user on a laptop:
 
 - `RATE_LIMIT_PROBE_PER_MINUTE` / `RATE_LIMIT_JOBS_PER_MINUTE` /
   `RATE_LIMIT_PROBE_EVENTS_PER_MINUTE` — per client, and meaningful now that
@@ -344,8 +356,8 @@ Updating — set `DOWNLOADER_TAG` in `.env` to the version you want, then:
 
 ```bash
 git pull                                                      # compose files only
-docker compose -f compose.yaml -f compose.prod.yaml pull
-docker compose -f compose.yaml -f compose.prod.yaml up -d
+docker compose pull
+docker compose up -d
 ```
 
 Rolling back is the same three commands with the previous version in `.env`, and
@@ -358,7 +370,201 @@ honestly at boot rather than left showing a progress bar that will never move.
 
 For LAN access alongside the public hostname — worth it for multi-gigabyte files
 when you are at home — republish the port on all interfaces in a local override
-rather than editing `compose.yaml`, which deliberately binds to loopback.
+rather than editing `compose.downloader.yaml`, which deliberately binds to
+loopback.
+
+## Migrating the volumes onto the project name
+
+**Read this before your first `up -d` after pulling repo-33, and do not skip it
+on the grounds that the diff looks like a rename.** It is a rename _and_ a
+migration, and the migration is the half that is not in the diff.
+
+Every fragment now sets `name: webtools`. Before repo-33 the downloader's
+fragments set no `name:` at all, so compose derived the project name from the
+basename of the directory you cloned into — `tools`, or `webtools-main`, or
+whatever the tarball unpacked as. Volumes are named `<project>_<volume>`, so
+this host's job database and its downloaded files are in **`<basename>_storage`**
+and the new project will look for `webtools_storage`, which does not exist.
+
+Nothing is lost when that happens. The stack comes up looking like a fresh
+install — an empty job list, no files — with the real data still on disk under a
+name nothing references. It is recoverable at any point by doing this section.
+
+**`docker compose down -v` is the command that makes it unrecoverable**, and it
+is plausible to type while a half-renamed stack is behaving oddly. Every `down`
+below is deliberately without `-v`. The old volume is **kept**, not removed:
+deleting it is a separate act for once the new one is proven.
+
+**The planner's grounding volumes do not need this.**
+[`compose.planner.yaml`](../compose.planner.yaml) has set `name: webtools` since
+it was written, so `valhalla_tiles`, `nominatim_data` and `overpass_db` are
+already under that project — which is exactly why merging it with the old
+`compose.yaml` was forbidden. What moves is `storage` (the downloader) and, on a
+host that was already running the planner's released image, `planner_storage`.
+
+**If this host runs both tools, it moves both volumes, and the steps below are
+not a subset you can take the first half of.** That configuration was the
+documented one — `-f compose.yaml -f compose.prod.yaml -f compose.planner.prod.yaml up -d`
+— and none of those three files set a `name:`, so both tools' volumes are under
+the same basename-derived project. Steps 2, 3 and 5 each say what changes; the
+one that bites is step 2, because a `down` over a partial file set leaves the
+other tool's container **running**, and step 4 then copies a database out from
+under a live process.
+
+### 1 — Find the name the volumes are actually under
+
+Before pulling, on the host, with the old checkout still in place:
+
+```bash
+docker compose ls                       # the project name this host runs under
+docker volume ls | grep -E '_storage$'      # ..._storage and ..._planner_storage
+```
+
+`docker volume ls` is the one to trust: it is the on-disk truth rather than a
+derivation. Note the prefix — everything below calls it `$OLD`.
+
+```bash
+OLD=<the prefix you just read>          # e.g. tools, webtools-main
+```
+
+### 2 — Stop the stack, without `-v`
+
+**Name every file this host runs, not just the downloader's.** The old commands
+still work until you pull:
+
+```bash
+# a downloader-only host
+docker compose -f compose.yaml -f compose.prod.yaml down
+
+# a host running both tools — the third `-f` is the one that matters
+docker compose -f compose.yaml -f compose.prod.yaml \
+               -f compose.planner.prod.yaml down
+```
+
+Stopped rather than running, because copying a SQLite database out from under a
+process that has it open copies a torn one — and `down` only stops the services
+**in the file set you gave it**. A container from the same project that is not
+in that set is an orphan to this invocation and is left running; `down --help`
+lists `--remove-orphans` for exactly that reason, and it is not the flag you
+want here, because it removes the container rather than shutting the service
+down as part of the stack. Naming the files is.
+
+Check it actually stopped before going on — this should print nothing:
+
+```bash
+docker ps --filter "label=com.docker.compose.project=${OLD}" --format '{{.Names}}'
+```
+
+### 3 — Pull, and set `COMPOSE_FILE`
+
+Then update `.env` so it carries the fragment list — copy the `COMPOSE_FILE`
+line out of `.env.prod.example`, keeping your own `TUNNEL_TOKEN`, `GHCR_OWNER`
+and `DOWNLOADER_TAG`:
+
+```bash
+# a downloader-only host
+COMPOSE_FILE=compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml
+
+# both tools — and keep PLANNER_TAG
+COMPOSE_FILE=compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml
+```
+
+Check that compose agrees about the name, and about the service list, before
+anything starts:
+
+```bash
+docker compose config --format json | jq -r .name     # expect: webtools
+docker compose config --services                      # expect the tools you run
+```
+
+### 4 — Copy the volume
+
+`docker volume` has no rename, so this is create-and-copy. A throwaway container
+with both volumes mounted is the whole mechanism:
+
+```bash
+docker volume create webtools_storage
+docker run --rm \
+  -v "${OLD}_storage:/from:ro" \
+  -v webtools_storage:/to \
+  alpine:3 sh -c 'cp -a /from/. /to/'
+```
+
+`cp -a` rather than `cp -r`: it preserves ownership and timestamps, and the
+container runs as a non-root user, so a copy that resets ownership gives you a
+`/data` the service cannot write. The `.` in `/from/.` is what copies dotfiles
+too. `:ro` on the source is deliberate — the old volume is the backup until the
+new one is proven, and a typo in this command should not be able to touch it.
+
+On a host running both tools, the same again for the planner's database — the
+one step 2 had to stop it to make safe:
+
+```bash
+docker volume create webtools_planner_storage
+docker run --rm \
+  -v "${OLD}_planner_storage:/from:ro" \
+  -v webtools_planner_storage:/to \
+  alpine:3 sh -c 'cp -a /from/. /to/'
+```
+
+### 5 — Check the copy before starting anything
+
+```bash
+docker run --rm -v "${OLD}_storage:/old:ro" -v webtools_storage:/new alpine:3 \
+  sh -c 'du -sb /old /new; find /old -type f | wc -l; find /new -type f | wc -l'
+```
+
+and, on a host that copied the planner's database too, **the same check again —
+this is not optional, it is the one that catches a planner left running through
+step 2**:
+
+```bash
+docker run --rm -v "${OLD}_planner_storage:/old:ro" \
+  -v webtools_planner_storage:/new alpine:3 \
+  sh -c 'du -sb /old /new; find /old -type f | wc -l; find /new -type f | wc -l'
+```
+
+Two identical byte counts and two identical file counts, each time. `jobs.db`
+should be in the downloader's listing and `planner.db` in the planner's; if
+either pair of byte totals differs by a few kilobytes, a `-wal` file was copied
+from a stack that was not fully stopped — go back to step 2, and re-read which
+files it says to name.
+
+### 6 — Bring it up and look at the data, in every tool this host runs
+
+```bash
+docker compose up -d
+docker compose logs -f cloudflared
+docker compose ps                       # every service you expected, and no more
+```
+
+Then open the UI. **The check that matters is data you recognise, not
+`/api/health`** — health answers perfectly against an empty database, which is
+the exact failure this whole section exists to prevent, and it answers that way
+in both tools.
+
+- **downloader** — old jobs present in the list, and a file still inside its
+  retention window still downloadable.
+- **planner**, if this host runs it — old plans present. `/api/health` answering
+  and the UI rendering prove neither: an empty `planner.db` looks exactly like a
+  working fresh install.
+
+If either one comes up empty, **do not run step 7**. Nothing is lost: the old
+volume still holds the data, and going back is step 2 followed by a re-copy.
+
+### 7 — Later, and deliberately, remove the old volume
+
+Once you have seen the data through the UI — **every tool, per step 6** — and
+are not planning to roll back:
+
+```bash
+docker volume rm "${OLD}_storage"
+docker volume rm "${OLD}_planner_storage"    # only if this host runs the planner
+```
+
+Not before, and not on the strength of a stack that merely started. Rolling back to a previous `DOWNLOADER_TAG` is a `pull` away, but
+rolling back the _project name_ means putting the old compose files back, and
+the old volume is what makes that free.
 
 ## Grounding the planner: a routing engine and a geocoder
 
@@ -560,31 +766,57 @@ Access application.
 A host says which tools it runs by the list of files it merges, and nothing
 else. [adr/004](./adr/004-one-compose-fragment-per-tool.md) is why:
 
+That list is `COMPOSE_FILE` in `.env`. Written out as `-f` flags, the three
+that mean something:
+
 ```bash
-# the downloader alone — unchanged, and still what a downloader-only host types
-docker compose -f compose.yaml -f compose.prod.yaml up -d
+# the downloader alone — what a downloader-only host runs
+docker compose -f compose.downloader.yaml -f compose.prod.yaml \
+               -f compose.downloader.prod.yaml up -d
 
 # both tools, one tunnel
-docker compose -f compose.yaml -f compose.prod.yaml -f compose.planner.prod.yaml up -d
+docker compose -f compose.downloader.yaml -f compose.prod.yaml \
+               -f compose.downloader.prod.yaml -f compose.planner.prod.yaml up -d
+
+# the planner alone, which is now something a host can say
+docker compose -f compose.prod.yaml -f compose.planner.prod.yaml up -d
 ```
 
-[`compose.planner.prod.yaml`](../compose.planner.prod.yaml) is additive: it adds
-the `planner` service on the `edge` network and adds `planner` to `cloudflared`'s
-`depends_on`, and it changes nothing a two-file host sees. That is deliberate and
-it is the whole reason it is a file rather than a block in
-[`compose.prod.yaml`](../compose.prod.yaml) — a `planner:` block in the shared
-overlay is a service definition, so a downloader-only host merging it would
-stand up the planner without ever asking for it.
+and as the `COMPOSE_FILE` lines that replace them:
 
-**ADR 004's other half is not done, and you will notice it here.** The rename to
-`compose.downloader.yaml` and the explicit `name:` on every fragment are
-[repo-33](./work/repo-33-adr-004-rename-and-the-project-name.md), left out on
-purpose: setting `name:` renames the compose project, and a renamed project does
-not find the `storage` volume holding the job database and every file still
-inside its retention window. Until that ticket lands, **do not merge
-`compose.planner.yaml` with `compose.yaml`** — the grounding fragment sets
-`name: webtools` and the two would be different projects. The fragment says so
-in its own header too.
+```bash
+COMPOSE_FILE=compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml
+COMPOSE_FILE=compose.downloader.yaml:compose.prod.yaml:compose.downloader.prod.yaml:compose.planner.prod.yaml
+COMPOSE_FILE=compose.prod.yaml:compose.planner.prod.yaml
+```
+
+**[`compose.prod.yaml`](../compose.prod.yaml) names no tool**, and that is the
+property the whole arrangement exists for. It carries `cloudflared` and the
+`edge` network and nothing else; each tool's released image, its `TRUST_PROXY`
+and its entry in `cloudflared`'s `depends_on` live in
+`compose.<tool>.prod.yaml`. A `planner:` block in the shared overlay would be a
+service definition — an image and a network are enough to start one — so a
+downloader-only host merging it would stand up the planner without ever asking
+for it. The third line above is what that buys: a host that runs the planner and
+not the downloader, which was not expressible while the shared overlay still
+carried the downloader's image.
+
+[`compose.planner.prod.yaml`](../compose.planner.prod.yaml) is additive in the
+same way its opposite number is: it adds the `planner` service on the `edge`
+network and adds `planner` to `cloudflared`'s `depends_on`, and it changes
+nothing a host that does not merge it sees.
+
+**Every fragment sets `name: webtools`**, so any merge of them is one compose
+project — including [`compose.planner.yaml`](../compose.planner.yaml), which is
+why merging the grounding fragment with the downloader's is now an ordinary
+thing to do. It was not before
+[repo-33](./work/repo-33-adr-004-rename-and-the-project-name.md): the old
+`compose.yaml` set no name, so it took the basename of the host's clone
+directory while the grounding fragment said `webtools`, and the two were
+different compose projects. **If this host has been running from a directory not
+called `webtools`, read
+[`## Migrating the volumes onto the project name`](#migrating-the-volumes-onto-the-project-name)
+before your next `up -d`.**
 
 ### 1 — Name the version
 
@@ -669,9 +901,12 @@ and nothing capping the number of replies.
 
 ### 4 — Bring it up, and check the right thing
 
+Add `compose.planner.prod.yaml` to `COMPOSE_FILE` in `.env` — see
+[`## What the host merges`](#what-the-host-merges) — then:
+
 ```bash
-docker compose -f compose.yaml -f compose.prod.yaml -f compose.planner.prod.yaml pull
-docker compose -f compose.yaml -f compose.prod.yaml -f compose.planner.prod.yaml up -d
+docker compose pull
+docker compose up -d
 ```
 
 This pull is short — the planner's image is a plain Node base, not the
