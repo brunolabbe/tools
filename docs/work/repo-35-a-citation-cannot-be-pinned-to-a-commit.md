@@ -1001,6 +1001,66 @@ for the work the answers imply.
    pointing at its own line goes from failing to passing under dedupe, measured in
    part 9 — **#6 and #7 land together, or #6 first.** Neither alone is safe.
 
+## The gate on this filing
+
+**Gate: PASS** — 2026-09-12 · branch `repo-35/record-the-decisions`, `origin/main...50bc418` · defect hunt run directly by this reviewer (no `Skill` tool; `code-review` not delegated)
+
+This branch's whole deliverable is recording the A/B/C decision, part 8 and part 9's decisions, and writing the Build brief those answers imply — it does not touch `scripts/citations.mjs`, its tests, `history.md`, or any declaration (confirmed at every commit checked: `git log --oneline 8d79d8e..50bc418 -- scripts/citations.mjs scripts/test/citations.test.ts` prints nothing). `Done when` items 2 through 7 describe runtime behavior the _implementation_ branch must exhibit; none of it is buildable yet, so each verdict below is `unproven (implementation)` rather than `unproven` — this review instead verified that every measurement the Build brief rests on is accurate and reproducible, across the branch's full sequence of revisions.
+
+| Done when                                                                                                                                                                                               | Proof                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A, B, C, and parts 8-9 each answered as a dated Log entry naming the option and reasoning; `status` moves to `ready`                                                                                 | proven — six Log entries dated 2026-09-12, each naming the decider and, where applicable, the recommendation it overrode; `node scripts/status.mjs --show repo-35` reports `status ready`, `difficulty hard`, `unblocked`                                                                                                              |
+| 2. Reproduction's three rows still print `4901cd6`'s numbers, or drift is recorded beside them                                                                                                          | verified — the two `--rev`-pinned rows are unchanged (a pin fixes both content and tree); the plain row's drift is recorded beside the original at each re-measurement; `scripts/citations.mjs` and `scripts/test/citations.test.ts` confirmed unmodified across the whole branch                                                      |
+| 3. `history.md`'s two declarations migrated, residual drift named and repointed, plain run exits 0                                                                                                      | unproven (implementation) — the base-commit exit-2 measurement and the shorthand-twin/residual-drift breakdown independently reproduced exit-for-exit                                                                                                                                                                                  |
+| 4. Malformed pin rejected loudly, with a test that fails on being merely non-zero                                                                                                                       | unproven (implementation) — Build step 2's permissive-scan mechanism independently prototyped (`@nope!`, `@bb` both vanish under the naive extended grammar; an npm-scoped `node_modules` path is unaffected), confirming the brief specifies a real gap and a real closing mechanism                                                  |
+| 5. Five locations migrated to pins, 21 kept as declarations, gate stays exit 0                                                                                                                          | unproven (implementation) — the classification of all 26 declared locations independently re-derived three times (regex scan, per-file checker run, strip-and-run), byte-identical each time                                                                                                                                           |
+| 6. Self-citation detected and named; both misleading texts corrected; two tests specified, the first falsifiable                                                                                        | unproven (implementation) — the two coordinates confirmed false-as-claimed against real `citations.mjs` output on a scratch-restored `repo-43`; the cross-file test case (`history.md` citing `repo-21:1360`) confirmed `ok` and not indistinct                                                                                        |
+| 7. `occurrences` deduplicated by line inside `locateAnchor`; all six wording sites individually correct; number retaken at implementation time; corpus-wide before/after on the `72 = 27 + 45` identity | unproven (implementation) — 0-of-6 corpus measurement independently reproduced three ways (CLI, direct-import, hit-position replica cross-check); the same-line hole independently reproduced with a second scratch record (`[11, 11]`, distinct 1); confirmed the hole cannot widen past same-line or range-including-the-citing-line |
+
+Findings raised during this gate, all closed by the tip above:
+
+- **med** · Build's Order section named `docs/work` as a migration path when nothing migrated lives there, inherited from the abandoned "it goes" scope. Fixed.
+- **med** · Build part 8's fragment-length table printed "18 → 3 lines" for a case independently measured at 2 distinct lines. Root cause: `scripts/citations.mjs:1424` "anchor starts on ${r.occurrences} lines of" interpolates a match count beside the word "lines," so the table and the tool were each faithful to something different. Filed as Build part 9 rather than silently corrected.
+- **med** · Build part 9's first draft named three wording sites; a sixth, `scripts/citations.mjs:595` "Every line an anchor's text starts on, in a file." (`locateAnchor`'s own docblock), was in neither relayed list. Confirmed against source and added.
+- **high** · Dedupe (part 9's chosen fix) opens a hole part 8 alone does not close: a self-citation whose cited line is the line it is written on collapses from 2 raw hits to 1 distinct line and would silently start passing. Independently reproduced with a second, differently-worded scratch record (raw `[11, 11]`, distinct 1); independently confirmed the hole cannot widen to a genuinely different target line, since the citing row's own embedded quote always contributes an independent distinct hit. `Done when` #6/#7 and Build's Order section now state the ordering constraint directly rather than only implying it.
+- **low** · Build's Order section didn't mention parts 8/9 at all despite the ordering constraint appearing only in `Done when` #7. Fixed; independently confirmed the fix names both the dependency and the reason 8/9 land before 1-6 (keeping the corpus-wide before/after single-variable).
+- **findings** · 5 raised across this gate's full sequence of re-checks, 5 carried, 0 dropped.
+
+NFR sweep: security n/a (no runtime code on this branch); performance n/a; reliability — the retake-at-implementation-time and corpus-wide before/after requirements in `Done when` #7 are the reliability guard for the one behavior change this Build now specifies, and both are present and worded as requirements rather than suggestions; maintainability — the six-site wording table, the narrow-hole bound, and the Order section's stated reasoning are the "why, not what" documentation this repo's style calls for.
+
+**Why this heading is not `## Review`.** `docs/01-TICKETS.md:281` "A gate on a pull request that only"
+carves this case out by name: a gate on a branch that only files a ticket does not
+go in `## Review`, because that section answers whether _the work_ was checked and
+a filing has no work in it — its `Done when` lines describe an implementation that
+does not exist yet. This branch is that shape exactly, and the reviewer's own table
+says so, reading `unproven (implementation)` on five of seven rows. The precedent
+named there is `dl-29`, which keeps its own under this same heading.
+
+**It is a carve-out, not a workaround, and the difference is worth stating**
+because the mechanical effect is identical. `scripts/status.mjs:330` ".test(line)) return true;"
+detects a gate record by a literal `## Review` heading, so renaming makes
+`reviewedButReady` stop firing — and that check exists to catch work that merged
+without its status being flipped, which is not what this is. The same passage
+predicts this exact collision in its last sentence: a filing gate under `## Review`
+"makes a perfectly ordinary unstarted ticket look like a defect". Measured both
+ways: under `## Review` the suite is `1 failed | 312 passed` and the citation gate
+reads `28 enforced`; under this heading it is `313 passed` and `27 enforced`, with
+`status: ready` still true.
+
+**Transcription note, written by the builder and not by the reviewer.** The section
+above is the reviewer's gate record, committed as it sent it — **nothing altered,
+nothing dropped**: every verdict, every finding and its severity, every number and
+every anchor is its own. Everything above this paragraph is its text; this
+paragraph is the only part of the section that is not.
+
+**One exception, stated because `verbatim` would otherwise be a slightly false
+claim.** `npm run format` rewrote two things in it, since oxfmt formats markdown
+here and `npm run check` would fail otherwise: table cells were padded to an
+aligned width, and `*implementation*` became `_implementation_`. Checked rather
+than assumed — normalising both copies for whitespace and emphasis-marker style
+makes them **identical**, so not one word, number, coordinate or verdict moved.
+The reviewer was told before this was committed.
+
 ## Log
 
 - **2026-09-12** — **Build part 9 is answered: (a), deduplicate `occurrences` by
