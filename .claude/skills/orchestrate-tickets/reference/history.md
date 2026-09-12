@@ -2083,3 +2083,137 @@ the orchestrator's own instruction to say which.
   page's clearest instance of Step 10's general shape** — the fact that a
   record about a not-yet-final file cannot be pre-verified against that file —
   solved by simulating the final file rather than by writing carefully.
+
+## Sixteenth session — 2026-09-12
+
+**Written by a records-only dispatch (Claude Sonnet 5, dispatched explicitly),
+transcribing the orchestrating session's own account (Claude Opus 5) of a batch
+it ran, with no `ticket-reviewer` gate on this branch — scoped to this file
+alone.** Every branch fact below was re-read from `git show` and `gh pr view`
+against the four pull requests' own remote refs (fetched as `pull/<n>/head`,
+since three of the four head branches no longer exist under
+`refs/heads` — only the pull request ref survives) rather than taken from the
+account; token figures, the exact round-by-round exchange behind each gate, and
+the "every pair differs" characterisation are the orchestrator's own and are
+marked as such. Base `main` at `8d79d8e`, confirmed as the shared merge-base of
+all four branches against `origin/main` — and, at the moment this row was
+written, `origin/main` had already moved two commits past it
+(`a7f2c86`, `d0727a2`), unrelated releases and a planner-deployment chore.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **4** taken from `ready`/`needs-decision` to a gated branch: `repo-43` (`difficulty: mechanical`, #210), `repo-33` (`difficulty: hard`, #211), `repo-40` (`difficulty: standard`, three stacked pull requests — #213 `repo-40-trust-proxy-lift`, #214 `repo-40-trust-proxy-downloader` (draft), #215 `repo-40-trust-proxy-planner` (draft, carries the ticket file and its gate record) — ordered by the draft flag rather than by base branch, per each PR's own body), `repo-35` (no `difficulty` field at dispatch, `difficulty: hard` added on the branch once its decisions were answered, #216). All four frontmatter values confirmed on their own branch tips rather than relayed. Intake read **3** `ready` (`repo-33` and `repo-39`, both `hard`; `repo-40`, `standard` — `repo-39`'s rating confirmed on `main`), **2** `needs-decision` brought in by answering them (`repo-35`, `repo-43`), and **1** excluded because a peer session held it live (`repo-38`) — which had in fact already merged as `#208` by the time this row's own base commit was cut: `8d79d8e` **is** `#208`'s merge commit, so the exclusion and the peer's landing are the same event viewed from two sides, not a contradiction. `repo-39` was offered and not chosen. Zero file overlap across the four tickets' own diffs, measured with `git diff --name-only origin/main...<branch>` (3, 22, 4, 1 paths). All six pull requests' own CI checks read green, re-run here per PR rather than from one combined figure. **`MERGEABLE` does not hold for all six as of this row, and that is a property of right now rather than of the batch's own close**: `#211` (`repo-33`) reads `DIRTY` against the current `origin/main` tip, conflicting with `d0727a2`'s compose-file edits, which landed after this batch's branches were cut; the other five still read `CLEAN`. None merged — merging is the owner's |
+| `agents` / `dispatches` | **9** agents — 1 seam-mapper, 4 builders (`repo-43`, `repo-33`, `repo-40`, `repo-35`), 4 reviewers (one per ticket) — / dispatches-and-wakes **not recorded**, and not supplied by the account either |
+| `builder rounds` | **Not given as a total, and this session's own self-attribution is unusually total: all six items below are the orchestrator's own by its own account, not a builder's or a reviewer's.** At least one extra round is independently visible on each of four branches — `repo-43`'s gate-record citation repair (`1548f21`, after `6c76694`'s record broke `--require-anchors`), `repo-40`'s twice-repaired gate record (`7b2596b` rewriting unanchorable coordinates to prose, after `4e030ff`'s FAIL and the owner's reversal at `a5d38be`), `repo-33`'s CONCERNS record closed by two further Log entries rather than by a rewritten verdict (`6fcf4be`, `c6c838b`), and `repo-35`'s two reversed premises (item 3 below) plus its stop-short after a gate record made `npm test` red (item 6 below, resolved by moving the section out from under `## Review` entirely) |
+| `gates` | **4 reviewers, all returned findings**, though not the same kind: `repo-43` PASS with **0 defects, 2 observations**, both resolved as not-carried; `repo-33` **CONCERNS**, 1 med + 1 low, both closed by later Log entries with the verdict left exactly as raised (*"a verdict that gets rewritten once the evidence arrives is not a record"*, in the record's own words); `repo-40` **PASS after three rounds** (FAIL → owner decision → PASS), 2 lows repaired in round 1, 1 acceptance-line high resolved by an owner override in round 2, 1 further low added in round 3; `repo-35`'s is not a `## Review` at all but **`## The gate on this filing`**, the carve-out `docs/01-TICKETS.md:281` "A gate on a pull request that only" names for a branch that only files a ticket — 5 findings raised across its own sequence of re-checks, all 5 carried, 0 dropped |
+| `wrong findings` | **0 gate findings were refuted this batch, and the schema's row does not fit what happened instead — every wrong claim this session ran orchestrator → builder, not builder/reviewer → orchestrator.** Two are reasoning errors relayed as premises and reversed by measurement (item 3), one is a measurement relayed inside a question's premise and later reversed by a bigger measurement (item 2), one is a premise a question was built on that a downstream gate then dissolved (item 4), one is a base-branch omission (item 5), and one is a ship-authority gap that a builder's own stop-short caught before anything shipped red (item 6) |
+| `subagent tokens` | **2,028,628** across the 9 agents that reported, none missing, summed here and matching the account exactly: seam-mapper 79,318 · `repo-33` builder 279,746 · `repo-40` builder 304,858 · `repo-43` builder 115,620 · `repo-35` builder 381,971 · `repo-43` gate 123,963 · `repo-40` gate 193,590 · `repo-33` gate 214,364 · `repo-35` gate 335,198. Split: builders 1,082,195 (**53.3%**) · gates 867,115 (**42.7%**) · intake 79,318 (**3.9%**). **Not the bill** — cache reads are the bulk and are not counted here, and several agents' final turns ended in a `SendMessage` that delivered no usage block, so the total is a floor rather than a final figure, per the account |
+| `cost` | **≈ $36.92** at the 2026-09-02 rate of $0.0182/1k, an arithmetic conversion of the total above and not independently billed — a floor for the same reason the row above is one |
+
+**"Every pair differs" does not hold, and the reason is structural rather than
+incidental.** `repo-33` (`hard`) and `repo-35` (unrated) were both built on Opus
+and gated on Sonnet — the identical tuple, confirmed on each PR's own body:
+`#211`'s "Built by **Claude Opus 5**. Gated by **Claude Sonnet**" and `#216`'s
+"Built by Claude Opus 5. Gated by Claude Sonnet." `.claude/agents/builder.md:25 "a contract, a security claim, a seam with reach"` pins `hard`'s builder to Opus
+but states no gate override the way `:23` "Its gate is" does for `standard`; an
+unrated ticket inherits the orchestrator's own model, which this session was
+also Opus. So both categories default to `ticket-reviewer.md`'s pinned Sonnet
+gate with an Opus builder, and the two rows collide whenever the orchestrator
+itself runs Opus — not a coincidence of this batch, but a gap in the table: it
+states an explicit gate for `standard` because that is the row a Sonnet-inherits
+orchestrator gets wrong, and states none for `hard` or `absent` because neither
+was ever the row in question. Nothing was mis-dispatched — Sonnet gating Opus
+on both is the correct direction — but the claim that every pair in this batch
+differs is false as stated, and is corrected here rather than transcribed.
+
+### What the skill got wrong
+
+Six items, all the orchestrator's own by its own account, transcribed here
+against what each branch's own commits and Log entries show.
+
+1. **The gate record was the thing that broke, in three of four tickets — never
+   the code — and the mechanism is that a `## Review` section is not enforced
+   by the citations gate until it is committed.** `repo-43`'s record broke
+   `--require-anchors` the moment it landed, repaired one commit later at
+   `1548f21` ("fix self-referential citations in repo-43 gate record"), right
+   after `6c76694` added it. `repo-40`'s record was rejected on citation grounds
+   once, confirmed at `7b2596b`: two sha-prefixed coordinates into `8d79d8e`
+   "cannot carry a working anchor: the planner's copy is already deleted on this
+   branch (would resolve as 'moved'), and the downloader's goes stale the moment
+   its own branch merges," rewritten as prose instead. `repo-33`'s reviewer
+   citing a coordinate that resolves against the working tree rather than the
+   ref it named is the account's own framing and was not independently located
+   in that ticket's committed text; recorded as supplied rather than confirmed.
+   Every exit-0 either agent takes before a record is committed is honest and
+   says nothing about what committing it will do.
+2. **A measurement relayed inside a question's premise reversed the question's
+   answer, and the reversal is on the branch.** `repo-35`'s Build section
+   records the correction directly: the 2026-09-08 note's "10 declaration lines
+   across 5 files, only `history.md`'s two production" is wrong on the
+   corrected count — **12 declaration lines naming 26 locations across 7
+   files, suppressing 31 citations**, of which **21 of the 26 declared
+   locations are not expressible as a rev pin**. The owner's "the evidence
+   marker goes" answer was given against the wrong number.
+3. **The orchestrator's own reasoning, sent down as a premise, was wrong twice,
+   and both reversals are on the branch.** `repo-35`'s Log names both: the
+   claim that dedupe-by-line cannot rescue a self-citation missed the case
+   where the citation points at its **own** line — `[224, 224, 235]` collapses
+   to 1 distinct line in that shape and would start passing, against 2 distinct
+   lines for a citation pointing at a different line of the same file, which
+   still fails — and "the three wording sites" was six, the branch finding a
+   sixth (`scripts/citations.mjs:595 "Every line an anchor's text starts on, in a file."`) that appeared in neither relayed list. Both reversals made
+   `Done when` items and the Order section's dependency between parts 8 and 9
+   load-bearing in a way the original premise did not predict.
+4. **A question was answered before a downstream agent dissolved its premise,
+   and the branch shows the re-ask rather than a silent substitution.**
+   `repo-35`'s reviewer found `docs/01-TICKETS.md:281 "A gate on a pull request that only"` — the carve-out for a branch that only files a ticket, with
+   `dl-29` named as the existing precedent — after the owner had already
+   answered a differently-framed question about the `ready`-plus-gate-record
+   conflict. The ticket now carries the gate under `## The gate on this filing`
+   rather than `## Review`, and `status: ready` holds with CI green:
+   "under `## Review` the suite is `1 failed | 312 passed`... under this
+   heading it is `313 passed`", both measured on the branch.
+5. **A base-branch check that is in `CLAUDE.md` and not in this skill caught a
+   real defect.** `#214` and `#215` were opened against the lift branch;
+   `CLAUDE.md:188 "Check the base branch too"` warns that a pull request opened against another feature
+   branch disappears with it while its own page still says merged. Both are
+   now based on `main` — confirmed on each PR's current `baseRefName` — with
+   ordering enforced by the draft flag rather than by the base, stated in
+   `#214`'s own body: "Ordering is enforced by the draft flag, not by the base
+   branch."
+6. **Conditional ship authority silently assumed the gates would still pass
+   after the gate record itself was committed, and did not this time.**
+   `repo-35`'s branch carries no `## Review` section and `status: ready`, not
+   `done` — confirmed on the tip. Item 4's carve-out is the resolution: the
+   record that would have tripped `reviewedButReady` was moved out from under
+   `## Review` rather than shipped red or left silently mislabelled.
+
+**A seventh, found in transcription rather than supplied: `builder.md`'s model
+table has an asymmetry that made the "every pair differs" claim false, not an
+accident of this batch.** Recorded above rather than as a numbered item here,
+because it surfaced while checking the account rather than being named by it.
+
+### What went right, and is worth copying
+
+- **Every gate ran its own reproductions rather than accepting the builder's.**
+  `repo-40`'s reviewer proved behaviour identity twice — an md5 match across all
+  three copies of `trustProxy()` plus a 42-input runtime differential against
+  both tools' built output, `cases=42 mismatches=0` — and mutation-tested the
+  new parser suite, catching 8 of 10 mutations on the first pass and repairing
+  the test for the other 2, confirmed in the record's own words: "Eight other
+  mutations... were caught by the suite as first written."
+- **`repo-35`'s gate and builder measured the same blocking figure by
+  deliberately different routes and cross-checked position for position.** The
+  ticket's own Log: "measured... by the gate first, then independently here
+  through a different route, importing the checker's own `extractCitations` and
+  `checkCitations` rather than parsing CLI output per file" — and it named the
+  limit of that method rather than resting on the agreement: two faithful
+  replicas of one algorithm inherit its edge cases identically, so agreement
+  between them proves the replicas match and nothing about the algorithm.
+- **`scripts/citations.mjs:1424` "anchor starts on ${r.occurrences} lines of"
+  prints a match count beside the word "lines" and misled the builder into
+  recording a number that did not reproduce — and that miswording is the
+  reproduction that justified `repo-35`'s part 9,** rather than a defect
+  quietly patched around: "Filed as Build part 9 rather than silently
+  corrected," in the gate's own words.
+
