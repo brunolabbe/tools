@@ -3,7 +3,7 @@ id: repo-43
 tool: repo
 title: A worktree's nested path silently shadows the shared root's copy of the same file
 kind: fix
-status: needs-decision
+status: done
 milestone: null
 depends_on: []
 difficulty: mechanical
@@ -200,11 +200,7 @@ worktree. **Do not pick one on this ticket.**
 
 ## Build
 
-**Not startable.** The fix itself — the sentence or two to write, and where —
-is small regardless of which option is chosen; the decision above is what is
-open. When it is answered on this page as a dated Log entry, replace this
-section with the concrete edit and move `status` to `ready` in the same
-commit.
+Add one or two sentences to `.claude/agents/builder.md` right after the "Never touch `/workspaces/tools` itself" paragraph (after line 160), and to `.claude/agents/ticket-reviewer.md` after the "Confirm you are looking at the right tree" step (after line 26), warning that an absolute path built from the literal prefix `/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's copy of that file with no error or warning. State what to do instead: use worktree-relative paths, treating this worktree's root as the repository root.
 
 ## Done when
 
@@ -220,6 +216,10 @@ commit.
    `node scripts/status.mjs --json` all exit 0 afterward.
 
 ## Log
+
+- **2026-09-12** — Decision answered on 2026-09-12 by the repo owner. **Question asked:** where the warning lives — that a worktree's nested path silently shadows the shared root's copy of the same file. **Options offered:** (a) a line in `builder.md` and `ticket-reviewer.md`; (b) a `.claude/rules/` page; (c) a `CLAUDE.md` line. **Chosen: (a)**, on 2026-09-12, by the repo owner. **Whose recommendation it overrode: none.** (a) is the ticket's own recommendation and the owner confirmed it. **What the answer explicitly accepts:** the ticket says (a) alone leaves the gap named in its own paragraph — it covers only these two agent types and does nothing for an ad-hoc subagent, for the orchestrator working directly in a worktree, or for a human. The owner chose (a) alone, **not** (a)+(c). This gap is knowingly accepted and not closed.
+
+  **Reproduction re-verified on 2026-09-12 against the then-current tip:** `git cat-file -p HEAD:CLAUDE.md | md5sum` returned `7e44f25cc0a6757b93f8f6eb56c239be  -` (identical to 2026-09-09); appended marker `REPRODUCTION-MARKER-repo43-2026-09-12-verify`; worktree-relative read returned hash `d2589056e4d36a6a7f220e2e6460fa62  CLAUDE.md`; absolute path `/workspaces/tools/CLAUDE.md` returned hash `7e44f25cc0a6757b93f8f6eb56c239be  /workspaces/tools/CLAUDE.md` (original, no marker); reverted with `git checkout -- CLAUDE.md` and confirmed clean.
 
 - **2026-09-09** — Filed on branch `repo-43-worktree-path-shadowing`, base
   `origin/main` at fetch time. `node scripts/next-id.mjs repo` reported `next
