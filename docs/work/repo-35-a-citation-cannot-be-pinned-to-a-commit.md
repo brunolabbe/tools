@@ -555,9 +555,27 @@ the list ratchets one way.
 ### 7. Order
 
 One branch, with the pieces in this order and the suite green at the end rather
-than in the middle: grammar and malformed-pin scan with their tests (1, 2, 4),
-then rev resolution (3), then the boundary rule and its enforcement (5), then the
-five migrations (6). The migrations last, because until a pin exists there is
+than in the middle.
+
+**Parts 8 and 9 first, in that order, and the order between them is not a
+preference.** Part 9 opens a hole — a self-citation whose hits all land on one
+line goes from failing to passing under dedupe — and part 8's detection is the
+only thing that closes it, so **8 lands with 9 or before it, never after**.
+`Done when` #6 and #7 carry the same constraint; it is repeated here because this
+section is the operational plan and an implementer reading only this paragraph
+would otherwise not see it.
+
+**They go before 1–6 rather than after, for a reason that is about measurement
+rather than taste.** `Done when` #7 requires a corpus-wide before/after showing
+that deduplicating the counter flips no verdict. Run that after the new grammar
+and the `malformed-pin` state are in, and any verdict that did move cannot be
+attributed — the citation corpus would have been re-parsed by a changed grammar
+in the same tree. Landing 8 and 9 against today's grammar keeps that comparison a
+single-variable one.
+
+**Then the pinning work**: grammar and malformed-pin scan with their tests (1, 2,
+4), then rev resolution (3), then the boundary rule and its enforcement (5), then
+the five migrations (6). The migrations last, because until a pin exists there is
 nothing to migrate them to — and because the enforcement landing first turns the
 five into failures the migration then clears, which is the order that proves the
 rule works rather than asserting it.
@@ -787,6 +805,22 @@ So dedupe **opens a hole** in the second shape, and part 8's self-citation
 detection is the only thing that closes it. That reverses the usual reading:
 part 8 is not merely still needed alongside part 9 — it is load-bearing
 _because of_ part 9, and the two must land together or in that order.
+
+**The hole is narrow, and that is a measured bound rather than an assumption.**
+The gate tried to widen it and could not: a self-citation whose target is a
+_different_ line cannot collapse to one distinct line, because the citing row
+always contributes a hit of its own through the quoted anchor embedded in it, so
+target ≠ citing guarantees at least two distinct lines. The hole is therefore
+confined to a self-citation whose cited line **is** the line it is written on, or
+whose cited range includes that line. Reproduced independently by the gate with a
+differently-worded record of its own — raw `[11, 11]`, distinct 1 — matching this
+page's construction. **Narrow is not the same as contrived**, and that is the gate's
+argument rather than this page's: the shape falls out of this repo's ordinary
+citation style, where prose beside a citation echoes the anchor's wording —
+`repo-43`, `dl-44` and `repo-31` all write that way. And there is a second,
+non-deliberate route in: **line-number drift**. A self-citation that was accurate
+when written has its own citing row shifted onto the target value by an unrelated
+edit, and nobody has to intend the shape for a record to acquire it.
 
 **The two defects have not yet collided in the live corpus.** Three of the six
 indistinct citations are self-citations, all on `repo-31`, and none is a same-line
