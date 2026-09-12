@@ -107,3 +107,48 @@ Filed as `repo-40` rather than the id `next-id.mjs` reports, because a sibling
 branch (`repo-37-anchor-planner-review-corpus`) had already pushed
 `docs/work/repo-39-...md` with no PR open yet — invisible to a tool that reads
 merged files plus open PR diffs. Not started.
+
+**2026-09-12 — Build step 1, the seam decision, and the lift itself
+(`repo-40-trust-proxy-lift`).** Chose `packages/core/src/trust-proxy.ts`, a
+new file, over landing `trustProxy()` beside `clientKey` in `rate-limit.ts`.
+Reasoning:
+
+- The two are related but not the same thing. `trustProxy()` decides which of
+  Fastify's `request.ip` and `request.hostname` come from; `clientKey` in
+  `rate-limit.ts` is one of several things _downstream_ that then keys off
+  `request.ip`. Rate limiting is a consumer of this value, not what it is
+  about — nothing here uses `trustProxy` for anything else yet, but the ticket
+  itself names that as the reason to keep the door open, not a reason to
+  couple them today.
+- `rate-limit.ts` is deliberately excluded from this package's main barrel
+  (`index.ts`) because it imports `node:net`, and the package root is in the
+  web bundle graph by way of every tool's contract — exporting it there would
+  drag server-only code into a browser build. `trustProxy()` imports nothing
+  from `node:*`. Filing it under `rate-limit.ts` would force it behind that
+  same server-only subpath for a reason that does not apply to it, and would
+  make the next config-parsing lift (this package's first, per the ticket's
+  own framing) look for precedent in the wrong file.
+
+Also: this is the moment `packages/core` gains the "config parsing" shape the
+ticket describes as absent (`trust-proxy.ts` is the first file here shaped
+like reading a value and falling back, not a primitive or a mechanism), and a
+direct test (`packages/core/test/trust-proxy.test.ts`) now pins the default,
+both boolean directions case-insensitively, and CIDR/list passthrough —
+neither tool tested this at the function level before (see pl-38's Log and
+below). `npm run check` and full `npm test` both green on this branch alone
+(2397/2397 tests, no `tools/` path touched, so this can land as its own PR
+ahead of the other two — see Traps).
+
+**What Done-when's third bullet has wrong.** It says both tools' own project
+suites "still cover `ApiConfig.trustProxy` end to end" — read as a claim that
+both already do. The planner's does (`tools/planner/api/test/config.test.ts`
+plus the proxy-aware rate-limit integration tests in `runs.test.ts`, pl-38).
+**The downloader's never has**: there is no `config.test.ts` under
+`tools/downloader/api/test/` at all, and nothing else in that suite reads
+`TRUST_PROXY` or sets `trustProxy` in a config override. That gap predates
+this ticket and is not created by the lift, so it is left alone here rather
+than folded in — adding a downloader end-to-end proxy-trust test is a real
+piece of work (a new integration test file, modeled on the planner's), not a
+byproduct of moving one function, and Build's three steps do not ask for it.
+Recorded here so "still cover... end to end" is read correctly: true for the
+planner, unchanged (i.e. still absent) for the downloader.
