@@ -25,7 +25,8 @@
     "../status.mjs",
     "../citations.mjs",
     "../citations-gate.mjs",
-    "../next-id.mjs"
+    "../next-id.mjs",
+    "../cloudflare-setup.mjs"
   ],
   // Restated, not inherited — the root's exclude is about the root's program.
   "exclude": []
