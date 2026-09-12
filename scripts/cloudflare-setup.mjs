@@ -170,6 +170,46 @@ export function desiredState(domain, email, tools = TOOLS) {
   return { ingress, dns, apps };
 }
 
+/**
+ * Where a token verifies, which is not the same endpoint for every token.
+ *
+ * A token made on the dashboard's **Account API tokens** page is account-owned
+ * (it carries a `cfat` prefix) and is not a user token at all: `/user/tokens/verify`
+ * answers `401 1000 Invalid API Token` for it, which reads exactly like a
+ * mistyped secret and sends you back to the dashboard to make another one. It
+ * was the first thing this script did, so a perfectly good token failed at the
+ * only call that could not be skipped.
+ *
+ * The new UI makes account-owned the default, so this is the common case rather
+ * than the exotic one.
+ */
+export function verifyPath(accountId) {
+  return accountId ? `/accounts/${accountId}/tokens/verify` : "/user/tokens/verify";
+}
+
+/**
+ * The writes, in the only order that is safe to make them.
+ *
+ * **Access first, then routing.** Ingress plus a proxied DNS record is what
+ * makes a hostname answer; the Access application is what makes it ask for a
+ * login. Do those in the obvious order and the endpoint is live and open for
+ * however long the remaining calls take — seconds on a good day, indefinitely
+ * if one of them fails and someone walks away. On a host whose cloudflared is
+ * already connected that window is real exposure, and for the downloader the
+ * docs are explicit about what an open instance is for: a machine that will
+ * fetch any URL a stranger names.
+ *
+ * Inverted, the failure mode is harmless: a policy guarding a hostname that
+ * does not resolve yet.
+ */
+export function applyOrder(plan) {
+  return [
+    ...plan.access.create.map((a) => ({ kind: "access", item: a })),
+    ...(plan.ingress.added.length > 0 ? [{ kind: "ingress", item: plan.ingress.ingress }] : []),
+    ...plan.dns.create.map((d) => ({ kind: "dns", item: d })),
+  ];
+}
+
 // --- the HTTP half ----------------------------------------------------------
 
 async function call(token, path, init = {}) {
@@ -213,8 +253,6 @@ async function main() {
   if (!args.domain) fail("--domain is required");
   if (!args.email) fail("--email is required — the address the Allow policies admit");
 
-  await call(token, "/user/tokens/verify");
-
   // `GET /zones` is a convenience, not a requirement. A token scoped to one
   // zone's DNS can usually still see that zone in the list — but "usually" is
   // the token's business, not ours, and a token without Zone:Read is a correct
@@ -222,6 +260,15 @@ async function main() {
   // entirely rather than making the caller widen a credential to be listed.
   let zoneId = args.zone;
   let accountId = args.account;
+
+  await call(token, verifyPath(accountId)).catch((err) => {
+    fail(
+      `${err.message}\n\n` +
+        "  If the token came from the dashboard's Account API tokens page it is\n" +
+        "  account-owned, and it can only be verified against its own account.\n" +
+        "  Pass --account <Account ID> (the domain's Overview page, right-hand column).",
+    );
+  });
 
   if (!zoneId || !accountId) {
     const zones = await call(token, `/zones?name=${encodeURIComponent(args.domain)}`).catch(
@@ -304,36 +351,36 @@ async function main() {
     return;
   }
 
-  if (ingress.added.length > 0) {
-    // The whole array, every time — including the rules we did not add. This is
-    // the call the refusals above are protecting.
-    await call(token, `/accounts/${accountId}/cfd_tunnel/${tunnel.id}/configurations`, {
-      method: "PUT",
-      body: JSON.stringify({ config: { ...config?.config, ingress: ingress.ingress } }),
-    });
-    out(`applied  ingress (${ingress.ingress.length} rules)`);
-  }
-
-  for (const d of dns.create) {
-    await call(token, `/zones/${zoneId}/dns_records`, {
-      method: "POST",
-      body: JSON.stringify({ type: "CNAME", name: d.name, content: d.content, proxied: true }),
-    });
-    out(`applied  dns     ${d.name}`);
-  }
-
-  for (const a of access.create) {
-    await call(token, `/accounts/${accountId}/access/apps`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: a.name,
-        type: "self_hosted",
-        domain: a.domain,
-        session_duration: SESSION_DURATION,
-        policies: [{ name: a.name, decision: a.decision, include: a.include, precedence: 1 }],
-      }),
-    });
-    out(`applied  access  ${a.domain}`);
+  for (const op of applyOrder({ access, ingress, dns })) {
+    if (op.kind === "access") {
+      const a = op.item;
+      await call(token, `/accounts/${accountId}/access/apps`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: a.name,
+          type: "self_hosted",
+          domain: a.domain,
+          session_duration: SESSION_DURATION,
+          policies: [{ name: a.name, decision: a.decision, include: a.include, precedence: 1 }],
+        }),
+      });
+      out(`applied  access  ${a.domain}`);
+    } else if (op.kind === "ingress") {
+      // The whole array, every time — including the rules we did not add. This
+      // is the call the refusals above are protecting.
+      await call(token, `/accounts/${accountId}/cfd_tunnel/${tunnel.id}/configurations`, {
+        method: "PUT",
+        body: JSON.stringify({ config: { ...config?.config, ingress: op.item } }),
+      });
+      out(`applied  ingress (${op.item.length} rules)`);
+    } else {
+      const d = op.item;
+      await call(token, `/zones/${zoneId}/dns_records`, {
+        method: "POST",
+        body: JSON.stringify({ type: "CNAME", name: d.name, content: d.content, proxied: true }),
+      });
+      out(`applied  dns     ${d.name}`);
+    }
   }
 }
 

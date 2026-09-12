@@ -32,7 +32,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
-import { desiredState, planAccess, planDns, planIngress, TOOLS } from "../cloudflare-setup.mjs";
+import {
+  desiredState,
+  planAccess,
+  planDns,
+  planIngress,
+  TOOLS,
+  verifyPath,
+  applyOrder,
+} from "../cloudflare-setup.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -178,4 +186,33 @@ test("the ports match the compose fragment that defines each service", () => {
       );
     }
   }
+});
+
+test("an account-owned token verifies against its account, not against /user", () => {
+  // Measured, not assumed: a `cfat`-prefixed token from the dashboard's Account
+  // API tokens page answers 401 1000 "Invalid API Token" at /user/tokens/verify
+  // and "valid and active" at /accounts/<id>/tokens/verify. The 401 is
+  // indistinguishable from a mistyped secret, so the endpoint choice is the
+  // difference between a working token and a second trip to the dashboard.
+  expect(verifyPath("4f6d6c46")).toBe("/accounts/4f6d6c46/tokens/verify");
+  expect(verifyPath(undefined)).toBe("/user/tokens/verify");
+});
+
+test("every Access application is created before any hostname resolves", () => {
+  const want = desiredState("example.com", "you@example.com");
+  const order = applyOrder({
+    access: planAccess([], want.apps),
+    ingress: planIngress(DOWNLOADER_LIVE, want.ingress),
+    dns: planDns([], want.dns, "abc"),
+  }) as { kind: string }[];
+
+  const kinds = order.map((o) => o.kind);
+  const lastAccess = kinds.lastIndexOf("access");
+  const firstRouting = Math.min(
+    ...["ingress", "dns"].map((k) => kinds.indexOf(k)).filter((i) => i !== -1),
+  );
+
+  expect(lastAccess).toBeLessThan(firstRouting);
+  // and the ingress PUT is one call carrying every rule, never one per rule.
+  expect(kinds.filter((k) => k === "ingress")).toHaveLength(1);
 });

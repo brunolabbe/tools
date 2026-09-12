@@ -235,3 +235,57 @@ rather than a branch, and this correction does not touch it. Made from
 pl-38's worktree rather than this ticket's own, because pl-2 was not checked
 out live at the time; flagged and cleared with the session that had been
 holding it before this edit was made.
+
+**2026-09-12 — step 6 is executable now, and running it against a real account
+disproved two things this ticket assumed.**
+
+The Cloudflare half was "a dashboard object" and therefore nobody's to automate.
+That was wrong: the tunnel configuration, the DNS record the dashboard creates
+silently on your behalf, and the Access application are all API v4 calls, and
+they are now [`scripts/cloudflare-setup.mjs`](../../../../scripts/cloudflare-setup.mjs)
+with `scripts/test/cloudflare-setup.test.ts` behind it. What could not live in
+this repo was never the procedure — only the credential.
+
+**Applied to a live account, and read back from the API rather than trusted from
+the script's own output.** `planner.<domain>` and `downloader.<domain>` now
+carry ingress rules, proxied CNAMEs and an Access application each, with the
+downloader's `api/files/*` bypass beside it. A second run reports
+`nothing to do`.
+
+**Two assumptions this ticket and 02-DEPLOYMENT.md carried, both false.**
+
+- **"The downloader is already live behind Access" was not true of the account
+  it was said of.** There were no Access applications at all — not one, for
+  anything — and no `downloader` hostname; what existed was an unrelated
+  hostname pointing at a port on the host. The deployment page reads as though
+  step 4 has been done once already by the time you reach the second tool, and
+  the delta for the second tool inherits that. It does not hold. Everything in
+  the plan was a create.
+- **An account-owned API token is not a user token.** The dashboard's _Account
+  API tokens_ page — now the default path — issues a `cfat`-prefixed token that
+  answers `401 1000 Invalid API Token` at `/user/tokens/verify` and verifies
+  fine at `/accounts/<id>/tokens/verify`. The script asked the wrong endpoint
+  first, so a correct token failed at the only call that could not be skipped,
+  with an error indistinguishable from a mistyped secret. `verifyPath` and its
+  test exist because of that measurement.
+
+**One defect found by writing it down rather than by running it.** The obvious
+order — route the hostname, then put a login on it — leaves the endpoint live
+and unauthenticated for the length of the remaining calls, and indefinitely if
+one fails. On a host whose `cloudflared` is already connected that is real
+exposure, and for the downloader the page is explicit about what an open
+instance is for. `applyOrder` creates every Access application first; the test
+was watched failing with the order inverted.
+
+**The third _Done when_ is still open, and still for the same reason.** The
+Cloudflare side is configured and verified; nothing is served until an operator
+brings the stack up with `TUNNEL_TOKEN`, `GHCR_OWNER` and both tags in `.env`.
+That is a machine, not a branch. `in-flight` stays.
+
+**repo-33 does not collide with this.** Checked rather than assumed: it renames
+the compose _files_ and sets the compose _project_ name, while tunnel ingress
+addresses a _service_ on the compose network, which it does not touch. The port
+check in this branch's test finds each fragment by the service it defines rather
+than by filename, verified by performing the rename in the worktree and watching
+the suite stay green. The one shared surface is `02-DEPLOYMENT.md`, in different
+sections.
