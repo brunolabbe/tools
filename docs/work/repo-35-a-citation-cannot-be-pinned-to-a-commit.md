@@ -283,9 +283,9 @@ failing citation has two possible repairs, which is what part 5's boundary rule
 exists to decide.
 
 Part 8 is a separate defect folded in on the owner's call, **answered
-2026-09-12** in the third Log entry of that date. **Part 9 is a second defect,
-found during that round's gate, and it is still open** — including whether it
-belongs on this ticket at all.
+2026-09-12**. Part 9 is a second defect, found during that round's gate, **also
+answered 2026-09-12** — including, against two recommendations, that it lands
+here rather than as its own ticket. **No open decision remains on this page.**
 
 ### 0. The blast radius, re-measured at `8d79d8e` before any of it is written
 
@@ -683,46 +683,116 @@ same conclusion. Two tickets landing opposite answers in one batch is the thing 
 avoid. The argument is kept here so a later reader can reopen it on purpose rather
 than rediscover it by accident.
 
-### 9. `occurrences` counts matches, not lines — open decision
+### 9. `occurrences` counts matches, not lines
 
 **Found by a disagreement, not by a review pass**, which is why it is recorded
-with how it surfaced: the gate reproduced the fragment-length table above and got
-2 where the table printed 3, on its own script and a plain `grep -c`. Neither
-side was wrong. Chasing which one was produced this.
+with how it surfaced: the gate reproduced the fragment-length table in part 8 and
+got 2 where the table printed 3. Neither side was wrong. Chasing which one
+produced this. **Answered 2026-09-12**; the Log carries the provenance, including
+that the answer overrode two recommendations and that folding it in here was
+taken as a named cost.
 
 **The defect.** `scripts/citations.mjs:826` "const hits = locateAnchor(content, c.anchor)"
 returns **one entry per match**, and `occurrences` is `hits.length`. Two matches
-on the same line count twice. The text printed to the author says lines:
-`scripts/citations.mjs:828` "is how many lines the fragment starts on in the whole file"
-in the source, and the remediation at`scripts/citations.mjs:1498` "anchor(s) verify on a fragment that starts on more than one line of the file"
-on the terminal.
+on the same line count twice, while **six** places call it a line count — two of
+them printed to the author.
 
-**Reproduced.** With the 18-character fragment above, `locateAnchor` returns
-`[224, 224, 235]` — three matches, **two** distinct lines — because the citing row
-contains the fragment twice, once in its own prose and once inside the anchor's
-quotes. The checker prints "starts on 3 lines" for a file that has it on 2.
+**The reproduction is not hypothetical: it misled an agent on this branch, this
+week.** `scripts/citations.mjs:1424` "anchor starts on ${r.occurrences} lines of"
+interpolates the match count directly beside the word "lines". For part 8's
+18-character fragment `locateAnchor` returns `[224, 224, 235]` — three matches,
+**two** distinct lines — and that line printed **"anchor starts on 3 lines"** for a
+fragment that starts on two. This ticket's own part 8 table recorded the 3, the
+gate read the file and got 2, and a round was spent reconciling a disagreement
+that existed only because the tool labelled a match count as a line count. Neither
+side had measured wrong. **That is the case for the behaviour change**, and it is
+a better one than "the wording is imprecise": a false sentence with a specific
+wrong number in it, printed to exactly the person trying to repair the citation.
 
-**Why it is not cosmetic, and why it lands on this ticket rather than a
-footnote.** `occurrences` is the number `--require-distinct-anchors` fails on, so
-it is the same counter part 8's self-citation rule is written against, and a
-self-citation is precisely the shape that makes a line match twice — the citing
-row carries both the prose and the anchor. The two defects meet on one line of
-code.
+A second, cleaner instance was produced on purpose while settling this: a scratch
+record whose anchor occurs on **one** line, for which the same message printed
+"anchor starts on 2 lines".
 
-**The decision, which is not settled here.** The two answers are not
-interchangeable, because one changes behaviour and the other does not:
+**What was chosen: (a), deduplicate by line**, so the counter means what those
+six places already claim. And **it lands on repo-35 rather than its own ticket**.
 
-- **(a) Correct the count** — deduplicate by line, so `occurrences` means what
-  three places already claim it means. The cost would be that it changes gate
-  verdicts: a record whose only duplication is two matches on one line is failing
-  today and would pass. **Measured, so this is no longer the unknown it was when
-  this part was filed — see below. Against the corpus as it stands, (a) changes
-  nothing.**
-- **(b) Correct the wording** in all three places to say matches rather than
-  lines. **Cost: none to behaviour, and it keeps a rule that fails a citation for
-  repeating a fragment on one line** — which is arguably right, since the
-  ambiguity `--require-distinct-anchors` exists to prevent is about a fragment
-  that is not unique, and twice on one line is not unique either.
+**The scope cost, accepted rather than argued.** This ticket now carries a
+repo-wide behaviour change to a counter every citation in the corpus is checked
+against, under a title about pinning one citation to a commit. That is exactly the
+scope-widening shape `CLAUDE.md`'s decision rule exists to catch. It was surfaced
+as a named cost when the question was put, and the owner took it knowingly.
+
+#### Where the dedupe goes, and why that decides how much wording changes
+
+`locateAnchor` has **exactly one consumer** — `scripts/citations.mjs:826` — so
+deduplicating inside it is safe, and it is the better of the two places:
+
+- **Dedupe inside `locateAnchor`** makes all six texts below true at once, and
+  also improves the `moved` message, which prints `hits.slice(0, 3)` as "it is at
+  _M_" and today can repeat a line number there.
+- **Dedupe only at the `occurrences` assignment** leaves `locateAnchor` returning
+  one entry per match, so `scripts/citations.mjs:595` stays wrong and must be
+  edited by hand.
+
+#### Six sites, each checked individually rather than waved through
+
+**There are six, not the five this ticket was handed and not the three it first
+recorded.** Each was read and judged against the post-change behaviour, because
+"the behaviour now matches what the text always claimed" is a claim to check, not
+a reason to skip checking:
+
+| Site                         | Text                                                                  | Printed? | After dedupe                     |
+| ---------------------------- | --------------------------------------------------------------------- | -------- | -------------------------------- |
+| `scripts/citations.mjs:118`  | "starts on more than one line of the file it points at"               | no       | **true** — no edit               |
+| `scripts/citations.mjs:595`  | "Every line an anchor's text starts on, in a file."                   | no       | **depends on where dedupe goes** |
+| `scripts/citations.mjs:828`  | "is how many lines the fragment starts on in the whole file"          | no       | **true** — no edit               |
+| `scripts/citations.mjs:975`  | "A `verified` anchor that starts on more than one line of its target" | no       | **true** — no edit               |
+| `scripts/citations.mjs:1424` | "anchor starts on ${r.occurrences} lines of"                          | **yes**  | **true** — see below             |
+| `scripts/citations.mjs:1498` | "anchor(s) verify on a fragment that starts on more than one line"    | **yes**  | **true** — no edit               |
+
+**`scripts/citations.mjs:595` is the sixth, and it was in neither relayed list.**
+It is `locateAnchor`'s own contract, not a statement about `occurrences`, so
+whether it becomes true depends on where the dedupe is applied — it is the one
+site the behaviour change does **not** automatically repair. That is the whole
+reason the individual check was worth doing.
+
+**`scripts/citations.mjs:1424` prints the right word beside the right number after
+the change, and that is checkable rather than hopeful.** The number it
+interpolates is `r.occurrences`, and the predicate that fails a citation reads the
+same field in both places that judge it —
+`scripts/citations.mjs:980` "const indistinct = results.filter(" and
+`scripts/citations-gate.mjs:558` "&& (r.occurrences ?? 1) > 1)".
+So once `occurrences` is a distinct-line count, the printed number **is** the
+quantity `--require-distinct-anchors` failed on, by construction rather than by
+coincidence. A site that prints the right word next to the wrong number has not
+been repaired, and this one is only repaired because both readers share the
+field.
+
+#### The interaction with part 8, measured rather than reasoned
+
+Both defects meet on this counter, and the interaction is **not** simply "dedupe
+does not rescue self-citations". Two shapes, and they behave differently:
+
+- **A self-citation pointing at a _different_ line of its own file** — part 8's
+  `repo-43` case. `[224, 224, 235]` becomes 2 distinct lines, still above one, so
+  it **still fails**. Part 8's detection is still needed, for the message rather
+  than the verdict.
+- **A self-citation pointing at its _own_ line** — measured with a scratch record
+  written for the purpose, a citation on line 11 reading `<this file>:11` with its
+  anchor also present in that line's prose. The checker reports
+  `anchor starts on 2 lines`, and the anchor is on **one** line. Raw 2, distinct 1.
+  **After dedupe it would be 1, and the citation would pass.** Today it fails.
+
+So dedupe **opens a hole** in the second shape, and part 8's self-citation
+detection is the only thing that closes it. That reverses the usual reading:
+part 8 is not merely still needed alongside part 9 — it is load-bearing
+_because of_ part 9, and the two must land together or in that order.
+
+**The two defects have not yet collided in the live corpus.** Three of the six
+indistinct citations are self-citations, all on `repo-31`, and none is a same-line
+case — their raw and distinct counts are equal. So nothing in the corpus today
+takes the second shape. That is a fact about this snapshot, not a property, which
+is the whole reason the retake below is required.
 
 #### The measurement (a) turned on, taken before choosing rather than after
 
@@ -730,8 +800,7 @@ Every record in `citations-gate.mjs`'s real scope — 128 files, `docs/work/*.md
 and `tools/*/docs/work/*.md` — run through the checker's **own** exported
 `extractCitations` and `checkCitations`, not a grep, collecting every citation
 that is `verified` with `occurrences` above 1. That reproduces the gate's `6
-indistinct` exactly. For each of the six, the raw match list was recomputed and
-compared against its distinct-line count.
+indistinct` exactly.
 
 | Record  | Anchor                          | Raw hits              | Distinct lines |
 | ------- | ------------------------------- | --------------------- | -------------- |
@@ -742,34 +811,38 @@ compared against its distinct-line count.
 | dl-44   | `served.rawPayload.equals(PNG)` | 2 — `[259, 337]`      | 2              |
 | dl-44   | `ON DELETE CASCADE`             | 2 — `[44, 86]`        | 2              |
 
-**Zero of the six owe their verdict to same-line duplication.** All six are
-genuinely ambiguous across two or more distinct lines, so **(a) would flip no
-gate verdict against today's corpus** — it reads as a correctness fix, not an
-amnesty. What it does not do is rule out a future citation hitting the shape,
-which is why the measurement is worth retaking at implementation time rather than
-trusted from here.
+`dl-44`'s two rows are **two separate citations**, at `:256` and `:336`, not one
+row standing for two. A re-run must match this table row for row.
 
-Two things make that number checkable rather than asserted. The raw-vs-distinct
-split needs `locateAnchor`, which is not exported, so it was replicated — and the
-replica was validated **per case**, by asserting its raw count equals the tool's
-own `occurrences` for that same citation: 6 of 6 agreed, and a disagreement
-anywhere would have invalidated its distinct counts. And the scan's coverage
-matches the gate's exactly: 56 of the 128 were skipped for having no single
-`Review` section, and 128 − 56 = 72 = the gate's own `27 enforced + 45
-grandfathered`.
+**Zero of the six owe their verdict to same-line duplication**, so **(a) flips no
+gate verdict against this corpus**. That is what let the question be asked with a
+number attached instead of a guess.
 
-**Three of the six are self-citations** (all on `repo-31`), which is part 8's
-shape — but none of them hits the same-line double match, so part 8's detection
-would not have quietly repaired them either. The two defects overlap in the code,
-not in the corpus.
+#### What the number rests on, and what it does not establish
 
-**And a third question belongs to whoever answers (a) versus (b)**: whether this
-should be part of repo-35 at all, or its own ticket. It was found here and it
-touches the same counter, which argues for folding it in; it is independent of
-pinning, which argues for splitting it. **Folding it in is not obviously right and
-this page does not assume it.** The gate's recommendation, recorded as its view
-and not adopted here: fold it in if (b) is chosen, split it out if (a) is, on the
-ground that a behaviour change deserves its own reproduction and its own gate.
+Three things, and the third is a limit rather than a guard:
+
+- **Coverage is structural, not coincidental.** 56 of the 128 were skipped for
+  having no single `Review` section, and 128 − 56 = 72 = the gate's own
+  `27 enforced + 45 grandfathered`. A record with no `## Review` heading gives the
+  gate's section selection nothing to work with, so it is the same population by
+  construction. Confirmed independently by a plain `grep` for the heading: 72 have
+  one, 56 do not.
+- **Position-level cross-validation, not just counts.** The raw-versus-distinct
+  split needs `locateAnchor`, which is not exported, so it was replicated. A single
+  replica can only be validated against the tool's `occurrences` — a **number** —
+  because a verified result's `foundAt` carries the in-range hits, not the full
+  list, so count agreement is the strongest check the public surface supports. Two
+  independently-written replicas, different code shape and no shared code, produce
+  the **same hit-line arrays position for position** for all six: `[6, 417]`,
+  `[417, 436, 458]`, `[375, 419]`, `[259, 337]` twice, `[44, 86]`.
+- **What that still cannot rule out, stated here rather than hedged elsewhere.**
+  Both replicas are faithful copies of the _same_ documented algorithm. If
+  `locateAnchor`'s own line attribution has a rare edge case — a match landing on
+  a line-join boundary attributed to the wrong side — both would inherit it
+  identically and their agreement would not surface it. **Neither of us has a
+  concrete instance of this.** It is not a finding; it is the limit of what "two
+  replicas agree" proves.
 
 ### Not in scope
 
@@ -861,21 +934,140 @@ for the work the answers imply.
    unhelpful is in Build part 8: five fragment lengths, 18 through 160, never
    reaching one occurrence.
 
-7. **Added 2026-09-12, for Build part 9. Still open, but now answerable.**
-   Whether `occurrences` is deduplicated by line or the three texts that call it a
-   line count are corrected to say matches — and whether that work belongs to this
-   ticket or its own — is answered as a dated Log entry naming the option.
+7. **Added 2026-09-12 for Build part 9, and made concrete the same day when it
+   was answered: (a), deduplicate `occurrences` by line, landing on this ticket.**
+   Four things.
 
-   **The measurement this line demanded has been taken, before the change rather
-   than after**: 0 of the corpus's 6 indistinct citations owe their verdict to
-   same-line duplication, so (a) flips no verdict today. Build part 9 carries the
-   per-citation table and how the method was validated. **Retake it at
-   implementation time rather than trusting it from here** — it is a live number
-   and a new citation can enter the shape at any commit; the point of the line was
-   never the specific answer but that an amnesty must not be mistaken for a
-   correctness fix.
+   1. **The behaviour.** `occurrences` counts distinct lines. Put the dedupe
+      inside `locateAnchor` — it has exactly one consumer — or edit
+      `scripts/citations.mjs:595` "Every line an anchor's text starts on, in a file."
+      by hand, because that is the one of the six wording sites the change does
+      not repair on its own.
+   2. **All six sites read correctly afterwards, each checked individually**, not
+      assumed fixed because the count changed under them. Build part 9 lists them
+      with a verdict each. For the printed one that interpolates the number,
+      `scripts/citations.mjs:1424` "anchor starts on ${r.occurrences} lines of",
+      the check is that the number printed is the one the flag failed on — both
+      read the same field, so this holds by construction once the field is right.
+   3. **The number is retaken at the commit that changes the counter**, not
+      trusted from this page's snapshot. More important now, not less: the
+      decision rests on a reading of one day's corpus, and a new citation can
+      enter the shape at any commit. **The implementation proves 0 verdicts flip
+      at its own tip.**
+   4. **A corpus-wide before/after.** The checker is run over the whole
+      enforced-plus-grandfathered population before and after the change and the
+      verdicts are identical, record for record. Coverage is shown by the
+      population identity: 128 files in scope, 56 with no single `Review` section,
+      and 128 − 56 = 72 = `27 enforced + 45 grandfathered`. **That identity is
+      structural, not coincidental** — a record with no `## Review` heading gives
+      the gate's section selection nothing to work with, so it is the same
+      population by construction.
+
+   And because part 9 opens a hole that only part 8 closes — a self-citation
+   pointing at its own line goes from failing to passing under dedupe, measured in
+   part 9 — **#6 and #7 land together, or #6 first.** Neither alone is safe.
 
 ## Log
+
+- **2026-09-12** — **Build part 9 is answered: (a), deduplicate `occurrences` by
+  line — and it lands on this ticket rather than its own.** Sixth entry of the
+  same date. **This closes the last open decision on the page.**
+
+  **Decided by the repo owner. It overrode two recommendations, and the
+  combination chosen was recommended by nobody.** The orchestrator recommended
+  (a) **as its own ticket**, on the reasoning that a repo-wide behaviour change to
+  a counter every citation is checked against is orthogonal to pinning. The gate
+  recommended conditionally: fold if (b), split if (a). The owner chose (a) **and**
+  fold.
+
+  **The scope cost, recorded as accepted rather than argued.** This ticket now
+  carries a repo-wide behaviour change under a title about pinning one citation to
+  a commit. That is precisely the scope-widening shape `CLAUDE.md`'s decision rule
+  exists to catch. It was surfaced as a named cost when the question was put, and
+  the owner took it knowingly. Not softened here, and not re-argued.
+
+  **The measurement is what let the question be asked with a number attached.** The
+  blocking fact — 0 of the 6 indistinct citations inflated by a same-line match, so
+  (a) flips no verdict today — was measured **before** the decision: by the gate
+  first, then independently here through a different route, importing the
+  checker's own `extractCitations` and `checkCitations` rather than parsing CLI
+  output per file. What two agreeing replicas do _not_ establish was named at the
+  same time rather than left implied.
+
+  **Three corrections this round, and two of them are to things handed to this
+  branch.**
+
+  **1. There are six wording sites, not three and not five.** The page first
+  recorded three; the dispatch corrected that to five and named two this branch had
+  not found, `scripts/citations.mjs:975` and the printed
+  `scripts/citations.mjs:1424`. Verified each against the source — and found a
+  **sixth that neither relayed list contained**:
+  `scripts/citations.mjs:595` "Every line an anchor's text starts on, in a file.",
+  which is `locateAnchor`'s own contract rather than a statement about
+  `occurrences`. It matters out of proportion to its size: it is **the one site the
+  behaviour change does not automatically repair**, because whether it becomes true
+  depends on where the dedupe is applied. Had the check been skipped on the
+  strength of "the behaviour now matches what the text claimed", it would have been
+  left quietly false. That is the answer to the instruction to check each site
+  rather than assume.
+
+  **2. `scripts/citations.mjs:1424` is the reproduction, and it did harm on this
+  branch.** It interpolates `r.occurrences` beside the word "lines", so for hits
+  `[224, 224, 235]` it printed "anchor starts on 3 lines" for a fragment starting
+  on two. That is the entire origin of the disagreement the previous entry records:
+  this page transcribed the tool and got 3, the gate read the file and got 2, and
+  neither had measured wrong. A false sentence with a specific wrong number in it,
+  printed to the person trying to repair the citation. **A better case for the
+  behaviour change than "the wording is imprecise"**, and the one a future reader
+  needs in order to see why the owner accepted the scope.
+
+  **3. The part 8 interaction is the opposite of what was relayed, and this is the
+  finding of the round.** The dispatch's reasoning was that dedupe turns
+  `[224, 224, 235]` into 2 distinct lines, so a self-citation still fails and part
+  8's detection is still needed. That is right for that shape and **wrong in
+  general**, which measuring rather than reasoning is what turned up. A scratch
+  record was built for the purpose: a citation on line 11 reading `<this file>:11`,
+  its anchor also present in that line's own prose. The anchor occurs on **one**
+  line; the checker prints "anchor starts on 2 lines"; raw 2, distinct 1.
+  **After dedupe that is 1, and the citation passes — where today it fails.**
+
+  So part 9 **opens a hole** that only part 8's self-citation detection closes.
+  Part 8 is not merely still needed alongside part 9; it is load-bearing _because_
+  of it, and `Done when` #6 and #7 must land together or #6 first. Nothing in the
+  live corpus takes that shape today — all three self-citations among the six are
+  on `repo-31` and none is a same-line case — so the two defects overlap in the
+  code and not yet in the corpus. A fact about this snapshot, not a property.
+
+  **Recorded on the page at the gate's request, with the arrays rather than a
+  summary of them.** Its independently-written `locateAnchor` replica — different
+  code shape, no shared code — reproduces this branch's hit-line arrays **position
+  for position**, not merely in length: `[6, 417]`, `[417, 436, 458]`,
+  `[375, 419]`, `[259, 337]` for both `dl-44` citations, and `[44, 86]`. That is
+  strictly stronger than the per-case guard available to a single replica, since a
+  verified result's `foundAt` carries only the in-range hits and the public surface
+  exposes the count alone. **And the limit of it, in the same breath:** both
+  replicas are faithful copies of the _same_ documented algorithm, so a rare
+  line-attribution edge case in that algorithm — a match landing on a line-join
+  boundary attributed to the wrong side — would be inherited identically by both
+  and their agreement would not surface it. Neither of us has a concrete instance.
+  Not a finding; the limit of what "two replicas agree" proves, written beside the
+  measurement rather than hedged elsewhere.
+
+  **`Done when` #7 is now four parts**: the behaviour and where the dedupe goes;
+  all six sites checked individually; the number **retaken at the commit that
+  changes the counter** rather than trusted from here; and a corpus-wide
+  before/after whose coverage is shown by the `128 − 56 = 72 = 27 + 45` identity,
+  which is structural because a record with no `## Review` heading gives the gate's
+  section selection nothing to work with.
+
+  **Unchanged, per the dispatch**: A, B, C, part 8 and `Done when` #3.
+
+  **Verification.** All unpiped, `$?` read directly. `npm run check` → 0.
+  `node scripts/citations.mjs` on this file → 0.
+  `node scripts/citations-gate.mjs --against origin/main` → 0.
+  `npm test -- --project repo` → 0. The scratch probe record was written under
+  `docs/work/`, measured and deleted in one script; `git status --porcelain` empty
+  afterwards, and the gate was never run while it existed.
 
 - **2026-09-12** — **Build part 9's blocking measurement is taken: 0 of the
   corpus's 6 indistinct citations owe their verdict to same-line duplication, so
