@@ -2110,26 +2110,26 @@ written, `origin/main` had already moved two commits past it
 | `subagent tokens` | **2,028,628** across the 9 agents that reported, none missing, summed here and matching the account exactly: seam-mapper 79,318 · `repo-33` builder 279,746 · `repo-40` builder 304,858 · `repo-43` builder 115,620 · `repo-35` builder 381,971 · `repo-43` gate 123,963 · `repo-40` gate 193,590 · `repo-33` gate 214,364 · `repo-35` gate 335,198. Split: builders 1,082,195 (**53.3%**) · gates 867,115 (**42.7%**) · intake 79,318 (**3.9%**). **Not the bill** — cache reads are the bulk and are not counted here, and several agents' final turns ended in a `SendMessage` that delivered no usage block, so the total is a floor rather than a final figure, per the account |
 | `cost` | **≈ $36.92** at the 2026-09-02 rate of $0.0182/1k, an arithmetic conversion of the total above and not independently billed — a floor for the same reason the row above is one |
 
-**"Every pair differs" does not hold, and the reason is structural rather than
-incidental.** `repo-33` (`hard`) and `repo-35` (unrated) were both built on Opus
-and gated on Sonnet — the identical tuple, confirmed on each PR's own body:
-`#211`'s "Built by **Claude Opus 5**. Gated by **Claude Sonnet**" and `#216`'s
-"Built by Claude Opus 5. Gated by Claude Sonnet." `.claude/agents/builder.md:25 "a contract, a security claim, a seam with reach"` pins `hard`'s builder to Opus
-but states no gate override the way `:23` "Its gate is" does for `standard`; an
-unrated ticket inherits the orchestrator's own model, which this session was
-also Opus. So both categories default to `ticket-reviewer.md`'s pinned Sonnet
-gate with an Opus builder, and the two rows collide whenever the orchestrator
-itself runs Opus — not a coincidence of this batch, but a gap in the table: it
-states an explicit gate for `standard` because that is the row a Sonnet-inherits
-orchestrator gets wrong, and states none for `hard` or `absent` because neither
-was ever the row in question. Nothing was mis-dispatched — Sonnet gating Opus
-on both is the correct direction — but the claim that every pair in this batch
-differs is false as stated, and is corrected here rather than transcribed.
+**Two things are true about this batch's model pairings, and both are kept
+rather than one standing as a correction of the other.** First, **within every
+one of the four tickets, the model that gated is not the model that built** —
+`repo-43` Haiku→Sonnet, `repo-40` Sonnet→Opus, `repo-33` Opus→Sonnet, `repo-35`
+Opus→Sonnet, 4 of 4, confirmed on each PR's own body (`#210`, `#213`/`#214`,
+`#211`, `#216`). That is the property the skill's model-pairing rule exists to
+guarantee: the checked thing does not pick its checker, and it held on every
+branch. Second, **two of the four pairings are identical to each other** —
+`repo-33` (`hard`) and `repo-35` (unrated) both landed Opus→Sonnet, also
+confirmed on their own bodies: `#211`'s "Built by **Claude Opus 5**. Gated by
+**Claude Sonnet**" and `#216`'s "Built by Claude Opus 5. Gated by Claude
+Sonnet." Nothing was mis-dispatched — Sonnet gating Opus on both is the
+correct direction for each ticket taken alone — but the two rows collapse onto
+one pairing, and why they do is its own finding, at item 7 below.
 
 ### What the skill got wrong
 
-Six items, all the orchestrator's own by its own account, transcribed here
-against what each branch's own commits and Log entries show.
+Seven items. The first six are the orchestrator's own by its own account,
+transcribed here against what each branch's own commits and Log entries show;
+the seventh was found in transcription rather than supplied.
 
 1. **The gate record was the thing that broke, in three of four tickets — never
    the code — and the mechanism is that a `## Review` section is not enforced
@@ -2140,10 +2140,21 @@ against what each branch's own commits and Log entries show.
    once, confirmed at `7b2596b`: two sha-prefixed coordinates into `8d79d8e`
    "cannot carry a working anchor: the planner's copy is already deleted on this
    branch (would resolve as 'moved'), and the downloader's goes stale the moment
-   its own branch merges," rewritten as prose instead. `repo-33`'s reviewer
-   citing a coordinate that resolves against the working tree rather than the
-   ref it named is the account's own framing and was not independently located
-   in that ticket's committed text; recorded as supplied rather than confirmed.
+   its own branch merges," rewritten as prose instead. `repo-33`'s reviewer hit
+   the same shape and caught it before it ever reached a commit, which is why
+   it is not in the committed text and is recorded here as supplied by the
+   orchestrator rather than found in the tree: it wrote a bare `docs/02-DEPLOYMENT.md:516`
+   into its Review draft, intending it against `origin/main`, but `citations.mjs`
+   resolves a bare `file:line` against the **working tree**, not the ref named
+   in prose — and at the tip, the migration section had grown and pushed that
+   content down, so line 516 was blank. The builder measured both forms: as
+   written, `exit 4` and unanchored; rewritten as prose naming the section
+   instead of the line, `exit 0`. The corrected form is what landed. This is an
+   instance of the round-trip working, not a gap in what either agent checked —
+   neither "confirmed" nor "unconfirmed" fits it. (A different, also-real
+   finding surfaced in the same ticket — demonstrating a compose-file breakage
+   from inside a nested worktree versus outside one — and belongs with the
+   `repo-43` path-shadowing thread rather than here.)
    Every exit-0 either agent takes before a record is committed is honest and
    says nothing about what committing it will do.
 2. **A measurement relayed inside a question's premise reversed the question's
@@ -2187,11 +2198,21 @@ against what each branch's own commits and Log entries show.
    `done` — confirmed on the tip. Item 4's carve-out is the resolution: the
    record that would have tripped `reviewedButReady` was moved out from under
    `## Review` rather than shipped red or left silently mislabelled.
-
-**A seventh, found in transcription rather than supplied: `builder.md`'s model
-table has an asymmetry that made the "every pair differs" claim false, not an
-accident of this batch.** Recorded above rather than as a numbered item here,
-because it surfaced while checking the account rather than being named by it.
+7. **`builder.md`'s model-pairing table gives `standard` an explicit gate
+   override and gives `hard` and `absent` none, so two different difficulty
+   classes collapse onto one pairing under an Opus orchestrator — found while
+   checking the account's "every pair differs," not named by it.**
+   `.claude/agents/builder.md:23 "Its gate is"` states `standard`'s Sonnet
+   builder is gated by Opus specifically because the default would gate a
+   Sonnet build with Sonnet; `:25 "a contract, a security claim, a seam with reach"`
+   pins `hard`'s builder to Opus but states no gate override, and an unrated
+   ticket inherits the orchestrator's own model with the same silence. Both
+   then fall through to `ticket-reviewer.md`'s pinned Sonnet default. This
+   batch is the collision: `repo-33` (`hard`) and `repo-35` (unrated) were
+   both built on Opus because the orchestrator itself was Opus, and both were
+   gated Sonnet by the same unstated default rather than by a rule that
+   named the pairing. The table is written as four distinct rows and behaves
+   as three whenever the orchestrator runs Opus.
 
 ### What went right, and is worth copying
 
