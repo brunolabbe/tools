@@ -140,9 +140,23 @@
  * stop shipping.
  *
  * **A declaration cannot excuse an indistinct anchor**, and that is deliberate:
- * `citations: evidence` waives a citation that *cannot* be made to pass, and this
- * one always can — by quoting a longer fragment. A waiver that stands in for a
- * one-line edit is the rubber stamp `applyDeclarations` refuses.
+ * `citations: evidence` waives a citation that *cannot* be made to pass, and an
+ * indistinct anchor into another file can — by quoting more of the line, or
+ * running the anchor on past it, until the fragment is unique. A waiver that
+ * stands in for that edit is the rubber stamp `applyDeclarations` refuses.
+ *
+ * **The one indistinct anchor no fragment repairs is a self-citation** (repo-35
+ * part 8): a citation whose target, once resolved, is the record it is written
+ * in. The fragment it quotes is written on the citing line too, so pointed at a
+ * different line it starts on at least two lines however long it is — measured
+ * at five lengths from 18 to 160 characters, never reaching one — and pointed at
+ * its own line it verifies only that the citation was written. This paragraph
+ * used to say "this one always can", and the advice printed at the moment of
+ * failure said "the fix is always available"; both were false for this shape,
+ * and the second was what an author read while trying to repair it. A
+ * self-citation still fails under the flag and still cannot be declared — what
+ * changed is that the run names it, and gives the repair that works: point the
+ * citation at the real subject, or write it as prose.
  *
  * **The exit code is a bitmask** (`EXIT`), because the failure classes are not
  * alike and one code cannot say which happened — a citation that cannot be
@@ -664,7 +678,12 @@ function locateAnchor(content, anchor) {
       if (start.at > at) break;
       lineNo = start.lineNo;
     }
-    hits.push(lineNo);
+    // One entry per *line*, not per match (repo-35 part 9). Matches arrive in
+    // haystack order, so a second match on the same line is always adjacent to
+    // the first. Counting both is how "anchor starts on 3 lines" got printed for
+    // a fragment starting on two — beside the word "lines", to the author trying
+    // to repair it — and every reader of this list already called it a line list.
+    if (hits.at(-1) !== lineNo) hits.push(lineNo);
   }
   return hits;
 }
@@ -716,8 +735,12 @@ export const EXIT = /** @type {const} */ ({
  *   rather than inferred from the default, which typed the parameter as one that
  *   can only succeed — so `makeResolver`, the one implementation that exists, was
  *   not assignable to it and a test passing it failed to compile.
+ * @param {{record?: string | null}} [options] `record` is the record being
+ *   checked, named as git names it — see `locateRecord` — so a citation that
+ *   resolves to it can be told apart as a self-citation. Omitted, nothing is.
  */
-export function checkCitations(citations, read, resolve = (f) => ({ path: f })) {
+export function checkCitations(citations, read, resolve = (f) => ({ path: f }), options = {}) {
+  const record = options.record ?? null;
   const cache = new Map();
   return citations.map((c) => {
     // A reference with no file is still a reference, and which of the two
@@ -737,11 +760,27 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
         resolved: null,
         foundAt: null,
         occurrences: null,
+        self: false,
       };
     }
 
     const resolved = resolve(c.file);
     const at = "error" in resolved ? null : resolved.path;
+    /**
+     * **A self-citation is decided after resolution, never by comparing path
+     * text** (repo-35 part 8): the record can be reached by its repo-relative
+     * path, by a shorthand inheriting it, or by a basename the resolver
+     * disambiguates, and all three are the same file.
+     *
+     * It is carried on every result rather than judged here, because whether it
+     * fails is the caller's policy — `isIndistinct` is where it bites. **It is
+     * true regardless of `occurrences`, and that is load-bearing rather than
+     * thorough**: counting lines instead of matches (part 9) collapses a
+     * self-citation of its own line, whose fragment also sits in that line's
+     * prose, from two to one. Keyed on the count alone, that shape would have
+     * started passing the moment the count was corrected.
+     */
+    const self = record !== null && at === record;
     const bad = (reason) => ({
       ...c,
       state: "unresolvable",
@@ -750,6 +789,7 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
       resolved: at,
       foundAt: null,
       occurrences: null,
+      self,
     });
 
     /**
@@ -791,6 +831,7 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
       resolved: at,
       foundAt: null,
       occurrences: null,
+      self,
     });
 
     if ("error" in resolved) return bad(resolved.error);
@@ -814,12 +855,15 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
       return {
         ...c,
         state: "unanchored",
-        reason: "no anchor — nothing checked it",
+        reason: self
+          ? `no anchor — nothing checked it; ${SELF_CITATION}`
+          : "no anchor — nothing checked it",
         text,
         foundAt: null,
         // Null rather than zero: nothing was searched for, which is a different
         // fact from a fragment that was searched for and found nowhere.
         occurrences: null,
+        self,
       };
     }
 
@@ -838,27 +882,59 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
       return {
         ...c,
         state: "verified",
-        reason: null,
+        // A verified citation has no reason, except this one: the verdict is
+        // true and says nothing, and the author needs to hear why before being
+        // told, as every other indistinct anchor is, to quote more.
+        reason: self ? SELF_CITATION : null,
         text,
         foundAt: inRange,
         occurrences: hits.length,
+        self,
       };
 
     const shown = normalizeAnchor(c.anchor).slice(0, 60);
     const elsewhere = `${hits.slice(0, 3).join(", ")}${hits.length > 3 ? ", …" : ""}`;
+    const where =
+      hits.length > 0
+        ? `anchor "${shown}" is not in ${range} — it is at ${elsewhere}`
+        : `anchor "${shown}" is not in ${range}, and not anywhere in ${resolved.path}`;
     return {
       ...c,
       state: "moved",
-      reason:
-        hits.length > 0
-          ? `anchor "${shown}" is not in ${range} — it is at ${elsewhere}`
-          : `anchor "${shown}" is not in ${range}, and not anywhere in ${resolved.path}`,
+      reason: self ? `${where}; ${SELF_CITATION}` : where,
       text,
       foundAt: hits,
       occurrences: hits.length,
+      self,
     };
   });
 }
+
+/**
+ * What a self-citation is told, wherever it turns up. One string, because the
+ * failure it replaces was advice that could not be followed printed in two
+ * places, and two copies of the repair are how that happens again.
+ */
+const SELF_CITATION =
+  "self-citation — it cites the record it is written in, so the fragment it quotes is on the " +
+  "citing line too and can never single out its target. Point it at the real subject, or write it as prose";
+
+/**
+ * Whether a verified citation's anchor fails `--require-distinct-anchors`.
+ *
+ * **Exported so there is exactly one of it.** `summarize` and
+ * `citations-gate.mjs` both judge this, and the number the CLI prints beside
+ * "lines" is only the number the flag failed on while both read one predicate —
+ * a second copy that still counted matches, or that forgot self-citations, would
+ * print one verdict and enforce another.
+ *
+ * A self-citation is indistinct whatever its count, for the reason the `self`
+ * docblock in `checkCitations` gives: counting lines can bring its count to one.
+ *
+ * @param {{state: string, occurrences?: number | null, self?: boolean}} r
+ */
+export const isIndistinct = (r) =>
+  r.state === "verified" && (r.self === true || (r.occurrences ?? 1) > 1);
 
 /** The states a declaration may excuse — the ones that would otherwise fail. */
 const FAILING = new Set(["unresolvable", "moved", "unchecked"]);
@@ -977,7 +1053,7 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
   // occupies is a fact about the fragment rather than about the record — so
   // this is counted, reported, and fatal only when the caller asks, exactly as
   // `unanchored` is.
-  const indistinct = results.filter((r) => r.state === "verified" && (r.occurrences ?? 1) > 1);
+  const indistinct = results.filter(isIndistinct);
 
   // Each class sets its own bit, so a run with two of them says two. The names
   // are carried alongside because the number alone is the thing this file spent
@@ -1351,7 +1427,9 @@ function main() {
   const declarations = extractDeclarations(markdown).filter((d) => inScope(d.line));
 
   const { results, stale } = applyDeclarations(
-    checkCitations(citations, makeReader(repo, rev), makeResolver(candidateFiles(repo, rev))),
+    checkCitations(citations, makeReader(repo, rev), makeResolver(candidateFiles(repo, rev)), {
+      record: relative,
+    }),
     declarations,
   );
   const summary = summarize(results, requireAnchors, stale, requireDistinct);
@@ -1419,7 +1497,9 @@ function main() {
     // Printed whatever the policy, like every other fact here: a reader judging
     // an unanchored citation by hand wants to know its neighbour verified on a
     // fragment that matches half the file.
-    if ((r.occurrences ?? 1) > 1) {
+    // Not for a self-citation, whose reason already says why no occurrence count
+    // is worth reading and what to do instead.
+    if ((r.occurrences ?? 1) > 1 && !r.self) {
       process.stdout.write(
         `             anchor starts on ${r.occurrences} lines of ${r.resolved} — verified means one of` +
           ` them is in range, not which one\n`,
@@ -1493,13 +1573,26 @@ function main() {
         `the bare name matches more than one file.`,
     );
   }
-  if (requireDistinct && summary.indistinct.length > 0) {
+  // Split, because the two have different repairs and the old single paragraph
+  // told a self-citation to do something that cannot be done (repo-35 part 8).
+  const selfCited = summary.indistinct.filter((r) => r.self);
+  const repeated = summary.indistinct.filter((r) => !r.self);
+  if (requireDistinct && repeated.length > 0) {
     advice.push(
-      `${summary.indistinct.length} anchor(s) verify on a fragment that starts on more than one line of the file\n` +
+      `${repeated.length} anchor(s) verify on a fragment that starts on more than one line of the file\n` +
         `they point at, and --require-distinct-anchors is in force. They are true today and cannot stay\n` +
         `true on their own: an unrelated edit can slide a different occurrence into the cited line and the\n` +
-        `citation keeps reporting ok. Quote more of the line until the fragment is unique. There is no\n` +
-        `evidence declaration for this — the fix is always available, so a waiver would be a rubber stamp.`,
+        `citation keeps reporting ok. Quote more of the line until the fragment is unique — an anchor may\n` +
+        `run on past the cited line if the line itself repeats. There is no evidence declaration for this:\n` +
+        `a waiver standing in for that edit would be a rubber stamp.`,
+    );
+  }
+  if (requireDistinct && selfCited.length > 0) {
+    advice.push(
+      `${selfCited.length} citation(s) point into this record itself, and --require-distinct-anchors is in force.\n` +
+        `A self-citation can never be distinct: the fragment it quotes is written on the citing line too,\n` +
+        `so quoting more of it lengthens both copies, and no declaration excuses it. Point the citation at the\n` +
+        `real subject, or write it as prose.`,
     );
   }
   if (stale.length > 0) {

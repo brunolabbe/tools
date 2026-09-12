@@ -1764,7 +1764,10 @@ test("an anchor that occurs once carries an occurrence count of one", () => {
  * rather than against this one — an anchored citation into a real repo file goes
  * stale the next time anybody edits it.
  */
-function withDistinctnessRepo(record: string): { dir: string; file: string; cleanup: () => void } {
+function withDistinctnessRepo(
+  record: string,
+  extra: Record<string, string> = {},
+): { dir: string; file: string; cleanup: () => void } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "citations-distinct-")));
   const git = (...args: string[]) => {
     const result = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
@@ -1778,6 +1781,10 @@ function withDistinctnessRepo(record: string): { dir: string; file: string; clea
     path.join(dir, "src", "a.ts"),
     ["const a = 1;", "// informational", "const b = 2;", "// informational", ""].join("\n"),
   );
+  for (const [name, body] of Object.entries(extra)) {
+    fs.mkdirSync(path.join(dir, path.dirname(name)), { recursive: true });
+    fs.writeFileSync(path.join(dir, name), body);
+  }
   const file = path.join(dir, "r.md");
   fs.writeFileSync(file, record);
   git("add", "-A");
@@ -1845,6 +1852,201 @@ test("a distinct anchor passes under --require-distinct-anchors", () => {
       encoding: "utf8",
     });
     expect(result.status).toBe(0);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * **repo-35 Done when 7.1.** `occurrences` counts the lines an anchor starts on,
+ * not its matches. The defect was printed, not only computed: for a fragment on
+ * two lines, one of which carried it twice, the CLI said "anchor starts on 3
+ * lines" — to the author trying to repair the citation — and a gate spent a
+ * round reconciling a disagreement the tool manufactured.
+ *
+ * All three readers are asserted, because the dedupe lives inside `locateAnchor`
+ * and each of them reads its list: the count, the in-range lines, and the
+ * `moved` reason, which used to repeat a line number.
+ */
+test("occurrences counts the lines an anchor starts on, not its matches", () => {
+  // Twice on line 1, once on line 3: three matches, two lines.
+  const file = ["the guard, and the guard again", "const b = 2;", "the guard"];
+
+  const verified = checkCitations([cite({ start: 1, end: 1, anchor: "the guard" })], () => file)[0];
+  expect(verified?.state).toBe("verified");
+  expect(verified?.occurrences).toBe(2);
+  expect(verified?.foundAt).toEqual([1]);
+
+  const moved = checkCitations([cite({ start: 2, end: 2, anchor: "the guard" })], () => file)[0];
+  expect(moved?.state).toBe("moved");
+  expect(moved?.reason).toBe('anchor "the guard" is not in 2 — it is at 1, 3');
+  expect(moved?.occurrences).toBe(2);
+});
+
+/**
+ * **repo-35 Done when 7.2**, the one wording site that interpolates the number:
+ * the word beside it is "lines", so the number has to be a line count. It is the
+ * same field `--require-distinct-anchors` fails on, which is what makes the
+ * printed number the one the flag judged.
+ */
+test("the CLI prints the number of lines an anchor starts on, beside the word lines", () => {
+  const { dir, file, cleanup } = withDistinctnessRepo('Proof: `src/g.ts:1 "the guard"`.\n', {
+    "src/g.ts": "the guard, and the guard again\nconst b = 2;\nthe guard\n",
+  });
+  try {
+    const result = spawnSync("node", [CLI, file, "--require-distinct-anchors"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(result.stdout).toMatch(/anchor starts on 2 lines of src\/g\.ts/);
+    expect(result.status).toBe(EXIT.indistinct);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * **repo-35 Done when 6.3, the first test — the one that must be able to fail.**
+ * A citation into the record it is written in quotes a fragment that is also on
+ * the citing line, so it starts on two lines however much of it is quoted. The
+ * advice this used to print — quote more, "the fix is always available" — could
+ * not be followed. What is asserted is that the self-citation remedy appears
+ * *instead of* that advice, not that the run is non-zero: it already was.
+ *
+ * Run against the source before part 8, this fails on the stderr assertions —
+ * the old run exits 16 here too, which is why the exit code alone proves nothing.
+ */
+const SELF_RECORD = [
+  "# r",
+  "",
+  "Decision answered on this line, and nowhere else.",
+  "",
+  'Proof: `r.md:3 "Decision answered on this line, and nowhere else."`.',
+  "",
+].join("\n");
+
+test("a citation into its own record is named a self-citation instead of being told to quote more", () => {
+  const { dir, file, cleanup } = withDistinctnessRepo(SELF_RECORD);
+  try {
+    const strict = spawnSync("node", [CLI, file, "--require-distinct-anchors"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    // Still fails, on the bit it always failed on. Nothing here makes it pass.
+    expect(strict.status).toBe(EXIT.indistinct);
+    expect(strict.stdout).toMatch(/^ {2}ok {9}r\.md:3 /m);
+    expect(strict.stdout).toMatch(/self-citation — it cites the record it is written in/);
+    expect(strict.stderr).toMatch(/point into this record itself/);
+    // `\s+`: the advice is wrapped for a terminal, and where it breaks is not the claim.
+    expect(strict.stderr).toMatch(/Point the citation at the\s+real subject, or write it as prose/);
+    // The advice that cannot be followed is gone, not printed beside the new.
+    expect(strict.stderr).not.toMatch(/Quote more of the line/);
+    expect(strict.stderr).not.toMatch(/always available/);
+
+    // Still policy, not taxonomy: the same lines without the flag, and exit 0.
+    const lax = spawnSync("node", [CLI, file], { cwd: dir, encoding: "utf8" });
+    expect(lax.status).toBe(0);
+    expect(marks(lax.stdout)).toEqual(marks(strict.stdout));
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * **repo-35 Done when 6.3, the second test — the half that proves the rule is
+ * narrow.** A record citing a *different* ticket file is ordinary: it is not a
+ * self-citation, it resolves, and its occurrences are counted exactly as before
+ * — distinct passes, repeated fails with the ordinary advice. The anchor is the
+ * one measured live from `history.md` into `repo-21`, reproduced in a fixture
+ * because a live coordinate would go stale here.
+ */
+test("a citation into a different ticket file is not a self-citation, and counts as before", () => {
+  const other = [
+    "# repo-21",
+    "not evidence of a delivered one",
+    "",
+    "a repeated line",
+    "a repeated line",
+    "",
+  ].join("\n");
+
+  const distinct = withDistinctnessRepo(
+    'Distinct: `other.md:2 "not evidence of a delivered one"`.\n',
+    { "other.md": other },
+  );
+  try {
+    const result = spawnSync("node", [CLI, distinct.file, "--require-distinct-anchors"], {
+      cwd: distinct.dir,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^ {2}ok {9}other\.md:2 /m);
+    expect(result.stdout).not.toMatch(/self-citation/);
+  } finally {
+    distinct.cleanup();
+  }
+
+  const repeated = withDistinctnessRepo('Repeated: `other.md:4 "a repeated line"`.\n', {
+    "other.md": other,
+  });
+  try {
+    const result = spawnSync("node", [CLI, repeated.file, "--require-distinct-anchors"], {
+      cwd: repeated.dir,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(EXIT.indistinct);
+    expect(result.stdout).toMatch(/anchor starts on 2 lines of other\.md/);
+    expect(result.stderr).toMatch(/Quote more of the line/);
+    expect(result.stderr).not.toMatch(/self-citation|point into this record itself/);
+  } finally {
+    repeated.cleanup();
+  }
+
+  // And at the unit, with the record named: resolution, not path text, decides.
+  const [unit] = checkCitations(
+    extractCitations('`other.md:2 "not evidence of a delivered one"`'),
+    () => other.split("\n"),
+    makeResolver(["docs/work/other.md", "docs/work/r.md"]),
+    { record: "docs/work/r.md" },
+  );
+  expect(unit?.state).toBe("verified");
+  expect(unit?.self).toBe(false);
+  expect(unit?.occurrences).toBe(1);
+});
+
+/**
+ * **repo-35 Done when 6 and 7 together — why part 8 lands with part 9 and never
+ * after it.** A self-citation of its own line, whose fragment also sits in that
+ * line's prose, used to match twice on one line and fail as indistinct. Counting
+ * lines makes that one, which alone would let it pass. The self-citation rule is
+ * what keeps it failing, and it is keyed on resolution rather than on the count
+ * for exactly this reason.
+ */
+test("a self-citation of its own line still fails, although it now starts on one line", () => {
+  const record = [
+    "# r",
+    "",
+    'self check `r.md:3 "self check"` — the prose and the anchor agree.',
+    "",
+  ].join("\n");
+  const [unit] = checkCitations(
+    extractCitations(record),
+    () => record.split("\n"),
+    makeResolver(["r.md"]),
+    { record: "r.md" },
+  );
+  expect(unit?.state).toBe("verified");
+  expect(unit?.occurrences).toBe(1);
+  expect(unit?.self).toBe(true);
+
+  const { dir, file, cleanup } = withDistinctnessRepo(record);
+  try {
+    const strict = spawnSync("node", [CLI, file, "--require-distinct-anchors"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(strict.status).toBe(EXIT.indistinct);
+    expect(strict.stderr).toMatch(/point into this record itself/);
   } finally {
     cleanup();
   }

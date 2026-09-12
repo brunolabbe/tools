@@ -669,3 +669,51 @@ test("a run with no history says that no history was compared", () => {
     cleanup();
   }
 });
+
+/**
+ * repo-35 part 8, at the gate. A gate record citing its own line — the shape
+ * whose fragment starts on one line once `occurrences` counts lines — still fails
+ * here, by name, because the predicate is imported from `citations.mjs` rather
+ * than restated as a count. The CLI run is asserted too, because the per-failure
+ * line is what a CI log shows and it used to print `null` for an indistinct one.
+ */
+test("a self-citation fails the gate by name, even when its fragment is on one line", () => {
+  const record =
+    '## Review\n\nself check `docs/work/a.md:3 "self check"` — prose and anchor agree.\n';
+  const { dir, cleanup } = withRepo({ "docs/work/a.md": record });
+  try {
+    const [read, resolve] = checkers(dir);
+    const result = checkRecord(dir, "docs/work/a.md", "Review", read, resolve);
+    expect(result.counts).toMatchObject({ verified: 1, indistinct: 1 });
+    expect(result.passed).toBe(false);
+    expect(result.failures?.[0]?.reason).toMatch(/^self-citation — /);
+
+    const lax = checkRecord(dir, "docs/work/a.md", "Review", read, resolve, false);
+    expect(lax.passed).toBe(true);
+
+    const run = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
+    expect(run.status).toBe(1);
+    expect(run.stdout).toMatch(/self-citation — it cites the record it is written in/);
+    expect(run.stdout).not.toMatch(/\bnull\b/);
+    expect(run.stderr).toMatch(/point into the record they are written in/);
+  } finally {
+    cleanup();
+  }
+});
+
+test("an indistinct citation into another file prints the lines it starts on, not null", () => {
+  const record = '## Review\n\nProof: `src/tls.ts:2 "depth"`.\n';
+  const { dir, cleanup } = withRepo({ "docs/work/a.md": record });
+  try {
+    fs.writeFileSync(
+      path.join(dir, "src", "tls.ts"),
+      ["// depth", "  // Defence in depth: the store is pinned.", "return true;", ""].join("\n"),
+    );
+    const run = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
+    expect(run.status).toBe(1);
+    expect(run.stdout).toMatch(/anchor starts on 2 lines of src\/tls\.ts/);
+    expect(run.stdout).not.toMatch(/\bnull\b/);
+  } finally {
+    cleanup();
+  }
+});

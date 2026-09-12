@@ -98,6 +98,7 @@ import {
   extractCitations,
   extractDeclarations,
   extractSections,
+  isIndistinct,
   makeReader,
   makeResolver,
   selectSection,
@@ -542,7 +543,7 @@ export function checkRecord(repo, record, section, read, resolve, requireDistinc
   const citations = extractCitations(markdown).filter((c) => inScope(c.line));
   const declarations = extractDeclarations(markdown).filter((d) => inScope(d.line));
   const { results, stale } = applyDeclarations(
-    checkCitations(citations, read, resolve),
+    checkCitations(citations, read, resolve, { record }),
     declarations,
   );
 
@@ -553,10 +554,11 @@ export function checkRecord(repo, record, section, read, resolve, requireDistinc
   // An indistinct anchor is `verified` and still a failure here, which is the
   // one place a state and a verdict come apart. `citations.mjs` keeps the state
   // because how many lines a fragment occupies is a fact about the fragment;
-  // this gate supplies the policy, exactly as it does for `unanchored`.
-  const indistinct = requireDistinct
-    ? results.filter((r) => r.state === "verified" && (r.occurrences ?? 1) > 1)
-    : [];
+  // this gate supplies the policy, exactly as it does for `unanchored`. The
+  // predicate is imported rather than restated, so the number `citations.mjs`
+  // prints beside "lines" is by construction the one this gate failed on — and
+  // a self-citation, which no fragment can make distinct, fails both the same way.
+  const indistinct = requireDistinct ? results.filter(isIndistinct) : [];
   if (indistinct.length > 0) counts.indistinct = indistinct.length;
   const failures = [...results.filter((r) => FAILING.has(r.state)), ...indistinct];
 
@@ -694,9 +696,15 @@ function main() {
     for (const f of result.failures) {
       const range = f.start === f.end ? `${f.start}` : `${f.start}-${f.end}`;
       const where = f.file === null ? `:${range}` : `${f.file}:${range}`;
+      // An indistinct citation is `verified`, so it carries no reason of its own
+      // and this printed the word `null` under it until repo-35 touched the line.
+      // The fallback is the fact the gate failed it on.
+      const reason =
+        f.reason ??
+        `anchor starts on ${f.occurrences} lines of ${f.resolved} — the fragment does not say which`;
       process.stdout.write(
         `         ${f.state.padEnd(12)} ${where}  (record line ${f.line})\n` +
-          `                      ${f.reason}\n`,
+          `                      ${reason}\n`,
       );
     }
     for (const s of result.stale) process.stdout.write(`         declaration  ${s.reason}\n`);
@@ -740,6 +748,16 @@ function main() {
   }
 
   const advice = [];
+  const selfCited = [...failed, ...regressed].flatMap((r) =>
+    (r.failures ?? []).filter((f) => f.self),
+  ).length;
+  if (selfCited > 0) {
+    advice.push(
+      `${selfCited} citation(s) point into the record they are written in. A self-citation can never\n` +
+        `be distinct — the fragment it quotes is written on the citing line too — so the advice below\n` +
+        `does not apply to it. Point it at the real subject, or write it as prose.`,
+    );
+  }
   if (failed.length > 0) {
     advice.push(
       `${failed.length} record(s) failed. Every citation under a \`## Review\` heading must carry a\n` +
