@@ -282,8 +282,9 @@ answer, but not a free one: its cost is that two mechanisms coexist and every
 failing citation has two possible repairs, which is what part 5's boundary rule
 exists to decide.
 
-Part 8 is a separate defect folded in on the owner's call. **It carries an open
-decision**, and nothing below settles it.
+Part 8 is a separate defect folded in on the owner's call, **answered
+2026-09-12** in the third Log entry of that date. **No open decision remains on
+this page.**
 
 ### 0. The blast radius, re-measured at `8d79d8e` before any of it is written
 
@@ -565,11 +566,12 @@ The migration touches records under `docs/work` and
 records under a `docs`-typed commit, `docs` is `hidden` in
 `release-please-config.json`, so no changelog line is split across tools.
 
-### 8. A self-citation can never satisfy `--require-distinct-anchors` — open decision
+### 8. A self-citation can never satisfy `--require-distinct-anchors`
 
 Folded in here on the owner's call rather than filed separately, because this
-implementation is already rewriting anchor resolution. **The defect is settled;
-the fix is not, and it is not settled below.**
+implementation is already rewriting anchor resolution. **Answered 2026-09-12; the
+Log carries the provenance, including that the answer went against this page's
+own recommendation.**
 
 **The defect.** When a citation's target file _is_ the file the citation is
 written in, the quoted fragment is embedded verbatim in the citing line, so it
@@ -578,13 +580,13 @@ lengthening the fragment lengthens both copies. Under
 `--require-distinct-anchors`, which the gate always passes, such a citation can
 never pass, for any fragment, of any length. It turned CI red on PR #210.
 
-**Reproduced here, not accepted as relayed.** `repo-43`'s record before its repair
-commit, restored with `git show 1548f21^:<path>` and run with the gate's own
-flags: `grep -n 'it overrode: none.'` returns the citing row and the target line,
-and the checker reports `anchor starts on 2 lines of <the record itself>`. Then
-the part that matters, because it is the part the source denies — the citing
-line's fragment was rewritten at five increasing lengths, 18 through 160
-characters, and the checker re-run on each:
+**Reproduced here, not accepted as relayed**, and this measurement is what makes
+the printed advice provably false rather than merely unhelpful. `repo-43`'s record
+before its repair commit, restored with `git show 1548f21^:<path>` and run with
+the gate's own flags: `grep -n 'it overrode: none.'` returns the citing row and
+the target line, and the checker reports `anchor starts on 2 lines of <the record
+itself>`. Then the citing line's fragment was rewritten at five increasing
+lengths and the checker re-run on each:
 
 | Fragment length | Occurrences reported |
 | --------------- | -------------------- |
@@ -597,37 +599,67 @@ characters, and the checker re-run on each:
 It never reaches one. The file was restored and `git status --porcelain`
 confirmed empty.
 
-**Two places assert the opposite, and one of them is what an author actually
-reads.** `scripts/citations.mjs:144` "one always can — by quoting a longer fragment"
-is the justification `applyDeclarations` uses to refuse a waiver for an indistinct
-anchor. The printed remediation says it too —
-`scripts/citations.mjs:1502` "evidence declaration for this — the fix is always available"
-— so the checker tells an author to do the one thing that cannot work, at the
-moment they are trying to repair it. That second coordinate was not in the report
-that raised this; it is the worse of the two.
+#### What was chosen
 
-**The decision, which is not mine or the reviewer's to make.** Recommended option
-first:
+**The checker detects the self-citation and prints the true remedy.** It
+recognises that the cited file is the record being checked, names that as the
+reason, and tells the author the repair that actually works — point the citation
+at the real subject, or write it as prose.
 
-- **(i) The checker detects a self-citation and excludes the citing line from the
-  occurrence count.** Recommended. When the cited file is the record being
-  checked, the line carrying the citation is not evidence about the target, so
-  counting it was always wrong. Well-behaved at the edges: the shortest fragment
-  above occurs on three lines, and excluding the citing row still leaves two, so
-  a genuinely indistinct self-citation still fails. **Cost:** a special case in
-  the distinctness rule, and a test proving it does not weaken distinctness for a
-  fragment that really does repeat in the same file.
-- **(ii) The comment and the printed remediation are corrected to admit the
-  exception, and the author's escape stays prose.** This is what `repo-43`
-  actually did — its two Proof cells were rewritten as prose, which bypasses
-  citation syntax entirely. **Cost:** a whole class of citation stays
-  uncheckable, and it is the worst class to lose, because a gate record citing
-  its own `Done when` rows is the commonest self-citation there is. It trades a
-  code change for a permanent hole in the corpus.
+**The citation still fails.** Nothing here makes a self-citation pass. That is the
+answer's whole shape: the defect being repaired is that the tool prints false
+advice, not that self-citation is an unsupported shape.
 
-Whichever is chosen, both coordinates above stop telling an author something that
-is not true — under (i) because it becomes true again, under (ii) because the
-text admits the exception.
+**What this gives up, and the owner accepted it.** A self-citation remains
+unverifiable, so genuine self-evidence — a gate record pointing at its own
+ticket's Log — stays unavailable. There is no mechanism for it after this change
+and none is added.
+
+#### The detection rule
+
+The cited path, once resolved, is the record being checked. That is the whole
+test, and it is decided after resolution rather than by comparing the text of the
+path, because the same file can be cited by a repo-relative path, by a shorthand,
+or by a basename the resolver disambiguates.
+
+**A record citing a _different_ ticket file is ordinary and must keep working.**
+Measured rather than assumed:
+`node scripts/citations.mjs .claude/skills/orchestrate-tickets/reference/history.md --require-distinct-anchors`
+reports `ok` for
+`docs/work/repo-21-the-orchestration-skill-outgrew-its-loop.md:1360` "not evidence of a delivered one" —
+one occurrence, distinct, unaffected. The citing line is not inside the file being
+counted, so nothing about the cross-file case changes. Keep that as a test beside
+the self-citation one; it is the half that proves the rule is narrow.
+
+#### Both texts get corrected, not just the behaviour
+
+A behaviour fix that leaves either of these standing has repaired half the defect,
+because the second is what an author reads while trying to repair the failure.
+
+- `scripts/citations.mjs:144` "one always can — by quoting a longer fragment" —
+  the source comment, and the justification `applyDeclarations` uses to refuse a
+  waiver for an indistinct anchor.
+- `scripts/citations.mjs:1501` "Quote more of the line until the fragment is unique"
+  and `scripts/citations.mjs:1502` "evidence declaration for this — the fix is always available" —
+  the remediation printed at the moment of failure. **This is the worse of the
+  two**, and it was not in the report that raised the defect.
+
+#### The argument for the option that lost, kept because it was not wrong
+
+The recommendation this page made was to **exclude the citing line from the
+occurrence count** when the cited file is the record itself: the line carrying a
+citation is not evidence about its target, so counting it was arguably always
+wrong, and the rule stays well-behaved at the edges — the 18-character fragment
+above occurs on three lines, so excluding the citing row still leaves two and a
+genuinely indistinct self-citation still fails.
+
+**It lost to consistency, not to being wrong.** Excluding the citing line makes
+self-citation _work_, and that cuts against the call already made on `repo-43` in
+this same batch, where the builder was told to repoint at the real subject rather
+than make its self-citation distinct and its reviewer independently reached the
+same conclusion. Two tickets landing opposite answers in one batch is the thing to
+avoid. The argument is kept here so a later reader can reopen it on purpose rather
+than rediscover it by accident.
 
 ### Not in scope
 
@@ -694,14 +726,96 @@ for the work the answers imply.
    takes the gate from exit 0 to **exit 1**, failing `pl-29`, `pl-34` and
    `repo-25`.
 
-6. **Added 2026-09-12, for the defect in Build part 8.** The open decision there
-   is answered as a dated Log entry naming the option, and whichever is chosen, a
-   test proves what a record citing its own file does under
-   `--require-distinct-anchors` — and `scripts/citations.mjs:144` "one always can — by quoting a longer fragment"
-   and `scripts/citations.mjs:1502` "evidence declaration for this — the fix is always available"
-   no longer tell an author to do something that cannot be done.
+6. **Added 2026-09-12 for the defect in Build part 8, and made concrete the same
+   day when it was answered.** Three things, and a fix that does the first without
+   the second has repaired half the defect:
+
+   1. **The behaviour.** A citation whose resolved target is the record being
+      checked is reported as a **self-citation**, by that name, with the remedy
+      that works — point at the real subject, or write it as prose. It still
+      fails; nothing here makes a self-citation pass.
+   2. **Both texts.** `scripts/citations.mjs:144` "one always can — by quoting a longer fragment",
+      `scripts/citations.mjs:1501` "Quote more of the line until the fragment is unique"
+      and `scripts/citations.mjs:1502` "evidence declaration for this — the fix is always available"
+      no longer tell an author to do something that cannot be done. The second is
+      the one printed at the moment of failure and is the worse of the two.
+   3. **Two tests, and the first must be able to fail.** One proving the
+      self-citation message appears _instead of_ the generic indistinct advice —
+      not merely that the run is non-zero, which it already is. One proving a
+      record citing a **different** ticket file still resolves and still counts
+      occurrences normally, which is measured today as `ok` on
+      `docs/work/repo-21-the-orchestration-skill-outgrew-its-loop.md:1360` "not evidence of a delivered one"
+      from `history.md` under `--require-distinct-anchors`.
+
+   The reproduction that makes the old advice provably false rather than merely
+   unhelpful is in Build part 8: five fragment lengths, 18 through 160, reporting
+   3 occurrences and then 2, 2, 2, 2 — never 1.
 
 ## Log
+
+- **2026-09-12** — **Build part 8 is answered: the checker detects the
+  self-citation and prints the true remedy.** Third entry of the same date. It
+  recognises that the cited file is the record being checked, names that as the
+  reason, and tells the author the repair that works — point at the real subject,
+  or write it as prose. The citation still fails; nothing in the answer makes a
+  self-citation pass.
+
+  **Decided by the repo owner. It overrode this page's recommendation, and it
+  matched the orchestrator's.** The page recommended **(i) exclude the citing line
+  from the occurrence count**, which would have made self-citation work. The
+  orchestrator put three options to the owner and recommended this one **against
+  (i)**, on the reasoning that the defect is that the printed advice is _false_ —
+  so the repair is to stop the tool misdirecting the author, not to make
+  self-citation a supported shape. Recorded by name and on both sides, so a reader
+  can see that a disagreement existed rather than finding a single unopposed
+  suggestion.
+
+  **Why (i) lost, and it was not for being wrong.** Excluding the citing line
+  makes self-citation _work_, which cuts against the call already made on
+  `repo-43` in this same batch: its builder was told to repoint at the real
+  subject rather than make its self-citation distinct, and its reviewer
+  independently reached the same conclusion. Two tickets landing opposite answers
+  in one batch is the thing to avoid. **The argument for (i) is kept in Build part
+  8 rather than deleted** — it lost to consistency, and a later reader should be
+  able to reopen it on purpose instead of rediscovering it by accident.
+
+  **What the answer gives up, accepted by the owner rather than solved.** A
+  self-citation remains unverifiable, so genuine self-evidence — a gate record
+  pointing at its own ticket's Log — stays unavailable, and no mechanism is added
+  for it.
+
+  **Both texts are in scope, not just the behaviour**, and `Done when` #6 now says
+  so in three parts. The source comment at `scripts/citations.mjs:144`, which
+  justifies `applyDeclarations` refusing a waiver, and the remediation **printed at
+  the moment of failure** at `scripts/citations.mjs:1501` and
+  `scripts/citations.mjs:1502`. The second is the worse of the two — it is what an
+  author reads while trying to repair the failure — and it was this branch's
+  finding, not present in the report that raised the defect. The orchestrator
+  verified both coordinates independently.
+
+  **The detection rule, and the case that must keep working.** The rule is: the
+  cited path, _once resolved_, is the record being checked — decided after
+  resolution rather than by comparing path text, since the same file can be
+  reached by a repo-relative path, a shorthand, or a basename the resolver
+  disambiguates. A record citing a **different** ticket file is ordinary and
+  unaffected, measured rather than assumed:
+  `node scripts/citations.mjs .claude/skills/orchestrate-tickets/reference/history.md --require-distinct-anchors`
+  reports `ok` for its citation into
+  `docs/work/repo-21-the-orchestration-skill-outgrew-its-loop.md:1360` "not evidence of a delivered one" —
+  one occurrence, distinct. That is the second required test, and it is the half
+  that proves the rule is narrow.
+
+  **The reproduction stays on the page as the evidence**, because it is what makes
+  the old advice provably false rather than merely unhelpful: the citing line's
+  fragment rewritten at 18, 40, 80, 120 and 160 characters, the checker re-run on
+  each, reporting 3 occurrences and then 2, 2, 2, 2. Never 1.
+
+  **Unchanged by this entry**, per the dispatch: C's reversal to "it narrows" and
+  `Done when` #3's rewrite.
+
+  **Verification.** All unpiped, `$?` read directly. `npm run check` → 0.
+  `node scripts/citations.mjs` on this file → 0.
+  `node scripts/citations-gate.mjs --against origin/main` → 0.
 
 - **2026-09-12** — **C is reversed. It is "it narrows", not "it goes" — and the
   reversal was caused by a corrected measurement, not by a change of mind.**
