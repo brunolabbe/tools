@@ -8,6 +8,10 @@
 
 import path from "node:path";
 import process from "node:process";
+// This tool's `trustProxy` was pl-38's deliberate duplicate of the
+// downloader's; repo-40 replaced it with the shared function below, the
+// planner being its second consumer. See that file for the parsing rules.
+import { trustProxy } from "@webtools/core";
 
 export const LOG_LEVELS = ["debug", "info", "warn", "error", "silent"] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
@@ -198,7 +202,11 @@ export interface ApiConfig {
    *
    * Mirrors `ApiConfig.trustProxy` in the downloader
    * (`tools/downloader/api/src/config.ts`) — same shape, same default, same
-   * argument against `true` — rather than inventing a second one (pl-38).
+   * argument against `true`, and since repo-40 the same parsing function
+   * (pl-38 duplicated it deliberately; repo-40 lifted it to
+   * `@webtools/core`). What is tool-specific is what this setting feeds —
+   * this tool's own `rateLimitRunsPerMinute` bucket above, not the
+   * downloader's three — which is why this field itself is not shared.
    */
   trustProxy: boolean | string;
 
@@ -296,24 +304,6 @@ function list(raw: string | undefined): string[] {
 function logLevel(raw: string | undefined): LogLevel {
   const value = (raw ?? API_DEFAULTS.logLevel).trim().toLowerCase();
   return (LOG_LEVELS as readonly string[]).includes(value) ? (value as LogLevel) : "info";
-}
-
-/**
- * `false` (the default), `true`, or a proxy address / CIDR / comma-separated
- * list, which Fastify accepts verbatim and is the form worth preferring.
- *
- * Identical to the downloader's `trustProxy` in
- * `tools/downloader/api/src/config.ts` — copied rather than shared, because a
- * tool never imports from another tool and this one function is not yet a
- * second real consumer of anything in `packages/`.
- */
-function trustProxy(raw: string | undefined): boolean | string {
-  const value = raw?.trim() ?? "";
-  if (value === "") return false;
-  const lower = value.toLowerCase();
-  if (["1", "true", "yes", "on"].includes(lower)) return true;
-  if (["0", "false", "no", "off"].includes(lower)) return false;
-  return value;
 }
 
 /**
