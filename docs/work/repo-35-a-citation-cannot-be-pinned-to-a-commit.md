@@ -262,18 +262,28 @@ radius is larger than the page states, not smaller.
 
 ## Build
 
-Written against the answers recorded in the Log entry of **2026-09-12**: **A — a
-rev inside the location**, **B — a pinned citation is always checked at its
-rev**, **C — the declaration mechanism goes.** Do not re-open those three; they
-were decided by the repo owner and each overrode the dispatching orchestrator's
-recommendation.
+Written against the answers recorded in the Log entries of **2026-09-12**: **A —
+a rev inside the location**, **B — a pinned citation is always checked at its
+rev**, **C — the declaration mechanism narrows.** Do not re-open those three; they
+were decided by the repo owner.
 
-**This is the expensive combination, and the brief says so rather than around
-it.** A reopens the one regex this page's own reproduction shows swallowing a
-citation whole; B makes a pin permanent; C removes the only escape hatch the tree
-has for a citation a rev cannot express — and the measurement in step 6 found
-that class is not hypothetical, it is 21 of the 26 declared locations in the tree
-today.
+**C was answered twice on the same day, and a reader who finds only the final
+state cannot tell that the option was tested against a real alternative — so both
+answers are on this page.** It was first answered "it goes", against the
+orchestrator's recommendation, and reversed to "it narrows" once the measurement
+the first answer rested on was corrected. The second Log entry of 2026-09-12
+carries the provenance. Part 5 carries the shape, and part 6 is deliberately
+still here: it is the evidence the reversal turned on.
+
+**Two of the three are still the expensive option, and the brief says so rather
+than around it.** A reopens the one regex this page's own reproduction shows
+swallowing a citation whole, and B makes a pin permanent. C is now the cheaper
+answer, but not a free one: its cost is that two mechanisms coexist and every
+failing citation has two possible repairs, which is what part 5's boundary rule
+exists to decide.
+
+Part 8 is a separate defect folded in on the owner's call. **It carries an open
+decision**, and nothing below settles it.
 
 ### 0. The blast radius, re-measured at `8d79d8e` before any of it is written
 
@@ -411,112 +421,213 @@ combination gives, and it is the one piece of good news in the brief:
   `verified`; pinned, anchored and wrong-at-rev is `moved`, so a pin cannot
   launder a citation that was already wrong when it was written.
 
-### 5. Removing the declaration mechanism (C)
+### 5. Narrowing the declaration mechanism (C)
 
-Delete `scripts/citations.mjs:247` "const DECLARATION =", `extractDeclarations`
+**C was answered twice. It is "it narrows", and the first answer — "it goes" —
+was reversed the same day when the measurement under it turned out to be wrong.**
+The Log entries carry the provenance; this step carries the shape.
+
+The mechanism stays, and it is withdrawn from exactly one case: **a citation that
+some commit of this repository would verify**. That case gets a pin. Everything
+else keeps the declaration.
+
+So nothing is deleted. `DECLARATION`
+(`scripts/citations.mjs:247` "const DECLARATION ="), `extractDeclarations`
 (`scripts/citations.mjs:473` "export function extractDeclarations(markdown)"),
 `applyDeclarations`
 (`scripts/citations.mjs:892` "export function applyDeclarations(results, declarations)"),
-the `evidence` state, the stale-declaration exit bit and its explanatory tail;
-drop the two imports and the `stale` term from the gate's `failing` arithmetic in
-`citations-gate.mjs`; delete the 24 `evidence` lines in
-`scripts/test/citations.test.ts`, and the passage in
-`.claude/skills/orchestrate-tickets/reference/records.md` that teaches the syntax.
-`DECLARED_LOCATION` goes with it unless a caller still needs a bare location
-parser.
+the `evidence` state and the stale-declaration exit bit all survive, as do the
+gate's two imports and the `stale` term in its `failing` arithmetic. The work is
+a boundary, not a removal — and the boundary is the whole substance of this
+option, because the cost it buys is that **two mechanisms now coexist and every
+failing citation has two possible repairs**. Without a rule, the wrong one is
+silently accepted, which is the hole that made C worth asking in the first place.
 
-**Nothing here lands until step 6 lands with it.** The measurement below is what
-CI does if the mechanism is removed and the migration is not.
+#### The rule, author-facing
 
-### 6. The migration, and the case a rev cannot express
+> **Reach for a pin when the citation was true of some commit in this
+> repository. Reach for a declaration when it was true of none.**
 
-`Done when` #1's answer to C is "every declaration in the tree migrated".
+It is decidable with one command rather than by judgement, which is what keeps it
+from rotting into a preference:
+
+```bash
+git log --all -S'<the anchor text>' -- <the cited file>
+```
+
+Non-empty — some tree had it, so a rev exists and the repair is a pin. Empty —
+nothing in this repository's history ever contained it, so no rev can express it
+and the declaration stands. That is the same command that settled `repo-21`'s
+case during this ticket's own measurement: its anchor is a `builder.md` row that
+reads plausibly like a real historical mapping, and the search returned **zero
+commits across every ref**, which is what moved it to the declaration side rather
+than a guess about what the table used to say.
+
+#### The rule, enforced — cheap half and expensive half
+
+A rule nothing checks is a comment. Two levels, and they should not be confused:
+
+- **The cheap half, and it catches every production case in the tree today.**
+  Refuse a declaration whose citation reports the reason "is not in _N_ — it is
+  at _M_": the anchor is present elsewhere in the same file at `HEAD`. That case
+  needs neither mechanism — it needs repointing — and it is free to detect
+  because the checker has already computed the occurrence list. This alone
+  catches all five of the pinnable locations below.
+- **The expensive half, only needed to separate a rewritten file from a
+  fabricated anchor.** Both report "not anywhere in _file_". Telling them apart
+  is the `git log -S` search above, per declared location, on every run. **Name
+  this as a cost before choosing to implement it**: it is a history search per
+  declaration, where every other check in this script reads one blob.
+
+A defensible first slice is the cheap half only, with the expensive half left to
+the author and the command written into `records.md` beside the syntax. Say which
+was built, in the Log, either way.
+
+### 6. Which of the 26 go which way
+
 Measured at `8d79d8e` by re-running the checker's own `DECLARATION` regex
 (`scripts/citations.mjs:247` "const DECLARATION =") over all 171 `.md` files
 outside `node_modules` — **12 declaration lines naming 26 locations across 7
 files, suppressing 31 citations.** That is not the 10 lines across 5 files this
 page recorded on 2026-09-08; `993af05` (repo-37, #200) added two more while it
-sat.
+sat. **This is the evidence for where the line falls, and it is why C was
+reversed**, so it stays on the page whatever else changes.
 
 Written as a list rather than a table on purpose: a findings table's bare numbers
 are citations too, so a `declaration lines` column on a row naming a file becomes
 seven citations into seven files that nobody meant to make. Each entry reads
 _declaration lines / locations named / citations suppressed_.
 
-- **history.md** — 2 / 4 / 8. Staleness, pinnable.
-- **dl-44-persist-the-thumbnail-beside-the-file.md** — 1 / 1 / 1. Staleness,
-  pinnable.
-- **records.md** — 1 / 2 / 0. Already stale; excuses nothing.
-- **repo-21-the-orchestration-skill-outgrew-its-loop.md** — 1 / 1 / 1. Exists at
-  no rev.
+**Migrate to a pin — 5 locations, 9 citations.** Every one reports "is not in _N_
+— it is at _M_", so the cheap half of the rule catches them without a history
+search.
+
+- **history.md** — 2 / 4 / 8. Staleness.
+- **dl-44-persist-the-thumbnail-beside-the-file.md** — 1 / 1 / 1. Staleness; a
+  gate record deliberately holding the coordinate it resolved at tip `e3d065e`.
+
+**Keep the declaration — 21 locations.** No rev of this repository expresses any
+of them.
+
 - **repo-25-citations-checker-misses-shorthand-references.md** — 5 / 15 / 18.
-  Exists at no rev.
-- **pl-29-detours-along-a-leg.md** — 1 / 1 / 1. Outside this repository.
+  Coordinates fabricated on purpose, to test the checker: "ambiguous — _N_
+  tracked files match" and "past end of file".
 - **pl-34-locality-free-query-confident-wrong-place.md** — 1 / 2 / 2. Ambiguous,
-  not stale.
+  not stale. A rev picks a tree, not a file among several sharing a basename.
+- **pl-29-detours-along-a-leg.md** — 1 / 1 / 1. The Overpass project's own
+  source path, which is in no tree of this repo at any rev.
+- **records.md** — 1 / 2 / 0. Already stale; excuses nothing, and is reported as
+  a stale declaration today. Delete rather than migrate.
+- **repo-21-the-orchestration-skill-outgrew-its-loop.md** — 1 / 1 / 1. A
+  scratch mutation the record quoted the checker's failure on and reverted
+  without committing; `git log --all -S` finds it in zero commits.
 
 **This page's 2026-09-08 note said only `history.md`'s two were the production
 case and the rest were ticket pages demonstrating the syntax. That is wrong in
-both directions, and the correction is why step 6 is the largest step.** `dl-44`'s
-is production — a gate record deliberately holding the coordinate it resolved at
-tip `e3d065e` — and `pl-29`'s and `pl-34`'s are production too, while being no
-kind of staleness case at all.
+both directions, and correcting it is what reversed C.** `dl-44`'s is production
+and pinnable; `pl-29`'s and `pl-34`'s are production and are not staleness cases
+at all.
 
-**What removal actually costs, measured rather than predicted.** Every
-declaration line stripped from all seven files in the working tree, then
+**What removing the mechanism outright would have cost, measured rather than
+predicted — the measurement that reversed the answer.** Every declaration line
+stripped from all seven files in the working tree, then
 `node scripts/citations-gate.mjs`; restored with `git checkout -- .` and
 `git status --porcelain` confirmed empty afterwards. The gate goes from exit 0 to
 **exit 1**, `27 enforced, 3 failing`, naming three records:
 
 - `pl-29` **FAIL** — one `unresolvable`, reason "no tracked file matches", on a
   range in `src/overpass_api/statements/around.cc` (the Overpass project's own
-  source, lines 392-441). **No rev of this repo can express it**, which is
-  exactly the case C withdrew the escape hatch from.
+  source, lines 392-441).
 - `pl-34` **FAIL** — two `unresolvable`, reasons "ambiguous — 3 tracked files
   match" on a `travel.ts` range and "ambiguous — 2 tracked files match" on a
-  `brief.ts` line. A rev picks a tree, not a file; pinning these does nothing at
-  all.
+  `brief.ts` line.
 - `repo-25` **WORSE** — 15 failing against a `GRANDFATHERED` entry of 12,
-  including two coordinates reported "past end of file". They are fabricated on
-  purpose, as that record's own evidence.
+  including two coordinates reported "past end of file".
 
-So the answer to "what happens to the case a rev cannot express" is not one
-answer but three, and none of them is a pin:
+Under "it narrows" none of those three is touched, and that is the point: the
+three records that would have gone red keep the mechanism they need.
 
-1. **Fabricated and past-end-of-file coordinates inside a reproduction**
-   (`repo-25`, `repo-21`) — stop spelling them in citation shape. Write the
-   location in the prose form `scripts/citations.mjs:232` "const PROSE" already
-   recognises, which is counted, printed and reported `unchecked` without setting
-   an exit bit, so the coordinate stays visible to a reader and stops being a
-   claim the checker must adjudicate. Fencing does **not** do this: the
-   declaration in `records.md` sits inside a fenced block and the checker parses
-   it anyway, which is why that file reports two stale declarations today.
-2. **Paths outside this repository** (`pl-29`) — the same treatment. That record
-   already says in prose that these are not paths in this tree and cannot be
-   resolved locally; after C it must stop writing them as though they were.
-3. **Ambiguous paths** (`pl-34`) — not a migration at all, a repair. Qualify each
-   to the file meant; the checker prints the candidates. This one ends up better
-   than it is today.
-
-`records.md`'s two locations need no migration, only deletion: they excuse
-nothing, and that file already fails on them.
-
-**Do not raise a `GRANDFATHERED` number to absorb `repo-25`.** The gate says so
-in its own output, and the list ratchets one way.
+**Do not raise a `GRANDFATHERED` number.** The gate says so in its own output, and
+the list ratchets one way.
 
 ### 7. Order
 
 One branch, with the pieces in this order and the suite green at the end rather
 than in the middle: grammar and malformed-pin scan with their tests (1, 2, 4),
-then rev resolution (3), then the migration of all seven records (6), then
-removal of the declaration mechanism (5). Removal last, because until the final
-declaration is gone the mechanism is still holding 31 citations up.
+then rev resolution (3), then the boundary rule and its enforcement (5), then the
+five migrations (6). The migrations last, because until a pin exists there is
+nothing to migrate them to — and because the enforcement landing first turns the
+five into failures the migration then clears, which is the order that proves the
+rule works rather than asserting it.
 
-The migration touches records under `docs/work`, `tools/downloader/docs/work` and
-`tools/planner/docs/work`. That is one pull request, not three: the paths are
-`.md` records under a `docs`-typed commit, `docs` is `hidden` in
-`release-please-config.json`, so no changelog line is split across tools — and
-splitting the branch would leave CI red between the halves.
+The migration touches records under `docs/work` and
+`tools/downloader/docs/work`. That is one pull request: the paths are `.md`
+records under a `docs`-typed commit, `docs` is `hidden` in
+`release-please-config.json`, so no changelog line is split across tools.
+
+### 8. A self-citation can never satisfy `--require-distinct-anchors` — open decision
+
+Folded in here on the owner's call rather than filed separately, because this
+implementation is already rewriting anchor resolution. **The defect is settled;
+the fix is not, and it is not settled below.**
+
+**The defect.** When a citation's target file _is_ the file the citation is
+written in, the quoted fragment is embedded verbatim in the citing line, so it
+always occurs at least twice — the citing row and the target line — and
+lengthening the fragment lengthens both copies. Under
+`--require-distinct-anchors`, which the gate always passes, such a citation can
+never pass, for any fragment, of any length. It turned CI red on PR #210.
+
+**Reproduced here, not accepted as relayed.** `repo-43`'s record before its repair
+commit, restored with `git show 1548f21^:<path>` and run with the gate's own
+flags: `grep -n 'it overrode: none.'` returns the citing row and the target line,
+and the checker reports `anchor starts on 2 lines of <the record itself>`. Then
+the part that matters, because it is the part the source denies — the citing
+line's fragment was rewritten at five increasing lengths, 18 through 160
+characters, and the checker re-run on each:
+
+| Fragment length | Occurrences reported |
+| --------------- | -------------------- |
+| 18              | 3 lines              |
+| 40              | 2 lines              |
+| 80              | 2 lines              |
+| 120             | 2 lines              |
+| 160             | 2 lines              |
+
+It never reaches one. The file was restored and `git status --porcelain`
+confirmed empty.
+
+**Two places assert the opposite, and one of them is what an author actually
+reads.** `scripts/citations.mjs:144` "one always can — by quoting a longer fragment"
+is the justification `applyDeclarations` uses to refuse a waiver for an indistinct
+anchor. The printed remediation says it too —
+`scripts/citations.mjs:1502` "evidence declaration for this — the fix is always available"
+— so the checker tells an author to do the one thing that cannot work, at the
+moment they are trying to repair it. That second coordinate was not in the report
+that raised this; it is the worse of the two.
+
+**The decision, which is not mine or the reviewer's to make.** Recommended option
+first:
+
+- **(i) The checker detects a self-citation and excludes the citing line from the
+  occurrence count.** Recommended. When the cited file is the record being
+  checked, the line carrying the citation is not evidence about the target, so
+  counting it was always wrong. Well-behaved at the edges: the shortest fragment
+  above occurs on three lines, and excluding the citing row still leaves two, so
+  a genuinely indistinct self-citation still fails. **Cost:** a special case in
+  the distinctness rule, and a test proving it does not weaken distinctness for a
+  fragment that really does repeat in the same file.
+- **(ii) The comment and the printed remediation are corrected to admit the
+  exception, and the author's escape stays prose.** This is what `repo-43`
+  actually did — its two Proof cells were rewritten as prose, which bypasses
+  citation syntax entirely. **Cost:** a whole class of citation stays
+  uncheckable, and it is the worst class to lose, because a gate record citing
+  its own `Done when` rows is the commonest self-citation there is. It trades a
+  code change for a permanent hole in the corpus.
+
+Whichever is chosen, both coordinates above stop telling an author something that
+is not true — under (i) because it becomes true again, under (ii) because the
+text admits the exception.
 
 ### Not in scope
 
@@ -526,6 +637,8 @@ splitting the branch would leave CI red between the halves.
   `records.md` are outside it and stay outside it; their red is a direct-run red.
 - Repairing unrelated `moved` citations elsewhere in the corpus, beyond the five
   on `history.md` that `Done when` #3 now names.
+- Repairing `repo-43`'s record. It has already been repaired on its own branch by
+  the prose route, and whichever way part 8 is answered, that repair stands.
 
 ## Done when
 
@@ -568,13 +681,130 @@ for the work the answers imply.
    the count, which is what the naive spelling does today (fact 1). **Under A this
    is the hardest line on the list, not a formality**; Build step 2 is why, and it
    is where a reviewer should look first.
-5. **Added 2026-09-12, for C.** Every declaration in the tree is gone and
-   `node scripts/citations-gate.mjs` still exits 0. Measured at `8d79d8e`:
-   removing the twelve declaration lines and nothing else takes the gate from
-   exit 0 to exit 1 with three records failing, so this line is not free and
-   Build step 6 is the work it names.
+5. **Added 2026-09-12 for C, and rewritten the same day when C reversed.** The
+   five pinnable locations — four on `history.md`, one on `dl-44` — have moved
+   from declarations to pins; the other 21 still carry declarations; the boundary
+   rule in Build part 5 is written down where an author will find it, and
+   whatever enforcement was built for it is named in the Log, cheap half or both.
+   `node scripts/citations-gate.mjs` still exits 0.
+
+   **The line this replaced read "every declaration in the tree is gone".** It is
+   recorded rather than deleted because the measurement that retired it is the
+   one that reversed C: removing all twelve declaration lines and nothing else
+   takes the gate from exit 0 to **exit 1**, failing `pl-29`, `pl-34` and
+   `repo-25`.
+
+6. **Added 2026-09-12, for the defect in Build part 8.** The open decision there
+   is answered as a dated Log entry naming the option, and whichever is chosen, a
+   test proves what a record citing its own file does under
+   `--require-distinct-anchors` — and `scripts/citations.mjs:144` "one always can — by quoting a longer fragment"
+   and `scripts/citations.mjs:1502` "evidence declaration for this — the fix is always available"
+   no longer tell an author to do something that cannot be done.
 
 ## Log
+
+- **2026-09-12** — **C is reversed. It is "it narrows", not "it goes" — and the
+  reversal was caused by a corrected measurement, not by a change of mind.**
+  Second entry of the same day, deliberately kept separate from the first rather
+  than folded into it: an answered decision that gets answered again is unusual
+  enough that flattening the two into a final state would hide the thing a reader
+  needs, which is that the option was tested against a real alternative and lost
+  to evidence.
+
+  **The sequence.**
+
+  1. **Originally chosen 2026-09-12: "it goes"** — every declaration in the tree
+     migrated, the mechanism removed. Recorded in the entry below.
+  2. **Reversed the same day to "it narrows"** — the marker **stays** for the
+     locations a rev pin cannot express, and is **withdrawn for the staleness
+     case**, whose locations migrate to pins.
+
+  **Why: the figure the question was put on was wrong, and it came from the
+  orchestrator.** The basis relayed to the owner was "10 real declarations across
+  5 files, only `history.md`'s two are the production staleness case" — relayed
+  without being measured. Both halves are false. Measured on this branch by
+  re-running the checker's own `DECLARATION` regex over all 171 `.md` files
+  outside `node_modules`: **12 declaration lines naming 26 locations across 7
+  files**, and **21 of the 26 are not expressible as a rev pin** — fabricated and
+  past-end-of-file coordinates on `repo-25`, an upstream project's path on
+  `pl-29`, ambiguous basenames on `pl-34`, an already-stale pair on `records.md`,
+  and a scratch mutation on `repo-21` that `git log --all -S` finds in zero
+  commits across every ref. Only 5 locations, on `history.md` and `dl-44`, are the
+  staleness case the pin was designed for.
+
+  Corroborated by the strip-and-run rather than left as a count: removing all
+  twelve declaration lines and nothing else takes
+  `node scripts/citations-gate.mjs` from **exit 0 to exit 1**, `27 enforced, 0
+failing` becoming `27 enforced, 3 failing`, naming **`pl-29`, `pl-34` and
+  `repo-25`**. (The dispatch relaying this reversal wrote "pl-29, pl-24 and
+  repo-25" and corrected itself in the same message; `pl-34` is the measured name
+  and there is no `pl-24` in this tree.)
+
+  The gate reproduced all three independently in its own worktree — its own
+  hand-typed regex, its own strip-and-run, its own per-citation classification of
+  all 26 — and reported byte-identical numbers, including the `git log --all -S`
+  check on `repo-21`'s anchor that would have moved 21 to 20 had that row ever
+  existed in any commit.
+
+  **"It narrows" was the orchestrator's original recommendation, and saying so is
+  the point of this entry.** The owner overrode it and chose "it goes"; the
+  corrected measurement then brought them back to it. That is not the same as the
+  recommendation having been right all along — it was made without the
+  measurement too — and the first answer was a real decision made on the evidence
+  available, not a slip. Both are recorded so neither reads as the only thing that
+  happened.
+
+  **What changed on the page.** Build part 5 is now a narrowing rather than a
+  removal, and carries the thing "narrows" actually costs: a boundary rule saying
+  which mechanism a future author reaches for, decidable by one command
+  (`git log --all -S'<anchor>' -- <file>`; non-empty means a rev exists, so pin),
+  with a cheap enforcement half that needs no history search and an expensive half
+  that does. Part 6 keeps the full classification of all 26 unchanged — it is the
+  evidence for where the line falls — and re-reads it as 5 to migrate and 21 to
+  keep. Part 7's order is inverted accordingly: enforcement before migration, so
+  the rule is proved by the five failures it raises and then clears. `Done when`
+  #5 is rewritten, with the line it replaced quoted rather than deleted.
+
+  **`Done when` #3's rewrite is untouched**, per the dispatch: the owner took this
+  branch's reading over the 2026-09-08 note and the gate agreed.
+
+  **Part 8 is new, and it is a second open decision, not a fix.** Folded in on the
+  owner's call because this implementation is already rewriting anchor resolution.
+  **A citation whose target file is the file it is written in can never satisfy
+  `--require-distinct-anchors`**, for any fragment of any length: the anchor is
+  embedded verbatim in the citing line, so it always occurs at least twice, and
+  lengthening it lengthens both copies.
+
+  **Reproduced rather than accepted.** `repo-43`'s record before its repair,
+  restored with `git show 1548f21^:<path>` into the worktree and run with the
+  gate's own flags, reports `anchor starts on 2 lines` of the record itself. Then
+  the half that is actually load-bearing, because it is the half the source
+  denies: the citing line's fragment was rewritten at 18, 40, 80, 120 and 160
+  characters and the checker re-run on each — 3 lines, then 2, 2, 2, 2. **It never
+  reaches one.** File restored, `git status --porcelain` empty.
+
+  **One thing found here that the report raising this did not have.** The false
+  claim is in two places, and the second is the one an author actually reads: not
+  only the source comment at `scripts/citations.mjs:144`, which justifies
+  `applyDeclarations` refusing a waiver, but the **printed remediation** at
+  `scripts/citations.mjs:1502`, which tells the author at the moment of failure
+  that "the fix is always available". The checker misdirects the repair it is
+  asking for.
+
+  Written as a decision with both options and their costs rather than a fix,
+  recommendation first: **(i)** exclude the citing line from the occurrence count
+  when the cited file is the record itself — well-behaved, since the shortest
+  fragment above still leaves two occurrences and so still fails — against
+  **(ii)** correct both texts to admit the exception and leave prose as the
+  escape, which is what `repo-43` did and which permanently loses the check for
+  the commonest self-citation there is, a gate record citing its own `Done when`
+  rows.
+
+  **Verification.** All unpiped, `$?` read directly. `npm run check` → 0.
+  `node scripts/citations.mjs` on this file → 0. `node scripts/citations-gate.mjs --against origin/main`
+  → 0. `npm test -- --project repo` → 0. `git status --porcelain` empty after both
+  reproductions, and `docs/work/repo-43-a-worktree-nested-path-shadows-the-shared-root.md`
+  confirmed restored byte-for-byte.
 
 - **2026-09-12** — **The decision is answered. A, B and C all three, by the repo
   owner, in answer to the questions exactly as this page words them.** Branch
@@ -590,6 +820,11 @@ for the work the answers imply.
 
   **C — the fate of the evidence declaration. Chosen: it goes** — every
   declaration in the tree migrated, the mechanism removed.
+
+  (**C was reversed later the same day, to "it narrows".** See the entry above,
+  which carries why. This entry is left exactly as it was written: the answer
+  recorded here was the answer given, on the evidence available at the time, and
+  rewriting it would hide that the option was tested.)
 
   **Each of the three overrode the dispatching orchestrator's recommendation, and
   that is recorded here because a decision that went against advice is worth more
