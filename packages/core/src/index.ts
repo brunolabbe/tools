@@ -5,3 +5,4 @@ export * from "./job.ts";
 // tool's contract — so exporting it from the barrel drags server-only code into
 // a browser build. It has its own subpath: `@webtools/core/rate-limit`.
 export * from "./redact.ts";
+export * from "./trust-proxy.ts";
