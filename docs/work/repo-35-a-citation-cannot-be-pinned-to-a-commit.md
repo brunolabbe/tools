@@ -713,23 +713,63 @@ code.
 interchangeable, because one changes behaviour and the other does not:
 
 - **(a) Correct the count** — deduplicate by line, so `occurrences` means what
-  three places already claim it means. **Cost: it changes gate verdicts.** A
-  record whose only duplication is two matches on one line is failing today and
-  would pass. The gate's baseline currently reports `6 indistinct` across the
-  corpus; how many of those six are this shape is **unmeasured**, and measuring it
-  is the first thing to do if (a) is chosen — it is the difference between a
-  correctness fix and a silent amnesty.
+  three places already claim it means. The cost would be that it changes gate
+  verdicts: a record whose only duplication is two matches on one line is failing
+  today and would pass. **Measured, so this is no longer the unknown it was when
+  this part was filed — see below. Against the corpus as it stands, (a) changes
+  nothing.**
 - **(b) Correct the wording** in all three places to say matches rather than
   lines. **Cost: none to behaviour, and it keeps a rule that fails a citation for
   repeating a fragment on one line** — which is arguably right, since the
   ambiguity `--require-distinct-anchors` exists to prevent is about a fragment
   that is not unique, and twice on one line is not unique either.
 
-**And a third question that belongs to whoever answers those**: whether this
+#### The measurement (a) turned on, taken before choosing rather than after
+
+Every record in `citations-gate.mjs`'s real scope — 128 files, `docs/work/*.md`
+and `tools/*/docs/work/*.md` — run through the checker's **own** exported
+`extractCitations` and `checkCitations`, not a grep, collecting every citation
+that is `verified` with `occurrences` above 1. That reproduces the gate's `6
+indistinct` exactly. For each of the six, the raw match list was recomputed and
+compared against its distinct-line count.
+
+| Record  | Anchor                          | Raw hits              | Distinct lines |
+| ------- | ------------------------------- | --------------------- | -------------- |
+| repo-31 | `status: done`                  | 2 — `[6, 417]`        | 2              |
+| repo-31 | `Answered: D, and built.`       | 3 — `[417, 436, 458]` | 3              |
+| repo-31 | `Answered: option D`            | 2 — `[375, 419]`      | 2              |
+| dl-44   | `served.rawPayload.equals(PNG)` | 2 — `[259, 337]`      | 2              |
+| dl-44   | `served.rawPayload.equals(PNG)` | 2 — `[259, 337]`      | 2              |
+| dl-44   | `ON DELETE CASCADE`             | 2 — `[44, 86]`        | 2              |
+
+**Zero of the six owe their verdict to same-line duplication.** All six are
+genuinely ambiguous across two or more distinct lines, so **(a) would flip no
+gate verdict against today's corpus** — it reads as a correctness fix, not an
+amnesty. What it does not do is rule out a future citation hitting the shape,
+which is why the measurement is worth retaking at implementation time rather than
+trusted from here.
+
+Two things make that number checkable rather than asserted. The raw-vs-distinct
+split needs `locateAnchor`, which is not exported, so it was replicated — and the
+replica was validated **per case**, by asserting its raw count equals the tool's
+own `occurrences` for that same citation: 6 of 6 agreed, and a disagreement
+anywhere would have invalidated its distinct counts. And the scan's coverage
+matches the gate's exactly: 56 of the 128 were skipped for having no single
+`Review` section, and 128 − 56 = 72 = the gate's own `27 enforced + 45
+grandfathered`.
+
+**Three of the six are self-citations** (all on `repo-31`), which is part 8's
+shape — but none of them hits the same-line double match, so part 8's detection
+would not have quietly repaired them either. The two defects overlap in the code,
+not in the corpus.
+
+**And a third question belongs to whoever answers (a) versus (b)**: whether this
 should be part of repo-35 at all, or its own ticket. It was found here and it
 touches the same counter, which argues for folding it in; it is independent of
 pinning, which argues for splitting it. **Folding it in is not obviously right and
-this page does not assume it.**
+this page does not assume it.** The gate's recommendation, recorded as its view
+and not adopted here: fold it in if (b) is chosen, split it out if (a) is, on the
+ground that a behaviour change deserves its own reproduction and its own gate.
 
 ### Not in scope
 
@@ -821,15 +861,74 @@ for the work the answers imply.
    unhelpful is in Build part 8: five fragment lengths, 18 through 160, never
    reaching one occurrence.
 
-7. **Added 2026-09-12, for Build part 9, and it is not yet answerable.** Whether
-   `occurrences` is deduplicated by line or the three texts that call it a line
-   count are corrected to say matches — and whether that work belongs to this
-   ticket or its own — is answered as a dated Log entry naming the option. If (a)
-   is chosen, the count of corpus records whose `indistinct` verdict is this shape
-   is measured **before** the change, not after, so an amnesty cannot be mistaken
-   for a correctness fix.
+7. **Added 2026-09-12, for Build part 9. Still open, but now answerable.**
+   Whether `occurrences` is deduplicated by line or the three texts that call it a
+   line count are corrected to say matches — and whether that work belongs to this
+   ticket or its own — is answered as a dated Log entry naming the option.
+
+   **The measurement this line demanded has been taken, before the change rather
+   than after**: 0 of the corpus's 6 indistinct citations owe their verdict to
+   same-line duplication, so (a) flips no verdict today. Build part 9 carries the
+   per-citation table and how the method was validated. **Retake it at
+   implementation time rather than trusting it from here** — it is a live number
+   and a new citation can enter the shape at any commit; the point of the line was
+   never the specific answer but that an amnesty must not be mistaken for a
+   correctness fix.
 
 ## Log
+
+- **2026-09-12** — **Build part 9's blocking measurement is taken: 0 of the
+  corpus's 6 indistinct citations owe their verdict to same-line duplication, so
+  option (a) would change no gate verdict today.** Fifth entry of the same date.
+  Part 9 stays **open** — this answers the fact the decision turns on, not the
+  decision.
+
+  **Measured here rather than transcribed.** The gate produced this number first
+  and reported it; it is written onto this page only after being reproduced
+  independently, because a count this page prints is this page's claim regardless
+  of who found it. Method: every record in `citations-gate.mjs`'s real scope — 128
+  files — run through the checker's **own exported** `extractCitations` and
+  `checkCitations`, collecting every citation `verified` with `occurrences` above
+  1. That reproduces the gate's `6 indistinct` exactly, and the six are the same
+     six, with the same anchors and the same raw hit lists.
+
+  **Two guards, because the interesting half needed a replica.** The raw-versus-
+  distinct split needs `locateAnchor`, which `citations.mjs` does not export, so it
+  was replicated — and the replica was validated **per case** by asserting its raw
+  count equals the tool's own `occurrences` for that same citation. 6 of 6 agreed;
+  a disagreement anywhere would have invalidated its distinct counts and the
+  script says so rather than printing a number regardless. Separately, coverage was
+  checked against the gate's own population: 56 of the 128 were skipped for having
+  no single `Review` section, and 128 − 56 = 72, which is exactly the gate's
+  `27 enforced + 45 grandfathered`. The scan saw what the gate sees.
+
+  **One refinement on the relayed table.** It listed `dl-44`'s
+  `served.rawPayload.equals(PNG)` as one row marked "×2 citations"; they are two
+  separate citations, at `:256` and `:336`, each raw 2 and distinct 2. The total of
+  six and the answer of zero are unchanged. Recorded because the page now prints
+  the per-citation table and it should match what a re-run prints.
+
+  **What the number does and does not settle.** It makes (a) a correctness fix
+  rather than an amnesty _against this corpus_. It does not rule out a future
+  citation entering the shape, so `Done when` #7 now says to retake it at
+  implementation time rather than trust it from here — the point of that line was
+  never the specific answer.
+
+  **Three of the six are self-citations** (all on `repo-31`), which is part 8's
+  shape, but none hits the same-line double match. The two defects overlap in the
+  code and not in the corpus, which is worth knowing before anyone assumes part 8
+  quietly repairs part 9.
+
+  **The gate's scoping recommendation, recorded as its view and not adopted**:
+  fold part 9 into this ticket if (b) is chosen, split it into its own if (a) is,
+  since a behaviour change deserves its own reproduction and its own gate. Left on
+  the page for whoever answers, alongside the page's own refusal to assume it
+  belongs here.
+
+  **Verification.** All unpiped, `$?` read directly. `npm run check` → 0.
+  `node scripts/citations.mjs` on this file → 0.
+  `node scripts/citations-gate.mjs --against origin/main` → 0.
+  `npm test -- --project repo` → 0.
 
 - **2026-09-12** — **Two gate findings repaired, and the second of them was not a
   defect in the ticket but a defect in the checker, found because the gate and
