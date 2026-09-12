@@ -3,7 +3,7 @@ id: pl-2
 tool: planner
 title: Ship the planner as a released image on its own subdomain
 kind: chore
-status: in-flight
+status: done
 milestone: null
 depends_on: [dl-10]
 difficulty: standard
@@ -133,6 +133,65 @@ from the one that wrote the branch, in its own worktree.
   both health checks before publishing either hostname, verified in the merged
   config rather than asserted. performance: n/a.
 
+### Gate on the Cloudflare-setup script (0ca4d87)
+
+**Gate: CONCERNS, all three findings repaired on the branch** — 2026-09-12 ·
+`main(8d79d8e)...0ca4d87` · reviewed on a different model from the one that wrote
+the branch, in its own worktree. The reviewer mutation-tested the ingress merge,
+the apply order and the proxied-flag guard by hand rather than reading them.
+
+The three `Done when` lines are unchanged by this diff and carry the 2026-09-08
+gate's verdicts. The third was still open when this gate ran; it closed later the
+same day against a running host, and the final Log entry is the measurement.
+
+- **med, fixed on this branch** ·
+  `scripts/cloudflare-setup.mjs:15` "never removes a rule it did not add" was
+  the claim, and no test held the code to it. Every "foreign" fixture in the suite was `downloader.example.com` —
+  which `desiredState` always also wants, since `TOOLS` carries both tools — so
+  a narrower regression that keeps only pre-existing rules **also present in
+  `desired`**, silently dropping any genuinely third-party hostname sharing the
+  tunnel, passed all eleven tests. Reproduced independently before acting on it:
+  the mutation is green on the old suite. This is not hypothetical — the account
+  this was applied to had exactly such a hostname, sharing the tunnel with
+  nothing else of ours.
+  `scripts/test/cloudflare-setup.test.ts:63` "const SHARED_TUNNEL = [" is now a
+  fixture whose foreign rule is in no tool's table, and `:84` "a hostname belonging to nobody in TOOLS survives the merge"
+  plus the rule-count case beside it both go red under the reviewer's mutation.
+- **low, fixed on this branch** · Two hostname-less rules in the _existing_
+  config: the second was silently dropped, because the merge kept
+  `existing.find(isCatchAll)` and discarded the rest — the function removing a
+  rule it did not add, in the one place it promised not to.
+  `scripts/cloudflare-setup.mjs:104` "if (catchAlls.length > 1)" makes it a
+  conflict, so the run refuses and a person decides which was meant.
+- **low, fixed on this branch** · A `desired` rule with a falsy hostname
+  produced a second catch-all, which matches everything and would swallow the
+  tunnel. Unreachable from the CLI — `desiredState` builds every hostname from a
+  subdomain and a domain — but `planIngress` is exported and general, so it
+  throws instead.
+- **found while repairing, not by the gate** · `GET /zones/:id/dns_records`
+  read one page of 500 and said nothing at the ceiling. A zone at 500+ could
+  have made the plan print `ADD` for a record that already exists on an unread
+  page. The API refuses the duplicate, so nothing corrupts — but a plan is a
+  document someone approves before `--apply`, and being wrong in it is the
+  defect. It now refuses.
+- **verified** ·
+  `scripts/cloudflare-setup.mjs:230` "export function applyOrder" holds for
+  every partial plan the reviewer tried — no access with routing, access with no
+  ingress, empty — and inverting it fails
+  `scripts/test/cloudflare-setup.test.ts:262` "expect(lastAccess).toBeLessThan(firstRouting)".
+- **verified** · `npm run check` and `npm test` exit 0 at the tip. The test file
+  is purely additive, so no existing assertion changed meaning.
+- **unverified by the reviewer, verified here** · that the script was applied to
+  a live account and read back from the API. The reviewer's sandbox has neither
+  the credential nor a route to Cloudflare and recorded the Log's claim as
+  asserted rather than confirmed, which is the right call from where it sat. It
+  was re-run after these repairs and still reports `nothing to do`.
+- NFR · security: three exact token permissions, no credential ever printed, no
+  shell invoked; Access applications created before any routing write, so the
+  hostname cannot resolve before its policy exists. reliability: idempotent, and
+  refuses rather than overwrites — now including the catch-all case.
+  performance: n/a.
+
 ## Log
 
 **2026-08-14 — steps 1–4 landed with dl-10.**
@@ -235,3 +294,98 @@ rather than a branch, and this correction does not touch it. Made from
 pl-38's worktree rather than this ticket's own, because pl-2 was not checked
 out live at the time; flagged and cleared with the session that had been
 holding it before this edit was made.
+
+**2026-09-12 — step 6 is executable now, and running it against a real account
+disproved two things this ticket assumed.**
+
+The Cloudflare half was "a dashboard object" and therefore nobody's to automate.
+That was wrong: the tunnel configuration, the DNS record the dashboard creates
+silently on your behalf, and the Access application are all API v4 calls, and
+they are now [`scripts/cloudflare-setup.mjs`](../../../../scripts/cloudflare-setup.mjs)
+with `scripts/test/cloudflare-setup.test.ts` behind it. What could not live in
+this repo was never the procedure — only the credential.
+
+**Applied to a live account, and read back from the API rather than trusted from
+the script's own output.** `planner.<domain>` and `downloader.<domain>` now
+carry ingress rules, proxied CNAMEs and an Access application each, with the
+downloader's `api/files/*` bypass beside it. A second run reports
+`nothing to do`.
+
+**Two assumptions this ticket and 02-DEPLOYMENT.md carried, both false.**
+
+- **"The downloader is already live behind Access" was not true of the account
+  it was said of.** There were no Access applications at all — not one, for
+  anything — and no `downloader` hostname; what existed was an unrelated
+  hostname pointing at a port on the host. The deployment page reads as though
+  step 4 has been done once already by the time you reach the second tool, and
+  the delta for the second tool inherits that. It does not hold. Everything in
+  the plan was a create.
+- **An account-owned API token is not a user token.** The dashboard's _Account
+  API tokens_ page — now the default path — issues a `cfat`-prefixed token that
+  answers `401 1000 Invalid API Token` at `/user/tokens/verify` and verifies
+  fine at `/accounts/<id>/tokens/verify`. The script asked the wrong endpoint
+  first, so a correct token failed at the only call that could not be skipped,
+  with an error indistinguishable from a mistyped secret. `verifyPath` and its
+  test exist because of that measurement.
+
+**One defect found by writing it down rather than by running it.** The obvious
+order — route the hostname, then put a login on it — leaves the endpoint live
+and unauthenticated for the length of the remaining calls, and indefinitely if
+one fails. On a host whose `cloudflared` is already connected that is real
+exposure, and for the downloader the page is explicit about what an open
+instance is for. `applyOrder` creates every Access application first; the test
+was watched failing with the order inverted.
+
+**The third _Done when_ is still open, and still for the same reason.** The
+Cloudflare side is configured and verified; nothing is served until an operator
+brings the stack up with `TUNNEL_TOKEN`, `GHCR_OWNER` and both tags in `.env`.
+That is a machine, not a branch. `in-flight` stays.
+
+**repo-33 does not collide with this.** Checked rather than assumed: it renames
+the compose _files_ and sets the compose _project_ name, while tunnel ingress
+addresses a _service_ on the compose network, which it does not touch. The port
+check in this branch's test finds each fragment by the service it defines rather
+than by filename, verified by performing the rename in the worktree and watching
+the suite stay green. The one shared surface is `02-DEPLOYMENT.md`, in different
+sections.
+
+**2026-09-12 — the third _Done when_ closed, and `status` with it.**
+
+The owner brought the stack up, reached `planner.oludoi.com`, was asked for a
+one-time PIN and got the UI. That proves the authenticated half. The other half
+of that line — "an unauthenticated request never reaches the host" — is not
+something a successful login demonstrates, so it was measured separately:
+
+- `planner.<domain>` and `downloader.<domain>`, with no credential, both answer
+  `302` to `<team>.cloudflareaccess.com/cdn-cgi/access/login/…`. The redirect is
+  issued by the edge, so the request is turned around before the tunnel, which
+  is the claim.
+- `downloader.<domain>/api/files/<a token that does not exist>` answers **`404`,
+  not a redirect**. Two things at once: the Bypass application matches the more
+  specific path as intended, and the origin is genuinely serving — a 404 for an
+  unknown capability token is the downloader's own answer, not Cloudflare's.
+  A hostname that merely resolved could not produce it.
+
+This ticket has been `in-flight` since 2026-08-14 for a reason that was always
+about a machine rather than a branch, and it is the reason the previous two
+sessions declined to close it. It is closed now because someone ran it, not
+because a diff looked finished.
+
+**2026-09-12 — the citation gate caught two things this branch broke, and one of
+them was in another ticket.**
+
+The `## Review` section above failed `citations-gate.mjs` with four unanchored
+references. They _had_ anchors; `oxfmt` reflowed the markdown and pushed each
+quote onto the line after its citation, and the gate reads the pair inline. The
+pairs now start their line so reflow cannot separate them. **The lesson is the
+verification, not the fix:** `node scripts/citations.mjs <record>` was run and
+exited 0, reporting the unanchored ones as informational. The gate's own command
+is `--section Review --require-anchors --require-distinct-anchors`, and without
+those flags it answers a weaker question than CI asks.
+
+**And three citations in
+[pl-38](./pl-38-the-planner-limiter-shares-one-bucket.md) moved because of this
+branch**, not because of anything pl-38 did: inserting a section into
+`02-DEPLOYMENT.md` shifted the lines its gate record cites. Repointed here,
+in the commit that moved them, because a record that cites the wrong line is
+worse than one that cites none — it reads as verified.

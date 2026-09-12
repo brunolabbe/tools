@@ -160,6 +160,8 @@ command including `pwd`.
 sessions run against this repo at once. If a command seems to need the shared
 checkout, that is the signal to stop and report, not to reach for it.
 
+**Use worktree-relative paths everywhere.** An absolute path built from the literal prefix `/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's copy of that file — no error, no warning, and it returns wrong content that looks exactly like right content. If you construct such a path and the file happens to be identical on both branches, you read the wrong tree with no indication. Use relative paths: this worktree's root is your repository root.
+
 Set up in this order — the order matters and each step has bitten someone:
 
 1. `git fetch origin && git checkout -B <branch> origin/<base>`. Take the base

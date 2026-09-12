@@ -107,6 +107,58 @@ That token is a bearer credential for the tunnel, not an identifier. Anyone
 holding it can publish traffic as you. `.env` is gitignored; if it ever leaks,
 delete the tunnel and create another, because there is no rotation.
 
+## 2 and 4, in one command
+
+Steps 2 and 4 are the two that are pure Cloudflare, and they are also
+[`scripts/cloudflare-setup.mjs`](../scripts/cloudflare-setup.mjs) — both tools at
+once, from a checkout, with no dashboard:
+
+```bash
+CLOUDFLARE_API_TOKEN=… node scripts/cloudflare-setup.mjs \
+  --domain example.com --email you@example.com --tunnel <the tunnel's name>
+```
+
+That prints a plan and writes nothing. `--apply` makes the changes. It is
+idempotent — a second run reports `nothing to do` — so it is also the way to
+check a host still matches what this page describes.
+
+The token wants exactly three permissions, and one of them is per-zone:
+
+| Scope   | Permission                | Access |
+| ------- | ------------------------- | ------ |
+| Account | Cloudflare Tunnel         | Edit   |
+| Account | Access: Apps and Policies | Edit   |
+| Zone    | DNS                       | Edit   |
+
+**A token made on the dashboard's _Account API tokens_ page is account-owned**,
+which is now the default, and an account-owned token is not a user token: it
+answers `401 Invalid API Token` at `/user/tokens/verify` while being perfectly
+valid. The script verifies against the account when it knows one, which is why
+`--account` exists beside `--zone`. Both ids are on the domain's Overview page,
+and passing them also covers a token without `Zone → Read` — a correct token for
+this job, since nothing here needs to _list_ zones.
+
+**It refuses where it cannot be sure, and it never deletes.** The ingress call
+replaces the tunnel's entire rule list, so adding a tool means writing every
+other tool's rule back out; a hostname already routed somewhere else stops the
+run with a conflict rather than being rewritten, and so does a DNS name that
+exists as something other than this tunnel's CNAME. Widening or removing an
+Access policy stays a dashboard decision — see
+[When you want it genuinely public](#when-you-want-it-genuinely-public).
+
+**Access applications are created before the routing**, on purpose. Ingress plus
+a proxied record is what makes a hostname answer; the Access application is what
+makes it ask for a login. In that order the endpoint would be live and open for
+as long as the remaining calls take, which on a host whose `cloudflared` is
+already connected is real exposure. Inverted, the worst case is a policy
+guarding a name that does not resolve yet.
+
+**Read step 4 before running it either way.** The script encodes which tool gets
+a Bypass rule and which must never have one; the argument for that is below, and
+it is not a preference.
+
+---
+
 ## 2 — Route the hostname
 
 Still in the tunnel's configuration, **Public Hostnames → Add a public
@@ -548,7 +600,11 @@ naming the variable, rather than starting something on a tag nobody chose.
 
 ### 2 — Route the hostname
 
-Same tunnel, **Public Hostnames → Add a public hostname**:
+`scripts/cloudflare-setup.mjs` already knows about both tools, so if you ran it
+for the downloader there is nothing to do here — it adds the planner's hostname
+and its Access application in the same run, and reports the downloader's as
+`ok`. By hand instead: same tunnel, **Public Hostnames → Add a public
+hostname**:
 
 | Field     | Value          |
 | --------- | -------------- |

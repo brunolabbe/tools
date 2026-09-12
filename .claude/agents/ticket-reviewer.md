@@ -23,7 +23,7 @@ Set up in this order, and **all of it before any test or check**:
    given. Detach rather than checking out the branch by name — the builder still
    holds that branch in its own worktree and git refuses a second checkout of it.
 2. **Confirm you are looking at the right tree**: `git log --oneline -1` and one
-   `git diff --stat <base>...HEAD`.
+   `git diff --stat <base>...HEAD`. **Use worktree-relative paths in all your reads and writes.** An absolute path built from `/workspaces/tools/<repo-relative-path>` resolves silently to the shared root's copy, not your worktree — no error, no warning. Construct paths relative to your working directory instead.
 3. Populate `node_modules` with
    `bash /workspaces/tools/.claude/scripts/worktree-farm.sh`. Not `npm install`:
    it is minutes and can fail outright when a postinstall cannot reach the
