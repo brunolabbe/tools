@@ -215,10 +215,36 @@ async function main() {
 
   await call(token, "/user/tokens/verify");
 
-  const zones = await call(token, `/zones?name=${encodeURIComponent(args.domain)}`);
-  if (zones.length !== 1) fail(`expected one zone named ${args.domain}, found ${zones.length}`);
-  const zone = zones[0];
-  const accountId = args.account ?? zone.account.id;
+  // `GET /zones` is a convenience, not a requirement. A token scoped to one
+  // zone's DNS can usually still see that zone in the list — but "usually" is
+  // the token's business, not ours, and a token without Zone:Read is a correct
+  // token for what this script does. So --zone and --account skip the lookup
+  // entirely rather than making the caller widen a credential to be listed.
+  let zoneId = args.zone;
+  let accountId = args.account;
+
+  if (!zoneId || !accountId) {
+    const zones = await call(token, `/zones?name=${encodeURIComponent(args.domain)}`).catch(
+      (err) => {
+        fail(
+          `${err.message}\n\n` +
+            "  The token cannot list zones. That is fine — pass the two ids from the\n" +
+            "  dashboard instead, both on your domain's Overview page, right-hand column:\n" +
+            "    --zone <Zone ID> --account <Account ID>",
+        );
+      },
+    );
+
+    if (zones.length !== 1) {
+      fail(
+        `expected one zone named ${args.domain}, found ${zones.length}` +
+          " — pass --zone and --account from the domain's Overview page",
+      );
+    }
+
+    zoneId ??= zones[0].id;
+    accountId ??= zones[0].account.id;
+  }
 
   const tunnels = (await call(token, `/accounts/${accountId}/cfd_tunnel?is_deleted=false`)).filter(
     (t) => !args.tunnel || t.name === args.tunnel || t.id === args.tunnel,
@@ -236,13 +262,13 @@ async function main() {
   const config = await call(token, `/accounts/${accountId}/cfd_tunnel/${tunnel.id}/configurations`);
   const ingress = planIngress(config?.config?.ingress ?? [], want.ingress);
 
-  const records = await call(token, `/zones/${zone.id}/dns_records?per_page=500`);
+  const records = await call(token, `/zones/${zoneId}/dns_records?per_page=500`);
   const dns = planDns(records, want.dns, tunnel.id);
 
   const apps = await call(token, `/accounts/${accountId}/access/apps`);
   const access = planAccess(apps, want.apps);
 
-  out(`zone    ${args.domain} (${zone.id})`);
+  out(`zone    ${args.domain} (${zoneId})`);
   out(`account ${accountId}`);
   out(`tunnel  ${tunnel.name} (${tunnel.id})`);
   out();
@@ -289,7 +315,7 @@ async function main() {
   }
 
   for (const d of dns.create) {
-    await call(token, `/zones/${zone.id}/dns_records`, {
+    await call(token, `/zones/${zoneId}/dns_records`, {
       method: "POST",
       body: JSON.stringify({ type: "CNAME", name: d.name, content: d.content, proxied: true }),
     });
