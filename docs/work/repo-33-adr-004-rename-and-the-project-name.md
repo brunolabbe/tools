@@ -117,6 +117,65 @@ only copy of anything a user downloaded.
 
 ## Log
 
+**2026-09-12 — merged `main`, and re-proved `Done when` #3 on the merged tree.**
+`main` moved under the open PR (five merges, including pl-2 `d0727a2` / #212,
+which edits `docs/02-DEPLOYMENT.md`). Merged rather than rebased: the gate
+record is committed, and a rebase moves every coordinate in it with no record
+of why. Merge commit `b3b3786`.
+
+**The verdict below was measured on `6fcf4be` and was not carried forward.**
+The merge changes the tree that run measured, so the `docker` job was run again
+rather than argued about: **run `34718932111`, workflow `downloader`, on
+`b3b37860638f77a06c23d570334fd760699d4d5a`, conclusion `success`**; job level
+`docker status=completed conclusion=success`; step 5
+`docker compose -f compose.downloader.yaml up -d --no-build` and step 6 the
+health wait, both `success`. `Done when` #3 is closed against the merged tree by
+direct evidence.
+
+That mattered more than it looked. A proposed shortcut — "the merge touches none
+of the image-build inputs, so the old run still applies" — named only the _root_
+`package.json`, and the merge does touch **`tools/downloader/api/package.json`**
+(`0.3.0` → `0.4.0`, from release-please). The bumped manifest builds green on
+`main` at `a7f2c86`, and the rename builds green on `6fcf4be`, but no run had
+covered **both together** until this one.
+
+**One conflict, and it was not a pick-a-side.**
+`pl-38-the-planner-limiter-shares-one-bucket.md`: both branches had repointed
+the _same_ two citations, each correct against its own tree — pl-2 to
+`docs/02-DEPLOYMENT.md:657` and `:273`, this branch to `:833` and `:231`. In the
+merged tree, which carries pl-2's 58-line section _and_ this branch's migration,
+**all four are wrong**. Re-resolved by running the checker against the merged
+file: `:889` and `:283`. The two this branch repaired that pl-2 never touched
+were re-checked rather than assumed to have survived — `compose.prod.yaml:71`
+and `compose.planner.prod.yaml:88`, both still correct. pl-2's own
+`pl-2-container-image.md:283` repair is unrelated and kept as it merged.
+
+**`docs/02-DEPLOYMENT.md` auto-merged cleanly, which is not the same as being
+correct, so it was read end to end.** pl-2's new section lands between steps 1
+and 2 of the tunnel walkthrough, above everything this branch wrote; the volume
+migration is contiguous with all seven steps in order and the two-tool handling
+intact in each. Four `compose.yaml` mentions remain in the file and all four are
+deliberate — two historical prose, two in migration step 2's pre-pull command,
+which is meant to name the old files.
+
+**The merge's most interesting artefact is a test from the other branch that
+reads this branch's files.** pl-2 added `scripts/test/cloudflare-setup.test.ts`,
+which globs the compose fragments at the repo root and asserts each tool's
+published port. It was written anticipating this rename and finds fragments by
+the _service they define_ rather than by filename. Run rather than trusted: 15
+tests pass. It is also not vacuous — it guards with
+`expect(fragments.length, "found no compose fragments to check against")` and a
+per-tool `"no compose fragment defines ${t.tool} with ports"`. Those guards were
+read, not demonstrated red; mutating a shared file mid-merge was not worth it,
+and the distinction is recorded rather than glossed.
+
+**Three citations in the `## Review` section broke and were deliberately left
+broken here.** pl-2's insertion pushed `docs/02-DEPLOYMENT.md:326`, `:353` and
+`:466` down to `378`, `405` and `518`. They are the reviewer's own text; the
+failure was sent to it to repair rather than rewritten by the builder, and
+`citations-gate.mjs` stays red until it lands. None of this Log's own citations
+moved.
+
 **2026-09-12 — `Done when` #3 converted from `unproven (gate)` to verified.**
 PR [#211](https://github.com/brunolabbe/tools/pull/211) fired the run that
 neither the builder nor the reviewer could: **run `34713750829`, workflow
