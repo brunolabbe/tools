@@ -41,14 +41,14 @@ an implementation detail** — see the decision below.
 
 This is the part that decides whether the feature works at all.
 
-|                                             | lifetime                                                                                             |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| The downloaded file, and so the green panel | **6 hours** (`fileRetentionHours: 6`, [`downloader/api/src/config.ts:192`](../../api/src/config.ts)) |
-| The thumbnail bytes the panel would show    | **10 minutes** (`THUMBNAIL_TTL_MS`, [`thumbnails.ts:91`](../../api/src/thumbnails.ts))               |
+|                                             | lifetime                                                                                                                     |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| The downloaded file, and so the green panel | **6 hours** (`fileRetentionHours: 6`, [`downloader/api/src/config.ts:238 "fileRetentionHours: 6"`](../../api/src/config.ts)) |
+| The thumbnail bytes the panel would show    | **10 minutes** (`THUMBNAIL_TTL_MS`, [`thumbnails.ts:115 "const THUMBNAIL_TTL_MS"`](../../api/src/thumbnails.ts))             |
 
-`ThumbnailStore` is an in-memory `Map` ([`thumbnails.ts:124`](../../api/src/thumbnails.ts))
+`ThumbnailStore` is an in-memory `Map` ([`thumbnails.ts:148 "readonly #entries = new Map"`](../../api/src/thumbnails.ts))
 with a 10-minute TTL, a 400-entry cap that evicts oldest-first
-([`:145-150`](../../api/src/thumbnails.ts)), and no persistence — a restart empties
+([`:169-174 "while (this.#entries.size > this.#maxEntries)"`](../../api/src/thumbnails.ts)), and no persistence — a restart empties
 it.
 
 Meanwhile **both** sides remember the path forever: the API's SQLite schema has a
@@ -106,7 +106,7 @@ work.
    holding `result__meta` and `result__actions`. A bare third child lands between
    them and pushes the filename into the middle of the row. This exact trap is
    already documented twice in this codebase — the grouping comments at
-   [`ProbePanel.tsx:57-61`](../../web/src/components/ProbePanel.tsx) and
+   [`ProbePanel.tsx:61-65 "Grouped with the title rather than added as a third child"`](../../web/src/components/ProbePanel.tsx) and
    [`JobCard.tsx:65-67`](../../web/src/components/JobCard.tsx) — so group the
    image with `result__meta` rather than adding a sibling.
 3. `Preview` takes `size: "panel" | "card"` ([`Preview.tsx:12`](../../web/src/components/Preview.tsx)).
@@ -133,15 +133,15 @@ work.
 
 **Gate: PASS** — 2026-09-05 · `origin/main...HEAD` (4a4cc4f...20006ca) · code-review at medium, run by the reviewer itself (sonnet, dispatched against a builder run recorded as opus)
 
-| Done when                                                                                                                                       | Proof                                                                                                                                                                 |
-| ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A completed job with a live `thumbnailPath` shows the preview inside the green result panel                                                     | `job-card.test.tsx:781-793` ✓                                                                                                                                         |
-| A completed job with no `thumbnailPath` renders the panel exactly as today — no gap, no reserved empty box, no layout shift                     | `job-card.test.tsx:811-838` ✓                                                                                                                                         |
-| A component test covers the filename still sitting at the left edge with the image present, so the `space-between` trap cannot regress silently | `job-card.test.tsx:795-809` ✓ — reproduced by mutation: reinstating the trap turns this test (and `:781`) red                                                         |
-| An active job still shows the preview in the head                                                                                               | `job-card.test.tsx:744-755` ✓                                                                                                                                         |
-| `npm run check` and `npm test -- --project downloader` pass                                                                                     | verified — `npm run check` exit 0; 65 files / 1032 tests passed (re-verified at 20006ca: no source file changed since 4caf813, `job-card.test.tsx` alone still 33/33) |
+| Done when                                                                                                                                       | Proof                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A completed job with a live `thumbnailPath` shows the preview inside the green result panel                                                     | `job-card.test.tsx:781-793 "a completed job shows its preview inside the result panel, and only there"` ✓                                                                                                                                          |
+| A completed job with no `thumbnailPath` renders the panel exactly as today — no gap, no reserved empty box, no layout shift                     | `job-card.test.tsx:811-838 "a completed job with no preview renders the result panel exactly as before"` ✓                                                                                                                                         |
+| A component test covers the filename still sitting at the left edge with the image present, so the `space-between` trap cannot regress silently | `job-card.test.tsx:795-809 "the filename keeps the left of the result panel with the image present"` ✓ — reproduced by mutation: reinstating the trap turns this test (and `:781 "a completed job shows its preview inside the result panel"`) red |
+| An active job still shows the preview in the head                                                                                               | `job-card.test.tsx:744-755 "an active job shows its preview in the head, beside the title, from our path"` ✓                                                                                                                                       |
+| `npm run check` and `npm test -- --project downloader` pass                                                                                     | verified — `npm run check` exit 0; 65 files / 1032 tests passed (re-verified at 20006ca: no source file changed since 4caf813, `job-card.test.tsx` alone still 33/33)                                                                              |
 
-- **low** · fixed in-branch, no action needed: the ticket's own citations drifted — one (`fileRetentionHours` at `config.ts`) was wrong from filing (a screen off), six others were moved by this branch's own commit adding lines to `JobCard.tsx`/`styles.css`. The ticket's Log originally claimed "every citation still resolves" on the strength of `citations.mjs` reporting `0 moved, 0 unresolvable`, which was a misread — all were `unanchored`, meaning the script compared coordinates, not content. Caught when this gate's own citation (`config.ts:192`) diverged from the ticket's (`:182`) with neither side flagging it. Fixed in `20006ca`, ticket file only; verified by re-reading each repointed target line against current source and rerunning `citations.mjs` (15 parsed, 0 unresolvable at the new tip).
+- **low** · fixed in-branch, no action needed: the ticket's own citations drifted — one (`fileRetentionHours` at `config.ts`) was wrong from filing (a screen off), six others were moved by this branch's own commit adding lines to `JobCard.tsx`/`styles.css`. The ticket's Log originally claimed "every citation still resolves" on the strength of `citations.mjs` reporting `0 moved, 0 unresolvable`, which was a misread — all were `unanchored`, meaning the script compared coordinates, not content. Caught when this gate's own citation (`tools/downloader/api/src/config.ts:192`) diverged from the ticket's (`:182`) with neither side flagging it. Fixed in `20006ca`, ticket file only; verified by re-reading each repointed target line against current source and rerunning `citations.mjs` (15 parsed, 0 unresolvable at the new tip).
 - **dropped** · reviewer's own hunt initially raised: an operator setting `FILE_RETENTION_HOURS` below `THUMBNAIL_TTL_MS` (10 min) would make the FILE_EXPIRED-preview regression observable. Does not reproduce — `config.ts`'s `int()` helper defaults `min = 1` and `FILE_RETENTION_HOURS` is parsed with no override, so every reachable value clamps to at least 1 hour (6x the TTL). No reachable configuration triggers this. Retracted after the builder pointed at the clamp and the reviewer confirmed by reading the function.
 - **findings** · code-review at medium (run by the reviewer itself) returned 2 across two passes; 1 carried (citation drift, fixed), 1 dropped (retention-hours caveat, does not reproduce).
 - NFR: security n/a (no new external input; `thumbnailPath` unchanged flow) · performance n/a (trivial render change) · reliability ✓ (`Preview`'s null-on-failure behavior unchanged) · maintainability ✓ (grouping comment mirrors existing pattern; citation drift addressed above; non-blocking heads-up that dl-43 will touch the same files, edits locatable by the new `result__headline` classname).
@@ -232,3 +232,5 @@ work.
   the CSP. `e2e/sniffer/mse-page.spec.ts` already proves exactly that for the
   probe panel's copy of the same component on the same `/api/thumbnail/` path,
   and the e2e suites were not run on this branch.
+
+- **2026-09-12 — repo-39: 7 failing references down to 2.** The four `job-card.test.tsx` ranges are anchored on their test names (unchanged). Outside the gate record, the Why's retention figure, thumbnail TTL, store map, eviction loop and `ProbePanel` grouping comment are repointed to where they stand now. **Left failing:** the low finding's two `config.ts` numbers, the gate's own and the ticket's, which are the subject of the finding rather than pointers. They are qualified from ambiguous to the downloader's `config.ts` and otherwise left as a dated account, waiting for repo-35's pin; the Log's matching sentence is left as written for the same reason.

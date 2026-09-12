@@ -110,11 +110,11 @@ passes: an initial review at `21bc1f9` and a confirmation at `01c23dd` after the
 findings below were fixed. Both from the reviewer's own detached worktree, both
 with `worktree-farm.sh` + build first, printed `pwd` before every suite run.
 
-| Done when                                                                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. A resolver meeting a certificate it cannot verify raises `TLS_VERIFICATION_FAILED`, not `UNREACHABLE` and not `NO_MEDIA_FOUND` — for both tiers, against a fixture | **proven.** Browser tier, unit: `resolvers/test/browser/capture-rules.test.ts:359`. Browser tier, real Chromium: `api/test/tier-tls-verdict.test.ts:77`. yt-dlp tier: `resolvers/test/ytdlp.test.ts:220`. Reviewer reverted each raise in turn and named the old verdict each returned to (`UNREACHABLE`, `NO_MEDIA_FOUND`) before restoring.                                                                                                                                            |
-| 2. An operator-supplied root reaches whichever tiers step 1's decision says it should, end to end against a locally-issued certificate                                | **unproven — out of scope for this slice, by design.** Half one (giving the tiers the anchor) was never built here; see `## Decision`. Not counted as a defect: the dispatch that produced this build explicitly excluded half one, the reviewer's own dispatch said not to gate it as missing work, and the orchestrator confirmed the rubric has no row for a deliberately sliced ticket.                                                                                              |
-| 3. `npm run check` and `npm test -- --project downloader` pass                                                                                                        | **proven.** `npm run check` exit 0, both passes. `npm test -- --project downloader`: 61 files / 966 tests at `01c23dd`, reproduced independently by the reviewer from a separate worktree with an identical count. Baseline at `origin/main` (`91c117b`): 59 files / 939 tests, per the reviewer's first pass; the deltas across both rounds (+1 file/+17 tests, then +1 file/+10 tests) reconcile exactly against the new `test(` blocks each round added, counted rather than assumed. |
+| Done when                                                                                                                                                             | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A resolver meeting a certificate it cannot verify raises `TLS_VERIFICATION_FAILED`, not `UNREACHABLE` and not `NO_MEDIA_FOUND` — for both tiers, against a fixture | **proven.** Browser tier, unit: `resolvers/test/browser/capture-rules.test.ts:359 "a refused certificate is TLS_VERIFICATION_FAILED, not UNREACHABLE"`. Browser tier, real Chromium: `api/test/tier-tls-verdict.test.ts:77 "says TLS_VERIFICATION_FAILED, where it used to say UNREACHABLE"`. yt-dlp tier: `resolvers/test/ytdlp.test.ts:343 "is TLS_VERIFICATION_FAILED, not the NO_MEDIA_FOUND default"`. Reviewer reverted each raise in turn and named the old verdict each returned to (`UNREACHABLE`, `NO_MEDIA_FOUND`) before restoring. |
+| 2. An operator-supplied root reaches whichever tiers step 1's decision says it should, end to end against a locally-issued certificate                                | **unproven — out of scope for this slice, by design.** Half one (giving the tiers the anchor) was never built here; see `## Decision`. Not counted as a defect: the dispatch that produced this build explicitly excluded half one, the reviewer's own dispatch said not to gate it as missing work, and the orchestrator confirmed the rubric has no row for a deliberately sliced ticket.                                                                                                                                                     |
+| 3. `npm run check` and `npm test -- --project downloader` pass                                                                                                        | **proven.** `npm run check` exit 0, both passes. `npm test -- --project downloader`: 61 files / 966 tests at `01c23dd`, reproduced independently by the reviewer from a separate worktree with an identical count. Baseline at `origin/main` (`91c117b`): 59 files / 939 tests, per the reviewer's first pass; the deltas across both rounds (+1 file/+17 tests, then +1 file/+10 tests) reconcile exactly against the new `test(` blocks each round added, counted rather than assumed.                                                        |
 
 - **med, Finding A — the yt-dlp certificate marker matched an ambiguous phrase,
   fixed.** `ytdlpCertificateMarker`'s generic "certificate verify failed" match
@@ -122,7 +122,7 @@ with `worktree-farm.sh` + build first, printed `pwd` before every suite run.
   (`"unable to get local issuer certificate"`), which is unrelated to a private
   root and which Chromium frequently recovers from via AIA chasing where
   yt-dlp's default backend does not. Since yt-dlp runs before the browser tier
-  and `TLS_VERIFICATION_FAILED` now stops the chain (`registry.ts:71`), an
+  and `TLS_VERIFICATION_FAILED` now stops the chain (`registry.ts:98 "if (error.code !=="`), an
   ordinary public-site misconfiguration would have hard-stopped instead of
   falling through to a tier likely to succeed. Reproduced on both sides: the
   reviewer measured the regex match; the builder built a real two-level chain
@@ -135,7 +135,7 @@ with `worktree-farm.sh` + build first, printed `pwd` before every suite run.
   by excluding the ambiguous phrase in `resolvers/src/tls-verification.ts`;
   tests in the new `resolvers/test/tls-verification.test.ts`, a
   `tls-incomplete-chain` fixture mode in `fake-ytdlp.mjs`, and a registry-level
-  assertion in `ytdlp.test.ts:259`. The reviewer additionally checked the
+  assertion in `ytdlp.test.ts:382 "an incomplete chain is left as NO_MEDIA_FOUND, not hard-stopped"`. The reviewer additionally checked the
   mirror risk — over-narrowing swallowing a genuine private-root signal — by
   adding `"self-signed"` to the exclusion list and watching six tests across
   three files go red; restored, clean. The sub-case the fix does not
@@ -161,13 +161,13 @@ with `worktree-farm.sh` + build first, printed `pwd` before every suite run.
   explain. Corrected in place next to the original claim.
 - **med, Finding D — the Decision section's exposure argument had a backwards
   premise, fixed.** The first draft framed a captured session cookie reaching
-  Chromium's traffic as new exposure relative to ffmpeg. `CLAUDE.md:115`
+  Chromium's traffic as new exposure relative to ffmpeg. `tools/downloader/CLAUDE.md:116 "not just the manifest"`
   requires `RequestContext` replayed on every fetch unconditionally, segments
-  included; `engine/src/ffmpeg/args.ts:162` calls `buildRequestContextArgs` on
+  included; `engine/src/ffmpeg/args.ts:162 "buildRequestContextArgs(options.requestContext)"` calls `buildRequestContextArgs` on
   every ffmpeg invocation with no gate; `Cookie` and `Authorization` are absent
   from that function's `DROPPED_HEADERS`
-  (`engine/src/ffmpeg/headers.ts:28-42`); and `ffmpegTlsIntercept` defaults to
-  `true` (`downloader/api/src/config.ts:377`) — so a captured cookie already crosses this
+  (`engine/src/ffmpeg/headers.ts:28-42 "const DROPPED_HEADERS"`); and `ffmpegTlsIntercept` defaults to
+  `true` (`downloader/api/src/config.ts:423 "ffmpegTlsIntercept: overrides.ffmpegTlsIntercept"`) — so a captured cookie already crosses this
   process in plaintext through ffmpeg's existing terminating proxy, by default,
   today. Both reviewer and builder independently verified all four citations.
   The conclusion (Chromium's exposure is larger) stands on **breadth of
@@ -207,13 +207,13 @@ builds half one has to meet this objection rather than rediscover it:
 - **Every HTTPS page Chromium loads crosses this process in plaintext, and that
   is a larger exposure than ffmpeg's — but not for the reason first written
   here.** Gate finding D, corrected: the first draft framed the session cookie
-  as new to Chromium's exposure, and it is not. `CLAUDE.md:115` requires
+  as new to Chromium's exposure, and it is not. `tools/downloader/CLAUDE.md:116` requires
   `RequestContext` replayed on every fetch, unconditionally, segments included;
   `engine/src/ffmpeg/args.ts:162` calls `buildRequestContextArgs` on every
   ffmpeg invocation with no gate; `Cookie` and `Authorization` are absent from
   that function's `DROPPED_HEADERS`
   (`engine/src/ffmpeg/headers.ts:28-42`); and `ffmpegTlsIntercept` defaults to
-  `true` (`downloader/api/src/config.ts:377`). So a captured session cookie already
+  `true` (`downloader/api/src/config.ts:423`). So a captured session cookie already
   crosses this process in plaintext through ffmpeg's terminating proxy, today,
   by default — moving the tiers changes nothing about that half. What is
   actually larger is **breadth**: a whole rendered page — its scripts, its
@@ -286,9 +286,9 @@ claim and a produced one stays visible.
 
   **What forced the split is an invariant, and it was right.** Holding
   `status: ready` while carrying a `## Review` gate record is a state this repo
-  forbids: `reviewedButReady` in [`scripts/status.mjs:264`](../../../../scripts/status.mjs)
+  forbids: `reviewedButReady` in [`scripts/status.mjs:387 "export function reviewedButReady"`](../../../../scripts/status.mjs)
   feeds `problems` and sets a non-zero exit, and
-  [`scripts/test/status.test.ts:180`](../../../../scripts/test/status.test.ts)
+  [`scripts/test/status.test.ts:197`](../../../../scripts/test/status.test.ts)
   asserts "no ticket on the board is ready with a gate record already on it". PR
   #142 went red on exactly that, on both the `check` job and the `scripts`
   suite, while `downloader`, `security` and `pr-title` all passed. The two
@@ -311,7 +311,7 @@ claim and a produced one stays visible.
   of what was checked then, not a pointer for a reader now.
 
 - **2026-09-04** — **`## Review` above is builder-written, which is the
-  convention and not a shortcut.** [`docs/01-TICKETS.md:239`](../../../../docs/01-TICKETS.md):
+  convention and not a shortcut.** [`docs/01-TICKETS.md:351 "the reviewer reports and the builder writes the section down"`](../../../../docs/01-TICKETS.md):
   "the reviewer reports and the builder writes the section down, with the date,
   the verdict, and **both halves named above**". It is transcribed from the
   reviewer's two reports — the initial gate at `21bc1f9` and the confirmation at
@@ -372,7 +372,7 @@ CertificateVerifyError(…))`.
     (`resolvers/src/tls-verification.ts`) is the constant shared by the two
     tiers this ticket is actually about.
   - **Step 2 is not only a copy change, and the ticket does not say so.**
-    `registry.ts:71` falls through on `NO_MEDIA_FOUND` and on nothing else, so
+    `registry.ts:98` falls through on `NO_MEDIA_FOUND` and on nothing else, so
     moving yt-dlp's verdict off that code **stops the resolver chain**. That is
     the right answer — the browser tier verifies against its own store and would
     meet the same private root, so falling through buys a browser launch and
@@ -517,12 +517,12 @@ to get local issuer certificate (_ssl.c:1032)…`. I also pointed the real
 
   **Finding D, fixed: the Decision section's cookie argument was backwards.**
   I had framed a captured session cookie reaching Chromium's traffic as new
-  exposure. `CLAUDE.md:115` requires `RequestContext` replayed on every fetch
+  exposure. `tools/downloader/CLAUDE.md:116` requires `RequestContext` replayed on every fetch
   unconditionally, `engine/src/ffmpeg/args.ts:162` calls
   `buildRequestContextArgs` on every ffmpeg invocation with no gate, `Cookie`
   and `Authorization` are absent from that function's `DROPPED_HEADERS`
   (`engine/src/ffmpeg/headers.ts:28-42`), and `ffmpegTlsIntercept` defaults to
-  `true` (`downloader/api/src/config.ts:377`) — all four re-verified here, not
+  `true` (`downloader/api/src/config.ts:423`) — all four re-verified here, not
   transcribed. So a captured cookie already crosses this process in plaintext
   through ffmpeg's existing terminating proxy, by default, today. The
   conclusion (Chromium's exposure is larger) still holds, on breadth rather
@@ -561,3 +561,5 @@ to get local issuer certificate (_ssl.c:1032)…`. I also pointed the real
   of dl-32/dl-33 riding dl-23's. Not folded into dl-29: it is a different tool
   area, it carries an open architectural decision, and dl-29 was explicitly told
   to stay out of `config.ts` while dl-31 was in gate.
+
+- **2026-09-12 — repo-39: the `## Review` citations anchored, 9 failing references down to 0, and the `GRANDFATHERED` entry deleted.** One was wrong from the day it was written: finding D's `CLAUDE.md` citation resolved to the root `CLAUDE.md`, a blank line, when the rule it quotes (replay `RequestContext` on every fetch) is in `tools/downloader/CLAUDE.md`. The same slip recurs twice outside the gate record, and all three now name the downloader's file. The stale `registry.ts`, `ytdlp.test.ts` and `config.ts` pointers are repointed by content, and the Log's `status.mjs`, `status.test.ts` and `01-TICKETS.md` pointers alongside. **Left as written outside the gate record, on purpose:** the Why's "Half two" and the Provenance section, which say in their own words that their line numbers describe the tree before the fix, and the `server.ts` decline, which dl-37 has since rewritten.

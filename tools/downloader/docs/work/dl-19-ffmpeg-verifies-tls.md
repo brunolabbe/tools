@@ -121,14 +121,14 @@ ffmpeg builds this repo runs.
 Reviewed at `96b6f22`; every `file:line` below is re-resolved against the tip of
 this branch, which moved when the findings were addressed.
 
-| #   | Done when                                                                                                           | Verdict           | Proven by                                                                                                                                                                     |
-| --- | ------------------------------------------------------------------------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `buildNetworkInputArgs` emits `-tls_verify 1`, asserted on every remote input including `manifest.ts`'s audio input | **proven**        | `engine/test/ffmpeg-args.test.ts:134`, `:237` (both inputs), `:252` (both under the hatch)                                                                                    |
-| 2   | An HLS download fails without the fixture CA and succeeds with it, both against real ffmpeg in the same suite       | **proven**        | `api/test/proxied-https.test.ts:397` (fails), `:421` (succeeds)                                                                                                               |
-| 3   | The failure carries a code and a message saying "certificate", distinct from a 404'd variant                        | **proven**        | `api/test/proxied-https.test.ts:397`, `:433` (404 stays `DOWNLOAD_FAILED`), `:474` (classifier)                                                                               |
-| 4   | The escape hatch turns verification off, logs a warning, and has a test proving the argv changes                    | **partly proven** | argv and behaviour at `api/test/proxied-https.test.ts:451` and `engine/test/ffmpeg-args.test.ts:145`; **the boot warning at `api/src/server.ts:103` has no test** — finding 3 |
-| 5   | Both ffmpeg builds measured, result in the Log whichever way it came out                                            | **verified**      | Log, "The two trust stores, measured"; re-run by the reviewer and reproduced                                                                                                  |
-| 6   | `npm run check` and `npm test -- --project downloader` green; `npm run e2e:downloader` passes unchanged             | **verified**      | Reviewer's own baseline, below                                                                                                                                                |
+| #   | Done when                                                                                                           | Verdict           | Proven by                                                                                                                                                                                                                                                                                                                            |
+| --- | ------------------------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `buildNetworkInputArgs` emits `-tls_verify 1`, asserted on every remote input including `manifest.ts`'s audio input | **proven**        | `engine/test/ffmpeg-args.test.ts:135 "an HTTPS input verifies the certificate by default"`, `:238 "both inputs of a separate-track download verify, and both take the CA"` (both inputs), `:253 "the escape hatch reaches both inputs too"` (both under the hatch)                                                                   |
+| 2   | An HLS download fails without the fixture CA and succeeds with it, both against real ffmpeg in the same suite       | **proven**        | `api/test/proxied-https.test.ts:426 "a download from an origin ffmpeg has no CA for fails, as a certificate problem"` (fails), `:450 "the same download succeeds when the fixture CA is passed"` (succeeds)                                                                                                                          |
+| 3   | The failure carries a code and a message saying "certificate", distinct from a 404'd variant                        | **proven**        | `api/test/proxied-https.test.ts:426 "a download from an origin ffmpeg has no CA for fails, as a certificate problem"`, `:462 "a 404 is still a download failure, and not mistaken for a certificate one"` (404 stays `DOWNLOAD_FAILED`), `:503 "the stderr classifier reads ffmpeg's real words, not a paraphrase"` (classifier)     |
+| 4   | The escape hatch turns verification off, logs a warning, and has a test proving the argv changes                    | **partly proven** | argv and behaviour at `api/test/proxied-https.test.ts:480 "the escape hatch really turns it off, argv and behaviour both"` and `engine/test/ffmpeg-args.test.ts:146 "the escape hatch writes -tls_verify 0 rather than dropping the flag"`; **the boot warning at `tools/downloader/api/src/server.ts:103` has no test** — finding 3 |
+| 5   | Both ffmpeg builds measured, result in the Log whichever way it came out                                            | **verified**      | Log, "The two trust stores, measured"; re-run by the reviewer and reproduced                                                                                                                                                                                                                                                         |
+| 6   | `npm run check` and `npm test -- --project downloader` green; `npm run e2e:downloader` passes unchanged             | **verified**      | Reviewer's own baseline, below                                                                                                                                                                                                                                                                                                       |
 
 **Verdict: CONCERNS**, as given and not softened. The implementation is correct,
 the argv layer is well tested and the measurements reproduced independently; the
@@ -146,18 +146,18 @@ layer that nothing pins.
    reached the segment origin, so propagation exists and the TLS options are
    simply not in the propagated set. The repo's fixture is single-origin and
    structurally cannot see this. — **Doc corrected here**
-   (`01-ARCHITECTURE.md:168`, `.env.example`, and this Log's opening);
+   (`tools/downloader/docs/01-ARCHITECTURE.md:168`, `.env.example`, and this Log's opening);
    **[dl-21](./dl-21-verified-hls-segments.md) filed** carrying the reproduction
    verbatim. Not fixed on this branch: `main` verified nothing at all, so this
    narrows a pre-existing hole rather than creating one, and the owner's decision
    was to land it as a partial.
-2. **Flipping the default at `api/src/config.ts:281` so a stock deployment ships
+2. **Flipping the default at `tools/downloader/api/src/config.ts:422 "overrides.ffmpegAllowUnverifiedTls ??"` so a stock deployment ships
    with verification off survived** — all 651 tests stayed green under exactly
    the regression this ticket exists to prevent. — **Fixed here**:
-   `api/test/queue-and-shutdown.test.ts:99`, which also covers reading override
+   `api/test/queue-and-shutdown.test.ts:100 "a stock deployment verifies certificates, and both TLS settings read env and override"`, which also covers reading override
    and env for both `ffmpegAllowUnverifiedTls` and `ffmpegCaFile`. Watched fail
    and recovered; see the mutation record below.
-3. **The boot warning (`api/src/server.ts:103`) has no test.** — **Not fixed**,
+3. **The boot warning (`tools/downloader/api/src/server.ts:103`) has no test.** — **Not fixed**,
    deliberately. The reviewer verified the behaviour at boot, so this is a
    missing test rather than a missing warning, and testing it means either
    asserting on a logger spy through `createApp` — which builds a database, an
@@ -166,10 +166,10 @@ layer that nothing pins.
    failure mode is "an operator is not told something they typed themselves".
    Recorded here so the next person decides on the evidence rather than assuming
    it was missed.
-4. **The classifier's `&&` is untested** (`engine/src/ffmpeg/runner.ts:96`):
+4. **The classifier's `&&` is untested** (`engine/src/ffmpeg/runner.ts:104 "CERTIFICATE_MENTIONED.test(stderr) && VERIFICATION_FAILED.test(stderr)"`):
    changing it to `||` keeps all tests green, so the "two halves, not a sentence
    list" design is unprotected — a `||` would classify any stderr containing the
-   word "verify" as a certificate failure. — **Not fixed.** `:474` tests the
+   word "verify" as a certificate failure. — **Not fixed.** `api/test/proxied-https.test.ts:503 "the stderr classifier reads ffmpeg's real words"` tests the
    inputs but no case separates `&&` from `||`; a killing test needs a string
    with one half and not the other (`"Invalid data found"` plus `"verify"`).
    Cheap, and it belongs with dl-21's work on this classifier rather than in a
@@ -177,13 +177,13 @@ layer that nothing pins.
 5. **`FFMPEG_CA_FILE` is not validated at boot.** A typo'd path fails every
    download as `TLS_VERIFICATION_FAILED` and blames the site, where `PROXY_URL`
    is refused at boot for exactly this class of mistake
-   (`api/src/config.ts:188`). Also, **`-ca_file` replaces the system trust store
+   (`tools/downloader/api/src/config.ts:326 "function proxyUrl("`). Also, **`-ca_file` replaces the system trust store
    rather than adding to it** — the code comment said so, `.env.example` did not.
    — **Half fixed**: both facts are now documented in `.env.example`, including
    that a corporate root means public CAs stop being trusted. The boot check is
    **not** added; it is a `statSync` and an `AppError` in `config.ts`, and it
    wants to land with a test rather than as an untested afterthought here.
-6. **`engine/src/config.ts:138` says "Only the exact words" and then accepts
+6. **`engine/src/config.ts:143 "Only the exact words"` says "Only the exact words" and then accepts
    `1`/`yes`/`0`/`no`** — three of four branches survive mutation. — **Not
    fixed.** The comment is describing the intent (a typo must not read as
    consent) rather than the implementation, and it is misleading as written. The
@@ -202,7 +202,7 @@ layer that nothing pins.
    second crash rather than disproving the first. The CONNECT-proxy method was
    judged sound and the measurement stands.
 9. **Cosmetic: `opensTls`'s catch branch emits the flag for a malformed or
-   relative URL** (`engine/src/ffmpeg/args.ts:100`). — **Not fixed**, and the
+   relative URL** (`engine/src/ffmpeg/args.ts:112-117 "function opensTls(url: string)"`). — **Not fixed**, and the
    behaviour is deliberate and documented in the function's own comment: a parse
    failure defaults to _more_ verification, not less. A relative URL never
    reaches it, since every variant URL is absolutised before the engine sees it.
@@ -471,3 +471,7 @@ reworded its message the classifier would miss it, `code` would come back
 assertion there wearing two coats. What genuinely is independent is the pair of
 positive runs against the same origin — CA passed, and verification off — since
 neither goes anywhere near the classifier.
+
+- **2026-09-12 — repo-39: the `## Review` citations anchored, 20 failing references down to 3.** The test pointers are repointed to their named tests. Three defects the count did not show: finding 2's `queue-and-shutdown.test.ts` citation has sat on the blank line above the test it describes since it was written; finding 4's bare line-number shorthand bound to `runner.ts`, past its end, when it meant the classifier test in `proxied-https.test.ts`; and three `api/src/…` paths were ambiguous across the two tools. `GRANDFATHERED` 20 → 3.
+
+  **Left failing:** the boot-warning coordinate in `server.ts` (row 4 and finding 3), and the `01-ARCHITECTURE.md` bullet finding 1 corrected. Both are now qualified to the downloader's files, and both describe text that has since been rewritten — the warning reworded, the bullet retitled — so neither is a pointer that moved; each is a claim about a version that no longer exists. Finding 3's "has no test" cannot be checked against the warning as it reads today either. They wait for repo-35's pin.

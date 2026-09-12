@@ -129,17 +129,17 @@ Y" — settled, not carried forward as open findings here.
 
 Three `file:line` citations below were re-resolved against tip `cad1d56` by the
 builder before this record was committed and corrected there: the Done-when
-reproduction row (`resolvers.test.ts:222` → `:191`, where `:222` is the
+reproduction row (`resolvers.test.ts:222 "a success on another host leaves the reattachment alone"` → `:191 "a concurrent success on the same host blocks reattachment"`, where `:222 "a success on another host leaves the reattachment alone"` is the
 adjacent over-suppression guard rather than the reproduction), `portFor`
-(`tls-rejections.ts:174` → `:176`), and the query site (`resolvers.ts:159` →
-`:163`). Nothing else was altered. See the Log entry below for the commands.
+(`tls-rejections.ts:174 "look unaffordable before the header"` → `:176 "export function portFor(url: URL)"`), and the query site (`resolvers.ts:159 "REATTACHABLE_CODES.has(error.code)"` →
+`:163 "rejections.since(url.hostname, portFor(url), startedAt)"`). Nothing else was altered. See the Log entry below for the commands.
 
 ### dl-38 — Done when (re-verified at cad1d56)
 
 | Done when                                                                            | Proof                                                                                                                                                                                                                  |
 | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Chosen remedy recorded with reasoning in the Log                                     | proven — Log entries for both the original option-2 build and this port-keying follow-up                                                                                                                               |
-| A test reproduces the load-balanced-origin scenario, red before the fix, green after | proven — `resolvers.test.ts:191` (renumbered from the prior pass); mechanism unchanged and still green                                                                                                                 |
+| A test reproduces the load-balanced-origin scenario, red before the fix, green after | proven — `resolvers.test.ts:191 "a concurrent success on the same host blocks reattachment"` (renumbered from the prior pass); mechanism unchanged and still green                                                     |
 | Existing suite, including the two-genuine-refusals guard, stays green                | proven — ran directly, passing at tip                                                                                                                                                                                  |
 | `npm run check` and `npm test -- --project downloader` pass                          | verified — `npm run check` exit 0; `npm test -- --project downloader` **1050/1050** across 65 files, up from 1041 at the prior tip (+9: 5 port-keying tests + 4 `portFor` tests), matching the builder's count exactly |
 
@@ -174,22 +174,22 @@ for one rather than exhausting a fuzz search.
    the certificate map's key is `key(host)`, untouched by this change, and
    `since()` looks it up before either conflict check runs.
    `"a certificate refusal is still carried across ports"`
-   (`tls-rejections.test.ts:386`) passes at tip, and I traced the assertion, not
+   (`tls-rejections.test.ts:386 "a certificate refusal is still carried across ports"`) passes at tip, and I traced the assertion, not
    just the name: it records once on the default port and queries both `HTTPS`
    and `ALT`, both returning the code.
 3. **`portFor` and the default-port case.** `url.hostname` still never carries a
    port (WHATWG, unchanged from the prior pass). `portFor`
-   (`tls-rejections.ts:176`, exported) returns `Number(url.port)` when explicit,
+   (`tls-rejections.ts:176 "export function portFor(url: URL)"`, exported) returns `Number(url.port)` when explicit,
    else `443`/`80` by scheme. Both `record*` call sites (`egress-proxy.ts`, via
    `parseAuthority`, which always yields an explicit numeric port) and the query
-   site (`resolvers.ts:163`, via `portFor`) end up with the identical number for
+   site (`resolvers.ts:163 "rejections.since(url.hostname, portFor(url), startedAt)"`, via `portFor`) end up with the identical number for
    an ordinary default-port URL — confirmed by the four `portFor` unit tests
-   (`tls-rejections.test.ts:429,433,437,444`) and by the "a success on :443 still
+   (`tls-rejections.test.ts:429 "an https URL with no port means 443"`, `tls-rejections.test.ts:433 "an explicit port is used as written"`, `tls-rejections.test.ts:437 "an http URL with no port means 80"`, `tls-rejections.test.ts:444 "an IPv6 URL keeps its port"`) and by the "a success on :443 still
    suppresses it for the caller that asked about :443" test, which only passes if
    both sides agree.
 4. **The rewritten "two ports are two entries" test.** Confirmed it is
    falsifiable and not vacuous: reproduced the described mutation
-   (`endpoint→key`) and this exact test fails (`tls-rejections.test.ts:403`,
+   (`endpoint→key`) and this exact test fails (`tls-rejections.test.ts:403 "the two ports are two entries, not one that overwrites the other"`,
    `expected undefined to be 'DEPTH_ZERO_SELF_SIGNED_CERT'`) — under the old
    host-keyed behavior, `max:1` would leave one shared entry for both ports and
    both queries would be suppressed, which is a _different_ wrong answer than
@@ -461,3 +461,5 @@ a function` in `tls-rejections.test.ts`, 2 in `resolvers.test.ts` surfacing as
   own Logs recording the identical check. Filed alongside
   [dl-39](./dl-39-real-yt-dlp-tls-coverage-in-ci.md), which is unrelated but
   shares a filing moment.
+
+- **2026-09-12 — repo-39: the `## Review` citations anchored, 13 failing references down to 0, and the `GRANDFATHERED` entry deleted.** Nothing had moved: this record's builder re-resolved every coordinate against the tip before committing, and it held. The one structural repair is that the four `portFor` unit tests were cited as a comma list, which parses as a single citation of the first; they are now four.

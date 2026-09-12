@@ -77,9 +77,14 @@ deliverable of that slice as much as the 126 references it repointed.
    twice — once on the citing line, once at the target — and `locateAnchor` does
    not exclude the citing line. Reproduced on `pl-5`, three times, with three
    different fragments. **The fix is to name the section in prose**, not to hunt
-   for a fragment; there is none. Worth deciding, separately, whether the checker
-   should skip the citing line — that is an open decision this ticket does not
-   settle.
+   for a fragment; there is none. **Whether the checker should skip the citing
+   line is no longer open:** repo-35's Build, part 8 ("A self-citation can never
+   satisfy `--require-distinct-anchors`", on `main` since #216), answered it on
+   2026-09-12. The checker detects a self-citation and prints the true remedy —
+   point the citation at the real subject, or write it as prose — and **the
+   citation still fails**; the citing line is not excluded. That implementation is
+   repo-35's and was unmerged at `64edce2`, so until it lands the checker still
+   prints the old advice to quote a longer fragment, which cannot work here.
 4. **A backticked bare number is a live citation, and it will bind to the wrong
    file.** `` `:41` `` inherits the last _qualified_ citation above it, which is
    frequently in the previous paragraph and about a different file. `pl-26`'s
@@ -156,9 +161,23 @@ them.
   and it is invisible to `citations-gate.mjs` by design. Whether the fix is to
   widen `SCOPE.section` to `null` — repo-29's option C, which
   `scripts/citations-gate.mjs`'s own docblock names as the destination — or to
-  repoint Log prose by hand as each record is touched, is an owner's call and not
-  this ticket's to make silently. Repoint what you touch, at minimum.
-- **`pl-20`'s first acceptance row does not render.**
+  repoint Log prose by hand as each record is touched, was put to the owner.
+
+  **Answered 2026-09-12: not yet — repoint what you touch.** It was asked with
+  three options: keep `section: "Review"` and repoint what each slice touches,
+  widen now, or leave it open. The answer was the orchestrator's recommendation
+  and overrode nothing. The measurement it was taken on, re-run by this ticket's
+  downloader-slice builder at `64edce2` by calling `gate()` from
+  `scripts/citations-gate.mjs` with an empty grandfather map: `section: null`
+  reports **128 records in scope, 87 failing, 2,068 failing references** (repo
+  1,008 · downloader 904 · planner 156), against **75 in scope, 45 failing, 614**
+  at `section: "Review"`. Widening stays the destination option C names. Until
+  then, **every slice repoints stale coordinates outside `## Review` in each
+  record it touches**, and leaves a coordinate the record itself dates — a
+  section saying its line numbers describe an earlier tree, or a quoted run —
+  as written.
+
+- **`pl-20`'s first acceptance row did not render — folded in, 2026-09-12.**
   `tools/planner/docs/work/pl-20-intake-fixture-builders.md:94` puts an
   unescaped `|` inside a code span — a `grep` pattern of the form
   `"INSERT INTO (intakes | answers)"` — and a bare pipe splits a GFM table cell
@@ -195,3 +214,79 @@ them.
   behave differently elsewhere are the `repo-*` records, which cite scripts that
   churn far more than test files do, and `dl-15`, whose 57 references are the
   largest single entry in the list.
+
+- **2026-09-12 — the downloader slice: 19 records, 296 failing references down to 49.** Built on `repo-39-downloader-slice` from `origin/main` at `64edce2`,
+  dispatched as `opus` (`difficulty: hard`). `dl-44` was out of scope by dispatch:
+  a concurrent repo-35 builder migrates its evidence declaration to a pin.
+
+  Measured in this worktree, exit codes read by redirecting to a file rather than
+  through a pipe:
+
+  | `node scripts/citations-gate.mjs` | enforced | failing | grandfathered | references |
+  | --------------------------------- | -------- | ------- | ------------- | ---------- |
+  | `origin/main` at `64edce2`        | 30       | 0       | 45            | 614        |
+  | this branch                       | 38       | 0       | 37            | 367        |
+
+  Both exit 0. The slice's own count comes from calling `gate()` with an empty
+  grandfather map, which reproduced 45 records / 614 references at `64edce2`
+  exactly: the 19 records held 296 failing references, none targeting
+  `scripts/`, and hold 49 across 11 records now. **Deleted from `GRANDFATHERED`:**
+  `dl-22`, `dl-23`, `dl-34`, `dl-35`, `dl-37`, `dl-38`, `dl-43`, `dl-46`.
+  **Lowered:** `dl-15` 57 → 8, `dl-16` 6 → 3, `dl-18` 26 → 4, `dl-19` 20 → 3,
+  `dl-32` 29 → 3, `dl-33` 20 → 17, `dl-36` 8 → 2, `dl-40` 6 → 4, `dl-41` 7 → 2,
+  `dl-42` 8 → 1, `dl-45` 23 → 2. Each record's own Log entry names what it left and
+  why. Under the owner's answer above, stale coordinates outside `## Review` were
+  repointed in every record touched, and coordinates a record dates in its own
+  words were left.
+
+  **Two files outside the slice were touched, one forced and one free.**
+  `repo-37`'s enforced gate record cites the `GRANDFATHERED` list by line. Deleting
+  eight entries moved it, the gate reported `1 moved` on `repo-37`, and the
+  citation was repointed, along with the same record's stale `FAILING` pointer in
+  its Why under the same answer. And `pl-20`'s pipe was folded in (Build, above).
+
+  **The 49 that remain are one class, and none was forced.** Each was true of some
+  commit and is not true of today's tree, in a place where repointing would change
+  what the record claims: quoted runner output, a defective coordinate that is a
+  finding's subject, a correction transcript, a test a later ticket replaced, or a
+  record that says its line numbers are evidence for an earlier sha (`dl-33`, 17 of
+  the 49). repo-35 assigns that case to a per-citation pin, and a declaration — the
+  only mechanism on `main` — is the wrong one for it. None was declared and none
+  was anchored to today's content. The one declaration this branch added is in
+  `dl-35`, for zod's source under `node_modules`, which no commit here ever held.
+
+  **What the brief had wrong.**
+
+  - Method note 3 called the self-citation question open; repo-35 part 8 had
+    answered it. Corrected above.
+  - It expected `dl-15` to behave differently and to be the hard record. It was
+    the most uniform: 49 of its 57 repointed by the name of the test that enclosed
+    each citation. The hard record was `dl-33`, whose own text forbids the repair.
+  - "Substitute inside the `## Review` span only" is not enough once the owner's
+    answer applies. Repointing outside the gate record needs a line-scoped
+    substitution too, refusing any pattern that is not unique on its line.
+  - It predicted `repo-*` records would churn because they cite scripts. This
+    slice held 0 references into `scripts/`, but its own edit to a script moved an
+    enforced record's citation — the churn arrives from the other direction.
+
+  **Filed as [repo-44](./repo-44-the-rest-of-the-review-corpus-and-the-pin-wait-class.md)**:
+  the `repo-*` records, the planner's three, `dl-44`, the 49 pin-wait references,
+  the method notes with seven added, and both carried items with their answers.
+
+  **`Done when`, per line.**
+
+  1. **Not met, and it cannot be by this slice.** `GRANDFATHERED` holds 37 entries
+     and 367 references (`node scripts/citations-gate.mjs`, exit 0). The 11
+     lowered downloader entries each have a Log saying why the rest cannot be
+     repaired yet; the other 26 are unbuilt. Carried to repo-44.
+  2. **Met for everything this branch anchored.** The gate enforces
+     `--require-distinct-anchors` and reports `38 enforced, 0 failing`; the 6
+     indistinct it still counts sit in `dl-44` (3) and `repo-31` (3), neither
+     touched here.
+  3. **Met for the 19 records and `repo-37`, as this branch's claim for a gate to
+     check.** Every repoint was read against the claim beside it, and each
+     left-failing reference is listed in its record's Log.
+  4. **Met.** `npm run check` exit 0; `node scripts/status.mjs --json` exit 0 with
+     `problems: []`. Also run: `npm test -- --project repo`, 7 files / 328 tests,
+     exit 0; and `node scripts/citations-gate.mjs --against origin/main`, exit 0,
+     `37 entr(y/ies) compared against origin/main: 0 raised`.

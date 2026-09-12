@@ -32,8 +32,8 @@ the table shows.
 
 **The parser is faithful and is not the bug.** `buildMasterVariant` emits exactly
 one variant per `EXT-X-STREAM-INF`, keyed `hls-${stream.index}`
-([`manifest/hls.ts:456`](../../resolvers/src/manifest/hls.ts)), and `streams.push` assigns
-`index: streams.length` ([`manifest/hls.ts:367`](../../resolvers/src/manifest/hls.ts)) —
+([`manifest/hls.ts:478`](../../resolvers/src/manifest/hls.ts)), and `streams.push` assigns
+`index: streams.length` ([`manifest/hls.ts:386 "streams.push({ attrs: pendingStream, uri: line, index: streams.length })"`](../../resolvers/src/manifest/hls.ts)) —
 nothing multiplies.
 
 **But the manifest did not declare twenty; it declared ten.** That sentence stood
@@ -59,9 +59,9 @@ causes, all real-world, none of them rendered:
 
 1. **One ladder per audio language.** The parser already resolves the stream's
    `AUDIO` group and picks a rendition from it
-   ([`manifest/hls.ts:436-439`](../../resolvers/src/manifest/hls.ts)), then puts its
+   ([`manifest/hls.ts:458-461 "const audioGroupId = attrs.get("`](../../resolvers/src/manifest/hls.ts)), then puts its
    language on the variant. `MediaVariant.language` exists in the contract
-   (`contract/src/media.ts:142` "language?: string | undefined;") — **and nothing in `web/src`
+   (`contract/src/media.ts:165` "language?: string | undefined;") — **and nothing in `web/src`
    ever reads it.** The only `.language` in the UI is for subtitle tracks. It is
    also the one field in that contract block carrying no doc comment, which is
    the tell: it was added and never wired to anything.
@@ -69,7 +69,7 @@ causes, all real-world, none of them rendered:
    `EXT-X-STREAM-INF` entries with identical attributes and a different URI. Only
    `url` differs, and `url` is never shown.
 3. **Different codec profiles.** `shortCodec`
-   (`web/src/lib/variants.ts:53` "function shortCodec") maps on the
+   (`web/src/lib/variants.ts:70` "function shortCodec") maps on the
    family prefix, so `avc1.4d401f` (Main) and `avc1.64001f` (High) both render as
    `H.264`.
 
@@ -106,7 +106,7 @@ Log has the evidence and the fixtures have the guards.
      answer in the overwhelming majority of cases and is why that map exists.
 3. Whatever the cause, a rendition list this long is hard to cross with the arrow
    keys, which is how the radio group is meant to be driven
-   ([`VariantTable.tsx:12`](../../web/src/components/VariantTable.tsx)). Twenty
+   ([`VariantTable.tsx:25 "Native radios inside the row header"`](../../web/src/components/VariantTable.tsx)). Twenty
    rows is twenty presses. Worth handling in this ticket if the collapse does not
    already solve it.
 
@@ -227,7 +227,7 @@ data".
 but the branch's own +21-line edit to that file pushed the true location further
 away, and fixing it was one line free while already there.
 
-**Finding 2 (low) — `web/src/lib/variants.ts:26` does not point at
+**Finding 2 (low) — `web/src/lib/variants.ts:26 "videoCodec: string;"` does not point at
 `shortCodec`.** Same situation: already wrong on `main` (line 40 there), pushed
 further by this branch's `VariantRow` field additions. Neither finding was made a
 condition of PASS; both flagged "so the record is accurate".
@@ -240,7 +240,7 @@ human — `3 verified, 0 moved, 0 unresolvable`.
 > The findings are right and the fix is theirs. The _quoted resolutions_ did not
 > reproduce here: at `6061bc6` — and at `effeb02` and at `main` — `media.ts:107`
 > is `container?: string | undefined;`, not `hasAudio?: boolean | undefined;`,
-> and `web/src/lib/variants.ts:26` is `videoCodec: string;`, not `quality: string;` (which is
+> and `web/src/lib/variants.ts:26 "videoCodec: string;"` is `videoCodec: string;`, not `quality: string;` (which is
 > line 24). Nothing turns on it: both citations were stale either way, which is
 > the finding. It is recorded because a coordinate in a gate record is read as
 > evidence by whoever comes next.
@@ -549,3 +549,5 @@ not a disagreement.
   cost to the next reader. Both are repointed and now carry anchor text, so
   `node scripts/citations.mjs` checks them rather than printing them for a human
   to judge — which is what stops the same silent drift next time.
+
+- **2026-09-12 — repo-39: 6 failing references down to 4.** The two `variants.ts` citations that quote what a stale coordinate actually held are anchored, since that line is unchanged. Outside the gate record, the Why's pointers — the HLS parser's variant key and stream push, its audio-group pick, `MediaVariant.language`, `shortCodec` and the arrow-key radio group — are repointed to where they stand now. **Left failing:** finding 1's and the builder's note's `media.ts` coordinate, which is the defective citation the finding is about; and the two coordinates the fix wrote ("fixed at"), which are a dated account of what the fix did and have both moved again since. All four were true of this record's commit only, so they wait for repo-35's pin. **Left as written outside the gate record:** the dated Log entry recording where the fields sat on `main` before and after, and the Why's engine pointer, whose "downloads from exactly that" dl-45 has since made untrue.

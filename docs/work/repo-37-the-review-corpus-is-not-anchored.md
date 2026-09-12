@@ -20,7 +20,7 @@ repo-29 built the gate and did not pay the debt. That was the owner's answer —
 the mechanism was the deliverable — but the debt has to have a home or the answer
 evaporates into a comment in a script. This is the home.
 
-`scripts/citations-gate.mjs:315 "const FAILING = new Set"` enforces anchors on
+`scripts/citations-gate.mjs:293 "const FAILING = new Set"` enforces anchors on
 every work record's `## Review` section. **59 of the 63 records that have such a
 section are exempted by name**, each with the number of failing references it is
 allowed to hold. Measured on repo-29's branch:
@@ -166,7 +166,7 @@ the tip figure of `45 … 614`. It read the whole
 `git diff a5e31c7...fde65a9 -- scripts/citations-gate.mjs` and confirmed it is 14
 deleted `GRANDFATHERED` lines and nothing else. It bucketed the surviving list
 programmatically off the live constant rather than off this record's prose:
-`scripts/citations-gate.mjs:295 "pl-25-grounding-cache.md"` heads the three
+`scripts/citations-gate.mjs:287 "pl-25-grounding-cache.md"` heads the three
 planner entries left, and the three buckets are repo- 22/231, downloader 20/300,
 planner 3/83.
 
