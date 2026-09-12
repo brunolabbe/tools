@@ -2127,11 +2127,13 @@ one pairing, and why they do is its own finding, at item 7 below.
 
 ### What the skill got wrong
 
-Eight items. The first six are the orchestrator's own by its own account,
+Nine items. The first six are the orchestrator's own by its own account,
 transcribed here against what each branch's own commits and Log entries show;
 the seventh was found in transcription rather than supplied; the eighth
 happened while this row was itself being drafted and is confirmed on
-`repo-33`'s own branch below rather than taken on the relay alone.
+`repo-33`'s own branch below rather than taken on the relay alone; the ninth
+was raised by the owner and checked here against `release-please-config.json`
+and the ticket's own text rather than accepted.
 
 1. **The gate record was the thing that broke, in three of four tickets — never
    the code — and the mechanism is that a `## Review` section is not enforced
@@ -2284,6 +2286,50 @@ happened while this row was itself being drafted and is confirmed on
    green on `6fcf4be`, but no run had covered both together until this one.
    **The generalisable rule: a check-list of paths has to name a dependency
    closure, not files chosen by hand.**
+9. **`repo-40` was split into three pull requests on its own ticket's
+   instruction, and the split's rationale did not hold — raised by the owner
+   and checked here against `release-please-config.json` and the ticket's own
+   text rather than accepted.** The Traps section states it as a rule:
+   `docs/work/repo-40-trust-proxy-is-a-second-consumer-with-nowhere-to-land.md:87 "This is repo-wide work that touches two tools' files, and it is not one"`
+   — "pull request… Landing all three in one branch produces the exact
+   squash-merge shape the root `CLAUDE.md` names as the tell that it should
+   have been more than one PR — split it, in whatever order keeps each PR
+   green on its own." Confirmed against `CLAUDE.md:209 "one sentence written for one of them, which is the tell that it should have been"`.
+   Neither builder nor reviewer is at fault for following a brief; nobody
+   checked whether the rule's premise applied. Read directly:
+   `release-please-config.json` names exactly two components,
+   `tools/downloader` and `tools/planner` — `packages/core` is not one — and
+   `refactor` (the type on two of the three sub-branches) carries
+   `"hidden": true`. A single branch spanning all three paths would have
+   produced no changelog line for either tool and no release; the failure the
+   split exists to prevent was not available to occur.
+
+   **Measured cost:** two extra pull requests (`#213` plus `#214`, `#215`), a
+   draft-flag sequencing to hold merge order, three sets of CI runs, and — the
+   mechanism, recurring three times and made visible here for the first
+   time — repeated merge conflicts on the one shared ticket file. **Under
+   squash-merge, a stacked branch conflicts with `main` after its own base
+   lands even though it carries the identical commits, because the squash
+   produces a new commit that is not an ancestor of the stack.** Confirmed on
+   the tree: `#214` merged one such reconciliation (`1b7a923`, after `#213`'s
+   squash `17966ac`); `#215` merged one (`7a12272`, also after `#213`'s
+   squash) and, as of this writing, reads `DIRTY`/`CONFLICTING` against `main`
+   again — a second reconciliation pending after `#214`'s own squash. All
+   three, completed or pending, land on the shared ticket-file Log rather
+   than on source. Retargeting the stack from base branches to `main` (item
+   5) is orthogonal to this — that addressed `CLAUDE.md:188`'s
+   disappearing-PR hazard and neither caused nor avoided these conflicts.
+
+   **The generalisable rule:** the Traps rule is right for a `fix` or `feat`
+   spanning two tools, which genuinely writes one sentence into two
+   changelogs — but it is stated unconditionally, when the type decides
+   whether there is a changelog at all, the same point `CLAUDE.md` already
+   makes about `docs` being hidden. Read the commit type and the component
+   list before paying for a split; if nothing reaches a changelog, the split
+   buys only independent revertability, and that has to be worth the conflict
+   rounds on its own. The same correction is being appended to `repo-40`'s own
+   ticket Log, as a correction to the brief rather than an edit to its Traps
+   section.
 
 ### What went right, and is worth copying
 
