@@ -117,6 +117,16 @@ only copy of anything a user downloaded.
 
 ## Log
 
+**2026-09-12 — the gate's low, closed.** The Review above records
+`docs/00-TOOLS.md:50` as edited beyond what the rename required, and it was
+right: `compose.prod.yaml` still exists, so listing it among the repo-wide
+concerns needed no change, and qualifying it to "`compose.prod.yaml`'s tunnel"
+made the sentence say "tunnel" twice. Restored to the wording this branch
+started from, so the file now drops out of the branch's diff entirely — a
+diff of it against `origin/main` is empty. The finding stays in the Review as
+raised: it was a true observation about the tree it reviewed, and this entry is
+where the repair belongs rather than in an edit to the record.
+
 **2026-09-12 — gate round: the migration was written for a one-tool host.**
 
 **The defect (the gate's finding 1, and it is real).** A host running _both_
