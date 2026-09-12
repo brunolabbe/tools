@@ -152,3 +152,16 @@ piece of work (a new integration test file, modeled on the planner's), not a
 byproduct of moving one function, and Build's three steps do not ask for it.
 Recorded here so "still cover... end to end" is read correctly: true for the
 planner, unchanged (i.e. still absent) for the downloader.
+
+**2026-09-12 — Build step 3, the downloader half
+(`repo-40-trust-proxy-downloader`, stacked on the lift).**
+`tools/downloader/api/src/config.ts` now imports `trustProxy` from
+`@webtools/core` and defines no local copy; its own doc comment was deleted
+and replaced with a two-line pointer above the import, the same pattern
+`rate-limit.ts` set. `ApiConfig.trustProxy`'s field-level doc comment is
+unchanged — it is tool-specific (what the setting does to _this_ tool's
+rate limiter), per the ticket. `@webtools/core` was already a `dependencies`
+(not `devDependencies`) entry in `tools/downloader/api/package.json` — the
+rate-limit import put it there first, so no manifest edit was needed.
+`npm run check` green; `npm test -- --project downloader`: 73 files, 1214
+tests, all passed.
