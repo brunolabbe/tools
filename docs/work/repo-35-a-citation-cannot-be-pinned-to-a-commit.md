@@ -3,7 +3,8 @@ id: repo-35
 tool: repo
 title: A citation cannot be pinned to a commit, so a record describing more than one tree cannot be checked
 kind: fix
-status: needs-decision
+status: ready
+difficulty: hard
 milestone: null
 depends_on: []
 ---
@@ -120,7 +121,8 @@ repair, out of this ticket's scope, and doing it quietly here would hide that
 the interim declarations are not self-maintaining.
 
 Also checked: the declarations are load-bearing. Deleting the `<!-- citations:
-evidence dispatching.md:206, dispatching.md:209 -->` line (`:653`) from a scratch
+evidence dispatching.md:206, dispatching.md:209 -->` line, the first of the two,
+from a scratch
 copy of `history.md` and re-running turns `13 verified, 4 moved, ..., 8 evidence`
 into `13 verified, 8 moved, ..., 4 evidence` — the four citations it covers move
 from suppressed to failing. Reverted; `git status` confirmed clean before and
@@ -260,29 +262,1349 @@ radius is larger than the page states, not smaller.
 
 ## Build
 
-**Not startable.** The build is whichever set of answers A, B and C receive;
-writing it now would be writing several briefs and discarding most of them. When
-the answers are recorded on this page, replace this section with the steps and
-move `status` to `ready` in the same commit.
+Written against the answers recorded in the Log entries of **2026-09-12**: **A —
+a rev inside the location**, **B — a pinned citation is always checked at its
+rev**, **C — the declaration mechanism narrows.** Do not re-open those three; they
+were decided by the repo owner.
+
+**C was answered twice on the same day, and a reader who finds only the final
+state cannot tell that the option was tested against a real alternative — so both
+answers are on this page.** It was first answered "it goes", against the
+orchestrator's recommendation, and reversed to "it narrows" once the measurement
+the first answer rested on was corrected. The second Log entry of 2026-09-12
+carries the provenance. Part 5 carries the shape, and part 6 is deliberately
+still here: it is the evidence the reversal turned on.
+
+**Two of the three are still the expensive option, and the brief says so rather
+than around it.** A reopens the one regex this page's own reproduction shows
+swallowing a citation whole, and B makes a pin permanent. C is now the cheaper
+answer, but not a free one: its cost is that two mechanisms coexist and every
+failing citation has two possible repairs, which is what part 5's boundary rule
+exists to decide.
+
+Part 8 is a separate defect folded in on the owner's call, **answered
+2026-09-12**. Part 9 is a second defect, found during that round's gate, **also
+answered 2026-09-12** — including, against two recommendations, that it lands
+here rather than as its own ticket. **No open decision remains on this page.**
+
+### 0. The blast radius, re-measured at `8d79d8e` before any of it is written
+
+- `scripts/citations.mjs` — 1,532 lines, unchanged since `a5e31c7`
+  (`git log --oneline a5e31c7..HEAD -- scripts/citations.mjs scripts/test/citations.test.ts`
+  printed nothing).
+- `scripts/citations-gate.mjs` **is also in scope, and this page did not
+  previously say so.** It imports `extractDeclarations` and `applyDeclarations`
+  and folds stale declarations into the number its grandfather list ratchets on:
+  `scripts/citations-gate.mjs:543` "const declarations = extractDeclarations(markdown)"
+  and `scripts/citations-gate.mjs:574` "failing: failures.length + stale.length".
+  C cannot land in `citations.mjs` alone.
+- `scripts/test/citations.test.ts` — 73 tests, 24 lines mentioning `evidence`.
+- The corpus: `node scripts/citations-gate.mjs` at base reports
+  `27 enforced, 0 failing; 45 grandfathered, holding 35 unresolvable, 43 moved, 530 unanchored, 6 indistinct.`,
+  exit 0. That line is the before-picture every step below is measured against.
+
+### 1. The grammar (A)
+
+Extend the location grammar with an optional rev between the file and the colon,
+`<file>@<rev>:<line>`, in `scripts/citations.mjs:183` "const INLINE = new RegExp("
+and in the declaration-shaped twin at
+`scripts/citations.mjs:251` "const DECLARED_LOCATION" (which survives C only if
+something still parses a bare location; see step 5).
+
+**The regex risk is smaller than this page feared, and that is measured, not
+argued.** The fear was that `@` is already a path character, so a rev suffix
+would be eaten by the file group. Prototyped standalone — a scratch script, not
+an edit to the checker — with the rev spelled `(?:@(?<rev>[0-9a-fA-F]{7,40}))?`
+inserted between the existing file alternation and the colon:
+
+Every token below is written with `<line>` where the prototype used a real line
+number, and that is not laziness — a literal one turns each row of this table
+into a live citation this page then has to keep true. Writing the placeholder is
+the same technique Build step 6 prescribes for a coordinate that must be read and
+not resolved, demonstrated on itself.
+
+| Token                                     | Today                               | With the rev group                     |
+| ----------------------------------------- | ----------------------------------- | -------------------------------------- |
+| `scripts/citations.mjs:<line> "x"`        | file, no rev                        | **identical**                          |
+| `docs/01-TICKETS.md:<line> "x"`           | file, no rev                        | **identical**                          |
+| `ci.yml:<line> "--require-anchors"`       | file, no rev                        | **identical**                          |
+| `node_modules/@scope/thing.ts:<line> "x"` | file `node_modules/@scope/thing.ts` | **identical** — read as a path, no rev |
+| `scripts/citations.mjs@<rev>:<line> "x"`  | **no reference at all**             | file + rev + anchor                    |
+
+The `@`-bearing path still reads as a path because the hex-and-length rule on the
+rev fails and the engine backtracks into the existing alternation. Two facts make
+that safe to rely on: no tracked file in this repo contains `@` at all
+(`git ls-files | grep -c '@'` returns `0`), and the one shape that would collide
+— an npm-scoped path — is preserved above by test rather than by argument. **Keep
+that case as a regression test.** It is the only thing standing between this
+change and a silently renamed file token.
+
+Then say what a **shorthand** does with a rev, which this page never asked and an
+implementer cannot avoid. `scripts/citations.mjs:212` "const SHORTHAND = new RegExp("
+means "the same file as the last one I named". It must also mean _the same rev_,
+because the citations this ticket exists for come in runs: each declared location
+on `history.md` is followed by shorthands belonging to the same entry, and
+pinning the named citation while leaving its shorthands on the working tree would
+repair the head of a run and break its tail. A shorthand may not carry its own
+`@rev`; it inherits.
+
+### 2. A malformed pin is rejected loudly — the hardest line, not a formality
+
+`Done when` #4 is where option A is expensive, because under A the malformed case
+and the invisible case are the same case. The same prototype:
+
+| Token                                    | With the rev group                        |
+| ---------------------------------------- | ----------------------------------------- |
+| `scripts/citations.mjs@nope!:<line> "x"` | **no reference at all**                   |
+| `scripts/citations.mjs@bb:<line> "x"`    | **no reference at all** — rev too short   |
+| `scripts/citations.mjs:<line>@<rev> "x"` | file, no rev, **anchor silently dropped** |
+
+A stricter location grammar does not satisfy #4 — it _is_ the failure #4
+describes. Rejection therefore needs a second, deliberately permissive scan
+beside the strict one: a pass matching anything pin-shaped —
+`<pathish>@<anything>:<digits>` and `<pathish>:<digits>@<anything>` — that
+reports every match the strict grammar did not accept at the same offset as a new
+state, `malformed-pin`, printed with the token exactly as the record wrote it.
+
+Two rules keep that scan honest, and both come out of the prototype:
+
+- **"Matched by the permissive scan" is not by itself malformed.** It also
+  matches every ordinary citation. The rule is _contains an `@`, and the strict
+  grammar produced no reference at that offset_.
+- **`<file>:<line>@<rev>` must be caught even though it parses.** It is the
+  subtler of the two failures this page measured: the reference survives and its
+  anchor is silently discarded, so the citation is downgraded from checked to
+  `unanchored` and nothing says why. The permissive scan sees it; the strict one
+  never will.
+
+Add `malformed-pin` to `scripts/citations.mjs:864` "const FAILING = new Set(" so
+it sets an exit bit — and, since C removes declarations, it is a state nothing
+can excuse. Tests: one per row of the table above, each asserting the citation is
+**counted** and **fails**, not merely that the run is non-zero.
+
+### 3. Resolution at the rev (B), and the permanence the owner accepted
+
+`scripts/citations.mjs:562` "export function makeReader(repo, rev)" already takes
+a rev and already exists; B is a reader per distinct rev, memoised, with the
+citation's own rev overriding the run's `--rev` when both are present.
+
+**A pin is permanent and nothing here guards against it.** The owner chose
+"always at its rev" knowing the cost this page states — a pinned citation is
+never re-checked against the present, so a page can pin its whole self green.
+That is accepted, not mitigated, and no step below reverses it. Two things are in
+scope only because they make the accepted cost _visible_ rather than smaller:
+
+- **A rev that does not resolve is a failure, never a pass.** An unknown or
+  unreadable rev reports `unresolvable`, reason "rev not in this repository". A
+  pin to a commit nobody has is the one way B could turn a citation green by
+  accident.
+- **The summary prints `N pinned`, and prints it only when `N` is above zero.** A
+  record with no pins must print a byte-identical summary line to the one it
+  prints today, because `Done when` #2 holds this page's reproduction table to
+  the exact strings it printed at `4901cd6`. Suppressing the field at zero is
+  what keeps those three rows unchanged; a field printed unconditionally changes
+  every record's output in the tree and costs the reproduction its meaning.
+
+### 4. What a rev does with an `unanchored` citation
+
+Fact 2 above says any per-citation rev has to answer this. The answer this
+combination gives, and it is the one piece of good news in the brief:
+
+- A rev changes **which tree the line is read from**, not whether an anchor
+  exists. A pinned citation with no anchor stays `unanchored` — still not in
+  `FAILING`, still printed, and now unexcusable, since declarations are gone.
+- **The tension fact 2 names dissolves for pinned citations.** Today, adding the
+  missing anchor to a stale citation converts a non-failing `unanchored` into a
+  failing `moved`, which is why "add the anchors" and "reach exit 0" pull against
+  each other. Add the anchor to a _pinned_ citation and it is checked at the rev
+  where it was true, so it becomes `verified`. Under B, anchoring a pinned
+  citation is a strict improvement where today it is a trade.
+- Write that as a test on both halves: pinned, anchored and correct-at-rev is
+  `verified`; pinned, anchored and wrong-at-rev is `moved`, so a pin cannot
+  launder a citation that was already wrong when it was written.
+
+### 5. Narrowing the declaration mechanism (C)
+
+**C was answered twice. It is "it narrows", and the first answer — "it goes" —
+was reversed the same day when the measurement under it turned out to be wrong.**
+The Log entries carry the provenance; this step carries the shape.
+
+The mechanism stays, and it is withdrawn from exactly one case: **a citation that
+some commit of this repository would verify**. That case gets a pin. Everything
+else keeps the declaration.
+
+So nothing is deleted. `DECLARATION`
+(`scripts/citations.mjs:247` "const DECLARATION ="), `extractDeclarations`
+(`scripts/citations.mjs:473` "export function extractDeclarations(markdown)"),
+`applyDeclarations`
+(`scripts/citations.mjs:892` "export function applyDeclarations(results, declarations)"),
+the `evidence` state and the stale-declaration exit bit all survive, as do the
+gate's two imports and the `stale` term in its `failing` arithmetic. The work is
+a boundary, not a removal — and the boundary is the whole substance of this
+option, because the cost it buys is that **two mechanisms now coexist and every
+failing citation has two possible repairs**. Without a rule, the wrong one is
+silently accepted, which is the hole that made C worth asking in the first place.
+
+#### The rule, author-facing
+
+> **Reach for a pin when the citation was true of some commit in this
+> repository. Reach for a declaration when it was true of none.**
+
+It is decidable with one command rather than by judgement, which is what keeps it
+from rotting into a preference:
+
+```bash
+git log --all -S'<the anchor text>' -- <the cited file>
+```
+
+Non-empty — some tree had it, so a rev exists and the repair is a pin. Empty —
+nothing in this repository's history ever contained it, so no rev can express it
+and the declaration stands. That is the same command that settled `repo-21`'s
+case during this ticket's own measurement: its anchor is a `builder.md` row that
+reads plausibly like a real historical mapping, and the search returned **zero
+commits across every ref**, which is what moved it to the declaration side rather
+than a guess about what the table used to say.
+
+#### The rule, enforced — cheap half and expensive half
+
+A rule nothing checks is a comment. Two levels, and they should not be confused:
+
+- **The cheap half, and it catches every production case in the tree today.**
+  Refuse a declaration whose citation reports the reason "is not in _N_ — it is
+  at _M_": the anchor is present elsewhere in the same file at `HEAD`. That case
+  needs neither mechanism — it needs repointing — and it is free to detect
+  because the checker has already computed the occurrence list. This alone
+  catches all five of the pinnable locations below.
+- **The expensive half, only needed to separate a rewritten file from a
+  fabricated anchor.** Both report "not anywhere in _file_". Telling them apart
+  is the `git log -S` search above, per declared location, on every run. **Name
+  this as a cost before choosing to implement it**: it is a history search per
+  declaration, where every other check in this script reads one blob.
+
+A defensible first slice is the cheap half only, with the expensive half left to
+the author and the command written into `records.md` beside the syntax. Say which
+was built, in the Log, either way.
+
+### 6. Which of the 26 go which way
+
+Measured at `8d79d8e` by re-running the checker's own `DECLARATION` regex
+(`scripts/citations.mjs:247` "const DECLARATION =") over all 171 `.md` files
+outside `node_modules` — **12 declaration lines naming 26 locations across 7
+files, suppressing 31 citations.** That is not the 10 lines across 5 files this
+page recorded on 2026-09-08; `993af05` (repo-37, #200) added two more while it
+sat. **This is the evidence for where the line falls, and it is why C was
+reversed**, so it stays on the page whatever else changes.
+
+Written as a list rather than a table on purpose: a findings table's bare numbers
+are citations too, so a `declaration lines` column on a row naming a file becomes
+seven citations into seven files that nobody meant to make. Each entry reads
+_declaration lines / locations named / citations suppressed_.
+
+**Migrate to a pin — 5 locations, 9 citations.** Every one reports "is not in _N_
+— it is at _M_", so the cheap half of the rule catches them without a history
+search.
+
+- **history.md** — 2 / 4 / 8. Staleness.
+- **dl-44-persist-the-thumbnail-beside-the-file.md** — 1 / 1 / 1. Staleness; a
+  gate record deliberately holding the coordinate it resolved at tip `e3d065e`.
+
+**Keep the declaration — 21 locations.** No rev of this repository expresses any
+of them.
+
+- **repo-25-citations-checker-misses-shorthand-references.md** — 5 / 15 / 18.
+  Coordinates fabricated on purpose, to test the checker: "ambiguous — _N_
+  tracked files match" and "past end of file".
+- **pl-34-locality-free-query-confident-wrong-place.md** — 1 / 2 / 2. Ambiguous,
+  not stale. A rev picks a tree, not a file among several sharing a basename.
+- **pl-29-detours-along-a-leg.md** — 1 / 1 / 1. The Overpass project's own
+  source path, which is in no tree of this repo at any rev.
+- **records.md** — 1 / 2 / 0. Already stale; excuses nothing, and is reported as
+  a stale declaration today. Delete rather than migrate.
+- **repo-21-the-orchestration-skill-outgrew-its-loop.md** — 1 / 1 / 1. A
+  scratch mutation the record quoted the checker's failure on and reverted
+  without committing; `git log --all -S` finds it in zero commits.
+
+**This page's 2026-09-08 note said only `history.md`'s two were the production
+case and the rest were ticket pages demonstrating the syntax. That is wrong in
+both directions, and correcting it is what reversed C.** `dl-44`'s is production
+and pinnable; `pl-29`'s and `pl-34`'s are production and are not staleness cases
+at all.
+
+**What removing the mechanism outright would have cost, measured rather than
+predicted — the measurement that reversed the answer.** Every declaration line
+stripped from all seven files in the working tree, then
+`node scripts/citations-gate.mjs`; restored with `git checkout -- .` and
+`git status --porcelain` confirmed empty afterwards. The gate goes from exit 0 to
+**exit 1**, `27 enforced, 3 failing`, naming three records:
+
+- `pl-29` **FAIL** — one `unresolvable`, reason "no tracked file matches", on a
+  range in `src/overpass_api/statements/around.cc` (the Overpass project's own
+  source, lines 392-441).
+- `pl-34` **FAIL** — two `unresolvable`, reasons "ambiguous — 3 tracked files
+  match" on a `travel.ts` range and "ambiguous — 2 tracked files match" on a
+  `brief.ts` line.
+- `repo-25` **WORSE** — 15 failing against a `GRANDFATHERED` entry of 12,
+  including two coordinates reported "past end of file".
+
+Under "it narrows" none of those three is touched, and that is the point: the
+three records that would have gone red keep the mechanism they need.
+
+**Do not raise a `GRANDFATHERED` number.** The gate says so in its own output, and
+the list ratchets one way.
+
+### 7. Order
+
+One branch, with the pieces in this order and the suite green at the end rather
+than in the middle.
+
+**Parts 8 and 9 first, in that order, and the order between them is not a
+preference.** Part 9 opens a hole — a self-citation whose hits all land on one
+line goes from failing to passing under dedupe — and part 8's detection is the
+only thing that closes it, so **8 lands with 9 or before it, never after**.
+`Done when` #6 and #7 carry the same constraint; it is repeated here because this
+section is the operational plan and an implementer reading only this paragraph
+would otherwise not see it.
+
+**They go before 1–6 rather than after, for a reason that is about measurement
+rather than taste.** `Done when` #7 requires a corpus-wide before/after showing
+that deduplicating the counter flips no verdict. Run that after the new grammar
+and the `malformed-pin` state are in, and any verdict that did move cannot be
+attributed — the citation corpus would have been re-parsed by a changed grammar
+in the same tree. Landing 8 and 9 against today's grammar keeps that comparison a
+single-variable one.
+
+**Then the pinning work**: grammar and malformed-pin scan with their tests (1, 2,
+4), then rev resolution (3), then the boundary rule and its enforcement (5), then
+the five migrations (6). The migrations last, because until a pin exists there is
+nothing to migrate them to — and because the enforcement landing first turns the
+five into failures the migration then clears, which is the order that proves the
+rule works rather than asserting it.
+
+The migration touches `.claude/skills/orchestrate-tickets/reference` (four
+locations on `history.md`, plus `records.md`'s two stale ones to delete and the
+boundary rule to write beside the syntax) and `tools/downloader/docs/work` (one
+on `dl-44`). **It touches nothing under `docs/work` — the repo-level work
+directory holds none of the five**, and an earlier draft of this sentence said it
+did, inherited from the wider scope "it goes" would have had. Both reference
+files are tracked, which is worth confirming because `.claude` is gitignored
+except by allowlist.
+
+That is one pull request: the paths are `.md` records under a `docs`-typed
+commit, `docs` is `hidden` in `release-please-config.json`, so no changelog line
+is split across tools.
+
+### 8. A self-citation can never satisfy `--require-distinct-anchors`
+
+Folded in here on the owner's call rather than filed separately, because this
+implementation is already rewriting anchor resolution. **Answered 2026-09-12; the
+Log carries the provenance, including that the answer went against this page's
+own recommendation.**
+
+**The defect.** When a citation's target file _is_ the file the citation is
+written in, the quoted fragment is embedded verbatim in the citing line, so it
+always occurs at least twice — the citing row and the target line — and
+lengthening the fragment lengthens both copies. Under
+`--require-distinct-anchors`, which the gate always passes, such a citation can
+never pass, for any fragment, of any length. It turned CI red on PR #210.
+
+**Reproduced here, not accepted as relayed**, and this measurement is what makes
+the printed advice provably false rather than merely unhelpful. `repo-43`'s record
+before its repair commit, restored with `git show 1548f21^:<path>` and run with
+the gate's own flags: `grep -n 'it overrode: none.'` returns the citing row and
+the target line, and the checker reports `anchor starts on 2 lines of <the record
+itself>`. Then the citing line's fragment was rewritten at five increasing
+lengths and the checker re-run on each:
+
+| Fragment length | Checker prints | Distinct lines |
+| --------------- | -------------- | -------------- |
+| 18              | 3 lines        | 2              |
+| 40              | 2 lines        | 2              |
+| 80              | 2 lines        | 2              |
+| 120             | 2 lines        | 2              |
+| 160             | 2 lines        | 2              |
+
+It never reaches one. The file was restored and `git status --porcelain`
+confirmed empty.
+
+**The two columns differ at 18 characters, and that is not a transcription error
+— it is what part 9 is about.** The gate reproduced 2 where this table printed 3
+and said so; both numbers turned out to be right about different things. The
+18-character fragment is `Decision answered`, which also occurs in the citing
+row's own prose ("Decision answered as dated Log entry naming option and
+reasoning"), so after the rewrite that row matches twice — once in the cell text,
+once inside the anchor's quotes. At 40 characters and above the fragment is
+longer than the prose overlap, only the anchor matches, and the two columns
+agree. **Anyone reproducing this needs the fragment, not just the length**: it is
+a prefix of line 235 beginning at `Decision answered`. A length alone does not
+determine the count, which is why the original one-column table was not
+reproducible.
+
+#### What was chosen
+
+**The checker detects the self-citation and prints the true remedy.** It
+recognises that the cited file is the record being checked, names that as the
+reason, and tells the author the repair that actually works — point the citation
+at the real subject, or write it as prose.
+
+**The citation still fails.** Nothing here makes a self-citation pass. That is the
+answer's whole shape: the defect being repaired is that the tool prints false
+advice, not that self-citation is an unsupported shape.
+
+**What this gives up, and the owner accepted it.** A self-citation remains
+unverifiable, so genuine self-evidence — a gate record pointing at its own
+ticket's Log — stays unavailable. There is no mechanism for it after this change
+and none is added.
+
+#### The detection rule
+
+The cited path, once resolved, is the record being checked. That is the whole
+test, and it is decided after resolution rather than by comparing the text of the
+path, because the same file can be cited by a repo-relative path, by a shorthand,
+or by a basename the resolver disambiguates.
+
+**A record citing a _different_ ticket file is ordinary and must keep working.**
+Measured rather than assumed:
+`node scripts/citations.mjs .claude/skills/orchestrate-tickets/reference/history.md --require-distinct-anchors`
+reports `ok` for
+`docs/work/repo-21-the-orchestration-skill-outgrew-its-loop.md:1360` "not evidence of a delivered one" —
+one occurrence, distinct, unaffected. The citing line is not inside the file being
+counted, so nothing about the cross-file case changes. Keep that as a test beside
+the self-citation one; it is the half that proves the rule is narrow.
+
+#### Both texts get corrected, not just the behaviour
+
+A behaviour fix that leaves either of these standing has repaired half the defect,
+because the second is what an author reads while trying to repair the failure.
+
+- `scripts/citations.mjs:144` "one always can — by quoting a longer fragment" —
+  the source comment, and the justification `applyDeclarations` uses to refuse a
+  waiver for an indistinct anchor.
+- `scripts/citations.mjs:1501` "Quote more of the line until the fragment is unique"
+  and `scripts/citations.mjs:1502` "evidence declaration for this — the fix is always available" —
+  the remediation printed at the moment of failure. **This is the worse of the
+  two**, and it was not in the report that raised the defect.
+
+#### The argument for the option that lost, kept because it was not wrong
+
+The recommendation this page made was to **exclude the citing line from the
+occurrence count** when the cited file is the record itself: the line carrying a
+citation is not evidence about its target, so counting it was arguably always
+wrong, and the rule stays well-behaved at the edges — the 18-character fragment
+above occurs on three lines, so excluding the citing row still leaves two and a
+genuinely indistinct self-citation still fails.
+
+**It lost to consistency, not to being wrong.** Excluding the citing line makes
+self-citation _work_, and that cuts against the call already made on `repo-43` in
+this same batch, where the builder was told to repoint at the real subject rather
+than make its self-citation distinct and its reviewer independently reached the
+same conclusion. Two tickets landing opposite answers in one batch is the thing to
+avoid. The argument is kept here so a later reader can reopen it on purpose rather
+than rediscover it by accident.
+
+### 9. `occurrences` counts matches, not lines
+
+**Found by a disagreement, not by a review pass**, which is why it is recorded
+with how it surfaced: the gate reproduced the fragment-length table in part 8 and
+got 2 where the table printed 3. Neither side was wrong. Chasing which one
+produced this. **Answered 2026-09-12**; the Log carries the provenance, including
+that the answer overrode two recommendations and that folding it in here was
+taken as a named cost.
+
+**The defect.** `scripts/citations.mjs:826` "const hits = locateAnchor(content, c.anchor)"
+returns **one entry per match**, and `occurrences` is `hits.length`. Two matches
+on the same line count twice, while **six** places call it a line count — two of
+them printed to the author.
+
+**The reproduction is not hypothetical: it misled an agent on this branch, this
+week.** `scripts/citations.mjs:1424` "anchor starts on ${r.occurrences} lines of"
+interpolates the match count directly beside the word "lines". For part 8's
+18-character fragment `locateAnchor` returns `[224, 224, 235]` — three matches,
+**two** distinct lines — and that line printed **"anchor starts on 3 lines"** for a
+fragment that starts on two. This ticket's own part 8 table recorded the 3, the
+gate read the file and got 2, and a round was spent reconciling a disagreement
+that existed only because the tool labelled a match count as a line count. Neither
+side had measured wrong. **That is the case for the behaviour change**, and it is
+a better one than "the wording is imprecise": a false sentence with a specific
+wrong number in it, printed to exactly the person trying to repair the citation.
+
+A second, cleaner instance was produced on purpose while settling this: a scratch
+record whose anchor occurs on **one** line, for which the same message printed
+"anchor starts on 2 lines".
+
+**What was chosen: (a), deduplicate by line**, so the counter means what those
+six places already claim. And **it lands on repo-35 rather than its own ticket**.
+
+**The scope cost, accepted rather than argued.** This ticket now carries a
+repo-wide behaviour change to a counter every citation in the corpus is checked
+against, under a title about pinning one citation to a commit. That is exactly the
+scope-widening shape `CLAUDE.md`'s decision rule exists to catch. It was surfaced
+as a named cost when the question was put, and the owner took it knowingly.
+
+#### Where the dedupe goes, and why that decides how much wording changes
+
+`locateAnchor` has **exactly one consumer** — `scripts/citations.mjs:826` — so
+deduplicating inside it is safe, and it is the better of the two places:
+
+- **Dedupe inside `locateAnchor`** makes all six texts below true at once, and
+  also improves the `moved` message, which prints `hits.slice(0, 3)` as "it is at
+  _M_" and today can repeat a line number there.
+- **Dedupe only at the `occurrences` assignment** leaves `locateAnchor` returning
+  one entry per match, so `scripts/citations.mjs:595` stays wrong and must be
+  edited by hand.
+
+#### Six sites, each checked individually rather than waved through
+
+**There are six, not the five this ticket was handed and not the three it first
+recorded.** Each was read and judged against the post-change behaviour, because
+"the behaviour now matches what the text always claimed" is a claim to check, not
+a reason to skip checking:
+
+| Site                         | Text                                                                  | Printed? | After dedupe                     |
+| ---------------------------- | --------------------------------------------------------------------- | -------- | -------------------------------- |
+| `scripts/citations.mjs:118`  | "starts on more than one line of the file it points at"               | no       | **true** — no edit               |
+| `scripts/citations.mjs:595`  | "Every line an anchor's text starts on, in a file."                   | no       | **depends on where dedupe goes** |
+| `scripts/citations.mjs:828`  | "is how many lines the fragment starts on in the whole file"          | no       | **true** — no edit               |
+| `scripts/citations.mjs:975`  | "A `verified` anchor that starts on more than one line of its target" | no       | **true** — no edit               |
+| `scripts/citations.mjs:1424` | "anchor starts on ${r.occurrences} lines of"                          | **yes**  | **true** — see below             |
+| `scripts/citations.mjs:1498` | "anchor(s) verify on a fragment that starts on more than one line"    | **yes**  | **true** — no edit               |
+
+**`scripts/citations.mjs:595` is the sixth, and it was in neither relayed list.**
+It is `locateAnchor`'s own contract, not a statement about `occurrences`, so
+whether it becomes true depends on where the dedupe is applied — it is the one
+site the behaviour change does **not** automatically repair. That is the whole
+reason the individual check was worth doing.
+
+**`scripts/citations.mjs:1424` prints the right word beside the right number after
+the change, and that is checkable rather than hopeful.** The number it
+interpolates is `r.occurrences`, and the predicate that fails a citation reads the
+same field in both places that judge it —
+`scripts/citations.mjs:980` "const indistinct = results.filter(" and
+`scripts/citations-gate.mjs:558` "&& (r.occurrences ?? 1) > 1)".
+So once `occurrences` is a distinct-line count, the printed number **is** the
+quantity `--require-distinct-anchors` failed on, by construction rather than by
+coincidence. A site that prints the right word next to the wrong number has not
+been repaired, and this one is only repaired because both readers share the
+field.
+
+#### The interaction with part 8, measured rather than reasoned
+
+Both defects meet on this counter, and the interaction is **not** simply "dedupe
+does not rescue self-citations". Two shapes, and they behave differently:
+
+- **A self-citation pointing at a _different_ line of its own file** — part 8's
+  `repo-43` case. `[224, 224, 235]` becomes 2 distinct lines, still above one, so
+  it **still fails**. Part 8's detection is still needed, for the message rather
+  than the verdict.
+- **A self-citation pointing at its _own_ line** — measured with a scratch record
+  written for the purpose, a citation on line 11 reading `<this file>:11` with its
+  anchor also present in that line's prose. The checker reports
+  `anchor starts on 2 lines`, and the anchor is on **one** line. Raw 2, distinct 1.
+  **After dedupe it would be 1, and the citation would pass.** Today it fails.
+
+So dedupe **opens a hole** in the second shape, and part 8's self-citation
+detection is the only thing that closes it. That reverses the usual reading:
+part 8 is not merely still needed alongside part 9 — it is load-bearing
+_because of_ part 9, and the two must land together or in that order.
+
+**The hole is narrow, and that is a measured bound rather than an assumption.**
+The gate tried to widen it and could not: a self-citation whose target is a
+_different_ line cannot collapse to one distinct line, because the citing row
+always contributes a hit of its own through the quoted anchor embedded in it, so
+target ≠ citing guarantees at least two distinct lines. The hole is therefore
+confined to a self-citation whose cited line **is** the line it is written on, or
+whose cited range includes that line. Reproduced independently by the gate with a
+differently-worded record of its own — raw `[11, 11]`, distinct 1 — matching this
+page's construction. **Narrow is not the same as contrived**, and that is the gate's
+argument rather than this page's: the shape falls out of this repo's ordinary
+citation style, where prose beside a citation echoes the anchor's wording —
+`repo-43`, `dl-44` and `repo-31` all write that way. And there is a second,
+non-deliberate route in: **line-number drift**. A self-citation that was accurate
+when written has its own citing row shifted onto the target value by an unrelated
+edit, and nobody has to intend the shape for a record to acquire it.
+
+**The two defects have not yet collided in the live corpus.** Three of the six
+indistinct citations are self-citations, all on `repo-31`, and none is a same-line
+case — their raw and distinct counts are equal. So nothing in the corpus today
+takes the second shape. That is a fact about this snapshot, not a property, which
+is the whole reason the retake below is required.
+
+#### The measurement (a) turned on, taken before choosing rather than after
+
+Every record in `citations-gate.mjs`'s real scope — 128 files, `docs/work/*.md`
+and `tools/*/docs/work/*.md` — run through the checker's **own** exported
+`extractCitations` and `checkCitations`, not a grep, collecting every citation
+that is `verified` with `occurrences` above 1. That reproduces the gate's `6
+indistinct` exactly.
+
+| Record  | Anchor                          | Raw hits              | Distinct lines |
+| ------- | ------------------------------- | --------------------- | -------------- |
+| repo-31 | `status: done`                  | 2 — `[6, 417]`        | 2              |
+| repo-31 | `Answered: D, and built.`       | 3 — `[417, 436, 458]` | 3              |
+| repo-31 | `Answered: option D`            | 2 — `[375, 419]`      | 2              |
+| dl-44   | `served.rawPayload.equals(PNG)` | 2 — `[259, 337]`      | 2              |
+| dl-44   | `served.rawPayload.equals(PNG)` | 2 — `[259, 337]`      | 2              |
+| dl-44   | `ON DELETE CASCADE`             | 2 — `[44, 86]`        | 2              |
+
+`dl-44`'s two rows are **two separate citations**, at `:256` and `:336`, not one
+row standing for two. A re-run must match this table row for row.
+
+**Zero of the six owe their verdict to same-line duplication**, so **(a) flips no
+gate verdict against this corpus**. That is what let the question be asked with a
+number attached instead of a guess.
+
+#### What the number rests on, and what it does not establish
+
+Three things, and the third is a limit rather than a guard:
+
+- **Coverage is structural, not coincidental.** 56 of the 128 were skipped for
+  having no single `Review` section, and 128 − 56 = 72 = the gate's own
+  `27 enforced + 45 grandfathered`. A record with no `## Review` heading gives the
+  gate's section selection nothing to work with, so it is the same population by
+  construction. Confirmed independently by a plain `grep` for the heading: 72 have
+  one, 56 do not.
+- **Position-level cross-validation, not just counts.** The raw-versus-distinct
+  split needs `locateAnchor`, which is not exported, so it was replicated. A single
+  replica can only be validated against the tool's `occurrences` — a **number** —
+  because a verified result's `foundAt` carries the in-range hits, not the full
+  list, so count agreement is the strongest check the public surface supports. Two
+  independently-written replicas, different code shape and no shared code, produce
+  the **same hit-line arrays position for position** for all six: `[6, 417]`,
+  `[417, 436, 458]`, `[375, 419]`, `[259, 337]` twice, `[44, 86]`.
+- **What that still cannot rule out, stated here rather than hedged elsewhere.**
+  Both replicas are faithful copies of the _same_ documented algorithm. If
+  `locateAnchor`'s own line attribution has a rare edge case — a match landing on
+  a line-join boundary attributed to the wrong side — both would inherit it
+  identically and their agreement would not surface it. **Neither of us has a
+  concrete instance of this.** It is not a finding; it is the limit of what "two
+  replicas agree" proves.
+
+### Not in scope
+
+- Any change to what `--rev` does as a whole-run flag. It stays.
+- Widening `citations-gate.mjs`'s scope
+  (`scripts/citations-gate.mjs:120` "export const SCOPE = {"). `history.md` and
+  `records.md` are outside it and stay outside it; their red is a direct-run red.
+- Repairing unrelated `moved` citations elsewhere in the corpus, beyond the five
+  on `history.md` that `Done when` #3 now names.
+- Repairing `repo-43`'s record. It has already been repaired on its own branch by
+  the prose route, and whichever way part 8 is answered, that repair stands.
 
 ## Done when
 
-Written against the decision, not against an implementation.
+Lines 1 to 4 were written against the decision, not against an implementation.
+The decision is answered, so 1 is met by the 2026-09-12 Log entry and 5 is added
+for the work the answers imply.
 
 1. A, B and C are each answered on this page as a dated Log entry naming the
    option and the reasoning, and `status` moves to `ready`.
 2. Whatever is chosen, the reproduction above still runs and its three rows are
    still the numbers it prints at `4901cd6` — if the fix changes them, the new
    numbers are recorded here beside the old ones rather than replacing them.
-3. Whatever is chosen, the four declarations on
-   `.claude/skills/orchestrate-tickets/reference/history.md` are either migrated
-   or explicitly kept, in the same change, and that page's plain run still exits
-   0 afterwards. It exits 0 today; a fix that reintroduces the red it replaced
-   has not finished.
+3. **Corrected 2026-09-12.** The two declaration lines on
+   `.claude/skills/orchestrate-tickets/reference/history.md`, naming four
+   locations and suppressing eight citations, are **migrated** — C is answered
+   "it goes", so "explicitly kept" is no longer one of the two ways to satisfy
+   this — and that page's plain run exits 0 afterwards.
+
+   **The clause this line used to carry, "It exits 0 today", was already false
+   when it was written, and this page's own 2026-09-08 re-measurement said so.**
+   Re-measured a third time at this ticket's base, `8d79d8e`:
+   `node scripts/citations.mjs .claude/skills/orchestrate-tickets/reference/history.md`
+   exits **2**, `11 verified, 7 moved, 3 unanchored, 0 unresolvable, 3 unchecked, 8 evidence — of 32 references`.
+   Not 0, and no longer the four `moved` recorded on 2026-09-08 either: seven.
+
+   So exit 0 is a bar that cannot be cleared by migrating the declarations alone,
+   and this line now says what else it takes. Two of the seven are shorthands into
+   `dispatching.md` at 230 and 233, written at record lines 106 and 107; they are
+   the undeclared twins of the declared pair and migrate with them. **The
+   remaining five are ordinary drift with nothing to do with pinning** — two into
+   `scripts/test/citations.test.ts`, two into `.github/workflows/ci.yml`, one into
+   `scripts/next-id.mjs` — and this line now requires them repointed in the same
+   change. That reverses the "out of scope" note in the 2026-09-08 Log entry, on
+   the ground that it was right for a measurement-only branch and wrong for a
+   branch that is editing this page anyway. **One edit to change back**: replace
+   "exits 0 afterwards" with "carries no failing citation that a declaration used
+   to suppress, and names the residual drift by file with a count".
+
 4. A malformed pin is rejected loudly, with a test proving it — not dropped from
-   the count, which is what the naive spelling does today (fact 1).
+   the count, which is what the naive spelling does today (fact 1). **Under A this
+   is the hardest line on the list, not a formality**; Build step 2 is why, and it
+   is where a reviewer should look first.
+5. **Added 2026-09-12 for C, and rewritten the same day when C reversed.** The
+   five pinnable locations — four on `history.md`, one on `dl-44` — have moved
+   from declarations to pins; the other 21 still carry declarations; the boundary
+   rule in Build part 5 is written down where an author will find it, and
+   whatever enforcement was built for it is named in the Log, cheap half or both.
+   `node scripts/citations-gate.mjs` still exits 0.
+
+   **The line this replaced read "every declaration in the tree is gone".** It is
+   recorded rather than deleted because the measurement that retired it is the
+   one that reversed C: removing all twelve declaration lines and nothing else
+   takes the gate from exit 0 to **exit 1**, failing `pl-29`, `pl-34` and
+   `repo-25`.
+
+6. **Added 2026-09-12 for the defect in Build part 8, and made concrete the same
+   day when it was answered.** Three things, and a fix that does the first without
+   the second has repaired half the defect:
+
+   1. **The behaviour.** A citation whose resolved target is the record being
+      checked is reported as a **self-citation**, by that name, with the remedy
+      that works — point at the real subject, or write it as prose. It still
+      fails; nothing here makes a self-citation pass.
+   2. **Both texts.** `scripts/citations.mjs:144` "one always can — by quoting a longer fragment",
+      `scripts/citations.mjs:1501` "Quote more of the line until the fragment is unique"
+      and `scripts/citations.mjs:1502` "evidence declaration for this — the fix is always available"
+      no longer tell an author to do something that cannot be done. The second is
+      the one printed at the moment of failure and is the worse of the two.
+   3. **Two tests, and the first must be able to fail.** One proving the
+      self-citation message appears _instead of_ the generic indistinct advice —
+      not merely that the run is non-zero, which it already is. One proving a
+      record citing a **different** ticket file still resolves and still counts
+      occurrences normally, which is measured today as `ok` on
+      `docs/work/repo-21-the-orchestration-skill-outgrew-its-loop.md:1360` "not evidence of a delivered one"
+      from `history.md` under `--require-distinct-anchors`.
+
+   The reproduction that makes the old advice provably false rather than merely
+   unhelpful is in Build part 8: five fragment lengths, 18 through 160, never
+   reaching one occurrence.
+
+7. **Added 2026-09-12 for Build part 9, and made concrete the same day when it
+   was answered: (a), deduplicate `occurrences` by line, landing on this ticket.**
+   Four things.
+
+   1. **The behaviour.** `occurrences` counts distinct lines. Put the dedupe
+      inside `locateAnchor` — it has exactly one consumer — or edit
+      `scripts/citations.mjs:595` "Every line an anchor's text starts on, in a file."
+      by hand, because that is the one of the six wording sites the change does
+      not repair on its own.
+   2. **All six sites read correctly afterwards, each checked individually**, not
+      assumed fixed because the count changed under them. Build part 9 lists them
+      with a verdict each. For the printed one that interpolates the number,
+      `scripts/citations.mjs:1424` "anchor starts on ${r.occurrences} lines of",
+      the check is that the number printed is the one the flag failed on — both
+      read the same field, so this holds by construction once the field is right.
+   3. **The number is retaken at the commit that changes the counter**, not
+      trusted from this page's snapshot. More important now, not less: the
+      decision rests on a reading of one day's corpus, and a new citation can
+      enter the shape at any commit. **The implementation proves 0 verdicts flip
+      at its own tip.**
+   4. **A corpus-wide before/after.** The checker is run over the whole
+      enforced-plus-grandfathered population before and after the change and the
+      verdicts are identical, record for record. Coverage is shown by the
+      population identity: 128 files in scope, 56 with no single `Review` section,
+      and 128 − 56 = 72 = `27 enforced + 45 grandfathered`. **That identity is
+      structural, not coincidental** — a record with no `## Review` heading gives
+      the gate's section selection nothing to work with, so it is the same
+      population by construction.
+
+   And because part 9 opens a hole that only part 8 closes — a self-citation
+   pointing at its own line goes from failing to passing under dedupe, measured in
+   part 9 — **#6 and #7 land together, or #6 first.** Neither alone is safe.
+
+## The gate on this filing
+
+**Gate: PASS** — 2026-09-12 · branch `repo-35/record-the-decisions`, `origin/main...50bc418` · defect hunt run directly by this reviewer (no `Skill` tool; `code-review` not delegated)
+
+This branch's whole deliverable is recording the A/B/C decision, part 8 and part 9's decisions, and writing the Build brief those answers imply — it does not touch `scripts/citations.mjs`, its tests, `history.md`, or any declaration (confirmed at every commit checked: `git log --oneline 8d79d8e..50bc418 -- scripts/citations.mjs scripts/test/citations.test.ts` prints nothing). `Done when` items 2 through 7 describe runtime behavior the _implementation_ branch must exhibit; none of it is buildable yet, so each verdict below is `unproven (implementation)` rather than `unproven` — this review instead verified that every measurement the Build brief rests on is accurate and reproducible, across the branch's full sequence of revisions.
+
+| Done when                                                                                                                                                                                               | Proof                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. A, B, C, and parts 8-9 each answered as a dated Log entry naming the option and reasoning; `status` moves to `ready`                                                                                 | proven — six Log entries dated 2026-09-12, each naming the decider and, where applicable, the recommendation it overrode; `node scripts/status.mjs --show repo-35` reports `status ready`, `difficulty hard`, `unblocked`                                                                                                              |
+| 2. Reproduction's three rows still print `4901cd6`'s numbers, or drift is recorded beside them                                                                                                          | verified — the two `--rev`-pinned rows are unchanged (a pin fixes both content and tree); the plain row's drift is recorded beside the original at each re-measurement; `scripts/citations.mjs` and `scripts/test/citations.test.ts` confirmed unmodified across the whole branch                                                      |
+| 3. `history.md`'s two declarations migrated, residual drift named and repointed, plain run exits 0                                                                                                      | unproven (implementation) — the base-commit exit-2 measurement and the shorthand-twin/residual-drift breakdown independently reproduced exit-for-exit                                                                                                                                                                                  |
+| 4. Malformed pin rejected loudly, with a test that fails on being merely non-zero                                                                                                                       | unproven (implementation) — Build step 2's permissive-scan mechanism independently prototyped (`@nope!`, `@bb` both vanish under the naive extended grammar; an npm-scoped `node_modules` path is unaffected), confirming the brief specifies a real gap and a real closing mechanism                                                  |
+| 5. Five locations migrated to pins, 21 kept as declarations, gate stays exit 0                                                                                                                          | unproven (implementation) — the classification of all 26 declared locations independently re-derived three times (regex scan, per-file checker run, strip-and-run), byte-identical each time                                                                                                                                           |
+| 6. Self-citation detected and named; both misleading texts corrected; two tests specified, the first falsifiable                                                                                        | unproven (implementation) — the two coordinates confirmed false-as-claimed against real `citations.mjs` output on a scratch-restored `repo-43`; the cross-file test case (`history.md` citing `repo-21:1360`) confirmed `ok` and not indistinct                                                                                        |
+| 7. `occurrences` deduplicated by line inside `locateAnchor`; all six wording sites individually correct; number retaken at implementation time; corpus-wide before/after on the `72 = 27 + 45` identity | unproven (implementation) — 0-of-6 corpus measurement independently reproduced three ways (CLI, direct-import, hit-position replica cross-check); the same-line hole independently reproduced with a second scratch record (`[11, 11]`, distinct 1); confirmed the hole cannot widen past same-line or range-including-the-citing-line |
+
+Findings raised during this gate, all closed by the tip above:
+
+- **med** · Build's Order section named `docs/work` as a migration path when nothing migrated lives there, inherited from the abandoned "it goes" scope. Fixed.
+- **med** · Build part 8's fragment-length table printed "18 → 3 lines" for a case independently measured at 2 distinct lines. Root cause: `scripts/citations.mjs:1424` "anchor starts on ${r.occurrences} lines of" interpolates a match count beside the word "lines," so the table and the tool were each faithful to something different. Filed as Build part 9 rather than silently corrected.
+- **med** · Build part 9's first draft named three wording sites; a sixth, `scripts/citations.mjs:595` "Every line an anchor's text starts on, in a file." (`locateAnchor`'s own docblock), was in neither relayed list. Confirmed against source and added.
+- **high** · Dedupe (part 9's chosen fix) opens a hole part 8 alone does not close: a self-citation whose cited line is the line it is written on collapses from 2 raw hits to 1 distinct line and would silently start passing. Independently reproduced with a second, differently-worded scratch record (raw `[11, 11]`, distinct 1); independently confirmed the hole cannot widen to a genuinely different target line, since the citing row's own embedded quote always contributes an independent distinct hit. `Done when` #6/#7 and Build's Order section now state the ordering constraint directly rather than only implying it.
+- **low** · Build's Order section didn't mention parts 8/9 at all despite the ordering constraint appearing only in `Done when` #7. Fixed; independently confirmed the fix names both the dependency and the reason 8/9 land before 1-6 (keeping the corpus-wide before/after single-variable).
+- **findings** · 5 raised across this gate's full sequence of re-checks, 5 carried, 0 dropped.
+
+NFR sweep: security n/a (no runtime code on this branch); performance n/a; reliability — the retake-at-implementation-time and corpus-wide before/after requirements in `Done when` #7 are the reliability guard for the one behavior change this Build now specifies, and both are present and worded as requirements rather than suggestions; maintainability — the six-site wording table, the narrow-hole bound, and the Order section's stated reasoning are the "why, not what" documentation this repo's style calls for.
+
+**Why this heading is not `## Review`.** `docs/01-TICKETS.md:281` "A gate on a pull request that only"
+carves this case out by name: a gate on a branch that only files a ticket does not
+go in `## Review`, because that section answers whether _the work_ was checked and
+a filing has no work in it — its `Done when` lines describe an implementation that
+does not exist yet. This branch is that shape exactly, and the reviewer's own table
+says so, reading `unproven (implementation)` on five of seven rows. The precedent
+named there is `dl-29`, which keeps its own under this same heading.
+
+**It is a carve-out, not a workaround, and the difference is worth stating**
+because the mechanical effect is identical. `scripts/status.mjs:330` ".test(line)) return true;"
+detects a gate record by a literal `## Review` heading, so renaming makes
+`reviewedButReady` stop firing — and that check exists to catch work that merged
+without its status being flipped, which is not what this is. The same passage
+predicts this exact collision in its last sentence: a filing gate under `## Review`
+"makes a perfectly ordinary unstarted ticket look like a defect". Measured both
+ways: under `## Review` the suite is `1 failed | 312 passed` and the citation gate
+reads `28 enforced`; under this heading it is `313 passed` and `27 enforced`, with
+`status: ready` still true.
+
+**Transcription note, written by the builder and not by the reviewer.** The section
+above is the reviewer's gate record, committed as it sent it — **nothing altered,
+nothing dropped**: every verdict, every finding and its severity, every number and
+every anchor is its own. Everything above this paragraph is its text; this
+paragraph is the only part of the section that is not.
+
+**One exception, stated because `verbatim` would otherwise be a slightly false
+claim.** `npm run format` rewrote two things in it, since oxfmt formats markdown
+here and `npm run check` would fail otherwise: table cells were padded to an
+aligned width, and `*implementation*` became `_implementation_`. Checked rather
+than assumed — normalising both copies for whitespace and emphasis-marker style
+makes them **identical**, so not one word, number, coordinate or verdict moved.
+The reviewer was told before this was committed.
 
 ## Log
+
+- **2026-09-12** — **Build part 9 is answered: (a), deduplicate `occurrences` by
+  line — and it lands on this ticket rather than its own.** Sixth entry of the
+  same date. **This closes the last open decision on the page.**
+
+  **Decided by the repo owner. It overrode two recommendations, and the
+  combination chosen was recommended by nobody.** The orchestrator recommended
+  (a) **as its own ticket**, on the reasoning that a repo-wide behaviour change to
+  a counter every citation is checked against is orthogonal to pinning. The gate
+  recommended conditionally: fold if (b), split if (a). The owner chose (a) **and**
+  fold.
+
+  **The scope cost, recorded as accepted rather than argued.** This ticket now
+  carries a repo-wide behaviour change under a title about pinning one citation to
+  a commit. That is precisely the scope-widening shape `CLAUDE.md`'s decision rule
+  exists to catch. It was surfaced as a named cost when the question was put, and
+  the owner took it knowingly. Not softened here, and not re-argued.
+
+  **The measurement is what let the question be asked with a number attached.** The
+  blocking fact — 0 of the 6 indistinct citations inflated by a same-line match, so
+  (a) flips no verdict today — was measured **before** the decision: by the gate
+  first, then independently here through a different route, importing the
+  checker's own `extractCitations` and `checkCitations` rather than parsing CLI
+  output per file. What two agreeing replicas do _not_ establish was named at the
+  same time rather than left implied.
+
+  **Three corrections this round, and two of them are to things handed to this
+  branch.**
+
+  **1. There are six wording sites, not three and not five.** The page first
+  recorded three; the dispatch corrected that to five and named two this branch had
+  not found, `scripts/citations.mjs:975` and the printed
+  `scripts/citations.mjs:1424`. Verified each against the source — and found a
+  **sixth that neither relayed list contained**:
+  `scripts/citations.mjs:595` "Every line an anchor's text starts on, in a file.",
+  which is `locateAnchor`'s own contract rather than a statement about
+  `occurrences`. It matters out of proportion to its size: it is **the one site the
+  behaviour change does not automatically repair**, because whether it becomes true
+  depends on where the dedupe is applied. Had the check been skipped on the
+  strength of "the behaviour now matches what the text claimed", it would have been
+  left quietly false. That is the answer to the instruction to check each site
+  rather than assume.
+
+  **2. `scripts/citations.mjs:1424` is the reproduction, and it did harm on this
+  branch.** It interpolates `r.occurrences` beside the word "lines", so for hits
+  `[224, 224, 235]` it printed "anchor starts on 3 lines" for a fragment starting
+  on two. That is the entire origin of the disagreement the previous entry records:
+  this page transcribed the tool and got 3, the gate read the file and got 2, and
+  neither had measured wrong. A false sentence with a specific wrong number in it,
+  printed to the person trying to repair the citation. **A better case for the
+  behaviour change than "the wording is imprecise"**, and the one a future reader
+  needs in order to see why the owner accepted the scope.
+
+  **3. The part 8 interaction is the opposite of what was relayed, and this is the
+  finding of the round.** The dispatch's reasoning was that dedupe turns
+  `[224, 224, 235]` into 2 distinct lines, so a self-citation still fails and part
+  8's detection is still needed. That is right for that shape and **wrong in
+  general**, which measuring rather than reasoning is what turned up. A scratch
+  record was built for the purpose: a citation on line 11 reading `<this file>:11`,
+  its anchor also present in that line's own prose. The anchor occurs on **one**
+  line; the checker prints "anchor starts on 2 lines"; raw 2, distinct 1.
+  **After dedupe that is 1, and the citation passes — where today it fails.**
+
+  So part 9 **opens a hole** that only part 8's self-citation detection closes.
+  Part 8 is not merely still needed alongside part 9; it is load-bearing _because_
+  of it, and `Done when` #6 and #7 must land together or #6 first. Nothing in the
+  live corpus takes that shape today — all three self-citations among the six are
+  on `repo-31` and none is a same-line case — so the two defects overlap in the
+  code and not yet in the corpus. A fact about this snapshot, not a property.
+
+  **Recorded on the page at the gate's request, with the arrays rather than a
+  summary of them.** Its independently-written `locateAnchor` replica — different
+  code shape, no shared code — reproduces this branch's hit-line arrays **position
+  for position**, not merely in length: `[6, 417]`, `[417, 436, 458]`,
+  `[375, 419]`, `[259, 337]` for both `dl-44` citations, and `[44, 86]`. That is
+  strictly stronger than the per-case guard available to a single replica, since a
+  verified result's `foundAt` carries only the in-range hits and the public surface
+  exposes the count alone. **And the limit of it, in the same breath:** both
+  replicas are faithful copies of the _same_ documented algorithm, so a rare
+  line-attribution edge case in that algorithm — a match landing on a line-join
+  boundary attributed to the wrong side — would be inherited identically by both
+  and their agreement would not surface it. Neither of us has a concrete instance.
+  Not a finding; the limit of what "two replicas agree" proves, written beside the
+  measurement rather than hedged elsewhere.
+
+  **`Done when` #7 is now four parts**: the behaviour and where the dedupe goes;
+  all six sites checked individually; the number **retaken at the commit that
+  changes the counter** rather than trusted from here; and a corpus-wide
+  before/after whose coverage is shown by the `128 − 56 = 72 = 27 + 45` identity,
+  which is structural because a record with no `## Review` heading gives the gate's
+  section selection nothing to work with.
+
+  **Unchanged, per the dispatch**: A, B, C, part 8 and `Done when` #3.
+
+  **Verification.** All unpiped, `$?` read directly. `npm run check` → 0.
+  `node scripts/citations.mjs` on this file → 0.
+  `node scripts/citations-gate.mjs --against origin/main` → 0.
+  `npm test -- --project repo` → 0. The scratch probe record was written under
+  `docs/work/`, measured and deleted in one script; `git status --porcelain` empty
+  afterwards, and the gate was never run while it existed.
+
+- **2026-09-12** — **Build part 9's blocking measurement is taken: 0 of the
+  corpus's 6 indistinct citations owe their verdict to same-line duplication, so
+  option (a) would change no gate verdict today.** Fifth entry of the same date.
+  Part 9 stays **open** — this answers the fact the decision turns on, not the
+  decision.
+
+  **Measured here rather than transcribed.** The gate produced this number first
+  and reported it; it is written onto this page only after being reproduced
+  independently, because a count this page prints is this page's claim regardless
+  of who found it. Method: every record in `citations-gate.mjs`'s real scope — 128
+  files — run through the checker's **own exported** `extractCitations` and
+  `checkCitations`, collecting every citation `verified` with `occurrences` above
+  1. That reproduces the gate's `6 indistinct` exactly, and the six are the same
+     six, with the same anchors and the same raw hit lists.
+
+  **Two guards, because the interesting half needed a replica.** The raw-versus-
+  distinct split needs `locateAnchor`, which `citations.mjs` does not export, so it
+  was replicated — and the replica was validated **per case** by asserting its raw
+  count equals the tool's own `occurrences` for that same citation. 6 of 6 agreed;
+  a disagreement anywhere would have invalidated its distinct counts and the
+  script says so rather than printing a number regardless. Separately, coverage was
+  checked against the gate's own population: 56 of the 128 were skipped for having
+  no single `Review` section, and 128 − 56 = 72, which is exactly the gate's
+  `27 enforced + 45 grandfathered`. The scan saw what the gate sees.
+
+  **One refinement on the relayed table.** It listed `dl-44`'s
+  `served.rawPayload.equals(PNG)` as one row marked "×2 citations"; they are two
+  separate citations, at `:256` and `:336`, each raw 2 and distinct 2. The total of
+  six and the answer of zero are unchanged. Recorded because the page now prints
+  the per-citation table and it should match what a re-run prints.
+
+  **What the number does and does not settle.** It makes (a) a correctness fix
+  rather than an amnesty _against this corpus_. It does not rule out a future
+  citation entering the shape, so `Done when` #7 now says to retake it at
+  implementation time rather than trust it from here — the point of that line was
+  never the specific answer.
+
+  **Three of the six are self-citations** (all on `repo-31`), which is part 8's
+  shape, but none hits the same-line double match. The two defects overlap in the
+  code and not in the corpus, which is worth knowing before anyone assumes part 8
+  quietly repairs part 9.
+
+  **The gate's scoping recommendation, recorded as its view and not adopted**:
+  fold part 9 into this ticket if (b) is chosen, split it into its own if (a) is,
+  since a behaviour change deserves its own reproduction and its own gate. Left on
+  the page for whoever answers, alongside the page's own refusal to assume it
+  belongs here.
+
+  **Verification.** All unpiped, `$?` read directly. `npm run check` → 0.
+  `node scripts/citations.mjs` on this file → 0.
+  `node scripts/citations-gate.mjs --against origin/main` → 0.
+  `npm test -- --project repo` → 0.
+
+- **2026-09-12** — **Two gate findings repaired, and the second of them was not a
+  defect in the ticket but a defect in the checker, found because the gate and
+  this branch disagreed about a number.** Fourth entry of the same date. No
+  decision answered; A, B, C and part 8 are untouched.
+
+  **Finding 1 — accepted, and it was mine.** Build part 7 still named `docs/work`
+  among the directories the migration touches. It does not: under "it narrows" the
+  five migrating locations are four on `history.md`, which lives under
+  `.claude/skills/orchestrate-tickets/reference`, and one on `dl-44` under
+  `tools/downloader/docs/work`. The repo-level work directory holds none of them.
+  The stale path was inherited from the wider scope "it goes" would have had —
+  when C reversed, the sentence lost `tools/planner/docs/work` and kept
+  `docs/work`, which was the wrong one to keep. Corrected, with `records.md` named
+  alongside `history.md` since the boundary rule is written there too.
+
+  **Finding 2 — not accepted as filed, and not rejected either: both numbers were
+  right.** The gate could not reproduce the fragment-length table's first row,
+  getting 2 where the table printed 3, and cross-checked with `grep -c`. Chased
+  rather than conceded, because a measurement this page prints is this page's
+  claim.
+
+  The 18-character fragment is `Decision answered`, a prefix of line 235. It also
+  occurs in the **citing row's own prose** — "Decision answered as dated Log entry
+  naming option and reasoning" — so once the anchor is rewritten to that fragment,
+  line 224 contains it twice: once in the cell text, once inside the quotes.
+  `locateAnchor` returns `[224, 224, 235]`. **Three matches, two distinct lines.**
+  The checker printed 3 and the gate counted 2, and neither was wrong: the gate
+  measured the file, this branch transcribed the tool. At 40 characters and above
+  the fragment outgrows the prose overlap and the two agree, which is why only the
+  first row diverged.
+
+  The gate's `grep -c` could not have found it either way — `locateAnchor` matches
+  against the file collapsed into one string, so it can match across a line
+  boundary, and a line-oriented grep cannot see that class of hit at all. That is
+  not a criticism of the check; it is the reason the two methods had to be
+  compared rather than one of them trusted.
+
+  **The table now prints both columns**, and says that a length alone does not
+  determine the count — the fragment does. The original one-column table was not
+  reproducible from what it wrote down, which is the defect this ticket exists to
+  prevent, committed on this ticket's own page.
+
+  **What that disagreement uncovered is Build part 9, and it is open.**
+  `occurrences` is `hits.length`, one entry per match, while three places call it a
+  line count: the source comment, and the remediation printed to the author. It is
+  the same counter `--require-distinct-anchors` fails on and therefore the same
+  counter part 8's self-citation rule is written against — and a self-citation is
+  exactly the shape that makes one line match twice, since the citing row carries
+  both the prose and the anchor. The two defects meet on one line of code.
+
+  **Left open rather than fixed here, with the options and their costs on the
+  page**: deduplicate the count, which changes gate verdicts and would quietly
+  pass records that fail today (the corpus reports `6 indistinct`; how many are
+  this shape is **unmeasured**, and measuring it first is what separates a
+  correctness fix from an amnesty), against correcting the wording in all three
+  places, which changes no behaviour and keeps a rule that is arguably right
+  anyway. **And whether part 9 belongs on this ticket at all is part of the
+  question** — it was found here and touches the same counter, but it is
+  independent of pinning. This page does not assume the answer.
+
+  **Verification.** All unpiped, `$?` read directly. `npm run check` → 0.
+  `node scripts/citations.mjs` on this file → 0.
+  `node scripts/citations-gate.mjs --against origin/main` → 0.
+  `npm test -- --project repo` → 0. The repo-43 record was overwritten with
+  `git show 1548f21^:<path>` during the reproduction and restored with
+  `git checkout --`; `git status --porcelain` empty before the commit. **One thing
+  this round got wrong and caught**: an earlier reproduction in this session left
+  that file dirty because it was restored from an in-memory copy of the _pre-fix_
+  content rather than with `git checkout --`, so the tree read modified against
+  `HEAD`. Caught by running `git status` rather than assuming the restore worked.
+
+- **2026-09-12** — **Build part 8 is answered: the checker detects the
+  self-citation and prints the true remedy.** Third entry of the same date. It
+  recognises that the cited file is the record being checked, names that as the
+  reason, and tells the author the repair that works — point at the real subject,
+  or write it as prose. The citation still fails; nothing in the answer makes a
+  self-citation pass.
+
+  **Decided by the repo owner. It overrode this page's recommendation, and it
+  matched the orchestrator's.** The page recommended **(i) exclude the citing line
+  from the occurrence count**, which would have made self-citation work. The
+  orchestrator put three options to the owner and recommended this one **against
+  (i)**, on the reasoning that the defect is that the printed advice is _false_ —
+  so the repair is to stop the tool misdirecting the author, not to make
+  self-citation a supported shape. Recorded by name and on both sides, so a reader
+  can see that a disagreement existed rather than finding a single unopposed
+  suggestion.
+
+  **Why (i) lost, and it was not for being wrong.** Excluding the citing line
+  makes self-citation _work_, which cuts against the call already made on
+  `repo-43` in this same batch: its builder was told to repoint at the real
+  subject rather than make its self-citation distinct, and its reviewer
+  independently reached the same conclusion. Two tickets landing opposite answers
+  in one batch is the thing to avoid. **The argument for (i) is kept in Build part
+  8 rather than deleted** — it lost to consistency, and a later reader should be
+  able to reopen it on purpose instead of rediscovering it by accident.
+
+  **What the answer gives up, accepted by the owner rather than solved.** A
+  self-citation remains unverifiable, so genuine self-evidence — a gate record
+  pointing at its own ticket's Log — stays unavailable, and no mechanism is added
+  for it.
+
+  **Both texts are in scope, not just the behaviour**, and `Done when` #6 now says
+  so in three parts. The source comment at `scripts/citations.mjs:144`, which
+  justifies `applyDeclarations` refusing a waiver, and the remediation **printed at
+  the moment of failure** at `scripts/citations.mjs:1501` and
+  `scripts/citations.mjs:1502`. The second is the worse of the two — it is what an
+  author reads while trying to repair the failure — and it was this branch's
+  finding, not present in the report that raised the defect. The orchestrator
+  verified both coordinates independently.
+
+  **The detection rule, and the case that must keep working.** The rule is: the
+  cited path, _once resolved_, is the record being checked — decided after
+  resolution rather than by comparing path text, since the same file can be
+  reached by a repo-relative path, a shorthand, or a basename the resolver
+  disambiguates. A record citing a **different** ticket file is ordinary and
+  unaffected, measured rather than assumed:
+  `node scripts/citations.mjs .claude/skills/orchestrate-tickets/reference/history.md --require-distinct-anchors`
+  reports `ok` for its citation into
+  `docs/work/repo-21-the-orchestration-skill-outgrew-its-loop.md:1360` "not evidence of a delivered one" —
+  one occurrence, distinct. That is the second required test, and it is the half
+  that proves the rule is narrow.
+
+  **The reproduction stays on the page as the evidence**, because it is what makes
+  the old advice provably false rather than merely unhelpful: the citing line's
+  fragment rewritten at 18, 40, 80, 120 and 160 characters, the checker re-run on
+  each, reporting 3 occurrences and then 2, 2, 2, 2. Never 1.
+
+  **Unchanged by this entry**, per the dispatch: C's reversal to "it narrows" and
+  `Done when` #3's rewrite.
+
+  **Verification.** All unpiped, `$?` read directly. `npm run check` → 0.
+  `node scripts/citations.mjs` on this file → 0.
+  `node scripts/citations-gate.mjs --against origin/main` → 0.
+
+- **2026-09-12** — **C is reversed. It is "it narrows", not "it goes" — and the
+  reversal was caused by a corrected measurement, not by a change of mind.**
+  Second entry of the same day, deliberately kept separate from the first rather
+  than folded into it: an answered decision that gets answered again is unusual
+  enough that flattening the two into a final state would hide the thing a reader
+  needs, which is that the option was tested against a real alternative and lost
+  to evidence.
+
+  **The sequence.**
+
+  1. **Originally chosen 2026-09-12: "it goes"** — every declaration in the tree
+     migrated, the mechanism removed. Recorded in the entry below.
+  2. **Reversed the same day to "it narrows"** — the marker **stays** for the
+     locations a rev pin cannot express, and is **withdrawn for the staleness
+     case**, whose locations migrate to pins.
+
+  **Why: the figure the question was put on was wrong, and it came from the
+  orchestrator.** The basis relayed to the owner was "10 real declarations across
+  5 files, only `history.md`'s two are the production staleness case" — relayed
+  without being measured. Both halves are false. Measured on this branch by
+  re-running the checker's own `DECLARATION` regex over all 171 `.md` files
+  outside `node_modules`: **12 declaration lines naming 26 locations across 7
+  files**, and **21 of the 26 are not expressible as a rev pin** — fabricated and
+  past-end-of-file coordinates on `repo-25`, an upstream project's path on
+  `pl-29`, ambiguous basenames on `pl-34`, an already-stale pair on `records.md`,
+  and a scratch mutation on `repo-21` that `git log --all -S` finds in zero
+  commits across every ref. Only 5 locations, on `history.md` and `dl-44`, are the
+  staleness case the pin was designed for.
+
+  Corroborated by the strip-and-run rather than left as a count: removing all
+  twelve declaration lines and nothing else takes
+  `node scripts/citations-gate.mjs` from **exit 0 to exit 1**, `27 enforced, 0
+failing` becoming `27 enforced, 3 failing`, naming **`pl-29`, `pl-34` and
+  `repo-25`**. (The dispatch relaying this reversal wrote "pl-29, pl-24 and
+  repo-25" and corrected itself in the same message; `pl-34` is the measured name
+  and there is no `pl-24` in this tree.)
+
+  The gate reproduced all three independently in its own worktree — its own
+  hand-typed regex, its own strip-and-run, its own per-citation classification of
+  all 26 — and reported byte-identical numbers, including the `git log --all -S`
+  check on `repo-21`'s anchor that would have moved 21 to 20 had that row ever
+  existed in any commit.
+
+  **"It narrows" was the orchestrator's original recommendation, and saying so is
+  the point of this entry.** The owner overrode it and chose "it goes"; the
+  corrected measurement then brought them back to it. That is not the same as the
+  recommendation having been right all along — it was made without the
+  measurement too — and the first answer was a real decision made on the evidence
+  available, not a slip. Both are recorded so neither reads as the only thing that
+  happened.
+
+  **What changed on the page.** Build part 5 is now a narrowing rather than a
+  removal, and carries the thing "narrows" actually costs: a boundary rule saying
+  which mechanism a future author reaches for, decidable by one command
+  (`git log --all -S'<anchor>' -- <file>`; non-empty means a rev exists, so pin),
+  with a cheap enforcement half that needs no history search and an expensive half
+  that does. Part 6 keeps the full classification of all 26 unchanged — it is the
+  evidence for where the line falls — and re-reads it as 5 to migrate and 21 to
+  keep. Part 7's order is inverted accordingly: enforcement before migration, so
+  the rule is proved by the five failures it raises and then clears. `Done when`
+  #5 is rewritten, with the line it replaced quoted rather than deleted.
+
+  **`Done when` #3's rewrite is untouched**, per the dispatch: the owner took this
+  branch's reading over the 2026-09-08 note and the gate agreed.
+
+  **Part 8 is new, and it is a second open decision, not a fix.** Folded in on the
+  owner's call because this implementation is already rewriting anchor resolution.
+  **A citation whose target file is the file it is written in can never satisfy
+  `--require-distinct-anchors`**, for any fragment of any length: the anchor is
+  embedded verbatim in the citing line, so it always occurs at least twice, and
+  lengthening it lengthens both copies.
+
+  **Reproduced rather than accepted.** `repo-43`'s record before its repair,
+  restored with `git show 1548f21^:<path>` into the worktree and run with the
+  gate's own flags, reports `anchor starts on 2 lines` of the record itself. Then
+  the half that is actually load-bearing, because it is the half the source
+  denies: the citing line's fragment was rewritten at 18, 40, 80, 120 and 160
+  characters and the checker re-run on each — 3 lines, then 2, 2, 2, 2. **It never
+  reaches one.** File restored, `git status --porcelain` empty.
+
+  **One thing found here that the report raising this did not have.** The false
+  claim is in two places, and the second is the one an author actually reads: not
+  only the source comment at `scripts/citations.mjs:144`, which justifies
+  `applyDeclarations` refusing a waiver, but the **printed remediation** at
+  `scripts/citations.mjs:1502`, which tells the author at the moment of failure
+  that "the fix is always available". The checker misdirects the repair it is
+  asking for.
+
+  Written as a decision with both options and their costs rather than a fix,
+  recommendation first: **(i)** exclude the citing line from the occurrence count
+  when the cited file is the record itself — well-behaved, since the shortest
+  fragment above still leaves two occurrences and so still fails — against
+  **(ii)** correct both texts to admit the exception and leave prose as the
+  escape, which is what `repo-43` did and which permanently loses the check for
+  the commonest self-citation there is, a gate record citing its own `Done when`
+  rows.
+
+  **Verification.** All unpiped, `$?` read directly. `npm run check` → 0.
+  `node scripts/citations.mjs` on this file → 0. `node scripts/citations-gate.mjs --against origin/main`
+  → 0. `npm test -- --project repo` → 0. `git status --porcelain` empty after both
+  reproductions, and `docs/work/repo-43-a-worktree-nested-path-shadows-the-shared-root.md`
+  confirmed restored byte-for-byte.
+
+- **2026-09-12** — **The decision is answered. A, B and C all three, by the repo
+  owner, in answer to the questions exactly as this page words them.** Branch
+  `repo-35/record-the-decisions`, base `origin/main` at `8d79d8e`. This commit
+  records the answers, writes the Build section they imply and moves `status` to
+  `ready`. It does not touch `scripts/citations.mjs`, its tests, or `history.md` —
+  the implementation is the next batch's work.
+
+  **A — what the syntax is. Chosen: a rev inside the location**, some spelling of
+  `<file>@<rev>:<line>`.
+
+  **B — when a pinned citation is checked. Chosen: always at its rev.**
+
+  **C — the fate of the evidence declaration. Chosen: it goes** — every
+  declaration in the tree migrated, the mechanism removed.
+
+  (**C was reversed later the same day, to "it narrows".** See the entry above,
+  which carries why. This entry is left exactly as it was written: the answer
+  recorded here was the answer given, on the evidence available at the time, and
+  rewriting it would hide that the option was tested.)
+
+  **Each of the three overrode the dispatching orchestrator's recommendation, and
+  that is recorded here because a decision that went against advice is worth more
+  to the next reader than one that did not.** The orchestrator recommended A's
+  second option, a rev _after_ the anchor; B's second option, present first with
+  the rev only as a fallback; and C's second option, that the mechanism _narrows_.
+  The owner chose otherwise on all three. The reasoning is the owner's and is not
+  re-argued here — this entry records the answers, and the Build section records
+  what they cost.
+
+  **They are the expensive combination, and the Build says so rather than around
+  it.** A reopens the regex this page's fact 1 measured swallowing a citation
+  whole; B makes a pin permanent, so a page can pin its whole self green; C
+  withdraws the only escape hatch for a citation naming something that exists at
+  no rev.
+
+  **`difficulty: hard`, added in this commit.** The filing deliberately left the
+  field off because "the decision changes the work materially — under C's first
+  option this is a regex, a reader and its tests, and under C's third it is that
+  plus a migration of every declaration in the tree." C's third is what was
+  chosen, so it is the larger shape, and it is a load-bearing regex plus a new
+  failing state plus a tree-wide migration. One edit to change if the owner
+  disagrees.
+
+  **What was measured before the Build was written, rather than relayed.**
+
+  **1. The option-C migration scope has grown since 2026-09-08 and the relayed
+  breakdown was wrong about which declarations are production.** Re-ran the
+  checker's own `DECLARATION` regex over all 171 `.md` files outside
+  `node_modules` (a scratch script importing nothing from the checker but the
+  regex text, so the filter is the checker's and not a substring grep):
+  **12 declaration lines naming 26 locations across 7 files, suppressing 31
+  citations** — not the 10 lines across 5 files this page recorded. `993af05`
+  (repo-37, #200) added the two new ones, on `pl-29` and `pl-34`. The per-file
+  table is in Build step 6.
+
+  The 2026-09-08 note also said that of the five files, "only `history.md`'s two
+  are the production case ... the other three are ticket pages demonstrating or
+  testing the declaration syntax inside their own examples". **Read in context,
+  that is wrong about three of them**, and the correction is the largest thing in
+  the Build: `dl-44`'s declaration is a gate record holding the coordinate it
+  actually resolved at tip `e3d065e`, which is the staleness case exactly;
+  `pl-29`'s covers an upstream project's path that is in no tree of this repo at
+  any rev; and `pl-34`'s covers two citations that are _ambiguous_, not stale, so
+  a rev does nothing for them. 21 of the 26 declared locations are in the class a
+  pin cannot express, not the handful the note implied.
+
+  **2. What removing the mechanism does to CI, measured rather than predicted.**
+  Stripped every declaration line from all seven files in this worktree, ran
+  `node scripts/citations-gate.mjs`, then restored with `git checkout -- .` and
+  confirmed `git status --porcelain` empty and the gate back to exit 0. Before:
+  `27 enforced, 0 failing; 45 grandfathered`, exit 0. After: **exit 1**,
+  `27 enforced, 3 failing`, naming `pl-29` (unresolvable, "no tracked file
+  matches"), `pl-34` (two unresolvable, "ambiguous — 3 tracked files match" and
+  "ambiguous — 2 tracked files match") and `repo-25` (WORSE — 15 failing against a
+  `GRANDFATHERED` entry of 12). That is the size of `Done when` #5.
+
+  **3. `citations-gate.mjs` is in scope for C and this page did not say so.** It
+  imports `extractDeclarations` and `applyDeclarations` and adds stale
+  declarations into the number its grandfather list ratchets on. C cannot land in
+  `citations.mjs` alone.
+
+  **4. Option A's regex risk is smaller than this page feared, and `Done when` #4
+  is larger.** Prototyped the extended location grammar standalone, in the
+  scratchpad, against nine tokens — nothing was written back into the checker. An
+  optional `(?:@(?<rev>[0-9a-fA-F]{7,40}))?` between the file alternation and the
+  colon leaves every existing shape byte-identical, **including an npm-scoped path
+  with an `@` in it**, because the hex-and-length rule fails and the engine
+  backtracks. Supporting measurement: `git ls-files | grep -c '@'` returns `0`, so
+  no tracked file in this repo carries an `@` at all.
+
+  But the same prototype shows a malformed rev (`@nope!`, or a two-character
+  `@bb`) still produces **no reference at all** under the stricter grammar — which
+  is precisely the invisibility `Done when` #4 forbids. **A stricter location
+  grammar does not satisfy #4; it is the failure #4 describes.** Build step 2
+  therefore specifies a second, deliberately permissive scan and a new
+  `malformed-pin` state, with the rule that catching it cannot be "the permissive
+  scan matched" — that matches every ordinary citation too.
+
+  **5. `Done when` #3's "It exits 0 today" is corrected in place, not annotated
+  around.** Re-measured at this branch's base: `history.md`'s plain run exits **2**
+  with `11 verified, 7 moved, 3 unanchored, 0 unresolvable, 3 unchecked, 8
+evidence — of 32 references`. That is worse than the 2026-09-08 re-measurement
+  found (four `moved`, no `unanchored`); three more citations have drifted and
+  three have lost their anchors since. #3 now names the five residual drifting
+  citations that are unrelated to pinning and requires them repointed, because
+  otherwise the exit-0 bar it sets is unreachable. **That reverses the earlier
+  "out of scope" note**, and the line says so and says how to reverse it back.
+
+  **6. The reproduction's three rows are untouched, confirmed rather than
+  re-derived** (`Done when` #2). Nothing on this branch changes behaviour, and
+  `git log --oneline a5e31c7..HEAD -- scripts/citations.mjs scripts/test/citations.test.ts`
+  printed nothing, so neither the checker nor its suite has moved since the rows
+  were last reproduced. Build step 3 adds the constraint that keeps them
+  reproducible after the fix: the new `pinned` count is printed only when it is
+  above zero, so a record with no pins prints a byte-identical summary.
+
+  **7. This page walked into its own defect while the Build was being written, and
+  the repairs are folded in rather than filed.** A first draft of the Build spelled
+  its example tokens with real line numbers and laid step 6's breakdown out as a
+  table. Re-running the checker took this page from `10 verified, 1 moved, 10
+unanchored, 1 unresolvable, 2 unchecked`, exit 3, to **8 failing** — the example
+  tokens had become live citations, and the table's `declaration lines` column had
+  become seven citations into the seven files those rows name, because a findings
+  table's bare numbers are citations too. Three repairs, all inside this file:
+
+  - example tokens now write `<line>` and `<rev>` where the prototype used a real
+    coordinate, which is the same technique Build step 6 prescribes for a
+    coordinate meant to be read and not resolved;
+  - step 6's breakdown is a list, not a table;
+  - the citation into `docs/01-TICKETS.md` read `moved` and is repointed from 134
+    to 147, and the parenthesised shorthand in the 2026-09-08 reproduction note —
+    which named a declaration's line number in prose and was being resolved as a
+    citation into `dispatching.md`, the last file that sentence named — is written
+    out in words instead. Neither changes what either note says.
+
+  **This page now exits 0**, `24 verified, 0 moved, 10 unanchored, 0 unresolvable,
+5 unchecked, 0 evidence — of 39 references`, against exit 3 at the base. It is
+  grandfathered by `citations-gate.mjs` rather than enforced, so none of that was
+  load-bearing for CI; it is recorded because a ticket about citation hygiene that
+  degrades its own page is worth catching before a reviewer does.
+
+  **Verification.** All read from `$?` on unpiped invocations, redirected to a file
+  rather than piped. `npm run check` → exit 0. `npm test -- --project repo` → exit
+  0, `6 passed (6)` files, `313 passed (313)` tests — **the project that holds
+  `scripts/test/` is named `repo`, not `scripts`; `--project scripts` fails with
+  "No projects matched the filter"**, which is worth one line here because this
+  page's cost section talks about the `scripts` suite throughout.
+  `node scripts/citations-gate.mjs` → exit 0,
+  `27 enforced, 0 failing; 45 grandfathered`, unchanged from the base.
+  `node scripts/status.mjs --show repo-35` → exit 0, `status ready`,
+  `difficulty hard`, `unblocked`.
 
 - **2026-09-08** — Filed, on branch `records/repo-history-tools-09` at `b728287`
   (PR #191), which also carries the interim declarations this ticket exists to
@@ -304,7 +1626,7 @@ Written against the decision, not against an implementation.
   way; only the id of the ticket it names in passing moved.)
 
   **`status: needs-decision`, not `ready`, and this is a deviation from the
-  dispatch, which asked for `ready`.** `docs/01-TICKETS.md:134` "is a ticket's first state"
+  dispatch, which asked for `ready`.** `docs/01-TICKETS.md:147` "is a ticket's first state"
   defines that state as a filing that is complete and not dispatchable because it
   poses a question its own page says must not be settled by whoever picks it up,
   which is exactly this ticket: its Build section cannot be written until A, B

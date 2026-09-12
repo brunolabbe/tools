@@ -103,7 +103,7 @@ carrying two conflicting citations. Nothing was dropped from either report.
 | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Two clients behind the proxy get independent allowances, proved by a test that fails against `main`. | **proven** — `tools/planner/api/test/runs.test.ts:452` "expect(thirdA.statusCode).toBe(429)" (client A exhausts its own bucket) and `tools/planner/api/test/runs.test.ts:458` "expect(firstB.statusCode).toBe(202)" (client B unaffected). Fails against `main`: reviewer reproduced independently by stashing `config.ts`/`server.ts` back to `a5e31c7` — failed exactly at the second assertion, `expected 429 to be 202`. |
 | A client whose `X-Forwarded-For` arrives from outside the trusted CIDR cannot choose its own bucket. | **proven** — `tools/planner/api/test/runs.test.ts:497` "all three counted against the one real address" sits directly above the deciding assertion. Not vacuous: reviewer reproduced by setting that test's harness to `trustProxy: true` — the "obvious fix" the Traps section warns against — which failed it, `expected 429 to be 202`.                                                                                   |
-| `02-DEPLOYMENT.md` no longer tells an operator that this cannot be fixed.                            | **verified** — `docs/02-DEPLOYMENT.md:833` "Rate limiting is per-client the same way the downloader" replaces the old "no `TRUST_PROXY` to make it so" paragraph. Reviewer checked the arithmetic ("Three differences" now matches three bullets) and confirmed, from the merged compose config, that both `TRUST_PROXY` lines and the `edge` subnet are the identical string.                                               |
+| `02-DEPLOYMENT.md` no longer tells an operator that this cannot be fixed.                            | **verified** — `docs/02-DEPLOYMENT.md:889` "Rate limiting is per-client the same way the downloader" replaces the old "no `TRUST_PROXY` to make it so" paragraph. Reviewer checked the arithmetic ("Three differences" now matches three bullets) and confirmed, from the merged compose config, that both `TRUST_PROXY` lines and the `edge` subnet are the identical string.                                               |
 
 Findings — 10 returned in the first round's defect hunt, 8 carried into this
 record, 2 dropped before write-up (reviewer's own count, not re-derived here):
@@ -132,14 +132,14 @@ scripts/citations.mjs` on this record now reports 0 moved.
   already absent, `CORS_ORIGINS` included) but a judgement call the reviewer
   flagged as the first place they would look. Added, beside
   `RATE_LIMIT_RUNS_PER_MINUTE`.
-- **low, declined** · `02-DEPLOYMENT.md:231` "Rate limits silently" —
+- **low, declined** · `02-DEPLOYMENT.md:283` "Rate limits silently" —
   undersells the malformed-value case: reviewer measured that a malformed
   `TRUST_PROXY` actually refuses the boot (`TypeError: invalid IP address:
 <x>`) rather than failing silently, only a valid-but-wrong value is silent.
   Pre-existing, out of this ticket's diff; reviewer offered it as optional
   ("decline freely") and the builder accepted the decline.
 - **low, escalated then repaired** ·
-  `pl-2-container-image.md:224` "rate-limiting" — `pl-2`'s Traps section
+  `pl-2-container-image.md:283` "rate-limiting" — `pl-2`'s Traps section
   still stated "No rate limiting and no `TRUST_PROXY`. `ApiConfig` has
   neither" as fact, both
   halves false since pl-16 and this ticket respectively. Raised as
@@ -281,7 +281,7 @@ Reproduced and fixed:
 - **low, `01-ARCHITECTURE.md` Configuration table** — added a `TRUST_PROXY` row
   beside `RATE_LIMIT_RUNS_PER_MINUTE`.
 
-Declined: **low, `docs/02-DEPLOYMENT.md:221`** ("Rate limits silently stop
+Declined: **low, `docs/02-DEPLOYMENT.md:273`** ("Rate limits silently stop
 working if `TRUST_PROXY` is wrong" undersells the malformed-value case, which
 actually refuses the boot). Pre-existing, out of this ticket's diff, and the
 gate offered it as optional ("decline freely"). A malformed `TRUST_PROXY`
