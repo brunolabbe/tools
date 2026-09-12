@@ -177,7 +177,60 @@ than folded in — adding a downloader end-to-end proxy-trust test is a real
 piece of work (a new integration test file, modeled on the planner's), not a
 byproduct of moving one function, and Build's three steps do not ask for it.
 Recorded here so "still cover... end to end" is read correctly: true for the
-planner, unchanged (i.e. still absent) for the downloader.
+planner, unchanged (i.e. still absent) for the downloader — **superseded by
+the entry below**, which closes that gap in this same branch on the owner's
+decision.
+
+**2026-09-12 — the owner's decision on Done-when bullet 3, and the downloader
+wiring test it produced (`repo-40-trust-proxy-downloader`).** The question:
+does `packages/core/test/trust-proxy.test.ts` discharge the ticket's "closed
+for both at once" line, or does the downloader still owe an end-to-end test?
+Options were (A) correct the line and file a `dl-` ticket, (B) add the test
+in this branch, (C) leave the line as written with nothing behind it.
+**Chosen: B, by the repository owner, on 2026-09-12, overriding both the
+gate's recommendation and the builder's, which were both (A).** The owner's
+answer makes bullet 3's acceptance line true rather than merely accurate —
+the line stays as written and the branch was raised to meet it, rather than
+the line being lowered to meet the branch.
+
+What the new test proves, and what it does not: `packages/core`'s test
+covers parsing (default, both boolean directions, CIDR/list passthrough) at
+the one place the function lives. It cannot prove that `TRUST_PROXY` reaches
+`Fastify({ trustProxy })` and thereby changes which address this tool's rate
+limiters key on — that is wiring, and the downloader had never tested it.
+`tools/downloader/api/test/trust-proxy.test.ts` (new file) exercises
+`rateLimitJobsPerMinute` through `POST /api/jobs`, behind both a trusted and
+an untrusted hop, modeled on the planner's own `describe("behind a proxy
+(pl-38)")` block in `runs.test.ts` rather than invented fresh — the two tools
+wire the identical setting into the identical Fastify option, so the shape
+should match.
+
+Made able to fail before committing, per the instruction to prove rather
+than assert it: hardcoded `server.ts`'s `trustProxy: config.trustProxy` to
+`trustProxy: false`, reran the new suite — `1 failed | 1 passed`. The
+"two clients behind a trusted proxy get independent allowances" test caught
+it (a client behind the trusted hop got refused because every request now
+collapsed onto the proxy's own address); the "outside the trusted CIDR"
+test did not go red under this particular mutation, because it exercises the
+case where the forwarded header is already ignored, which `trustProxy: false`
+does not change. Restored `server.ts` from a byte-for-byte backup and
+confirmed `git status --porcelain` reported only the new test file before
+committing. Gates on the new tip: `npm run check` 0, `--project downloader`
+74 files / 1216 tests (was 73/1214 — +1 file/+2 tests), full `npm test` 138
+files / 2400 tests (was 137/2398).
+
+**2026-09-12 — Build step 3, the downloader half
+(`repo-40-trust-proxy-downloader`, stacked on the lift).**
+`tools/downloader/api/src/config.ts` now imports `trustProxy` from
+`@webtools/core` and defines no local copy; its own doc comment was deleted
+and replaced with a two-line pointer above the import, the same pattern
+`rate-limit.ts` set. `ApiConfig.trustProxy`'s field-level doc comment is
+unchanged — it is tool-specific (what the setting does to _this_ tool's
+rate limiter), per the ticket. `@webtools/core` was already a `dependencies`
+(not `devDependencies`) entry in `tools/downloader/api/package.json` — the
+rate-limit import put it there first, so no manifest edit was needed.
+`npm run check` green; `npm test -- --project downloader`: 73 files, 1214
+tests, all passed.
 
 **2026-09-12 — Build step 3, the planner half
 (`repo-40-trust-proxy-planner`, stacked on the lift, sibling of
@@ -232,3 +285,44 @@ different line is the thing worth avoiding, not the thing worth saying.
 Citations gate: 15 verified, 0 moved, 0 unanchored, 3 unchecked, of 18
 references, exit 0 — identical to the reviewer's own numbers. `npm run
 check`: exit 0.
+
+**2026-09-12 — a correction to the Traps section, raised by the owner.** The
+Traps section is not being edited — it was true of what it claimed, and this
+is the record of what it turned out to miss, not a rewrite of the section
+itself.
+
+The Traps section says this "is not one pull request", because landing all
+three in one branch "produces the exact squash-merge shape the root
+`CLAUDE.md` names as the tell that it should have been more than one PR."
+That was followed correctly, and the orchestrator confirmed the text held —
+neither the builder nor the orchestrator is being second-guessed for
+following it.
+
+**But the rule the Traps section invokes exists for changelog attribution by
+path, and no changelog entry was ever possible here.** Read directly against
+`release-please-config.json`: `refactor` is `hidden: true`, and
+**`packages/core` is not a release component at all** — the only components
+are `tools/downloader` and `tools/planner`. A single `refactor(repo): …`
+branch spanning `packages/core` and both tools' `config.ts` would have
+produced no changelog line for either tool and no release. The failure the
+split exists to prevent — one sentence landing in two changelogs — could not
+have occurred here, because no sentence was going to land in any changelog.
+
+**What the split cost, recorded honestly:** two extra pull requests, three
+merge-conflict rounds on this one ticket file (#214's own merge, #215's
+first merge, #215's second), draft-flag sequencing to enforce an order the
+base branch could not, and three separate sets of CI runs — all for a
+function of eight lines that was byte-identical in both tools before the
+lift.
+
+**What it bought:** each branch green on its own, and each tool's switch
+independently revertable without touching the other. Real, but thin against
+the cost above.
+
+**The correction to carry forward:** the Traps rule is sound for a `fix` or
+`feat` spanning two tools, which genuinely does land one sentence in two
+changelogs. It is stated here unconditionally, and the type decides whether
+there is a changelog at all — the same point the root `CLAUDE.md` makes
+about `docs` being hidden. Before paying for a split, read the type and the
+component list; if nothing reaches a changelog, the split buys only
+independent revertability, and that may not be worth three PRs.

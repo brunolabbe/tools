@@ -9,6 +9,9 @@
 import path from "node:path";
 import process from "node:process";
 import { ALLOWED_SCHEMES, AppError } from "@downloader/contract";
+// `trustProxy` lived here until repo-40 lifted it to `@webtools/core` as the
+// planner's second consumer; see that file for the parsing rules.
+import { trustProxy } from "@webtools/core";
 
 export interface ApiConfig {
   host: string;
@@ -309,19 +312,6 @@ function list(raw: string | undefined): string[] {
     .split(",")
     .map((entry) => entry.trim())
     .filter((entry) => entry !== "");
-}
-
-/**
- * `false` (the default), `true`, or a proxy address / CIDR / comma-separated
- * list, which Fastify accepts verbatim and is the form worth preferring.
- */
-function trustProxy(raw: string | undefined): boolean | string {
-  const value = raw?.trim() ?? "";
-  if (value === "") return false;
-  const lower = value.toLowerCase();
-  if (["1", "true", "yes", "on"].includes(lower)) return true;
-  if (["0", "false", "no", "off"].includes(lower)) return false;
-  return value;
 }
 
 /**
