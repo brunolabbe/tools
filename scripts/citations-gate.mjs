@@ -101,6 +101,7 @@ import {
   isIndistinct,
   makeReader,
   makeResolver,
+  makeTrees,
   selectSection,
 } from "./citations.mjs";
 
@@ -298,8 +299,12 @@ export const GRANDFATHERED = new Map([
   ["tools/planner/docs/work/pl-32-vite-config-test.md", 22],
 ]);
 
-/** The states that fail this gate. `unanchored` is here; that is the whole point. */
-const FAILING = new Set(["unanchored", "moved", "unresolvable"]);
+/**
+ * The states that fail this gate. `unanchored` is here; that is the whole point.
+ * So is `malformed-pin` (repo-35), for the same reason: a pin nothing could read
+ * is a citation nothing checked.
+ */
+const FAILING = new Set(["unanchored", "moved", "unresolvable", "malformed-pin"]);
 
 /** This file, as git names it — the thing `--against` reads an older copy of. */
 export const SELF = "scripts/citations-gate.mjs";
@@ -523,8 +528,19 @@ export function findRecords(repo, pathspecs) {
  * @param {string | null} section
  * @param {(file: string) => string[] | null} read
  * @param {(file: string) => {path: string} | {error: string}} resolve
+ * @param {boolean} [requireDistinct]
+ * @param {ReturnType<typeof makeTrees>} [trees] The commits pins name. Made per
+ *   call when omitted; `gate` passes one for the whole run instead.
  */
-export function checkRecord(repo, record, section, read, resolve, requireDistinct = true) {
+export function checkRecord(
+  repo,
+  record,
+  section,
+  read,
+  resolve,
+  requireDistinct = true,
+  trees = makeTrees(repo),
+) {
   const markdown = fs.readFileSync(path.join(repo, record), "utf8");
 
   let chosen = null;
@@ -543,7 +559,7 @@ export function checkRecord(repo, record, section, read, resolve, requireDistinc
   const citations = extractCitations(markdown).filter((c) => inScope(c.line));
   const declarations = extractDeclarations(markdown).filter((d) => inScope(d.line));
   const { results, stale } = applyDeclarations(
-    checkCitations(citations, read, resolve, { record }),
+    checkCitations(citations, read, resolve, { record, trees }),
     declarations,
   );
 
@@ -588,6 +604,7 @@ export function checkRecord(repo, record, section, read, resolve, requireDistinc
 export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
   const read = makeReader(repo, null);
   const resolve = makeResolver(candidateFiles(repo, null));
+  const trees = makeTrees(repo);
 
   const inScope = [];
   const failed = [];
@@ -597,7 +614,7 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
   const debt = {};
 
   for (const record of findRecords(repo, scope.records)) {
-    const result = checkRecord(repo, record, scope.section, read, resolve);
+    const result = checkRecord(repo, record, scope.section, read, resolve, true, trees);
     if (result.skipped) continue;
     inScope.push(result);
     if (result.passed && result.error == null) continue;
@@ -646,7 +663,16 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
 
 /** The `state: count` half of a record's line, worst first and zeroes dropped. */
 const countLine = (counts) =>
-  ["unresolvable", "moved", "unanchored", "indistinct", "unchecked", "evidence", "verified"]
+  [
+    "malformed-pin",
+    "unresolvable",
+    "moved",
+    "unanchored",
+    "indistinct",
+    "unchecked",
+    "evidence",
+    "verified",
+  ]
     .filter((state) => (counts[state] ?? 0) > 0)
     .map((state) => `${counts[state]} ${state}`)
     .join(", ");
@@ -695,7 +721,12 @@ function main() {
     );
     for (const f of result.failures) {
       const range = f.start === f.end ? `${f.start}` : `${f.start}-${f.end}`;
-      const where = f.file === null ? `:${range}` : `${f.file}:${range}`;
+      // Printed as the record wrote it: a pin with its rev, a malformed one verbatim.
+      const where =
+        f.malformed ??
+        (f.file === null
+          ? `:${range}`
+          : `${f.file}${f.rev === undefined ? "" : `@${f.rev}`}:${range}`);
       // An indistinct citation is `verified`, so it carries no reason of its own
       // and this printed the word `null` under it until repo-35 touched the line.
       // The fallback is the fact the gate failed it on.

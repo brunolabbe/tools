@@ -701,6 +701,52 @@ test("a self-citation fails the gate by name, even when its fragment is on one l
   }
 });
 
+/**
+ * repo-35 parts 1-3, inside the gate. A pin is read at its commit when the
+ * working tree has moved the cited line, the same citation unpinned is `moved`,
+ * and a malformed pin fails the gate — `unanchored`'s rule, that a state nobody
+ * checked is a failure here, applies to a pin nobody could read.
+ */
+test("the gate reads a pin at its commit, and fails a malformed one", () => {
+  const { dir, cleanup } = withRepo({});
+  try {
+    const sha = gitIn(dir, "rev-parse", "HEAD");
+    fs.writeFileSync(
+      path.join(dir, "src", "tls.ts"),
+      [
+        "// inserted",
+        "export function verify() {",
+        "  // Defence in depth: the store is pinned.",
+        "  return true;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    fs.mkdirSync(path.join(dir, "docs", "work"), { recursive: true });
+    const write = (name: string, body: string) =>
+      fs.writeFileSync(path.join(dir, "docs", "work", name), `## Review\n\n${body}\n`);
+    write("a.md", `Pinned: \`src/tls.ts@${sha}:2 "Defence in depth"\`.`);
+    write("b.md", 'Unpinned: `src/tls.ts:2 "Defence in depth"`.');
+    write("c.md", 'Malformed: `src/tls.ts@nope!:2 "Defence in depth"`.');
+
+    const [read, resolve] = checkers(dir);
+    expect(checkRecord(dir, "docs/work/a.md", "Review", read, resolve)).toMatchObject({
+      passed: true,
+      counts: { verified: 1 },
+    });
+    expect(checkRecord(dir, "docs/work/b.md", "Review", read, resolve)).toMatchObject({
+      passed: false,
+      counts: { moved: 1 },
+    });
+    const malformed = checkRecord(dir, "docs/work/c.md", "Review", read, resolve);
+    expect(malformed.passed).toBe(false);
+    expect(malformed.counts).toMatchObject({ "malformed-pin": 1 });
+    expect(malformed.failing).toBe(1);
+  } finally {
+    cleanup();
+  }
+});
+
 test("an indistinct citation into another file prints the lines it starts on, not null", () => {
   const record = '## Review\n\nProof: `src/tls.ts:2 "depth"`.\n';
   const { dir, cleanup } = withRepo({ "docs/work/a.md": record });

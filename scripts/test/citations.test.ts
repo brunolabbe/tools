@@ -2051,3 +2051,260 @@ test("a self-citation of its own line still fails, although it now starts on one
     cleanup();
   }
 });
+
+/**
+ * **repo-35 Build part 1.** A pin is written inside the location,
+ * `<file>@<rev>:<line>`, and every shape that already parsed parses exactly as it
+ * did — the same object, with no `rev` key at all rather than a `rev: null` a
+ * strict comparison would call a change.
+ *
+ * **The scoped path is the regression that matters.** `@` was a path character
+ * before pins existed, and `node_modules/@scope/thing.ts` is the one shape that
+ * could be silently renamed into a file and a rev. It is kept here as a test
+ * rather than resting on the fact that no tracked file carries an `@` today.
+ */
+test("a pin inside the location is read, and every shape that parsed before parses the same", () => {
+  const unchanged = [
+    ['at `scripts/citations.mjs:12 "x"`', "scripts/citations.mjs", "x"],
+    ['at `docs/01-TICKETS.md:12 "x"`', "docs/01-TICKETS.md", "x"],
+    ['at `ci.yml:12 "--require-anchors"`', "ci.yml", "--require-anchors"],
+    ['at `node_modules/@scope/thing.ts:12 "x"`', "node_modules/@scope/thing.ts", "x"],
+  ] as const;
+  for (const [line, file, anchor] of unchanged) {
+    expect(extractCitations(line)).toEqual([
+      { file, start: 12, end: 12, anchor, source: "inline", line: 1, from: null, nearby: false },
+    ]);
+  }
+
+  expect(extractCitations('at `scripts/citations.mjs@abc1234:12 "x"`')).toEqual([
+    {
+      file: "scripts/citations.mjs",
+      rev: "abc1234",
+      start: 12,
+      end: 12,
+      anchor: "x",
+      source: "inline",
+      line: 1,
+      from: null,
+      nearby: false,
+    },
+  ]);
+  const full = "0123456789abcdef0123456789abcdef01234567";
+  expect(extractCitations(`\`citations.mjs@${full}:3-9\``)[0]).toMatchObject({
+    file: "citations.mjs",
+    rev: full,
+    start: 3,
+    end: 9,
+  });
+});
+
+/**
+ * A shorthand means "the same file as the citation above" and so the same pin —
+ * the citations a pin exists for come in runs, and pinning the head of a run
+ * while its shorthands went on reading the working tree would repair the head and
+ * break the tail.
+ */
+test("a shorthand inherits the pin of the citation it takes its file from", () => {
+  const found = extractCitations(
+    "At `a/one.ts@abc1234:5` then `:9`; later `b/two.ts:1` then `:3`.",
+  );
+  expect(found.map((c) => `${c.source} ${c.file}@${c.rev ?? "-"}:${c.start}`)).toEqual([
+    "inline a/one.ts@abc1234:5",
+    "shorthand a/one.ts@abc1234:9",
+    "inline b/two.ts@-:1",
+    "shorthand b/two.ts@-:3",
+  ]);
+});
+
+/**
+ * **repo-35 Done when 4**, one test per malformed shape, and each asserts that
+ * the citation is **counted** and **fails** on a bit of its own — not merely that
+ * the run is non-zero. The exact exit code is the half that proves there is one
+ * reference and not two: a malformed pin that also left its strict parse behind
+ * would set a second bit.
+ *
+ * Before this, the first two produced no reference at all, and the third one
+ * reference whose anchor had silently vanished.
+ */
+const MALFORMED_PINS = [
+  [
+    "a rev that is not hex",
+    'At `scripts/citations.mjs@nope!:1 "x"`.',
+    "scripts/citations.mjs@nope!:1",
+  ],
+  [
+    "a rev too short to name a commit",
+    'At `scripts/citations.mjs@bb:1 "x"`.',
+    "scripts/citations.mjs@bb:1",
+  ],
+  [
+    "a rev after the line, where the anchor used to be dropped",
+    'At `scripts/citations.mjs:1@abc1234 "x"`.',
+    "scripts/citations.mjs:1@abc1234",
+  ],
+  ["a rev on a shorthand, which inherits its pin instead", "At `:2@abc1234`.", ":2@abc1234"],
+] as const;
+
+for (const [shape, body, token] of MALFORMED_PINS) {
+  test(`a malformed pin is counted and fails loudly: ${shape}`, () => {
+    const found = extractCitations(body);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.malformed).toBe(token);
+
+    const { record, cleanup } = withRecord(`## Review\n\n${body}\n`);
+    try {
+      const result = run(record);
+      expect(result.status).toBe(EXIT.malformedPin);
+      expect(result.stdout).toContain(`  MALFORMED  ${token}`);
+      expect(result.stdout).toMatch(
+        /0 verified, 0 moved, 0 unanchored, 0 unresolvable, 0 unchecked, 0 evidence, 1 malformed-pin — of 1 reference\n/,
+      );
+      expect(result.stderr).toMatch(/malformed/);
+    } finally {
+      cleanup();
+    }
+  });
+}
+
+/** The state nothing excuses — a declaration naming the location stays stale. */
+test("no declaration excuses a malformed pin", () => {
+  const { record, cleanup } = withRecord(
+    "## Review\n\n<!-- citations: evidence scripts/citations.mjs:1 -->\n\nBroken `scripts/citations.mjs@nope!:1`.\n",
+  );
+  try {
+    const result = run(record);
+    expect(result.status).toBe(EXIT.malformedPin | EXIT.declaration);
+    expect(result.stdout).toContain("  MALFORMED  scripts/citations.mjs@nope!:1");
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * **repo-35 Build parts 3 and 4**, end to end against a real tree whose second
+ * commit inserted three lines above the cited region.
+ *
+ * A pinned citation is read at its own rev, whatever the run reads — the plain
+ * run and `--rev HEAD` agree on it. Anchored and correct at the rev is
+ * `verified`, while the same citation unpinned is `moved`; anchored and **wrong**
+ * at the rev is `moved`, so a pin cannot launder a citation that was already
+ * wrong when it was written; unanchored stays `unanchored`, since a rev changes
+ * which tree a line is read from and not whether anything checked it. The
+ * shorthand on the same line inherits the pin, and resolves at the old tree —
+ * where its line differs from the tip's.
+ */
+test("a pinned citation is checked at its own rev, whatever tree the run reads", () => {
+  const { dir, before, mixed, cleanup } = withInsertionRepo();
+  const short = before.slice(0, 7);
+  const pinned = path.join(dir, "pinned.md");
+  fs.writeFileSync(
+    pinned,
+    [
+      "## Review",
+      "",
+      `Correct then: \`src/tls.ts@${short}:2-3 "Defence in depth"\`, and \`:4 "export const after"\` below it.`,
+      `Wrong even then: \`src/tls.ts@${before}:4 "Defence in depth"\`.`,
+      `Never checked: \`src/tls.ts@${short}:1\`.`,
+      'Unpinned, against the tip: `src/tls.ts:2-3 "Defence in depth"`.',
+      "",
+    ].join("\n"),
+  );
+  try {
+    for (const argv of [[pinned], [pinned, "--rev", "HEAD"]]) {
+      const result = spawnSync("node", [CLI, ...argv], { cwd: dir, encoding: "utf8" });
+      expect(result.status).toBe(EXIT.moved);
+      expect(result.stdout).toMatch(summary(2, 2, 1, 0, 5));
+      expect(result.stdout).toMatch(/— of 5 references, 4 pinned\n/);
+      expect(result.stdout).toContain(`  ok         src/tls.ts@${short}:2-3 "Defence in depth"`);
+      expect(result.stdout).toContain(
+        `  ok         :4 in src/tls.ts@${short} (named at record line 3)`,
+      );
+      expect(result.stdout).toContain(`  MOVED      src/tls.ts@${before}:4 "Defence in depth"`);
+      expect(result.stdout).toMatch(/anchor "Defence in depth" is not in 4 — it is at 2/);
+      expect(result.stdout).toContain(`  unanchored src/tls.ts@${short}:1`);
+      expect(result.stdout).toContain('  MOVED      src/tls.ts:2-3 "Defence in depth"');
+    }
+
+    // A record with no pin prints the summary it always printed, byte for byte:
+    // the count is suppressed at zero, which is what keeps every existing
+    // record's output — and repo-35's own reproduction table — unchanged.
+    const plain = spawnSync("node", [CLI, mixed, "--rev", "HEAD"], { cwd: dir, encoding: "utf8" });
+    expect(plain.stdout).toMatch(
+      /^1 verified, 1 moved, 1 unanchored, 1 unresolvable, 0 unchecked, 0 evidence — of 4 references\nexit 3/m,
+    );
+    expect(plain.stdout).not.toMatch(/pinned/);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * The one way a pin could turn a citation green by accident is by naming a
+ * commit nobody has, and being quietly read against something else. It is
+ * `unresolvable`, and says which rev.
+ */
+test("a pin to a commit this repository does not have is unresolvable, never a pass", () => {
+  const { dir, cleanup } = withInsertionRepo();
+  const record = path.join(dir, "ghost.md");
+  fs.writeFileSync(
+    record,
+    '## Review\n\nPinned to nothing: `src/tls.ts@deadbeef0:2 "Defence in depth"`.\n',
+  );
+  try {
+    const result = spawnSync("node", [CLI, record], { cwd: dir, encoding: "utf8" });
+    expect(result.status).toBe(EXIT.unresolvable);
+    expect(result.stdout).toMatch(summary(0, 0, 0, 1, 1));
+    expect(result.stdout).toMatch(/rev deadbeef0 not in this repository/);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * **repo-35 Build part 5, the cheap half of the boundary rule.** A pin is for a
+ * citation some commit would verify; a declaration is for one no commit would.
+ * When the anchor is on another line of the very file it was checked against,
+ * that tree verifies it — the citation needs repointing or a pin, and the
+ * declaration is refused: the citation fails as what it is, and the declaration
+ * fails on its own bit for trying to excuse it.
+ *
+ * All three halves in one test, because the rule is only a rule if each side of
+ * it holds: refused where a line would verify it, the pin clears it, and a
+ * declaration still stands where no line of the file would.
+ */
+test("a declaration is refused for a citation that another line of its file would verify", () => {
+  const { dir, before, cleanup } = withInsertionRepo();
+  const record = path.join(dir, "declared.md");
+  const at = () => spawnSync("node", [CLI, record], { cwd: dir, encoding: "utf8" });
+  try {
+    fs.writeFileSync(
+      record,
+      '## Review\n\n<!-- citations: evidence src/tls.ts:2-3 -->\n\nThen: `src/tls.ts:2-3 "Defence in depth"`.\n',
+    );
+    const refused = at();
+    expect(refused.status).toBe(EXIT.moved | EXIT.declaration);
+    expect(refused.stdout).toContain('  MOVED      src/tls.ts:2-3 "Defence in depth"');
+    expect(refused.stderr).toMatch(
+      /"src\/tls\.ts:2-3" is declared evidence, but anchor "Defence in depth" is not in 2-3 — it is at 5/,
+    );
+    expect(refused.stderr).toMatch(/repoint it, or pin it to the commit where it held/);
+
+    fs.writeFileSync(
+      record,
+      `## Review\n\nThen: \`src/tls.ts@${before}:2-3 "Defence in depth"\`.\n`,
+    );
+    const repaired = at();
+    expect(repaired.status).toBe(0);
+    expect(repaired.stdout).toMatch(summary(1, 0, 0, 0, 1));
+
+    fs.writeFileSync(
+      record,
+      '## Review\n\n<!-- citations: evidence src/tls.ts:2 -->\n\nEvidence: `src/tls.ts:2 "a line nobody ever wrote"`.\n',
+    );
+    const stands = at();
+    expect(stands.status).toBe(0);
+    expect(stands.stdout).toMatch(summary(0, 0, 0, 0, 1, 0, 1));
+  } finally {
+    cleanup();
+  }
+});
