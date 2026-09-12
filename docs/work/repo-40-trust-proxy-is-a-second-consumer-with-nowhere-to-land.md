@@ -222,7 +222,13 @@ downloader tip and moved its verdict to **PASS**; the `## Review` section
 above is that round-3 text, replacing the round-2 FAIL wholesale rather than
 being patched, since the underlying claim changed rather than one word in
 it. Transcribed verbatim from the reviewer, as with every earlier revision of
-that section — I did not draft any of its text. `npx oxfmt` on this file:
-exit 0 (no-op, matching the reviewer's own pre-check). Citations gate: 15
-verified, 0 moved, 0 unanchored, 3 unchecked, of 18 references, exit 0 —
-identical to the reviewer's own numbers. `npm run check`: exit 0.
+that section — I did not draft any of its text. **One line differs from what
+the reviewer sent**: the `**Gate: PASS**` header paragraph wraps across three
+lines in the committed text rather than one, because `npx oxfmt` reflowed it
+on save; the reviewer diffed both forms with whitespace normalised and
+confirmed both md5 to the same hash, so no content changed. Noted explicitly
+rather than left implicit, since a bare "nothing changed" beside a visibly
+different line is the thing worth avoiding, not the thing worth saying.
+Citations gate: 15 verified, 0 moved, 0 unanchored, 3 unchecked, of 18
+references, exit 0 — identical to the reviewer's own numbers. `npm run
+check`: exit 0.
