@@ -166,7 +166,7 @@ the tip figure of `45 … 614`. It read the whole
 `git diff a5e31c7...fde65a9 -- scripts/citations-gate.mjs` and confirmed it is 14
 deleted `GRANDFATHERED` lines and nothing else. It bucketed the surviving list
 programmatically off the live constant rather than off this record's prose:
-`scripts/citations-gate.mjs:295 "pl-25-grounding-cache.md"` heads the three
+`scripts/citations-gate.mjs@64edce2:295 "pl-25-grounding-cache.md"` heads the three
 planner entries left, and the three buckets are repo- 22/231, downloader 20/300,
 planner 3/83.
 
@@ -192,7 +192,7 @@ entry allows 15` — then reverts clean. The bookkeeping is a check, not a habit
   reported reproducing it three times; the reviewer proved it always holds, by
   appending a unique token to one line and citing it from the next — exit 16,
   `anchor starts on 2 lines`.
-  `scripts/citations.mjs:643 "function locateAnchor(content, anchor)"` does not
+  `scripts/citations.mjs@64edce2:643 "function locateAnchor(content, anchor)"` does not
   exclude the citing line, and the citing line necessarily contains the anchor,
   so a record can never cite itself distinctly. Not a workaround nobody found: a
   fact.

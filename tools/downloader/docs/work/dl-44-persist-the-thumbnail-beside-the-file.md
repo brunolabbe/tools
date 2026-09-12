@@ -129,14 +129,12 @@ image lives exactly as long as the thing it depicts.
 
 **Gate: PASS** — 2026-09-07 · `origin/main...HEAD`, tip `e3d065e` · own defect hunt (docs-only diff; no `code-review` dispatch)
 
-<!-- citations: evidence api/src/routes/thumbnail.ts:27 -->
-
-The citation below is left at the coordinate this gate actually resolved, at tip `e3d065e`, and is declared as that gate's own evidence rather than repointed: rewriting it would make the record claim to have checked a line that did not exist when it ran. The build recorded in the Log moved that line down the file, to the coordinate the `## Decision` section above now names.
+The citation below is left at the coordinate this gate actually resolved, at tip `e3d065e`, and is pinned rather than repointed: rewriting it would make the record claim to have checked a line that did not exist when it ran. The build recorded in the Log moved that line down the file, to the coordinate the `## Decision` section above now names. The pin names `0042c62`, the squash merge of that branch, because `e3d065e` did not survive the merge; the cited line reads the same at both. Until repo-35 an evidence declaration carried it instead, which stopped the check rather than keeping it.
 
 This diff records Build step 4's already-answered decision onto a `ready` ticket — no implementation exists, so no `Done when` line applies, and per `docs/01-TICKETS.md` ("A gate on a pull request that only files a ticket does not go in `## Review`") this record sits under its own heading rather than `## Review`, so `repo-12`'s board check does not read a `ready` ticket with a review record as merged-without-status-flip.
 
 - The added `## Decision` section is consistent with the unedited Build section: step 4's added sentence restates the Decision section's own text (A recommended and standing, C chosen, B's orphan-retention cost attached) without contradicting it.
-- Citation `api/src/routes/thumbnail.ts:27 "context.thumbnails.get"` verifies — `node scripts/citations.mjs` → `1 verified, 0 moved, 0 unanchored, 0 unresolvable, 0 unchecked, 0 evidence`.
+- Citation `api/src/routes/thumbnail.ts@0042c62:27 "context.thumbnails.get"` verifies — `node scripts/citations.mjs` → `1 verified, 0 moved, 0 unanchored, 0 unresolvable, 0 unchecked, 0 evidence`.
 - `status: ready`, `depends_on: [dl-41]` untouched; `npm run status -- --json` exits 0, `"status": "ready"`, `"reviewed": false`, `"problems": []`.
 - No `## Review` heading present.
 - `npm run check` exits 0; `npx oxfmt --check` reports correct formatting.
