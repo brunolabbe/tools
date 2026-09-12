@@ -3,7 +3,7 @@ id: pl-2
 tool: planner
 title: Ship the planner as a released image on its own subdomain
 kind: chore
-status: in-flight
+status: done
 milestone: null
 depends_on: [dl-10]
 difficulty: standard
@@ -348,3 +348,25 @@ check in this branch's test finds each fragment by the service it defines rather
 than by filename, verified by performing the rename in the worktree and watching
 the suite stay green. The one shared surface is `02-DEPLOYMENT.md`, in different
 sections.
+
+**2026-09-12 — the third _Done when_ closed, and `status` with it.**
+
+The owner brought the stack up, reached `planner.oludoi.com`, was asked for a
+one-time PIN and got the UI. That proves the authenticated half. The other half
+of that line — "an unauthenticated request never reaches the host" — is not
+something a successful login demonstrates, so it was measured separately:
+
+- `planner.<domain>` and `downloader.<domain>`, with no credential, both answer
+  `302` to `<team>.cloudflareaccess.com/cdn-cgi/access/login/…`. The redirect is
+  issued by the edge, so the request is turned around before the tunnel, which
+  is the claim.
+- `downloader.<domain>/api/files/<a token that does not exist>` answers **`404`,
+  not a redirect**. Two things at once: the Bypass application matches the more
+  specific path as intended, and the origin is genuinely serving — a 404 for an
+  unknown capability token is the downloader's own answer, not Cloudflare's.
+  A hostname that merely resolved could not produce it.
+
+This ticket has been `in-flight` since 2026-08-14 for a reason that was always
+about a machine rather than a branch, and it is the reason the previous two
+sessions declined to close it. It is closed now because someone ran it, not
+because a diff looked finished.
