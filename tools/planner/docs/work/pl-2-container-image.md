@@ -141,21 +141,21 @@ the branch, in its own worktree. The reviewer mutation-tested the ingress merge,
 the apply order and the proxied-flag guard by hand rather than reading them.
 
 The three `Done when` lines are unchanged by this diff and carry the 2026-09-08
-gate's verdicts; the third is still "not provable from a repository", for the
-same reason, which is why `status` stays `in-flight`.
+gate's verdicts. The third was still open when this gate ran; it closed later the
+same day against a running host, and the final Log entry is the measurement.
 
-- **med, fixed on this branch** · The docstring at `scripts/cloudflare-setup.mjs:15`
-  "never removes a rule it did not add" was the claim, and no test held the code
-  to it. Every "foreign" fixture in the suite was `downloader.example.com` —
+- **med, fixed on this branch** ·
+  `scripts/cloudflare-setup.mjs:15` "never removes a rule it did not add" was
+  the claim, and no test held the code to it. Every "foreign" fixture in the suite was `downloader.example.com` —
   which `desiredState` always also wants, since `TOOLS` carries both tools — so
   a narrower regression that keeps only pre-existing rules **also present in
   `desired`**, silently dropping any genuinely third-party hostname sharing the
   tunnel, passed all eleven tests. Reproduced independently before acting on it:
   the mutation is green on the old suite. This is not hypothetical — the account
   this was applied to had exactly such a hostname, sharing the tunnel with
-  nothing else of ours. `scripts/test/cloudflare-setup.test.ts:63`
-  "const SHARED_TUNNEL = [" is now a fixture whose foreign rule is in no tool's
-  table, and `:84` "a hostname belonging to nobody in TOOLS survives the merge"
+  nothing else of ours.
+  `scripts/test/cloudflare-setup.test.ts:63` "const SHARED_TUNNEL = [" is now a
+  fixture whose foreign rule is in no tool's table, and `:84` "a hostname belonging to nobody in TOOLS survives the merge"
   plus the rule-count case beside it both go red under the reviewer's mutation.
 - **low, fixed on this branch** · Two hostname-less rules in the _existing_
   config: the second was silently dropped, because the merge kept
@@ -174,11 +174,11 @@ same reason, which is why `status` stays `in-flight`.
   page. The API refuses the duplicate, so nothing corrupts — but a plan is a
   document someone approves before `--apply`, and being wrong in it is the
   defect. It now refuses.
-- **verified** · the apply-order invariant at `scripts/cloudflare-setup.mjs:230`
-  "export function applyOrder" holds for every partial plan the reviewer tried —
-  no access with routing, access with no ingress, empty — and inverting it fails
-  `scripts/test/cloudflare-setup.test.ts:262`
-  "expect(lastAccess).toBeLessThan(firstRouting)".
+- **verified** ·
+  `scripts/cloudflare-setup.mjs:230` "export function applyOrder" holds for
+  every partial plan the reviewer tried — no access with routing, access with no
+  ingress, empty — and inverting it fails
+  `scripts/test/cloudflare-setup.test.ts:262` "expect(lastAccess).toBeLessThan(firstRouting)".
 - **verified** · `npm run check` and `npm test` exit 0 at the tip. The test file
   is purely additive, so no existing assertion changed meaning.
 - **unverified by the reviewer, verified here** · that the script was applied to
@@ -370,3 +370,22 @@ This ticket has been `in-flight` since 2026-08-14 for a reason that was always
 about a machine rather than a branch, and it is the reason the previous two
 sessions declined to close it. It is closed now because someone ran it, not
 because a diff looked finished.
+
+**2026-09-12 — the citation gate caught two things this branch broke, and one of
+them was in another ticket.**
+
+The `## Review` section above failed `citations-gate.mjs` with four unanchored
+references. They _had_ anchors; `oxfmt` reflowed the markdown and pushed each
+quote onto the line after its citation, and the gate reads the pair inline. The
+pairs now start their line so reflow cannot separate them. **The lesson is the
+verification, not the fix:** `node scripts/citations.mjs <record>` was run and
+exited 0, reporting the unanchored ones as informational. The gate's own command
+is `--section Review --require-anchors --require-distinct-anchors`, and without
+those flags it answers a weaker question than CI asks.
+
+**And three citations in
+[pl-38](./pl-38-the-planner-limiter-shares-one-bucket.md) moved because of this
+branch**, not because of anything pl-38 did: inserting a section into
+`02-DEPLOYMENT.md` shifted the lines its gate record cites. Repointed here,
+in the commit that moved them, because a record that cites the wrong line is
+worse than one that cites none — it reads as verified.
