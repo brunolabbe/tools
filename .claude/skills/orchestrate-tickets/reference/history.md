@@ -91,27 +91,25 @@ a different tree. Measured 2026-09-08 at `4901cd6`: the plain run reported
 `--rev b142a4a` — the tenth session's own base — reported `7 verified, 6 moved,
 5 unresolvable`, breaking five citations to repair one.
 
-**So a citation that must stay as written is declared instead**, which is the
-mechanism `reference/records.md` already names for that case. On this page a
-`<!-- citations: evidence ... -->` declaration means *correct at the rev named
-below, deliberately not repointed*. It buys exit 0 and it costs the check — the
-script stops calling these a defect and stops checking them — so the rev is
-recorded here, and each was re-read at it with `git show <rev>:<path>` before the
-declaration was written:
+**So a citation that must stay as written is pinned to the rev it was true at**,
+written inside its location as `<file>@<rev>:<line>` (repo-35). A pin is checked
+at that rev on every run, so it keeps the check: from 2026-09-08 until repo-35
+these four were carried by evidence declarations instead, which bought exit 0 by
+no longer checking them at all. Each rev was re-read with `git show <rev>:<path>`
+before the declaration was written, and the pins name the same revs:
 
 - The tenth session's defect 1, correct at `b142a4a`, that entry's own base:
-  `dispatching.md:206 "Probed on 2026-09-01"`
+  `dispatching.md@b142a4a:206 "Probed on 2026-09-01"`
   and `:209` "carry `ListAgents` and `SendMessage`".
-  `repo-21` has since rewritten the section around them, and the same two lines
-  are `:230` "Probed on 2026-09-01"
-  and `:233` "carry `ListAgents` and `SendMessage`"
-  today — moved, not reworded.
+  `repo-21` then rewrote the section around them, and when this note was written
+  the same two lines were `dispatching.md@b384033:230` "Probed on 2026-09-01"
+  and `:233` "carry `ListAgents` and `SendMessage`" — moved, not reworded.
 - The eleventh session's `tickets` row, correct at `9b426c8`, that entry's own
-  base: `docs/work/repo-30-the-id-sweep-cannot-see-repo-tickets.md:6 "status: ready"`.
+  base: `docs/work/repo-30-the-id-sweep-cannot-see-repo-tickets.md@9b426c8:6 "status: ready"`.
   That line now reads `status: done`, which is the ticket landing rather than the
   citation being wrong.
 - The eleventh session's defect 3, correct at `9b426c8`:
-  `tools/downloader/e2e/sniffer/mse-page.spec.ts:102 "toHaveCount(5)"`.
+  `tools/downloader/e2e/sniffer/mse-page.spec.ts@9b426c8:102 "toHaveCount(5)"`.
   `dl-43` deleted the assertion, which is what that entry says it existed to do,
   so the anchor is nowhere in the file and there is nothing to repoint it to.
 
@@ -650,11 +648,9 @@ corrected.**
 **what the skill got wrong** — eight, none fixed here: this commit is scoped to
 this file.
 
-<!-- citations: evidence dispatching.md:206, dispatching.md:209 -->
-
 1. **The tool list an agent definition declares is not the tool list it is
    given, and `dispatching.md` states the declared one as a probed fact.**
-   Under `dispatching.md:206 "Probed on 2026-09-01"`, three lines down at
+   Under `dispatching.md@b142a4a:206 "Probed on 2026-09-01"`, three lines down at
    `:209` "carry `ListAgents` and `SendMessage`", the page says both agent types carry `ListAgents` and `SendMessage`
    directly. Two builders reported this batch that they had
    no `ListAgents`, one distinguishing it from an unreliable self-report on the
@@ -1208,15 +1204,13 @@ marked as supplied.
 
 | Field | Value |
 | --- | --- |
-| `tickets` | **6 pull requests against `origin/main`, one merged.** `#175` (`docs/dl-44-dl-45-decisions`, decision records for `dl-44`/`dl-45`) · `#176` (`repo-30-id-sweep-repo-tickets`, a second round on `repo-30` — its first fix had already merged the same day as `#174`/`24e5bf7` and left `status: ready`, re-verified here: `docs/work/repo-30-the-id-sweep-cannot-see-repo-tickets.md:6` "status: ready" still reads that way on `main`, because the sweep's own exit-code test had never observed what it claimed to — see item 2) · `#177` (`docs/repo-decisions-2026-09-07`, four decision records: `repo-15`, `repo-16`, `repo-26`, `repo-29`) · `#178` (`dl-43-gate-progress-on-what-actually-happened`, built, plus filed `dl-46`) · `#179` (`repo-21-orchestration-skill-loop`, `repo-21` + `repo-28`, **merged as `9b426c8`**, the base this row is measured against) · `#180` (`repo-windows-ci`, filed `repo-31`, `status: needs-decision`). The supplied summary reads **"5 tickets built + 2 bookkeeping branches + 1 filing."** The two bookkeeping branches (`#175`, `#177`) and the one filing (`#180`) match the diffs exactly. **The five built tickets do not reconcile**: `git diff --name-only origin/main...<branch>` on all six names exactly four built tickets — `repo-21`, `repo-28` (both `#179`), `repo-30` (`#176`), `dl-43` (`#178`) — and `dl-46` is filed, not built, on its own branch's own diff. Re-run here, `npm run status --ready` returns exactly the four tickets this batch built or attempted (`dl-43`, `dl-44`, `dl-45`, `repo-30`) plus the four it recorded decisions for (`repo-15`, `repo-16`, `repo-26`, `repo-29`) — this batch touched every ticket that was `ready` or `needs-decision` on the board at once, which is worth recording on its own. Left as an unreconciled count rather than silently rounded to five |
+| `tickets` | **6 pull requests against `origin/main`, one merged.** `#175` (`docs/dl-44-dl-45-decisions`, decision records for `dl-44`/`dl-45`) · `#176` (`repo-30-id-sweep-repo-tickets`, a second round on `repo-30` — its first fix had already merged the same day as `#174`/`24e5bf7` and left `status: ready`, re-verified here: `docs/work/repo-30-the-id-sweep-cannot-see-repo-tickets.md@9b426c8:6` "status: ready" still reads that way on `main`, because the sweep's own exit-code test had never observed what it claimed to — see item 2) · `#177` (`docs/repo-decisions-2026-09-07`, four decision records: `repo-15`, `repo-16`, `repo-26`, `repo-29`) · `#178` (`dl-43-gate-progress-on-what-actually-happened`, built, plus filed `dl-46`) · `#179` (`repo-21-orchestration-skill-loop`, `repo-21` + `repo-28`, **merged as `9b426c8`**, the base this row is measured against) · `#180` (`repo-windows-ci`, filed `repo-31`, `status: needs-decision`). The supplied summary reads **"5 tickets built + 2 bookkeeping branches + 1 filing."** The two bookkeeping branches (`#175`, `#177`) and the one filing (`#180`) match the diffs exactly. **The five built tickets do not reconcile**: `git diff --name-only origin/main...<branch>` on all six names exactly four built tickets — `repo-21`, `repo-28` (both `#179`), `repo-30` (`#176`), `dl-43` (`#178`) — and `dl-46` is filed, not built, on its own branch's own diff. Re-run here, `npm run status --ready` returns exactly the four tickets this batch built or attempted (`dl-43`, `dl-44`, `dl-45`, `repo-30`) plus the four it recorded decisions for (`repo-15`, `repo-16`, `repo-26`, `repo-29`) — this batch touched every ticket that was `ready` or `needs-decision` on the board at once, which is worth recording on its own. Left as an unreconciled count rather than silently rounded to five |
 | `agents` / `dispatches` | **13 agents** — 1 seam-mapper, 7 builder dispatches across the 6 branches (one each, except `#180`'s filing, which took two: an Opus builder killed by a session rate limit before committing anything, and a Sonnet replacement that filed `repo-31` — the tenth session's same shape, a builder round lost to the session itself rather than to the work), and 5 ticket-reviewers (`#175`–`#179`; none dispatched against `#180`, consistent with a filing having no implementation to gate). Total dispatches-and-wakes `not recorded` beyond this table |
 | `builder rounds` | Not given as a count. Qualitatively: `dl-43` (gate rounds, a CI fix, and filing `dl-46`), `repo-21`/`repo-28` (a fold-in plus a stall recovery — item 1) and `repo-30` (a CI fix after its first gate, run as its own commit range `6a5944b...4e1e325`) each took more than one round; the two decision-record branches and `#180`'s filing read as single-pass. One round was lost outright rather than spent: `#180`'s first builder was killed by a session rate limit having produced nothing, and had to be re-dispatched from zero |
 | `gates` | **5 gate agents, covering every branch but `#180`'s filing.** Pass structure as supplied: `dl-43` ×4 plus an out-of-band e2e check; `repo-30` ×3 on its still-open branch (one of them volunteering a finding against an earlier pass of itself — item 2); `repo-21`/`repo-28` 2, verified here against the merged tree — `CONCERNS` at `928e3ac`, `PASS` at `5065aed`; the two decision-record gates (`#175`, `#177`) are not stated as counts. **Returned findings:** at least 3 of 5 (`dl-43`, `repo-21`/`28`, `repo-30`) — the two decision-record gates are not stated to have found anything, so this is "at least 3," not "exactly 3" |
 | `wrong findings` | **None refuted this session, per the supplied data.** What happened instead runs the same direction the eighth and tenth sessions already recorded: a reviewer found a gap in its own earlier verification and wrote it into its own record unprompted, rather than being caught by a builder or a later gate — `repo-30`'s reviewer, on its still-open branch: *"my `6a5944b` gate's 'verified' line for Done-when 2 had the same blind spot this CI run exposed… Recorded here rather than silently carried forward."* A third instance of the same shape, changing no verdict |
 | `subagent tokens` | **2,635,387 across the 12 agents that reported; 1 (the killed `#180` Opus builder) reported nothing** — summed here from the per-agent figures supplied, matching the orchestrator's own "~2.64 M" to within rounding: seam-mapper 75,025 · `dl-43` builder 464,151 · `dl-43` reviewer 289,790 · `repo-21`/`28` builder 370,737 · `repo-21`/`28` reviewer 246,492 · `repo-30` builder 276,923 · `repo-30` reviewer 221,284 · 4-record builder (`#177`) 171,000 · 4-record reviewer 130,087 · `dl-44`/`45` builder 114,913 · `dl-44`/`45` reviewer 113,707 · `#180` replacement builder 161,278. Split on these floors: builders **59.2%** · gates **38.0%** · intake **2.8%** |
 | `cost` | **≈ $47.96** at the 2026-09-02 rate of $0.0182/1k — an arithmetic conversion of a set of floors with one agent's spend entirely unmeasured, so a floor and not a bill, same caveat as the ninth and tenth sessions' cost rows |
-
-<!-- citations: evidence docs/work/repo-30-the-id-sweep-cannot-see-repo-tickets.md:6, tools/downloader/e2e/sniffer/mse-page.spec.ts:102 -->
 
 **what the skill got wrong** — seven, none fixed on this branch, which is scoped
 to this file alone:
@@ -1255,7 +1249,7 @@ to this file alone:
 3. **Add e2e to the "narrowest thing that can fail" guidance, with its inverse
    stated beside it.** `dl-43`'s builder skipped the e2e suites, reasoning that
    the unit suites already covered the analysing panel's features. CI
-   disagreed: `tools/downloader/e2e/sniffer/mse-page.spec.ts:102` "toHaveCount(5)"
+   disagreed: `tools/downloader/e2e/sniffer/mse-page.spec.ts@9b426c8:102` "toHaveCount(5)"
    — the five-stages-at-once list this ticket exists to
    remove — asserted the exact defect the ticket fixed. Its own diagnosis is
    the guidance's missing half: *"a test's value is not the feature it covers,
@@ -1285,8 +1279,8 @@ to this file alone:
    failures were Windows-only" — went to the owner as-is. `repo-31`'s filing
    (`#180`), reading each failed job's log rather than its conclusion,
    established that **all eight failures fail on the identical assertion** —
-   `scripts/test/citations.test.ts:1319` "This record exists at that rev and cited something different there",
-   reached from `scripts/test/citations.test.ts:1318` "expect(pinned.stdout).toMatch(" — one unfixed regression
+   `scripts/test/citations.test.ts:1334` "This record exists at that rev and cited something different there",
+   reached from `scripts/test/citations.test.ts:1333` "expect(pinned.stdout).toMatch(" — one unfixed regression
    in the repo's own citation checker, counted eight times by run count. Its
    own distinction is the reusable one: *"'Windows is the dominant source of
    red' and 'the team has looked at eight different Windows failures' are
@@ -1488,8 +1482,8 @@ the line that already covers them.
    is nowhere in the file. The third drifted when `repo-21` rewrote
    `dispatching.md`. **Nothing reports this**: `npm run check` does not run the
    checker at all, and CI runs it on exactly one file —
-   `.github/workflows/ci.yml:136` "--require-anchors" — scoped that way on
-   purpose, `.github/workflows/ci.yml:128` "alone, on purpose". So the page
+   `.github/workflows/ci.yml:151` "--require-anchors" — scoped that way on
+   purpose, `.github/workflows/ci.yml:142` "alone, on purpose". So the page
    carrying the schema every session must append to is failing its own checker at
    the base, and each session inherits a red baseline it has no way to see. The
    tenth session's entry 8 said *nothing checks this page*; this is the
@@ -1639,7 +1633,7 @@ to this file alone.
    Re-run here, that is worse than an error — `node scripts/next-id.mjs
    downloader` prints `next free: downloader-1` and **exits 0**, a confident
    answer to a question nobody asked, and
-   `scripts/next-id.mjs:29` "export const USAGE =" is the one line that says so.
+   `scripts/next-id.mjs:36` "export const USAGE =" is the one line that says so.
    Both were one command
    from being right. **The `repo-36` builder refused to record the first**, on
    the reasoning that an unmeasured "flaky" line would sit in the one ticket
@@ -2176,7 +2170,7 @@ and the ticket's own text rather than accepted.
    to 1 distinct line in that shape and would start passing, against 2 distinct
    lines for a citation pointing at a different line of the same file, which
    still fails — and "the three wording sites" was six, the branch finding a
-   sixth (`scripts/citations.mjs:595 "Every line an anchor's text starts on, in a file."`) that appeared in neither relayed list. Both reversals made
+   sixth (`scripts/citations.mjs@64edce2:595 "Every line an anchor's text starts on, in a file."`) that appeared in neither relayed list. Both reversals made
    `Done when` items and the Order section's dependency between parts 8 and 9
    load-bearing in a way the original premise did not predict.
 4. **A question was answered before a downstream agent dissolved its premise,
@@ -2348,7 +2342,7 @@ and the ticket's own text rather than accepted.
   limit of that method rather than resting on the agreement: two faithful
   replicas of one algorithm inherit its edge cases identically, so agreement
   between them proves the replicas match and nothing about the algorithm.
-- **`scripts/citations.mjs:1424` "anchor starts on ${r.occurrences} lines of"
+- **`scripts/citations.mjs@64edce2:1424` "anchor starts on ${r.occurrences} lines of"
   prints a match count beside the word "lines" and misled the builder into
   recording a number that did not reproduce — and that miswording is the
   reproduction that justified `repo-35`'s part 9,** rather than a defect

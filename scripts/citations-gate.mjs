@@ -98,8 +98,10 @@ import {
   extractCitations,
   extractDeclarations,
   extractSections,
+  isIndistinct,
   makeReader,
   makeResolver,
+  makeTrees,
   selectSection,
 } from "./citations.mjs";
 
@@ -297,8 +299,12 @@ export const GRANDFATHERED = new Map([
   ["tools/planner/docs/work/pl-32-vite-config-test.md", 22],
 ]);
 
-/** The states that fail this gate. `unanchored` is here; that is the whole point. */
-const FAILING = new Set(["unanchored", "moved", "unresolvable"]);
+/**
+ * The states that fail this gate. `unanchored` is here; that is the whole point.
+ * So is `malformed-pin` (repo-35), for the same reason: a pin nothing could read
+ * is a citation nothing checked.
+ */
+const FAILING = new Set(["unanchored", "moved", "unresolvable", "malformed-pin"]);
 
 /** This file, as git names it — the thing `--against` reads an older copy of. */
 export const SELF = "scripts/citations-gate.mjs";
@@ -522,8 +528,19 @@ export function findRecords(repo, pathspecs) {
  * @param {string | null} section
  * @param {(file: string) => string[] | null} read
  * @param {(file: string) => {path: string} | {error: string}} resolve
+ * @param {boolean} [requireDistinct]
+ * @param {ReturnType<typeof makeTrees>} [trees] The commits pins name. Made per
+ *   call when omitted; `gate` passes one for the whole run instead.
  */
-export function checkRecord(repo, record, section, read, resolve, requireDistinct = true) {
+export function checkRecord(
+  repo,
+  record,
+  section,
+  read,
+  resolve,
+  requireDistinct = true,
+  trees = makeTrees(repo),
+) {
   const markdown = fs.readFileSync(path.join(repo, record), "utf8");
 
   let chosen = null;
@@ -542,7 +559,7 @@ export function checkRecord(repo, record, section, read, resolve, requireDistinc
   const citations = extractCitations(markdown).filter((c) => inScope(c.line));
   const declarations = extractDeclarations(markdown).filter((d) => inScope(d.line));
   const { results, stale } = applyDeclarations(
-    checkCitations(citations, read, resolve),
+    checkCitations(citations, read, resolve, { record, trees }),
     declarations,
   );
 
@@ -553,10 +570,11 @@ export function checkRecord(repo, record, section, read, resolve, requireDistinc
   // An indistinct anchor is `verified` and still a failure here, which is the
   // one place a state and a verdict come apart. `citations.mjs` keeps the state
   // because how many lines a fragment occupies is a fact about the fragment;
-  // this gate supplies the policy, exactly as it does for `unanchored`.
-  const indistinct = requireDistinct
-    ? results.filter((r) => r.state === "verified" && (r.occurrences ?? 1) > 1)
-    : [];
+  // this gate supplies the policy, exactly as it does for `unanchored`. The
+  // predicate is imported rather than restated, so the number `citations.mjs`
+  // prints beside "lines" is by construction the one this gate failed on — and
+  // a self-citation, which no fragment can make distinct, fails both the same way.
+  const indistinct = requireDistinct ? results.filter(isIndistinct) : [];
   if (indistinct.length > 0) counts.indistinct = indistinct.length;
   const failures = [...results.filter((r) => FAILING.has(r.state)), ...indistinct];
 
@@ -586,6 +604,7 @@ export function checkRecord(repo, record, section, read, resolve, requireDistinc
 export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
   const read = makeReader(repo, null);
   const resolve = makeResolver(candidateFiles(repo, null));
+  const trees = makeTrees(repo);
 
   const inScope = [];
   const failed = [];
@@ -595,7 +614,7 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
   const debt = {};
 
   for (const record of findRecords(repo, scope.records)) {
-    const result = checkRecord(repo, record, scope.section, read, resolve);
+    const result = checkRecord(repo, record, scope.section, read, resolve, true, trees);
     if (result.skipped) continue;
     inScope.push(result);
     if (result.passed && result.error == null) continue;
@@ -644,7 +663,16 @@ export function gate(repo, scope = SCOPE, grandfathered = GRANDFATHERED) {
 
 /** The `state: count` half of a record's line, worst first and zeroes dropped. */
 const countLine = (counts) =>
-  ["unresolvable", "moved", "unanchored", "indistinct", "unchecked", "evidence", "verified"]
+  [
+    "malformed-pin",
+    "unresolvable",
+    "moved",
+    "unanchored",
+    "indistinct",
+    "unchecked",
+    "evidence",
+    "verified",
+  ]
     .filter((state) => (counts[state] ?? 0) > 0)
     .map((state) => `${counts[state]} ${state}`)
     .join(", ");
@@ -693,10 +721,21 @@ function main() {
     );
     for (const f of result.failures) {
       const range = f.start === f.end ? `${f.start}` : `${f.start}-${f.end}`;
-      const where = f.file === null ? `:${range}` : `${f.file}:${range}`;
+      // Printed as the record wrote it: a pin with its rev, a malformed one verbatim.
+      const where =
+        f.malformed ??
+        (f.file === null
+          ? `:${range}`
+          : `${f.file}${f.rev === undefined ? "" : `@${f.rev}`}:${range}`);
+      // An indistinct citation is `verified`, so it carries no reason of its own
+      // and this printed the word `null` under it until repo-35 touched the line.
+      // The fallback is the fact the gate failed it on.
+      const reason =
+        f.reason ??
+        `anchor starts on ${f.occurrences} lines of ${f.resolved} — the fragment does not say which`;
       process.stdout.write(
         `         ${f.state.padEnd(12)} ${where}  (record line ${f.line})\n` +
-          `                      ${f.reason}\n`,
+          `                      ${reason}\n`,
       );
     }
     for (const s of result.stale) process.stdout.write(`         declaration  ${s.reason}\n`);
@@ -740,6 +779,16 @@ function main() {
   }
 
   const advice = [];
+  const selfCited = [...failed, ...regressed].flatMap((r) =>
+    (r.failures ?? []).filter((f) => f.self),
+  ).length;
+  if (selfCited > 0) {
+    advice.push(
+      `${selfCited} citation(s) point into the record they are written in. A self-citation can never\n` +
+        `be distinct — the fragment it quotes is written on the citing line too — so the advice below\n` +
+        `does not apply to it. Point it at the real subject, or write it as prose.`,
+    );
+  }
   if (failed.length > 0) {
     advice.push(
       `${failed.length} record(s) failed. Every citation under a \`## Review\` heading must carry a\n` +
