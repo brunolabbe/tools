@@ -852,6 +852,7 @@ describe("error mapping", () => {
     expect(statusForCode("INVALID_URL")).toBe(400);
     expect(statusForCode("DRM_PROTECTED")).toBe(451);
     expect(statusForCode("NO_MEDIA_FOUND")).toBe(422);
+    expect(statusForCode("AGE_CONFIRMATION_REQUIRED")).toBe(422);
     expect(statusForCode("RATE_LIMITED")).toBe(429);
     expect(statusForCode("SIZE_LIMIT_EXCEEDED")).toBe(413);
     expect(statusForCode("FILE_EXPIRED")).toBe(410);

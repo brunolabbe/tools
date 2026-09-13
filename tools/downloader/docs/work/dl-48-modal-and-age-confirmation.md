@@ -302,3 +302,52 @@ Checks, all exit 0: `npm run check`; `npm test -- --project downloader`,
 failing. Five Review citations in dl-19, dl-34 and repo-33 were repointed after
 `api/src/config.ts` and `capture-rules.test.ts` moved; the gate located each
 anchor at its new line.
+
+**2026-09-13 — gate** by the ticket-reviewer agent on Sonnet, at `3984373`:
+**CONCERNS**, with one med finding and four low. Each was checked by hand before
+repair, and every one was repaired in the next commit.
+
+- **med, reproduced here too.** `dismissModal` treated any `position: fixed`
+  layer over the centre as a modal, then searched its whole subtree for a close
+  control. Two things went wrong:
+  - **The fixed app root was treated as a modal.** A page whose whole app lives
+    in a fixed root had its "Close menu" pressed: `dismissModal` returned 1 and
+    the click handler fired.
+  - **The close pattern was too loose.** `CLOSE_TEXT` matched "Close account"
+    and "Close ticket", because any two words could follow the verb.
+
+  Repaired in two ways:
+  - **A fixed layer counts only when it covers something.** Page content must
+    lie under the centre point, neither inside the layer nor one of its
+    ancestors. The live page's promo passes this; an app root does not.
+  - **Only an overlay word may follow the verb**, such as "popup", "dialog" or
+    "banner".
+
+  The class-name fallback ("close" in a button's class) was not in the brief,
+  had no test, and is removed. The `age-gate.html` player area now spans the
+  viewport centre, as the reproduced page's did. The new `fixed-shell.html`
+  test pins the app-root case. After the repair, the same reproduction returns
+  0 and nothing is clicked.
+
+- **low:** `AGE_CONFIRMATION_REQUIRED → 422` had no runtime assertion. It is now
+  in `api/test/routes.test.ts`'s error-mapping test.
+- **low:** precedence against `BOT_CHALLENGE` was untested. There is now a
+  classifier test.
+- **low:** a press that leaves the gate standing had no integration test.
+  `age-gate.html?inert` now pins that it fails `NO_MEDIA_FOUND`.
+- **low:** the class-name heuristic had no coverage. It is removed; see above.
+- **The reviewer checked and found no defect** in:
+  - the revisit bound, which it reproduced with `MAX_OVERLAY_REVISITS = 0`;
+  - Cyrillic matching without the `u` flag;
+  - regex sources surviving JSON interpolation into the page;
+  - the premise at `8849c14`.
+
+After the repair:
+
+- **Checks:** `npm run check` passes, and so does
+  `npm test -- --project downloader` (1265 tests in 75 files).
+- **Citations:** the gate is at 0 failing, after one more dl-34 citation was
+  repointed.
+- **Live, via the built resolver:** with `confirmAge: false` the page fails
+  `AGE_CONFIRMATION_REQUIRED` in 7.0 s. With `confirmAge: true` it returns 5
+  HLS variants from 144p to 720p, in 26.9 s.

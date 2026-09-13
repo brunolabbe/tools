@@ -42,14 +42,15 @@ const CONSENT_TEXT =
   /^\s*(?:accept(?: all| cookies| and continue)?|i accept|agree|i agree|allow all|got it|ok|okay|continue|understood|alles akzeptieren|akzeptieren|zustimmen|einverstanden|tout accepter|accepter|j'accepte|aceptar( todo)?|acepto|aceitar|accetta(?: tutto)?|accetto|akkoord|godkänn|zgadzam się|принять)\s*$/i;
 
 /**
- * A close control's accessible name: a close verb, optionally followed by what
- * it closes ("Close popup"). Anchored at the start so a sentence containing the
+ * A close control's accessible name: a close verb, optionally followed by a
+ * word naming an overlay ("Close popup"). Only such a word — the verb followed
+ * by anything at all also matched "Close account" (dl-48's gate). Anchored at the start so a sentence containing the
  * word is not a control. Never a call to action — a promo's primary button
  * starts or navigates to other content, and a stream reached through it is the
  * wrong stream (dl-48).
  */
 export const CLOSE_TEXT =
-  /^\s*(?:[×✕✖x]|close|dismiss|no,? thanks|not now|schließen|fermer|cerrar|chiudi|fechar|sluiten|stäng|zamknij|закрыть|скрыть)(?:\s+\S+){0,2}\s*$/i;
+  /^\s*(?:[×✕✖x]|close|dismiss|no,? thanks|not now|schließen|fermer|cerrar|chiudi|fechar|sluiten|stäng|zamknij|закрыть|скрыть)(?:\s+(?:the\s+)?(?:popup|pop-up|dialog|modal|banner|window|overlay|offer|ad|advert|advertisement|message|notification|попап|окно|баннер|рекламу|уведомление))?\s*$/i;
 
 /**
  * A control whose label states the viewer is over an age. Anchored, like
@@ -76,6 +77,12 @@ const SEMANTIC_DIALOG = "[role='dialog'], [role='alertdialog'], [aria-modal='tru
  * wrong one. A visible semantic dialog is the fallback when nothing covers the
  * centre.
  *
+ * **A fixed layer counts only when it covers something**: page content under
+ * the centre point that is neither inside the layer nor one of its ancestors.
+ * An app whose whole root is `position: fixed`, a common way to lock scrolling,
+ * covers the centre too, with nothing under it; without this its "Close menu"
+ * was pressed (dl-48's gate).
+ *
  * A layer holding a `<video>` is left alone: sites open their player in a
  * lightbox, and closing that closes the thing this tier exists to watch.
  *
@@ -90,12 +97,25 @@ const MARK_CLOSE_SCRIPT = `(() => {
     return rect.width > 0 && rect.height > 0;
   };
   var container = null;
-  var node = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+  var stack = document.elementsFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+  var node = stack[0];
   for (; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
     if (node.matches(semantic) || getComputedStyle(node).position === 'fixed') {
       container = node;
       break;
     }
+  }
+  if (container) {
+    var covers = false;
+    for (var k = 0; k < stack.length; k++) {
+      var under = stack[k];
+      if (under === document.body || under === document.documentElement) continue;
+      if (!container.contains(under) && !under.contains(container)) {
+        covers = true;
+        break;
+      }
+    }
+    if (!covers) container = null;
   }
   if (!container) {
     var dialogs = document.querySelectorAll(semantic);
@@ -112,8 +132,7 @@ const MARK_CLOSE_SCRIPT = `(() => {
     var el = controls[j];
     if (!shown(el)) continue;
     var name = (el.getAttribute('aria-label') || el.getAttribute('title') || el.innerText || '').trim();
-    var button = el.tagName === 'BUTTON' || el.getAttribute('role') === 'button';
-    if (close.test(name) || (button && /close/i.test(el.getAttribute('class') || ''))) {
+    if (close.test(name)) {
       el.setAttribute(${JSON.stringify(CLOSE_MARK)}, '');
       return 'marked';
     }

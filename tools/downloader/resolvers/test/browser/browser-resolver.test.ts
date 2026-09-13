@@ -342,6 +342,34 @@ describe("BrowserResolver", () => {
     );
 
     test(
+      "a press that leaves the gate standing fails NO_MEDIA_FOUND, not the refusal",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200, confirmAge: true });
+        server.requests.length = 0;
+        const error = await probeError("/age-gate.html?inert", resolver);
+
+        // The server was set to confirm and did: "not set to confirm it" would
+        // be false.
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(server.requests).toContain("/beacon/age-confirmed");
+      },
+    );
+
+    test(
+      "a fixed root the whole app lives in is not a modal, and its close control is left alone",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        server.requests.length = 0;
+        const error = await probeError("/fixed-shell.html", resolver);
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(server.requests).not.toContain("/beacon/shell-closed");
+      },
+    );
+
+    test(
       "an age link on a page with no adult-content wording is left alone",
       { timeout: TEST_TIMEOUT_MS },
       async () => {

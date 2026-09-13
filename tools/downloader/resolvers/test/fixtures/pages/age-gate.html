@@ -4,9 +4,11 @@
     <meta charset="utf-8" />
     <title>Age-gated player</title>
     <style>
+      /* Spans the centre of the viewport, as the reproduced page's player area
+         did: the modal counts as one only because it covers this. */
       #gate {
-        width: 640px;
-        height: 360px;
+        width: 100%;
+        height: 70vh;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -127,7 +129,9 @@
 
         document.getElementById("age-confirm").addEventListener("click", function () {
           beacon("age-confirmed");
-          mountPlayer();
+          // ?inert leaves the gate standing after the press, for the case of a
+          // confirmation that was allowed and did not start the player.
+          if (!new URLSearchParams(location.search).has("inert")) mountPlayer();
         });
       })();
     </script>

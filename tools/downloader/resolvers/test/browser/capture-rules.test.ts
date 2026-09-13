@@ -334,19 +334,28 @@ describe("page-interaction labels (dl-48)", () => {
     }
   });
 
-  test.each(["Close", "Close popup", "×", "Закрыть попап", "Schließen", "No thanks"])(
-    "%s is a close control",
-    (label) => {
-      expect(CLOSE_TEXT.test(label)).toBe(true);
-    },
-  );
+  test.each([
+    "Close",
+    "Close popup",
+    "Close dialog",
+    "×",
+    "Закрыть попап",
+    "Schließen",
+    "No thanks",
+  ])("%s is a close control", (label) => {
+    expect(CLOSE_TEXT.test(label)).toBe(true);
+  });
 
-  test.each(["Watch now", "Смотреть", "Subscribe", "Closed captions"])(
-    "%s is not a close control",
-    (label) => {
-      expect(CLOSE_TEXT.test(label)).toBe(false);
-    },
-  );
+  test.each([
+    "Watch now",
+    "Смотреть",
+    "Subscribe",
+    "Closed captions",
+    "Close account",
+    "Close ticket",
+  ])("%s is not a close control", (label) => {
+    expect(CLOSE_TEXT.test(label)).toBe(false);
+  });
 });
 
 describe("classifyFailure", () => {
@@ -402,6 +411,12 @@ describe("classifyFailure", () => {
     expect(
       classifyFailure({ ...base, ageGate: true, finalUrl: "https://site.example/login" }).code,
     ).toBe("AUTH_REQUIRED");
+  });
+
+  test("a bot challenge in front of an age gate is the more fundamental answer", () => {
+    expect(classifyFailure({ ...base, ageGate: true, title: "Just a moment..." }).code).toBe(
+      "BOT_CHALLENGE",
+    );
   });
 
   test("an age gate outranks a region marker on the same page", () => {
