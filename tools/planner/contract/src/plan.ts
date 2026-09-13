@@ -54,6 +54,13 @@ export const MAX_ITEM_NOTE_CHARS = 500;
 export const MAX_REVISION_REASON_CHARS = 500;
 
 /**
+ * A re-plan's note (`RevisionOperation`'s `replan`). Beside the reason's bound
+ * because the two are easy to confuse and are not the same thing: the reason is
+ * the caption the server writes, and the note is context the user typed.
+ */
+export const MAX_REVISION_NOTE_CHARS = 500;
+
+/**
  * How many `reading` sources one revision may carry.
  *
  * One lookup per corridor endpoint is the shape the discovery pass has, so two
@@ -233,6 +240,140 @@ export const planGapSchema = z.object({
 }) satisfies z.ZodType<PlanGap>;
 
 // ---------------------------------------------------------------------------
+// Operations
+// ---------------------------------------------------------------------------
+
+/**
+ * What made a revision: the structured operation on the document that §6's
+ * amendment says a plan is revised through (pl-42).
+ *
+ * **Stored on the revision it produced**, because the amendment promises that
+ * "which days did this revision touch, and why" is answerable from the revision
+ * itself, and a free-text `reason` cannot answer it. `reason` stays, as the
+ * caption; it is derived from this server-side and never taken from a client.
+ *
+ * **Every member names candidates, never item ids.** An item id belongs to one
+ * revision, and a stored operation must still mean something read beside the
+ * next one. A candidate is placed at most once per revision (refused otherwise
+ * by `planRevisionSchema`), so the name is unambiguous.
+ *
+ * - **`first-draft`** — revision 1, and only revision 1. Not requestable: the
+ *   first draft has its own route (`ROUTES.plans`).
+ * - **`replan`** — re-plan the named `days`. Every day outside them is frozen,
+ *   every item on it included, pinned or not; that is what "a revision names
+ *   what it may touch" means. `specialists` empty is the free re-pack from the
+ *   plan's existing candidates, not an error; named specialists run again and
+ *   their candidates join the pool. `days` must also be within the base
+ *   revision's day count, which a schema cannot see, so `api` checks it.
+ *   **`note` is context, never an instruction**: whoever renders it into a
+ *   prompt renders it the way `discoveryBlock` renders a find, as text a user
+ *   typed. It is not the caption either.
+ * - **`move`** — one item, to `toDayIndex` at `toPosition`, as a pure edit with
+ *   no packing. **`toPosition` is the index in the destination day's item list
+ *   _after_ the item has left its source day**, so `0..length` of that list
+ *   inclusive; a same-day move is ambiguous by one without that sentence.
+ *   `fromDayIndex` is redundant with `candidateId` and kept on purpose, so a
+ *   stored move reads on its own ("from day 2 to day 4") without resolving the
+ *   parent. `api` derives it from the item the request names; the request does
+ *   not carry it. **A move onto a day that cannot hold it is refused by
+ *   `@planner/itinerary`'s composer check, with `PLAN_INFEASIBLE`** (pl-43) —
+ *   not by this schema, and not by a code of `api`'s or `web`'s own.
+ * - **`remove`** — one item off `fromDayIndex`, as a pure edit.
+ * - **`restore`** — append a copy of revision `revision` as a new revision.
+ *   History stays linear. **A restore copies the old days as stored, their
+ *   `travelFromPrevious` included, and re-measures nothing**: that evidence is
+ *   still what those days were packed against. `revision` must be earlier than
+ *   the revision the restore produces; the schema can only check `>= 1`, and
+ *   the rest is `api`'s.
+ */
+export type RevisionOperation =
+  | { kind: "first-draft" }
+  | {
+      kind: "replan";
+      /** Day indexes: non-empty, unique, ascending, each below `MAX_PLAN_DAYS`. */
+      days: number[];
+      /** Unique. Empty means re-pack from the existing candidates, with no model call. */
+      specialists: Specialist[];
+      /** Context the specialists read, never an instruction. See above. */
+      note: string | null;
+    }
+  | {
+      kind: "move";
+      candidateId: string;
+      fromDayIndex: number;
+      toDayIndex: number;
+      /** In the destination day's list after the item has left its source. See above. */
+      toPosition: number;
+    }
+  | { kind: "remove"; candidateId: string; fromDayIndex: number }
+  | { kind: "restore"; revision: number };
+
+const dayIndexSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(MAX_PLAN_DAYS - 1);
+
+// Unique and ascending are separate checks so each has its own failure: `[1, 1]`
+// is ordered and duplicated, and `[2, 1]` is unique and out of order.
+const replanDaysSchema = z
+  .array(dayIndexSchema)
+  .min(1)
+  .refine((days) => new Set(days).size === days.length, {
+    message: "A re-plan names each day once.",
+  })
+  .refine((days) => days.every((day, index) => (days[index - 1] ?? day) <= day), {
+    message: "A re-plan names its days in ascending order.",
+  });
+
+const replanSpecialistsSchema = z
+  .array(z.enum(SPECIALISTS))
+  .refine((specialists) => new Set(specialists).size === specialists.length, {
+    message: "A re-plan names each specialist once.",
+  });
+
+export const firstDraftOperationSchema = z.object({ kind: z.literal("first-draft") });
+
+export const replanOperationSchema = z.object({
+  kind: z.literal("replan"),
+  days: replanDaysSchema,
+  specialists: replanSpecialistsSchema,
+  note: z.string().trim().min(1).max(MAX_REVISION_NOTE_CHARS).nullable(),
+});
+
+export const moveOperationSchema = z.object({
+  kind: z.literal("move"),
+  candidateId: z.string().min(1),
+  fromDayIndex: dayIndexSchema,
+  toDayIndex: dayIndexSchema,
+  // `0..length` of a day that can already hold `MAX_ITEMS_PER_DAY`, so the end
+  // of a full day is `MAX_ITEMS_PER_DAY` and parses. Bounding it one lower
+  // would refuse that one move as a malformed request while every other move
+  // onto the same full day reaches the composer's `PLAN_INFEASIBLE` — two
+  // answers to one cause.
+  toPosition: z.number().int().min(0).max(MAX_ITEMS_PER_DAY),
+});
+
+export const removeOperationSchema = z.object({
+  kind: z.literal("remove"),
+  candidateId: z.string().min(1),
+  fromDayIndex: dayIndexSchema,
+});
+
+export const restoreOperationSchema = z.object({
+  kind: z.literal("restore"),
+  revision: z.number().int().min(1),
+});
+
+export const revisionOperationSchema = z.discriminatedUnion("kind", [
+  firstDraftOperationSchema,
+  replanOperationSchema,
+  moveOperationSchema,
+  removeOperationSchema,
+  restoreOperationSchema,
+]) satisfies z.ZodType<RevisionOperation>;
+
+// ---------------------------------------------------------------------------
 // Revisions
 // ---------------------------------------------------------------------------
 
@@ -257,6 +398,11 @@ export interface PlanRevision {
    * first draft's is simply that it is the first draft.
    */
   reason: string;
+  /**
+   * The operation that made this revision (pl-42) — what the caption above is a
+   * sentence about. `first-draft` if and only if this is revision 1.
+   */
+  operation: RevisionOperation;
   createdAt: string;
   days: PlanDay[];
   /** What this draft could not cover, and why. Empty is a real and good answer. */
@@ -307,6 +453,7 @@ export const planRevisionSchema = z
     revision: z.number().int().min(1),
     parentRevisionId: z.string().min(1).nullable(),
     reason: z.string().trim().min(1).max(MAX_REVISION_REASON_CHARS),
+    operation: revisionOperationSchema,
     createdAt: z.iso.datetime(),
     days: z.array(planDaySchema).max(MAX_PLAN_DAYS),
     gaps: z.array(planGapSchema).max(SPECIALISTS.length),
@@ -329,7 +476,105 @@ export const planRevisionSchema = z
   .refine((rev) => rev.days.every((day, index) => day.dayIndex === index), {
     message: "Day indexes must be dense and in order.",
     path: ["days"],
-  }) satisfies z.ZodType<PlanRevision>;
+  })
+  // The parent rule's shape again: the first draft is the only revision nothing
+  // was done to, and no later revision can claim to be one.
+  .refine((rev) => (rev.revision === 1) === (rev.operation.kind === "first-draft"), {
+    message: "Only the first revision is a first draft, and it must be one.",
+    path: ["operation"],
+  })
+  // Until pl-42 this held only because `pack.ts` places each candidate once or
+  // excludes it. A re-plan and an edit are two more ways to write a revision,
+  // and a candidate on a frozen day placed again on a named one is the obvious
+  // bug in both (pl-43). Here "at most once" stops being one implementation's
+  // accident — and it is what lets an operation name a candidate at all.
+  .refine(
+    (rev) => {
+      const placed = rev.days.flatMap((day) => day.items.map((item) => item.candidateId));
+      return new Set(placed).size === placed.length;
+    },
+    { message: "A candidate is placed at most once in a revision.", path: ["days"] },
+  ) satisfies z.ZodType<PlanRevision>;
+
+// ---------------------------------------------------------------------------
+// Diffs
+// ---------------------------------------------------------------------------
+
+/** Where a candidate sat in one revision: its day, and its place in that day. */
+export interface DiffPlacement {
+  dayIndex: number;
+  position: number;
+}
+
+/**
+ * One candidate that changed between a revision and its parent.
+ *
+ * Keyed on the candidate, never on the item: item ids belong to one revision,
+ * so two revisions share no item id to compare, and a candidate is the identity
+ * that survives (`PlanItem`'s own note).
+ */
+export type DiffEntry =
+  | { kind: "added"; candidateId: string; to: DiffPlacement }
+  | { kind: "removed"; candidateId: string; from: DiffPlacement }
+  | { kind: "moved"; candidateId: string; from: DiffPlacement; to: DiffPlacement };
+
+/**
+ * What changed from `parentRevisionId` to `revisionId`: one per revision after
+ * the first, against its parent (pl-42).
+ *
+ * **Derived, never stored.** A stored diff can disagree with the two revisions
+ * beside it — pl-10's argument for `UncheckedConstraint`, for the same reason.
+ * `diffRevisions` in `@planner/itinerary` computes it, and `api` serves the
+ * result on `PlanView.diffs`, because `web` may import only this package.
+ *
+ * **Items only.** A gap that opened or closed is not an entry here, and neither
+ * is a changed `travelFromPrevious` or pin; this says where candidates went.
+ *
+ * **What counts as `moved` is pl-43's to define and test**, and the definition
+ * goes in this comment when it lands. The trap it has to avoid: a `position`
+ * that shifted only because a neighbour was removed is not a move a reader
+ * cares about, and a diff reporting it makes every edit look like a reshuffle.
+ */
+export interface RevisionDiff {
+  revisionId: string;
+  parentRevisionId: string;
+  /** Unchanged candidates are absent, so an empty list is "nothing moved". */
+  entries: DiffEntry[];
+}
+
+export const diffPlacementSchema = z.object({
+  dayIndex: dayIndexSchema,
+  position: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_ITEMS_PER_DAY - 1),
+}) satisfies z.ZodType<DiffPlacement>;
+
+export const diffEntrySchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("added"),
+    candidateId: z.string().min(1),
+    to: diffPlacementSchema,
+  }),
+  z.object({
+    kind: z.literal("removed"),
+    candidateId: z.string().min(1),
+    from: diffPlacementSchema,
+  }),
+  z.object({
+    kind: z.literal("moved"),
+    candidateId: z.string().min(1),
+    from: diffPlacementSchema,
+    to: diffPlacementSchema,
+  }),
+]) satisfies z.ZodType<DiffEntry>;
+
+export const revisionDiffSchema = z.object({
+  revisionId: z.string().min(1),
+  parentRevisionId: z.string().min(1),
+  entries: z.array(diffEntrySchema),
+}) satisfies z.ZodType<RevisionDiff>;
 
 // ---------------------------------------------------------------------------
 // The plan
@@ -433,7 +678,7 @@ export function pinnedCandidateIds(revision: PlanRevision): string[] {
 /** What `appendRevision` needs told; everything else it derives from the plan. */
 export type NewRevision = Pick<
   PlanRevision,
-  "id" | "reason" | "createdAt" | "days" | "gaps" | "coverage" | "reading"
+  "id" | "reason" | "operation" | "createdAt" | "days" | "gaps" | "coverage" | "reading"
 >;
 
 /**

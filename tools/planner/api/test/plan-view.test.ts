@@ -76,6 +76,9 @@ function supersedeDraft(harness: RunHarness, planId: string): PlanRevision {
   const appended = appendRevision(plan, {
     id: randomUUID(),
     reason: "A second draft, so the first is no longer the one being read.",
+    // A copy of the draft it supersedes, which is what a restore is (pl-42).
+    // Read back, `toRevision` reports `first-draft` until pl-44 stores the column.
+    operation: { kind: "restore", revision: previous.revision },
     createdAt: NOW.toISOString(),
     gaps: previous.gaps,
     coverage: previous.coverage,

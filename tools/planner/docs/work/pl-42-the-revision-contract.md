@@ -355,3 +355,167 @@ Facts checked against `origin/main` at filing:
 - The pin route refuses a superseded item with `ITEM_NOT_FOUND` (pl-22).
 - `web` depends on `contract` alone, which is why the diff is served rather than
   imported.
+
+**2026-09-13 — built; step 7 held on an open decision, so this stays `ready`.**
+Branched from `origin/main` at `8849c14`, dispatched as Opus. Steps 1 to 6 are
+on the branch. Step 7's measurement is below. The ceiling itself is not: the
+owner's instruction for this build was that if enforcing it needs a new error
+code, no code, no constant and no refusal path are committed, and it does.
+
+What landed:
+
+- `plan.ts`: `RevisionOperation` and a schema per member, `PlanRevision.operation`,
+  `operation` in `NewRevision`, `MAX_REVISION_NOTE_CHARS`, and the two refines
+  (first draft if and only if revision 1; a candidate placed at most once).
+  `RevisionDiff`, `DiffEntry` and `DiffPlacement` with schemas. The `moved`
+  definition is left to pl-43, as assigned, and the doc comment says so.
+- `api.ts`: `ROUTES.planRevisions`, `planRevisionsUrl`, `ReviseRequest` and
+  `ReviseResponse` with schemas, and `PlanView.diffs`. The request doc comment
+  names `ITEM_NOT_FOUND`, `REVISION_NOT_FOUND`, `PLAN_NOT_FOUND` and core's
+  `NOT_FOUND`. `unchecked`'s comment now says it covers only the latest revision.
+- `run.ts`: `RUN_KINDS` and `Run.kind`, and `queued → composing`, argued in
+  the `RUN_TRANSITIONS` comment as a third application of the existing skip
+  argument, with no existing edge relabelled.
+- `errors.ts`: `REVISION_STALE` (not retryable) and `PLAN_BUSY` (retryable,
+  `details.run`), each argued in its comment. The comment on `PLAN_BUSY` says it
+  is the document's invariant rather than the job runner's.
+
+**Additions the brief did not name**, each needed to build what it did:
+
+- **More exports than the Done-when list.** The request schema is built from
+  the operation schemas, so each bound is written once. That means exporting
+  `firstDraftOperationSchema`, `replanOperationSchema`, `moveOperationSchema`,
+  `removeOperationSchema` and `restoreOperationSchema`. The response schema
+  needs `planViewSchema`, which did not exist. `diffPlacementSchema` and
+  `diffEntrySchema` are exported beside `revisionDiffSchema`.
+- **`move.toPosition` is bounded at `MAX_ITEMS_PER_DAY`, not one lower.** The
+  brief gave no schema bound. `0..length` of a full day ends at 12, and a bound
+  of 11 would refuse that one move as a malformed request (`INVALID_ANSWER` in
+  pl-44) while every other move onto the same full day reaches pl-43's
+  `PLAN_INFEASIBLE`. That would be two answers to one cause. `DiffPlacement.position`
+  keeps an item's bound, because it describes a placement that exists.
+
+### The literals, and why they are true
+
+`toRevision` returns `operation: { kind: "first-draft" }`, and `toRun` and
+`insertRun` return `kind: "draft"`. Each carries a comment naming pl-44. This is
+true of every row production can write. `startRun` creates a new plan for every
+`POST /api/plans`, with exactly one run. `persist` is only ever handed
+`compose`'s result for that run, and `FIRST_DRAFT_REASON` is the only reason the
+orchestrator writes. So every stored revision is revision 1 of its plan and a
+first draft, and every stored run drafts one. **For the same reason,
+`readPlanView` returns `diffs: []`**, with a comment naming pl-44 and pl-43: no
+plan that exists has a second revision to diff.
+
+**One row is not a first draft: a test's.** `supersedeDraft` in
+`api/test/plan-view.test.ts` writes a revision 2 by hand to prove pin
+scoping. It now stamps `{ kind: "restore", revision: previous.revision }`,
+which is what a copy of a draft is, but `toRevision` reads it back as
+`first-draft`. Nothing on that read path validates, and the test asserts
+nothing about the operation. pl-44's stored column makes the read honest.
+
+### What the brief had wrong
+
+- **"Three lines" was five sites, and one of them is outside the named files.**
+  The brief did name `toRevision`, `toRun` and `compose`. It missed these:
+  - `insertRun` in `api/src/db/runs.ts` builds a `Run` by hand as well.
+  - A required `PlanView.diffs` is a compile error in `readPlanView`
+    (`api/src/runs/orchestrator.ts`) and in `planView` in
+    `web/test/plan-fixtures.ts`. The brief's "nothing else outside `contract`
+    changes" cannot hold with step 4 as written.
+  - `api/test/plan-view.test.ts` builds a `NewRevision` by hand, as noted above.
+
+  `npm run typecheck` found every one of them. None is in pl-39's files
+  (`agent/src/*`, `api/src/{config,server}.ts`).
+
+- **`run.test.ts` asserted `queued → composing` was illegal**, as its example of
+  "a way back". It now uses `composing → queued`, and a separate test covers the
+  new edge along with the two skips it does not open (`queued → done`,
+  `queued → reviewing`).
+- **Trap 1's "every stored revision _is_ a first draft"** is true of
+  production, and false of the one test row above.
+
+**Fold-in: nothing.** The brief names two adjacent pieces of work, and neither
+is free from here. The `moved` definition is pl-43's, and needs pl-43's
+algorithm. `PLAN_INFEASIBLE → 409` is pl-44's, and lives in `http-errors.ts` on
+a route that does not exist yet.
+
+### Verification
+
+`npx vitest run` on each narrowest file: `contract/test/{plan,run,errors,revise}.test.ts`,
+and then `itinerary/test/compose.test.ts`, `api/test/{plan-view,runs}.test.ts`
+and `web/test/{run-view,plan-view}.test.tsx`. **Each new rule was run red**:
+twelve mutations, applied one at a time to the source from a backup.
+Each failed exactly the test written for it and nothing else: candidate
+once; first draft if and only if revision 1 (two tests); days unique; days
+ascending; days non-empty; specialists unique; note bound; `restore >= 1`;
+`queued → composing`; `PLAN_BUSY` retryable; `baseRevisionId` on `replan`;
+`baseRevisionId` on `restore`. All four sources were `cmp`-identical to the
+backup afterwards. The `toPosition` bound, changed after that run, was run red
+on its own: restoring `MAX_ITEMS_PER_DAY - 1` fails the move test, 1 of 29.
+
+### Step 7 — the measurement, and why the ceiling is held
+
+Measured with a scratch script that is not checked in. For each checked-in trip
+fixture it runs `compose` with `NOTHING_MEASURED`, then appends _n_ copies of
+that revision through `appendRevision`. Each copy has re-keyed ids and a
+`replan` operation, and the chain is validated by `planDetailSchema`. It then
+builds `PlanView` with *n*−1 diffs and validates it by `planViewSchema`. The
+empty-diffs column is the smallest a diff can be. The worst-diff column has
+every parent item `removed` and every child item `added`, the largest entry
+list two revisions can produce. `node --import tsx measure.ts` printed:
+
+```
+fixture file sizes (bytes) and one composed revision:
+  road-trip          file= 4776  days= 9  items= 3  view@1=  6123
+  backcountry        file= 4856  days= 4  items= 2  view@1=  5636
+  motorised-touring  file= 4601  days= 4  items= 1  view@1=  4936
+  city-and-culture   file= 5155  days= 8  items= 3  view@1=  6195
+  resort             file= 4153  days= 8  items= 1  view@1=  5253
+  multi-city         file= 4965  days=13  items= 2  view@1=  6281
+
+PlanView JSON bytes for city-and-culture:
+  revisions= 1  diffs-empty=    6195  diffs-worst=    6195  (6.0 KiB)
+  revisions=10  diffs-empty=   18710  diffs-worst=   22913  (22.4 KiB)
+  revisions=50  diffs-empty=   74910  diffs-worst=   97793  (95.5 KiB)
+  marginal bytes per revision, worst diff: 1855
+
+PlanView JSON bytes for multi-city:
+  revisions= 1  diffs-empty=    6281  diffs-worst=    6281  (6.1 KiB)
+  revisions=10  diffs-empty=   20330  diffs-worst=   23129  (22.6 KiB)
+  revisions=50  diffs-empty=   83490  diffs-worst=   98729  (96.4 KiB)
+  marginal bytes per revision, worst diff: 1869
+```
+
+`city-and-culture` is the largest fixture file and `multi-city` the largest
+view. **The fixtures place one to three items each**, so they measure a thin
+plan, not a full one. A second scratch script builds one schema-valid revision
+at the schema's own maximum: 60 days of 12 items, every leg `not-established`,
+which is the smallest non-null travel (a measured leg is larger). It printed:
+
+```
+max revision: 720 items, 154843 bytes (schema-valid=true; every leg not-established, the smallest non-null travel; a measured leg is larger)
+worst diff for it: 136934 bytes
+  revisions= 1  ~154843 bytes (0.15 MiB), candidates and brief excluded
+  revisions=10  ~2780836 bytes (2.65 MiB), candidates and brief excluded
+  revisions=50  ~14451916 bytes (13.78 MiB), candidates and brief excluded
+```
+
+So 50 revisions is under 100 KiB for every fixture, and about 14 MiB at the
+schema maximum before candidates, the brief, or any measured travel.
+
+**Enforcing a ceiling on writes needs a new error code.** A revise request on a
+plan at the ceiling is well formed and has to be refused, and no code in the
+taxonomy means that:
+
+- `SIZE_LIMIT_EXCEEDED` is core's artifact cap. Its copy, "The result is larger
+  than the configured size limit", would have to be re-worded at the raise
+  site, which is the rule's own tell.
+- `PLAN_INFEASIBLE` is about the trip's constraints.
+- `INVALID_ANSWER` is about a malformed answer.
+- `RATE_LIMITED` is about time, and `PLAN_BUSY` clears on its own.
+
+So there is no `MAX_REVISIONS_PER_PLAN` on the branch. Where the constant
+lives, and whether it is a write ceiling at all, turns on the answer, and the
+decision went back to the orchestrator as options. pl-44's check 6 waits on it,
+as its own brief already provides.

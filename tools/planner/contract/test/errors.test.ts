@@ -28,6 +28,18 @@ describe("the planner error taxonomy", () => {
     expect(RETRYABLE_CODES.has("INVALID_DATES")).toBe(false);
   });
 
+  test("a busy plan is worth retrying and a stale base is not", () => {
+    // pl-42. `PLAN_BUSY` clears on its own when the current change finishes;
+    // replaying a request built on a superseded revision never succeeds, so
+    // `REVISION_STALE` sends the user to reload instead.
+    expect(PLANNER_ERROR_CODES).toContain("PLAN_BUSY");
+    expect(PLANNER_ERROR_CODES).toContain("REVISION_STALE");
+    expect(new AppError("PLAN_BUSY").retryable).toBe(true);
+    expect(new AppError("REVISION_STALE").retryable).toBe(false);
+    expect(DEFAULT_ERROR_MESSAGES.REVISION_STALE).toMatch(/reload/i);
+    expect(DEFAULT_ERROR_MESSAGES.PLAN_BUSY).toMatch(/wait/i);
+  });
+
   test("lets a caller override the catalog's copy and its retry answer", () => {
     const error = new AppError("INVALID_DATES", "You are returning before you leave.", {
       retryable: true,

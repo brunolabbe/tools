@@ -96,6 +96,37 @@ export const PLANNER_ERROR_CODES = [
    */
   "ITEM_NOT_FOUND",
   /**
+   * A revision was asked to build on a revision that is no longer the latest:
+   * `ReviseRequest.baseRevisionId` names a draft something else has since
+   * appended to (pl-42).
+   *
+   * Two tabs open on one plan is the ordinary case, not an attack. No existing
+   * code fits: `REVISION_NOT_FOUND` would be a lie, since the base revision is
+   * right there, and `ITEM_NOT_FOUND` is about an item, not about the document
+   * having moved on. About this tool's document rather than the transport, so
+   * not core's. **Not retryable**: replaying the same request is exactly the
+   * wrong move, because the base it names will never be the latest again. The
+   * next step is to reload and decide again.
+   */
+  "REVISION_STALE",
+  /**
+   * Another write to this plan is already in progress (pl-42).
+   *
+   * **The invariant is the document's, not the job runner's.** A plan's
+   * revisions are one linear, append-only chain, `UNIQUE (plan_id, revision)`.
+   * A second writer building on the same latest revision while a run composes
+   * would produce two children of one parent, and the database would refuse one
+   * of them after its whole bill was spent. A non-terminal run is how `api`
+   * *detects* the condition; it is not what this code *means*. So **this is not
+   * a generic "job busy" code**, and it is no precedent for moving job-runner
+   * concepts into a tool's taxonomy — nor for lifting this one into core.
+   *
+   * Retryable, because it clears on its own when the current change finishes.
+   * **`details` carry `{ run: <runId> }`**, the run in progress, so a client can
+   * point at it rather than only say that one exists.
+   */
+  "PLAN_BUSY",
+  /**
    * The plan's own constraints cannot all be satisfied: a day that cannot hold
    * its legs and its activities, a deal-breaker that nothing survives, a
    * budget no candidate set fits inside.
@@ -176,6 +207,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   PLAN_NOT_FOUND: "That plan could not be found.",
   REVISION_NOT_FOUND: "That version of the plan could not be found.",
   ITEM_NOT_FOUND: "That item is no longer part of this plan — reload it to see the current draft.",
+  REVISION_STALE: "This plan changed since you opened it — reload to see the current version.",
+  PLAN_BUSY: "A change to this plan is already underway — wait for it to finish, then try again.",
   PLAN_INFEASIBLE: "This trip cannot be planned as described — something has to give.",
   BRIEF_INCOMPLETE: "There are still a few essentials to answer before this trip can be planned.",
   INVALID_ANSWER: "That answer does not fit the question.",
@@ -190,10 +223,14 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
  * `AGENT_MALFORMED_REPLY` is absent on purpose. Re-asking a model that just
  * produced unparseable output is worth doing — but *inside* the agent, with the
  * failure fed back, not by replaying the same request from the top.
+ *
+ * `PLAN_BUSY` is here and `REVISION_STALE` is not, and the pair is the rule in
+ * miniature: a busy plan clears on its own, and a stale base never will.
  */
 export const RETRYABLE_CODES: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   ...CORE_RETRYABLE_CODES,
   "AGENT_UNAVAILABLE",
+  "PLAN_BUSY",
 ]);
 
 /**

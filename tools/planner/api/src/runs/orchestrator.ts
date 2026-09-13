@@ -551,6 +551,10 @@ export function readPlanView(context: AppContext, id: string): PlanView {
       revision === null
         ? []
         : uncheckedForRevision({ brief: plan.brief, candidates: plan.candidates, revision }),
+    // Empty, and true of every plan that exists: one diff per revision after
+    // the first, and nothing before pl-44 writes a second revision. pl-44
+    // replaces this with `revisionDiffs` from `@planner/itinerary` (pl-43).
+    diffs: [],
   };
 }
 

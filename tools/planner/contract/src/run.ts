@@ -117,9 +117,18 @@ export type RunStatus = (typeof RUN_STATUSES)[number];
  * earlier: a brief with no origin, no destination, or a grounding provider that
  * cannot discover anything skips the corridor query entirely, and a run that
  * discovered nothing must not pass through a state it spent no time in.
+ *
+ * **`queued → composing` is legal**, and it is the same argument a third time
+ * rather than a relabelled edge (pl-42). A re-plan that names no specialists
+ * re-packs its days from the candidates the plan already has, so it has no
+ * fan-out; when its slice also has no transition to measure, it has no
+ * grounding either, and the first thing it does is compose. Walking it through
+ * `fanning-out` or `grounding` on the way would emit two states it spent no time
+ * in, which is decoration. A first draft never takes this edge — it always has
+ * a roster — and nothing here needs to tell the two apart: `Run.kind` does.
  */
 export const RUN_TRANSITIONS: TransitionTable<RunStatus> = {
-  queued: ["grounding", "fanning-out", "failed", "canceled"],
+  queued: ["grounding", "fanning-out", "composing", "failed", "canceled"],
   "fanning-out": ["grounding", "composing", "failed", "canceled"],
   grounding: ["fanning-out", "composing", "failed", "canceled"],
   composing: ["reviewing", "done", "failed", "canceled"],
@@ -227,6 +236,24 @@ export const runProgressSchema = z.discriminatedUnion("type", [
 // ---------------------------------------------------------------------------
 
 /**
+ * What a run is producing. A const tuple with the union derived from it, like
+ * `RUN_STATUSES`.
+ *
+ * - **`draft`** — revision 1, from an intake (`POST /api/plans`).
+ * - **`replan`** — a later revision re-planning named days
+ *   (`POST /api/plans/:id/revisions`, pl-42). **Every re-plan is a run**, one
+ *   naming no specialists included: re-packed days have new transitions, which
+ *   means grounding lookups, which belong in something that can report them and
+ *   be canceled. The edits (move, remove, restore) are not runs at all.
+ *
+ * `RunProgress` gains nothing for it: a re-plan with no specialists sends a
+ * `roster` frame with `total: 0`, which is true.
+ */
+export const RUN_KINDS = ["draft", "replan"] as const;
+
+export type RunKind = (typeof RUN_KINDS)[number];
+
+/**
  * A run, as `POST /api/plans` answers and as the plan page polls.
  *
  * **`planId` is populated from the first moment**, because the plan row is
@@ -243,6 +270,8 @@ export interface Run {
   id: string;
   /** The plan this run is drafting. Written before the fan-out starts. */
   planId: string;
+  /** A first draft or a re-plan — see `RUN_KINDS`. */
+  kind: RunKind;
   status: RunStatus;
   /**
    * How many specialists this run will pay for.
@@ -271,6 +300,7 @@ const errorPayloadShape = z.object({
 export const runSchema = z.object({
   id: z.string().min(1),
   planId: z.string().min(1),
+  kind: z.enum(RUN_KINDS),
   status: z.enum(RUN_STATUSES),
   rosterSize: z.number().int().min(0).nullable(),
   specialistsDone: z.number().int().min(0),

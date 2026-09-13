@@ -13,7 +13,18 @@ import { z } from "zod";
 import type { TripBrief } from "./brief.ts";
 import { ERROR_CODES } from "./errors.ts";
 import type { AppErrorPayload } from "./errors.ts";
-import type { Plan, PlanDetail } from "./plan.ts";
+import type { Specialist } from "./candidate.ts";
+import {
+  moveOperationSchema,
+  planDetailSchema,
+  replanOperationSchema,
+  restoreOperationSchema,
+  revisionDiffSchema,
+} from "./plan.ts";
+import type { Plan, PlanDetail, RevisionDiff } from "./plan.ts";
+import { runSchema } from "./run.ts";
+import type { Run } from "./run.ts";
+import { uncheckedConstraintSchema } from "./unchecked.ts";
 import type { UncheckedConstraint } from "./unchecked.ts";
 import type { Answers, QuestionId, QuestionNode } from "./tree.ts";
 
@@ -58,6 +69,12 @@ export const ROUTES = {
    * because an item id is only unique within the plan that owns it.
    */
   planItemPin: `${API_PREFIX}/plans/:id/items/:itemId/pin`,
+  /**
+   * `POST` a `ReviseRequest` to append a revision (pl-42): a re-plan answers 202
+   * with a run, and an edit answers 200 with the whole view — see
+   * `ReviseResponse`. The first draft is not requested here; it has `plans`.
+   */
+  planRevisions: `${API_PREFIX}/plans/:id/revisions`,
   /** `GET`, SSE. The run's progress, keyed by the run and not by the plan. */
   runEvents: `${API_PREFIX}/runs/:id/events`,
   /**
@@ -93,6 +110,10 @@ export function planItemPinUrl(planId: string, itemId: string): string {
   return ROUTES.planItemPin
     .replace(":id", encodeURIComponent(planId))
     .replace(":itemId", encodeURIComponent(itemId));
+}
+
+export function planRevisionsUrl(planId: string): string {
+  return ROUTES.planRevisions.replace(":id", encodeURIComponent(planId));
 }
 
 export function runEventsUrl(id: string): string {
@@ -240,12 +261,30 @@ export interface PlanListResponse {
  * client that forgot would render a plan that merely looks finished.
  *
  * `unchecked` is **derived on read**, not stored — see `uncheckedForRevision` in
- * `@planner/itinerary`. It describes `plan`'s latest revision.
+ * `@planner/itinerary`.
  */
 export interface PlanView {
   plan: PlanDetail;
+  /**
+   * What nothing checked about **the latest revision only.** A client showing
+   * an older version has no list for it here: what that version did not check
+   * is not in this view, and rendering this list beside it would claim it was.
+   */
   unchecked: readonly UncheckedConstraint[];
+  /**
+   * What each revision changed, one per revision after the first, against its
+   * parent, oldest first (pl-42). **Derived on read**, as `unchecked` is — see
+   * `RevisionDiff` for why a diff is never stored. Empty for a plan with one
+   * revision or none.
+   */
+  diffs: readonly RevisionDiff[];
 }
+
+export const planViewSchema = z.object({
+  plan: planDetailSchema,
+  unchecked: z.array(uncheckedConstraintSchema),
+  diffs: z.array(revisionDiffSchema),
+}) satisfies z.ZodType<PlanView>;
 
 /**
  * Pin or unpin one item. The whole body, because it is the whole write.
@@ -261,6 +300,104 @@ export interface PinItemRequest {
 export const pinItemRequestSchema = z.object({
   pinned: z.boolean(),
 }) satisfies z.ZodType<PinItemRequest>;
+
+// ---------------------------------------------------------------------------
+// Revising a plan
+// ---------------------------------------------------------------------------
+
+/**
+ * Revise a plan: re-plan some days, or move, remove or restore (pl-42).
+ *
+ * The request is the operation the revision will store (`RevisionOperation`),
+ * in the client's terms, with two differences:
+ *
+ * - **It names `itemId` where the stored operation names a candidate.** An item
+ *   id is the client's handle on the revision it is looking at, exactly as the
+ *   pin route's is. The server resolves it to a candidate, and to the day that
+ *   becomes `fromDayIndex`, before storing anything. The request carries no
+ *   `fromDayIndex`, so there is nothing for a client to get wrong.
+ * - **Every member carries `baseRevisionId`**, the revision the client was
+ *   looking at. A revision always builds on the latest, so a base that is no
+ *   longer the latest is `REVISION_STALE`; a write already under way on the
+ *   plan is `PLAN_BUSY`.
+ *
+ * `toPosition` is the index in the destination day's list **after** the item
+ * has left its source, so `0..length` of that list inclusive — the definition
+ * on `RevisionOperation`, which pl-44 validates, pl-45 computes and pl-43
+ * applies. `first-draft` is not requestable.
+ *
+ * **Which "not found" is which**, since the repo's rule on those codes exists
+ * because this confusion recurs:
+ *
+ * - an `itemId` the base revision does not have is **`ITEM_NOT_FOUND`**, which
+ *   already means "reload";
+ * - a `restore.revision` the plan does not have is **`REVISION_NOT_FOUND`**;
+ * - a plan that does not exist is `PLAN_NOT_FOUND`;
+ * - core's `NOT_FOUND` is a URL that matched no route, and is none of these.
+ *
+ * The caption (`PlanRevision.reason`) is written by the server from the
+ * operation. Nothing here carries one, and a `note` is not one.
+ */
+export type ReviseRequest =
+  | {
+      kind: "replan";
+      baseRevisionId: string;
+      days: number[];
+      specialists: Specialist[];
+      note: string | null;
+    }
+  | {
+      kind: "move";
+      baseRevisionId: string;
+      itemId: string;
+      toDayIndex: number;
+      toPosition: number;
+    }
+  | { kind: "remove"; baseRevisionId: string; itemId: string }
+  | { kind: "restore"; baseRevisionId: string; revision: number };
+
+const baseRevisionIdSchema = z.string().min(1);
+const itemIdSchema = z.string().min(1);
+
+// Built from the operation schemas so each bound is written once: a request
+// that parses here names an operation whose bounds parse there.
+export const reviseRequestSchema = z.discriminatedUnion("kind", [
+  replanOperationSchema.extend({ baseRevisionId: baseRevisionIdSchema }),
+  z.object({
+    kind: z.literal("move"),
+    baseRevisionId: baseRevisionIdSchema,
+    itemId: itemIdSchema,
+    toDayIndex: moveOperationSchema.shape.toDayIndex,
+    toPosition: moveOperationSchema.shape.toPosition,
+  }),
+  z.object({
+    kind: z.literal("remove"),
+    baseRevisionId: baseRevisionIdSchema,
+    itemId: itemIdSchema,
+  }),
+  restoreOperationSchema.extend({ baseRevisionId: baseRevisionIdSchema }),
+]) satisfies z.ZodType<ReviseRequest>;
+
+/**
+ * What revising answers with, discriminated so a caller cannot read an edit's
+ * view out of a re-plan's answer.
+ *
+ * - **`run`, answered 202, for `replan`.** Every re-plan is a run, one naming
+ *   no specialists included: re-packed days have new transitions, which means
+ *   grounding lookups, which belong in something that can report them and be
+ *   canceled. Its progress is on `ROUTES.runEvents`, as a first draft's is.
+ * - **`revision`, answered 200, for `move`, `remove` and `restore`.** The edits
+ *   are synchronous, with a lookup sized to the edit: one call per place that
+ *   never located, plus one matrix — usually a single cached matrix (pl-44).
+ *   The whole view comes back, as the pin route's does, so an open tab holds
+ *   the document the next reader gets.
+ */
+export type ReviseResponse = { kind: "run"; run: Run } | { kind: "revision"; view: PlanView };
+
+export const reviseResponseSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("run"), run: runSchema }),
+  z.object({ kind: z.literal("revision"), view: planViewSchema }),
+]) satisfies z.ZodType<ReviseResponse>;
 
 export const errorPayloadSchema = z.object({
   code: z.enum(ERROR_CODES),
