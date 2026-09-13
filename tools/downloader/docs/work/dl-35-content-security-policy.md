@@ -94,12 +94,12 @@ preview that stops working can only be the policy.
 **Gate: CONCERNS** — 2026-09-04 · `ed784aa` · `ticket-reviewer`, reproducing in
 its own detached worktree
 
-| Done when                                                             | Proof                                                                                                                                                                            |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 · The document response carries the policy, proven by an API test   | **proven** — `api/test/csp.test.ts:96` (the exact directive set, both directions) · `:98` (each directive's value) for `index.html`; `:123` · `:125` for the SPA fallback        |
-| 2 · The preview still renders, in `e2e/`, `<img>` with non-zero width | **unproven (gate)** — `e2e/sniffer/mse-page.spec.ts:136` (present) · `:147-148` (`naturalWidth === 64`) · `:152` (the origin was asked, by the API). See the note below          |
-| 3 · No console CSP violation on the happy path, same e2e spec         | **unproven (gate)** — `e2e/sniffer/mse-page.spec.ts:214`; the same assertion also guards the other two journeys, `e2e/csp.spec.ts:179` and `e2e/download.spec.ts:104`            |
-| 4 · `npm run check` and `npm test -- --project downloader` pass       | **verified** — both re-run by the reviewer at `ed784aa`: `check` exit 0; 60 files / 947 tests. (Reported as "proven"; `verified` is this repo's word for a row a command proves) |
+| Done when                                                             | Proof                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 · The document response carries the policy, proven by an API test   | **proven** — `api/test/csp.test.ts:85-99 "index.html at the root carries it"` (the exact directive set, both directions, then each directive's value) for `index.html`; `:102-127 "the SPA fallback carries the same policy"` for the SPA fallback                                                                          |
+| 2 · The preview still renders, in `e2e/`, `<img>` with non-zero width | **unproven (gate)** — `e2e/sniffer/mse-page.spec.ts:165 "expect(preview).toBeVisible()"` (present) · `:176-177 ".poll(async () => await preview.evaluate"` (`naturalWidth === 64`) · `:181 "expect(hls.requests).toContain(PREVIEW_PATH)"` (the origin was asked, by the API). See the note below                           |
+| 3 · No console CSP violation on the happy path, same e2e spec         | **unproven (gate)** — `e2e/sniffer/mse-page.spec.ts:243 "expect(await cspViolationsOn(page)).toEqual([])"`; the same assertion also guards the other two journeys, `e2e/csp.spec.ts:179 "expect(await cspViolationsOn(page)).toEqual([])"` and `e2e/download.spec.ts:104 "expect(await cspViolationsOn(page)).toEqual([])"` |
+| 4 · `npm run check` and `npm test -- --project downloader` pass       | **verified** — both re-run by the reviewer at `ed784aa`: `check` exit 0; 60 files / 947 tests. (Reported as "proven"; `verified` is this repo's word for a row a command proves)                                                                                                                                            |
 
 **What `unproven (gate)` means on rows 2 and 3, because unqualified it will be
 misread.** It means CI has not run against this commit — **not** that the lines
@@ -110,6 +110,8 @@ detached worktree at `ed784aa` (fast config 7/7, sniffer 1/1).
 `e2e (sniffer)` on every pull request touching this tool, and these rows clear to
 `proven` when it does. The branch was unpushed at gate time because the build
 deliberately stopped short of the pull request.
+
+<!-- citations: evidence schemas.js:965-990, util.js:145-160 -->
 
 - **decision (answered)** · The build widened past the ticket's `api` + `e2e` into
   `web`, to stop zod's `new Function("")` JIT probe reporting a violation on every
@@ -125,7 +127,7 @@ deliberately stopped short of the pull request.
 - **low** · The import order in `web/src/main.tsx` is load-bearing and only the
   e2e suite catches a reorder. Reproduced: moving `import "./lib/zod-jitless.ts"`
   below `@downloader/contract` and rebuilding turns exactly one assertion red
-  (`csp.spec.ts:179`, `blockedURI: "eval"`), 3 of 4 still passing. The gate then
+  (`csp.spec.ts:179 "expect(await cspViolationsOn(page)).toEqual([])"`, `blockedURI: "eval"`), 3 of 4 still passing. The gate then
   established from zod's own source why no cheaper guard is possible:
   `util.allowsEval` is a `cached()` getter that fires **once**, lazily, at the
   first `_object` schema construction (`schemas.js:965-990`, `util.js:145-160`)
@@ -142,8 +144,8 @@ deliberately stopped short of the pull request.
 - **no finding** · The policy is enforced rather than asserted. The gate
   reproduced both red runs at the counts the Log claims — hook removed: 3 of 4 in
   `e2e/csp.spec.ts`, 4 of 8 in `api/test/csp.test.ts` — and the cross-origin
-  differential (`csp.spec.ts:101` · `:105-106` · `:112` blocked and never
-  requested, `:120-121` the same image loading from a policy-free page).
+  differential (`csp.spec.ts:101 "expect(blocked.naturalWidth).toBe(0)"` · `:105-106 "expect(imgViolations).toHaveLength(1)"` · `:112 "expect(hls.requests).not.toContain(PREVIEW_PATH)"` blocked and never
+  requested, `:120-121 "expect(allowed.naturalWidth).toBe(PREVIEW_WIDTH)"` the same image loading from a policy-free page).
 - **no finding** · The hand-edited `package-lock.json` line verified without
   installing: `npm ls zod -w @downloader/web` exit 0, no `invalid`, `extraneous`
   or `missing`. The gate was explicit that it did **not** run `npm ci`, so a
@@ -263,3 +265,5 @@ only commit since — touches this file alone.
   to be served by `main.ts` under `WEB_DIR` and not by the shipped image; and
   only Chromium was driven, which is the only browser either Playwright config
   runs.
+
+- **2026-09-12 — repo-39: the `## Review` citations anchored, 17 failing references down to 0, and the `GRANDFATHERED` entry deleted.** The three `mse-page.spec.ts` pointers dl-43 moved are repointed; the rest were unchanged. **Two shapes worth recording.** Row 1's four `csp.test.ts` coordinates could not be anchored as four: the `index.html` test and the SPA-fallback test end in byte-identical assertion lines, so no quote-free fragment of any cited line is distinct. They are now two citations, one per test, anchored on the test names, with the row's wording kept. And the `schemas.js` / `util.js` coordinates point into zod's own source under `node_modules`, which no commit of this repository has ever contained; they carry an evidence declaration, the mechanism repo-35 keeps for exactly that case.

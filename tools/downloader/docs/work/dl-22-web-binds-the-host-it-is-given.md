@@ -65,12 +65,12 @@ Traps:
 
 **Gate: PASS** — 2026-08-23 · `origin/main...HEAD` · code-review at medium
 
-| Done when                                                                                      | Proof                                                                                                            |
-| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `vite-config.test.ts` proves the config binds `process.env["HOST"]` when set, `false` when not | `web/test/vite-config.test.ts:36` (set) ✓ · `:44` (unset) ✓                                                      |
-| The same suite proves `strictPort` is on and `port` is 5173                                    | `web/test/vite-config.test.ts:50` (port) ✓ · `:51` (strictPort) ✓                                                |
-| `npm run dev:downloader:web` listens on `0.0.0.0:5173`, `curl http://127.0.0.1:5173/` → 200    | **verified** — `ss -ltn`: `0.0.0.0:5173`; curl `200`. Bug reproduced with `HOST` unset: `[::1]:5173`, IPv4 `000` |
-| `npm run check` and `npm test -- --project downloader` pass                                    | **verified** — cold `check` exit 0 (tsbuildinfo cleared); 47 files / 643 tests vs 46 / 640 at `0c67b8e`          |
+| Done when                                                                                      | Proof                                                                                                                      |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `vite-config.test.ts` proves the config binds `process.env["HOST"]` when set, `false` when not | `tools/downloader/web/test/vite-config.test.ts:33-36 "binds the HOST it is given"` (set) ✓ · `:44 "toBe(false)"` (unset) ✓ |
+| The same suite proves `strictPort` is on and `port` is 5173                                    | `tools/downloader/web/test/vite-config.test.ts:50 "toBe(5173)"` (port) ✓ · `:51 "strictPort).toBe(true)"` (strictPort) ✓   |
+| `npm run dev:downloader:web` listens on `0.0.0.0:5173`, `curl http://127.0.0.1:5173/` → 200    | **verified** — `ss -ltn`: `0.0.0.0:5173`; curl `200`. Bug reproduced with `HOST` unset: `[::1]:5173`, IPv4 `000`           |
+| `npm run check` and `npm test -- --project downloader` pass                                    | **verified** — cold `check` exit 0 (tsbuildinfo cleared); 47 files / 643 tests vs 46 / 640 at `0c67b8e`                    |
 
 - **low** · `vite.config.ts` is now checked on the `web/test` surface (Bundler + DOM + JSX).
   `tsconfig.tests.json`'s own comment holds that the surface split is what keeps `document`
@@ -124,3 +124,5 @@ Traps:
   shared dev-server config package would pull a new workspace into the root
   tsconfig, `vitest.config.ts` and the image-closure scan for four lines of
   build tooling. If a third tool arrives, lift it then.
+
+- **2026-09-12 — repo-39: the `## Review` citations anchored, 4 failing references down to 0, and the `GRANDFATHERED` entry deleted.** Both `vite-config.test.ts` citations were ambiguous across the two tools and are now qualified; nothing in the file had moved. The first cited assertion carries a double quote, which an anchor cannot, so that citation is widened to the test it sits in and anchored on the test's name.

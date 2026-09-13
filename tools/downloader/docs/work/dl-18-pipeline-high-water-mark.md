@@ -139,22 +139,22 @@ later line in `job-card.test.tsx` down with it — the failure dl-15's fifth gat
 records, and the reason to re-resolve every citation in a record rather than only
 the ones a round happens to touch.
 
-| Done when                                                                          | Verdict  | Proof                                                                                                              |
-| ---------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `probing` with bytes already downloaded renders "Downloading" as completed         | proven   | `job-card.test.tsx:321`, both arms of the `attempts: 2` loop                                                       |
-| first `probing`, nothing downloaded, renders "Downloading" pending, asserted apart | proven   | `job-card.test.tsx:349`; and the premise holds — an unconditional mark reddens the test at `job-card.test.tsx:337` |
-| the active step is identifiable by role, and the test queries it that way          | proven   | `job-card.test.tsx:331`, `:356`, `:294` via `activeStep()`; `chrome.test.tsx:99`                                   |
-| dl-15's characterization test replaced by its inverse, dl-18 no longer named       | proven   | `job-card.test.tsx:298` replaces it in place; `git grep dl-18` in that file is empty                               |
-| `npm run check` and `npm test -- --project downloader` green                       | verified | re-run by the reviewer: exit 0, 645 tests                                                                          |
+| Done when                                                                          | Verdict  | Proof                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `probing` with bytes already downloaded renders "Downloading" as completed         | proven   | `job-card.test.tsx:339-376 "a re-probe keeps Downloading marked done instead of walking the list back"`, both arms of the `attempts: 2` loop                                                                                                 |
+| first `probing`, nothing downloaded, renders "Downloading" pending, asserted apart | proven   | `job-card.test.tsx:378 "a first probe leaves Downloading pending, however many bytes are on the card"`; and the premise holds — an unconditional mark reddens the test at `job-card.test.tsx:378 "a first probe leaves Downloading pending"` |
+| the active step is identifiable by role, and the test queries it that way          | proven   | `job-card.test.tsx:339 "a re-probe keeps Downloading marked done"`, `:378 "a first probe leaves Downloading pending"`, `:313 "a forward-running job marks the steps behind it done"` via `activeStep()`; `chrome.test.tsx:99`                |
+| dl-15's characterization test replaced by its inverse, dl-18 no longer named       | proven   | `job-card.test.tsx:339 "a re-probe keeps Downloading marked done instead of walking the list back"` replaces it in place; `git grep dl-18` in that file is empty                                                                             |
+| `npm run check` and `npm test -- --project downloader` green                       | verified | re-run by the reviewer: exit 0, 645 tests                                                                                                                                                                                                    |
 
 **Findings, all seven, with dispositions.**
 
 - **#1 (med) — the fix does not reach a client on a live stream.** Confirmed by
   rendering, not by reading: driven through the back-edge with only the frames
   the server emits, the live render is byte-identical to the first-probe render
-  and "Downloading" goes pending. `JobEvent` (`contract/src/job.ts:167-176`) has
+  and "Downloading" goes pending. `JobEvent` (`contract/src/job.ts:178-187 "export type JobEvent ="`) has
   seven members and none carries `attempts`; `applyJobEvent`
-  (`job-reducer.ts:76-131`) never writes it in any of its seven arms. The
+  (`job-reducer.ts:77-134 "export function applyJobEvent(job: Job, event: JobEvent): Job"`) never writes it in any of its seven arms. The
   builder's Log had already reported this from reading the source and was right
   in every particular. **Filed as
   [dl-20](./dl-20-reprobe-mark-on-the-live-stream.md)** — which is what makes
@@ -166,30 +166,30 @@ the ones a round happens to touch.
   between the `status` frame and the `progress` frame". That transient carries
   `attempts: 1`; it is the _other_ loop. As written the comment claimed coverage
   of exactly the case #1 says is uncovered. **Rewritten** at
-  `job-card.test.tsx:306-317`, which now says plainly that the 41 MB arm is a
+  `job-card.test.tsx:347-358 "is the shape a *refetched* job carries"`, which now says plainly that the 41 MB arm is a
   negative control for the byte count and not the wire transient, and points at
   dl-20. The loop itself was correct and is unchanged.
 - **#3 (low) — "the Why describes the fixture rather than the product" is
   false.** The reviewer rendered the wire transient — `status` frame applied,
   `progress` frame not yet — and the card does show "39 MB" beside the "Fetching
-  fresh stream links" hint. `orchestrator.ts:189-192` names that window in its
+  fresh stream links" hint. `tools/downloader/api/src/jobs/orchestrator.ts:197-200 "Resetting the stored snapshot is not enough on its own"` names that window in its
   own comment. Only the `attempts: 2` beside those bytes is unreachable, and
   nothing in that test reads it. **Corrected in the Log.**
 - **#4 (low) — misclassified fixture shape.** dl-15's gate-3 shape is _a fixture
   whose value makes a branch unobservable_; this is _a fixture describing an
   unreachable state_, and no branch here is unobservable. **Corrected in the
   Log**, with the reviewer's count: three impossible-state fixtures in the
-  downloader `web` suite (`job-card.test.tsx:254` pre-existing, `:319` introduced
-  by this branch, `:390` inheriting a 41 MB default from `fixtures.ts:128`), and
-  two that are **not** impossible — `job-card.test.tsx:347` and
-  `status.test.ts:29` are the live transient.
+  downloader `web` suite (`job-card.test.tsx:295 "const reprobing = job("` pre-existing, `:360 "{ attempts: 2, progress: { percent: null, downloadedBytes } }"` introduced
+  by this branch, `:516 "const queued = job("` inheriting a 41 MB default from `tools/downloader/web/test/fixtures.ts:177 "downloadedBytes: 41_000_000"`), and
+  two that are **not** impossible — `job-card.test.tsx:388 "{ attempts: 1, progress: { percent: null, downloadedBytes } }"` and
+  `web/test/status.test.ts:29 "attempts: 1, progress: { downloadedBytes: 41_000_000 }"` are the live transient.
 - **#5 (low) — "correct after a dropped connection" is too strong.**
-  `reconcileJob` (`job-reducer.ts:149`) keeps the local copy when it is strictly
+  `reconcileJob` (`job-reducer.ts:188 "return remoteAt >= localAt ? remote : local;"`) keeps the local copy when it is strictly
   newer, so a reconnect whose refetch races an inbound event discards the remote
   `attempts: 2` and the card stays wrong. **Corrected in the Log**, and carried
   into dl-20's Why and its third Build step.
 - **#6 (info, no change) — the pre-existing `job("queued")` fixture.**
-  `job-card.test.tsx:390` mounts a queued job carrying `fixtures.ts:128`'s 41 MB
+  `job-card.test.tsx:516 "const queued = job("` mounts a queued job carrying `tools/downloader/web/test/fixtures.ts:177 "downloadedBytes: 41_000_000"`'s 41 MB
   default, which a job that has downloaded nothing cannot have. It predates this
   branch, no assertion in that test reads the byte count, and changing a shared
   fixture default is how dl-15's gate 4 created a new blind spot while closing an
@@ -202,7 +202,7 @@ the ones a round happens to touch.
   an enum, and both mutations against it were killed. No change.
 
 **On the class assertions.** Three sites still read a class name —
-`job-card.test.tsx:286` and `chrome.test.tsx:103-104`, `:115` — plus two helpers
+`job-card.test.tsx:327 "expect(items.map((step) => [step.textContent, step.className]))"` and `chrome.test.tsx:103-104`, `:115` — plus two helpers
 that read one, `stepStates()` and `stageClasses()`. All five are deliberate
 companions rather than leftovers: the class and the ARIA attribute are set from
 one expression in each component, so a suite watching only the accessible half
@@ -218,7 +218,7 @@ vacuously.
 
 **Two things the reviewer verified that the builder could not have.** The
 acceptance premise "a fix that marks everything done cannot pass" is **real**:
-making the mark unconditional reddens `job-card.test.tsx:337`. And the
+making the mark unconditional reddens `job-card.test.tsx:378 "a first probe leaves Downloading pending"`. And the
 accessibility change is **purely additive** — `listitem` is nameFrom-author-only,
 so these items had no accessible name at all before this branch, and nothing a
 screen reader previously received was replaced or overridden.
@@ -282,7 +282,7 @@ accessible tree just as well. Both lists now answer
   fixture rather than the product". That is wrong. The gate rendered the wire
   transient — the `status` frame applied, the `progress` frame that follows it
   not yet — and the card does show "39 MB" under the "Fetching fresh stream
-  links" hint. `orchestrator.ts:189-192` names that window in its own comment,
+  links" hint. `tools/downloader/api/src/jobs/orchestrator.ts:197-200` names that window in its own comment,
   which is why the reset is emitted as a frame at all. The Why describes the
   product; only the `attempts: 2` beside those bytes is unreachable, and nothing
   in that test reads it. Untouched, as the brief instructs.
@@ -297,11 +297,11 @@ accessible tree just as well. Both lists now answer
   the fixture as documentation of the wire.
 
   The gate counted **three impossible-state fixtures** in the downloader `web`
-  suite: `job-card.test.tsx:254` (pre-existing, dl-15's), `job-card.test.tsx:319`
+  suite: `job-card.test.tsx:295` (pre-existing, dl-15's), `job-card.test.tsx:360`
   (introduced by this branch, and the negative control for the byte count), and
-  `job-card.test.tsx:390`, where `job("queued")` inherits `fixtures.ts:128`'s
+  `job-card.test.tsx:516`, where `job("queued")` inherits `tools/downloader/web/test/fixtures.ts:177`'s
   41 MB default for a job that has downloaded nothing. Two others that look like
-  the shape are **not**: `job-card.test.tsx:347` and `status.test.ts:29` both
+  the shape are **not**: `job-card.test.tsx:388` and `web/test/status.test.ts:29` both
   carry `attempts: 1` with bytes on the clock, which is precisely the live
   transient and precisely the case dl-20 exists for.
 
@@ -319,7 +319,7 @@ accessible tree just as well. Both lists now answer
   byte-identical to the first-probe render.
 
   **"Correct after a dropped connection" was itself too strong**, and the gate
-  narrowed it. `reconcileJob` (`job-reducer.ts:149`) keeps the _local_ copy when
+  narrowed it. `reconcileJob` (`job-reducer.ts:188`) keeps the _local_ copy when
   it is strictly newer than the remote one — which is exactly what a reconnect
   produces, since reconnecting is when frames arrive in a burst. A reconnect
   whose refetch loses that race discards the remote `attempts: 2` and the card
@@ -366,3 +366,7 @@ The third one is the trap the brief names: with only `attempts <= 1` guarding,
 a `failed` job with a retry behind it reports `statusIndex("downloading")`
 instead of the last index, and `a terminal job gains no trail of steps it never
 walked` is the only thing that notices.
+
+- **2026-09-12 — repo-39: the `## Review` citations anchored, 26 failing references down to 4.** Every `job-card.test.tsx` coordinate had drifted by 41 lines, where dl-43 and dl-45 added tests above the pipeline tests, and each was repointed to the test or expression that stood there at this record's commit, found by name rather than by offset. The ambiguous `orchestrator.ts`, `fixtures.ts` and `status.test.ts` are qualified to the downloader's files, and the 41 MB fixture default, which has moved within `fixtures.ts`, is anchored where it is now. The same coordinates in the gate-round Log entry above were repointed alongside, so the Log and the gate record agree. `GRANDFATHERED` 26 → 4.
+
+  **Left failing:** the four `chrome.test.tsx` coordinates — the active-stage row and the two class-assertion paragraphs. They point into "the narration follows the clock", which dl-43 replaced when the panel stopped narrating a clock, so nothing stands at any of them. True of this record's commit only; they wait for repo-35's pin.

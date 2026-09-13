@@ -32,7 +32,7 @@ readers independently: `channelCount` 64, and the next real probe's
 
 That is closed. `Channel.claimed` is set only by the probe route, and an
 unclaimed channel whose last listener leaves is reclaimed at once
-([`api/src/probe-stages.ts:148 "!current.claimed && current.listeners.size === 0"`](../../api/src/probe-stages.ts)), pinned by
+([`api/src/probe-stages.ts:154 "!current.claimed && current.listeners.size === 0"`](../../api/src/probe-stages.ts)), pinned by
 [`api/test/probe-stages.test.ts:127 "frees its channel immediately"`](../../api/test/probe-stages.test.ts) which
 was run red against the unfixed hub (`expected 64 to be +0`).
 
@@ -82,7 +82,7 @@ branch answer three unrelated questions.
 
 1. **Decide the bucket's shape first, and it is the only real decision here.**
    The existing three (`probe`, `jobs`, `files`) are in
-   [`tools/downloader/api/src/context.ts:83 "rateLimits: { probe: RateLimiter"`](../../api/src/context.ts), built in `server.ts` from
+   [`tools/downloader/api/src/context.ts:86 "rateLimits: {"`](../../api/src/context.ts), built in `server.ts` from
    `config.rateLimit*PerMinute`. `files` is the interesting precedent: it is keyed
    on the file's capability token rather than the IP, "because what it protects is
    one file rather than the service" (`fileBucketKey` in `routes/files.ts`). Ask
@@ -143,13 +143,13 @@ only raises the number of sockets an attacker has to hold.
 unchanged through `76076ac`) · manual defect hunt at medium, self-run (no
 `code-review` tool available to the reviewing subagent)
 
-| Done when                                                             | Proof                                                                                                                             |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Client over its limit refused with JSON error, no `text/event-stream` | `api/test/rate-limit.test.ts:703-742` (`:722-736`) ✓                                                                              |
-| Refused probe still completes and answers normally                    | `api/test/rate-limit.test.ts:744-779` (`:762`, `:769-775`) ✓                                                                      |
-| Client under its limit unaffected                                     | `api/test/rate-limit.test.ts:781-808` ✓                                                                                           |
-| Default on, bucket covered like the other three                       | `api/test/rate-limit.test.ts:834-854` (probe-events), `:969-971` (thumbnail) ✓                                                    |
-| `npm run check` and `npm test -- --project downloader` pass           | verified — both re-run at `8c965c5`: `npm run check` exit 0 (unpiped); `npm test -- --project downloader` 1167 passed, 71 files ✓ |
+| Done when                                                             | Proof                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Client over its limit refused with JSON error, no `text/event-stream` | `api/test/rate-limit.test.ts:703-742 "a client over its limit gets a JSON error, not an empty event stream"` (`:722-736 "The point of the ordering"`) ✓                                                                                |
+| Refused probe still completes and answers normally                    | `api/test/rate-limit.test.ts:744-779 "a probe whose narration was refused still completes and answers normally"` (`:762 "expect(refused.statusCode).toBe(429); const probed = await"`, `:769-775 "A real answer, not merely a 200"`) ✓ |
+| Client under its limit unaffected                                     | `api/test/rate-limit.test.ts:781-808 "a client under its limit is unaffected"` ✓                                                                                                                                                       |
+| Default on, bucket covered like the other three                       | `api/test/rate-limit.test.ts:834-854 "the default is on, and is one subscribe per probe"` (probe-events), `:969-971 "rateLimitThumbnailPerMinute).toBeGreaterThan(0)"` (thumbnail) ✓                                                   |
+| `npm run check` and `npm test -- --project downloader` pass           | verified — both re-run at `8c965c5`: `npm run check` exit 0 (unpiped); `npm test -- --project downloader` 1167 passed, 71 files ✓                                                                                                      |
 
 - **low** · The Log's earlier "tsc caveat" paragraph claimed an incremental
   `tsc --build` reported clean before catching a reintroduced `mediaUrl` error.
@@ -169,8 +169,8 @@ unchanged through `76076ac`) · manual defect hunt at medium, self-run (no
   `probeEvents` that the `probe` bucket was not already refusing in the same
   breath; the narration is refused alongside an analysis that is itself being
   refused and told properly. (b) confirmed via
-  `grep -rn probeGate tools/downloader/api/src/` (`server.ts:493`,
-  `routes/probe.ts:105,109`) — nothing gates the SSE hub globally, so two
+  `grep -rn probeGate tools/downloader/api/src/` (`tools/downloader/api/src/server.ts:493 "probeGate: new ConcurrencyGate(config.maxConcurrentProbes)"`,
+  `routes/probe.ts:105 "const release = context.probeGate.tryAcquire();"`, `routes/probe.ts:109 "limit: context.probeGate.limit,"`) — nothing gates the SSE hub globally, so two
   distinct addresses suffice to fill all 64 channels between them, each
   individually under its own ~40-channel ceiling. Both inherent to the owner's
   per-IP decision and the ticket's own scope; not this branch's to fix.
@@ -381,3 +381,5 @@ unchanged through `76076ac`) · manual defect hunt at medium, self-run (no
   **Why** are measured, not estimated — 64/64 with the next probe refused, by the
   builder and the reviewer independently, before any code moved. Filed rather
   than folded in by the owner's decision, recorded above.
+
+- **2026-09-12 — repo-39: the `## Review` citations anchored, 10 failing references down to 0, and the `GRANDFATHERED` entry deleted.** One cited assertion, the refused probe's 429, occurs seven times in `rate-limit.test.ts`, so its anchor runs across the line break into the statement that follows it — the only distinct fragment that starts on that line. `server.ts` is qualified and `routes/probe.ts`'s comma list expanded. Outside the gate record, the Why's hub-reclaim and `rateLimits` pointers are repointed; the Build's "Why it is still not rate limited" anchor is left, since this ticket itself rewrote that heading.
