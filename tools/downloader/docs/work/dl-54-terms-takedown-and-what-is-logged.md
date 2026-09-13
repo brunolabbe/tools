@@ -54,7 +54,7 @@ deletes a job row: `JobStore.delete` has no caller outside the tests, and the
 retention sweep removes files, tokens and thumbnails only. So today every page
 anyone downloaded from is kept for as long as the `/data` volume lives. That
 is longer than any of the options above. The outcome record in
-[dl-55](./dl-55-a-record-of-how-probes-and-downloads-end.md) stores hostnames
+[dl-57](./dl-57-a-record-of-how-probes-and-downloads-end.md) stores hostnames
 only, so it adds nothing to this question.
 
 **2 — The contact.** An address the owner is willing to publish. It should not

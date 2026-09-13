@@ -5,7 +5,7 @@ title: Take the login off downloader.oludoi.com, once an anonymous visitor canno
 kind: work-package
 status: ready
 milestone: M5
-depends_on: [dl-50, dl-51, dl-52, dl-53, dl-54, dl-55]
+depends_on: [dl-50, dl-51, dl-52, dl-53, dl-54, dl-57, dl-58]
 difficulty: standard
 ---
 
