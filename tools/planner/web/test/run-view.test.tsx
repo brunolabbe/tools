@@ -73,6 +73,7 @@ function run(overrides: Partial<Run> = {}): Run {
   return {
     id: "run-1",
     planId: "plan-1",
+    kind: "draft",
     status: "fanning-out",
     rosterSize: 5,
     specialistsDone: 5,

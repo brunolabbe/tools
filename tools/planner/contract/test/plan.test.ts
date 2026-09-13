@@ -4,17 +4,22 @@ import {
   emptyBrief,
   latestRevision,
   location,
+  MAX_ITEMS_PER_DAY,
+  MAX_PLAN_DAYS,
+  MAX_REVISION_NOTE_CHARS,
   MODEL_ASSERTED,
   pinnedCandidateIds,
   planDetailSchema,
   planItemSchema,
   planRevisionSchema,
+  revisionDiffSchema,
   revisionItems,
   type Candidate,
   type NewRevision,
   type PlanDay,
   type PlanDetail,
   type PlanItem,
+  type RevisionOperation,
 } from "../src/index.ts";
 
 function item(overrides: Partial<PlanItem> = {}): PlanItem {
@@ -61,7 +66,16 @@ function emptyPlan(): PlanDetail {
 }
 
 function draft(id: string, createdAt: string, days: PlanDay[] = []): NewRevision {
-  return { id, reason: "First draft", createdAt, days, gaps: [], coverage: [], reading: [] };
+  return {
+    id,
+    reason: "First draft",
+    operation: { kind: "first-draft" },
+    createdAt,
+    days,
+    gaps: [],
+    coverage: [],
+    reading: [],
+  };
 }
 
 describe("appendRevision", () => {
@@ -92,12 +106,18 @@ describe("appendRevision", () => {
     const before = appendRevision(emptyPlan(), draft("rev-1", "2026-08-15T10:05:00.000Z"));
     const snapshot = structuredClone(before);
 
+    const operation: RevisionOperation = { kind: "remove", candidateId: "cand-1", fromDayIndex: 0 };
     const after = appendRevision(before, {
       ...draft("rev-2", "2026-08-16T09:00:00.000Z"),
       reason: "Dropped the second hotel",
+      operation,
     });
 
     expect(before).toEqual(snapshot);
+    // pl-42: the operation is carried through as given, and the predecessor
+    // keeps its own — an append never rewrites what made an earlier revision.
+    expect(after.revisions[1]?.operation).toEqual(operation);
+    expect(after.revisions[0]?.operation).toEqual({ kind: "first-draft" });
     expect(before.revisions).toHaveLength(1);
     expect(after.revisions).toHaveLength(2);
     expect(after.revisions).not.toBe(before.revisions);
@@ -172,6 +192,7 @@ describe("the revision schema", () => {
     revision: 1,
     parentRevisionId: null,
     reason: "First draft",
+    operation: { kind: "first-draft" as const },
     createdAt: "2026-08-15T10:05:00.000Z",
     days: [],
     gaps: [],
@@ -239,6 +260,184 @@ describe("the revision schema", () => {
     // the tool invent a departure and then plan against it as though chosen.
     const dateless = { ...base, days: [{ id: "d", dayIndex: 0, date: null, items: [] }] };
     expect(planRevisionSchema.safeParse(dateless).success).toBe(true);
+  });
+});
+
+describe("the operation a revision records", () => {
+  // pl-42. Every rule below has a case that fails on that rule alone, and where
+  // the rule is a refine the assertion names its message, so a case cannot pass
+  // by tripping a neighbouring rule instead.
+  const second = {
+    id: "rev-2",
+    planId: "plan-1",
+    revision: 2,
+    parentRevisionId: "rev-1",
+    reason: "Re-planned day 2",
+    createdAt: "2026-08-16T10:05:00.000Z",
+    days: [],
+    gaps: [],
+    coverage: [],
+    reading: [],
+  };
+  const replan = { kind: "replan" as const, days: [0, 2], specialists: ["lodging"], note: null };
+
+  function messages(operation: unknown): string[] {
+    const result = planRevisionSchema.safeParse({ ...second, operation });
+    return result.success ? [] : result.error.issues.map((issue) => issue.message);
+  }
+
+  function refused(operation: unknown): boolean {
+    return !planRevisionSchema.safeParse({ ...second, operation }).success;
+  }
+
+  test("a well-formed re-plan is accepted", () => {
+    expect(messages(replan)).toEqual([]);
+  });
+
+  test("a re-plan names at least one day", () => {
+    expect(refused({ ...replan, days: [] })).toBe(true);
+  });
+
+  test("a re-plan names each day once", () => {
+    expect(messages({ ...replan, days: [1, 1] })).toEqual(["A re-plan names each day once."]);
+  });
+
+  test("a re-plan names its days in ascending order", () => {
+    expect(messages({ ...replan, days: [2, 1] })).toEqual([
+      "A re-plan names its days in ascending order.",
+    ]);
+  });
+
+  test("a re-plan's days are day indexes a plan can have", () => {
+    expect(refused({ ...replan, days: [-1] })).toBe(true);
+    expect(refused({ ...replan, days: [MAX_PLAN_DAYS] })).toBe(true);
+    expect(refused({ ...replan, days: [0.5] })).toBe(true);
+    expect(refused({ ...replan, days: [MAX_PLAN_DAYS - 1] })).toBe(false);
+  });
+
+  test("a re-plan names each specialist once", () => {
+    expect(messages({ ...replan, specialists: ["lodging", "lodging"] })).toEqual([
+      "A re-plan names each specialist once.",
+    ]);
+    expect(refused({ ...replan, specialists: ["sommelier"] })).toBe(true);
+  });
+
+  test("a re-plan may name no specialists at all", () => {
+    // Empty is the free re-pack from the plan's existing candidates, not an error.
+    expect(messages({ ...replan, specialists: [] })).toEqual([]);
+  });
+
+  test("a re-plan's note is bounded, and may be absent", () => {
+    expect(refused({ ...replan, note: "x".repeat(MAX_REVISION_NOTE_CHARS) })).toBe(false);
+    expect(refused({ ...replan, note: "x".repeat(MAX_REVISION_NOTE_CHARS + 1) })).toBe(true);
+    expect(refused({ ...replan, note: null })).toBe(false);
+  });
+
+  test("a restore names a revision from 1 up", () => {
+    expect(refused({ kind: "restore", revision: 1 })).toBe(false);
+    expect(refused({ kind: "restore", revision: 0 })).toBe(true);
+  });
+
+  test("a move and a remove name a candidate and the day it left", () => {
+    const move = {
+      kind: "move",
+      candidateId: "cand-1",
+      fromDayIndex: 0,
+      toDayIndex: 1,
+      toPosition: 0,
+    };
+    expect(refused(move)).toBe(false);
+    // The end of a full day is a real position; overfilling it is the composer's PLAN_INFEASIBLE.
+    expect(refused({ ...move, toPosition: MAX_ITEMS_PER_DAY })).toBe(false);
+    expect(refused({ ...move, toPosition: MAX_ITEMS_PER_DAY + 1 })).toBe(true);
+    const { fromDayIndex: _from, ...withoutFrom } = move;
+    expect(refused(withoutFrom)).toBe(true);
+    expect(refused({ ...move, candidateId: "" })).toBe(true);
+    expect(refused({ kind: "remove", candidateId: "cand-1", fromDayIndex: 0 })).toBe(false);
+    expect(refused({ kind: "remove", candidateId: "", fromDayIndex: 0 })).toBe(true);
+  });
+
+  test("a later revision may not claim to be a first draft", () => {
+    expect(messages({ kind: "first-draft" })).toEqual([
+      "Only the first revision is a first draft, and it must be one.",
+    ]);
+  });
+
+  test("the first revision must be a first draft", () => {
+    const result = planRevisionSchema.safeParse({
+      ...second,
+      revision: 1,
+      parentRevisionId: null,
+      operation: replan,
+    });
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
+      "Only the first revision is a first draft, and it must be one.",
+    ]);
+  });
+
+  test("a candidate is placed at most once in a revision", () => {
+    // pl-43's first trap: a candidate on a frozen day placed again on a named
+    // one. Two candidates, one on each day, is the ordinary case.
+    const parse = (days: PlanDay[]) =>
+      planRevisionSchema.safeParse({ ...second, operation: replan, days });
+    const twice = [
+      day(0, [item({ id: "a", candidateId: "cand-1" })]),
+      day(1, [item({ id: "b", candidateId: "cand-1" })]),
+    ];
+    const once = [
+      day(0, [item({ id: "a", candidateId: "cand-1" })]),
+      day(1, [item({ id: "b", candidateId: "cand-2" })]),
+    ];
+
+    expect(parse(twice).error?.issues.map((issue) => issue.message)).toEqual([
+      "A candidate is placed at most once in a revision.",
+    ]);
+    expect(parse(once).success).toBe(true);
+  });
+});
+
+function parsesAsDiff(value: unknown): boolean {
+  return revisionDiffSchema.safeParse(value).success;
+}
+
+describe("the diff schema", () => {
+  const parses = parsesAsDiff;
+  const placement = { dayIndex: 0, position: 0 };
+  const diff = {
+    revisionId: "rev-2",
+    parentRevisionId: "rev-1",
+    entries: [
+      { kind: "added", candidateId: "cand-1", to: placement },
+      { kind: "removed", candidateId: "cand-2", from: placement },
+      { kind: "moved", candidateId: "cand-3", from: placement, to: { dayIndex: 1, position: 0 } },
+    ],
+  };
+
+  test("a diff with one entry of each kind parses", () => {
+    expect(parses(diff)).toBe(true);
+  });
+
+  test("a diff names both of the revisions it compares", () => {
+    expect(parses({ ...diff, revisionId: "" })).toBe(false);
+    expect(parses({ ...diff, parentRevisionId: "" })).toBe(false);
+  });
+
+  test.for(["added", "removed", "moved"])("a %s entry names its candidate", (kind) => {
+    const entries = diff.entries.map((entry) =>
+      entry.kind === kind ? { ...entry, candidateId: "" } : entry,
+    );
+    expect(parses({ ...diff, entries })).toBe(false);
+  });
+
+  test("a placement is a position an item can hold", () => {
+    // A placement says where an item sits, so it has an item's bound. That is
+    // one lower than a move's `toPosition`, which may name the end of a full day.
+    const at = (position: number) => ({
+      ...diff,
+      entries: [{ kind: "added", candidateId: "cand-1", to: { dayIndex: 0, position } }],
+    });
+    expect(parses(at(MAX_ITEMS_PER_DAY - 1))).toBe(true);
+    expect(parses(at(MAX_ITEMS_PER_DAY))).toBe(false);
   });
 });
 
