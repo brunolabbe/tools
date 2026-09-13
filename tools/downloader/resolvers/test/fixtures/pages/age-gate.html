@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Age-gated player</title>
+    <style>
+      /* Spans the centre of the viewport, as the reproduced page's player area
+         did: the modal counts as one only because it covers this. */
+      #gate {
+        width: 100%;
+        height: 70vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #222;
+        color: #fff;
+      }
+      /* Covers the whole viewport, so a click on anything beneath it is
+         intercepted — which is what makes pressing the gate first fail. */
+      #promo {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+      }
+      #promo .box {
+        width: 360px;
+        padding: 24px;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Age-gated player</h1>
+    <!-- dl-48's page shape: an adult-content confirmation standing where the
+         player mounts, and a promotional modal over both. The player exists only
+         after the confirmation is pressed, and nothing under the modal can be
+         pressed until it is closed. Every interaction reports itself to a
+         /beacon/ path so a test can assert from outside what was clicked. -->
+    <div id="player">
+      <div id="gate">
+        <p>This video is for adults only.</p>
+        <button id="age-confirm" type="button">I am 18 or older</button>
+      </div>
+    </div>
+
+    <!-- No dialog role and no aria-modal: the reproduced page had neither, only a
+         fixed layer, so a close step that needs dialog semantics must fail here. -->
+    <div id="promo">
+      <div class="box">
+        <button id="promo-close" type="button" aria-label="Close popup">×</button>
+        <h2 id="promo-title">A new season is out</h2>
+        <!-- The primary action. Its text is a PLAY_TEXT match on purpose: if the
+             modal is not closed, the play step would press this, and the
+             promo path it leads to is what the tests assert is never requested. -->
+        <a id="promo-cta" href="/age-gate-promo.html">Watch now</a>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var MASTER = "/media/mse/master.m3u8";
+        var VARIANT = "/media/mse/v1080.m3u8";
+        var SEGMENTS = [
+          "/media/mse/init.mp4",
+          "/media/mse/seg-00001.m4s",
+          "/media/mse/seg-00002.m4s",
+        ];
+
+        function beacon(name) {
+          fetch("/beacon/" + name).catch(function () {});
+        }
+
+        function mountPlayer() {
+          var video = document.createElement("video");
+          video.muted = true;
+          video.setAttribute("playsinline", "");
+          video.width = 640;
+          video.height = 360;
+          // The playlist is requested on the press itself, not from "sourceopen":
+          // that event fires late on a loaded CI runner, and a probe waiting for
+          // network quiet concluded "no media" before it arrived.
+          fetch(MASTER)
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch(VARIANT);
+            })
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return Promise.all(
+                SEGMENTS.map(function (url) {
+                  return fetch(url);
+                }),
+              );
+            })
+            .catch(function () {});
+          var mediaSource = new MediaSource();
+          video.src = URL.createObjectURL(mediaSource);
+          var player = document.getElementById("player");
+          player.replaceChildren(video);
+        }
+
+        // ?late=<ms> holds both layers back, as the reproduced page did, so the
+        // tier meets them only after its playback passes are over.
+        var late = Number(new URLSearchParams(location.search).get("late")) || 0;
+        if (late > 0) {
+          var layers = [document.getElementById("gate"), document.getElementById("promo")];
+          layers.forEach(function (layer) {
+            layer.style.display = "none";
+          });
+          setTimeout(function () {
+            layers.forEach(function (layer) {
+              layer.style.display = "";
+            });
+          }, late);
+        }
+
+        document.getElementById("promo-close").addEventListener("click", function () {
+          beacon("modal-closed");
+          document.getElementById("promo").remove();
+        });
+
+        document.getElementById("age-confirm").addEventListener("click", function () {
+          beacon("age-confirmed");
+          // ?inert leaves the gate standing after the press, for the case of a
+          // confirmation that was allowed and did not start the player.
+          if (!new URLSearchParams(location.search).has("inert")) mountPlayer();
+        });
+      })();
+    </script>
+  </body>
+</html>

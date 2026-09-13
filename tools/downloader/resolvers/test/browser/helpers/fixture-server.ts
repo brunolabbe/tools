@@ -32,6 +32,12 @@ const STATUS_OVERRIDES: Record<string, number> = {
 
 export interface FixtureServer {
   origin: string;
+  /**
+   * Every pathname requested, in order. A fixture that must prove a control was
+   * or was not pressed reports it to a `/beacon/` path, and a test clears this
+   * before the probe it asserts on.
+   */
+  requests: string[];
   url(pathname: string): string;
   close(): Promise<void>;
 }
@@ -44,10 +50,17 @@ function resolveWithin(pathname: string): string | undefined {
 }
 
 export async function startFixtureServer(): Promise<FixtureServer> {
+  const requests: string[] = [];
   const server: Server = createServer((request, response) => {
     void (async () => {
       const requestUrl = new URL(request.url ?? "/", "http://localhost");
       const pathname = requestUrl.pathname;
+      requests.push(pathname);
+
+      if (pathname.startsWith("/beacon/")) {
+        response.writeHead(204).end();
+        return;
+      }
 
       // A login wall reached by redirect, which is the shape real sites use.
       if (pathname === "/gated") {
@@ -91,6 +104,7 @@ export async function startFixtureServer(): Promise<FixtureServer> {
 
   return {
     origin,
+    requests,
     url: (pathname: string) => new URL(pathname, origin).toString(),
     close: async () => {
       await new Promise<void>((resolve, reject) => {

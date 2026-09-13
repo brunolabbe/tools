@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>App shell</title>
+  </head>
+  <body style="margin: 0">
+    <!-- The whole app in one position: fixed root, a common way to lock page
+         scrolling. It covers the centre of the viewport with nothing under it,
+         so it is not a modal, and the close control in its header is not the
+         browser tier's to press (dl-48's gate). -->
+    <div id="app" style="position: fixed; inset: 0; overflow: auto">
+      <header>
+        <button id="banner-close" type="button" aria-label="Close banner">Close banner</button>
+      </header>
+      <main style="min-height: 100vh">
+        <h1>App shell</h1>
+        <p>Nothing here plays.</p>
+      </main>
+    </div>
+    <script>
+      document.getElementById("banner-close").addEventListener("click", function () {
+        fetch("/beacon/shell-closed").catch(function () {});
+      });
+    </script>
+  </body>
+</html>
