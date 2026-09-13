@@ -802,6 +802,8 @@ _repo-44, 2026-09-13: the table's two self-citations are now prose naming what t
   uncovered by that verdict in the pull request rather than left to look
   reviewed.
 
+- **2026-09-13 — repo-44: 12 failing references down to 0.** Rows 1 and 6 cited this record by line, which a record cannot do under `--require-distinct-anchors`; they now name the section and the verdict, and the builder's blockquote that restated those two offsets as shorthands, which had bound to `repo-13` by inheritance, gives them as prose line numbers. The comma lists in rows 4 and 5 are expanded into anchored ranges, using the anchors this section's own bullets already verified. The other ten are anchored where they stand, and a dated note beside the sentence that pins the twelve to `36c8b31` says so.
+
 ## The gate on this filing
 
 **This section records the gate on the pull request that files this ticket.**

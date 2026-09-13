@@ -315,3 +315,5 @@ record to the tree it was checked against is cheaper and safer than chasing line
 that move. A reader on the tip wanting the annotation should look for the dated
 heading rather than the number. Recording it here so the discrepancy is a known
 one rather than a discovered one.
+
+- **2026-09-13 — repo-44: 4 failing references down to 0.** Anchored; the citation of `pl-28`'s dated Log heading is repointed to where that heading stands now. Outside the gate record, the citations into `pl-28` are that record's line numbers when this was written, and are left as written.

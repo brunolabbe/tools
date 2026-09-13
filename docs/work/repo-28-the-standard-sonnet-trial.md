@@ -323,3 +323,5 @@ NFR: security n/a · performance n/a — the cost/gate-parity arithmetic ($7.20 
   exits 0. It enforces type, format and scope (a `fix` with no scope is rejected,
   naming the allowed set) and nothing else. The id-in-the-subject convention is
   `CLAUDE.md`'s and is unenforced, exactly as `CLAUDE.md` itself says.
+
+- **2026-09-13 — repo-44: 1 failing reference down to 0.** Anchored in place.

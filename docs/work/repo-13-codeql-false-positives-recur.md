@@ -925,6 +925,8 @@ the fix-round narrative moved into `## Log`, per this gate's recommended remedy.
   Anchored on prose, not on `## The gate on this filing`, for the reason the
   entry above this one records.
 
+- **2026-09-13 — repo-44: 30 failing references down to 0.** Gate 1's coordinates were read against `196fd28` and gate 2's against `e614ec9`, and each is repointed to its test or guard by name. Four things worth keeping. The two `guard.assertAllowed` shorthands in gate 1's `net.connect` bullet had bound to this record by inheritance; they name `egress-proxy.ts`'s two call sites and are qualified. The two ambiguous `proxied-https.test.ts` 502s had bound to `egress-proxy.test.ts`, past its end, and now cite the two tests that hold them. The suppression comment the high finding quotes was rewritten by the fix round, so that citation points at the comment as it stands and says so in the same sentence. And the Log paragraph and Done-when line that gate 1 cited by this record's own line numbers are named in prose, because a record cannot cite itself under `--require-distinct-anchors`. Gate 2's sibling-sweep enumerations are comma lists the checker does not read, and are left as the reviewer wrote them. Outside the gate record, the triage record is as it was drafted and the Log's coordinates are dated measurements; both are left as written.
+
 ## The gate on this filing
 
 **This section records the gate on PR #124, the filing.** The implementation

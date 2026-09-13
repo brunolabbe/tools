@@ -832,3 +832,7 @@ moved, 0 unanchored, 0 unresolvable`.
   half-committed it, is a better record than one found by a clean observer** —
   and it is the actual argument for a second opinion being a different model
   rather than a second pass.
+
+- **2026-09-13 — repo-44: 23 failing references down to 3.** Each of the three sections dates its citations to a branch sha the squash merge discarded, so every citation that names what it claims is pinned per citation to `65ac617`, the commit that merged this record, with a dated note beside each pinning sentence. The citation of this record's own Open-question answer is prose.
+
+  **Three cannot be repaired**, and stay counted in `GRANDFATHERED` on the owner's decision of 2026-09-13. Gate 2's first bullet quotes a bare `grounding-fixtures.test.ts` coordinate from the reviewer's draft as the thing that came back unanchored, so anchoring it would contradict the sentence. And its thesis bullet names the `citations.mjs` and `citations.test.ts` coordinates that the old checker called `ok` at `2de66cd`, which record the junk those lines held on a tree the squash merge discarded; no anchor at any reachable commit names them.

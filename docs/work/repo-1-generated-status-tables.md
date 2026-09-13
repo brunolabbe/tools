@@ -327,12 +327,12 @@ may not have opened.
 grep finds four, in the four files it named. Each now points at the fact's real
 home rather than at a page being emptied:
 
-| Site                              | Now points at                                            |
-| --------------------------------- | -------------------------------------------------------- |
-| `api/src/guarded-fetch.ts:13`     | `dl-11`, which closed the ffmpeg-egress hole it names    |
-| `api/src/dispatcher.ts:4`         | `dl-8`, which is what the "two gaps" were                |
-| `api/src/jobs/orchestrator.ts:71` | `engine/src/download/manifest.ts` and `download/http.ts` |
-| `api/test/pipeline.test.ts:259`   | the same two, plus `MAX_REPROBE_RETRIES`                 |
+| Site                                                                      | Now points at                                            |
+| ------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `api/src/guarded-fetch.ts:13`                                             | `dl-11`, which closed the ffmpeg-egress hole it names    |
+| `api/src/dispatcher.ts:4`                                                 | `dl-8`, which is what the "two gaps" were                |
+| `api/src/jobs/orchestrator.ts:79` "download is ffmpeg doing the fetching" | `engine/src/download/manifest.ts` and `download/http.ts` |
+| `api/test/pipeline.test.ts:589` "VARIANT_GONE —"                          | the same two, plus `MAX_REPROBE_RETRIES`                 |
 
 **Five more citations were about to become false**, and are the ones a grep for
 `03-STATUS` in `*.ts` does not find. Two in closed tickets' Logs asserted the
@@ -648,3 +648,5 @@ the guard demonstrated firing rather than merely not complaining, and it is the
 one assertion this branch could not make about itself — the acceptance line says
 "a branch that edits a generated region fails `--check`", and until now nothing
 on the branch had ever seen it fail.
+
+- **2026-09-13 — repo-44: the `## Review` citations anchored, 16 failing references down to 0.** The acceptance table's tests are repointed by name, and the three that repo-2 deleted are pinned to `022dfff`, the commit that merged this record. Gate 3's live contradiction in `review-ticket/SKILL.md` is pinned to `1d3efff`, `main` just before this merged, where the lines it quotes stand. Gate 4's two findings that were fixed in place are pinned to `022dfff` at the reviewer's own coordinates, and the assertion-style rule is repointed to where it stands now. The planner status page's three sentences of narrative existed only on the squashed branch, so that citation is pinned to the merge, where the ADR link stands in their place, and the disposition says so. The bare `SKILL.md` citations were ambiguous across three skills and are qualified to the one each finding names. Outside the gate record, the Log's two sweep-table pointers are repointed to where the same comments stand; the rest of its coordinates are dated and left as written.

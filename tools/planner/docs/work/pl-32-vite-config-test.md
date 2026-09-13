@@ -405,3 +405,9 @@ changes is this one and no citation here names this file by line.
   `Object.is`-strict, not truthiness) and its `env -u HOST` / `HOST=192.168.1.5`
   runs (which prove the suite does not lean on this container's ambient `HOST`) —
   both properties the builder's five mutations could not reach.
+
+- **2026-09-13 — repo-44: 22 failing references down to 2.** Every shorthand after the `devcontainer.json` citation had inherited that file, where the prose names the Vite test, the Dockerfile or this record's Why. The test shorthands are qualified to `vite-config.test.ts` and anchored, and the Why's line numbers are prose.
+
+  **The three Dockerfile coordinates are qualified to `tools/planner/Dockerfile`, and are correct but unchecked**: the checker cannot resolve a path with no extension, so they stopped being counted rather than stay bound to the wrong file. The owner accepted that on 2026-09-13.
+
+  **Two cannot be repaired**, and stay counted in `GRANDFATHERED` on the owner's decision of 2026-09-13: the bare and the parenthesised line numbers in the tooling paragraph, which quote the shapes the orchestrator's script could not read and name no file at all.

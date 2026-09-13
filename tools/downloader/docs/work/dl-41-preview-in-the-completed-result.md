@@ -234,3 +234,5 @@ work.
   and the e2e suites were not run on this branch.
 
 - **2026-09-12 — repo-39: 7 failing references down to 2.** The four `job-card.test.tsx` ranges are anchored on their test names (unchanged). Outside the gate record, the Why's retention figure, thumbnail TTL, store map, eviction loop and `ProbePanel` grouping comment are repointed to where they stand now. **Left failing:** the low finding's two `config.ts` numbers, the gate's own and the ticket's, which are the subject of the finding rather than pointers. They are qualified from ambiguous to the downloader's `config.ts` and otherwise left as a dated account, waiting for repo-35's pin; the Log's matching sentence is left as written for the same reason.
+
+- **2026-09-13 — repo-44: repo-39's 2 pinned.** The gate's and the ticket's `config.ts` numbers are pinned to `b228efb`, the commit that merged this record: the gate's names `fileRetentionHours`, and the ticket's names `host`, a screen above it, which is the finding.

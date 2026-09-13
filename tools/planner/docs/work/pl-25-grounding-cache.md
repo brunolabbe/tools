@@ -572,3 +572,5 @@ mid-review.
 **628 in the planner suite (627 before, 574 at the branch point), 1222
 repo-wide, `npm run check` green.** The new boot-sweep test was confirmed failing
 with its guard removed, like the three before it.
+
+- **2026-09-13 — repo-44: 23 failing references down to 0.** Every table coordinate had drifted by eleven lines and is repointed by its test's name; the ellipsis-led anchor is replaced by the full name. The migration-5 test no longer exists in `migrations.test.ts`, so its row is pinned to `6ad9de2`, the commit that merged this record.

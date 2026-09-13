@@ -414,3 +414,5 @@ carries both`, and checked it is not tautological by inverting the ternary's
   something the source does not support — arriving in this repo's own gate record
   while that ticket was in flight, which is worth the two lines it costs to
   record.
+
+- **2026-09-13 — repo-44: 23 failing references down to 0.** The test citations are repointed to their tests by name. Row 5 describes one commit's contents, and the reconstruction paragraph's numbers are, in its words, the pre-amend line numbers, so both are pinned to `91c18f9`, the commit that merged this record. The `validate` pointer in the NFR line was wrong the day it was written — at `424be56` that line was inside `danglingDependencies` — and is repointed to the status check it names. The two citations of this record by line are prose naming the section and the heading.

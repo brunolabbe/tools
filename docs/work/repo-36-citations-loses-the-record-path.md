@@ -427,3 +427,7 @@ repo-36` — `repo-34` is held by #187 and `repo-35` was taken minutes earlier b
   left dangling: the file is the same file and the runs did happen, but a command
   naming a path that no longer exists is exactly the stale coordinate this ticket
   is about.
+
+- **2026-09-13 — repo-44: 28 failing references down to 8.** Rounds one and three date their citations to `ab5e6fa` and `e3c17f8`, both discarded by the squash merge, so every citation that names what it claims is pinned to `479c831`, the commit that merged this record, with a dated note beside each pinning sentence. Round one's outside-the-repo test was renamed in round three, and its row says so. Round four's one unanchored coordinate is repointed beside its anchored siblings.
+
+  **Eight cannot be repaired**, and stay counted in `GRANDFATHERED` on the owner's decision of 2026-09-13: the line the builder's note says the reviewer cited, twice, which is a blank line and is the defect the note records; the five coordinates the next paragraph says had drifted onto a docblock asterisk, a comment, prose, another comment and another test's name, which record where they landed on a tree the squash merge discarded; and round three's failure location, line 1368 at column 56, quoted from the CI log with its column, which cannot take an anchor without deleting the column.

@@ -50,7 +50,7 @@ because it is what a reader needs in order to size this:
   `milestone`.** Measured below: exit 0, `problems: []`. `EXIT_ON_PROBLEMS` is
   `["json"]` (`scripts/status.mjs:610`) and it fires only on a dangling
   dependency or a gate record on a `ready` ticket. CI's board gate is
-  `node scripts/status.mjs --json > /dev/null` (`.github/workflows/ci.yml:115`),
+  `node scripts/status.mjs --json > /dev/null` (`.github/workflows/ci.yml:129` "run: node scripts/status.mjs --json"),
   so a quoted title never turns CI red.
 - **A quoted `depends_on` entry is a different story and does reach the exit
   code.** See the third row of the field table below. That is a correction to
@@ -152,7 +152,7 @@ options and their costs are left below as filed, because the costs B accepts are
 real and a future reader needs to see what was traded, not only what was picked.
 
 `docs/01-TICKETS.md` documents the fields but **never mentions quoting**, and its
-worked example (`docs/01-TICKETS.md:51`) shows an unquoted title. `status.mjs`'s
+worked example (`docs/01-TICKETS.md:62` "title: Pin vetted addresses into the socket") shows an unquoted title. `status.mjs`'s
 docblock says the grammar is "the subset the tickets actually use ... **Not
 YAML, and not pretending to be**". So there is no existing rule to read the fix
 off, and the options differ in what the format accepts afterwards.
@@ -233,7 +233,7 @@ and 4 change and the `Done when` lines must be rewritten with them.
    nor permitted. This is the sentence whose absence let two authors reach for
    YAML in two days, and it is required under every option including C.
 4. `scripts/test/status.test.ts` — cases per the `Done when` lines. `repoWith`
-   (`:29`), `ticket` (`:40`) and `run` (`:97`) already provide the fixture and
+   (`scripts/test/status.test.ts:30` "function repoWith(tickets"), `ticket` (`:41` "const ticket ="), and `run` (`:98` "function run(args") already provide the fixture and
    the CLI harness. `run` returns `{ stdout, stderr, status }`, so **assert on
    `stdout`, not only on `status`** — see the note under Done when.
 5. Do not touch `danglingDependencies` or `EXIT_ON_PROBLEMS`. The false dangling
@@ -366,7 +366,7 @@ node scripts/status.mjs --root "$R" --json
   `note` and `milestone` — measured, exit 0 with `problems: []`. It is false for
   `depends_on`: `parseList` has the same gap and turns a quoted entry into a
   false `dangling-dependency`, which makes `--json` exit 1 and fails
-  `.github/workflows/ci.yml:115`, the board's whole CI gate. The brief asked
+  `.github/workflows/ci.yml:129` "run: node scripts/status.mjs --json", the board's whole CI gate. The brief asked
   whether `parseList` "may or may not have the same gap". It does, and it is the
   more serious half.
 - **The quoting was never required by this parser.** An unquoted leading
@@ -659,3 +659,5 @@ genuinely starts and ends with one, write those terms in backticks instead.`
   was writable all along. Neither of us would have got to "fix the message and
   pin the escape hatch" alone, and the patch either of us would have written
   alone — document the loss, or narrow the rule — would have been worse.
+
+- **2026-09-13 — repo-44: 16 failing references down to 0.** Anchored, mostly in place; the `01-TICKETS.md` ranges and the `rejectQuoted` ranges are repointed by content, and one anchor that opened a template literal's backtick without closing it was replaced before `oxfmt` could reflow the row. Outside the gate record, the `ci.yml` board-gate pointer, twice, and the ticket format's worked example are repointed, and the three fixture helpers the Build step names, which had bound to `status.mjs` by inheritance, are qualified to `status.test.ts`. The Why and the Reproduction describe `parseScalar` before this fix rewrote it, and the Log's was-cited-and-was-at corrections are dated; both are left as written.

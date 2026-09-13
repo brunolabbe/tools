@@ -1395,3 +1395,5 @@ gated it` gained a four-row pairing table with a gate column and lost three
   this ticket adds. A future revert of that row without a matching skill edit is
   now a red CI run naming the line — defect 1's class, caught on the first change
   that could have reproduced it.
+
+- **2026-09-13 — repo-44: 2 failing references down to 0.** Done-when 6's comma list is expanded into the two measurements it named, and gate 2's `records.md` range is repointed to where that bullet stands now. Outside the gate record, the citations are quoted checker output and dated measurements, and are left as written.

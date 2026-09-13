@@ -349,3 +349,5 @@ open`, and Build step 4 is marked `n/a` because it was conditional on (c).
   hook called a script, nothing here would have said so** — which is the
   objection, demonstrated rather than restated. (b) remains the option that
   closes that hole, declined on cost.
+
+- **2026-09-13 — repo-44: 4 failing references down to 0.** Anchored in place; none had moved.

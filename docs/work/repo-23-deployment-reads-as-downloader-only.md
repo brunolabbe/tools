@@ -108,7 +108,7 @@ the file rather than only here — a ticket is not where the next reader looks.
 1. Add the signpost to `docs/02-DEPLOYMENT.md`, above `## Shape` (currently line
    13), after the existing intro. It must:
    - use the phrase **"worked example"**, matching `docs/00-TOOLS.md:51` and
-     `docs/adr/004-one-compose-fragment-per-tool.md:14` rather than inventing a
+     `docs/adr/004-one-compose-fragment-per-tool.md:22` "downloader is their worked example rather than their" rather than inventing a
      third wording for the same idea;
    - say the page is repo-wide and why — one tunnel, one login policy, one
      version scheme, for whatever gets published;
@@ -250,7 +250,7 @@ Reviewer: Sonnet 5 (`claude-sonnet-5`). Builder ran Opus (explicit `model: "opus
 - **2026-09-05** — An earlier framing of this ticket called it below
   `CLAUDE.md`'s bar for filing — "no defect, no reproduction, no decision" — and
   that was withdrawn before filing. It has a reproduction, with a named agent,
-  named commands and named line ranges, and `docs/01-TICKETS.md:32` says the
+  named commands and named line ranges, and `docs/01-TICKETS.md:43` "is worth a ticket, because the reproduction is the deliverable" says the
   reproduction is the deliverable. Recorded because the withdrawn framing is the
   more interesting half: the observation looked unfileable right up until the
   agent that made the mistake explained how it made it.
@@ -415,3 +415,5 @@ bucket. The scope of` — inside the Cloudflare WAF bullet that ends by linking
   three links long and the second was the cheap place to break it: one
   `sed -n '256p'` against the commit the citation was written at would have
   settled it before any of this was dispatched.
+
+- **2026-09-13 — repo-44: 4 failing references down to 0.** Both verified bullets describe an old → new correction measured on this branch, so the four coordinates are pinned to `6b86273`, the commit that merged this record, where each holds the text the bullets name. Outside the gate record, the Build step's `adr/004` pointer and the pointer to the ticket format's defect rule are repointed; the Why's reproduction of the page before the signpost, and the Log's line-number corrections, are left as written.

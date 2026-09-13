@@ -526,3 +526,5 @@ Recorded by the orchestrating agent, from gate E on dl-23.
 - **2026-09-12 — repo-39: the `## Review` citations anchored, 6 failing references down to 3.** The two `playwright.sniffer.config.ts` ranges are anchored (unchanged since gate 3), and the MSE journey's proof pointer is repointed to where the same test stands after dl-43's additions. `GRANDFATHERED` 6 → 3.
 
   **Left failing, deliberately:** the three `mse-page.spec.ts` coordinates that quote a run's own output — the failure location of the genuine red, twice, and the test location the CI run log named. dl-43 rewrote that block (the five-item assertion the red was reported at no longer exists), so each was true of the reviewed commit and of nothing since. Repointing would edit a dated measurement; they wait for repo-35's pin.
+
+- **2026-09-13 — repo-44: repo-39's 3 pinned.** The red run's failure location, twice, and the CI log's test location stand exactly at `83618de`, the commit that merged this record: the `toHaveCount(5)` the run reported, and the test declaration the log named.

@@ -125,7 +125,7 @@ Two specific things a trial has to settle, neither of which is guessable:
 4. **`docs/01-TICKETS.md`** — the `difficulty` paragraph says _"Absent means the
    builder inherits the orchestrator's model, which is the status quo"_, which
    stays true, and so does the comment at
-   `scripts/status.mjs:72 "absent mean the same thing to a dispatcher"` —
+   `scripts/status.mjs:80 "absent mean the same thing to a dispatcher"` —
    which becomes false the day the trial lands `standard` → `sonnet`. Do not pre-edit
    either for a change that has not happened. **Add a line to this ticket's Log
    naming both sites**, so the trial's implementer finds them without a grep.
@@ -244,7 +244,7 @@ to the dispatcher and not to the agent being measured, which is now stated in
 
   **Two sites the trial will need, recorded here so they are not grepped for:**
   `docs/01-TICKETS.md`'s `difficulty` paragraph, and the comment at
-  `scripts/status.mjs:72 "absent mean the same thing to a dispatcher"`. Both are
+  `scripts/status.mjs:80 "absent mean the same thing to a dispatcher"`. Both are
   true today and both become false the day `standard` maps
   to `sonnet`. Deliberately not pre-edited.
 
@@ -267,3 +267,5 @@ to the dispatcher and not to the agent being measured, which is now stated in
   rather than a spend decision, so if the trial lands they are worth re-reading
   as a set — but back-rating work this session has not read is the judgement
   repo-17 argues the orchestrator must not make.
+
+- **2026-09-13 — repo-44: 5 failing references down to 0.** Row 1's paragraph pointer is anchored. The step-4 exclusion clause, the `resolvedModel` sentence and the routes passage no longer stand in `orchestrate-tickets/SKILL.md` — repo-21 moved and rewrote them — so all three are pinned to `7862e9c`, the commit that merged this record. Outside the gate record, the `status.mjs` difficulty comment is repointed, twice.

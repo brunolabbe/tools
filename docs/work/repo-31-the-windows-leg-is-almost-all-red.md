@@ -13,7 +13,7 @@ depends_on: []
 ## Why
 
 `.github/workflows/ci.yml` runs the unit-test matrix over
-`` `.github/workflows/ci.yml:318` "os: [ubuntu-latest, windows-latest]" ``, gated
+`` `.github/workflows/ci.yml:329` "os: [ubuntu-latest, windows-latest]" ``, gated
 by a `changes` job rather than an event filter — a documentation-only push still
 skips the matrix, on both `push` and `pull_request` alike. The repo's owner asked
 directly whether the Windows leg is worth keeping. This ticket is where that
@@ -176,9 +176,9 @@ for keeping the leg is currently unbacked by any test, on either OS.
 **A second, undeduplicated implementation does get exercised for real, and it is
 this ticket's actual evidence for "the runner earns something."**
 `tools/downloader/resolvers/src/resolvers/ytdlp.ts` has its own `killTree`
-(`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:734` "if (process.platform ===" ``,
+(`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:818` "if (process.platform ===" ``,
 spawning
-`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:735` "const killer = spawn(" ``
+`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:819` "const killer = spawn(" ``
 via a bare `"taskkill"` resolved off `PATH`, not the absolute path `kill.ts`
 resolves), and `tools/downloader/resolvers/test/ytdlp.test.ts`'s
 `` `tools/downloader/resolvers/test/ytdlp.test.ts:399` "an abort kills the process instead of hanging" ``
@@ -189,9 +189,9 @@ test cannot buy: whether `spawn("taskkill", [...], { shell: false })` resolved
 off `PATH` on a real Windows host does what the code assumes.
 
 **`findExecutable`'s `PATHEXT` branch is untested on any platform** —
-`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:830` "const isWindows = platform ===" ``
+`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:914` "const isWindows = platform ===" ``
 /
-`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:832` "const extensions = isWindows" ``
+`` `tools/downloader/resolvers/src/resolvers/ytdlp.ts:916` "const extensions = isWindows" ``
 — and unlike `taskkillPath`, it reads `process.platform` and `process.env`
 directly rather than accepting them as parameters, so making it testable
 cross-platform is a small refactor away, not free today.
@@ -272,7 +272,7 @@ Four `gh run view` calls, as asked:
   matrix.
 - The `changes` gate is real, not a guess:
   `` `.github/workflows/ci.yml:221` "changes:" `` /
-  `` `.github/workflows/ci.yml:314` "if: needs.changes.outputs.code == 'true'" ``.
+  `` `.github/workflows/ci.yml:325` "if: needs.changes.outputs.code == 'true'" ``.
 - Only the unfiltered `schedule` trigger ran the matrix against the regression
   and went red — run `34127289168`, 13:25 UTC, the first of the four
   citations-only failures in measurement 1's table. Everything between 11:39
@@ -296,7 +296,7 @@ mutually exclusive.
 ### A. Remove `windows-latest` from the matrix
 
 Cheapest. Deletes one array entry at
-`` `.github/workflows/ci.yml:318` "os: [ubuntu-latest, windows-latest]" ``.
+`` `.github/workflows/ci.yml:329` "os: [ubuntu-latest, windows-latest]" ``.
 
 - Ends the dominant source of red immediately — 7 of 8 failures counted here
   disappear outright, and the 8th's Windows half with them.
@@ -711,3 +711,5 @@ kills the process tree"` was run: 1 passed, and the marker file contained
   fixes the red assertion, and repo-32's Build section.
   A reader hitting `repo-33` above should read it as "the ticket now called
   repo-36", never as the peer's ADR-004 ticket.
+
+- **2026-09-13 — repo-44: 3 failing references down to 0.** All three cited this record by line, which a record cannot do under `--require-distinct-anchors`; they are prose naming the frontmatter, the Log entry and the decision paragraph, with a dated note beside the builder's note. Outside the gate record, six anchored pointers in the measurements — the Windows matrix line twice, the code gate, and four `ytdlp.ts` lines — are repointed to where they stand. The `--rev` message pointer now starts on two lines of `citations.test.ts`, so repointing it would anchor an indistinct fragment; it is left as written.

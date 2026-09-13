@@ -612,7 +612,7 @@ line was run as written, and every number below was measured here.
 - **`status` stays `ready`.** The gate has not run, and there is no ship
   authority on this branch. It moves to `done` in the commit that lands the gate
   record, which is also what keeps `reviewedButReady` empty
-  (`scripts/status.mjs:291` "export function reviewedButReady").
+  (`scripts/status.mjs:387` "export function reviewedButReady").
 - **Two stale citations in this file were found and deliberately left alone.**
   `node scripts/citations.mjs docs/work/repo-22-grep-is-a-wrapper.md` exits `1`:
   the gate record's `records.md:156` "Measure that exit code without a pipe"
@@ -672,7 +672,7 @@ this filing"` resolves the anchor `ok` — `1 verified, 0 moved`. The Log's
   - `--rev 5fed828 --section "The gate on this filing"` → `3 verified, 0 moved,
 0 unanchored`, exit `0`.
   - `--section Log --rev 5fed828` → `5 verified, 1 moved`. The one that moves is
-    `scripts/status.mjs:291` "export function reviewedButReady", and that is
+    `scripts/status.mjs:387` "export function reviewedButReady", and that is
     correct: it was written by the "built"
     entry against the current tree, not the filing tree. **The Log genuinely
     cites two trees**, so no single run makes it clean, and that is a fact about
@@ -731,9 +731,9 @@ branch that already carried two**, under one squash-merge line.
 - **The three reproductions are now tests, and they were watched going red.**
   Removing only the new clause from both files fails exactly the three new tests
   with the other twelve green:
-  `scripts/test/hooks.test.ts:97` "an escaped inner quote splits the phrase",
-  `scripts/test/hooks.test.ts:178` "does not block when an escaped inner quote"
-  and `scripts/test/hooks.test.ts:189` "a heredoc that quotes the phrase in prose". The
+  `scripts/test/hooks.test.ts:118` "check-tree-grep stays quiet when an escaped inner quote splits the phrase",
+  `scripts/test/hooks.test.ts:203` "does not block when an escaped inner quote"
+  and `scripts/test/hooks.test.ts:214` "a heredoc that quotes the phrase in prose". The
   heredoc one is the load-bearing case — it has a real command word in front, so
   unlike the gate's original it is a shape somebody would actually type.
 - **A claim in `check-pr-title.sh`'s header was measurably false and is gone.**
@@ -965,3 +965,9 @@ manipulation is exactly the one that needed it.
   about which entry points need process-level tests. **Deliberately not swept:**
   the other scripts were not audited here, because measuring that count is the
   first step of `repo-26`'s work and would prejudge its decision.
+
+- **2026-09-13 — repo-44: 14 failing references down to 2.** The acceptance table's tests are repointed by name, its comma list is expanded, and the wiring test, since renamed, is pinned to `36be01b`, the commit that merged this record, where it carries the name the row gives. Round 5's correction transcript is pinned on its new side to `36be01b`, which carries `11ac0d9`'s lines.
+
+  **Two cannot be repaired**, and stay counted in `GRANDFATHERED` on the owner's decision of 2026-09-13: the transcript's old side, the two line numbers it says those tests were at before, true only of the branch commit before `11ac0d9`, which the squash merge discarded.
+
+  Outside the gate record, five anchored pointers in the Log — `reviewedButReady` twice and three hook tests — are repointed to where they stand. The notes pinned in prose to `5fed828` and `23d4bc3` are left as written.

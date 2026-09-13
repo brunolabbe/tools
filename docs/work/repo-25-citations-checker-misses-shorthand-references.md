@@ -567,3 +567,7 @@ of 44` and `planner — 1 open of 37` earlier in the same session; 44 + 37 + 26 
   close enough to a tautology to be useless as a check. The two separate rules
   are usable: **scope the sentence to the command, not to the topic**, and
   **familiarity with code is not a measurement of it**.
+
+- **2026-09-13 — repo-44: 12 failing references down to 2.** The table's coordinates are re-resolved to the tests they name, including the two the builder's note says were a line or two out, and the note's two working coordinates are pinned to `4bc3e66`, the commit that merged this record, with a dated note beside it.
+
+  **Two cannot be repaired**, and stay counted in `GRANDFATHERED` on the owner's decision of 2026-09-13: the `citations.mjs` coordinate inside the first finding's double-backtick reproduction, which is quoted fixture text and cannot take an anchor without editing the quote; and the backticked port the second finding quotes from `dl-38`, which is not a pointer at all.

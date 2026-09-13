@@ -622,3 +622,5 @@ z.ZodType<MediaVariant>` would have compiled without it and the field would
   and not one fixture exercising it. Both were bought by doing the work.
 
 - **2026-09-12 — repo-39: 23 failing references down to 2.** A note beside "anchored to `d3677ad`" says what changed and why. The `failover.test.ts` case in the TLS bullet was a bare shorthand bound to `failover.ts`, and is qualified. **Left failing:** row four's picker-collapse pair, which names a test dl-47 replaced — the yt-dlp tier now arrives pre-grouped, so the collapsed count the row cites is gone — including the second of its two coordinates, which a comma list had been hiding. It waits for repo-35's pin. **Left as written outside the gate record:** the Why's engine pointer and the Log's quoted `citations.mjs` output.
+
+- **2026-09-13 — repo-44: repo-39's 2 pinned.** The picker-collapse pair names a test dl-47 replaced; both stand at `1f0f440`, the commit that merged this record. A dated note beside repo-39's note on the Review's first paragraph says so.

@@ -283,3 +283,5 @@ tools/downloader/api/package.json` is empty, `@downloader/resolvers` was
   dependency for the scan to miss.
 
 - **2026-09-12 — repo-39: 8 failing references down to 1.** Citations anchored, the manifest-arm test range repointed to where that test stands now, and the `api/package.json` pointer qualified. Outside the gate record, the Log's `audioUrl` producer list is qualified and repointed. **Left failing:** the `hls-e2e.test.ts` line the reviewer's red run reported its `AssertionError` at — quoted run output, and since moved — which waits for repo-35's pin. **Left as written:** the Why's coordinates, which the first Log entry says describe `4a4cc4f`, the reproduction's tree, and the fix-commit coordinates that entry lists as "on the fix they read".
+
+- **2026-09-13 — repo-44: repo-39's 1 pinned.** The line the red run reported is pinned to `53b57ad`, the commit that merged this record, as a two-line range whose first line is the stream read, because the audio and video assertions differ only inside their quotes.

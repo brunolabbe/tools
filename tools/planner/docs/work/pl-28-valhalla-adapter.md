@@ -775,3 +775,7 @@ edit it.
 
 Recorded by
 [repo-11](../../../../docs/work/repo-11-stale-fixture-formatting-notes.md).
+
+- **2026-09-13 — repo-44: 38 failing references down to 3.** The test coordinates were exact at `bd3bdbc` and the source coordinates at `ccf1c95`, both discarded by the squash merge; `60e48e7`, the merge, is thirteen lines off because of the post-gate `trimSlash` change. So pointers are repointed by what they name — the two `Map`s, `indexOf`'s validation, the half-cell and negative guards, the `User-Agent` header — with a dated note beside gate 2's sentence about what the record carries. `firstCoordinates` no longer exists and is pinned to `60e48e7`. Two shorthands in gate 2 that had bound to `valhalla.ts` name tests and are qualified, and the ambiguous `logging.test.ts` is qualified to the planner's.
+
+  **Three cannot be repaired**, and stay counted in `GRANDFATHERED` on the owner's decision of 2026-09-13: the two relayed `Map` line numbers gate 2 says were already stale when sent, true only of `e60f5a6`, which the squash merge discarded; and the `valhalla.ts` coordinate inside the quoted CodeQL alert.

@@ -300,3 +300,5 @@ shells out to a tool will hit this, and the easy way out is closed by design.
 The scan now also asserts `expect(result.error).toBeUndefined()`, so a spawn that
 fails fails **by name** rather than disguising itself as an assertion about
 output — which is the whole reason this cost a CI leg to find.
+
+- **2026-09-13 — repo-44: 8 failing references down to 0.** Every coordinate in gate 1 was exactly right at `102458c`, the commit that merged this record, and each is repointed from there to where the same test or declaration stands now, anchored on its name. An earlier reading against `4128986`, gate 1's own sha, proposed wrong repoints for half of them, because the round that answered gate 1 wrote the findings' coordinates.

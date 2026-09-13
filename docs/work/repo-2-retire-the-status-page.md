@@ -672,3 +672,5 @@ Written as guidance with the reasoning rather than a script to paste: the mount
 layout is this container's, while the relative-link rule is npm's and will
 outlive it. The section ends by saying to verify a farm with `readlink -f` and
 one real suite, because the failure mode is quiet by construction.
+
+- **2026-09-13 — repo-44: 4 failing references down to 0.** Finding 1's annotation is anchored where it stands. Finding 2's `dir: docs` line was removed by the fix, so it is pinned to `4fcd133`, `main` before this merged, the last reachable tree that holds it, and the disposition says so; finding 3's bullet was fixed in place and is pinned to `0c67b8e`, the merge, at the reviewer's coordinate. Outside the gate record, the Log's sweep coordinates are dated and left as written.

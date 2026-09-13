@@ -728,3 +728,5 @@ main` — plus "editing `.github/workflows/` so a required check passes
   agent that can edit either has no hook. §1 remains uncovered. The header says
   so in the file, in those terms, so the next reader does not mistake this for
   protection it is not.
+
+- **2026-09-13 — repo-44: 3 failing references down to 0.** The two test citations are repointed by name. Finding 3 cites the header line where this branch recorded that the hook had never fired; today's header no longer carries it, so that citation is pinned to `43670a2`, the commit that merged this record.

@@ -342,3 +342,5 @@ No disagreement, nothing unresolved on my side.
   exactly the new file, which is the check this session had not thought to make.
 
 - **2026-09-12 — repo-39: 8 failing references down to 2.** The test and helper citations are anchored; none had moved. **Left failing, both deliberately:** row 4's `143-149` range, which the note above the gate record says must stay wrong because it is the reviewer's evidence for the off-by-one it reports; and the NFR line's pointer to `newSerial` in `tls-interception.ts`, whose unconditional `00` prefix — the precedent the reviewer called this consistent with — was later replaced as dl-33's defect. The Log's copy of that pointer is left for the same reason. Both were true of this record's commit and of nothing since, so they wait for repo-35's pin. `GRANDFATHERED` 8 → 2.
+
+- **2026-09-13 — repo-44: repo-39's 2 pinned.** Row 4's range is the reviewer's evidence for an off-by-one: at `03f7fa4`, `main` just before this merged, its first line is exactly the public-key assignment and the comment is the six lines after it, as the row says. The NFR's `newSerial` precedent is pinned to `e9f516b`, the commit that merged this record.

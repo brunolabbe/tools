@@ -85,7 +85,7 @@ Two smaller things worth knowing, both true today:
   **not** mention `--section`. The docblock and the error message already
   disagree with each other, which is a hint about which of them was intended.
 - `main()` is not exported, so an argv test drives the CLI rather than calling
-  it. `scripts/test/citations.test.ts:89` already does exactly that with
+  it. `scripts/test/citations.test.ts:162` "the CLI exits non-zero on an unresolvable citation" already does exactly that with
   `spawnSync`, so the
   pattern to copy is in the file.
 
@@ -355,3 +355,5 @@ becomes a loud error rather than the silent no-op it is now.
   are the same axis — they are not, and treating them as one axis is what made
   rejecting `--section` read as an implicit "delete" instead of a third, orthogonal
   state that answers neither.
+
+- **2026-09-13 — repo-44: 6 failing references down to 0.** The four test citations are repointed by name, and the plain-text assertion ranges beside them are moved by the same offset, checked line by line against `a888fd9` and today. The declined header finding's range is repointed to where the scope-beside-the-count code stands now. Outside the gate record, the Why's pointer to the existing spawnSync test is repointed; the Reproduction's coordinates describe the script before this fix and are left as written.

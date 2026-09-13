@@ -253,3 +253,5 @@ is a section move, a clause and a trim.
   **Not run:** no reviewer was dispatched from this branch's copy of
   `ticket-reviewer.md`, so the new ordering is proofread rather than exercised.
   The gate on this branch reads the merged `main` version, which is the old one.
+
+- **2026-09-13 — repo-44: 10 failing references down to 0.** Read against `3e58c32`, the commit that merged this record, since the reviewed `9389612` did not survive. The reviewer's three comma lists are expanded into one anchored citation per line, and a shorthand that had bound to `builder.md` is qualified to `ticket-reviewer.md`, which is what its sentence names. The `orchestrate-tickets` premise is pinned to the merge, since that skill has since been rewritten.

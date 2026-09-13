@@ -70,7 +70,7 @@ cheaper than settling it if the reasoning survives the branch.
 
 The options as they were put, with the costs that came from reading the code —
 the store is filled at probe time and read by token at
-`api/src/routes/thumbnail.ts:53` "context.thumbnails.get", so it is what shows
+`api/src/routes/thumbnail.ts:66` "context.thumbnails.get", so it is what shows
 a preview before any file exists (the coordinate moved when the build recorded
 in the Log added the route's second source above it):
 
@@ -391,3 +391,5 @@ Every citation now carries anchor text, so the checker verifies the claim rather
   One thing not fixed, deliberately: `scripts/test/citations.test.ts` also
   fails on that leg, identically at `origin/main`, and is parked as `repo-31`.
   Untouched.
+
+- **2026-09-13 — repo-44: 4 failing references down to 0.** The two byte-match assertions and the cascade clause each occur twice in their files, so their anchors now run across the line break into the statement that tells them apart (repo-44's note 14); the read-path re-check is repointed. Outside the gate record, the Why's in-memory store pointer is repointed.

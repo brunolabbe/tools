@@ -539,7 +539,7 @@ json/yml/md` returns prose references only — no `JSON.parse`, so a comment
 **Gate 1 found a better argument than mine, and it is the one to keep.** I
 reasoned from the absence of consumers, which only shows nothing breaks _today_.
 The gate found the precedent: **`.oxlintrc.json` — the sibling config, named
-beside `.oxfmtrc.json` at `CLAUDE.md:57-58` — already carries `//` comments and
+beside `.oxfmtrc.json` at `CLAUDE.md:65-66` "Tooling: **oxlint** and **oxfmt**" — already carries `//` comments and
 already fails strict `JSON.parse`.** So this branch introduces no new property of
 the repo; it makes the two oxc configs consistent. Verified here rather than
 inherited, and the gate's SHA needed correcting: comments entered
@@ -669,3 +669,5 @@ Nine commit SHAs are cited above — `5ab843f`, `786d686`, `2f97370`, `b876906`,
 `50701dc`. Gate 1 resolved all of them and confirmed each says what is claimed;
 `b876906` is the one this pass added, and it was verified here rather than taken
 from the gate, which had attributed those comments to `5ab843f`.
+
+- **2026-09-13 — repo-44: 3 failing references down to 0.** F5's comment range is anchored, and its comma list becomes the range it names in `package.json` today. F6's `CLAUDE.md` coordinate is dated in the row itself to `eac616e`, which the squash merge discarded, so it is pinned to `e56d093`, `main` just before this merged, where those lines carry the sentence the finding is about; the row says so. Outside the gate record, the Log's pointer to the Tooling line is repointed.
