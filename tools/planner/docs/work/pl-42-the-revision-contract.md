@@ -3,7 +3,7 @@ id: pl-42
 tool: planner
 title: The contract for revising a plan — operations, the re-plan run, and the diff
 kind: work-package
-status: ready
+status: done
 milestone: P4
 depends_on: []
 difficulty: hard
@@ -361,6 +361,32 @@ One item was unverifiable at filing: whether a zero-specialist run's `roster`
 frame sets `rosterSize` correctly. That wiring does not exist yet, and it is
 pl-44's to prove.
 
+## Review
+
+**Gate: PASS** — 2026-09-13 · Sonnet · `origin/main` (`8849c14`)...`9138ddc` · defect hunt run directly at medium depth (subagent context, no `code-review` delegate)
+
+| Done when                                                                                                                                                                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RevisionOperation`, `RevisionDiff`, `ReviseRequest`, `ReviseResponse`, `ROUTES.planRevisions`/`planRevisionsUrl` exist, schema'd, exported from the index                                                        | proven — `contract/src/plan.ts:306 "export type RevisionOperation ="`, `contract/src/plan.ts:555 "export interface RevisionDiff {"`, `planner/contract/src/api.ts:341 "export type ReviseRequest ="`, `planner/contract/src/api.ts:395 "export type ReviseResponse = { kind:"`, `planner/contract/src/api.ts:77 "/plans/:id/revisions"`; runtime-imported all 22 new exports off `dist/index.js` myself, all resolved |
+| Schema tests prove every named bound (days rules, unique specialists, note bound, `restore.revision >= 1`, first-draft iff revision 1, candidate-once, `baseRevisionId` per kind), each with its own failing case | proven — independently reproduced with 22 of my own source mutations, one at a time, each run against its narrowest file and restored to a byte-identical file after; every bound this line names went red on exactly its own test, including `contract/test/revise.test.ts:43 "a $kind request without a base revision is refused"`, parameterised over all four request kinds                                       |
+| `appendRevision` carries `operation`; existing append-only test covers it                                                                                                                                         | proven — `contract/test/plan.test.ts:117 "the operation is carried through as given"`                                                                                                                                                                                                                                                                                                                                 |
+| `queued → composing` legal, argued in the comment, covered by `canRunTransition` tests                                                                                                                            | proven — `contract/src/run.ts:121 "and it is the same argument a third time"`, `contract/test/run.test.ts:97 "lets a run go straight from"`                                                                                                                                                                                                                                                                           |
+| `REVISION_STALE`/`PLAN_BUSY` in the taxonomy with copy, retryability matching step 6                                                                                                                              | proven — `contract/test/errors.test.ts:31 "a busy plan is worth retrying and a stale base is not"`                                                                                                                                                                                                                                                                                                                    |
+| `MAX_REVISIONS_PER_PLAN` set, with the measurement in the Log                                                                                                                                                     | verified for the code that consumes it (constant, code, copy, retryability); **not independently re-measured** — the sizing script is not checked in — `contract/src/plan.ts:78 "export const MAX_REVISIONS_PER_PLAN = 50;"`                                                                                                                                                                                          |
+| `toRevision`/`toRun` compile with literal values naming pl-44; Log says why they're true of every row                                                                                                             | proven — `api/src/db/plans.ts:411 "pl-44 replaces this with the"`, `api/src/db/runs.ts:79 "pl-44 takes the kind as input"`                                                                                                                                                                                                                                                                                            |
+| `npm run check` and `npm test -- --project planner` pass; no field made optional                                                                                                                                  | proven — ran both myself at `9138ddc`: `check` exit 0, `--project planner` 888/888                                                                                                                                                                                                                                                                                                                                    |
+
+Three low findings from the first pass, all found and fixed within this pull request, before merge — not open:
+
+- **low, fixed at `9138ddc`** · six `.min(1)`/`.max` bounds had no failing case (`DiffPlacement.position`'s upper bound; `candidateId` on `diffEntrySchema`'s three variants; `revisionDiffSchema.revisionId`/`.parentRevisionId`; `moveOperationSchema.candidateId`; the request's `itemId`). I independently reproduced all six as green before the fix (mutate, run `--project planner`, confirm no failure, restore, `md5sum` match), and independently reproduced three of them as red after the fix. Closed by `contract/test/plan.test.ts:416 "a diff with one entry of each kind parses"` through `:440 "expect(parses(at(MAX_ITEMS_PER_DAY))).toBe(false)"` (the new "the diff schema" block), `contract/test/plan.test.ts:355 "expect(refused({ ...move, candidateId:"`, and `contract/test/revise.test.ts:71 "item id is not empty"`.
+- **low, fixed at `9138ddc`** · `api/src/runs/orchestrator.ts:560 "diffs: [],"`'s comment claimed "every plan that exists"; `api/test/plan-view.test.ts`'s `supersedeDraft` helper falsifies that inside the test suite's own database. Now reads `api/src/runs/orchestrator.ts:554 "every plan the API can write"`, naming the helper, with the ticket's Log corrected the same way.
+- **correction to my own first-pass record, not the builder's code** · I had cited the tested `remove`-with-empty-`candidateId` case as neighbouring `contract/test/plan.test.ts:378 "a candidate is placed at most once in a revision"`. It is a different test, `contract/test/plan.test.ts:341 "a move and a remove name a candidate and the day it left"`, not adjacent to it. No code changed for this one; my citation was wrong, not the ticket's test.
+- **dropped** · none.
+- **findings** · 3 returned, 3 carried (2 of them since fixed), 0 dropped.
+- NFR: security n/a · performance n/a · reliability ✓ (retryability re-verified unchanged) · maintainability — both fixed comments now correctly scope their universal claim to what the API can write versus what a test can construct by hand.
+
+**Not done:** did not re-run the Step 7 sizing measurement (script not checked in); did not run `code-review` (this hunt substitutes for it per the gate's own instruction); no e2e/image gate applies to this ticket's `Done when`.
+
 ## Log
 
 **2026-09-13 — filed.** From a roadmap review after pl-39 through pl-41 were
@@ -584,3 +610,15 @@ an overstated comment. Each was reproduced before it was fixed:
   the suite. The comment now says "every plan the API can write" and names the
   helper. The Log sentence above that made the same claim is corrected the same
   way.
+
+**2026-09-13 — gated, and done.** The gate (dispatched as Sonnet) passed at
+`9138ddc`. Its record is `## Review` above, committed verbatim in the commit
+that sets `status: done`. **A note on that record from me, the builder
+(dispatched as Opus), not from the reviewer:** its first finding says "six"
+bounds had no failing case and then lists eight. The eight are the bounds
+counted one by one: `DiffPlacement.position`, `candidateId` on each of `added`,
+`removed` and `moved`, `revisionId`, `parentRevisionId`, `move.candidateId`,
+and the request's `itemId`. Those are the eight I mutated. The six is the
+reviewer's first-pass count, which mutated only `added`'s `candidateId` as
+representative of all three variants ("6 of 22 stayed green" in its long form).
+The citations are unaffected.
