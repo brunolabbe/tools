@@ -50,6 +50,12 @@ export interface ApiConfig {
   enableYtdlpResolver: boolean;
   enableBrowserResolver: boolean;
   enableDirectResolver: boolean;
+  /**
+   * Whether the browser tier presses an "I am over 18" control it recognises.
+   * Off by default: the press is an attestation made on the user's behalf, so a
+   * fresh install never makes it (dl-48). Closing a modal is not behind this.
+   */
+  enableAgeConfirmation: boolean;
 
   proxyUrl: string | undefined;
   ffmpegPath: string | undefined;
@@ -416,6 +422,8 @@ export function loadApiConfig(
       overrides.enableBrowserResolver ?? bool(env["ENABLE_BROWSER_RESOLVER"], true),
     enableDirectResolver:
       overrides.enableDirectResolver ?? bool(env["ENABLE_DIRECT_RESOLVER"], true),
+    enableAgeConfirmation:
+      overrides.enableAgeConfirmation ?? bool(env["ENABLE_AGE_CONFIRMATION"], false),
     proxyUrl: overrides.proxyUrl ?? proxyUrl(env["PROXY_URL"]),
     ffmpegPath: overrides.ffmpegPath ?? env["FFMPEG_PATH"] ?? undefined,
     ffmpegAllowUnverifiedTls:

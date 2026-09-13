@@ -6,7 +6,8 @@
  * Making the player start.
  *
  * Nothing is captured until the page actually asks for media, and most pages
- * will not until a consent banner is gone and something has been clicked. Every
+ * will not until a modal and a consent banner are gone and something has been
+ * clicked. Some also stand an age confirmation where the player mounts. Every
  * step here is best-effort: a selector that does not exist is the normal case,
  * never an error.
  *
@@ -16,6 +17,7 @@
 
 import type { Frame, Page } from "playwright";
 import { budget, remaining, sleep, throwIfAborted } from "./abort.ts";
+import { AGE_MARKERS } from "./classify.ts";
 import type { HitCollector } from "./intercept.ts";
 
 /** Vendor-specific accept buttons, most-common first. */
@@ -38,6 +40,120 @@ const CONSENT_SELECTORS: readonly string[] = [
 /** Text-matched fallback in the languages we see most often. */
 const CONSENT_TEXT =
   /^\s*(?:accept(?: all| cookies| and continue)?|i accept|agree|i agree|allow all|got it|ok|okay|continue|understood|alles akzeptieren|akzeptieren|zustimmen|einverstanden|tout accepter|accepter|j'accepte|aceptar( todo)?|acepto|aceitar|accetta(?: tutto)?|accetto|akkoord|godkänn|zgadzam się|принять)\s*$/i;
+
+/**
+ * A close control's accessible name: a close verb, optionally followed by what
+ * it closes ("Close popup"). Anchored at the start so a sentence containing the
+ * word is not a control. Never a call to action — a promo's primary button
+ * starts or navigates to other content, and a stream reached through it is the
+ * wrong stream (dl-48).
+ */
+export const CLOSE_TEXT =
+  /^\s*(?:[×✕✖x]|close|dismiss|no,? thanks|not now|schließen|fermer|cerrar|chiudi|fechar|sluiten|stäng|zamknij|закрыть|скрыть)(?:\s+\S+){0,2}\s*$/i;
+
+/**
+ * A control whose label states the viewer is over an age. Anchored, like
+ * `CONSENT_TEXT`, so a sentence in the page body is not a label; and a label
+ * alone is not a gate — see `AGE_MARKERS`. Each new phrasing is one more
+ * alternative, not a new branch.
+ */
+export const AGE_GATE_TEXT =
+  /^\s*(?:(?:yes|да|ja|oui|sí|si|sì|sim|tak)[,.!]?\s+)?(?:i(?:'|’)?m|i am|мне(?:\s+уже)?(?:\s+есть)?|ich bin|j'ai|tengo|ho|tenho|ik ben|jag är|mam(?:\s+ukończone)?)\s+(?:(?:over|at least|older than|больше|über|mindestens|plus de|más de|più di|mais de|ouder dan|över)\s+)?(?:18|21)\s*\+?(?:\s*(?:years(?: old)?|or (?:older|over)|лет|года?|jahre(?: alt)?|oder älter|ans(?: ou plus)?|años(?: o más)?|anni|anos(?: ou mais)?|jaar(?: of ouder)?|år|lat))?\s*[.!]?\s*$/i;
+
+/** Marks the close control `MARK_CLOSE_SCRIPT` chose, so the click goes through the locator API. */
+const CLOSE_MARK = "data-downloader-close";
+
+const SEMANTIC_DIALOG = "[role='dialog'], [role='alertdialog'], [aria-modal='true'], dialog[open]";
+
+/**
+ * Finds the layer that intercepts clicks and marks its close control.
+ *
+ * **The layer is whatever covers the centre of the viewport**, climbing to the
+ * nearest ancestor that is a dialog or `position: fixed`. Dialog semantics alone
+ * are not enough: the page dl-48 reproduced had none, only a fixed layer, and
+ * two other fixed layers with close buttons of their own (a toast, a banner) —
+ * so "the first close control on the page" would have spent the pass on the
+ * wrong one. A visible semantic dialog is the fallback when nothing covers the
+ * centre.
+ *
+ * A layer holding a `<video>` is left alone: sites open their player in a
+ * lightbox, and closing that closes the thing this tier exists to watch.
+ *
+ * Returns `marked`, `dialog` (a semantic dialog with no close control this
+ * recognises, which earns an Escape), or `none`.
+ */
+const MARK_CLOSE_SCRIPT = `(() => {
+  var close = new RegExp(${JSON.stringify(CLOSE_TEXT.source)}, ${JSON.stringify(CLOSE_TEXT.flags)});
+  var semantic = ${JSON.stringify(SEMANTIC_DIALOG)};
+  var shown = function (el) {
+    var rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  };
+  var container = null;
+  var node = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+  for (; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+    if (node.matches(semantic) || getComputedStyle(node).position === 'fixed') {
+      container = node;
+      break;
+    }
+  }
+  if (!container) {
+    var dialogs = document.querySelectorAll(semantic);
+    for (var i = 0; i < dialogs.length; i++) {
+      if (shown(dialogs[i])) {
+        container = dialogs[i];
+        break;
+      }
+    }
+  }
+  if (!container || container.querySelector('video')) return 'none';
+  var controls = container.querySelectorAll('button, a, [role="button"], [aria-label], [title]');
+  for (var j = 0; j < controls.length; j++) {
+    var el = controls[j];
+    if (!shown(el)) continue;
+    var name = (el.getAttribute('aria-label') || el.getAttribute('title') || el.innerText || '').trim();
+    var button = el.tagName === 'BUTTON' || el.getAttribute('role') === 'button';
+    if (close.test(name) || (button && /close/i.test(el.getAttribute('class') || ''))) {
+      el.setAttribute(${JSON.stringify(CLOSE_MARK)}, '');
+      return 'marked';
+    }
+  }
+  return container.matches(semantic) ? 'dialog' : 'none';
+})()`;
+
+const UNMARK_CLOSE_SCRIPT = `(() => {
+  var marked = document.querySelectorAll('[${CLOSE_MARK}]');
+  for (var i = 0; i < marked.length; i++) marked[i].removeAttribute(${JSON.stringify(CLOSE_MARK)});
+})()`;
+
+/**
+ * True when a control carries an `AGE_GATE_TEXT` label **and** the page carries
+ * an `AGE_MARKERS` phrase. Both, because an "I am 18" link in the footer of a
+ * page with nothing age-restricted on it is not a gate.
+ */
+const AGE_GATE_SCRIPT = `(() => {
+  var label = new RegExp(${JSON.stringify(AGE_GATE_TEXT.source)}, ${JSON.stringify(AGE_GATE_TEXT.flags)});
+  var markers = ${JSON.stringify(AGE_MARKERS)};
+  var body = document.body;
+  var text = body ? (body.innerText || body.textContent || '').toLowerCase() : '';
+  var marked = false;
+  for (var i = 0; i < markers.length; i++) {
+    if (text.indexOf(markers[i]) !== -1) {
+      marked = true;
+      break;
+    }
+  }
+  if (!marked) return false;
+  var controls = document.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="submit"]');
+  for (var j = 0; j < controls.length; j++) {
+    var el = controls[j];
+    var name = (el.getAttribute('aria-label') || el.innerText || el.value || '').trim();
+    if (!label.test(name)) continue;
+    var rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) return true;
+  }
+  return false;
+})()`;
 
 const PLAY_SELECTORS: readonly string[] = [
   "button[aria-label*='play' i]",
@@ -119,6 +235,7 @@ const SIGNALS_SCRIPT = `(() => {
     html: root ? root.outerHTML.slice(0, 8000) : '',
     hasPasswordInput: !!document.querySelector('input[type="password"]'),
     hasPlayerElement: !!document.querySelector('video, audio, iframe[src], [class*="player"], [id*="player"]'),
+    ageGate: ${AGE_GATE_SCRIPT},
   };
 })()`;
 
@@ -135,6 +252,7 @@ export interface RawPageSignals {
   html: string;
   hasPasswordInput: boolean;
   hasPlayerElement: boolean;
+  ageGate: boolean;
 }
 
 function originOf(raw: string): string | undefined {
@@ -210,10 +328,94 @@ export async function dismissConsent(frame: Frame, timeoutMs: number): Promise<n
   return clicked;
 }
 
-async function provokeFrame(frame: Frame, pageOrigin: string | undefined): Promise<void> {
+/**
+ * Closes the layer over the page, through its close control or Escape. First in
+ * `provokeFrame`, because a modal intercepts every later click: in dl-48's
+ * reproduction, pressing the age confirmation with the modal open timed out.
+ *
+ * At most one per pass, the restraint `dismissConsent` argues: a second close
+ * click can as easily open something as close it.
+ */
+export async function dismissModal(
+  frame: Frame,
+  options: { timeoutMs: number; scriptable: boolean },
+): Promise<number> {
+  if (options.scriptable) {
+    let found = "none";
+    try {
+      found = await frame.evaluate<string>(MARK_CLOSE_SCRIPT);
+    } catch {
+      return 0;
+    }
+    if (found === "marked") {
+      try {
+        await frame.locator(`[${CLOSE_MARK}]`).first().click({ timeout: options.timeoutMs });
+        return 1;
+      } catch {
+        return 0;
+      } finally {
+        try {
+          await frame.evaluate(UNMARK_CLOSE_SCRIPT);
+        } catch {
+          // The close removed the frame's document, or navigated it.
+        }
+      }
+    }
+    if (found !== "dialog") return 0;
+  } else {
+    // No script in a cross-origin frame, so only what the locator API can see:
+    // a dialog by its semantics, and a close control by its accessible name.
+    try {
+      const dialog = frame.locator(visibleQuery(SEMANTIC_DIALOG.split(", "))).first();
+      if (!(await dialog.isVisible())) return 0;
+      const control = dialog.getByRole("button", { name: CLOSE_TEXT }).first();
+      if (await control.isVisible()) {
+        await control.click({ timeout: options.timeoutMs });
+        return 1;
+      }
+    } catch {
+      return 0;
+    }
+  }
+
+  // A dialog with no close control this recognises. Escape is what a person
+  // would try next, and it never presses the dialog's primary action.
+  try {
+    await frame.page().keyboard.press("Escape");
+    return 1;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Presses a recognised age confirmation. The caller decides whether to call it
+ * at all — that is the operator's `confirmAge`, never this function's.
+ */
+async function confirmAgeGate(frame: Frame, timeoutMs: number): Promise<boolean> {
+  try {
+    if (!(await frame.evaluate<boolean>(AGE_GATE_SCRIPT))) return false;
+  } catch {
+    return false;
+  }
+  return await clickByText(frame, AGE_GATE_TEXT, timeoutMs);
+}
+
+async function provokeFrame(
+  frame: Frame,
+  pageOrigin: string | undefined,
+  confirmAge: boolean,
+): Promise<void> {
+  const scriptable = isScriptableFrame(frame, pageOrigin);
+  await dismissModal(frame, { timeoutMs: 1500, scriptable });
   await dismissConsent(frame, 2000);
 
-  if (isScriptableFrame(frame, pageOrigin)) {
+  // Recognising a gate needs the page's wording as well as the control's label,
+  // so it is only tried where script runs. The player mounts after the press,
+  // which is why playback provocation still follows it.
+  if (confirmAge && scriptable) await confirmAgeGate(frame, 2000);
+
+  if (scriptable) {
     try {
       await frame.evaluate<boolean>(SCROLL_SCRIPT);
     } catch {
@@ -235,7 +437,7 @@ async function provokeFrame(frame: Frame, pageOrigin: string | undefined): Promi
     // No video element yet, or it is not clickable.
   }
 
-  if (isScriptableFrame(frame, pageOrigin)) {
+  if (scriptable) {
     try {
       await frame.evaluate<number>(PLAY_SCRIPT);
     } catch {
@@ -250,7 +452,7 @@ async function provokeFrame(frame: Frame, pageOrigin: string | undefined): Promi
  */
 export async function provokePlayback(
   page: Page,
-  options: { deadline: number; signal: AbortSignal },
+  options: { deadline: number; signal: AbortSignal; confirmAge: boolean },
 ): Promise<void> {
   const pageOrigin = originOf(page.url());
   for (let pass = 0; pass < 2; pass++) {
@@ -261,12 +463,40 @@ export async function provokePlayback(
     for (const frame of frames) {
       if (remaining(options.deadline) < 1500) return;
       try {
-        await provokeFrame(frame, pageOrigin);
+        await provokeFrame(frame, pageOrigin, options.confirmAge);
       } catch {
         // A frame can detach at any moment; the others still deserve a try.
       }
     }
     if (pass === 0) await sleep(budget(options.deadline, 900), options.signal);
+  }
+}
+
+/**
+ * The overlay steps again, for a layer that mounts after `provokePlayback` has
+ * finished. dl-48's page put its modal and its age gate up about 3.4 s after
+ * `DOMContentLoaded`, when both passes were long over — and a press then
+ * produced a playlist 0.2 s later.
+ *
+ * **Only the modal and the gate, never the play clicks or the consent text.**
+ * Pressing play again on a player that is about to request can pause it, and
+ * `CONSENT_TEXT` matches words like "continue" that a page repeats elsewhere;
+ * each was bounded by the two passes, and a loop would unbound it.
+ */
+export async function revisitOverlays(
+  page: Page,
+  options: { deadline: number; confirmAge: boolean },
+): Promise<void> {
+  const pageOrigin = originOf(page.url());
+  for (const frame of page.frames()) {
+    if (remaining(options.deadline) < 1500) return;
+    try {
+      const scriptable = isScriptableFrame(frame, pageOrigin);
+      await dismissModal(frame, { timeoutMs: 1500, scriptable });
+      if (options.confirmAge && scriptable) await confirmAgeGate(frame, 2000);
+    } catch {
+      // Detached mid-visit; the next visit, or the next frame, still gets a try.
+    }
   }
 }
 
@@ -282,11 +512,17 @@ export async function waitForQuiet(options: {
   minWaitMs: number;
   signal: AbortSignal;
   stop?: () => boolean;
+  /**
+   * Run on every tick before quiet is judged. The caller owns its cadence and
+   * its cap; whatever it provokes counts as activity, as it should.
+   */
+  revisit?: () => Promise<void>;
 }): Promise<boolean> {
   const startedAt = Date.now();
   for (;;) {
     throwIfAborted(options.signal);
     if (options.stop?.()) return true;
+    await options.revisit?.();
     const idleFor = Date.now() - options.collector.lastActivityAt;
     const waitedFor = Date.now() - startedAt;
     if (waitedFor >= options.minWaitMs && idleFor >= options.quietMs) return true;
@@ -307,6 +543,13 @@ export async function readSignals(page: Page): Promise<RawPageSignals> {
   try {
     return await page.evaluate<RawPageSignals>(SIGNALS_SCRIPT);
   } catch {
-    return { title: "", bodyText: "", html: "", hasPasswordInput: false, hasPlayerElement: false };
+    return {
+      title: "",
+      bodyText: "",
+      html: "",
+      hasPasswordInput: false,
+      hasPlayerElement: false,
+      ageGate: false,
+    };
   }
 }

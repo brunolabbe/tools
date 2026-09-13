@@ -348,6 +348,14 @@ export const SCENARIOS: readonly Scenario[] = [
     job: SUCCESS,
   },
   {
+    keyword: "agegate",
+    title: "Age confirmation required",
+    description: "An over-18 confirmation this server is not set to press.",
+    probeDelayMs: 1_500,
+    probeError: "AGE_CONFIRMATION_REQUIRED",
+    job: SUCCESS,
+  },
+  {
     keyword: "geo",
     title: "Geo blocked",
     description: "Source refused the server's region.",

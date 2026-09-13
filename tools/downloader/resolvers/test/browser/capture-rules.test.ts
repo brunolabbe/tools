@@ -7,7 +7,12 @@
 
 import { AppError, REDACTED, redactHeaders, redactUrl } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
-import { classifyFailure, classifyNavigationError } from "../../src/browser/classify.ts";
+import {
+  AGE_MARKERS,
+  classifyFailure,
+  classifyNavigationError,
+} from "../../src/browser/classify.ts";
+import { AGE_GATE_TEXT, CLOSE_TEXT } from "../../src/browser/provoke.ts";
 import { DrmObserver, drmInitScript, toDrmSystem } from "../../src/browser/drm.ts";
 import {
   classifyMedia,
@@ -290,6 +295,60 @@ describe("buildRequestContext", () => {
   });
 });
 
+describe("page-interaction labels (dl-48)", () => {
+  const AGE_LABELS = [
+    "I am 18 or older",
+    "I'm over 18",
+    "Yes, I am 18+",
+    "I am 21 or older",
+    "Мне уже есть 18",
+    "Мне есть 18 лет",
+    "Ich bin über 18",
+    "J'ai plus de 18 ans",
+    "Tengo más de 18 años",
+    "Ho più di 18 anni",
+    "Tenho mais de 18 anos",
+    "Ik ben 18 jaar of ouder",
+    "Jag är över 18",
+    "Mam ukończone 18 lat",
+  ];
+
+  test.each(AGE_LABELS)("%s is an age label", (label) => {
+    expect(AGE_GATE_TEXT.test(label)).toBe(true);
+  });
+
+  test.each([
+    "18+",
+    "18+ 12:21",
+    "Watch now",
+    "I am 17",
+    "This video is for viewers who are 18 or older.",
+  ])("%s is not", (label) => {
+    expect(AGE_GATE_TEXT.test(label)).toBe(false);
+  });
+
+  test("no age label carries a marker, or every label would vouch for itself", () => {
+    for (const label of AGE_LABELS) {
+      const lower = label.toLowerCase();
+      expect(AGE_MARKERS.filter((marker) => lower.includes(marker))).toEqual([]);
+    }
+  });
+
+  test.each(["Close", "Close popup", "×", "Закрыть попап", "Schließen", "No thanks"])(
+    "%s is a close control",
+    (label) => {
+      expect(CLOSE_TEXT.test(label)).toBe(true);
+    },
+  );
+
+  test.each(["Watch now", "Смотреть", "Subscribe", "Closed captions"])(
+    "%s is not a close control",
+    (label) => {
+      expect(CLOSE_TEXT.test(label)).toBe(false);
+    },
+  );
+});
+
 describe("classifyFailure", () => {
   const base = {
     finalUrl: "https://site.example/watch",
@@ -298,6 +357,7 @@ describe("classifyFailure", () => {
     html: "",
     hasPasswordInput: false,
     hasPlayerElement: true,
+    ageGate: false,
     quietReached: true,
   };
 
@@ -325,6 +385,29 @@ describe("classifyFailure", () => {
 
   test("a sign-in box next to a working player is not", () => {
     expect(classifyFailure({ ...base, hasPasswordInput: true }).code).toBe("NO_MEDIA_FOUND");
+  });
+
+  test("an age gate nobody pressed is named as such, with the marker that made it one", () => {
+    const error = classifyFailure({
+      ...base,
+      ageGate: true,
+      bodyText: "This video is for adults only.",
+    });
+    expect(error.code).toBe("AGE_CONFIRMATION_REQUIRED");
+    expect(error.details?.["marker"]).toBe("adults only");
+    expect(error.retryable).toBe(false);
+  });
+
+  test("a login wall in front of an age gate is the more fundamental answer", () => {
+    expect(
+      classifyFailure({ ...base, ageGate: true, finalUrl: "https://site.example/login" }).code,
+    ).toBe("AUTH_REQUIRED");
+  });
+
+  test("an age gate outranks a region marker on the same page", () => {
+    expect(
+      classifyFailure({ ...base, ageGate: true, bodyText: "Not available in your country." }).code,
+    ).toBe("AGE_CONFIRMATION_REQUIRED");
   });
 
   test("region refusal is named as such", () => {

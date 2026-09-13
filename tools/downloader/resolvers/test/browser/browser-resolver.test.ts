@@ -259,6 +259,102 @@ describe("BrowserResolver", () => {
     },
   );
 
+  describe("a modal over an age gate (dl-48)", () => {
+    const PROMO_PATH = "/age-gate-promo.html";
+
+    test(
+      "closes the modal through its close control and, told to confirm ages, finds the stream",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        // The recording parser, as the MSE test uses, so the variant URL is the
+        // master the page fetched rather than a rendition parsed out of it.
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({
+          pool,
+          hlsParser: hls.parser,
+          quietMs: 1200,
+          confirmAge: true,
+        });
+        server.requests.length = 0;
+        const result = await probe("/age-gate.html", resolver);
+
+        expect(result.variants[0]?.url).toBe(server.url("/media/mse/master.m3u8"));
+        expect(server.requests).toContain("/beacon/modal-closed");
+        expect(server.requests).toContain("/beacon/age-confirmed");
+        // A stream reached through the promo's own button would be the wrong
+        // stream, and would pass the assertion above.
+        expect(server.requests).not.toContain(PROMO_PATH);
+      },
+    );
+
+    test(
+      "meets a modal and a gate that mount after the playback passes are over",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        // A quiet window longer than the delay: the page is otherwise idle, and
+        // what is under test is that the wait looks again, not that it lasts.
+        const resolver = new BrowserResolver({
+          pool,
+          hlsParser: hls.parser,
+          quietMs: 6000,
+          confirmAge: true,
+        });
+        server.requests.length = 0;
+        const result = await probe("/age-gate.html?late=3500", resolver);
+
+        expect(result.variants[0]?.url).toBe(server.url("/media/mse/master.m3u8"));
+        expect(server.requests).toContain("/beacon/modal-closed");
+        expect(server.requests).toContain("/beacon/age-confirmed");
+      },
+    );
+
+    test(
+      "not told to confirm ages, fails AGE_CONFIRMATION_REQUIRED without pressing the gate",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        server.requests.length = 0;
+        const error = await probeError("/age-gate.html", resolver);
+
+        expectCode(error, "AGE_CONFIRMATION_REQUIRED");
+        expect(error.details?.["marker"]).toBe("adults only");
+        expect(server.requests).toContain("/beacon/modal-closed");
+        expect(server.requests).not.toContain("/beacon/age-confirmed");
+        expect(server.requests).not.toContain(PROMO_PATH);
+        expect(server.requests).not.toContain("/media/mse/master.m3u8");
+      },
+    );
+
+    test(
+      "presses Escape on a dialog it finds no close control in",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        server.requests.length = 0;
+        const result = await probe("/modal-escape.html", resolver);
+
+        expect(result.variants[0]?.url).toBe(server.url("/media/mse/master.m3u8"));
+        expect(server.requests).toContain("/beacon/modal-escaped");
+        expect(server.requests).not.toContain("/modal-escape-promo.html");
+      },
+    );
+
+    test(
+      "an age link on a page with no adult-content wording is left alone",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200, confirmAge: true });
+        server.requests.length = 0;
+        const error = await probeError("/age-link.html", resolver);
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(server.requests).not.toContain("/beacon/age-link");
+      },
+    );
+  });
+
   test("reports BOT_CHALLENGE on an interstitial", { timeout: TEST_TIMEOUT_MS }, async () => {
     const resolver = new BrowserResolver({ pool, quietMs: 1200 });
     const error = await probeError("/challenge.html", resolver);

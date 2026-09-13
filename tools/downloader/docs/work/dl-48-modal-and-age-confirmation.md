@@ -3,7 +3,7 @@ id: dl-48
 tool: downloader
 title: The browser tier closes a modal over the player, and confirms an age gate only when the operator opts in
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -242,3 +242,63 @@ against the code at that commit:
 - `BrowserResolverOptions` has no field for page interaction.
 - Analysis §7's "Player never starts" row reads "`NO_MEDIA_FOUND`; try
   consent-banner dismissal first".
+
+**2026-09-13 — built** on the filing branch, in PR #227, at the owner's request.
+Measured against the live page as well as the fixtures, which is how the first
+three corrections below were found.
+
+What the brief had wrong:
+
+- **The modal has no dialog semantics.** Build step 1 matched only
+  `[role='dialog']` and `[aria-modal='true']` descendants. The reproduced
+  page's promo is a plain `position: fixed` layer with neither, and the page
+  carries two more fixed layers with close controls of their own, a
+  notification toast and a banner. So "the first close control" would spend the
+  pass on the wrong layer. `dismissModal` instead takes the layer covering the
+  viewport's centre, climbing to the nearest dialog or fixed ancestor, and falls
+  back to a visible semantic dialog. It presses Escape only for a semantic
+  dialog, and it leaves any layer holding a `<video>` alone, since sites open
+  their player in a lightbox. The fixture's modal has no role, so a dialog-only
+  step fails it.
+- **Both layers mount late.** A live trace saw nothing at 0.9 s or 2.3 s after
+  `DOMContentLoaded`, both layers at 3.4 s, and a playlist 0.2 s after closing
+  and pressing. `provokePlayback`'s two passes are over by then, and the first
+  live probe with `confirmAge` still answered `NO_MEDIA_FOUND`. The quiet
+  wait now revisits the modal and gate steps once a second, at most four times,
+  while nothing has been captured. It never repeats the play clicks or the
+  consent text: a second play click can pause a player, and `CONSENT_TEXT`
+  matches words like "continue". The `?late=3500` fixture test fails with
+  `MAX_OVERLAY_REVISITS` set to 0 and passes at 4.
+- **The close control's name carries a noun** ("close popup"), so `CLOSE_TEXT`
+  allows up to two words after the verb.
+- **"18+" cannot be a marker.** The page prints it as a badge on every listed
+  thumbnail. The marker that matched live is the Russian stem for "minors".
+- **The web package enumerates codes too.** `web/src/lib/error-presentation.ts`
+  is a `Record<ErrorCode, …>`, and `web/test/mock-api.test.ts` requires a
+  mock scenario per code, now `agegate`.
+- **A gate still showing after an allowed press fails `NO_MEDIA_FOUND`**, not
+  `AGE_CONFIRMATION_REQUIRED`, whose copy says the server is not set to confirm.
+  The resolver clears `ageGate` when `confirmAge` is on.
+
+Placed differently from the brief, and why:
+
+- `AGE_MARKERS` is in `classify.ts` beside `GEO_MARKERS`, which `provoke.ts`
+  imports, rather than in `provoke.ts`. The classifier needs it for
+  `details.marker`, and `classify.ts` has no Playwright dependency.
+- The boot log's `ageConfirmation` is read back from
+  `BrowserResolver.confirmsAge`, not from the config, so
+  `api/test/config.test.ts` proves the setting reached the tier.
+- The fixture server records requested paths and answers `/beacon/*` with 204.
+  That is how the tests assert what was and was not pressed after the browser
+  context is gone.
+
+Live, calling the built `BrowserResolver` directly rather than through the API:
+
+- `confirmAge: false`: `AGE_CONFIRMATION_REQUIRED` in 10.3 s.
+- `confirmAge: true`: 5 HLS variants from 144p to 720p, in 24.6 s.
+
+Checks, all exit 0: `npm run check`; `npm test -- --project downloader`,
+1259 tests in 75 files; `citations-gate.mjs --against origin/main` with 0
+failing. Five Review citations in dl-19, dl-34 and repo-33 were repointed after
+`api/src/config.ts` and `capture-rules.test.ts` moved; the gate located each
+anchor at its new line.

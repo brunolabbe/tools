@@ -28,7 +28,13 @@ import { DRM_BINDING_NAME, DrmObserver, drmInitScript, drmReadbackScript } from 
 import { HitCollector } from "../browser/intercept.ts";
 import { BrowserPool } from "../browser/pool.ts";
 import type { BrowserPoolStats } from "../browser/pool.ts";
-import { provokePlayback, readMetadata, readSignals, waitForQuiet } from "../browser/provoke.ts";
+import {
+  provokePlayback,
+  readMetadata,
+  readSignals,
+  revisitOverlays,
+  waitForQuiet,
+} from "../browser/provoke.ts";
 import { rankHits } from "../browser/rank.ts";
 import { buildRequestContext } from "../browser/request-context.ts";
 import { createRequestSizeProbe } from "../browser/size-probe.ts";
@@ -59,6 +65,14 @@ const SETTLE_TIMEOUT_MS = 3000;
 /** Slack past the internal deadline before the hard cap fires. */
 const HARD_TIMEOUT_GRACE_MS = 3000;
 const CONTEXT_CLOSE_TIMEOUT_MS = 5000;
+/**
+ * dl-48: how often, and how many times, the quiet wait looks again for a modal
+ * or an age gate that mounted after playback provocation — only while nothing
+ * has been captured. Four visits a second apart cover a layer arriving up to
+ * about five seconds late; the page that needed it arrived at 3.4 s.
+ */
+const OVERLAY_REVISIT_EVERY_MS = 1000;
+const MAX_OVERLAY_REVISITS = 4;
 
 export interface BrowserResolverOptions {
   /** Defaults to `MAX_CONCURRENT_BROWSERS`, then 2. Each context costs ~300 MB. */
@@ -83,6 +97,13 @@ export interface BrowserResolverOptions {
    * launched with launch flags of the caller's choosing.
    */
   proxyRootSpkiSha256?: string;
+  /**
+   * Press a recognised "I am over 18" control. Off by default, because the
+   * press is an attestation made on the user's behalf and only an operator can
+   * choose to make it (dl-48). With it off, a probe stopped by such a gate fails
+   * `AGE_CONFIRMATION_REQUIRED` rather than `NO_MEDIA_FOUND`.
+   */
+  confirmAge?: boolean;
 }
 
 interface ProbeOutcome {
@@ -102,6 +123,7 @@ export class BrowserResolver implements Resolver {
   readonly #hlsParser: HlsParser;
   readonly #dashParser: DashParser;
   readonly #quietMs: number;
+  readonly #confirmAge: boolean;
 
   constructor(options: BrowserResolverOptions = {}) {
     this.#ownsPool = options.pool === undefined;
@@ -119,6 +141,12 @@ export class BrowserResolver implements Resolver {
     this.#hlsParser = options.hlsParser ?? parseHls;
     this.#dashParser = options.dashParser ?? parseDash;
     this.#quietMs = options.quietMs ?? DEFAULT_QUIET_MS;
+    this.#confirmAge = options.confirmAge ?? false;
+  }
+
+  /** Whether this tier presses an age confirmation, for the boot log. */
+  get confirmsAge(): boolean {
+    return this.#confirmAge;
   }
 
   /** Anything fetchable over HTTP. This is the fallback for everything. */
@@ -236,9 +264,12 @@ export class BrowserResolver implements Resolver {
     await provokePlayback(page, {
       deadline: deadline - TEARDOWN_RESERVE_MS,
       signal: options.signal,
+      confirmAge: this.#confirmAge,
     });
 
     this.#stage(options, "network-quiet");
+    let revisits = 0;
+    let lastRevisitAt = Date.now();
     const quietReached = await waitForQuiet({
       collector,
       deadline: deadline - TEARDOWN_RESERVE_MS,
@@ -246,6 +277,16 @@ export class BrowserResolver implements Resolver {
       minWaitMs: MIN_WAIT_MS,
       signal: options.signal,
       stop: () => drm.detected,
+      revisit: async () => {
+        if (collector.hits.length > 0 || revisits >= MAX_OVERLAY_REVISITS) return;
+        if (Date.now() - lastRevisitAt < OVERLAY_REVISIT_EVERY_MS) return;
+        revisits += 1;
+        lastRevisitAt = Date.now();
+        await revisitOverlays(page, {
+          deadline: deadline - TEARDOWN_RESERVE_MS,
+          confirmAge: this.#confirmAge,
+        });
+      },
     });
 
     this.#stage(options, "settle-requests");
@@ -262,6 +303,10 @@ export class BrowserResolver implements Resolver {
       const signals = await readSignals(page);
       throw classifyFailure({
         ...signals,
+        // A gate still showing after this tier was allowed to press it is a
+        // press that did not start the player. Saying the server "is not set to
+        // confirm" would be false, so that probe fails as an absence instead.
+        ageGate: signals.ageGate && !this.#confirmAge,
         finalUrl,
         status: navigation?.status(),
         quietReached,
