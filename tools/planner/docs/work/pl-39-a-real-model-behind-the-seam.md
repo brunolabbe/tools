@@ -295,6 +295,32 @@ Separately, pl-40's grooming found that the input figures were taken with no
 finds in the prompt. The table now says so, and that finding is
 [pl-41](./pl-41-every-find-reaches-the-prompt.md).
 
+## Review
+
+**Gate: CONCERNS** — 2026-09-13 · `origin/main...3841faf8e0d001b6690a5c8376edafbae2d95c9e` · defect hunt run directly (ticket-reviewer, no `code-review` delegation), across three rounds: initial hunt at `489bce9`, a fix-and-reverify round at `b4c934f`, and this owner-decided delta at `3841faf`
+
+| Done when                                                                                                  | Proof                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Boots with key, health reports anthropic/claude-opus-5; refuses without key, naming the variable           | `api/test/health.test.ts:37 "boots on anthropic with a key"` ✓, `:57 "refuses to boot anthropic without a key"` ✓                                                                                                                                                                                                                                                                        |
+| Unrecognised `MODEL_PROVIDER` refuses to boot                                                              | `api/test/config.test.ts:38 "refuses an unknown model provider"` ✓                                                                                                                                                                                                                                                                                                                       |
+| `AnthropicProvider`: schema/thinking/effort/fallback/beta/key sent; every stop reason and error row mapped | `agent/test/anthropic-provider.test.ts:130 "the reply schema as output_config.format"` ✓, `:262 "is malformed, not a silent end"` ✓ (4 stop reasons incl. `compaction`), `:312 "with the catalog's retryability"` ✓ — all 7 `codeFor` branches and all 4 `stopReasonOf` cases individually mutation-confirmed red                                                                        |
+| Reply passing sent JSON Schema but failing `costEstimateSchema`'s refine is refused and re-asked           | `agent/test/anthropic-provider.test.ts:396 "fails costEstimateSchema's refine is refused"` ✓                                                                                                                                                                                                                                                                                             |
+| JSON Schema for `specialistReplySchema` snapshotted                                                        | `agent/test/anthropic-provider.test.ts:187 "is snapshotted, so a zod or SDK upgrade"` ✓                                                                                                                                                                                                                                                                                                  |
+| Thrown auth error through the real logger never contains the key                                           | `tools/planner/api/test/logging.test.ts:87 "does not contain the key"` ✓; the gate additionally ran 4 uncommitted sentinel-injection probes (custom header, body message, connection error, workspace-id header), 0 leaks                                                                                                                                                                |
+| Scripted suites and e2e pass unchanged                                                                     | scripted: `agent/test/scripted-provider.test.ts` unchanged, 5/5 green ✓; e2e: **unproven (gate)** — `.github/workflows/planner.yml`                                                                                                                                                                                                                                                      |
+| `MAX_OUTPUT_TOKENS` 8,000 in both places; `RUN_TOKEN_BUDGET` consequence documented                        | `api/test/config.test.ts:140 "defaults the reply ceiling to 8,000"` ✓; `docs/02-DEPLOYMENT.md`'s fallback-doubling paragraph closes the completeness gap found in round 1                                                                                                                                                                                                                |
+| Lockfile adds SDK and its own deps only                                                                    | verified — 6 new entries (SDK + 5 transitive, corrected from the Log's original miscount of "six"), one line removed (`@babel/runtime`'s `"dev": true`)                                                                                                                                                                                                                                  |
+| `ANTHROPIC_CUSTOM_HEADERS` cannot silently override the configured key (owner's decision, this delta)      | `api/test/config.test.ts:59 "refuses anthropic when ANTHROPIC_CUSTOM_HEADERS is set"` ✓, `:89 "a blank ANTHROPIC_CUSTOM_HEADERS is unset"` ✓ (verified against the real SDK independently), `:100 "does not stop the scripted default"` ✓, `api/test/health.test.ts:73 "refuses to boot anthropic when ANTHROPIC_CUSTOM_HEADERS is set in the environment"` ✓ through the real boot path |
+| `npm run check` and `npm test -- --project planner` pass; image builds                                     | verified green (891/891 tests, 54 files) ✓; image build **unproven (gate)** — `.github/workflows/planner.yml`, no Docker daemon here                                                                                                                                                                                                                                                     |
+
+- **Resolved** (found in round 1, fixed and reverified in round 2) · `docs/02-DEPLOYMENT.md`'s `RUN_TOKEN_BUDGET` sizing didn't disclose that a refusal-fallback can double a single attempt's bill — now documented as a `med`-severity doc completeness gap, closed.
+- **Resolved** · `compaction` stop reason untested by name — fixture and test.each entry added, 30/30.
+- **Resolved** · ticket Log miscounted the lockfile's transitive packages ("six" → "five").
+- **Resolved this round** · `ANTHROPIC_CUSTOM_HEADERS` could silently override the configured API key — owner decided to refuse to boot (option c) rather than re-send the key per request (b) or leave it documented; implemented, tested at both the config and real-boot levels, and independently verified against the real SDK's blank-handling behavior.
+- **dropped** · none across all three rounds.
+- **findings** · 3 found round 1 (1 med, 2 low), all 3 carried and fixed; 2 open decisions raised round 1, both now decided by the owner — `ANTHROPIC_CUSTOM_HEADERS` (option c, refuse to boot, resolved this delta) and empty `MODEL_PROVIDER` (option A, keep blank = unset, decided 2026-09-13, no code change).
+- NFR: security ✓ (1 committed test plus 4 uncommitted gate probes across 5 paths total, 0 leaks; the new refusal message is a static string, so the raw env value structurally cannot reach it). performance n/a. reliability ✓. maintainability ✓ (both low findings closed).
+
 ## Log
 
 **2026-09-13 — filed.** From a roadmap review that found every planner ticket
@@ -418,7 +444,13 @@ OVERRIDE-FROM-ENV` (a probe against a stubbed `fetch`, no network). The SDK
   which is the same mistake one character later. It raises `INTERNAL`, as
   `requiredEndpoint` does. An unknown `MODEL_EFFORT` refuses the same way, for the
   same reason. An empty value of any of the three is "unset" and takes the
-  default, as a commented-out `.env` line should.
+  default, as a commented-out `.env` line should. **For `MODEL_PROVIDER` that is
+  now the owner's decision, 2026-09-13.** The gate asked whether a
+  present-but-blank value, such as an unresolved compose variable, should
+  refuse instead, and recommended keeping it. The owner kept it: blank stays
+  unset, and no code changed. The answer reached this Log through the
+  orchestrator's relay after the builder's first account of it; until then the
+  sentence above stood as the builder's own choice.
 - **The missing key and the unknown `MODEL_PROVIDER` raise `AGENT_UNCONFIGURED`,
   not `requiredEndpoint`'s `INTERNAL`.** The contract defines that code as "no
   model provider is configured, or the one named does not exist", which is
