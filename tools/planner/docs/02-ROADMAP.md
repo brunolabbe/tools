@@ -179,6 +179,19 @@ run _before_ the fan-out — the finds are what a specialist reads — where eve
 other grounding call in this phase happens after it. So the run grounds twice,
 and §5's amendment records why that is a shape change rather than an extra call.
 
+**Every piece above landed, and P3 was still not met.** Its line says _against a
+real model_, and as of 2026-09-13 `createModelProvider` knew only `scripted`:
+every grounded candidate had been written by a script. Two pieces close it, and
+they are split because only the first can be proven in CI:
+
+6. **A real model behind the seam** — Anthropic, `claude-opus-5` by default,
+   structured replies through `ModelProvider`, adaptive thinking at low effort
+   and an 8,000-token reply cap. → [pl-39](./work/pl-39-a-real-model-behind-the-seam.md)
+7. **The milestone, proven** — a key-gated live run that records what a real
+   plan costs against the ceiling the budget claims, what a hostile place name
+   does to a real model, and the first real replies pl-36's corpus is waiting
+   for. → [pl-40](./work/pl-40-prove-p3-against-a-real-model.md)
+
 pl-27 depends only on pl-24, not on pl-28: the fixture provider answers, so the
 pass and the packing arithmetic can be built and tested with no instance running
 and no network. That is deliberately the pl-9-and-pl-5 arrangement again, which
