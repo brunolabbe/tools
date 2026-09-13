@@ -96,7 +96,7 @@ const ALLOWED_CONTENT_TYPES: ReadonlySet<string> = new Set([
 const MAX_THUMBNAIL_BYTES = 512 * 1024;
 
 /**
- * Well under `probeTimeoutMs` (30 s by default) on purpose. A decorative image
+ * Well under `probeTimeoutMs` (45 s by default) on purpose. A decorative image
  * must never be able to add meaningfully to how long a probe takes, and the
  * probe's own budget has already been mostly spent by the time we get here.
  */
