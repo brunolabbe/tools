@@ -56,6 +56,53 @@ describe("loadApiConfig", () => {
     expect(loadApiConfig({}, { MODEL_PROVIDER: "  " }).modelProvider).toBe("scripted");
   });
 
+  test("refuses anthropic when ANTHROPIC_CUSTOM_HEADERS is set, naming the variable and never its value", () => {
+    // The owner's decision on pl-39. The SDK applies this variable to every
+    // request, and a header in it can replace the configured key.
+    const secret = "x-api-key: sk-ant-STRAY-KEY-FROM-HOST";
+    for (const env of [
+      { MODEL_PROVIDER: "anthropic", ANTHROPIC_CUSTOM_HEADERS: secret },
+      // No colon adds no header in the SDK, but the rule is "set", not "parses".
+      { MODEL_PROVIDER: "anthropic", ANTHROPIC_CUSTOM_HEADERS: "garbage" },
+    ]) {
+      try {
+        loadApiConfig({}, env);
+        expect.unreachable("anthropic booted with ANTHROPIC_CUSTOM_HEADERS set");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(AppError);
+        const appError = error as AppError;
+        expect(appError.code).toBe("AGENT_UNCONFIGURED");
+        expect(appError.message).toContain("ANTHROPIC_CUSTOM_HEADERS");
+        expect(appError.details).toEqual({ variable: "ANTHROPIC_CUSTOM_HEADERS" });
+        expect(
+          JSON.stringify({ message: appError.message, details: appError.details }),
+        ).not.toContain("STRAY-KEY");
+      }
+    }
+
+    // The provider named by override rather than by environment refuses too.
+    expect(() =>
+      loadApiConfig({ modelProvider: "anthropic" }, { ANTHROPIC_CUSTOM_HEADERS: secret }),
+    ).toThrow(/ANTHROPIC_CUSTOM_HEADERS is set/u);
+  });
+
+  test("a blank ANTHROPIC_CUSTOM_HEADERS is unset, because the SDK adds no header for one", () => {
+    // Measured against SDK 0.125.0: it trims the value and treats empty as
+    // absent, so these add no header and must not refuse.
+    for (const blank of ["", "   ", " \n ", "\t"]) {
+      expect(
+        loadApiConfig({}, { MODEL_PROVIDER: "anthropic", ANTHROPIC_CUSTOM_HEADERS: blank })
+          .modelProvider,
+      ).toBe("anthropic");
+    }
+  });
+
+  test("ANTHROPIC_CUSTOM_HEADERS does not stop the scripted default, which never builds the SDK", () => {
+    expect(loadApiConfig({}, { ANTHROPIC_CUSTOM_HEADERS: "x-extra: 1" }).modelProvider).toBe(
+      "scripted",
+    );
+  });
+
   test("recognises anthropic, and reads its key, model and effort from their own variables", () => {
     const config = loadApiConfig(
       {},

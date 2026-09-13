@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_ERROR_MESSAGES, ROUTES } from "@planner/contract";
 import type { App } from "../src/server.ts";
 import { createApp } from "../src/server.ts";
@@ -68,6 +68,30 @@ describe("GET /api/health", () => {
 
     await expect(started).rejects.toThrow(/ANTHROPIC_API_KEY is not set/u);
     await expect(started).rejects.toMatchObject({ code: "AGENT_UNCONFIGURED" });
+  });
+
+  test("refuses to boot anthropic when ANTHROPIC_CUSTOM_HEADERS is set in the environment", async () => {
+    // The owner's decision on pl-39, through the real boot path: `createApp`
+    // reads `process.env`, so the variable is stubbed there rather than passed.
+    vi.stubEnv("ANTHROPIC_CUSTOM_HEADERS", "x-api-key: sk-ant-STRAY-KEY-FROM-HOST");
+    try {
+      const started = createApp({
+        config: {
+          databasePath: ":memory:",
+          logLevel: "silent",
+          modelProvider: "anthropic",
+          anthropicApiKey: "sk-ant-health-test-key",
+        },
+      });
+
+      await expect(started).rejects.toThrow(/ANTHROPIC_CUSTOM_HEADERS is set/u);
+      await expect(started).rejects.toMatchObject({
+        code: "AGENT_UNCONFIGURED",
+        details: { variable: "ANTHROPIC_CUSTOM_HEADERS" },
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test("names the grounding provider too, and says nothing else about it", async () => {

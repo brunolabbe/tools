@@ -426,6 +426,39 @@ function modelEffort(raw: string | undefined): AnthropicEffort {
   );
 }
 
+/**
+ * `ANTHROPIC_CUSTOM_HEADERS` refuses to boot a real model — the owner's
+ * decision on pl-39, taken over re-sending the key on every request.
+ *
+ * The SDK reads this variable unconditionally, no client option switches it
+ * off, and a header in it can replace the explicit key — reproduced with a
+ * stubbed `fetch`. Re-sending `x-api-key` per request would close the key, but
+ * not a stray `anthropic-beta` or any other header that changes what a request
+ * does or bills. Refusing closes all of them, the same way a typo'd
+ * `MODEL_PROVIDER` refuses above.
+ *
+ * **Only under `anthropic`.** No other provider constructs the SDK, so under
+ * `scripted` the variable reaches nothing, and refusing there would stop a
+ * developer whose shell exports it for other tooling from running the default.
+ *
+ * **Blank is unset**, and that is measured rather than assumed: SDK 0.125.0
+ * trims the value and treats an empty result as absent, so a blank or
+ * whitespace-only value adds no header. This trims the same way, so the two
+ * cannot disagree about what "set" means.
+ *
+ * **The value is never repeated** in the message or the details. A variable
+ * whose job is carrying headers may be carrying a key.
+ */
+function refuseCustomHeaders(provider: ModelProviderName, raw: string | undefined): void {
+  if (provider !== "anthropic") return;
+  if ((raw ?? "").trim() === "") return;
+  throw new AppError(
+    "AGENT_UNCONFIGURED",
+    'MODEL_PROVIDER is "anthropic" and ANTHROPIC_CUSTOM_HEADERS is set. The Anthropic SDK applies that variable to every request and it can replace the configured key, so this service refuses to start with it. Unset it.',
+    { details: { variable: "ANTHROPIC_CUSTOM_HEADERS" } },
+  );
+}
+
 export function loadApiConfig(
   overrides: Partial<ApiConfig> = {},
   env: NodeJS.ProcessEnv = process.env,
@@ -436,11 +469,14 @@ export function loadApiConfig(
       ? ":memory:"
       : (rawDatabase ?? path.resolve(API_DEFAULTS.dataDir, API_DEFAULTS.databaseFile));
 
+  const resolvedModelProvider = overrides.modelProvider ?? modelProvider(env["MODEL_PROVIDER"]);
+  refuseCustomHeaders(resolvedModelProvider, env["ANTHROPIC_CUSTOM_HEADERS"]);
+
   return {
     host: overrides.host ?? env["HOST"] ?? API_DEFAULTS.host,
     port: overrides.port ?? int(env["PORT"], API_DEFAULTS.port, { min: 0, max: 65_535 }),
     databasePath,
-    modelProvider: overrides.modelProvider ?? modelProvider(env["MODEL_PROVIDER"]),
+    modelProvider: resolvedModelProvider,
     // Read here and nowhere else — the SDK would read it from `process.env`
     // itself if it were not handed one. Not validated here: whether a missing
     // key is a problem depends on which provider was named, which is

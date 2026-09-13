@@ -788,6 +788,14 @@ configured and billed nothing. An unknown `MODEL_EFFORT` refuses the same way,
 and since pl-39 so does an unknown `GROUNDING_PROVIDER`. Read `failed to start`
 in the container log, not `/api/health`.
 
+**`ANTHROPIC_CUSTOM_HEADERS` must not be set on a host running
+`MODEL_PROVIDER=anthropic`, and the service refuses to start if it is.** The
+Anthropic SDK applies that variable to every request whatever the service passes
+it, and a header in it can replace the configured key or add a beta header that
+changes what is billed. A blank value counts as unset, because the SDK adds no
+header for one. Under `scripted` the variable is ignored, since nothing builds
+the SDK.
+
 After it boots, `/api/health` reports `agent: { provider: "anthropic", model:
 "claude-opus-5" }` — the model configured. A refused request can be answered by a
 fallback model inside the same call, and when that happens the log line

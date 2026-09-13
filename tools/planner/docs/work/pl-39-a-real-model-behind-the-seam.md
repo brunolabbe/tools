@@ -358,9 +358,33 @@ and the planner e2e suite ran unchanged.
   and an explicit `apiKey`, the request went out with `x-api-key:
 OVERRIDE-FROM-ENV` (a probe against a stubbed `fetch`, no network). The SDK
   merges env-derived default headers over its auth headers, and later keys
-  overwrite earlier ones. Per-request `headers` rank above both, so re-sending
-  the key on every request would close it. That is put to the orchestrator as a
-  decision rather than built here.
+  overwrite earlier ones. **Now refused: the owner's decision, 2026-09-13, and
+  it overrode the builder's recommendation.** The gate put two options: leave
+  it documented, or re-send `x-api-key` on every request (the builder
+  recommended this). The orchestrator added a third, refuse to boot while the
+  variable is set, and recommended it: re-sending the key still leaves a stray
+  `anthropic-beta` or any other header free to change what is billed, and
+  refusing matches how this ticket already treats a typo'd provider. All three
+  went to the owner, who chose the refusal. As built:
+  - **In `loadApiConfig`, raising `AGENT_UNCONFIGURED`**, right after
+    `MODEL_PROVIDER` is resolved — the same place and the same code as the
+    unknown-provider refusal, and `config.ts` is already the only file allowed to
+    read the environment. The provider constructor could not do it without
+    reading `process.env` itself. The message names the variable and never its
+    value, since a variable that carries headers may be carrying a key.
+  - **Only when the provider is `anthropic`.** No other provider constructs the
+    SDK, so under `scripted` the variable reaches nothing. Refusing there would
+    stop a developer whose shell exports it for other tools from running the
+    default.
+  - **Blank or whitespace-only counts as unset, and that was measured.** SDK
+    0.125.0's `readEnv` trims and treats an empty result as absent. A probe
+    against a stubbed `fetch` sent no extra header for `""`, `"   "`, `" \n "` or
+    `"\t"`, and one for `"x-extra: 1"`. The check trims the same way. A non-blank
+    value with no colon also adds no header in the SDK, but it refuses anyway,
+    because the rule is "set", not "parses".
+  - Proven by `api/test/config.test.ts` (refusal, blank, scripted) and
+    `api/test/health.test.ts` (through `createApp` with the variable stubbed in
+    `process.env`), and red-run once with the check removed.
 - **"Check the fixture, and say which it was" could not be settled by a fixture
   written by hand.** The documented semantics are that top-level `usage` covers
   only the attempt that produced the message and `usage.iterations` reports
