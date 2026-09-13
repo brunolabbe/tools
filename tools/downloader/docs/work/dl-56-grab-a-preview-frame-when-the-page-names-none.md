@@ -205,3 +205,11 @@ commit between the two touches `tools/downloader`.
   `ffmpegEgress.tlsCaFile`. That is the tiers' proxy when ffmpeg TLS
   interception is off, and a separate terminating `ffmpegProxy` when it is on.
 - `probeTimeoutMs` defaults to 45 s.
+
+## The gate on this filing
+
+**2026-09-13 — CONCERNS**, the same gate as dl-55, recorded there in full. For
+this ticket it confirmed the code facts: `captureThumbnail`'s early return, the
+thumbnail constants, `runFfmpeg`'s options, `PROGRESS_ARGS`, `ffmpegEgress` and
+the `probeTimeoutMs` default. It also confirmed that `depends_on: [dl-55]` is
+justified by the text. It raised nothing against this ticket's Build.

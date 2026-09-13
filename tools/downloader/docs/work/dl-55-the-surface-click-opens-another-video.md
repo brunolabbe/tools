@@ -119,7 +119,9 @@ Chosen from options:
      URLs passed through `redactUrl` from `@webtools/core`. This holds even if
      hits exist: a hit collected before the departure could still be a preview
      clip. Stop the quiet wait early once a departure is seen; nothing after it
-     is worth waiting for.
+     is worth waiting for. `resolvers` does not depend on `@webtools/core`
+     today, so add it to `resolvers/package.json`'s `dependencies`;
+     `packages/core/test/image-closure.test.ts` fails by name if it is missing.
    - Log a `warn` naming the step that was running when the page left, so the
      next page shape that trips the guard is diagnosable from the log.
 4. **Tests**, beside dl-48's in `resolvers/test/browser/browser-resolver.test.ts`,
@@ -131,8 +133,8 @@ Chosen from options:
      at (5, 5) on the first `<video>` would land on it. The second page plays a
      different master playlist.
    - The probe returns the first page's playlist, the second page is never
-     requested, and its playlist is never in `variants`. Assert on requests the
-     fixture server saw. If `fixture-server.ts` records none, add that.
+     requested, and its playlist is never in `variants`. Assert on the `requests`
+     list `fixture-server.ts` already keeps.
    - **The guard fixture.** A page whose only play control navigates the top
      frame, once by `history.pushState` plus in-page content swap and once by
      `location.assign`, to a page that plays a stream. Both probes fail
@@ -214,3 +216,20 @@ between the two touches `tools/downloader`. Facts checked against the code at
   requested or landing URL.
 - The probe's `requestContext` `Referer` was the embedded player's origin, so
   the winning hit came from the second page's player iframe, not the top frame.
+
+## The gate on this filing
+
+**2026-09-13 — CONCERNS**, from `ticket-reviewer` on Sonnet, at `f3d72e4`. It
+checked every code fact in this ticket and in dl-56 against `1835657`, and
+found all of them true. Its report is on the pull request thread.
+
+- **high, no change needed** — the id `dl-55` was also claimed by PR #235.
+  The reviewer ran before that PR's author renumbered: PR #235 at `3066c57`
+  claims dl-57 and dl-58 and no dl-55, and `next-id.mjs` after a fetch lists
+  dl-55 and dl-56 on this branch only. The reviewer's fix, renaming these
+  tickets to dl-57 and dl-58, would have re-created the collision.
+- **low, fixed** — Build step 3 imports `redactUrl` from `@webtools/core`, which
+  `resolvers` does not depend on. Step 3 now says to add it.
+- **low, fixed** — `api/src/thumbnails.ts` said `probeTimeoutMs` defaults to
+  30 s, and `api/src/config.ts` sets 45 s. The comment is corrected on this
+  branch.
