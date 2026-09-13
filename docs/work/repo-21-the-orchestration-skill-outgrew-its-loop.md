@@ -217,7 +217,7 @@ from a scratch copy, not from its documentation:
   **not** parse as citations, so today `SKILL.md` has effectively none.
 - Writing defect 1's own sentence as a citation reports
   `MOVED  .claude/agents/builder.md:22 "| \`mechanical\` | \`sonnet\` |"`with
-*"not in 22, and not anywhere in the file"*, exit **1**. The true wording, and`.claude/agents/ticket-reviewer.md:6 "model: sonnet"`, both report `ok`— exit
+*"not in 22, and not anywhere in the file"*, exit **1**. The true wording, and`.claude/agents/ticket-reviewer.md:6 "model: sonnet isolation: worktree"`, both report `ok`— exit
 **0** with`--require-anchors`. **The check would have caught defect 1 and does
   not fire on the corrected text.**
 - Working-tree mode uses `git ls-files`, so it needs no history: it is safe in

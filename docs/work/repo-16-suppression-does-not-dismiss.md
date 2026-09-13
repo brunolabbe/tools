@@ -365,7 +365,7 @@ security tab rather than inferred.
    Its body reads
    `repo-13-codeql-false-positives-recur.md:216` "**Answered 2026-09-01: it closed.**"
    struck through, while its own gate table still reads
-   `repo-13-codeql-false-positives-recur.md:294` "correctly left **deferred**"
+   `repo-13-codeql-false-positives-recur.md:294` "correctly left **deferred** — `gh api` denied"
    — **that row is now marked `WITHDRAWN` and retracted beneath the table; the
    line number is repointed from the one this ticket was filed with, which this
    build's own edit moved**.
