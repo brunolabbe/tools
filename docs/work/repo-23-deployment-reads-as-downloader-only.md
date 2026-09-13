@@ -108,7 +108,7 @@ the file rather than only here — a ticket is not where the next reader looks.
 1. Add the signpost to `docs/02-DEPLOYMENT.md`, above `## Shape` (currently line
    13), after the existing intro. It must:
    - use the phrase **"worked example"**, matching `docs/00-TOOLS.md:51` and
-     `docs/adr/004-one-compose-fragment-per-tool.md:14` rather than inventing a
+     `docs/adr/004-one-compose-fragment-per-tool.md:22` "downloader is their worked example rather than their" rather than inventing a
      third wording for the same idea;
    - say the page is repo-wide and why — one tunnel, one login policy, one
      version scheme, for whatever gets published;
@@ -221,8 +221,8 @@ Reviewer: Sonnet 5 (`claude-sonnet-5`). Builder ran Opus (explicit `model: "opus
 | 6. `npm run check`/`format`/`status.mjs` clean          | **verified** — `check` exit 0, `format` leaves `git status --porcelain` empty, `status.mjs --json` → `problems: []`, `repo-23` at `status: done`                                             |
 | 7. This ticket's own citations resolve at `c37cab9`     | **verified** — `node scripts/citations.mjs docs/work/repo-23-*.md --rev c37cab9` → 0 moved, 0 unresolvable, exit 0 (25 unanchored — expected, that section carries no anchor text by design) |
 
-- **verified** · the two repointed, now-anchored citations (repo-1 → `docs/02-DEPLOYMENT.md:278`, dl-32 → `:155`) actually catch drift, not just pass today: injecting one line at the top of `docs/02-DEPLOYMENT.md` turns both `ok` → `MOVED`; restoring turns both back. Reproduces the builder's own disclosed probe.
-- **verified** · the `:271`/`:278` correction to the orchestrator's brief is right: `git show 022dfff:docs/02-DEPLOYMENT.md | sed -n '256p'` and `sed -n '278p'` on this branch are byte-identical; `origin/main`'s own line 256 was already the unrelated scrub-bar-drag sentence, matching this branch's line 271. The builder corrected the orchestrator, not the reverse.
+- **verified** · the two repointed, now-anchored citations (repo-1 → `docs/02-DEPLOYMENT.md@6b86273:278` "The scope of that, and the shared store", dl-32 → `:155` "see the security posture in") actually catch drift, not just pass today: injecting one line at the top of `docs/02-DEPLOYMENT.md` turns both `ok` → `MOVED`; restoring turns both back. Reproduces the builder's own disclosed probe.
+- **verified** · the `docs/02-DEPLOYMENT.md@6b86273:271` "scrub-bar drag"/`:278` "The scope of that, and the shared store" correction to the orchestrator's brief is right: `git show 022dfff:docs/02-DEPLOYMENT.md | sed -n '256p'` and `sed -n '278p'` on this branch are byte-identical; `origin/main`'s own line 256 was already the unrelated scrub-bar-drag sentence, matching this branch's line 271. The builder corrected the orchestrator, not the reverse.
 - **verified** · scope is clean: `docs/02-DEPLOYMENT.md` is a pure `15 0` insertion (`git diff --numstat`), heading list byte-identical before/after; the branch touches exactly 4 files total, none of them `vitest.config.ts`, `version.txt`, `CHANGELOG.md` or `.release-please-manifest.json`; merge-base with `origin/main` is `4a4cc4f`, which itself only touches `vitest.config.ts` (18 lines) — the rebase claim in the Log holds.
 - **verified** · changelog risk is accurately disclosed: `release-please-config.json` marks `docs` `"hidden": true`; per `docs/03-RELEASING.md`'s own worked example, a releasing-type title (e.g. `fix(repo):`) would route by path and cut a downloader release off this branch's one-line `tools/downloader/docs/work/dl-32-*.md` touch. Live only against the not-yet-opened PR's title — not a defect in this diff.
 - **verified** · both hand-checks (heading-anchor slugs, markdown link resolution) are accurately disclosed as hand checks — `npm run check` is lint+format:check+typecheck and validates neither. Left as disclosed, not upgraded to a gate.
@@ -250,7 +250,7 @@ Reviewer: Sonnet 5 (`claude-sonnet-5`). Builder ran Opus (explicit `model: "opus
 - **2026-09-05** — An earlier framing of this ticket called it below
   `CLAUDE.md`'s bar for filing — "no defect, no reproduction, no decision" — and
   that was withdrawn before filing. It has a reproduction, with a named agent,
-  named commands and named line ranges, and `docs/01-TICKETS.md:32` says the
+  named commands and named line ranges, and `docs/01-TICKETS.md:43` "is worth a ticket, because the reproduction is the deliverable" says the
   reproduction is the deliverable. Recorded because the withdrawn framing is the
   more interesting half: the observation looked unfileable right up until the
   agent that made the mistake explained how it made it.
@@ -415,3 +415,5 @@ bucket. The scope of` — inside the Cloudflare WAF bullet that ends by linking
   three links long and the second was the cheap place to break it: one
   `sed -n '256p'` against the commit the citation was written at would have
   settled it before any of this was dispatched.
+
+- **2026-09-13 — repo-44: 4 failing references down to 0.** Both verified bullets describe an old → new correction measured on this branch, so the four coordinates are pinned to `6b86273`, the commit that merged this record, where each holds the text the bullets name. Outside the gate record, the Build step's `adr/004` pointer and the pointer to the ticket format's defect rule are repointed; the Why's reproduction of the page before the signpost, and the Log's line-number corrections, are left as written.

@@ -94,20 +94,20 @@ reddens 2 of 3, M5 reddens 1 of 3. Controls green before and after.
 
 It added a sixth mutation of its own — `?? false` → `?? undefined` — which goes
 red with `expected undefined to be false`. That one proves something none of the
-builder's five could: `:55` is `Object.is`-strict rather than a truthiness
+builder's five could: `tools/planner/web/test/vite-config.test.ts:55` "expect(server?.host).toBe(false)" is `Object.is`-strict rather than a truthiness
 assertion, a distinction invisible to any mutation that swaps one falsy value for
 another.
 
 It also ran the suite under `env -u HOST` and under `HOST=192.168.1.5`: **green
 both ways**, so the suite does not depend on this container's ambient `HOST`.
 That is the one property the builder's runs could not establish, since all of
-them inherited `HOST=0.0.0.0` from `.devcontainer/devcontainer.json:97`.
+them inherited `HOST=0.0.0.0` from `.devcontainer/devcontainer.json:97` "HOST".
 
 **The `resetModules` experiment is the one worth carrying forward.** Deleting
-`vi.resetModules()` at `:31` turns the suite **red**, with the cached-module
+`vi.resetModules()` at `tools/planner/web/test/vite-config.test.ts:31` "vi.resetModules()" turns the suite **red**, with the cached-module
 symptom exactly: `expected '0.0.0.0' to be false`. So the line the brief warned about is
 not defensive folklore inherited from the downloader; it is load-bearing here and
-now measured. Deleting the `afterEach` at `:39-42` left the suite green — F3.
+now measured. Deleting the `afterEach` at `tools/planner/web/test/vite-config.test.ts:39-42` "afterEach(() => {" left the suite green — F3.
 
 Independent confirmations: `npm test -- --project planner` → 50 files / 702
 tests, identical to the builder's report; a cold typecheck with the gate's own
@@ -141,27 +141,27 @@ generalises past this ticket.
 
 #### Findings — three, all no-change
 
-**F1 — the Why at `:19-20` mis-cites the Dockerfile. Confirmed independently by
+**F1 — the Why (its lines 19-20) mis-cites the Dockerfile. Confirmed independently by
 builder, gate and orchestrator. No change.**
 `tools/planner/Dockerfile:110` does carry `ENV HOST=0.0.0.0`, but the image never
-runs Vite: `:130` is `EXPOSE 8090` and `:139` is
-`CMD ["node", "tools/planner/api/dist/main.js"]`, and the comment at `:108-109`
+runs Vite: `tools/planner/Dockerfile:130` is `EXPOSE 8090` and `tools/planner/Dockerfile:139` is
+`CMD ["node", "tools/planner/api/dist/main.js"]`, and the comment at `tools/planner/Dockerfile:108-109`
 names `API_DEFAULTS` itself. The real source of the dev server's `HOST` is
-`.devcontainer/devcontainer.json:97`, commented at `:95-96`. All five coordinates
+`.devcontainer/devcontainer.json:97` "HOST", commented at `:95-96` "Dev servers must listen on all interfaces to be reachable". All five coordinates
 re-verified while writing this section. _Disposition:_ **Why** stays as the
 historical record of what was believed when the ticket was filed, and the Log
 carries the correction — this repo's stated convention for a brief that did not
 survive contact with the code.
 
-**F2 — `:59` passes a `HOST` the test does not use. Inert, not wrong. No
+**F2 — `tools/planner/web/test/vite-config.test.ts:58-59` "fails on a taken port rather than walking to one nobody forwarded" passes a `HOST` the test does not use. Inert, not wrong. No
 change.**
-`tools/planner/web/test/vite-config.test.ts:59` calls
-`serverConfigWith("0.0.0.0")`, but that test asserts only `:63` `port` and `:64`
+`tools/planner/web/test/vite-config.test.ts:58-59` "fails on a taken port rather than walking to one nobody forwarded" calls
+`serverConfigWith("0.0.0.0")`, but that test asserts only `tools/planner/web/test/vite-config.test.ts:63` "expect(server?.port).toBe(5183)" `port` and `tools/planner/web/test/vite-config.test.ts:64` "expect(server?.strictPort).toBe(true)"
 `strictPort`, neither of which reads `HOST`. The helper's signature requires an
 argument and some value must be passed. Recorded so a later reader does not
 mistake it for a dependency and preserve it as one.
 
-**F3 — the `afterEach` at `:39-42` is uncovered by construction. Genuine
+**F3 — the `afterEach` at `tools/planner/web/test/vite-config.test.ts:39-42` "afterEach(() => {" is uncovered by construction. Genuine
 hygiene, unproven. No change.**
 No mutation in this file can kill it: deleting it leaves the suite green, because
 every test sets or deletes `HOST` before importing. It exists against a future
@@ -171,11 +171,11 @@ demands it.
 
 #### Acceptance
 
-| Done when                                                                               | Verdict  | Proof                                                                                                                                                                                                  |
-| --------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `npm test -- --project planner` covers the three values; the unset case asserts `false` | verified | `tools/planner/web/test/vite-config.test.ts:47` (`host`), `:55` (`toBe(false)`, not a string), `:63` (`port`), `:64` (`strictPort`); gate's `?? undefined` mutation proves `:55` is `Object.is`-strict |
-| `npm run check` and `npm test` pass                                                     | verified | cold `npm run check` exit 0, `grep -c "error TS"` → 0; full `npm test` exit 0, 104 files / 1531 tests; gate independently 50 / 702 on `--project planner`                                              |
-| Changing `strictPort` to `false` fails the suite — measured, not assumed                | verified | M2 in the Log's mutation table: exit 1, `expected false to be true` against `:64`; gate reproduced it row for row on its own harness                                                                   |
+| Done when                                                                               | Verdict  | Proof                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test -- --project planner` covers the three values; the unset case asserts `false` | verified | `tools/planner/web/test/vite-config.test.ts:44-47` "binds the HOST it is given" (`host`), `:55` "expect(server?.host).toBe(false)" (`toBe(false)`, not a string), `:63` "expect(server?.port).toBe(5183)" (`port`), `:64` "expect(server?.strictPort).toBe(true)" (`strictPort`); gate's `?? undefined` mutation proves `:55` "expect(server?.host).toBe(false)" is `Object.is`-strict |
+| `npm run check` and `npm test` pass                                                     | verified | cold `npm run check` exit 0, `grep -c "error TS"` → 0; full `npm test` exit 0, 104 files / 1531 tests; gate independently 50 / 702 on `--project planner`                                                                                                                                                                                                                              |
+| Changing `strictPort` to `false` fails the suite — measured, not assumed                | verified | M2 in the Log's mutation table: exit 1, `expected false to be true` against `tools/planner/web/test/vite-config.test.ts:64` "expect(server?.strictPort).toBe(true)"; gate reproduced it row for row on its own harness                                                                                                                                                                 |
 
 #### What this gate did NOT do
 
@@ -405,3 +405,9 @@ changes is this one and no citation here names this file by line.
   `Object.is`-strict, not truthiness) and its `env -u HOST` / `HOST=192.168.1.5`
   runs (which prove the suite does not lean on this container's ambient `HOST`) —
   both properties the builder's five mutations could not reach.
+
+- **2026-09-13 — repo-44: 22 failing references down to 2.** Every shorthand after the `devcontainer.json` citation had inherited that file, where the prose names the Vite test, the Dockerfile or this record's Why. The test shorthands are qualified to `vite-config.test.ts` and anchored, and the Why's line numbers are prose.
+
+  **The three Dockerfile coordinates are qualified to `tools/planner/Dockerfile`, and are correct but unchecked**: the checker cannot resolve a path with no extension, so they stopped being counted rather than stay bound to the wrong file. The owner accepted that on 2026-09-13.
+
+  **Two cannot be repaired**, and stay counted in `GRANDFATHERED` on the owner's decision of 2026-09-13: the bare and the parenthesised line numbers in the tooling paragraph, which quote the shapes the orchestrator's script could not read and name no file at all.

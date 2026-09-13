@@ -145,17 +145,17 @@ section is the **same 14 files** — the insertion count has moved twice since,
 because each gate's record is itself part of the diff it describes, so the file
 list is the half worth quoting and the number is not.
 
-| Done when                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The adapter parses checked-in **real** payloads into the seam's types, offline, no network       | **unproven**, and deliberately recorded as the weaker of its two halves. `travel` is proven: `grounding-valhalla.test.ts:105`, `:147`, `:166`, `:180` over `fixtures/valhalla-sources-to-targets.json`. `locate` has **no payload at all** — its parser can be replaced with `return null;` and the suite stays green. A row reading `proven` for a line half of which nothing asserts is the failure this table exists to prevent. → [pl-30](./pl-30-geocoder-payload.md) |
-| An unroutable pair is a `null` cell; unreachable is `UNREACHABLE`; slow is `TIMEOUT`. No sockets | **proven** · `grounding-valhalla.test.ts:147` (four `null` cells off the captured payload, and the self-pair still a real zero), `:239` (`UNREACHABLE`, retryable), `:262` (`TIMEOUT`, `details.timeoutMs`). Every one drives an injected `fetch`; nothing in the file opens a socket                                                                                                                                                                                      |
-| `GROUNDING_PROVIDER=valhalla` with no endpoint fails at boot with a clear message                | **proven** · `health.test.ts:85` (missing) and `:102` (present but not a URL). The reviewer read the actual message rather than the matcher                                                                                                                                                                                                                                                                                                                                |
-| `/api/health` reports the provider name and **no** endpoint, asserted on the response body       | **proven** · `health.test.ts:57`. Asserted on the body, as the line requires, and the reviewer additionally grepped the whole payload for every substring of both endpoints — `valhalla.internal`, `nominatim.internal`, `8002`, `8080`, `http` — all absent                                                                                                                                                                                                               |
-| A logged config object contains no endpoint credentials, in `logging.test.ts`'s shape            | **proven** · `logging.test.ts:53`, with `:82` holding the fixture default to the same line so it is not a special case. It asserts over **every** boot line rather than the one that was tempted, and the geocoder URL carries a credential in its userinfo — so it covers the credential case and not only the hostname                                                                                                                                                   |
-| The deployment document gets an operator from a `.osm.pbf` to a running instance                 | **verified** — prose, re-read rather than executed. `docs/02-DEPLOYMENT.md` §"Grounding the planner", four steps, and `compose.planner.yaml` beside it                                                                                                                                                                                                                                                                                                                     |
-| …**and pl-2's compose service names it**                                                         | **unproven**, and unprovable as written: that service does not exist. pl-2 steps 5–6 have been open since 2026-08-14. `compose.planner.yaml` carries the three settings it will need, so pl-2 is a paste — see the Log                                                                                                                                                                                                                                                     |
-| `npm run check` and `npm test -- --project planner` pass                                         | **verified** — re-run by the reviewer, which also measured the `origin/main` baseline itself at **669 / 47 files**, agreeing with the Log                                                                                                                                                                                                                                                                                                                                  |
-| The image gate does not run locally — say so rather than reporting green                         | **verified** — said, in the Log's Gates block and again in `compose.planner.yaml`. It has not run                                                                                                                                                                                                                                                                                                                                                                          |
+| Done when                                                                                        | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The adapter parses checked-in **real** payloads into the seam's types, offline, no network       | **unproven**, and deliberately recorded as the weaker of its two halves. `travel` is proven: `grounding-valhalla.test.ts:243` "parses the measured cells into metres and minutes", `:287` "an unroutable pair is a null cell, not an error and not a", `:306` "hands back a fresh source per cell, so a caller cannot", `:320` "a place with no coordinates is not sent, and its row and" over `fixtures/valhalla-sources-to-targets.json`. `locate` has **no payload at all** — its parser can be replaced with `return null;` and the suite stays green. A row reading `proven` for a line half of which nothing asserts is the failure this table exists to prevent. → [pl-30](./pl-30-geocoder-payload.md) |
+| An unroutable pair is a `null` cell; unreachable is `UNREACHABLE`; slow is `TIMEOUT`. No sockets | **proven** · `grounding-valhalla.test.ts:287` "an unroutable pair is a null cell, not an error and not a" (four `null` cells off the captured payload, and the self-pair still a real zero), `:379` "an unreachable instance is UNREACHABLE, and retryable" (`UNREACHABLE`, retryable), `:402` "a slow instance is TIMEOUT, and the deadline is ours rather" (`TIMEOUT`, `details.timeoutMs`). Every one drives an injected `fetch`; nothing in the file opens a socket                                                                                                                                                                                                                                        |
+| `GROUNDING_PROVIDER=valhalla` with no endpoint fails at boot with a clear message                | **proven** · `health.test.ts:114` "refuses to boot when a real backend was named and no" (missing) and `:135` "refuses to boot on an endpoint that is not a URL" (present but not a URL). The reviewer read the actual message rather than the matcher                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `/api/health` reports the provider name and **no** endpoint, asserted on the response body       | **proven** · `health.test.ts:57` "names a real backend by name, and still says nothing about". Asserted on the body, as the line requires, and the reviewer additionally grepped the whole payload for every substring of both endpoints — `valhalla.internal`, `nominatim.internal`, `8002`, `8080`, `http` — all absent                                                                                                                                                                                                                                                                                                                                                                                      |
+| A logged config object contains no endpoint credentials, in `logging.test.ts`'s shape            | **proven** · `tools/planner/api/test/logging.test.ts:53` "names the backend and never where it is", with `:82` "says the same about the fixture default" holding the fixture default to the same line so it is not a special case. It asserts over **every** boot line rather than the one that was tempted, and the geocoder URL carries a credential in its userinfo — so it covers the credential case and not only the hostname                                                                                                                                                                                                                                                                            |
+| The deployment document gets an operator from a `.osm.pbf` to a running instance                 | **verified** — prose, re-read rather than executed. `docs/02-DEPLOYMENT.md` §"Grounding the planner", four steps, and `compose.planner.yaml` beside it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| …**and pl-2's compose service names it**                                                         | **unproven**, and unprovable as written: that service does not exist. pl-2 steps 5–6 have been open since 2026-08-14. `compose.planner.yaml` carries the three settings it will need, so pl-2 is a paste — see the Log                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `npm run check` and `npm test -- --project planner` pass                                         | **verified** — re-run by the reviewer, which also measured the `origin/main` baseline itself at **669 / 47 files**, agreeing with the Log                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| The image gate does not run locally — say so rather than reporting green                         | **verified** — said, in the Log's Gates block and again in `compose.planner.yaml`. It has not run                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 **What the gate verified that the builder could not have.** It did not take the
 fixture-provenance claim on trust: it ran `npm pack @valhallajs/valhallajs@3.7.0`
@@ -174,10 +174,10 @@ identical, so it does not matter — but this was **not** a byte-for-byte
 reproduction and the record should not read as though it were.
 
 **Step 4 passes, and the builder's report was silent on it.** Both tables are
-`Map`s — `valhalla.ts:398` and `:354`, and there is no third. `__proto__`,
+`Map`s — `valhalla.ts:721` "const cells = new Map" and `:677` "const position = new Map", and there is no third. `__proto__`,
 `constructor`, `toString` and `prototype` as place names all travel as ordinary
 query strings and come back as ordinary answers. `from_index: "constructor"` is
-rejected by `indexOf` at `valhalla.ts:430`. The shallow-freeze property was
+rejected by `indexOf` at `valhalla.ts:750-753` "function indexOf(cell: unknown, field". The shallow-freeze property was
 proved by mutating a nested field of a returned cell in place and re-asking:
 the second answer was identical.
 
@@ -194,16 +194,16 @@ the second answer was identical.
   load, and exits 1 on a clean unmutated tree — so every mutation "died"
   regardless. The second harness opens with a control run over the unmutated
   tree and prints its result; sixteen mutations, sixteen killed, control green.
-  The ordering is now asserted at `grounding-valhalla.test.ts:309`, the code
+  The ordering is now asserted at `grounding-valhalla.test.ts:449` "a caller's own reason is never reinterpreted as our deadline", the code
   comment that reasoned about it wrongly is corrected, and the Log says what
   happened.
 
 - **F2 · fixed** — "asserted by nothing" understated the geocoder gap. What is
-  true is that the whole of `firstCoordinates` (`valhalla.ts:476`) can be
+  true is that the whole of `firstCoordinates` (`tools/planner/api/src/grounding/valhalla.ts@60e48e7:489` "function firstCoordinates(body: unknown)") can be
   replaced with `return null;` and the planner suite stays green — reproduced by
   the builder at 698/698 — with none of its seven branches pinned. The Log now
   says that, and adds the production reachability the gate asked for:
-  `runs/travel.ts:295` calls `locate` on every run, so the first plan a
+  `runs/travel.ts:325` "provider.locate({ place: each.place" calls `locate` on every run, so the first plan a
   `valhalla` deployment builds executes unasserted parsing code, and the failure
   it hides is a healthy service reporting `{"grounding":{"provider":"valhalla"}}`
   while every plan carries a `travel-time` unchecked constraint — an answer
@@ -232,15 +232,15 @@ the second answer was identical.
   equivalent; four were not, and all four now have a test that was watched to
   fail before it was believed:
 
-  | Survivor                                                            | Now killed by                    |
-  | ------------------------------------------------------------------- | -------------------------------- |
-  | `valhalla.ts:430` — `indexOf`'s validation, **type check included** | `grounding-valhalla.test.ts:450` |
-  | `valhalla.ts:450` — `estimate`'s half-a-cell guard (`\|\|`→`&&`)    | `grounding-valhalla.test.ts:478` |
-  | `valhalla.ts:451` — the negative time/distance guard                | `grounding-valhalla.test.ts:491` |
-  | `valhalla.ts:165` — the Nominatim `User-Agent` header               | `grounding-valhalla.test.ts:363` |
+  | Survivor                                                                                                                   | Now killed by                                                                                    |
+  | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+  | `valhalla.ts:753` "Number.isInteger(value) && value >= 0 ? value : null" — `indexOf`'s validation, **type check included** | `grounding-valhalla.test.ts:1315` "an index that is a string cannot displace the cell it"        |
+  | `valhalla.ts:773` "!isFiniteNumber(time)" — `estimate`'s half-a-cell guard (`\|\|`→`&&`)                                   | `grounding-valhalla.test.ts:1343` "half a cell is no cell — a distance with no time, and the"    |
+  | `valhalla.ts:774` "if (time < 0" — the negative time/distance guard                                                        | `grounding-valhalla.test.ts:1356` "a negative time or distance is no answer, not a negative leg" |
+  | `valhalla.ts:321` "USER_AGENT, accept" — the Nominatim `User-Agent` header                                                 | `grounding-valhalla.test.ts:524` "asks the geocoder for the name and the locality together"      |
 
   **Row one is narrower than it looks, and gate 2 caught the overstatement.**
-  What `:450` kills is dropping `indexOf`'s validation _entirely_, the
+  What `grounding-valhalla.test.ts:1315` "an index that is a string cannot displace the cell it" kills is dropping `indexOf`'s validation _entirely_, the
   `typeof value === "number"` check included. Removing only the
   `Number.isInteger(value) && value >= 0` half **survives** — gate 2 applied
   exactly that and got 698/698 — and that half is plausibly an equivalent
@@ -249,7 +249,7 @@ the second answer was identical.
   ever looks up. It is left unkilled deliberately rather than chased with a test
   that would assert nothing.
 
-  `:467` is therefore **documentation of intent, not a killer**. It resolves
+  `grounding-valhalla.test.ts:1332` "an index that is not a whole number is no index at all" is therefore **documentation of intent, not a killer**. It resolves
   `null` with or without the integer guard, and it is kept because "an index
   that is not a whole number is no index at all" is a sentence the next person
   to touch `indexOf` should find written down.
@@ -289,7 +289,7 @@ CONCERNS is part of this ticket's record whatever gate 2 found.
 applied, rebuilt, run **red**, reverted, run **green** — and in every case the
 failure _output_ was read rather than the exit code trusted. That distinction is
 the whole reason this gate exists: reading an exit code is exactly what produced
-the twelve reds that were not there. `grounding-valhalla.test.ts:450` was shown
+the twelve reds that were not there. `grounding-valhalla.test.ts:1315` "an index that is a string cannot displace the cell it" was shown
 to fail with the hostile `"0"`-indexed cell displacing the measured 3.339 km leg
 and reporting `distanceMeters: 99999000, durationMinutes: 0`.
 
@@ -308,7 +308,7 @@ described that guard as stopping a prototype hit through an array subscript, and
 the orchestrator passed that framing down as an instruction; the builder pushed
 back, saying the container closes that route and the guard's real work is key
 collision. Gate 2 traced `from_index` to `cells.set(cellKey(from, to), cell)` at
-`valhalla.ts:398`, confirmed `cells` is a `Map` — never an array subscript,
+`valhalla.ts:721-728` "const cells = new Map", confirmed `cells` is a `Map` — never an array subscript,
 never a plain-object key — and that `cellKey` joins with `KEY_SEPARATOR`, so
 `"0"` and `0` produce the same string key and the later `Map.set` wins. **The
 builder was right and gate 1's framing was wrong.** Recorded because a
@@ -316,13 +316,13 @@ correction that only travelled through a conversation is a correction the next
 reader cannot find.
 
 **F2 was verified independently**: replacing the body of `firstCoordinates`
-(`valhalla.ts:476`) with `return null;` still leaves 698 in 49 green. The Log's
+(`tools/planner/api/src/grounding/valhalla.ts@60e48e7:489` "function firstCoordinates(body: unknown)") with `return null;` still leaves 698 in 49 green. The Log's
 strongest claim about its own weakest code holds.
 
 **12 of 12 spot-checked citations resolved.** Two line numbers relayed during
 gate 1 — `:388` and `:346` for the two `Map`s — were already stale when they
-were sent; `valhalla.ts:398` and `:354` are correct, and are what the record
-now carries.
+were sent; `valhalla.ts:721` "const cells = new Map" and `:677` "const position = new Map" are correct, and are what the record
+now carries. (repo-44, 2026-09-13: re-resolved to the lines the two `Map`s hold now, in this sentence and in gate 1's step-4 paragraph alike; the tree this gate read did not survive the squash merge.)
 
 #### What gate 2 did not do
 
@@ -343,13 +343,13 @@ gate, `compose.planner.yaml` and both third-party image tags remain
   check kept — and got **698/698, exit 0. It survives.** The builder reproduced
   it before rewriting anything.
 
-  What `:450` kills is the _broader_ mutation that drops the type check too. The
+  What `grounding-valhalla.test.ts:1315` "an index that is a string cannot displace the cell it collides with" kills is the _broader_ mutation that drops the type check too. The
   integer/non-negative half alone is plausibly an equivalent mutant, because
   `from` and `to` reach the lookup as loop counters over the caller's own
   arrays, so a fractional or negative index can only key something nothing ever
   looks up. **No test was added**, on the gate's own instruction: a test that
   cannot fail is the thing this ticket has already been wrong about once. Row 13
-  and the F5 table now say "entirely, the type check included", `:467` is
+  and the F5 table now say "entirely, the type check included", `grounding-valhalla.test.ts:1332` "an index that is not a whole number is no index at all" is
   described as documenting intent rather than as a killer, and the equivalence
   argument is written down in both places.
 
@@ -775,3 +775,7 @@ edit it.
 
 Recorded by
 [repo-11](../../../../docs/work/repo-11-stale-fixture-formatting-notes.md).
+
+- **2026-09-13 — repo-44: 38 failing references down to 3.** The test coordinates were exact at `bd3bdbc` and the source coordinates at `ccf1c95`, both discarded by the squash merge; `60e48e7`, the merge, is thirteen lines off because of the post-gate `trimSlash` change. So pointers are repointed by what they name — the two `Map`s, `indexOf`'s validation, the half-cell and negative guards, the `User-Agent` header — with a dated note beside gate 2's sentence about what the record carries. `firstCoordinates` no longer exists and is pinned to `60e48e7`. Two shorthands in gate 2 that had bound to `valhalla.ts` name tests and are qualified, and the ambiguous `logging.test.ts` is qualified to the planner's.
+
+  **Three cannot be repaired**, and stay counted in `GRANDFATHERED` on the owner's decision of 2026-09-13: the two relayed `Map` line numbers gate 2 says were already stale when sent, true only of `e60f5a6`, which the squash merge discarded; and the `valhalla.ts` coordinate inside the quoted CodeQL alert.
