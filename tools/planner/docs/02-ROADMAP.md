@@ -221,6 +221,28 @@ revising does not grow with how many revisions came before. A free-text note may
 ride along on a revision for the specialists to read as context; it is never an
 instruction to the composer.
 
+**Ticketed on 2026-09-13.** The first set of operations is: re-plan named days,
+move or remove one item, and restore an earlier version as a new one. A re-plan
+with no specialists named re-packs the plan's existing candidates without
+calling a model. Named specialists run again. Re-plans build on the latest
+version, so history stays one line. **Brief edits are deferred**, because
+changing the dates changes the day count, and a revision has to name its days.
+Contract first, then three pieces in parallel:
+
+1. **The revision contract** — the operations, the re-plan run kind, the diff
+   type and the route. → [pl-42](./work/pl-42-the-revision-contract.md)
+2. **Composing a slice, applying an edit, and the diff** — pure `itinerary`, no
+   model. → [pl-43](./work/pl-43-repack-named-days-and-diff.md)
+3. **The re-plan run and the synchronous edits** — `api`, a migration, and a
+   specialist subset on the fan-out. →
+   [pl-44](./work/pl-44-the-replan-run-and-edits.md)
+4. **Revise, pick a version, read the diff** — `web`, built against a mocked API
+   first. → [pl-45](./work/pl-45-revise-and-read-the-diff.md)
+5. **The whole flow through a browser**: draft, re-plan a day, move, read the
+   diff, restore and reload, once pl-44 and pl-45 have both landed. pl-19
+   stands in the same relation to pl-10. →
+   [pl-46](./work/pl-46-revise-through-the-browser.md)
+
 ## Later, and not soon
 
 Exports (PDF, calendar, share link), several people editing one plan, accounts.
@@ -409,9 +431,12 @@ there is no transcript. Specialists were always going to read the brief and neve
 the conversation, and now there is no conversation to be tempted by. What
 replaces it as the cost control is the per-run budget in §9.
 
-Later phases have no ticket files yet, on purpose. A brief written three phases
-ahead is fiction, and this format keeps briefs and outcomes in the same file
-precisely so nobody has to reconcile a stale one.
+Phases were ticketed only once the phase before them had taught what their
+briefs needed, on purpose: a brief written three phases ahead is fiction, and
+this format keeps briefs and outcomes in the same file precisely so nobody has
+to reconcile a stale one. Phase 4 was ticketed on 2026-09-13, when Phase 3's
+last pieces were filed and the revision groundwork (append-only revisions, pins
+the composer honours, a diff by candidate identity) was already in the code.
 
 ---
 
