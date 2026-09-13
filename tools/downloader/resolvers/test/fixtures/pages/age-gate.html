@@ -81,27 +81,28 @@
           video.setAttribute("playsinline", "");
           video.width = 640;
           video.height = 360;
+          // The playlist is requested on the press itself, not from "sourceopen":
+          // that event fires late on a loaded CI runner, and a probe waiting for
+          // network quiet concluded "no media" before it arrived.
+          fetch(MASTER)
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch(VARIANT);
+            })
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return Promise.all(
+                SEGMENTS.map(function (url) {
+                  return fetch(url);
+                }),
+              );
+            })
+            .catch(function () {});
           var mediaSource = new MediaSource();
-          mediaSource.addEventListener("sourceopen", function () {
-            fetch(MASTER)
-              .then(function (r) {
-                return r.text();
-              })
-              .then(function () {
-                return fetch(VARIANT);
-              })
-              .then(function (r) {
-                return r.text();
-              })
-              .then(function () {
-                return Promise.all(
-                  SEGMENTS.map(function (url) {
-                    return fetch(url);
-                  }),
-                );
-              })
-              .catch(function () {});
-          });
           video.src = URL.createObjectURL(mediaSource);
           var player = document.getElementById("player");
           player.replaceChildren(video);
