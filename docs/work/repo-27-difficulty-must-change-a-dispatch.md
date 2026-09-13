@@ -181,15 +181,15 @@ working directly rather than through a dispatched builder, so the
 model-difference rule held. Verdict **CONCERNS**, both carried findings fixed in
 the commit that carries this record.
 
-| #   | Done when                                                                                            | Test                                                                                                                            |
-| --- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `hard` maps to `opus`, and the file says why                                                         | `.claude/agents/builder.md:25 "Pinned rather than inherited"`, and the paragraph at `:39`                                       |
-| 2   | step 4 no longer implies a `hard` ticket is built on Sonnet                                          | `.claude/skills/orchestrate-tickets/SKILL.md:133 "never on a"` — the new exclusion clause                                       |
-| 3   | `standard` and `absent` unchanged, nothing claims a `standard` builder runs Sonnet                   | `git diff 48e9479..58d8047 -- .claude/agents/builder.md` empty; repo-wide grep for a standard/sonnet pairing empty              |
-| 4   | the decision recorded, both halves, with the reason the second waits                                 | this ticket, _The decision, and its answer_                                                                                     |
-| 5   | step 4's `resolvedModel` claim corrected, task-file route named, measured distinguished from relayed | `.claude/skills/orchestrate-tickets/SKILL.md:86 "does not reach"` and the routes passage at `:114`                              |
-| 6   | `npm run check` passes, `npm run format` run over changed `.md`                                      | exit 0; `.claude/` is oxfmt-ignored repo-wide, so `npx oxfmt --check docs/work/repo-27-*.md` is the formattable half and passes |
-| 7   | `--show repo-27` parses, `--json` exits 0                                                            | both exit 0                                                                                                                     |
+| #   | Done when                                                                                            | Test                                                                                                                                                |
+| --- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `hard` maps to `opus`, and the file says why                                                         | `.claude/agents/builder.md:25 "Pinned rather than inherited"`, and the paragraph at `:39` "names a model because `inherit` cannot keep its promise" |
+| 2   | step 4 no longer implies a `hard` ticket is built on Sonnet                                          | `.claude/skills/orchestrate-tickets/SKILL.md@7862e9c:133 "never on a"` — the new exclusion clause                                                   |
+| 3   | `standard` and `absent` unchanged, nothing claims a `standard` builder runs Sonnet                   | `git diff 48e9479..58d8047 -- .claude/agents/builder.md` empty; repo-wide grep for a standard/sonnet pairing empty                                  |
+| 4   | the decision recorded, both halves, with the reason the second waits                                 | this ticket, _The decision, and its answer_                                                                                                         |
+| 5   | step 4's `resolvedModel` claim corrected, task-file route named, measured distinguished from relayed | `.claude/skills/orchestrate-tickets/SKILL.md@7862e9c:86 "does not reach"` and the routes passage at `:114` "which repo-17 measured on 2026-09-01"   |
+| 6   | `npm run check` passes, `npm run format` run over changed `.md`                                      | exit 0; `.claude/` is oxfmt-ignored repo-wide, so `npx oxfmt --check docs/work/repo-27-*.md` is the formattable half and passes                     |
+| 7   | `--show repo-27` parses, `--json` exits 0                                                            | both exit 0                                                                                                                                         |
 
 **Findings, 3 raised, 2 carried, 1 dropped.**
 
@@ -206,7 +206,7 @@ the commit that carries this record.
 - **low — "~94% of the bill" read as freshly measured. Fixed.** It sat one
   sentence after a `Measured 2026-09-06` claim with no citation of its own, and
   the figure is repo-17's, measured 2026-09-01. Now attributed inline.
-  **Reproduced**: the string exists in `repo-17`'s Log and now carries its attribution at `.claude/skills/orchestrate-tickets/SKILL.md:114 "repo-17 measured on 2026-09-01"`, and
+  **Reproduced**: the string exists in `repo-17`'s Log and now carries its attribution at `.claude/skills/orchestrate-tickets/SKILL.md@7862e9c:114 "repo-17 measured on 2026-09-01"`, and
   nothing on this branch re-measured it.
 
 - **dropped — bold-vs-italic in a quotation.** `builder.md` renders SKILL.md's

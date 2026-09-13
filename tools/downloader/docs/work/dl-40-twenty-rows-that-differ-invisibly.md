@@ -221,7 +221,7 @@ not narrowing it — a URL key and this key produce identical output on every
 fixture in this branch, and they diverge only in the direction that protects
 data".
 
-**Finding 1 (low) — `media.ts:107` in the Why prose does not point at
+**Finding 1 (low) — `media.ts@1514e43:107` "container?: string" in the Why prose does not point at
 `MediaVariant.language`.** Established as **already stale on `main`**
 (`git show main:…/media.ts | grep language` → 121), so not broken by this branch;
 but the branch's own +21-line edit to that file pushed the true location further
@@ -232,13 +232,13 @@ away, and fixing it was one line free while already there.
 further by this branch's `VariantRow` field additions. Neither finding was made a
 condition of PASS; both flagged "so the record is accurate".
 
-**Both accepted and fixed** at `media.ts:142` and `web/src/lib/variants.ts:53`, and both now
+**Both accepted and fixed** at `media.ts@1514e43:142` "language?: string" and `web/src/lib/variants.ts@1514e43:53` "function shortCodec(codec: string", and both now
 carry anchor text so `citations.mjs` checks them instead of printing them for a
 human — `3 verified, 0 moved, 0 unresolvable`.
 
 > **Builder's note on the two coordinates, added rather than silently corrected.**
 > The findings are right and the fix is theirs. The _quoted resolutions_ did not
-> reproduce here: at `6061bc6` — and at `effeb02` and at `main` — `media.ts:107`
+> reproduce here: at `6061bc6` — and at `effeb02` and at `main` — `media.ts@1514e43:107` "container?: string"
 > is `container?: string | undefined;`, not `hasAudio?: boolean | undefined;`,
 > and `web/src/lib/variants.ts:26 "videoCodec: string;"` is `videoCodec: string;`, not `quality: string;` (which is
 > line 24). Nothing turns on it: both citations were stale either way, which is

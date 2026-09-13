@@ -306,7 +306,7 @@ worktree rather than read back out of the Log:
 - The false green reproduced: `ENABLE_BROWSER_RESOLVER=false npm run
 e2e:downloader:sniffer` still passes.
 - The genuine red reproduced: editing `ENABLE_BROWSER_RESOLVER` to `"false"` at
-  `playwright.sniffer.config.ts:71 "ENABLE_BROWSER_RESOLVER:"` fails at `mse-page.spec.ts:89` with
+  `playwright.sniffer.config.ts:71 "ENABLE_BROWSER_RESOLVER:"` fails at `mse-page.spec.ts@83618de:89` "toHaveCount(5)" with
   `expected 5, Received 0`. File restored, `git status --porcelain` clean.
 - The new configs are typechecked, not merely present: a planted type error in
   `playwright.sniffer.config.ts` makes `npm run typecheck` fail at
@@ -321,7 +321,7 @@ e2e:downloader:sniffer` still passes.
 exact sha.** Both earlier gates disclosed "the job has never run on a GitHub
 runner" as an open risk. That is no longer true. Run `33445623826`, at headSha
 `e8925ce`, shows `e2e (direct)` SUCCESS (`3 passed (8.1s)`), `e2e (sniffer)`
-SUCCESS (`1 passed (12.7s)`, naming `mse-page.spec.ts:63`) and `docker` SUCCESS.
+SUCCESS (`1 passed (12.7s)`, naming `mse-page.spec.ts@83618de:63` "finds a blob-only stream through the sniffer") and `docker` SUCCESS.
 This upgrades several rows below from `unproven (gate)` to `verified` — not
 because the local gates changed, but because the run log for the reviewed sha was
 read rather than the gate being reported as run without checking.
@@ -329,7 +329,7 @@ read rather than the gate being reported as run without checking.
 | Done when                                                                                                                                                        | Proof                                                                                                                                                                                                                                                                                                      |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | MSE-page journey passes in a real browser, `ENABLE_YTDLP_RESOLVER=false`, direct tier unable to help                                                             | verified — `e2e/sniffer/mse-page.spec.ts:69 "finds a blob-only stream through the sniffer and downloads it"`, tiers at `playwright.sniffer.config.ts:71-76 "ENABLE_BROWSER_RESOLVER:"`; reran locally (1 passed) and confirmed on Actions run 33445623826, job `e2e (sniffer)`, at this exact sha, SUCCESS |
-| Spec fails if the sniffer is disabled — via the config value, not an env var                                                                                     | verified — reproduced both ways: env var gives a false green (1 passed); editing the `tiers` literal gives a genuine red at `mse-page.spec.ts:89`, `expected 5, Received 0`                                                                                                                                |
+| Spec fails if the sniffer is disabled — via the config value, not an env var                                                                                     | verified — reproduced both ways: env var gives a false green (1 passed); editing the `tiers` literal gives a genuine red at `mse-page.spec.ts@83618de:89` "toHaveCount(5)", `expected 5, Received 0`                                                                                                       |
 | `npm run e2e:downloader` unchanged in scope and runtime                                                                                                          | verified — `download.spec.ts` untouched by the diff; reran, 3 passed (8.4s here vs 6.1s in the Log — different host, same count, same test names)                                                                                                                                                          |
 | CI runs both suites on a downloader change, named separately                                                                                                     | verified — `downloader.yml` matrix (`e2e (direct)`, `e2e (sniffer)`), and the actual PR #122 run at `e8925ce` shows both checks by those exact names, both SUCCESS; path filters checked against every touched file via the `paths:` list, all covered                                                     |
 | "The e2e suite drives only the direct resolver" stops being true; frontmatter to `done`; container tier stays smoke-tested-only and that gap is said, not hidden | proven — `tools/downloader/CLAUDE.md` and dl-2's Log rewritten accordingly; `npm run status -- --show dl-16` reports `status: done`                                                                                                                                                                        |

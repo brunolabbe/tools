@@ -85,12 +85,12 @@ while the frontmatter said `done`, which is the shape the root `CLAUDE.md`
 forbids and which closing the ticket guaranteed nobody would reopen. No finding
 disputed the design.
 
-| Done when                                                                     | Proof                                                                                                                                                    |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--json` exits non-zero when a `ready` ticket's work has merged, and names it | **proven** — `scripts/test/status.test.ts:916` asserts exit 1, the stderr line and the `--json` payload; the reporter itself at `scripts/status.mjs:250` |
-| A ticket whose only merged pull request _created_ its file is not reported    | **proven** — `scripts/test/status.test.ts:838`, over `repo-5` and `repo-12` both                                                                         |
-| Proven by making it fail first — the exit code and the message, not silence   | **proven** — `scripts/test/status.test.ts:916`; three mutations, each red only in its own case, recorded in the Log                                      |
-| `pl-29` needs no fix; its shape is the fixture                                | **verified** — the fixture is `scripts/test/status.test.ts:817`, and the real file at `98b5e61` was run through the CLI at `--root`                      |
+| Done when                                                                     | Proof                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--json` exits non-zero when a `ready` ticket's work has merged, and names it | **proven** — `scripts/test/status.test.ts:1185` "--json exits non-zero on a gated ready ticket and names it" asserts exit 1, the stderr line and the `--json` payload; the reporter itself at `scripts/status.mjs:387` "export function reviewedButReady(tickets) {" |
+| A ticket whose only merged pull request _created_ its file is not reported    | **proven** — `scripts/test/status.test.ts:1107-1111` "a ready ticket whose merged pull request only filed it is not reported", over `repo-5` and `repo-12` both                                                                                                      |
+| Proven by making it fail first — the exit code and the message, not silence   | **proven** — `scripts/test/status.test.ts:1185` "--json exits non-zero on a gated ready ticket and names it"; three mutations, each red only in its own case, recorded in the Log                                                                                    |
+| `pl-29` needs no fix; its shape is the fixture                                | **verified** — the fixture is `scripts/test/status.test.ts:1086` "const gated = (body: string)", and the real file at `98b5e61` was run through the CLI at `--root`                                                                                                  |
 
 **Findings.**
 
@@ -99,13 +99,13 @@ disputed the design.
   now records the ruling and its reasoning, and the decision is closed.
 - **F2 · med · fixed** — `renderView`'s JSDoc declared
   `ReturnType<typeof danglingDependencies>` while `main` passed a concatenation
-  of both checks. Now a named `Problem` typedef, `scripts/status.mjs:598`.
+  of both checks. Now a named `Problem` typedef, `scripts/status.mjs:863` "@typedef {ReturnType<typeof danglingDependencies>[number]".
   `checkJs` is off for this file, so nothing would have caught it.
 - **F3 · low · fixed** — the tilde-fence branch of `hasGateRecord` was
-  hand-verified and uncommitted. `scripts/test/status.test.ts:885`.
+  hand-verified and uncommitted. `scripts/test/status.test.ts:1154` "a ## Review inside a tilde-fenced block is an example too".
 - **F4 · low · pinned, not fixed** — an unclosed fence swallows a real gate
   record below it, so a ticket that should be flagged is not.
-  `scripts/test/status.test.ts:898` asserts the behaviour and says why: repairing
+  `scripts/test/status.test.ts:1167` "an unclosed fence hides a real gate record below it, and" asserts the behaviour and says why: repairing
   it means guessing which of an odd number of fences was the typo, and guessing
   wrong turns a missed row into a red pipeline.
 - **F5 · no change** — the gate re-resolved `pl-28`'s two "**`status` stays

@@ -294,7 +294,7 @@ Sonnet reviewing an Opus build.
 | 3. `js/missing-rate-limiting` open/closed                        | **WITHDRAWN — do not cite this row**; retraction directly below the table · correctly left **deferred** — `gh api` denied, ticket does not claim otherwise, no defect |
 | 4. Path-scoped query filter confirmed not to exist               | not re-verified (caller: already settled against GitHub's docs)                                                                                                       |
 | 5. Inline suppression honoured, confirmed on a real PR           | **contested, not proven** — see high/med findings below                                                                                                               |
-| 6. Option chosen by owner, rejected options costed               | proven — `docs/adr/005-excusing-a-code-scanning-finding.md:103-131`                                                                                                   |
+| 6. Option chosen by owner, rejected options costed               | proven — `docs/adr/005-excusing-a-code-scanning-finding.md:160-204` "Alternatives considered"                                                                         |
 | 7. Durable home, five fields, criteria discoverable              | proven — `docs/adr/005:52-82`; register command reproduced, returns exactly one line                                                                                  |
 | 8. Answered by this PR's own `CodeQL` check                      | check ran and passed (`gh pr checks 126`), but what it answers is ambiguous — see med finding                                                                         |
 | 9. `npm run check` passes, `npm run format` run if `.md` changed | verified — ran `npm run check` at `196fd28`: pass (lint, format, typecheck)                                                                                           |
@@ -328,19 +328,19 @@ Sonnet reviewing an Opus build.
 > sentence in the ADR being too broad, not about row 4, which claims only that it
 > did not re-verify.
 
-- **high** · `tools/downloader/api/src/egress-proxy.ts:357-364` — the suppression
+- **high** · `tools/downloader/api/src/egress-proxy.ts:484-495` "This proxy exists to fetch a URL the user chose" (repo-44: the comment this finding quotes was rewritten in the round Gate 2 checks; the range holds its corrected text now) — the suppression
   comment claims "remove either [`guard.assertAllowed` or the pinning `lookup`] and
   `egress-proxy.test.ts` fails five tests." That is exactly true for
-  `guard.assertAllowed`: removing both call sites (`:345`, `:406`) fails 5 tests,
+  `guard.assertAllowed`: removing both call sites (`tools/downloader/api/src/egress-proxy.ts:472` "await guard.assertAllowed(target)", `tools/downloader/api/src/egress-proxy.ts:537` "await guard.assertAllowed(`https://${target}`)") fails 5 tests,
   names matching the ticket exactly. It is **not** true for the pinning lookup under
   either natural interpretation. Deleting `lookup` from `connectOptions`
-  (`egress-proxy.ts:239`) fails **6** tests, not 5 — one extra because `lookup` also
+  (`egress-proxy.ts:345` "const connectOptions = upstream === null ? { lookup } : {}") fails **6** tests, not 5 — one extra because `lookup` also
   carries the test harness's mocked DNS resolution, so this edit breaks legitimate
   "allowed" requests too. Isolating the guard itself — commenting out only the
-  `isBlockedAddress` rejection inside `createPinningLookup` (`dispatcher.ts:153-158`)
+  `isBlockedAddress` rejection inside `createPinningLookup` (`dispatcher.ts:163-168` "if (!guard.isExemptHost(hostname)) {")
   while leaving DNS resolution intact — fails only **1** test ("a rebind caught at
   connect stays a refusal, though it arrives as a socket error",
-  `egress-proxy.test.ts:289`). The companion test at `egress-proxy.test.ts:234` ("a
+  `egress-proxy.test.ts:315` "a rebind caught at connect stays a refusal, though it"). The companion test at `egress-proxy.test.ts:245` "a name that rebinds after the pre-flight check is refused" ("a
   name that rebinds after the pre-flight check is refused at connect") **still passes
   with the guard disabled**, because its mock target (`127.0.0.1` with nothing
   listening) produces the same `502` whether the guard blocked it or the connection
@@ -351,11 +351,11 @@ Sonnet reviewing an Opus build.
   is specific to the shipped code comment, which is the artifact rule 4 designates as
   the register future readers will trust. Two remedies, not one fix: (a) narrow the
   comment's wording to what was measured, or (b) strengthen
-  `egress-proxy.test.ts:234` to assert on the distinguishing signal (log message and
-  error code, as `:289` does) rather than status code. Recommend (b) first since it
+  `egress-proxy.test.ts:245` "a name that rebinds after the pre-flight check is refused" to assert on the distinguishing signal (log message and
+  error code, as `egress-proxy.test.ts:315` "a rebind caught at connect stays a refusal, though it" does) rather than status code. Recommend (b) first since it
   closes the real gap; (a) is the minimum honest fix.
-- **med** · `docs/work/repo-13-codeql-false-positives-recur.md:393-398` (also softer
-  at `:210-211`) — the Log states the PR "either goes green because the suppression
+- **med** · this ticket's `## Log`, in its paragraph on this pull request as the experiment for acceptance line 5, (also softer
+  at `## Done when` line 5) — the Log states the PR "either goes green because the suppression
   is honoured, or red because it is not." That is a false dichotomy.
   `git diff origin/main...196fd28 -- tools/downloader/api/src/egress-proxy.ts` shows
   the 8 new lines are all `+` comment and `const proxied = http.request(` carries no
@@ -370,14 +370,14 @@ Sonnet reviewing an Opus build.
   mechanism plausibly reattributes here, which would favour "suppression honoured".
   But the ticket's own Log says that alert history is "relayed from screenshots and
   not verified", so the counter-evidence is itself unverified. A later reader seeing
-  this check green and reading `:393-398` as written would reasonably conclude the
+  this check green and reading that Log paragraph as written would reasonably conclude the
   mechanism is proven, when the branch's own diff makes that unsupported. Remedies:
-  (a) soften `:393-398` and `:210-211` to name the third possibility explicitly, or
+  (a) soften both passages to name the third possibility explicitly, or
   (b) get the alert state read before declaring Done-when 5/8 settled. Recommend (a)
   now, since (b) is blocked in this container.
 - **verified, no defect** · the `net.connect` restraint — only `http.request` was
   suppressed. Right call: `guard.assertAllowed` gates both paths unconditionally
-  (`:345`/`:406`), so no functional gap results, and an unconfirmed suppression would
+  (`tools/downloader/api/src/egress-proxy.ts:472` "await guard.assertAllowed(target)"/`tools/downloader/api/src/egress-proxy.ts:537` "await guard.assertAllowed(`https://${target}`)"), so no functional gap results, and an unconfirmed suppression would
   corrupt rule 4's register. Whether any query fires on `net.connect` could not be
   independently confirmed (`gh api` denied); the premise is inherited from the
   earlier screenshot-based triage.
@@ -385,7 +385,7 @@ Sonnet reviewing an Opus build.
   at `196fd28`: 55 files, 845 tests passing; the source diff is exactly 8 added
   comment lines.
 - **verified, no defect** · register argument — `grep -rn 'codeql\[' --include='*.ts' .`
-  returns exactly one line, `egress-proxy.ts:364`, matching the ADR. The adr/003
+  returns exactly one line, `egress-proxy.ts:495` "codeql[js/request-forgery]", matching the ADR. The adr/003
   parallel is honestly drawn, reused for the same structural reason rather than
   borrowed for authority.
 - **verified, no defect** · the known gap (nothing enforces the five fields) is
@@ -393,7 +393,7 @@ Sonnet reviewing an Opus build.
   consistent with this repo's "second consumer, not the first guess" philosophy.
 - **verified, no defect** · ticket record shape — `status: done`, `## Review` pending
   this gate, `## The gate on this filing` kept as #124's separate record. Matches
-  `docs/01-TICKETS.md:154-163`; `npm run status -- --json` exits 0 with no
+  `docs/01-TICKETS.md:281-290` "A gate on a pull request that only _files_ a ticket"; `npm run status -- --json` exits 0 with no
   `reviewed-but-ready` problem.
 - **findings** · defect hunt at medium, self-run, returned 2; 2 carried, 0 dropped.
 - NFR: security — the high finding is a security-documentation defect (an inaccurate
@@ -405,7 +405,7 @@ Sonnet reviewing an Opus build.
 **Reproductions run**, all edits reverted and the worktree confirmed clean:
 `npm run build` / `npm run check` / `npm test -- --project downloader` at `196fd28`
 (845/845); removing both `guard.assertAllowed` calls → 5 failed, names matching;
-removing `files.ts:119` → 5 failed, names matching; removing `lookup` from
+removing `files.ts:86` "{ onRequest: rateLimit }" → 5 failed, names matching; removing `lookup` from
 `connectOptions` → 6 failed; disabling only `isBlockedAddress` inside
 `createPinningLookup` → 1 failed; the register grep → one match;
 `git show ec1dd6b -- egress-proxy.ts` → confirmed dl-27 never touched the
@@ -422,24 +422,24 @@ reviewer, at `medium`. Sonnet reviewing an Opus build. Gate 1's ADR-structure,
 register-argument, `net.connect`-restraint and deferred-rate-limit findings are not
 re-litigated here.
 
-| Gate 1 finding                                                                             | Verdict this round                | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ------------------------------------------------------------------------------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **high** — the suppression comment overclaimed "5 tests" for the pinning-lookup half       | **fixed, and correctly reframed** | Reproduced independently: disabling only the `isBlockedAddress` rejection in `createPinningLookup` (`dispatcher.ts:156-160`) fails **2** in `egress-proxy.test.ts` and **6** in `dispatcher.test.ts`, 8 project-wide. Both the scoped and project-wide runs match the builder's claim exactly. The reframing holds: `dispatcher.test.ts` genuinely owns `createPinningLookup`, so the design was never weakly covered — gate 1's "1 not 5" was real but understated the true net, because it only ran the file gate 1 had scoped to. The updated comment and `docs/adr/005:139-146` now state 5 / 2 / 6 exactly, matching these runs |
-| — fail-first on the strengthened test                                                      | **confirmed, does its job**       | `egress-proxy.test.ts:234-263` now takes a `recordingLogger` and asserts the refusal message, `code === "BLOCKED_TARGET"` and `host === "rebind.test:443"`, keeping the `502`. With the pinning rejection disabled it goes red (2 failures, including this one); with the guard intact, 20/20 green in that file                                                                                                                                                                                                                                                                                                                     |
-| **med** — Log and ADR framed the green `CodeQL` check as proof the suppression is honoured | **fixed honestly**                | The Log, `docs/adr/005:166-179`, and Done-when 5 and 8 now name the third reading explicitly — the alert may never have been attributed to this diff — and state what would settle it (suppressed vs `Open` in the security tab), while keeping the `dl-27` counter-evidence flagged as unverified. Read as a stranger, nothing reads as though the green check proved the mechanism                                                                                                                                                                                                                                                 |
+| Gate 1 finding                                                                             | Verdict this round                | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------ | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **high** — the suppression comment overclaimed "5 tests" for the pinning-lookup half       | **fixed, and correctly reframed** | Reproduced independently: disabling only the `isBlockedAddress` rejection in `createPinningLookup` (`dispatcher.ts:166-170` "if (!guard.isExemptHost(hostname)) {") fails **2** in `egress-proxy.test.ts` and **6** in `dispatcher.test.ts`, 8 project-wide. Both the scoped and project-wide runs match the builder's claim exactly. The reframing holds: `dispatcher.test.ts` genuinely owns `createPinningLookup`, so the design was never weakly covered — gate 1's "1 not 5" was real but understated the true net, because it only ran the file gate 1 had scoped to. The updated comment and `docs/adr/005:139-146` now state 5 / 2 / 6 exactly, matching these runs |
+| — fail-first on the strengthened test                                                      | **confirmed, does its job**       | `egress-proxy.test.ts:245-274` "a name that rebinds after the pre-flight check is refused" now takes a `recordingLogger` and asserts the refusal message, `code === "BLOCKED_TARGET"` and `host === "rebind.test:443"`, keeping the `502`. With the pinning rejection disabled it goes red (2 failures, including this one); with the guard intact, 20/20 green in that file                                                                                                                                                                                                                                                                                                |
+| **med** — Log and ADR framed the green `CodeQL` check as proof the suppression is honoured | **fixed honestly**                | The Log, `docs/adr/005:166-179`, and Done-when 5 and 8 now name the third reading explicitly — the alert may never have been attributed to this diff — and state what would settle it (suppressed vs `Open` in the security tab), while keeping the `dl-27` counter-evidence flagged as unverified. Read as a stranger, nothing reads as though the green check proved the mechanism                                                                                                                                                                                                                                                                                        |
 
 **Sibling sweep, walked in full rather than sampled.** Every `.status`/`statusLine`
 assertion in both files. `egress-proxy.test.ts`: 17 assertions
 (`:215,230,231,257,295,338,377,394,406,437,453,465,474,483,524,565,600`). Of the
-ambiguous ones — 502, reachable by a dead socket as well as a real block — `:257`
-now discriminates via the log (fixed this round); `:295` via log message plus
-`errno` plus an explicit "not `refused`"; `:338` via a certificate-specific message
-and code; `:524` via `seen`, proving the upstream actually received the CONNECT;
-`:565` via a message containing "certificate did not verify". `:230`
+ambiguous ones — 502, reachable by a dead socket as well as a real block — `egress-proxy.test.ts:245` "a name that rebinds after the pre-flight check is refused"
+now discriminates via the log (fixed this round); `egress-proxy.test.ts:297` "an allowed host we cannot reach is not reported as a refusal" via log message plus
+`errno` plus an explicit "not `refused`"; `egress-proxy.test.ts:329` "a certificate this proxy refused is neither a policy" via a certificate-specific message
+and code; `egress-proxy.test.ts:506` "a tunnel is requested from the upstream, and its refusal is" via `seen`, proving the upstream actually received the CONNECT;
+`egress-proxy.test.ts:538` "terminating still verifies the origin when the tunnel is" via a message containing "certificate did not verify". `egress-proxy.test.ts:241` "expect(first.status).not.toBe(403)"
 (`not.toBe(403)`) is the one true near-miss and is a weak negative, but it asserts
 no security property and is the control half of a two-host test whose other half is
 fully discriminating. Correctly left alone. `proxied-https.test.ts`: assertions at
-`:589,691,698,699,702,721,728,729`; the two ambiguous 502s (`:691`, `:721`) both
+`:589,691,698,699,702,721,728,729`; the two ambiguous 502s (`tools/downloader/api/test/proxied-https.test.ts:682-702` "an origin the proxy does not trust is refused, and the status line says why", `:705-729` "a certificate valid for another name does not pass either") both
 pair status with `statusLine` matched against `/certificate/iu` plus a specific
 error-code substring. **No sibling of the original defect survives uncaught.**
 

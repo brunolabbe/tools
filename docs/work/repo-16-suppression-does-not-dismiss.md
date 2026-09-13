@@ -413,15 +413,15 @@ security tab rather than inferred.
 hunt run directly by the reviewer (no `Skill`/`Agent` tool in that role), to
 `medium` depth.
 
-| Done when                                                                   | Proof                                                                                                                                                                                                                                             |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Four options costed, one chosen, three rejected with cost                | verified — `docs/work/repo-16-suppression-does-not-dismiss.md:67-231`                                                                                                                                                                             |
-| 2. `security.yml` implemented, default-branch condition verified by reading | verified — `security.yml:100`                                                                                                                                                                                                                     |
-| 3. Pinning sub-decision answered (SHA + reason beside step)                 | verified — `security.yml:89-101`; SHA independently confirmed against `advanced-security/dismiss-alerts`' `v2.0.3` tag via the GitHub API                                                                                                         |
-| 4. adr/005 carries all three amendments                                     | verified — `docs/adr/005-excusing-a-code-scanning-finding.md:39-50, 179-190, 321-361`                                                                                                                                                             |
-| 5. repo-13 lines 5/8 answered, line 3 settled, withdrawn in place           | verified — `docs/work/repo-13-codeql-false-positives-recur.md:216-226, 231-249, 260-279, 294, 302-329`; programmatic row-diff independently reproduced: 29 rows, 1 differing in content, no `-` line outside the one repadded table hunk          |
-| 6. Alert 2's post-change state recorded from the security tab               | **unproven (gate)** — `docs/work/repo-16-suppression-does-not-dismiss.md:365-373`; the dismissal step has never run (`gh run list --branch repo-16-dismiss-suppressed-alerts` → 0 rows) and the live alert state is unreachable (`gh api` denied) |
-| 7. `npm run check` passes, `npm run format` run                             | proven — reproduced: `npm run check` exit 0; `npx oxfmt --check .` clean on 569 files                                                                                                                                                             |
+| Done when                                                                   | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Four options costed, one chosen, three rejected with cost                | verified — this ticket's _Decision — answered 2026-09-07, not open_ section, through Build step 1                                                                                                                                                                                                                                                                                                                                                  |
+| 2. `security.yml` implemented, default-branch condition verified by reading | verified — `security.yml:100` "if: github.event_name == 'push' && github.ref =="                                                                                                                                                                                                                                                                                                                                                                   |
+| 3. Pinning sub-decision answered (SHA + reason beside step)                 | verified — `security.yml:89-101` "Pinned to a commit SHA, and it is the only such pin in this directory"; SHA independently confirmed against `advanced-security/dismiss-alerts`' `v2.0.3` tag via the GitHub API                                                                                                                                                                                                                                  |
+| 4. adr/005 carries all three amendments                                     | verified — `docs/adr/005-excusing-a-code-scanning-finding.md:39-50` "An excused finding is excused in the code it excuses", `:179-190` "the failure in Context.", `:321-361` "#### What the merge showed"                                                                                                                                                                                                                                          |
+| 5. repo-13 lines 5/8 answered, line 3 settled, withdrawn in place           | verified — `docs/work/repo-13-codeql-false-positives-recur.md:216-226` "**Answered 2026-09-01: it closed.**", `:231-249` "Still open, and the pull-request check cannot close it", `:260-279` "its reasoning for it does not.", `:294` "retraction directly below the table", `:302-329` "**Retraction of row 3"; programmatic row-diff independently reproduced: 29 rows, 1 differing in content, no `-` line outside the one repadded table hunk |
+| 6. Alert 2's post-change state recorded from the security tab               | **unproven (gate)** — this ticket's `Done when` 6, _Not done, and not doable from here_; the dismissal step has never run (`gh run list --branch repo-16-dismiss-suppressed-alerts` → 0 rows) and the live alert state is unreachable (`gh api` denied)                                                                                                                                                                                            |
+| 7. `npm run check` passes, `npm run format` run                             | proven — reproduced: `npm run check` exit 0; `npx oxfmt --check .` clean on 569 files                                                                                                                                                                                                                                                                                                                                                              |
 
 - **The load-bearing claim (no `suppressions[]` without `packs:`) was
   independently re-derived from `github/codeql@4239fee` and
@@ -477,7 +477,7 @@ afterwards through this ticket's pull request._
 > **Two of the twelve moved after the gate, and are pinned rather than
 > remapped.** Post-gate edits added 32 lines above them in this file, so the
 > table's two self-citations resolve at `36c8b31` and **not** in the merged tree:
-> `repo-16:67-231` is `:99-263` here, and `repo-16:365-373` is `:397-405`. Both
+> `repo-16:67-231` is lines 99-263 here, and `repo-16:365-373` is lines 397-405. Both
 > offsets were measured, not computed from the diff — `## Decision — answered
 2026-09-07, not open` and `6. **Not done, and not doable from here.**` were
 > located by `grep -n` and the endpoints re-resolved by `awk 'NR==n'`. The
@@ -487,9 +487,11 @@ afterwards through this ticket's pull request._
 > re-resolved at the tip — three in `docs/adr/005`, five in `repo-13`, two in
 > `security.yml`._
 
+_repo-44, 2026-09-13: the table's two self-citations are now prose naming what they point at, since a record cannot cite itself under `--require-distinct-anchors`; the other ten are anchored against the tree as it stands, where each still holds the lines this gate read, and the comma lists in rows 4 and 5 are expanded so every range in them is checked. `36c8b31` did not survive the squash merge._
+
 > **WITHDRAWN — do not cite this paragraph.** _One commit was added after the
 > gate, rewrapping a ragged comment in `security.yml`; **its line count was
-> preserved deliberately**, so `security.yml:100` and `:89-101` resolve
+> preserved deliberately**, so `security.yml:100` "if: github.event_name == 'push' && github.ref ==" and `:89-101` "Pinned to a commit SHA, and it is the only such pin in this directory" resolve
 > identically at both shas._
 >
 > **Retraction, same day, by the reviewer's own run.** The second half is false.
@@ -500,8 +502,8 @@ afterwards through this ticket's pull request._
 > slices differs (`da2c91fe…` / `a173676c…`).
 >
 > **The standing statement, each half checked separately rather than predicted
-> from the edit's shape:** `security.yml:100` **is** byte-identical at both shas
-> — `diff` of the two single lines is empty. `security.yml:89-101` resolves at
+> from the edit's shape:** `security.yml:100` "if: github.event_name == 'push' && github.ref ==" **is** byte-identical at both shas
+> — `diff` of the two single lines is empty. `security.yml:89-101` "Pinned to a commit SHA, and it is the only such pin in this directory" resolves at
 > both and still holds the pin-reason block the row cites it for, but is **not**
 > byte-identical; three words moved inside the range. `Done when` 3 is
 > unaffected. Only this note's claim about itself was wrong.

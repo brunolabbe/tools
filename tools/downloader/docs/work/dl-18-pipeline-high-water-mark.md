@@ -139,13 +139,13 @@ later line in `job-card.test.tsx` down with it — the failure dl-15's fifth gat
 records, and the reason to re-resolve every citation in a record rather than only
 the ones a round happens to touch.
 
-| Done when                                                                          | Verdict  | Proof                                                                                                                                                                                                                                        |
-| ---------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `probing` with bytes already downloaded renders "Downloading" as completed         | proven   | `job-card.test.tsx:339-376 "a re-probe keeps Downloading marked done instead of walking the list back"`, both arms of the `attempts: 2` loop                                                                                                 |
-| first `probing`, nothing downloaded, renders "Downloading" pending, asserted apart | proven   | `job-card.test.tsx:378 "a first probe leaves Downloading pending, however many bytes are on the card"`; and the premise holds — an unconditional mark reddens the test at `job-card.test.tsx:378 "a first probe leaves Downloading pending"` |
-| the active step is identifiable by role, and the test queries it that way          | proven   | `job-card.test.tsx:339 "a re-probe keeps Downloading marked done"`, `:378 "a first probe leaves Downloading pending"`, `:313 "a forward-running job marks the steps behind it done"` via `activeStep()`; `chrome.test.tsx:99`                |
-| dl-15's characterization test replaced by its inverse, dl-18 no longer named       | proven   | `job-card.test.tsx:339 "a re-probe keeps Downloading marked done instead of walking the list back"` replaces it in place; `git grep dl-18` in that file is empty                                                                             |
-| `npm run check` and `npm test -- --project downloader` green                       | verified | re-run by the reviewer: exit 0, 645 tests                                                                                                                                                                                                    |
+| Done when                                                                          | Verdict  | Proof                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `probing` with bytes already downloaded renders "Downloading" as completed         | proven   | `job-card.test.tsx:339-376 "a re-probe keeps Downloading marked done instead of walking the list back"`, both arms of the `attempts: 2` loop                                                                                                                                    |
+| first `probing`, nothing downloaded, renders "Downloading" pending, asserted apart | proven   | `job-card.test.tsx:378 "a first probe leaves Downloading pending, however many bytes are on the card"`; and the premise holds — an unconditional mark reddens the test at `job-card.test.tsx:378 "a first probe leaves Downloading pending"`                                    |
+| the active step is identifiable by role, and the test queries it that way          | proven   | `job-card.test.tsx:339 "a re-probe keeps Downloading marked done"`, `:378 "a first probe leaves Downloading pending"`, `:313 "a forward-running job marks the steps behind it done"` via `activeStep()`; `chrome.test.tsx@b15bcff:99` "); // Nothing is behind the first stage" |
+| dl-15's characterization test replaced by its inverse, dl-18 no longer named       | proven   | `job-card.test.tsx:339 "a re-probe keeps Downloading marked done instead of walking the list back"` replaces it in place; `git grep dl-18` in that file is empty                                                                                                                |
+| `npm run check` and `npm test -- --project downloader` green                       | verified | re-run by the reviewer: exit 0, 645 tests                                                                                                                                                                                                                                       |
 
 **Findings, all seven, with dispositions.**
 
@@ -202,7 +202,7 @@ the ones a round happens to touch.
   an enum, and both mutations against it were killed. No change.
 
 **On the class assertions.** Three sites still read a class name —
-`job-card.test.tsx:327 "expect(items.map((step) => [step.textContent, step.className]))"` and `chrome.test.tsx:103-104`, `:115` — plus two helpers
+`job-card.test.tsx:327 "expect(items.map((step) => [step.textContent, step.className]))"` and `chrome.test.tsx@b15bcff:103-104` "stages__item stages__item--active", `chrome.test.tsx@b15bcff:115` "stages__item stages__item--done" — plus two helpers
 that read one, `stepStates()` and `stageClasses()`. All five are deliberate
 companions rather than leftovers: the class and the ARIA attribute are set from
 one expression in each component, so a suite watching only the accessible half
@@ -210,7 +210,7 @@ would let the stylesheet's hook drift silently, and the reverse. The role
 assertions are what speak for a user; the class assertions are what keep the two
 halves from separating.
 
-**On the one negative assertion.** `chrome.test.tsx:102` asserts no stage claims
+**On the one negative assertion.** `chrome.test.tsx@b15bcff:102` "expect(screen.queryAllByRole" asserts no stage claims
 to be done at zero elapsed. It has a companion, per dl-15's gate-5 rule: deleting
 the `<ol className="stages">` block reddens it, because `activeStage()` and the
 indexed class reads beside it throw on an absent list rather than passing
