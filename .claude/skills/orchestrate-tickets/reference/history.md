@@ -2645,3 +2645,128 @@ this branch.
   citations. The builder re-tested it in place (6 of 6 verified). That is the
   sixteenth session's item 1, a record that breaks only once committed, closed
   by the agent that wrote the record rather than found after it landed.
+
+## Nineteenth session — 2026-09-13
+
+**Written by a records-only dispatch (Claude Opus 5, dispatched as `opus`),
+transcribing the orchestrating session's own account of a batch it ran, with no
+gate on this branch — scoped to this file alone.** Both pull requests were read
+with `gh pr view 228` and `gh pr view 229` at 2026-09-13 22:43 UTC, and their
+comments with `--json comments`. Branch facts come from `git log`, `git
+merge-base` and `git diff` on `origin/pl-42-the-revision-contract` and
+`origin/pl-39-a-real-model`. Each verdict was read from the ticket's committed
+`## Review` with `git show <branch>:<ticket>`. CI conclusions come from `gh run
+list --branch <b> --json` and `gh run view <id> --json jobs`, never by eye. The
+intake count was re-run as `npm run status -- --ready` on a checkout of the base.
+Two measurements were taken on detached checkouts that were never pushed: the
+citation gate at pl-39's gated tip, and the gate on a scratch merge of both
+branches (item 1). **Orchestrator-reported, not verified here:** the open-PR
+count at intake, the seam map and its finding, the owner's batch choice, every
+wake and round count and the attribution of rounds, every token figure, the
+reviewer's uncommitted "extended with 4 scenarios" claim, the unreceived queued
+message, and items 3, 7 and 8's underlying episodes. Both branches sit on
+`8849c14`, which is still `origin/main`.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **2**, both `difficulty: hard` (confirmed in each ticket's frontmatter on `main`): `pl-42` → **#228**, open at `5f2be13`, five commits over `8849c14`; `pl-39` → **#229**, open at `e048642`, five commits over `8849c14`. Both `OPEN`, `MERGEABLE`, not draft, `status: done` on each branch tip. Intake: **0 open pull requests** (orchestrator-reported; consistent with the PR list, where #226 merged at 18:25 UTC, #227 was created at 21:28 and pl-42's first commit is 21:16), and `--ready` returned **3**, `pl-39`, `pl-41` and `pl-42`, reproduced exactly on `8849c14`. The seam-mapper reported no file overlap, and **the owner chose "pl-39 + pl-42 only"**, holding `pl-41` for a soft overlap on cost prose with `pl-39`. **The branches as finished share two paths**, neither of which the briefs predicted: `tools/planner/contract/src/errors.ts` (pl-42's new codes; pl-39's reworded `AGENT_UNAVAILABLE` comment, from the owner's first pl-39 decision) and `pl-24`'s gate record (each branch pins different citations in it). `git merge-tree --write-tree` reports no conflict, and the scratch merge passes the citation gate. Two other open PRs, #227 (`dl-48-coverage`) and #230 (`planner-env-example`, created 22:36), are not this batch's; #230's overlap with pl-39's new settings was not checked |
+| `agents` / `dispatches` | **6** agents: 1 seam-mapper (**`sonnet`**, from `.claude/agents/seam-mapper.md`'s frontmatter, since no model was passed at dispatch), 2 builders (`opus`), 2 reviewers (`sonnet`), and 1 records-only builder (this row, `opus`). **6** spawns, plus **about 20 wakes, approximate because no strict tally was kept**: pl-42 builder about 5, pl-39 builder about 9, pl-42 reviewer about 2, pl-39 reviewer about 4 |
+| `builder rounds` | **About 14**. **pl-42, about 5:** the build; step 7's owner decision (a new `REVISION_LIMIT_REACHED` code, limit 50); the gate fixes; the ship round; a CI-red round for moved citations. **pl-39, about 9:** the build; three owner decisions; the gate exchange; a blank-`MODEL_PROVIDER` plus custom-headers decision round; a stop on the section citations check; continue plus pins; a stop on pl-28 `WORSE`; the ship round. **About 4 were the orchestrator's fault** (items 1–3, and a citation gate read through a `grep` for `FAIL` or `MOVED`, which dropped the pl-28 `WORSE` line and cost one extra stop). The commits for each round are on the branches. The rounds themselves are orchestrator-reported |
+| `gates` | **2** reviewers, **both returned findings**. **pl-42: PASS** at `9138ddc` over 2 passes (the PR thread's long form names `19f1810` as the first reviewed tip). The record lists **3 low findings, but only 2 are code fixes** (both at `9138ddc`); the third is the reviewer correcting its own first-pass citation, "No code changed for this one". It records 22 of its own source mutations, and 6 bounds green before the fix. **pl-39: CONCERNS** at `3841faf` over 3 rounds (`489bce9`, `b4c934f`, `3841faf`, named in the record's header): 1 med and 2 low, all fixed; 2 open decisions raised, both decided by the owner. CONCERNS rests only on e2e and the image build being unproven at the gate. **Both have since passed in CI:** the `planner` workflow at `e048642` (run 34787290352) shows `docker` success and `e2e` success. The builder had already run `npm run e2e:planner` at `3841faf` and `902265e`, 4 passed each, in a PR comment the reviewer re-ran and agreed with. **Owner decisions: six by the orchestrator's count**, pl-42's step 7 and five on pl-39 (all five are listed in #229's body). #228's body shows step 7 as two answers, option A and then 50 "asked separately", so seven answers counted per question |
+| `wrong findings` | **0 gate findings refuted.** Wrong *claims*: the pl-39 reviewer's "logging.test.ts extended with 4 scenarios" for uncommitted probes, caught by the builder (the committed record says "4 uncommitted sentinel-injection probes"); two ambiguous or unanchored citations in the pl-39 section, caught by the builder's citations check; a mis-attributed citation in pl-42's first pass, which the committed record carries as the reviewer's own correction. **One reached a commit, annotated:** pl-42's record says "six" bounds and lists eight, and the builder's Log explains both (the reviewer's six mutated one `candidateId` variant as representative of three). **One further wrong claim reached a PR thread, not listed in the orchestrator's account:** the pl-39 gate's long form said e2e was not run because there is no Docker daemon, and the planner e2e suite does not use Docker. It was corrected by a separate builder comment, with the long form left unedited |
+| `subagent tokens` | **1,391,956** observed, cumulative per agent, last observed: seam-mapper **48,896** · pl-42 builder **302,201** · pl-39 builder **494,921** · pl-42 reviewer **282,508** · pl-39 reviewer **263,430** · this row **not reported**, since an agent cannot see its own figure. Split: builders **797,122 (57.3%)** · gate **545,938 (39.2%)** · intake **48,896 (3.5%)**. **Both reviewer figures are floors**: each took further turns ending in `SendMessage` after its last usage report. A floor on the batch, and **not the bill**: cache reads are uncounted |
+| `cost` | **≈ $25.33** at **the stale 2026-09-02 rate** of $0.0182/1k. An arithmetic conversion of the observed floor, not billed |
+
+**Model pairing: `hard`, so Opus built and Sonnet gated**, on both tickets. #228's
+body says "builder `opus`, gate `sonnet`", and #229's says the same.
+
+### What the skill got wrong
+
+Eight items, from the orchestrator's account. Items 1, 2, 4, 5 and 6 are checked
+here against the pages they name, and two of them do not survive intact. Items
+3 and 7 are not reproducible from outside the session. Item 8 is relayed, and
+this dispatch saw a different shape of it.
+
+1. **No step runs `node scripts/citations-gate.mjs --against origin/main` before
+   a PR opens.** Any branch that moves lines an older gate record cites fails
+   CI's `check` job. **Verified.** A search of `SKILL.md`, `reference/`,
+   `.claude/agents/` and `review-ticket` finds the script only named, never
+   invoked. `review-ticket` step 8 runs `citations.mjs` over the new record
+   alone, which cannot see an older one. #228's CI failed at `3b3e1cd` (run
+   34786249601, the `check` job) and passed at `5f2be13` after 5 pins in 3
+   records (pl-10, pl-24, pl-29). **pl-39 would have failed too, measured:** at
+   `3841faf` the gate exits 1 with 5 records `FAIL` and pl-28 `WORSE`, 13
+   `moved` citations in total. `e048642` writes 11 pins to `8849c14` in 6
+   records (repo-11, repo-33, repo-40, pl-24, pl-28, pl-38). The other two are
+   pl-28's line-number shorthands, which sit in the same table cells as a pinned
+   citation and resolve through it.
+   **The pair is not a hazard to each other at merge:** a scratch merge of both
+   heads gives `73 enforced, 0 failing` and exit 0 against `origin/main`.
+2. **Ship authority granted in the gate prompt, relayed through the reviewer,
+   loses to the builder's own dispatch**, and both builders were right to stop.
+   **Partly contradicted:** the skill already sends it to the builder.
+   `.claude/skills/orchestrate-tickets/reference/sizing.md@8849c14:35 "End every relay with conditional ship authority."`
+   and
+   `.claude/skills/orchestrate-tickets/reference/dispatching.md@8849c14:28 "Ship authority, or not."`
+   both address the builder's relay, and `builder.md` opens a PR only when "your
+   prompt" grants it. What is missing is narrower: nothing says a gate prompt
+   *cannot* carry it. That is why the orchestrator counts this round as its own.
+3. **A decision answered on one half of a pair has to be relayed to both
+   halves**, or the reviewer's verbatim section records it as open. Blank
+   `MODEL_PROVIDER` = unset went only to the builder. It was caught before commit,
+   and the committed pl-39 record lists both decisions as decided.
+4. **A message queued to a running agent was reported never received** (the
+   pl-39 builder, the blank-`MODEL_PROVIDER` answer). This is the second sighting,
+   after the eighteenth session's item 4, and the sentence it contradicts is
+   unchanged since then:
+   `.claude/skills/orchestrate-tickets/reference/concurrency.md@8849c14:95 "Messaging a running agent is nearly free"`.
+   The harness behaviour itself is orchestrator-reported.
+5. **Gate prompts do not require the reviewer to run `citations.mjs --section
+   Review --require-anchors --require-distinct-anchors` before handing over its
+   section.** The pl-42 reviewer did it unprompted; the pl-39 reviewer did not,
+   and two citations failed at the builder. **Partly contradicted:**
+   `ticket-reviewer.md` preloads `review-ticket`, which tells the reviewer every
+   `## Review` citation needs an anchor that occurs once, and that CI enforces
+   both. Its step 8 gives the exact command **to the builder, before the
+   commit**, and that is where pl-39's two failures were caught. The skill
+   worked at the step it designates. The defect is that the reviewer is given the
+   rule but not the command, so a clean handover costs the builder a round.
+6. **No procedure for a ticket that adds an npm dependency.** **Verified as
+   absent:** `builder.md` and `ticket-reviewer.md` forbid `npm install`, and
+   `dispatching.md` forbids writing an install into a gate prompt. Nothing covers
+   adding a package. The builder improvised `npm install --package-lock-only
+   --ignore-scripts` with a symlinked scratch install, and pl-39's Log records
+   that `--package-lock-only` also rewrote two workspace versions, which were
+   reverted by hand. The reviewer linked the builder's copy
+   (orchestrator-reported). **#229's CI was the first real install, and it
+   passed:** at `e048642`, `CI` (run 34787290348) shows `check`, `changes` and
+   both `test` jobs as success.
+7. **"Ask every agent for what the skill got wrong at dispatch" was not done.**
+   Only the pl-39 pair was asked, mid-batch; the pl-42 agents never were. The
+   instruction is this page's own schema row. The omission is
+   orchestrator-reported.
+8. **Relayed and unverified: the pl-39 builder reported that the sandbox
+   refuses piped git commands and shell variables.** The orchestrator ran such
+   commands without refusal in its own session. **This records dispatch, also
+   worktree-isolated, saw part of it, in a narrower shape.** A plain pipe from
+   `git diff` into `grep` and `wc` ran, and so did `echo "exit=$?"`. Three compound
+   commands were refused before running. One was a `for` loop whose body ran `git`
+   and `gh` ("names git in a form too complex to verify that it stays inside the
+   worktree"). Another was a `;`-chain that ran the farm script with its output
+   redirected ("runs bash inside a construct too complex to verify"). The third
+   was a `cat` heredoc appending this entry, where `git` appeared only in the text
+   being written ("too complex to verify that it stays inside the worktree"). Plain
+   commands, and the file-edit tool, worked. The refusal appears to belong to a
+   worktree-isolated agent and to fire on how a command is built, not on pipes or
+   variables as such. One dispatch is not a measurement of the rule.
+
+### What this row's verification added
+
+- **#228's body is stale on one line.** Its "Verification on the final tip
+  `3b3e1cd`" predates the pin commit `5f2be13`. The pin repair is documented in a
+  separate PR comment, not in the body.
+- **The seam map's "no overlap" held for the briefs and not for the branches.**
+  Both shared paths came from mid-batch work: an owner decision that lifted the
+  stop on `contract/` for one doc comment, and citation pins. A map read at intake
+  cannot see either, and `git merge-tree` on the finished heads is the check that
+  can.
