@@ -2517,3 +2517,131 @@ The orchestrator re-checked the shared checkout, the three worktrees and the
 remote heads, all clean, and resumed the agent by message. It told the agent
 that nothing it held was evidence, and the agent re-ran its control before
 continuing.
+
+## Eighteenth session — 2026-09-13
+
+**Written by a records-only dispatch (Claude Opus 5, dispatched as `opus`),
+transcribing the orchestrating session's own account of a batch it ran, with no
+gate on this branch — scoped to this file alone.** Branch facts were re-read
+from `pull/223/head` with `git log`, `git merge-base` and `git show`. The pull
+request's state was read with `gh pr view 223` at 2026-09-13 05:01 UTC, and the
+owner's decisions were read from its body. The gate's two passes were checked
+against the reviewer's report on the PR thread and against the `## Review`
+section on the branch. **Orchestrator-reported, not verified here:** the intake
+count, the agent and wake counts, the attribution of rounds, every token figure,
+the queued-message episode, the harness working-directory change and the
+peer-session relay. #223's base is `4b9ce2f` (its merge-base with `origin/main`),
+and `origin/main` has since moved one commit, to `514b5b6` (#222, a planner
+filing). The two changes share no file: #222 touches 5 paths, #223 touches 40,
+and `comm -12` over the two sorted `git diff --name-only` lists prints nothing.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **1**, `repo-44` (`difficulty: hard`, confirmed in its frontmatter on `main`), taken whole on one branch as **#223**, open at `6e7ed81`. Four commits over `4b9ce2f`, 40 files, `status: done` on the branch tip. Intake: **no open pull requests**, and `--ready` returned **1** ticket (orchestrator-reported). That count is consistent with the base: `pl-39`, `pl-40` and `pl-41`, which `--ready` lists at `514b5b6`, are absent from `4b9ce2f`'s tree. **The seam-mapper was not dispatched**, because a single candidate has no seams to map, so the batch question became how to *slice* the one ticket (item 1). Read at 05:01 UTC: `OPEN`, `MERGEABLE`. `pr-title`, CI `check`, CI `changes`, `security` `codeql`, `dependency-review` and `CodeQL` were success, and both `test` matrix jobs were still `IN_PROGRESS`. At the orchestrator's earlier look, `CI` and `security` had been in progress |
+| `agents` / `dispatches` | **3** agents: 1 builder (`opus`), 1 reviewer (`sonnet`), and 1 records-only builder (this row, `opus`). **3** spawns. Wakes are **approximate, since the orchestrator kept no strict tally**: the builder was woken about 4 times (the reviewer's pass-1 message, the orchestrator's acceptance message, the round that hit a failing condition, and a resend after a queued message went unread). The reviewer was woken once, sent back for enumeration, and took a further turn after the builder's closing commit |
+| `builder rounds` | **About 4**: the build, the gate exchange, the closing commit that hit a failing condition, and the push that opened the PR. **2 were the orchestrator's fault.** One was a ship-authority condition broader than the `Done when` line it stood for (item 3). The other was a reply sent to a running builder that was never acted on (item 4). `6e7ed81`, the closing commit, is visible on the branch. The rounds themselves are orchestrator-reported |
+| `gates` | **1** reviewer over **2 passes**, both **PASS** at `7725487`, and **findings were returned**. Pass 1 **sampled** `Done when` 3 despite a prompt that said "enumerate, don't sample": it read 39 of the 114 pins and spot-checked about 30–40 of the non-pin citations. The orchestrator caught this at step 8 and sent it back (item 2). Pass 2 enumerated all **443** citation occurrences the branch touched (409 inside `## Review`, of which 123 pinned; 34 outside it) with `citations.mjs`'s own extractors and resolvers, and found **0 mismatches**. It reported one headcount discrepancy, 26 against the Log's 25. Separately, the builder's reproduction found pass 1's "zero indistinct anchors anywhere" false: 2 pre-existing anchors, in `repo-16` and `repo-21`, since repaired in `6e7ed81`. It also found that pass 1's draft section would have failed the citation gate once committed. All of this is confirmed on the PR thread and in the branch's own post-gate Log entry |
+| `wrong findings` | **0 gate findings refuted.** The wrong *claims* were the reviewer's "zero indistinct anywhere", and **both** headcounts: the builder's 25 and the reviewer's 26. A script corrected them to **28 occurrences at 24 distinct targets**. The 25 counted substitution rows and omitted `repo-37`'s pointer, and the 26 counted two `repo-1` rows that only the formatter touched, per the branch Log. **None reached a commit uncorrected** |
+| `subagent tokens` | **1,410,875** observed, **1 of 3 agents missing**: builder **944,332** (cumulative, from its final completion notification, which folds in every resume) · reviewer **466,543** · this row **not reported**, since an agent cannot see its own figure. Split of the observed figure: builder 66.9% · gate 33.1% · intake 0%, with no seam-mapper. **Corrected during this row's writing** from a builder figure of 864,956, which came from its first completion notification. A floor on the batch, because this row's own agent is missing, and **not the bill**: cache reads are uncounted |
+| `cost` | **≈ $25.68** at the 2026-09-02 rate of $0.0182/1k. An arithmetic conversion of the observed total, not billed |
+
+**Model pairing: `hard`, so Opus built and Sonnet gated**, dispatched as `opus`
+and `sonnet`. #223's body names both: "Built by `opus` (Opus 5) per
+`difficulty: hard`, gated by `sonnet` (Sonnet 5)". With one ticket there is no
+cross-ticket collision to see, but this is the pairing the sixteenth session's
+item 7 says every `hard` ticket lands on.
+
+**Four decisions went to the owner.** Each recommendation is from the
+orchestrator's account, and each answer is confirmed in #223's body:
+- **batch scope:** the options were the downloader slice (recommended), the planner slice, two stacked, or the whole ticket. **The owner chose the whole ticket, overriding the recommendation**;
+- **`dl-33`'s quoted Vitest coordinate:** grandfather it (recommended, chosen), file a checker ticket, or paraphrase;
+- **the 23 references that cannot take an anchor without editing a quote**, raised by the builder mid-build: grandfather them (recommended, chosen), grandfather them and file a checker ticket, or rewrite as prose;
+- **`pl-32`'s extension-less `tools/planner/Dockerfile` coordinates:** a Log note (recommended, chosen), a ticket, or a revert.
+
+### What the skill got wrong
+
+Eight items, all from the orchestrator's account. Items 1, 3, 4 and 7 are
+checked here against the page each one names, and item 8's two line numbers
+against both trees. Item 5 is checked against the branch Log, and item 2
+against the PR thread. Item 6 is harness behaviour and is not reproducible from
+this branch.
+
+1. **Step 2 has no case for one large unblocked ticket.** It mandates a
+   seam-mapper and a "which batch" question
+   (`.claude/skills/orchestrate-tickets/SKILL.md@514b5b6:42 "Map the seams, then ask which batch"`).
+   With a single candidate there is nothing to map, but there is still a
+   batch decision: how to slice a ticket whose own Build says
+   `docs/work/repo-44-the-rest-of-the-review-corpus-and-the-pin-wait-class.md@514b5b6:72 "Take one tool, or one run of ids, per dispatch"`.
+   `sizing.md` covers slicing only when a decision blocks
+   (`.claude/skills/orchestrate-tickets/reference/sizing.md@514b5b6:108 "### Slice a blocked ticket"`).
+   The owner overrode the recommended slice here, which is why the question
+   was worth asking and why the step should say to ask it.
+2. **A gate told "enumerate, don't sample" sampled and still reported PASS** on
+   the `Done when` line that needed enumeration. Step 8's checks ask for a spec
+   file and line per verdict
+   (`.claude/skills/orchestrate-tickets/SKILL.md@514b5b6:82 "line carry a verdict naming a spec file and line"`),
+   not for **population against coverage**. Adding **"does the count read equal
+   the count that exists?"** would have caught it mechanically: 39 read of
+   114 pins is visible in pass 1's own report. This is the seventeenth
+   session's item 2 again, one session later, in a gate whose prompt already
+   carried that lesson. The instruction alone did not hold, so the check has to
+   sit with whoever accepts the report.
+3. **`sizing.md` calls ship-authority conditions mechanical**
+   (`.claude/skills/orchestrate-tickets/reference/sizing.md@514b5b6:40 "are mechanical. It worked on three branches"`).
+   Running them is. **Writing** them is not. The orchestrator required a
+   clean whole-file citation check on `repo-21`, but `Done when` 2 is only
+   about indistinct anchors. Two deliberate failures that predate the branch, a
+   quoted checker line and a placeholder, made it exit 3. #223's body records
+   the condition being re-scoped after it failed, and it cost a round.
+   **Derive each condition from the words of a `Done when` line**, not from
+   the command that seems to stand for it.
+4. **`concurrency.md` says messaging a running agent "is nearly free"**
+   (`.claude/skills/orchestrate-tickets/reference/concurrency.md@514b5b6:95 "Messaging a running agent is nearly free"`).
+   The orchestrator's option-1 reply came back "queued for delivery at its
+   next tool round". The builder then completed without acting on it: it was
+   shown `completed`, with the branch unpushed, and nothing announced the
+   drop. A resend was needed. **After sending to a running agent, confirm with
+   `ListAgents` and the artifact (a push, a commit) rather than assuming
+   delivery.** This is the counterpart of the seventeenth session's item 4:
+   there, a message believed to be queued was a resume; here, one that was
+   queued was never read.
+5. **The ticket expected `repo-35` to shift per-bucket counts, and it shifted
+   none.** 231, 83, 4 and 49 reproduced exactly at `4b9ce2f`, which contains
+   #219. This is recorded in the branch Log's "what the brief had wrong".
+6. **Harness: a `cd` in one orchestrator Bash call moved the session's primary
+   working directory.** An orchestrator call of the form `cd <builder worktree>
+   && …` changed the session's primary working directory to that worktree, and
+   an environment update announced it. An orchestrator whose next edit used a
+   relative path would have written into the builder's tree. Orchestrator-reported.
+7. **`records.md` does not say what happens when a fix lands after the
+   reviewer's verbatim section is committed.** Searching `records.md` and
+   `SKILL.md` for "after the gate" and "post-gate" returns nothing. The choice
+   made here: the section stays as a description of the reviewed sha
+   (`7725487`), the builder adds a dated post-gate Log entry for the fix
+   (`6e7ed81`, whose entry says "The gate record above describes `7725487` and
+   is committed as the reviewer sent it"), and the reviewer confirmed the new
+   sha without editing its section.
+8. **A relayed claim true of `main` and false of the branch.** A peer session
+   (`tools-fa`) relayed "`const FAILING` moved to line 299; re-measure against
+   the merged checker". That is true of `main`
+   (`scripts/citations-gate.mjs@514b5b6:299 "const FAILING"`) and false of the
+   branch. On #223's head it is at line 269, because the branch shrank
+   `GRANDFATHERED`. And the base already contained #219: `626c8fb` is an
+   ancestor of #223's head. **One command settled it.** The relay shape is *a
+   claim true of `main` but not of the branch*.
+
+### What went right, and is worth copying
+
+- **The builder reproduced the gate instead of transcribing it, and it caught
+  two false claims before either reached a commit.** Its whole-file sweep
+  without `--section` contradicted pass 1's "zero indistinct anywhere". It then
+  counted the outside-`## Review` repoints with a script built on
+  `citations.mjs`'s own `extractCitations`, which settled a 25-against-26
+  disagreement at a third number, 28 occurrences at 24 targets, and explained
+  both wrong ones. Two agents that disagree are not choosing between their
+  figures. The measurement neither of them had taken yet decides it.
+- **The reviewer's second pass tested its own section with the checker before
+  sending it**, after its first draft would have failed the gate on its own
+  citations. The builder re-tested it in place (6 of 6 verified). That is the
+  sixteenth session's item 1, a record that breaks only once committed, closed
+  by the agent that wrote the record rather than found after it landed.
