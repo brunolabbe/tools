@@ -209,6 +209,8 @@ against faking progress applies (§7).
 ## Configuration
 
 All via environment, parsed and validated once at boot with zod, `api` only.
+Every variable and its default is listed in [`.env.example`](../.env.example),
+which nothing loads.
 
 | Variable                     | Default    | Why it matters                                                 |
 | ---------------------------- | ---------- | -------------------------------------------------------------- |

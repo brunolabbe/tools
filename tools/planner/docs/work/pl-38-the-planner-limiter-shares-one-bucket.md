@@ -126,7 +126,7 @@ record, 2 dropped before write-up (reviewer's own count, not re-derived here):
   (pre-existing staleness on `main`, not introduced by this branch — flagged
   by the reviewer regardless because the file was open). Repointed; `node
 scripts/citations.mjs` on this record now reports 0 moved.
-- **low** · `tools/planner/docs/01-ARCHITECTURE.md:228` "CIDR the above" —
+- **low** · `tools/planner/docs/01-ARCHITECTURE.md:230` "CIDR the above" —
   repaired. The Configuration table omitted `TRUST_PROXY` among 13 of the
   tool's 22 env vars, not a rule violation on its own (several others were
   already absent, `CORS_ORIGINS` included) but a judgement call the reviewer
