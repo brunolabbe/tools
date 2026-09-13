@@ -753,6 +753,66 @@ on `valhalla` is the other thing to check early: it shells out to `curl`, and
 whether that image ships one is exactly the sort of thing that shows up as a
 container that answers fine by hand and reports unhealthy anyway.
 
+## A real model behind the planner
+
+The planner ships with `MODEL_PROVIDER=scripted`, which answers every
+specialist from a fixed script: no key, no bill, and a plan that is visibly not a
+model's. That stays the image's default — the `Dockerfile` sets it and so does
+[`compose.planner.prod.yaml`](../compose.planner.prod.yaml) — because a real
+model is a deliberate act per deployment, not something a host inherits.
+[pl-39](../tools/planner/docs/work/pl-39-a-real-model-behind-the-seam.md) added
+the first one, Anthropic's.
+
+| Variable            | Value                     | Required                                     |
+| ------------------- | ------------------------- | -------------------------------------------- |
+| `MODEL_PROVIDER`    | `anthropic`               | yes                                          |
+| `ANTHROPIC_API_KEY` | the key                   | yes — **a secret**, see below                |
+| `MODEL`             | `claude-opus-5` (default) | no                                           |
+| `MODEL_EFFORT`      | `low` (default)           | no — `low`, `medium`, `high`, `xhigh`, `max` |
+| `MODEL_TIMEOUT_MS`  | `120000` (default)        | no — per attempt                             |
+| `MAX_OUTPUT_TOKENS` | `8000` (default)          | no — see the budget trap below               |
+
+**The key is a secret, and it never goes in a compose file that is checked in.**
+Put it in the host's `.env` beside `COMPOSE_FILE`, and pass it through from an
+override file that also stays on the host — `ANTHROPIC_API_KEY:
+${ANTHROPIC_API_KEY}` and `MODEL_PROVIDER: "anthropic"` under the `planner`
+service's `environment`, in a file listed after `compose.planner.prod.yaml` in
+`COMPOSE_FILE` so its values win. The service reads the key once at boot and
+logs the provider and the model, never the key.
+
+**Both mistakes refuse to boot rather than degrade.** `MODEL_PROVIDER=anthropic`
+with no `ANTHROPIC_API_KEY` stops the process naming the variable, and so does
+a name this build does not know — `MODEL_PROVIDER=antropic` used to fall back
+to `scripted` silently, which on a production host meant a service that looked
+configured and billed nothing. An unknown `MODEL_EFFORT` refuses the same way,
+and since pl-39 so does an unknown `GROUNDING_PROVIDER`. Read `failed to start`
+in the container log, not `/api/health`.
+
+After it boots, `/api/health` reports `agent: { provider: "anthropic", model:
+"claude-opus-5" }` — the model configured. A refused request can be answered by a
+fallback model inside the same call, and when that happens the log line
+`model reply served by another model` names the one that did.
+
+### `RUN_TOKEN_BUDGET` now buys a quarter as many specialists
+
+**Read this before setting `RUN_TOKEN_BUDGET`, and re-read it if one is already
+set.** The run budget is spent by dividing it by `MAX_OUTPUT_TOKENS × 2` — one
+reply and one re-ask per specialist — and pl-39 raised `MAX_OUTPUT_TOKENS` from
+2,048 to 8,000, because the model thinks by default and thinking counts against
+that ceiling. So a budget chosen before that change affords a quarter of what it
+did: `RUN_TOKEN_BUDGET=20000` ran 4 specialists and now runs 1. **Nothing errors.**
+The plan comes back with `specialist-dropped-for-budget` gaps, which is exactly
+the shape of a budget working as intended.
+
+The arithmetic also counts output only. Input is roughly a quarter of a fixture
+run's dollars, and a corridor run is not a fixture run: nothing caps how many
+discovery finds reach a specialist's prompt today. Whether the budget should
+count input is
+[pl-40](../tools/planner/docs/work/pl-40-prove-p3-against-a-real-model.md)'s
+measurement to take; until then, size `RUN_TOKEN_BUDGET` in output tokens, as
+`maxSpecialists × 16000` for the roster you mean to afford, or leave it unset and
+let `MAX_SPECIALISTS` be the cap.
+
 ## Adding the second tool
 
 **The tunnel does not change, and neither does anything above.** One tunnel per
@@ -884,7 +944,9 @@ from the downloader's, and the first is not a hardening preference:
   looks healthy and answers from a fixed script. It is set explicitly in the
   image and again in the fragment, and `/api/health` reports `agent.provider` —
   but set it deliberately rather than relying on someone reading a health
-  payload.
+  payload. A name the build does not know refuses to boot rather than falling
+  back to it — see
+  [`## A real model behind the planner`](#a-real-model-behind-the-planner).
 
 Rate limiting is per-client the same way the downloader's is: `RATE_LIMIT_RUNS_PER_MINUTE`
 (default 5, on `POST /api/plans`) is keyed on `request.ip`, and

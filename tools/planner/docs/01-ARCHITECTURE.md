@@ -210,22 +210,27 @@ against faking progress applies (§7).
 
 All via environment, parsed and validated once at boot with zod, `api` only.
 
-| Variable                     | Default    | Why it matters                                                 |
-| ---------------------------- | ---------- | -------------------------------------------------------------- |
-| `PORT`                       | `8090`     | 8090/5183 so both tools run at once                            |
-| `MODEL_PROVIDER`             | `scripted` | The only place a model backend is named                        |
-| `GROUNDING_PROVIDER`         | `fixtures` | Same seam, same default: a fresh clone plans with no key       |
-| `VALHALLA_URL`               | —          | Routing endpoint. No default: an endpoint is a deployment fact |
-| `GEOCODER_URL`               | —          | A router does not geocode. Both required, or the boot refuses  |
-| `GROUNDING_TIMEOUT_MS`       | `5000`     | Short: a run holds a queue slot while it grounds               |
-| `MAX_SPECIALISTS`            | `5`        | The roster cap the orchestrator degrades to (§9)               |
-| `MAX_GROUNDING_CALLS`        | `40`       | Per run. Grounding is where the bill lives                     |
-| `GROUNDING_CACHE_TTL_*`      | varies     | Hours for an opening time, months for a distance (§5)          |
-| `MAX_CRITIC_ROUNDS`          | `2`        | Bounded, or the critic and composer argue on the clock         |
-| `RUN_TOKEN_BUDGET`           | —          | Hard ceiling per run; degrade the roster rather than exceed it |
-| `MAX_CONCURRENT_RUNS`        | `2`        | Each run is itself a fan-out                                   |
-| `RATE_LIMIT_RUNS_PER_MINUTE` | `5`        | Runs one client may start. Zero disables it (pl-16)            |
-| `TRUST_PROXY`                | `false`    | CIDR the above trusts to name a client; never `true` (pl-38)   |
+| Variable                     | Default         | Why it matters                                                                         |
+| ---------------------------- | --------------- | -------------------------------------------------------------------------------------- |
+| `PORT`                       | `8090`          | 8090/5183 so both tools run at once                                                    |
+| `MODEL_PROVIDER`             | `scripted`      | The only place a model backend is named. Unknown names refuse to boot                  |
+| `ANTHROPIC_API_KEY`          | —               | For `anthropic`. A secret: no default, never in a checked-in file                      |
+| `MODEL`                      | `claude-opus-5` | Which model a real provider asks. Ignored under `scripted`                             |
+| `MODEL_EFFORT`               | `low`           | `low` to `max`. Thinking stays adaptive; effort is the lever                           |
+| `MODEL_TIMEOUT_MS`           | `120000`        | Per attempt. The SDK retries, so a call can hold a slot 3× this                        |
+| `MAX_OUTPUT_TOKENS`          | `8000`          | Thinking counts against it, and it divides `RUN_TOKEN_BUDGET`                          |
+| `GROUNDING_PROVIDER`         | `fixtures`      | Same seam, same default: a fresh clone plans with no key. Unknown names refuse to boot |
+| `VALHALLA_URL`               | —               | Routing endpoint. No default: an endpoint is a deployment fact                         |
+| `GEOCODER_URL`               | —               | A router does not geocode. Both required, or the boot refuses                          |
+| `GROUNDING_TIMEOUT_MS`       | `5000`          | Short: a run holds a queue slot while it grounds                                       |
+| `MAX_SPECIALISTS`            | `5`             | The roster cap the orchestrator degrades to (§9)                                       |
+| `MAX_GROUNDING_CALLS`        | `40`            | Per run. Grounding is where the bill lives                                             |
+| `GROUNDING_CACHE_TTL_*`      | varies          | Hours for an opening time, months for a distance (§5)                                  |
+| `MAX_CRITIC_ROUNDS`          | `2`             | Bounded, or the critic and composer argue on the clock                                 |
+| `RUN_TOKEN_BUDGET`           | —               | Hard ceiling per run; degrade the roster rather than exceed it                         |
+| `MAX_CONCURRENT_RUNS`        | `2`             | Each run is itself a fan-out                                                           |
+| `RATE_LIMIT_RUNS_PER_MINUTE` | `5`             | Runs one client may start. Zero disables it (pl-16)                                    |
+| `TRUST_PROXY`                | `false`         | CIDR the above trusts to name a client; never `true` (pl-38)                           |
 
 ## Key decisions and why
 

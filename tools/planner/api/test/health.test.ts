@@ -34,6 +34,42 @@ describe("GET /api/health", () => {
     expect(context.model.name).toBe("scripted");
   });
 
+  test("boots on anthropic with a key, and names the provider and the model — nothing else", async () => {
+    // Constructing the provider makes no request, so this boots with no
+    // network and no bill (pl-39).
+    app = await createApp({
+      config: {
+        databasePath: ":memory:",
+        logLevel: "silent",
+        modelProvider: "anthropic",
+        anthropicApiKey: "sk-ant-health-test-key",
+      },
+    });
+
+    const body = (
+      await app.server.inject({ method: "GET", url: ROUTES.health })
+    ).json<HealthResponse>();
+
+    expect(body.agent).toEqual({ provider: "anthropic", model: "claude-opus-5" });
+    expect(JSON.stringify(body)).not.toContain("sk-ant-health-test-key");
+  });
+
+  test("refuses to boot anthropic without a key, naming the variable", async () => {
+    // A service that starts here reports healthy and then fails every
+    // specialist of its first run, into named gaps that look like honest ones.
+    const started = createApp({
+      config: {
+        databasePath: ":memory:",
+        logLevel: "silent",
+        modelProvider: "anthropic",
+        anthropicApiKey: undefined,
+      },
+    });
+
+    await expect(started).rejects.toThrow(/ANTHROPIC_API_KEY is not set/u);
+    await expect(started).rejects.toMatchObject({ code: "AGENT_UNCONFIGURED" });
+  });
+
   test("names the grounding provider too, and says nothing else about it", async () => {
     const { server, context } = await startApp();
 

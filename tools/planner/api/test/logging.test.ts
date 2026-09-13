@@ -14,6 +14,8 @@
  * So the discipline is at the call site, and this is what holds it there.
  */
 
+import { AnthropicProvider } from "@planner/agent";
+import { AppError } from "@planner/contract";
 import { afterEach, describe, expect, test } from "vitest";
 import type { App } from "../src/server.ts";
 import { createApp } from "../src/server.ts";
@@ -38,6 +40,9 @@ function capturing(): { logger: AppLogger; lines: Line[] } {
   });
   return { logger, lines };
 }
+
+/** A model provider key, which must reach no log line by any path (pl-39). */
+const KEY = "sk-ant-api03-LOGGING-TEST-KEY-9f3c2a7b";
 
 const ROUTING = "http://valhalla.internal:8002";
 const GEOCODER = "http://user:hunter2@nominatim.internal:8080";
@@ -79,6 +84,71 @@ describe("what boot writes down about grounding", () => {
     expect(everything).not.toContain("hunter2");
   });
 
+  test("a thrown authentication error, logged through the real logger, does not contain the key", async () => {
+    // pl-39. The SDK's errors carry the request that produced them, and the
+    // request carries `x-api-key`. The provider logs status, type and request
+    // id by hand and attaches no cause; this holds it to that through the
+    // logger that production runs, and through the error handler's own fields.
+    const { logger, lines } = capturing();
+
+    const provider = new AnthropicProvider({
+      apiKey: KEY,
+      model: "claude-opus-5",
+      effort: "low",
+      timeoutMs: 5_000,
+      maxRetries: 0,
+      fetch: answer401,
+      logger,
+    });
+
+    const thrown = await provider
+      .send({ system: "s", messages: [{ role: "user", content: "u" }], maxOutputTokens: 10 })
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    expect(thrown).toBeInstanceOf(AppError);
+    const appError = thrown as AppError;
+    expect(appError.code).toBe("AGENT_UNCONFIGURED");
+
+    // What `registerErrorHandling` and a run's failure path write about it.
+    logger.error("request failed", { code: appError.code, details: appError.details });
+    logger.error("run failed", { error: appError.toPayload(), cause: appError.cause });
+
+    const failed = lines.find((line) => line.msg === "model request failed");
+    expect(failed).toMatchObject({
+      status: 401,
+      type: "authentication_error",
+      requestId: "req_logging_401",
+    });
+    expect(JSON.stringify(lines)).not.toContain(KEY);
+    // The part of a key that survives a truncating formatter, too.
+    expect(JSON.stringify(lines)).not.toContain(KEY.slice(-12));
+  });
+
+  test("names the model provider and model at boot, and never the key", async () => {
+    const { logger, lines } = capturing();
+    app = await createApp({
+      logger,
+      config: { databasePath: ":memory:", modelProvider: "anthropic", anthropicApiKey: KEY },
+    });
+
+    const configured = lines.find((line) => line.msg === "agent configured");
+    expect(configured).toMatchObject({ provider: "anthropic", model: "claude-opus-5" });
+    // Exactly those two beside pino's own fields, so a later addition — the
+    // config object, say — has to come past this test.
+    const {
+      level: _l,
+      time: _t,
+      msg: _m,
+      pid: _p,
+      hostname: _h,
+      ...fields
+    } = configured ?? ({} as Line);
+    expect(new Set(Object.keys(fields))).toEqual(new Set(["model", "provider"]));
+    expect(JSON.stringify(lines)).not.toContain(KEY);
+  });
+
   test("says the same about the fixture default, so the line is not a special case", async () => {
     const { logger, lines } = capturing();
     app = await createApp({ logger, config: { databasePath: ":memory:" } });
@@ -89,3 +159,18 @@ describe("what boot writes down about grounding", () => {
     expect(Object.keys(configured ?? {})).not.toContain("geocoder");
   });
 });
+
+/** A Messages API `401`, as the provider's `fetch` would receive it. */
+async function answer401(): Promise<Response> {
+  return new Response(
+    JSON.stringify({
+      type: "error",
+      error: { type: "authentication_error", message: "invalid x-api-key" },
+      request_id: "req_logging_401",
+    }),
+    {
+      status: 401,
+      headers: { "content-type": "application/json", "request-id": "req_logging_401" },
+    },
+  );
+}
