@@ -427,7 +427,8 @@ true of every row production can write. `startRun` creates a new plan for every
 orchestrator writes. So every stored revision is revision 1 of its plan and a
 first draft, and every stored run drafts one. **For the same reason,
 `readPlanView` returns `diffs: []`**, with a comment naming pl-44 and pl-43: no
-plan that exists has a second revision to diff.
+route can append a second revision to diff. The one plan with two revisions is
+the test row below, and it reads an empty list too.
 
 **One row is not a first draft: a test's.** `supersedeDraft` in
 `api/test/plan-view.test.ts` writes a revision 2 by hand to prove pin
@@ -558,3 +559,28 @@ to the orchestrator as options. The owner chose A with 50.
 `planDetailSchema.revisions`. Step 7 specifies no schema check, and nothing
 reads a stored plan through that schema (_Traps_). The refusal is pl-44's check
 6 with its 409, plus the re-check inside `persist`.
+
+**2026-09-13 — the gate's three low findings, reproduced and repaired.** The
+gate (Sonnet, PASS at `19f1810`) found schema bounds with no failing case, and
+an overstated comment. Each was reproduced before it was fixed:
+
+- **Untested bounds.** I applied eight mutations one at a time and ran
+  `npx vitest run tools/planner/contract/test`. All eight stayed green at 127
+  of 127, which reproduced the finding:
+  - `DiffPlacement.position`'s maximum;
+  - the `candidateId` minimum on each of `added`, `removed` and `moved`;
+  - the minimums on `revisionId` and `parentRevisionId`;
+  - `move.candidateId`'s minimum;
+  - the request's `itemId` minimum.
+
+  New tests are in `contract/test/plan.test.ts` (_the diff schema_, and one line
+  in the move/remove test) and in `contract/test/revise.test.ts` (an empty
+  `itemId` on `move` and `remove`). The same eight mutations then each failed
+  exactly their own test, at 135 tests, and every source was byte-identical
+  after its restore.
+
+- **`diffs: []`'s comment said "every plan that exists".** The test helper
+  `supersedeDraft` appends a second revision by hand, so that was false inside
+  the suite. The comment now says "every plan the API can write" and names the
+  helper. The Log sentence above that made the same claim is corrected the same
+  way.

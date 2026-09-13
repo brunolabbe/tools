@@ -12,6 +12,7 @@ import {
   planDetailSchema,
   planItemSchema,
   planRevisionSchema,
+  revisionDiffSchema,
   revisionItems,
   type Candidate,
   type NewRevision,
@@ -351,6 +352,7 @@ describe("the operation a revision records", () => {
     expect(refused({ ...move, toPosition: MAX_ITEMS_PER_DAY + 1 })).toBe(true);
     const { fromDayIndex: _from, ...withoutFrom } = move;
     expect(refused(withoutFrom)).toBe(true);
+    expect(refused({ ...move, candidateId: "" })).toBe(true);
     expect(refused({ kind: "remove", candidateId: "cand-1", fromDayIndex: 0 })).toBe(false);
     expect(refused({ kind: "remove", candidateId: "", fromDayIndex: 0 })).toBe(true);
   });
@@ -391,6 +393,51 @@ describe("the operation a revision records", () => {
       "A candidate is placed at most once in a revision.",
     ]);
     expect(parse(once).success).toBe(true);
+  });
+});
+
+function parsesAsDiff(value: unknown): boolean {
+  return revisionDiffSchema.safeParse(value).success;
+}
+
+describe("the diff schema", () => {
+  const parses = parsesAsDiff;
+  const placement = { dayIndex: 0, position: 0 };
+  const diff = {
+    revisionId: "rev-2",
+    parentRevisionId: "rev-1",
+    entries: [
+      { kind: "added", candidateId: "cand-1", to: placement },
+      { kind: "removed", candidateId: "cand-2", from: placement },
+      { kind: "moved", candidateId: "cand-3", from: placement, to: { dayIndex: 1, position: 0 } },
+    ],
+  };
+
+  test("a diff with one entry of each kind parses", () => {
+    expect(parses(diff)).toBe(true);
+  });
+
+  test("a diff names both of the revisions it compares", () => {
+    expect(parses({ ...diff, revisionId: "" })).toBe(false);
+    expect(parses({ ...diff, parentRevisionId: "" })).toBe(false);
+  });
+
+  test.for(["added", "removed", "moved"])("a %s entry names its candidate", (kind) => {
+    const entries = diff.entries.map((entry) =>
+      entry.kind === kind ? { ...entry, candidateId: "" } : entry,
+    );
+    expect(parses({ ...diff, entries })).toBe(false);
+  });
+
+  test("a placement is a position an item can hold", () => {
+    // A placement says where an item sits, so it has an item's bound. That is
+    // one lower than a move's `toPosition`, which may name the end of a full day.
+    const at = (position: number) => ({
+      ...diff,
+      entries: [{ kind: "added", candidateId: "cand-1", to: { dayIndex: 0, position } }],
+    });
+    expect(parses(at(MAX_ITEMS_PER_DAY - 1))).toBe(true);
+    expect(parses(at(MAX_ITEMS_PER_DAY))).toBe(false);
   });
 });
 

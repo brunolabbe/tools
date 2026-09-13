@@ -67,6 +67,13 @@ describe("the request", () => {
     ).toBe(false);
   });
 
+  test.for(requests.filter((request) => request.kind === "move" || request.kind === "remove"))(
+    "a $kind request's item id is not empty",
+    (request) => {
+      expect(reviseRequestSchema.safeParse({ ...request, itemId: "" }).success).toBe(false);
+    },
+  );
+
   test("the request carries the operation's bounds, written once", () => {
     const replan = requests[0]!;
     expect(reviseRequestSchema.safeParse({ ...replan, days: [2, 1] }).success).toBe(false);
