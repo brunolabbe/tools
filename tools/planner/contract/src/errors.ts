@@ -40,7 +40,12 @@ export const PLANNER_ERROR_CODES = [
    * pointless until an operator changes something.
    */
   "AGENT_UNCONFIGURED",
-  /** The provider was configured but refused us: bad key, revoked, out of credit. */
+  /**
+   * The provider is configured and is not answering: down, overloaded, or
+   * unreachable. Retryable, because the same request may succeed later. A key
+   * or model the provider refuses is `AGENT_UNCONFIGURED` instead — that answers
+   * the same way every time until an operator changes something (pl-39).
+   */
   "AGENT_UNAVAILABLE",
   /** The model declined to answer, or stopped on its own safety grounds. */
   "AGENT_REFUSED",

@@ -268,6 +268,9 @@ describe("what the provider reads back", () => {
   );
 
   test("model_context_window_exceeded is CONTEXT_LIMIT, because the API typed it so", async () => {
+    // The owner's decision on pl-39: the stop reason is the API's own typed
+    // signal for an exhausted window, so it is `CONTEXT_LIMIT` and not one more
+    // malformed reply.
     const { fetch } = answering(fixture("contextWindowExceeded"));
     const error = await failure(provider(fetch).send(REQUEST));
     expect(error.code).toBe("CONTEXT_LIMIT");
@@ -304,7 +307,8 @@ describe("how a failure is named", () => {
     ["forbidden", "AGENT_UNCONFIGURED"],
     ["internalError", "AGENT_UNAVAILABLE"],
     ["overloaded", "AGENT_UNAVAILABLE"],
-    ["modelNotFound", "INTERNAL"],
+    // A `MODEL` the API has never heard of — the owner's decision on pl-39.
+    ["modelNotFound", "AGENT_UNCONFIGURED"],
   ] as const)("%s is %s, with the catalog's retryability", async (name, code) => {
     const { fetch } = answering(fixture(name));
     const error = await failure(provider(fetch).send(REQUEST));

@@ -336,8 +336,9 @@ and the planner e2e suite ran unchanged.
   malformed request, distinguishable only by its message. So every `400` is
   `INTERNAL`, and a test holds a context-naming `400` there. The typed signal the
   API does have is the `model_context_window_exceeded` **stop reason**, which the
-  brief's stop-reason list did not name; it is mapped to `CONTEXT_LIMIT` here, and
-  that choice is put to the orchestrator as an open decision rather than settled.
+  brief's stop-reason list did not name. It maps to `CONTEXT_LIMIT` — **the
+  owner's decision, 2026-09-13**, put as an open question with that option
+  recommended and taken over "malformed like the others". A test pins it.
   `compaction` is a stop reason too, and is malformed like the other three.
 - **The discriminated unions do survive as `anyOf`, but looser.** The helper
   rewrites each `z.literal` discriminant to `{"type":"string","description":"{const:
@@ -361,11 +362,12 @@ and the planner e2e suite ran unchanged.
 - **The contract disagrees with the error table about a bad key.**
   `contract/src/errors.ts` documents `AGENT_UNAVAILABLE` as "configured but
   refused us: bad key, revoked, out of credit", and that code is retryable; the
-  brief maps a bad key to `AGENT_UNCONFIGURED`. Built to the brief, whose reason
-  — a bad key answers the same way every time — is the stronger one. The
-  contract's comment is untouched, because `contract/` was out of this ticket's
-  bounds while pl-42 was building in it; that is an open decision for the
-  orchestrator, not a quiet one.
+  brief maps a bad key to `AGENT_UNCONFIGURED`. **The owner's decision,
+  2026-09-13:** keep `AGENT_UNCONFIGURED`, because a bad key answers the same way
+  every time and is not worth a retry, and fix the contract's comment in this
+  change rather than in a follow-up. Both are done. The owner's answer lifted
+  the stop on `contract/` for that one doc comment only, while pl-42 was
+  building in the same file; nothing else there moved.
 - **The lockfile diff was not SDK-only on the first try.** `npm install
 --package-lock-only` also rewrote two workspace versions the lockfile had
   fallen behind on (`@downloader/api` 0.2.0 → 0.4.0, `@planner/api` 0.4.0 →
@@ -395,6 +397,13 @@ and the planner e2e suite ran unchanged.
   unmeasured.** It applies per attempt, and the SDK retries a timeout, so one call
   can hold a queue slot for three times it. pl-40 is where a real latency
   distribution replaces the guess.
+- **A `404` — a `MODEL` the API has never heard of — is `AGENT_UNCONFIGURED`,
+  not `INTERNAL`.** The owner's decision, 2026-09-13, over the table's "anything
+  else": a model typo answers the same way on every request, like a bad key,
+  and that code's copy tells the user it is the server's configuration. The
+  test's red run: with the `NotFoundError` mapping replaced by `false`, the
+  `modelNotFound` row failed, and it passed again once the mapping was
+  restored.
 - **Retries are the SDK's alone, made explicit at `maxRetries: 2`.** Nothing
   above the seam reads `AppError.retryable` today. Each mapped code's
   retryability is asserted against `RETRYABLE_CODES` rather than restated.

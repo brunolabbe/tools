@@ -52,6 +52,7 @@ import Anthropic, {
   APIUserAbortError,
   AuthenticationError,
   InternalServerError,
+  NotFoundError,
   PermissionDeniedError,
   RateLimitError,
 } from "@anthropic-ai/sdk";
@@ -212,6 +213,7 @@ export class AnthropicProvider implements ModelProvider {
    * | `APIConnectionTimeoutError`                      | `TIMEOUT`            |
    * | `RateLimitError`                                 | `RATE_LIMITED`       |
    * | `AuthenticationError`, `PermissionDeniedError`   | `AGENT_UNCONFIGURED` |
+   * | `NotFoundError` (an unknown `MODEL`)             | `AGENT_UNCONFIGURED` |
    * | `InternalServerError`, 529, `APIConnectionError` | `AGENT_UNAVAILABLE`  |
    * | anything else, every `400` included              | `INTERNAL`           |
    *
@@ -267,9 +269,15 @@ function codeFor(error: unknown): ErrorCode {
   // asked about first or every timeout reads as the vendor being down.
   if (error instanceof APIConnectionTimeoutError) return "TIMEOUT";
   if (error instanceof RateLimitError) return "RATE_LIMITED";
-  // A bad or unauthorised key is this server's configuration, and
-  // `AGENT_UNCONFIGURED`'s copy says so to the user.
-  if (error instanceof AuthenticationError || error instanceof PermissionDeniedError) {
+  // A bad or unauthorised key, or a `MODEL` the API has never heard of, is
+  // this server's configuration, and `AGENT_UNCONFIGURED`'s copy says so to the
+  // user. The `404` joined by the owner's decision on pl-39: a model typo
+  // answers the same way on every request, like a bad key.
+  if (
+    error instanceof AuthenticationError ||
+    error instanceof PermissionDeniedError ||
+    error instanceof NotFoundError
+  ) {
     return "AGENT_UNCONFIGURED";
   }
   // The SDK raises `InternalServerError` for every status from 500 up, 529
