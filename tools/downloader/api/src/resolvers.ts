@@ -216,6 +216,7 @@ export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
     // `--proxy-server`, and the pool keys its shared browser on the URL alone.
     browser = new BrowserResolver({
       maxConcurrentBrowsers: config.maxConcurrentBrowsers,
+      confirmAge: config.enableAgeConfirmation,
       ...(tierEgress === undefined ? {} : { proxyRootSpkiSha256: tierEgress.rootSpkiSha256 }),
     });
     resolvers.push(named(browser));
@@ -237,6 +238,9 @@ export function buildRegistry(options: BuildRegistryOptions): RegistryBuild {
     // Enabled and *present* are different things, and only the second one
     // affects behaviour.
     ytdlpAvailable: ytdlp?.available ?? false,
+    // Read back from the tier rather than the config, for the same reason: what
+    // the resolver was actually given is what decides whether a gate is pressed.
+    ageConfirmation: browser?.confirmsAge ?? false,
   });
 
   if (!config.enableBrowserResolver) {

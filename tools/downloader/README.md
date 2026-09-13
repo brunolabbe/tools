@@ -77,12 +77,15 @@ behind a Cloudflare Tunnel and a login, without opening a port on the router.
 
 ```bash
 npm install
-cp .env.example .env
 npm run dev                    # API on :8080 and UI on :5173, both watching
 npm run check                  # lint (oxlint) + format (oxfmt) + typecheck
 npm test -- --project downloader
 npm run e2e:downloader         # whole stack in a real browser (npm run e2e:install first)
 ```
+
+Settings are environment variables, listed with their defaults in
+[`.env.example`](./.env.example). Nothing loads a `.env` file, so set what you
+change in the shell.
 
 Requires Node ≥ 22. `ffmpeg` ships bundled via `ffmpeg-static`; `yt-dlp` is
 optional and the system degrades to browser-sniffing without it.

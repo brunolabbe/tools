@@ -407,6 +407,10 @@ function toRevision(db: Database, row: RevisionRow): PlanRevision {
     revision: row.revision,
     parentRevisionId: row.parent_revision_id,
     reason: row.reason,
+    // A literal, and true of every row that exists: nothing before pl-44 can
+    // write a revision other than a first draft. pl-44 replaces this with the
+    // stored `plan_revisions.operation_json` column and its backfill.
+    operation: { kind: "first-draft" },
     createdAt: row.created_at,
     days,
     gaps,

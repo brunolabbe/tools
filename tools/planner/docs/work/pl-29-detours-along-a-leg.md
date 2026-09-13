@@ -491,7 +491,7 @@ component, its dedup, its tests) and the ticket file itself.
 - **F1 · low · fixed** — `pl-35-travel-source-unattributed.md`'s Why section
   cited `contract/src/plan.ts` line 114 and `contract/src/travel.ts` line 95. At
   `15162df` both are wrong: `travelFromPrevious: ItemTravel | null;` is at
-  `tools/planner/contract/src/plan.ts:125 "travelFromPrevious: ItemTravel | null;"`
+  `tools/planner/contract/src/plan.ts@8849c14:125 "travelFromPrevious: ItemTravel | null;"`
   (line 116 when the finding was written), and `provenance: Provenance;` is at
   `tools/planner/contract/src/travel.ts:62 "provenance: Provenance;"` — line 95
   there lands mid-comment above an unrelated declaration. Independently

@@ -26,6 +26,7 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   // 451 is the one status that means precisely this.
   DRM_PROTECTED: 451,
   AUTH_REQUIRED: 422,
+  AGE_CONFIRMATION_REQUIRED: 422,
   GEO_BLOCKED: 451,
   BOT_CHALLENGE: 422,
   LIVE_STREAM_UNSUPPORTED: 422,

@@ -23,6 +23,7 @@ import {
   type PlanItem,
   type PlanRevision,
   type PlanView,
+  type RevisionDiff,
   type Source,
   type TripBrief,
   type TripDates,
@@ -93,6 +94,7 @@ export function revision(
     revision: 1,
     parentRevisionId: null,
     reason: "The first draft.",
+    operation: { kind: "first-draft" },
     createdAt: CREATED,
     days,
     gaps,
@@ -106,6 +108,7 @@ export interface ViewOverrides {
   candidates?: Candidate[];
   revisions?: PlanRevision[];
   unchecked?: UncheckedConstraint[];
+  diffs?: RevisionDiff[];
   title?: string;
 }
 
@@ -138,5 +141,6 @@ export function planView(overrides: ViewOverrides = {}): PlanView {
         candidateIds: [],
       },
     ],
+    diffs: overrides.diffs ?? [],
   };
 }

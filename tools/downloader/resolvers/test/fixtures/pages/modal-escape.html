@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dialog without a close control</title>
+    <style>
+      #offer {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+      }
+      #offer .box {
+        width: 360px;
+        padding: 24px;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Dialog without a close control</h1>
+    <!-- The player starts only from its button, and the dialog over it offers
+         nothing to close it with but Escape (dl-48). -->
+    <div id="player"><button id="start" type="button">Play video</button></div>
+
+    <div id="offer" role="dialog" aria-modal="true" aria-labelledby="offer-title">
+      <div class="box">
+        <h2 id="offer-title">Get the app</h2>
+        <a id="offer-cta" href="/modal-escape-promo.html">Subscribe</a>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        document.addEventListener("keydown", function (event) {
+          var offer = document.getElementById("offer");
+          if (event.key !== "Escape" || !offer) return;
+          fetch("/beacon/modal-escaped").catch(function () {});
+          offer.remove();
+        });
+
+        document.getElementById("start").addEventListener("click", function () {
+          fetch("/media/mse/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/mse/v1080.m3u8");
+            })
+            .catch(function () {});
+        });
+      })();
+    </script>
+  </body>
+</html>

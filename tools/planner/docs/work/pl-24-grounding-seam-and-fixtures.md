@@ -185,7 +185,7 @@ records nothing.
   is the more likely path in practice — a reload, not a reconnect. Both now go
   through one `countsFrom(run)` helper that answers `{ total: null, done: 0 }`
   during grounding, so the bar is indeterminate until a real frame arrives.
-- **med · fixed** · `contract/src/run.ts:306 "describes a moment that has already passed"` and
+- **med · fixed** · `contract/src/run.ts@8849c14:306 "describes a moment that has already passed"` and
   `tools/planner/api/src/routes/events.ts:26 "describes a moment already past"`
   — both doc comments claimed `grounding`, like `roster`, "describes a moment
   that has already passed" and that "the `Run` already carries the count", which

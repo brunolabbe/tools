@@ -551,6 +551,13 @@ export function readPlanView(context: AppContext, id: string): PlanView {
       revision === null
         ? []
         : uncheckedForRevision({ brief: plan.brief, candidates: plan.candidates, revision }),
+    // Empty, and true of every plan the API can write: one diff per revision
+    // after the first, and no route appends a second revision before pl-44.
+    // A test that appends one by hand (`supersedeDraft` in
+    // `api/test/plan-view.test.ts`) reads an empty list too, and asserts
+    // nothing about it. pl-44 replaces this with `revisionDiffs` from
+    // `@planner/itinerary` (pl-43).
+    diffs: [],
   };
 }
 

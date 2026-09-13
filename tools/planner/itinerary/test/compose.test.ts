@@ -41,6 +41,7 @@ function asRevision(
     revision: 1,
     parentRevisionId: null,
     reason: REVISION.reason,
+    operation: { kind: "first-draft" },
     createdAt: REVISION.createdAt,
     days,
     gaps,

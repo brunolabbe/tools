@@ -44,7 +44,7 @@ describe("the transition table", () => {
     expect(canRunTransition("fanning-out", "composing")).toBe(true);
     expect(canRunTransition("composing", "done")).toBe(true);
 
-    expect(canRunTransition("queued", "composing")).toBe(false);
+    expect(canRunTransition("composing", "queued")).toBe(false);
     expect(canRunTransition("composing", "fanning-out")).toBe(false);
     expect(canRunTransition("done", "fanning-out")).toBe(false);
   });
@@ -92,6 +92,19 @@ describe("the transition table", () => {
     // cannot discover anything, must not pass through a state it spent no time
     // in — the same argument `fanning-out → composing` already won.
     expect(canRunTransition("queued", "fanning-out")).toBe(true);
+  });
+
+  test("lets a run go straight from `queued` to `composing`", () => {
+    // pl-42: a re-plan naming no specialists has no fan-out, and when its slice
+    // has no transition to measure it has no grounding either. Walking it
+    // through either state would emit a state it spent no time in — the
+    // argument `composing → done` and `fanning-out → composing` already won.
+    expect(canRunTransition("queued", "composing")).toBe(true);
+
+    // The edge is that one skip and no more: a queued run still cannot finish,
+    // or be reviewed, without composing.
+    expect(canRunTransition("queued", "done")).toBe(false);
+    expect(canRunTransition("queued", "reviewing")).toBe(false);
   });
 
   test("every non-terminal status can fail and can be canceled", () => {
@@ -145,6 +158,7 @@ describe("the wire", () => {
   const run = {
     id: "run-1",
     planId: "plan-1",
+    kind: "draft",
     status: "fanning-out",
     rosterSize: 5,
     specialistsDone: 2,
@@ -158,6 +172,13 @@ describe("the wire", () => {
     // Null rather than zero: "not decided yet" and "nobody is running" are
     // different sentences, and only one of them is a bug.
     expect(runSchema.safeParse({ ...run, status: "queued", rosterSize: null }).success).toBe(true);
+  });
+
+  test("a run says whether it drafts or re-plans, and nothing else", () => {
+    expect(runSchema.safeParse({ ...run, kind: "replan" }).success).toBe(true);
+    expect(runSchema.safeParse({ ...run, kind: "restore" }).success).toBe(false);
+    const { kind: _kind, ...kindless } = run;
+    expect(runSchema.safeParse(kindless).success).toBe(false);
   });
 
   test("every frame the server can build is one the client can parse", () => {

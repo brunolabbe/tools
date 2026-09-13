@@ -255,6 +255,9 @@ export function compose(input: ComposeInput): ComposeResult {
     revision: {
       id: input.revision.id,
       reason: input.revision.reason,
+      // The only revision this composer writes today. pl-43 gives the re-plan
+      // its own entry point, which stamps a `replan` operation.
+      operation: { kind: "first-draft" },
       createdAt: input.revision.createdAt,
       days,
       gaps: [...(input.gaps ?? []), ...gapsFor(input.candidates, packed)],

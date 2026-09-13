@@ -20,6 +20,13 @@ export interface PageSignals {
   html: string;
   hasPasswordInput: boolean;
   hasPlayerElement: boolean;
+  /**
+   * An age self-confirmation is showing that nobody pressed: a control whose
+   * label states the viewer's age, on a page carrying an `AGE_MARKERS` phrase.
+   * The resolver clears it when the operator opted in to pressing it, because
+   * then a gate still showing is a press that did not work, not a refusal.
+   */
+  ageGate: boolean;
   /** False when the deadline ran out with the page still fetching. */
   quietReached: boolean;
 }
@@ -79,6 +86,47 @@ const GEO_MARKERS: readonly string[] = [
   "no está disponible en tu país",
 ];
 
+/**
+ * Page wording that says the content is for adults. `provoke.ts` counts an
+ * "I am over 18" control as a gate only on a page carrying one of these, so an
+ * age link in a footer is not mistaken for one (dl-48).
+ *
+ * **Never a bare "18+"**, which is a rating badge that listings print beside
+ * every thumbnail, and never a phrase an age label itself would contain ("over
+ * 18"), or every such label would vouch for itself.
+ */
+export const AGE_MARKERS: readonly string[] = [
+  "adults only",
+  "for adults only",
+  "adult content",
+  "age-restricted",
+  "age restricted",
+  "confirm your age",
+  "verify your age",
+  "you must be 18",
+  "you must be at least 18",
+  "not suitable for minors",
+  "несовершеннолетн",
+  "только для взрослых",
+  "подтвердите возраст",
+  "подтвердите свой возраст",
+  "nur für erwachsene",
+  "altersbestätigung",
+  "réservé aux adultes",
+  "interdit aux mineurs",
+  "confirmez votre âge",
+  "solo para adultos",
+  "contenido para adultos",
+  "confirma tu edad",
+  "vietato ai minori",
+  "solo per adulti",
+  "apenas para adultos",
+  "conteúdo adulto",
+  "alleen voor volwassenen",
+  "endast för vuxna",
+  "tylko dla dorosłych",
+];
+
 function containsAny(haystack: string, needles: readonly string[]): string | undefined {
   for (const needle of needles) {
     if (haystack.includes(needle)) return needle;
@@ -119,6 +167,16 @@ export function classifyFailure(signals: PageSignals): AppError {
         ...(loginForm ? { reason: "login-form" } : {}),
         ...(authMarker === undefined ? {} : { marker: authMarker }),
       },
+    });
+  }
+
+  // After a challenge and a login wall, which are both more fundamental answers
+  // when either stands in front of the gate. A probe that found media never gets
+  // here, so a gate that was pressed and worked cannot produce this code.
+  if (signals.ageGate) {
+    const ageMarker = containsAny(haystack, AGE_MARKERS);
+    return new AppError("AGE_CONFIRMATION_REQUIRED", undefined, {
+      details: { ...details, ...(ageMarker === undefined ? {} : { marker: ageMarker }) },
     });
   }
 

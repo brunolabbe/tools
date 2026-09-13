@@ -37,6 +37,9 @@ function toRun(row: RunRow): Run {
   return {
     id: row.id,
     planId: row.plan_id,
+    // A literal, and true of every row that exists: nothing before pl-44 starts
+    // a re-plan. pl-44 replaces this with the stored `plan_runs.kind` column.
+    kind: "draft",
     // Cast rather than validated: the only writer is `updateRunStatus` below,
     // which takes a `RunStatus`, and a row that somehow held something else
     // would be a corruption no read path could sensibly recover from.
@@ -73,6 +76,8 @@ export function insertRun(
   return {
     id: run.id,
     planId: run.planId,
+    // `toRun`'s literal, for the same reason; pl-44 takes the kind as input.
+    kind: "draft",
     status: run.status,
     rosterSize: null,
     specialistsDone: 0,
