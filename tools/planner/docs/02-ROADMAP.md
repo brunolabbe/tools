@@ -225,9 +225,10 @@ instruction to the composer.
 move or remove one item, and restore an earlier version as a new one. A re-plan
 with no specialists named re-packs the plan's existing candidates without
 calling a model. Named specialists run again. Re-plans build on the latest
-version, so history stays one line. **Brief edits are deferred**, because
-changing the dates changes the day count, and a revision has to name its days.
-Contract first, then three pieces in parallel:
+version, so history stays one line. **Brief edits came second**, because
+changing the dates changes the day count, and a revision has to name its days;
+they build on the first five and are items 6 and 7. Contract first, then three
+pieces in parallel:
 
 1. **The revision contract** — the operations, the re-plan run kind, the diff
    type and the route. → [pl-42](./work/pl-42-the-revision-contract.md)
@@ -242,6 +243,12 @@ Contract first, then three pieces in parallel:
    diff, restore and reload, once pl-44 and pl-45 have both landed. pl-19
    stands in the same relation to pl-10. →
    [pl-46](./work/pl-46-revise-through-the-browser.md)
+6. **Edit the trip's dates and budget**: each version keeps its own brief, a
+   longer trip plans the days it adds, a shorter one refuses to drop a pin, and
+   a budget change re-packs every unpinned item. `contract`, `itinerary` and
+   `api`. → [pl-47](./work/pl-47-edit-the-dates-and-budget.md)
+7. **Change the dates or the budget from the plan page**, and one more step in
+   pl-46's browser walk. → [pl-48](./work/pl-48-change-dates-and-budget-on-the-page.md)
 
 ## Later, and not soon
 

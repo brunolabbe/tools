@@ -157,8 +157,10 @@ The work lives in a new `api/src/runs/revise.ts`, which keeps
 7. **Per kind:**
    - `replan`: every day is below the base revision's day count. Past it is
      `INVALID_ANSWER`, the same refusal a malformed body gets. The day count
-     is fixed by the brief snapshot, so this is not staleness, and a correct
-     client cannot send it.
+     is the base revision's. A dates edit ([pl-47](./pl-47-edit-the-dates-and-budget.md))
+     can change it, but only by appending a revision, so a request built on an
+     older count is already `REVISION_STALE` at check 5. This is not
+     staleness, and a correct client cannot send it.
    - `move` / `remove`: `itemId` is an item on the latest revision, otherwise
      `ITEM_NOT_FOUND`. Resolve it to its candidate and its day in one query
      scoped the way `updateItemPin` scopes its `UPDATE`, never by trusting the
@@ -180,6 +182,13 @@ Then `replan` answers **202** `{ kind: "run", run }`, and the other three answer
 **`http-errors.ts`:** `REVISION_STALE → 409` and `PLAN_BUSY → 409`. The
 request conflicts with the document's current state, and neither is the
 caller's malformed input. `PLAN_BUSY`'s retryability is the catalog's.
+**Map `PLAN_INFEASIBLE → 409` too.** `STATUS_BY_CODE` has no entry for it, and
+the table falls back to 500, because until now it was only ever raised inside a
+run. A synchronous move (step 5) is its first HTTP caller, and without the entry
+it reports a server fault for a day the user overfilled. The same argument
+applies: the request is well formed and conflicts with the plan's own
+constraints. [pl-47](./pl-47-edit-the-dates-and-budget.md)'s dropped-pin refusal
+relies on this entry.
 
 ### 3. `PLAN_BUSY` without a race
 
@@ -231,6 +240,11 @@ Queue, SSE and cancel are exactly a draft's. `Run.kind` is `"replan"`, set on
 **The brief is the plan's snapshot**, `plan.brief`, and never `readIntake`.
 The intake stays editable, and the snapshot is what every revision of this
 plan was built against.
+
+**[pl-47](./pl-47-edit-the-dates-and-budget.md) moves that snapshot onto each
+revision**, so a dates or budget edit can change it, and `plan.brief` stays the
+first draft's. Whichever of the two lands second changes this read, and every
+other `plan.brief` in this ticket, to the base revision's `brief`.
 
 **The pipeline.** Every edge is legal after pl-42:
 

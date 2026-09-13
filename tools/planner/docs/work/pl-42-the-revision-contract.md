@@ -58,7 +58,10 @@ Each was chosen from options:
   day in Trieste" to "extend the dates and re-plan the slice that opens". Neither
   is expressible after this ticket. A reader of `00-ANALYSIS.md` should not
   expect them, and the ticket that adds them has the day-count question to
-  answer first.
+  answer first. **That ticket is [pl-47](./pl-47-edit-the-dates-and-budget.md)**,
+  filed the same day with its page in
+  [pl-48](./pl-48-change-dates-and-budget-on-the-page.md). The owner's answers
+  to the day-count question are recorded there.
 - **What a re-plan spends:** the user names specialists. **None named means
   re-pack the named days from the plan's existing candidates**, with no model
   call. Named specialists run again, and their new candidates join the plan's
