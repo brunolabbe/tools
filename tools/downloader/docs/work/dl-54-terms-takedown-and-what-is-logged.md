@@ -48,6 +48,15 @@ the owner's choices, and the build makes the service say them.
 - **C — Leave logs as they are.** Retention is then whatever the host's Docker
   logging driver does, which today nothing pins.
 
+**Whichever option is chosen, it has to cover the database, not only the
+logs.** Every `jobs` row keeps its full `source_url`, and no production code
+deletes a job row: `JobStore.delete` has no caller outside the tests, and the
+retention sweep removes files, tokens and thumbnails only. So today every page
+anyone downloaded from is kept for as long as the `/data` volume lives. That
+is longer than any of the options above. The outcome record in
+[dl-55](./dl-55-a-record-of-how-probes-and-downloads-end.md) stores hostnames
+only, so it adds nothing to this question.
+
 **2 — The contact.** An address the owner is willing to publish. It should not
 be the one the Access policy allows, so the login address stays unpublished
 while the planner still uses it.

@@ -171,7 +171,10 @@ limits sized for strangers
 that the tunnel's terms allow
 ([dl-53](./work/dl-53-finished-files-and-the-tunnel.md)), and terms, a takedown
 contact and a logging policy
-([dl-54](./work/dl-54-terms-takedown-and-what-is-logged.md)). Four of those
+([dl-54](./work/dl-54-terms-takedown-and-what-is-logged.md)). Opening also waits
+on a record of how probes and downloads turn out
+([dl-55](./work/dl-55-a-record-of-how-probes-and-downloads-end.md)), so the
+first public traffic shows which sites fail. Four of those
 pose a question first.
 
 ---
