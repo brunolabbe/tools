@@ -290,3 +290,17 @@ them.
      `problems: []`. Also run: `npm test -- --project repo`, 7 files / 328 tests,
      exit 0; and `node scripts/citations-gate.mjs --against origin/main`, exit 0,
      `37 entr(y/ies) compared against origin/main: 0 raised`.
+
+- **2026-09-13 — the gate's two findings, both reproduced before being accepted.**
+  **Med:** repo-44's "check reachability" did not say reachable from a pushed
+  ref. Reproduced in this worktree: `git cat-file -t e3d065e` printed `commit`,
+  `git merge-base --is-ancestor e3d065e origin/main` exited 1, and
+  `git branch -a --contains e3d065e` printed nothing. repo-44's Build now names
+  the pushed-ref check. **Low:** the widened repo count. The builder's report to
+  the orchestrator gave 1,010 at the tip and the reviewer measured 1,013. Both
+  are right, about different trees: `gate()` with `section: null` and an empty
+  grandfather map reads records from `git ls-files`, and 1,010 was taken while
+  repo-44 was still untracked. Re-run after the commit that added it, the same
+  probe prints `129 in scope, 86 failing, 1,795` (repo 1,013 · downloader 626 ·
+  planner 156), and the reviewer's per-record deltas (+3 repo-35, −1 repo-37, +3
+  repo-44) reconcile it from 1,008. The 1,010 was never written into the tree.

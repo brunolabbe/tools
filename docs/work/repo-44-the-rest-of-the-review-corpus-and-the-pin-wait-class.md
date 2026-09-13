@@ -5,7 +5,7 @@ title: 367 failing references still sit behind the citation gate's grandfather l
 kind: chore
 status: ready
 milestone: null
-depends_on: []
+depends_on: [repo-35]
 difficulty: hard
 ---
 
@@ -78,7 +78,15 @@ touch a citation inside a quoted reproduction.
 - Pin each of the 49 at the commit it was true of: the reviewed sha where it is
   still reachable, and otherwise the commit that merged the record. repo-39 found
   several reviewed shas squashed away (`dl-36`'s `1fe5a4d` and `dab661c`, and
-  `dl-37`'s pre-squash tip), so check reachability before choosing a rev.
+  `dl-37`'s pre-squash tip), so check reachability before choosing a rev — and
+  **reachable means reachable from a pushed ref**, not present in your worktree:
+  `git merge-base --is-ancestor <sha> origin/main` exits 0, or
+  `git branch -r --contains <sha>` is non-empty. A commit object kept alive by a
+  reflog entry, a stray local ref or an unpruned dangling commit resolves locally
+  and not in a fresh clone, so a pin built on it verifies for you and fails in
+  CI. repo-39's reviewer reproduced exactly that on `e3d065e`: `git cat-file -t`
+  printed `commit`, `--is-ancestor` against `origin/main` exited 1, and no local
+  or remote branch contained it.
 - **Use a pin, not a declaration, for all 49.** Every one was true of some commit.
   repo-35 part 5's rule sends exactly that case to a pin, and its cheap half
   refuses a declaration whose anchor is still found elsewhere in the file — which
@@ -206,3 +214,12 @@ stale one.
   printed `next free: repo-44` at `64edce2`, and the same command in this
   worktree printed the same). Every figure above is this branch's own measurement.
   **Re-measure before starting**, and after repo-35 merges in particular.
+- **2026-09-13** — `depends_on` set to `[repo-35]`. Filed with `[]` so the
+  `repo-*` and planner slices would stay dispatchable, with the dependency stated
+  in prose; the builder's report put `[repo-35]` to the orchestrator as the
+  alternative. **The owner answered `[repo-35]`.** Relayed by the orchestrator
+  through repo-39's reviewer in its ship-authority text, and confirmed by the
+  orchestrator's own message to the builder on 2026-09-13. Effect: `npm run status`
+  will not report this ticket startable until repo-35 is `done`, which matches the
+  Build's instruction to re-measure after repo-35 merges. Build's finding-1
+  sentence on pushed-ref reachability added the same day, from repo-39's gate.
