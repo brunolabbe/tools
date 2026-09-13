@@ -258,7 +258,7 @@ describe("what the provider reads back", () => {
     expect((await provider(fetch).send(REQUEST)).stopReason).toBe("refusal");
   });
 
-  test.each(["pauseTurn", "toolUse", "stopSequence"])(
+  test.each(["pauseTurn", "toolUse", "stopSequence", "compaction"])(
     "%s is malformed, not a silent end — this request sends nothing that could cause it",
     async (name) => {
       const { fetch } = answering(fixture(name));

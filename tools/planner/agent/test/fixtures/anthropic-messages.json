@@ -227,6 +227,28 @@
         }
       }
     },
+    "compaction": {
+      "_note": "Only a request carrying context management can stop this way, and this adapter sends none. The envelope is the ordinary one with the stop reason changed.",
+      "status": 200,
+      "headers": { "request-id": "req_fixture_compaction" },
+      "body": {
+        "id": "msg_fixture_compaction",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-5",
+        "content": [{ "type": "text", "text": "{\"candidates\":[]}" }],
+        "stop_reason": "compaction",
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 780,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 12,
+          "iterations": null
+        }
+      }
+    },
     "contextWindowExceeded": {
       "status": 200,
       "headers": { "request-id": "req_fixture_context_window" },

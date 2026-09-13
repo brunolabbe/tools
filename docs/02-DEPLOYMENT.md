@@ -813,6 +813,14 @@ measurement to take; until then, size `RUN_TOKEN_BUDGET` in output tokens, as
 `maxSpecialists × 16000` for the roster you mean to afford, or leave it unset and
 let `MAX_SPECIALISTS` be the cap.
 
+**That number admits specialists; it does not bound what they bill.** It counts
+one reply and one re-ask at `MAX_OUTPUT_TOKENS` each. But a refusal fallback can
+bill a single attempt twice: the declined model's partial reply and the fallback
+model's whole one, each up to `MAX_OUTPUT_TOKENS`. So the worst case per
+specialist is four times `MAX_OUTPUT_TOKENS` — 32,000 at the default — not the
+16,000 the budget divides by. The arithmetic is deliberately left alone here, as
+the input-token gap is; how often a fallback fires is pl-40's to measure.
+
 ## Adding the second tool
 
 **The tunnel does not change, and neither does anything above.** One tunnel per

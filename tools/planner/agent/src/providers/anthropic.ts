@@ -18,7 +18,9 @@
  * the ones that are "nothing": a stray `ANTHROPIC_AUTH_TOKEN` on a host would
  * otherwise be sent beside the key, and the API rejects a request carrying both.
  * The one it reads unconditionally is `ANTHROPIC_CUSTOM_HEADERS`, which no
- * option switches off.
+ * option switches off — and it can replace the key rather than add to it: an
+ * `x-api-key` line in that variable overwrites the one passed here. Recorded in
+ * pl-39's Log; closing it is an open decision, not something this file does.
  *
  * ## Structured output is a promise, not the check
  *

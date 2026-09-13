@@ -352,7 +352,15 @@ and the planner e2e suite ran unchanged.
   passed explicitly — `authToken: null` matters, because a stray token on a host
   would be sent beside the key and the API rejects both together.
   `ANTHROPIC_CUSTOM_HEADERS` is read unconditionally and no option switches it
-  off; recorded, not worked around.
+  off; recorded, not worked around. **It can replace the key, not merely add a
+  header** — found by the gate and reproduced here: with
+  `ANTHROPIC_CUSTOM_HEADERS="x-api-key: OVERRIDE-FROM-ENV"` in the environment
+  and an explicit `apiKey`, the request went out with `x-api-key:
+OVERRIDE-FROM-ENV` (a probe against a stubbed `fetch`, no network). The SDK
+  merges env-derived default headers over its auth headers, and later keys
+  overwrite earlier ones. Per-request `headers` rank above both, so re-sending
+  the key on every request would close it. That is put to the orchestrator as a
+  decision rather than built here.
 - **"Check the fixture, and say which it was" could not be settled by a fixture
   written by hand.** The documented semantics are that top-level `usage` covers
   only the attempt that produced the message and `usage.iterations` reports
@@ -371,7 +379,7 @@ and the planner e2e suite ran unchanged.
 - **The lockfile diff was not SDK-only on the first try.** `npm install
 --package-lock-only` also rewrote two workspace versions the lockfile had
   fallen behind on (`@downloader/api` 0.2.0 → 0.4.0, `@planner/api` 0.4.0 →
-  0.5.1). Both were reverted by hand. What is left is the SDK, its six transitive
+  0.5.1). Both were reverted by hand. What is left is the SDK, its five transitive
   packages, and `@babel/runtime` losing `"dev": true`, which is correct: the
   SDK's `json-schema-to-ts` makes it a production dependency now.
 
