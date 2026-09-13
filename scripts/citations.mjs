@@ -69,6 +69,15 @@
  * otherwise the marker is a rubber stamp, which is the failure mode every other
  * refusal in this file exists to prevent.
  *
+ * **Since repo-35 a declaration is for a citation no commit would verify, and a
+ * pin for one some commit would.** The cheap half of that boundary is enforced:
+ * a declaration naming a citation whose anchor is on another line of the very
+ * file it was checked against is refused, because that tree verifies it, and the
+ * repair is a repoint or a pin. Telling a rewritten file from a fabricated anchor
+ * — both report "not anywhere" — takes a history search per declaration on every
+ * run, where every other check here reads one blob; that half is left to the
+ * author, with the command beside the syntax in `records.md`.
+ *
  * **A declaration names a qualified location**, `file.ts:120`, and a shorthand is
  * named by the file it inherited. So the one thing that cannot be declared is a
  * reference this could not attach to a file at all — which is the rule, not a
@@ -98,6 +107,20 @@
  * not have then. Reproduced before fixing: a record that gained a citation after
  * the pinned sha has that citation reported `unresolvable` against the old tree,
  * blaming the record for a claim it never made.
+ *
+ * **One citation can be pinned instead** (repo-35), written inside its location:
+ * `dispatching.md@b142a4a:206` followed by its anchor. `--rev` pins every
+ * citation in a record to one commit, which fits a gate record and has no answer
+ * at all for a record whose lines describe different trees — a history page
+ * appending one entry per session, or a record quoting a before beside an after.
+ * A pin is read at its own commit on every run, overriding `--rev`, and a
+ * shorthand under it inherits it. **That makes a pin permanent, and the owner
+ * chose it knowing so**: a pinned citation is never re-checked against the
+ * present, so a page can pin its whole self green. What keeps that visible rather
+ * than smaller is that a rev nobody has is `unresolvable`, never a pass, and that
+ * the summary counts `N pinned` whenever there is one. A pin written wrong is
+ * `malformed-pin`, a failure on a bit of its own — see `PIN_SHAPED` for why that
+ * takes a second pass rather than a stricter grammar.
  *
  * `--section` narrows the check to one heading's span — `--section Review` on a
  * gate record with four `##` sections. The name is matched case-insensitively,
@@ -140,9 +163,23 @@
  * stop shipping.
  *
  * **A declaration cannot excuse an indistinct anchor**, and that is deliberate:
- * `citations: evidence` waives a citation that *cannot* be made to pass, and this
- * one always can — by quoting a longer fragment. A waiver that stands in for a
- * one-line edit is the rubber stamp `applyDeclarations` refuses.
+ * `citations: evidence` waives a citation that *cannot* be made to pass, and an
+ * indistinct anchor into another file can — by quoting more of the line, or
+ * running the anchor on past it, until the fragment is unique. A waiver that
+ * stands in for that edit is the rubber stamp `applyDeclarations` refuses.
+ *
+ * **The one indistinct anchor no fragment repairs is a self-citation** (repo-35
+ * part 8): a citation whose target, once resolved, is the record it is written
+ * in. The fragment it quotes is written on the citing line too, so pointed at a
+ * different line it starts on at least two lines however long it is — measured
+ * at five lengths from 18 to 160 characters, never reaching one — and pointed at
+ * its own line it verifies only that the citation was written. This paragraph
+ * used to say "this one always can", and the advice printed at the moment of
+ * failure said "the fix is always available"; both were false for this shape,
+ * and the second was what an author read while trying to repair it. A
+ * self-citation still fails under the flag and still cannot be declared — what
+ * changed is that the run names it, and gives the repair that works: point the
+ * citation at the real subject, or write it as prose.
  *
  * **The exit code is a bitmask** (`EXIT`), because the failure classes are not
  * alike and one code cannot say which happened — a citation that cannot be
@@ -181,10 +218,54 @@ const ANCHOR = String.raw`(?:\x60?[ \t]?"(?<anchor>[^"\n]{1,200})")?`;
  * citation.
  */
 const INLINE = new RegExp(
-  String.raw`(?<file>(?:[\w.@-]+\/)+[\w.@-]+\.\w+|[\w.@-]+\.(?:ts|tsx|mjs|js|json|md|yml|yaml|sh)):(?<start>\d+)(?:[-–](?<end>\d+))?` +
+  String.raw`(?<file>(?:[\w.@-]+\/)+[\w.@-]+\.\w+|[\w.@-]+\.(?:ts|tsx|mjs|js|json|md|yml|yaml|sh))` +
+    String.raw`(?:@(?<rev>[0-9a-fA-F]{7,40}))?` +
+    String.raw`:(?<start>\d+)(?:[-–](?<end>\d+))?` +
     ANCHOR,
   "g",
 );
+
+/**
+ * **A pin**, `<file>@<rev>:<line>` (repo-35): one citation resolved against a
+ * commit rather than the tree the run reads. The group above is optional and
+ * narrow on purpose — hex, 7 to 40 characters — because `@` was already a path
+ * character before it existed. A token like `node_modules/@scope/thing.ts:12` has
+ * no hex run between an extension and the colon, so the group fails, the engine
+ * backtracks into the file alternation, and the path parses exactly as it always
+ * did. No tracked file in this repository contains an `@` at all; the scoped
+ * path is pinned by a test rather than by that fact.
+ *
+ * **That narrowness is also why a stricter grammar cannot reject a bad pin**: a
+ * rev that is not hex, or too short, makes the whole token fail to match, and a
+ * citation nothing matches is not counted at all — the invisible failure this
+ * script exists to refuse, produced by its own new syntax. So a second pass,
+ * deliberately permissive, looks for anything *pin-shaped* the strict one did not
+ * accept, and reports it as `malformed-pin`. Two shapes:
+ *
+ *   - `<file>@<anything>:<line>` — malformed unless the strict grammar read a pin
+ *     over the same text;
+ *   - `<file>:<line>@<anything>` — malformed always, **although it parses**. The
+ *     strict grammar reads `<file>:<line>`, and the `@` then sits between the
+ *     location and its quoted fragment, so the anchor was silently dropped and a
+ *     checked citation became an unchecked one. That was measured before this
+ *     existed, and it is the subtler of the two.
+ *
+ * "Matched by the permissive pass" is never enough by itself: it also matches
+ * every ordinary pin. What makes a token malformed is containing an `@` that the
+ * strict grammar did not turn into a pin.
+ */
+const PIN_SHAPED = [
+  /(?<file>(?:[\w.@-]+\/)*[\w.-]+\.\w+)@(?<rev>[^\s:`"]*):(?<start>\d+)(?:[-–](?<end>\d+))?/g,
+  /(?<file>(?:[\w.@-]+\/)*[\w.@-]+\.\w+):(?<start>\d+)(?:[-–](?<end>\d+))?@(?<rev>[^\s`"]*)/g,
+];
+
+/**
+ * A shorthand that carries a rev of its own, in either position. A shorthand
+ * means "the same file as the last one I named" and so also means the same pin;
+ * one that names its own would silently disagree with the citation it inherits
+ * its file from, so it is malformed rather than read.
+ */
+const SHORTHAND_PIN = /\x60(?<token>@[^\s:`"]*:\d+(?:[-–]\d+)?|:\d+(?:[-–]\d+)?@[^\s`"]*)\x60/g;
 
 /**
  * The same rule inside a table's `line` cell, where the location is a bare
@@ -247,8 +328,13 @@ const PROSE = /\blines?[ \t]+(\d+)(?:[ \t]*[-–][ \t]*(\d+))?\b/gi;
 const DECLARATION =
   /^[ \t]*<!--[ \t]*citations:[ \t]*evidence[ \t]+(?<list>[^>]*?)[ \t]*-->[ \t]*$/;
 
-/** A location as a declaration writes it: a qualified `file:line`, no shorthand. */
-const DECLARED_LOCATION = /^(?<file>[\w.@/-]+\.\w+):(?<start>\d+)(?:[-–](?<end>\d+))?$/;
+/**
+ * A location as a declaration writes it: a qualified `file:line`, no shorthand —
+ * with its pin when the citation carries one, since a declaration names a
+ * citation exactly as the record writes it.
+ */
+const DECLARED_LOCATION =
+  /^(?<file>[\w.@/-]+\.\w+)(?:@(?<rev>[0-9a-fA-F]{7,40}))?:(?<start>\d+)(?:[-–](?<end>\d+))?$/;
 
 /** A `file` cell in a table row: the first backticked path-looking token. */
 const CELL_FILE =
@@ -298,8 +384,14 @@ const CELL_FILE =
  * refusals to catch one is the worse trade, so the answer here is provenance, not a
  * verdict.
  *
+ * **`rev` and `malformed` are present only where they apply** (repo-35). A pinned
+ * citation, and a shorthand inheriting from one, carries `rev`; a pin-shaped
+ * token the strict grammar did not accept carries `malformed`, the token as
+ * written. Absent rather than `null`, so every citation written before pins
+ * existed extracts to exactly the object it always did.
+ *
  * @param {string} markdown
- * @returns {{file: string | null, start: number, end: number, anchor: string | null, source: "inline" | "table" | "shorthand" | "prose", line: number, from: number | null, nearby: boolean}[]}
+ * @returns {{file: string | null, rev?: string, malformed?: string, start: number, end: number, anchor: string | null, source: "inline" | "table" | "shorthand" | "prose", line: number, from: number | null, nearby: boolean}[]}
  */
 export function extractCitations(markdown) {
   const out = [];
@@ -332,6 +424,8 @@ export function extractCitations(markdown) {
    */
   let paragraph = 0;
   let currentFileParagraph = /** @type {number | null} */ (null);
+  /** The pin that file was named with, which a shorthand below it inherits too. */
+  let currentRev = /** @type {string | null} */ (null);
 
   let headers = /** @type {string[]} */ ([]);
   lines.forEach((text, index) => {
@@ -366,6 +460,7 @@ export function extractCitations(markdown) {
         const cellMatch = CELL_FILE.exec(cells[fileCol]);
         const file = cellMatch ? cellMatch[1] : cells[fileCol].replace(/`/g, "").trim();
         currentFile = file;
+        currentRev = null;
         currentFileLine = lineNo;
         currentFileParagraph = paragraph;
         for (const num of cells[lineCol].matchAll(TABLE_LINE)) {
@@ -384,22 +479,26 @@ export function extractCitations(markdown) {
       }
     }
 
-    /** @type {{at: number, until: number, make: () => (typeof out)[number]}[]} */
+    /** @type {{at: number, until: number, rev: string | null, make: () => (typeof out)[number]}[]} */
     const found = [];
 
     for (const m of text.matchAll(INLINE)) {
-      const g = /** @type {{file: string, start: string, end?: string, anchor?: string}} */ (
-        m.groups
-      );
+      const g =
+        /** @type {{file: string, rev?: string, start: string, end?: string, anchor?: string}} */ (
+          m.groups
+        );
       found.push({
         at: m.index,
         until: m.index + m[0].length,
+        rev: g.rev ?? null,
         make: () => {
           currentFile = g.file;
+          currentRev = g.rev ?? null;
           currentFileLine = lineNo;
           currentFileParagraph = paragraph;
           return {
             file: g.file,
+            ...(g.rev === undefined ? {} : { rev: g.rev }),
             start: Number(g.start),
             end: Number(g.end ?? g.start),
             anchor: g.anchor ?? null,
@@ -414,6 +513,45 @@ export function extractCitations(markdown) {
 
     const inQualified = (at) => found.some((f) => at >= f.at && at < f.until);
 
+    // The permissive pass — see `PIN_SHAPED`. A pin-shaped token the strict pass
+    // did not read as a pin *replaces* whatever the strict pass made of it at the
+    // same place, so the count neither loses the token nor holds it twice. One
+    // that starts inside a citation already found is quoted text in its anchor,
+    // and is left alone for the reason a shorthand there is.
+    for (const pattern of PIN_SHAPED) {
+      for (const m of text.matchAll(pattern)) {
+        const same = found.filter((f) => f.at === m.index);
+        if (same.some((f) => f.rev !== null)) continue;
+        if (same.length === 0 && inQualified(m.index)) continue;
+        for (const f of same) found.splice(found.indexOf(f), 1);
+        const g = /** @type {{file: string, start: string, end?: string}} */ (m.groups);
+        found.push({
+          at: m.index,
+          until: m.index + m[0].length,
+          rev: null,
+          make: () => {
+            // The file is named, so a shorthand below may take it; the pin is
+            // unreadable, so it takes none.
+            currentFile = g.file;
+            currentRev = null;
+            currentFileLine = lineNo;
+            currentFileParagraph = paragraph;
+            return {
+              file: g.file,
+              malformed: m[0],
+              start: Number(g.start),
+              end: Number(g.end ?? g.start),
+              anchor: null,
+              source: "inline",
+              line: lineNo,
+              from: null,
+              nearby: false,
+            };
+          },
+        });
+      }
+    }
+
     for (const m of text.matchAll(SHORTHAND)) {
       if (inQualified(m.index)) continue;
       const g = /** @type {{start: string, end?: string, inner?: string, outer?: string}} */ (
@@ -422,11 +560,35 @@ export function extractCitations(markdown) {
       found.push({
         at: m.index,
         until: m.index + m[0].length,
+        rev: null,
         make: () => ({
           file: currentFile,
+          ...(currentFile === null || currentRev === null ? {} : { rev: currentRev }),
           start: Number(g.start),
           end: Number(g.end ?? g.start),
           anchor: g.inner ?? g.outer ?? null,
+          source: "shorthand",
+          line: lineNo,
+          from: currentFileLine,
+          nearby: currentFileParagraph === paragraph,
+        }),
+      });
+    }
+
+    for (const m of text.matchAll(SHORTHAND_PIN)) {
+      if (inQualified(m.index)) continue;
+      const token = /** @type {{token: string}} */ (m.groups).token;
+      const [, start, end] = /:(\d+)(?:[-–](\d+))?/.exec(token) ?? [];
+      found.push({
+        at: m.index,
+        until: m.index + m[0].length,
+        rev: null,
+        make: () => ({
+          file: currentFile,
+          malformed: token,
+          start: Number(start),
+          end: Number(end ?? start),
+          anchor: null,
           source: "shorthand",
           line: lineNo,
           from: currentFileLine,
@@ -468,7 +630,7 @@ export function extractCitations(markdown) {
  * matches nothing. A waiver nobody can read is the state this replaces.
  *
  * @param {string} markdown
- * @returns {{file: string, start: number, end: number, text: string, line: number}[]}
+ * @returns {{file: string, rev?: string, start: number, end: number, text: string, line: number}[]}
  */
 export function extractDeclarations(markdown) {
   /** Tagged so the CLI can exit on the declaration bit rather than a generic 1. */
@@ -491,12 +653,14 @@ export function extractDeclarations(markdown) {
       if (location?.groups === undefined) {
         throw refuse(
           `${lineNo}: "${entry}" is not a citation an evidence declaration can name.\n` +
-            `Write each one exactly as the record cites it, qualified: file.ts:120 or file.ts:120-130.`,
+            `Write each one exactly as the record cites it, qualified: file.ts:120 or file.ts:120-130,\n` +
+            `with its pin if it carries one: file.ts@<rev>:120.`,
         );
       }
-      const { file, start, end } = location.groups;
+      const { file, rev, start, end } = location.groups;
       out.push({
         file,
+        ...(rev === undefined ? {} : { rev }),
         start: Number(start),
         end: Number(end ?? start),
         text: entry,
@@ -574,6 +738,48 @@ export function makeReader(repo, rev) {
     } catch {
       return null;
     }
+  };
+}
+
+/**
+ * A reader and a resolver for each commit a pin names, made once each (repo-35).
+ *
+ * `null` for a rev that does not name a commit here — a sha nobody fetched, a
+ * branch sha a squash merge discarded, a typo — and the caller turns that into
+ * `unresolvable`. **Never a fallback to another tree**: a pin quietly read
+ * against the working tree is the one way pinning could turn a citation green by
+ * accident. An abbreviated rev is resolved to its full commit first, so an
+ * ambiguous one is refused by git rather than guessed at here.
+ *
+ * @param {string} repo
+ * @returns {(rev: string) => {read: (file: string) => string[] | null, resolve: (file: string) => {path: string} | {error: string}} | null}
+ */
+export function makeTrees(repo) {
+  /** @type {Map<string, {read: (file: string) => string[] | null, resolve: (file: string) => {path: string} | {error: string}} | null>} */
+  const trees = new Map();
+  return (rev) => {
+    if (!trees.has(rev)) {
+      let tree = null;
+      try {
+        const commit = execFileSync(
+          "git",
+          ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`],
+          {
+            cwd: repo,
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+          },
+        ).trim();
+        tree = {
+          read: makeReader(repo, commit),
+          resolve: makeResolver(candidateFiles(repo, commit)),
+        };
+      } catch {
+        tree = null;
+      }
+      trees.set(rev, tree);
+    }
+    return trees.get(rev) ?? null;
   };
 }
 
@@ -664,13 +870,19 @@ function locateAnchor(content, anchor) {
       if (start.at > at) break;
       lineNo = start.lineNo;
     }
-    hits.push(lineNo);
+    // One entry per *line*, not per match (repo-35 part 9). Matches arrive in
+    // haystack order, so a second match on the same line is always adjacent to
+    // the first. Counting both is how "anchor starts on 3 lines" got printed for
+    // a fragment starting on two — beside the word "lines", to the author trying
+    // to repair it — and every reader of this list already called it a line list.
+    if (hits.at(-1) !== lineNo) hits.push(lineNo);
   }
   return hits;
 }
 
 /** How a citation came out, worst first. There is no boolean here on purpose. */
 const STATES = /** @type {const} */ ([
+  "malformed-pin",
   "unresolvable",
   "moved",
   "unchecked",
@@ -695,6 +907,7 @@ export const EXIT = /** @type {const} */ ({
   unanchored: 4,
   declaration: 8,
   indistinct: 16,
+  malformedPin: 32,
 });
 
 /**
@@ -716,10 +929,33 @@ export const EXIT = /** @type {const} */ ({
  *   rather than inferred from the default, which typed the parameter as one that
  *   can only succeed — so `makeResolver`, the one implementation that exists, was
  *   not assignable to it and a test passing it failed to compile.
+ * @param {{record?: string | null, trees?: ReturnType<typeof makeTrees>}} [options]
+ *   `record` is the record being checked, named as git names it — see
+ *   `locateRecord` — so a citation that resolves to it can be told apart as a
+ *   self-citation; omitted, nothing is. `trees` supplies the commit a pin names;
+ *   omitted, every pin is `unresolvable` and none is ever read through `read`.
  */
-export function checkCitations(citations, read, resolve = (f) => ({ path: f })) {
+export function checkCitations(citations, read, resolve = (f) => ({ path: f }), options = {}) {
+  const record = options.record ?? null;
+  const trees = options.trees ?? (() => null);
   const cache = new Map();
   return citations.map((c) => {
+    // Refused before anything else, file or no file: a malformed pin names no
+    // commit anything could read, and a shorthand carrying one may have no file.
+    if (c.malformed !== undefined) {
+      return {
+        ...c,
+        state: "malformed-pin",
+        reason:
+          `"${c.malformed}" is not a pin this can read — write file.ts@<rev>:120, the rev before the colon ` +
+          `and 7 to 40 hex characters of a commit; a shorthand takes the pin of the citation it inherits from`,
+        text: null,
+        resolved: null,
+        foundAt: null,
+        occurrences: null,
+        self: false,
+      };
+    }
     // A reference with no file is still a reference, and which of the two
     // no-file cases it is decides everything. A shorthand *claims* a file — the
     // one above it — so a shorthand with nothing above it cannot be right, and
@@ -737,11 +973,42 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
         resolved: null,
         foundAt: null,
         occurrences: null,
+        self: false,
       };
     }
 
-    const resolved = resolve(c.file);
+    // A pin is read at its own commit, whatever tree the run reads (repo-35).
+    const pin = c.rev ?? null;
+    const tree = pin === null ? { read, resolve } : trees(pin);
+    if (tree === null) {
+      return {
+        ...c,
+        state: "unresolvable",
+        reason: `rev ${pin} not in this repository`,
+        text: null,
+        resolved: null,
+        foundAt: null,
+        occurrences: null,
+        self: false,
+      };
+    }
+    const resolved = tree.resolve(c.file);
     const at = "error" in resolved ? null : resolved.path;
+    /**
+     * **A self-citation is decided after resolution, never by comparing path
+     * text** (repo-35 part 8): the record can be reached by its repo-relative
+     * path, by a shorthand inheriting it, or by a basename the resolver
+     * disambiguates, and all three are the same file.
+     *
+     * It is carried on every result rather than judged here, because whether it
+     * fails is the caller's policy — `isIndistinct` is where it bites. **It is
+     * true regardless of `occurrences`, and that is load-bearing rather than
+     * thorough**: counting lines instead of matches (part 9) collapses a
+     * self-citation of its own line, whose fragment also sits in that line's
+     * prose, from two to one. Keyed on the count alone, that shape would have
+     * started passing the moment the count was corrected.
+     */
+    const self = record !== null && at === record;
     const bad = (reason) => ({
       ...c,
       state: "unresolvable",
@@ -750,6 +1017,7 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
       resolved: at,
       foundAt: null,
       occurrences: null,
+      self,
     });
 
     /**
@@ -791,11 +1059,14 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
       resolved: at,
       foundAt: null,
       occurrences: null,
+      self,
     });
 
     if ("error" in resolved) return bad(resolved.error);
-    if (!cache.has(resolved.path)) cache.set(resolved.path, read(resolved.path));
-    const content = cache.get(resolved.path);
+    // Keyed by pin as well as path: one file at two commits is two files.
+    const cached = `${pin ?? ""}:${resolved.path}`;
+    if (!cache.has(cached)) cache.set(cached, tree.read(resolved.path));
+    const content = cache.get(cached);
     c = { ...c, resolved: resolved.path };
     if (content === null) return bad("file not found");
     if (c.start < 1 || c.start > content.length) {
@@ -814,12 +1085,15 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
       return {
         ...c,
         state: "unanchored",
-        reason: "no anchor — nothing checked it",
+        reason: self
+          ? `no anchor — nothing checked it; ${SELF_CITATION}`
+          : "no anchor — nothing checked it",
         text,
         foundAt: null,
         // Null rather than zero: nothing was searched for, which is a different
         // fact from a fragment that was searched for and found nowhere.
         occurrences: null,
+        self,
       };
     }
 
@@ -838,33 +1112,66 @@ export function checkCitations(citations, read, resolve = (f) => ({ path: f })) 
       return {
         ...c,
         state: "verified",
-        reason: null,
+        // A verified citation has no reason, except this one: the verdict is
+        // true and says nothing, and the author needs to hear why before being
+        // told, as every other indistinct anchor is, to quote more.
+        reason: self ? SELF_CITATION : null,
         text,
         foundAt: inRange,
         occurrences: hits.length,
+        self,
       };
 
     const shown = normalizeAnchor(c.anchor).slice(0, 60);
     const elsewhere = `${hits.slice(0, 3).join(", ")}${hits.length > 3 ? ", …" : ""}`;
+    const where =
+      hits.length > 0
+        ? `anchor "${shown}" is not in ${range} — it is at ${elsewhere}`
+        : `anchor "${shown}" is not in ${range}, and not anywhere in ${resolved.path}`;
     return {
       ...c,
       state: "moved",
-      reason:
-        hits.length > 0
-          ? `anchor "${shown}" is not in ${range} — it is at ${elsewhere}`
-          : `anchor "${shown}" is not in ${range}, and not anywhere in ${resolved.path}`,
+      reason: self ? `${where}; ${SELF_CITATION}` : where,
       text,
       foundAt: hits,
       occurrences: hits.length,
+      self,
     };
   });
 }
 
+/**
+ * What a self-citation is told, wherever it turns up. One string, because the
+ * failure it replaces was advice that could not be followed printed in two
+ * places, and two copies of the repair are how that happens again.
+ */
+const SELF_CITATION =
+  "self-citation — it cites the record it is written in, so the fragment it quotes is on the " +
+  "citing line too and can never single out its target. Point it at the real subject, or write it as prose";
+
+/**
+ * Whether a verified citation's anchor fails `--require-distinct-anchors`.
+ *
+ * **Exported so there is exactly one of it.** `summarize` and
+ * `citations-gate.mjs` both judge this, and the number the CLI prints beside
+ * "lines" is only the number the flag failed on while both read one predicate —
+ * a second copy that still counted matches, or that forgot self-citations, would
+ * print one verdict and enforce another.
+ *
+ * A self-citation is indistinct whatever its count, for the reason the `self`
+ * docblock in `checkCitations` gives: counting lines can bring its count to one.
+ *
+ * @param {{state: string, occurrences?: number | null, self?: boolean}} r
+ */
+export const isIndistinct = (r) =>
+  r.state === "verified" && (r.self === true || (r.occurrences ?? 1) > 1);
+
 /** The states a declaration may excuse — the ones that would otherwise fail. */
 const FAILING = new Set(["unresolvable", "moved", "unchecked"]);
 
-/** A location as both a citation and a declaration spell it, for matching. */
-const key = (file, start, end) => `${file}:${start}${end === start ? "" : `-${end}`}`;
+/** A location as both a citation and a declaration spell it, pin included, for matching. */
+const key = (file, start, end, rev) =>
+  `${file}${rev === undefined ? "" : `@${rev}`}:${start}${end === start ? "" : `-${end}`}`;
 
 /**
  * Apply a record's evidence declarations, and report the ones that are wrong.
@@ -881,23 +1188,41 @@ const key = (file, start, end) => `${file}:${start}${end === start ? "" : `-${en
  * resolves to the wrong content, and one that is deliberately unresolvable —
  * plus a fourth for the record lying about which is which.
  *
- * Matching is on the citation **as written**, `file:start[-end]`, so a
+ * Matching is on the citation **as written**, `file[@rev]:start[-end]`, so a
  * declaration names exactly what a reader sees in the record. `unchecked` is
  * excusable too: a prose reference is one of the shapes a reproduction is made
  * of, and it fails no run, but declaring it is how a record says it meant it.
+ *
+ * **Two things no declaration excuses** (repo-35). A `malformed-pin`, which is
+ * named by nothing — a declaration naming its location reads as naming a
+ * citation this record does not have. And **the cheap half of the boundary rule
+ * between a declaration and a pin**: a `moved` citation whose anchor is on
+ * another line of the file it was checked against. That tree verifies it, so it
+ * is a citation some commit would verify — it wants repointing, or a pin to the
+ * commit where it held — and a declaration standing in for that edit is refused
+ * on the declaration bit while the citation goes on failing as `moved`. A
+ * citation whose anchor is nowhere in the file may be either a rewritten file or
+ * a fabricated anchor; telling those apart needs history, and is left to the
+ * author.
  *
  * @param {ReturnType<typeof checkCitations>} results
  * @param {ReturnType<typeof extractDeclarations>} declarations
  */
 export function applyDeclarations(results, declarations) {
-  const excused = new Set(declarations.map((d) => key(d.file, d.start, d.end)));
+  const excused = new Set(declarations.map((d) => key(d.file, d.start, d.end, d.rev)));
   const used = new Set();
+  /** @type {Map<string, string>} the reason each refused citation failed for, by key */
+  const refused = new Map();
 
   const applied = results.map((r) => {
-    if (r.file === null) return r;
-    const at = key(r.file, r.start, r.end);
+    if (r.file === null || r.state === "malformed-pin") return r;
+    const at = key(r.file, r.start, r.end, r.rev);
     if (!excused.has(at)) return r;
     if (!FAILING.has(r.state)) return r;
+    if (r.state === "moved" && (r.foundAt?.length ?? 0) > 0) {
+      refused.set(at, r.reason ?? "its anchor is elsewhere in the file");
+      return r;
+    }
     used.add(at);
     return {
       ...r,
@@ -907,16 +1232,24 @@ export function applyDeclarations(results, declarations) {
   });
 
   const stale = declarations
-    .filter((d) => !used.has(key(d.file, d.start, d.end)))
+    .filter((d) => !used.has(key(d.file, d.start, d.end, d.rev)))
     .map((d) => {
+      const at = key(d.file, d.start, d.end, d.rev);
       const cited = results.some(
-        (r) => r.file !== null && key(r.file, r.start, r.end) === key(d.file, d.start, d.end),
+        (r) =>
+          r.file !== null &&
+          r.state !== "malformed-pin" &&
+          key(r.file, r.start, r.end, r.rev) === at,
       );
+      const why = refused.get(at);
       return {
         ...d,
-        reason: cited
-          ? `record line ${d.line}: "${d.text}" is declared evidence, but it does not fail — drop the declaration`
-          : `record line ${d.line}: "${d.text}" is declared evidence, but this record does not cite it`,
+        reason:
+          why !== undefined
+            ? `record line ${d.line}: "${d.text}" is declared evidence, but ${why} — that tree verifies it, so a declaration is not what it needs: repoint it, or pin it to the commit where it held`
+            : cited
+              ? `record line ${d.line}: "${d.text}" is declared evidence, but it does not fail — drop the declaration`
+              : `record line ${d.line}: "${d.text}" is declared evidence, but this record does not cite it`,
       };
     });
 
@@ -977,7 +1310,7 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
   // occupies is a fact about the fragment rather than about the record — so
   // this is counted, reported, and fatal only when the caller asks, exactly as
   // `unanchored` is.
-  const indistinct = results.filter((r) => r.state === "verified" && (r.occurrences ?? 1) > 1);
+  const indistinct = results.filter(isIndistinct);
 
   // Each class sets its own bit, so a run with two of them says two. The names
   // are carried alongside because the number alone is the thing this file spent
@@ -995,14 +1328,23 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
   if (requireDistinct && indistinct.length > 0)
     set("indistinct", `${indistinct.length} anchor(s) not distinct`);
   if (stale.length > 0) set("declaration", `${stale.length} stale evidence declaration`);
+  if (counts["malformed-pin"] > 0) {
+    set("malformedPin", `${counts["malformed-pin"]} malformed pin`);
+  }
+
+  // Counted across states rather than as one of them: a pinned citation is still
+  // verified, moved or whatever else it came out as.
+  const pinned = results.filter((r) => r.rev !== undefined).length;
 
   return {
     ...counts,
     indistinct,
+    pinned,
     total: results.length,
     failed:
       counts.moved +
       counts.unresolvable +
+      counts["malformed-pin"] +
       (requireAnchors ? counts.unanchored : 0) +
       (requireDistinct ? indistinct.length : 0),
     exit,
@@ -1010,11 +1352,20 @@ function summarize(results, requireAnchors, stale = [], requireDistinct = false)
     // this script printed while three citations pointed at unrelated code. The
     // suffix is on the same line as the counts so a CI log shows the policy that
     // judged them next to the numbers it judged.
+    //
+    // **`malformed-pin` and `pinned` are the two figures printed only above
+    // zero** (repo-35), against the rule that every bucket prints. A record with
+    // no pin prints the line it printed before pins existed, byte for byte:
+    // repo-35's reproduction holds three rows to the exact strings they printed at
+    // `4901cd6`, and a field printed unconditionally would change every record's
+    // output in the tree.
     line:
       `${counts.verified} verified, ${counts.moved} moved, ` +
       `${counts.unanchored} unanchored, ${counts.unresolvable} unresolvable, ` +
       `${counts.unchecked} unchecked, ${counts.evidence} evidence` +
+      (counts["malformed-pin"] > 0 ? `, ${counts["malformed-pin"]} malformed-pin` : "") +
       ` — of ${results.length} reference${results.length === 1 ? "" : "s"}` +
+      (pinned > 0 ? `, ${pinned} pinned` : "") +
       (requireAnchors ? ", anchors required" : "") +
       (requireDistinct ? ", distinct anchors required" : ""),
     // The number and what it meant, on one line. `exit 3` in a CI log is not
@@ -1144,7 +1495,7 @@ export function selectSection(sections, name) {
 export function recordDrift(now, before) {
   const here = extractCitations(now);
   const there = extractCitations(before);
-  const at = (c) => key(c.file, c.start, c.end);
+  const at = (c) => key(c.file, c.start, c.end, c.rev);
   const thereKeys = new Set(there.map(at));
   const hereKeys = new Set(here.map(at));
   const added = here.filter((c) => !thereKeys.has(at(c)));
@@ -1351,7 +1702,10 @@ function main() {
   const declarations = extractDeclarations(markdown).filter((d) => inScope(d.line));
 
   const { results, stale } = applyDeclarations(
-    checkCitations(citations, makeReader(repo, rev), makeResolver(candidateFiles(repo, rev))),
+    checkCitations(citations, makeReader(repo, rev), makeResolver(candidateFiles(repo, rev)), {
+      record: relative,
+      trees: makeTrees(repo),
+    }),
     declarations,
   );
   const summary = summarize(results, requireAnchors, stale, requireDistinct);
@@ -1388,6 +1742,7 @@ function main() {
     // which is the right choice there and one more reason not to grep across the
     // two.
     const mark = {
+      "malformed-pin": "MALFORMED",
       verified: "ok",
       moved: "MOVED",
       unanchored: "unanchored",
@@ -1401,12 +1756,18 @@ function main() {
     // both ends: what it says, and the file it inherited with the record line
     // that named it, because that file is a guess and a guess has to be audible.
     const resolvedTo = r.resolved && r.resolved !== r.file ? ` -> ${r.resolved}` : "";
+    // A pin prints where the record wrote it, and a malformed one exactly as
+    // written: the token is the thing to fix, and a tidied copy would hide what is
+    // wrong with it.
+    const pin = r.rev === undefined ? "" : `@${r.rev}`;
     const located =
-      r.file === null
-        ? `${r.source === "prose" ? "line " : ":"}${range}`
-        : r.source === "shorthand"
-          ? `:${range} in ${r.file}${resolvedTo} (named at record line ${r.from})`
-          : `${r.file}:${range}${resolvedTo}`;
+      r.malformed !== undefined
+        ? r.malformed
+        : r.file === null
+          ? `${r.source === "prose" ? "line " : ":"}${range}`
+          : r.source === "shorthand"
+            ? `:${range} in ${r.file}${pin}${resolvedTo} (named at record line ${r.from})`
+            : `${r.file}${pin}:${range}${resolvedTo}`;
     const shown = r.anchor === null ? located : `${located} "${r.anchor.slice(0, 60)}"`;
     process.stdout.write(`  ${mark} ${shown}  (record line ${r.line}, ${r.source})\n`);
     // An unanchored citation prints both: the line, because a human judging it by
@@ -1419,7 +1780,9 @@ function main() {
     // Printed whatever the policy, like every other fact here: a reader judging
     // an unanchored citation by hand wants to know its neighbour verified on a
     // fragment that matches half the file.
-    if ((r.occurrences ?? 1) > 1) {
+    // Not for a self-citation, whose reason already says why no occurrence count
+    // is worth reading and what to do instead.
+    if ((r.occurrences ?? 1) > 1 && !r.self) {
       process.stdout.write(
         `             anchor starts on ${r.occurrences} lines of ${r.resolved} — verified means one of` +
           ` them is in range, not which one\n`,
@@ -1474,7 +1837,8 @@ function main() {
   if (summary.moved > 0) {
     advice.push(
       `${summary.moved} citation(s) do not point at what they say. Repoint them against the tree you are\n` +
-        `committing, or pin the record to the commit the gate reviewed with --rev and say so in the record.\n` +
+        `committing; pin one to the commit it was true of, as \`file.ts@<rev>:120\`; or pin the whole record\n` +
+        `to the commit the gate reviewed with --rev and say so in the record.\n` +
         `Where the reason says the anchor is nowhere in the file, neither of those is the fix — the anchor\n` +
         `spans something the file has between its words, most often a comment's // or * continuation\n` +
         `marker. Shorten it to one line's worth, or quote the marker as it appears.`,
@@ -1489,25 +1853,47 @@ function main() {
   }
   if (summary.unresolvable > 0) {
     advice.push(
-      `${summary.unresolvable} citation(s) cannot be right at all: the file is gone, the line is past the end, or\n` +
-        `the bare name matches more than one file.`,
+      `${summary.unresolvable} citation(s) cannot be right at all: the file is gone, the line is past the end,\n` +
+        `the bare name matches more than one file, or a pin names a commit this repository does not have.`,
     );
   }
-  if (requireDistinct && summary.indistinct.length > 0) {
+  if (summary["malformed-pin"] > 0) {
     advice.push(
-      `${summary.indistinct.length} anchor(s) verify on a fragment that starts on more than one line of the file\n` +
+      `${summary["malformed-pin"]} pin(s) are malformed, so nothing here could read them, and nothing excuses one:\n` +
+        `a declaration naming the location stays stale. Write a pin as \`file.ts@<rev>:120 "a fragment"\` — the\n` +
+        `rev before the colon, 7 to 40 hex characters of a commit this repository has. A shorthand takes the\n` +
+        `pin of the citation it inherits its file from, and carries none of its own.`,
+    );
+  }
+  // Split, because the two have different repairs and the old single paragraph
+  // told a self-citation to do something that cannot be done (repo-35 part 8).
+  const selfCited = summary.indistinct.filter((r) => r.self);
+  const repeated = summary.indistinct.filter((r) => !r.self);
+  if (requireDistinct && repeated.length > 0) {
+    advice.push(
+      `${repeated.length} anchor(s) verify on a fragment that starts on more than one line of the file\n` +
         `they point at, and --require-distinct-anchors is in force. They are true today and cannot stay\n` +
         `true on their own: an unrelated edit can slide a different occurrence into the cited line and the\n` +
-        `citation keeps reporting ok. Quote more of the line until the fragment is unique. There is no\n` +
-        `evidence declaration for this — the fix is always available, so a waiver would be a rubber stamp.`,
+        `citation keeps reporting ok. Quote more of the line until the fragment is unique — an anchor may\n` +
+        `run on past the cited line if the line itself repeats. There is no evidence declaration for this:\n` +
+        `a waiver standing in for that edit would be a rubber stamp.`,
+    );
+  }
+  if (requireDistinct && selfCited.length > 0) {
+    advice.push(
+      `${selfCited.length} citation(s) point into this record itself, and --require-distinct-anchors is in force.\n` +
+        `A self-citation can never be distinct: the fragment it quotes is written on the citing line too,\n` +
+        `so quoting more of it lengthens both copies, and no declaration excuses it. Point the citation at the\n` +
+        `real subject, or write it as prose.`,
     );
   }
   if (stale.length > 0) {
     advice.push(
       `${stale.length} evidence declaration(s) in this record are wrong, which is a failure of its own:\n` +
         `${stale.map((s) => `  ${s.reason}`).join("\n")}\n` +
-        `A declaration excuses a citation that fails. One that excuses nothing is a rubber stamp, and a\n` +
-        `citation whose failure was fixed should lose its declaration in the same edit.`,
+        `A declaration excuses a citation that fails and that no commit would verify. One that excuses nothing\n` +
+        `is a rubber stamp, and a citation whose failure was fixed should lose its declaration in the same\n` +
+        `edit; one whose anchor another line of its file still carries wants repointing or a pin instead.`,
     );
   }
   // The carve-out the footer used to describe in prose is a declaration now:

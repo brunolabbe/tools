@@ -669,3 +669,97 @@ test("a run with no history says that no history was compared", () => {
     cleanup();
   }
 });
+
+/**
+ * repo-35 part 8, at the gate. A gate record citing its own line — the shape
+ * whose fragment starts on one line once `occurrences` counts lines — still fails
+ * here, by name, because the predicate is imported from `citations.mjs` rather
+ * than restated as a count. The CLI run is asserted too, because the per-failure
+ * line is what a CI log shows and it used to print `null` for an indistinct one.
+ */
+test("a self-citation fails the gate by name, even when its fragment is on one line", () => {
+  const record =
+    '## Review\n\nself check `docs/work/a.md:3 "self check"` — prose and anchor agree.\n';
+  const { dir, cleanup } = withRepo({ "docs/work/a.md": record });
+  try {
+    const [read, resolve] = checkers(dir);
+    const result = checkRecord(dir, "docs/work/a.md", "Review", read, resolve);
+    expect(result.counts).toMatchObject({ verified: 1, indistinct: 1 });
+    expect(result.passed).toBe(false);
+    expect(result.failures?.[0]?.reason).toMatch(/^self-citation — /);
+
+    const lax = checkRecord(dir, "docs/work/a.md", "Review", read, resolve, false);
+    expect(lax.passed).toBe(true);
+
+    const run = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
+    expect(run.status).toBe(1);
+    expect(run.stdout).toMatch(/self-citation — it cites the record it is written in/);
+    expect(run.stdout).not.toMatch(/\bnull\b/);
+    expect(run.stderr).toMatch(/point into the record they are written in/);
+  } finally {
+    cleanup();
+  }
+});
+
+/**
+ * repo-35 parts 1-3, inside the gate. A pin is read at its commit when the
+ * working tree has moved the cited line, the same citation unpinned is `moved`,
+ * and a malformed pin fails the gate — `unanchored`'s rule, that a state nobody
+ * checked is a failure here, applies to a pin nobody could read.
+ */
+test("the gate reads a pin at its commit, and fails a malformed one", () => {
+  const { dir, cleanup } = withRepo({});
+  try {
+    const sha = gitIn(dir, "rev-parse", "HEAD");
+    fs.writeFileSync(
+      path.join(dir, "src", "tls.ts"),
+      [
+        "// inserted",
+        "export function verify() {",
+        "  // Defence in depth: the store is pinned.",
+        "  return true;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    fs.mkdirSync(path.join(dir, "docs", "work"), { recursive: true });
+    const write = (name: string, body: string) =>
+      fs.writeFileSync(path.join(dir, "docs", "work", name), `## Review\n\n${body}\n`);
+    write("a.md", `Pinned: \`src/tls.ts@${sha}:2 "Defence in depth"\`.`);
+    write("b.md", 'Unpinned: `src/tls.ts:2 "Defence in depth"`.');
+    write("c.md", 'Malformed: `src/tls.ts@nope!:2 "Defence in depth"`.');
+
+    const [read, resolve] = checkers(dir);
+    expect(checkRecord(dir, "docs/work/a.md", "Review", read, resolve)).toMatchObject({
+      passed: true,
+      counts: { verified: 1 },
+    });
+    expect(checkRecord(dir, "docs/work/b.md", "Review", read, resolve)).toMatchObject({
+      passed: false,
+      counts: { moved: 1 },
+    });
+    const malformed = checkRecord(dir, "docs/work/c.md", "Review", read, resolve);
+    expect(malformed.passed).toBe(false);
+    expect(malformed.counts).toMatchObject({ "malformed-pin": 1 });
+    expect(malformed.failing).toBe(1);
+  } finally {
+    cleanup();
+  }
+});
+
+test("an indistinct citation into another file prints the lines it starts on, not null", () => {
+  const record = '## Review\n\nProof: `src/tls.ts:2 "depth"`.\n';
+  const { dir, cleanup } = withRepo({ "docs/work/a.md": record });
+  try {
+    fs.writeFileSync(
+      path.join(dir, "src", "tls.ts"),
+      ["// depth", "  // Defence in depth: the store is pinned.", "return true;", ""].join("\n"),
+    );
+    const run = spawnSync("node", [CLI], { cwd: dir, encoding: "utf8" });
+    expect(run.status).toBe(1);
+    expect(run.stdout).toMatch(/anchor starts on 2 lines of src\/tls\.ts/);
+    expect(run.stdout).not.toMatch(/\bnull\b/);
+  } finally {
+    cleanup();
+  }
+});

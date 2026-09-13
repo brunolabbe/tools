@@ -119,7 +119,8 @@ discarded. So:
   resolve` one layer out.
 
   The exit code is a **bitmask** — `1` unresolvable, `2` moved, `4` unanchored
-  under `--require-anchors`, `8` a wrong evidence declaration — and the run prints
+  under `--require-anchors`, `8` a wrong evidence declaration, `16` an indistinct
+  anchor under `--require-distinct-anchors`, `32` a malformed pin — and the run prints
   it as `exit 3 — 1 unresolvable, 1 moved`. So a CI job can tell a record that
   cannot be right from one that says the wrong thing, and either from a record
   whose failures are deliberate.
@@ -230,22 +231,53 @@ discarded. So:
   finding and a builder a round, and neither party is wrong.
 
   It cannot judge one of the four modes, and says so: a citation whose *content*
-  changed still resolves unless you anchor it. The other — a citation that is a
-  finding's own evidence and must stay wrong — is now something you **declare**
-  rather than something you warn about in prose:
+  changed still resolves unless you anchor it. The other — a citation that must
+  stay as written — has two mechanisms since repo-35, and **which one to reach
+  for is decided by a command rather than by taste**:
 
-  ```md
-  <!-- citations: evidence hls.ts:367, index.ts:440 -->
+  > **Reach for a pin when the citation was true of some commit in this
+  > repository. Reach for a declaration when it was true of none.**
+
+  ```bash
+  git log --all -S'<the anchor text>' -- <the cited file>
   ```
 
-  One or more per record, each naming a citation as the record writes it,
-  qualified. Those are reported `evidence` and set no exit bit, so the record
-  passes with its wrong coordinates intact and nothing has to be edited to make a
-  gate green. Put the declaration in the same `##` section as the citations it
-  excuses, so a `--section` run is excused too. **A declaration that excuses
-  nothing fails** — because the citation now passes, or because the record no
-  longer contains it — which is what stops a waiver outliving the finding it was
-  written for. Judging whether a citation *deserves* one is still yours.
+  Non-empty: some tree held it, so a rev exists and the repair is a **pin**.
+  Empty: nothing in this repository's history ever contained it — a coordinate
+  fabricated on purpose as a defect's evidence, an upstream project's path, an
+  ambiguous basename — and the **declaration** stands. A citation that merely
+  went stale is the first case, however it reads today.
+
+  **A pin** is written inside the location, `<file>@<rev>:<line>`, with its anchor
+  after it as usual. The rev is 7 to 40 hex characters naming a commit, and it
+  goes before the colon. It is checked at that commit on every run, whatever tree
+  the run reads and overriding `--rev`, and a shorthand after it inherits the pin.
+  **A pin is permanent**: it is never re-checked against the present, which is
+  the point on a history page and a cost everywhere else. Pin to a sha that
+  survives — the base or a `main` commit, never a pre-squash branch tip — because
+  a rev this repository does not have is `unresolvable`. A pin written wrong — a
+  rev that is not hex, too short, placed after the line number, or carried by a
+  shorthand — is `MALFORMED`, exit bit `32`, and nothing excuses it. The summary
+  line adds `N pinned` whenever there is one, and says nothing about pins when
+  there are none.
+
+  **A declaration** is an HTML comment on a line of its own —
+  `<!-- citations: evidence <file>:<line>, <file>:<line> -->` — naming one or more
+  citations exactly as the record writes them, qualified, pin included if the
+  citation has one. Those are reported `evidence` and set no exit bit, so the
+  record passes with its wrong coordinates intact. Put the declaration in the same
+  `##` section as the citations it excuses, so a `--section` run is excused too.
+  **A declaration that excuses nothing fails** — because the citation now passes,
+  or because the record no longer contains it — which is what stops a waiver
+  outliving the finding it was written for.
+
+  **And the rule above is enforced where it can be told without history.** A
+  declared citation whose anchor is on another line of the very file it was
+  checked against is verified by that tree, so its declaration is refused on bit
+  `8` and the citation goes on failing as `moved`, naming the line it is at —
+  repoint it, or pin it. The other half, telling a rewritten file from a
+  fabricated anchor when both read "not anywhere in the file", is not checked:
+  that is the command above, and running it is yours.
 
   Run it as the genuinely last action before `git add` regardless — it is a
   second and cheaper thing to be last, not a replacement for being careful about
@@ -400,10 +432,12 @@ Four states, and no `N/N`:
 | `ok` | the anchor is in the cited range. The only state anything verified |
 | `MOVED` | the anchor is not there. The reason says which line it is at now, or that it is nowhere in the file. **Exit 2** |
 | `unanchored` | the lines exist and nothing checked them. The cited line is printed for you to judge by hand, which is the only check it has. **Exit 4**, but only under `--require-anchors` |
-| `FAIL` | it cannot be right at all — file gone, line past the end, bare name matching several files. **Exit 1** |
+| `FAIL` | it cannot be right at all — file gone, line past the end, bare name matching several files, or a pin naming a commit this repository does not have. **Exit 1** |
+| `MALFORMED` | a pin the checker cannot read — a rev that is not 7 to 40 hex characters, one after the line number, or one on a shorthand. Nothing excuses it. **Exit 32** |
 
 **The exit code is a bitmask, not a ranking.** `citations.mjs` sets `EXIT` to
-`unresolvable: 1`, `moved: 2`, `unanchored: 4`, `declaration: 8`, so a run with
+`unresolvable: 1`, `moved: 2`, `unanchored: 4`, `declaration: 8`, `indistinct: 16`,
+`malformedPin: 32`, so a run with
 one `MOVED` and one `FAIL` exits **3** — run to confirm on 2026-09-07, not read
 off the table. Reading the code as "the worst thing that happened" loses the other
 half; `!= 0` is the only reading a script should make of it. *(Cited as prose
@@ -442,10 +476,19 @@ anchor minus a length, missing the `+1` an inclusive range needs.
 
 Two things it still cannot judge, and you must. A citation that is a finding's
 own evidence ("the text is at `:94-95`, not `:93-94`") must stay as written even
-when the run calls it moved — say so in a `<!-- citations: evidence ... -->`
-declaration, which is the one part of that a machine can now read; whether the
-citation earns the declaration is not. And an anchor is only as good as the
-fragment chosen: `"const"` is on every line of the file and verifies nothing.
+when the run calls it moved — pin it to the commit it was true at, or, if no
+commit ever held it, say so in a `<!-- citations: evidence ... -->` declaration.
+The rule for which, and the command that decides it, sit beside the declaration
+syntax above; whether the citation earns either is still yours. And an anchor is
+only as good as the fragment chosen: `"const"` is on every line of the file and
+verifies nothing.
+
+**A citation into the record it is written in can never be distinct**, and
+`--require-distinct-anchors` — which the citation gate always passes — reports it
+by name as a `self-citation` rather than telling you to quote more. The fragment
+it quotes is written on the citing line too, so lengthening it lengthens both
+copies. Point it at the real subject, or write it as prose; no declaration excuses
+it.
 
 ### Migration: nothing already committed is rewritten
 
