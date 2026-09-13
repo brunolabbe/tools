@@ -2371,3 +2371,149 @@ and the ticket's own text rather than accepted.
   `tools/downloader/api/package.json` once earlier in this round. One
   principle, applied twice, one read each time it was invoked.
 
+
+## Seventeenth session — 2026-09-12/13
+
+**Written by the orchestrating session itself (Claude Opus 5), with no gate on
+this branch, scoped to this file alone.** Every branch fact below was re-read
+with `git show` and `gh pr view` against the two pull requests' remote heads,
+not taken from any agent's report. Token figures are each agent's
+last-observed `subagent_tokens`, the only figures this page has ever counted.
+Base `main` at `64edce2` for both branches, unmoved from intake to the last
+look.
+
+| Field | Value |
+| --- | --- |
+| `tickets` | **2**, both `difficulty: hard`: `repo-35` (the whole Build, parts 0–9, #219 at `aa8d19c`) and a **slice** of `repo-39` (the downloader records less `dl-44`, #220 at `7b5020b`). The slice closed `repo-39` as `done` and filed the remainder as **`repo-44`**, whose id was assigned by the orchestrator from `node scripts/next-id.mjs repo`, carrying `depends_on: [repo-35]` on the owner's answer. Intake found **2** `ready`, **0** `needs-decision`, no open pull requests, and no live peer session. The seam map put one file under both tickets (`scripts/citations-gate.mjs`, code on one side, `GRANDFATHERED` lines on the other); the owned records `dl-44`, `repo-21` and `repo-25` were excluded from the slice by measurement. **The one real collision was invisible to the map**: both branches edit the citations that `repo-37`'s enforced gate record makes *into* the `GRANDFATHERED` list, so the two PRs conflict on one line of `repo-37`. `git merge-tree` was run by the repo-35 gate, and the resolution (keep repo-35's pin) was proven green on a scratch merge: gate exit 0, `npm run check` exit 0, 346/346 |
+| `agents` / `dispatches` | **5** agents: 1 seam-mapper, 2 builders, 2 reviewers. **5** spawns, plus **4** orchestrator wakes observed as `Resuming` in a `SendMessage` result: the repo-39 gate after a session-limit kill, the same gate on a send-back, the repo-39 builder on a report-format question, and the repo-35 builder on a direct ship grant. Agent-to-agent wakes are not observable from here and are **not recorded** |
+| `builder rounds` | **7** invocations over 2 builders. `repo-35`: build → commit the review record and decline the PR → open the PR. `repo-39`: build → apply two gate findings and hold → woken by a question → commit the amended record and open the PR. **2 were the orchestrator's fault**: repo-35's third round, because ship authority was routed through the reviewer (item 1), and repo-39's third, a wake nobody needed (item 4). The first build round was complete on both branches |
+| `gates` | **2** reviewers, **both returned findings**. `repo-35`: **PASS**, 1 low carried (no test for a pinned self-citation), and 0 med or high, on seven attacks including a fresh `git clone` from `origin` and a base-vs-tip parse diff over 171 files. `repo-39`: **CONCERNS → PASS** over three passes. The first was killed by an HTTP 429 session limit and resumed by message. The second returned 2 findings (repo-44's pin-reachability guidance; an unrecorded widened-count figure), both repaired at `49ffecb`, and was **sent back by the orchestrator** for sampling a check the prompt specified as an enumeration (item 2). The third enumerated 203 citation comparisons, 161 matched automatically and 42 read by hand, with 0 undisclosed wrong repoints |
+| `wrong findings` | **0 gate findings refuted.** The widened repo count the builder reported as 1,010 reproduced as 1,013, and the reviewer explained all three deltas; a figure that did not reproduce rather than a finding. The wrong claims this session were the **orchestrator's own measurements** (item 6), and none reached a commit |
+| `subagent tokens` | **1,831,087** last-observed, all 5 agents reporting: seam-mapper 82,664 · repo-35 builder 400,121 · repo-39 builder 566,211 · repo-35 gate 271,653 · repo-39 gate 510,438. Split: builders 966,332 (**52.8%**) · gates 782,091 (**42.7%**) · intake 82,664 (**4.5%**). **The repo-35 builder reported 516,783 at build completion and 400,121 after its resume**, so its last-observed figure is lower than an earlier one (item 3); with the higher figure the total is 1,947,749. The repo-39 builder's final report after opening #220 never reached the orchestrator as a notification, so its figure predates that round. **A floor, and not the bill**: cache reads are uncounted |
+| `cost` | **≈ $33.33** (≈ $35.45 on the higher total) at the 2026-09-02 rate of $0.0182/1k. An arithmetic conversion, not billed |
+
+**Model pairings: both tickets were `hard`, so both were Opus-built and
+Sonnet-gated**, dispatched as `opus` and `sonnet` and named that way in both PR
+bodies. Within each ticket the checker differs from the checked. Across the
+batch the two pairings are identical, which is the sixteenth session's item 7
+arriving again: every `hard` ticket lands on one pairing.
+
+**Four decisions went to the owner, in three questions:**
+- **batch:** the owner chose a larger repo-39 slice beside repo-35, **overriding the orchestrator's recommendation** of the 83-reference planner slice;
+- **whether the citations gate widens to whole records:** "not yet, repoint what you touch", the recommendation, taken on a measured 614 → 2,068 failing references with the Review scope reproducing 614 as its control;
+- **which slice:** the downloader, the recommendation, on a measured 0 of 296 references targeting `scripts/`, against 95 of 217 in the repo-* slice;
+- **repo-44's `depends_on`:** `[repo-35]`, the recommendation.
+
+### What the skill got wrong
+
+Ten items. Items 1, 2, 4, 5 and 6 are the orchestrator's own. Items 7–9 came
+from the three agents asked at the end of their runs. The seam-mapper and the
+repo-35 gate were never asked, because the question was not put at dispatch as
+the schema says, and they had finished before it was put.
+
+1. **Ship authority relayed through the reviewer is not ship authority, and
+   both builders said so.** The gate prompts told each reviewer to paste an
+   authority paragraph into its final message to the builder, so that the
+   builder could open the PR without a round back to the orchestrator.
+   `builder.md` grants the PR only when the builder's *own* prompt gives
+   explicit authority. The repo-35 builder committed the record and declined
+   the PR, and its reviewer agreed. That cost a resume. The repo-39 builder
+   held until a direct message from the orchestrator arrived. **Grant ship
+   authority in the builder's dispatch, or in a direct message from the
+   orchestrator; never route it through the reviewer.** The routing also
+   carried an owner answer (`depends_on`) by the same hop, which the builder
+   rightly would not act on alone either.
+2. **A positive control can satisfy the prompt's letter and miss the failure it
+   exists to catch.** The first repo-39 gate "proved its harness" by moving a
+   citation out of range and watching `citations-gate` go red. The prohibited
+   failure is a repoint that **resolves** to today's content and no longer
+   supports the claim, and the gate passes that by construction. The same pass
+   substituted hand-reading a sample for the enumeration the prompt specified,
+   without saying so. The send-back asked for a control that plants the
+   prohibited failure itself. That control first exposed **a bug in the
+   reviewer's own comparison tool**, a self-referential match that approved
+   any citation anchored on its enclosing test's name. Only then did the
+   203-comparison enumeration mean anything. **A gate prompt should say which
+   failure the control must plant, not only that one is required.** The
+   reviewer's own account of why it sampled: the enumeration hit a pairing
+   problem on its first record, it had five more attacks queued, and sandbox
+   refusals (item 7) had eaten its turns. It did not surface the trade.
+3. **`subagent_tokens` is not always cumulative.** `SKILL.md` says a resume is
+   folded into the figure. The repo-35 builder reported 516,783, was resumed,
+   and reported 400,121. One counterexample; the mechanism is not known here.
+   Until it is, record every observed figure per agent, not only the last.
+4. **"No completion notification since it was woken" is not "still
+   running".** The orchestrator sent three agents a report-format question
+   believing all three were mid-run. Two messages queued; the repo-39 builder's
+   came back `Resuming`, because it had ended its turn waiting for the amended
+   record. **One `ListAgents` first.** The measured price was +25,443
+   subagent tokens (540,768 → 566,211), far below the 100–330 k resume figure
+   `concurrency.md` carries. That is a second counterexample to one of the
+   skill's constants, with the same caveat that subagent tokens exclude cache
+   reads.
+5. **Nothing makes anyone check a PR's title type against the paths it
+   touches.** Both tickets were `repo`-scoped. repo-35's branch touches one
+   `tools/downloader/docs/work/` record, and repo-39's touches 19 downloader
+   records and one planner record. `release-please-config.json` has no
+   `exclude-paths`, so a `feat` or `fix` title would have cut a changelog entry
+   and a version in each tool for markdown edits. The repo-35 builder proposed
+   `feat(repo):`, and the orchestrator caught it only at ship time. Both PRs
+   landed as `chore(repo):`, following repo-29's #194. **Step 9 should have
+   the orchestrator read `git diff --name-only` for `tools/` paths before
+   granting a title.**
+6. **The orchestrator's own harness could not fail, twice, and the rule that
+   catches it was on the page both times.** Counting `indistinct` anchors
+   through `failures[].state` returns nothing. An indistinct anchor keeps
+   `state: "verified"` and is tallied only in `counts.indistinct`.
+   - **First use:** it produced an empty column in a measurement put before
+     the owner. It was withdrawn there as "the wrong state name", not
+     investigated.
+   - **Second use:** it returned 0 at base and 0 at tip, over the 21 records
+     repo-39 changed, for a Done-when check. The positive control over
+     `repo-31` and `dl-44`, which the gate says hold 3 each, returned 0 and
+     0.
+   - **After the fix:** the control read 3 and 3 at both revs, and the 21
+     records read 0 and 0 again, now as evidence.
+
+   The class is `defect-shapes.md`'s *harness that cannot fail*. Applying it on
+   the first use would have cost one command.
+7. **Subagent worktree sandboxes refuse ordinary shell shapes, and nothing an
+   agent reads says so.** All three agents asked hit "too complex to verify
+   that it stays inside the worktree". The refused shapes were:
+   - a git command followed by `echo $?`;
+   - a heredoc commit message, or a heredoc script body;
+   - a variable holding a path;
+   - a `for` loop over `sed -n`;
+   - an `awk` program containing `>>`;
+   - `python3`;
+   - one heredoc that passed and failed on identical retries.
+
+   The repo's own "read the exit code unpiped, redirected to a file" rule steers
+   agents toward exactly these shapes. Workarounds that held: one plain command
+   per call, `git commit -F <file>`, literal paths, `printf` over `cat <<EOF`,
+   and `awk -v`.
+8. **The test project that covers `scripts/` is named `repo`**, and neither
+   `CLAUDE.md`'s Testing section nor `builder.md` names it. The orchestrator's
+   own dispatch said "the `scripts` project", a spelling repo-35's ticket
+   already records failing with "No projects matched the filter". Both
+   builders found `repo` by reading `vitest.config.ts`.
+9. **`builder.md`'s setup runs the farm script by an absolute path into the
+   shared checkout**, on the page that forbids touching `/workspaces/tools`.
+   Both builders flagged the contradiction. It works, and the page does not
+   say the exception is intended.
+10. **A dispatch boundary the gate itself made unkeepable.** The repo-39
+    dispatch said to touch the slice's records and their `GRANDFATHERED` lines
+    only. Deleting eight entries moved the lines `repo-37`'s enforced record
+    cites, and the gate went red until `repo-37` was repointed. The repo-35
+    builder hit the same edge from the other side and pinned those citations
+    to `64edce2`. **Any branch that edits the `GRANDFATHERED` list also owns
+    `repo-37`'s citations into it**, and two such branches in one batch always
+    conflict there. The seam map could not see this, because the collision is
+    a citation *into* a shared file, not an edit *of* one.
+
+**Confirmed rather than contradicted.** `worktree-hygiene.md`'s _When every
+agent dies at once_ held under a real HTTP 429 that killed one gate mid-run.
+The orchestrator re-checked the shared checkout, the three worktrees and the
+remote heads, all clean, and resumed the agent by message. It told the agent
+that nothing it held was evidence, and the agent re-ran its control before
+continuing.
