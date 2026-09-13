@@ -9,7 +9,7 @@
 
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { ScriptedProvider } from "@planner/agent";
+import { AnthropicProvider, ScriptedProvider } from "@planner/agent";
 import type { GroundingProvider, ModelProvider } from "@planner/agent";
 import { AppError } from "@planner/contract";
 import { RateLimiter } from "@webtools/core/rate-limit";
@@ -60,13 +60,40 @@ const MAX_BODY_BYTES = 64 * 1024;
  *
  * One `switch`, and it is the only place in the tool that knows a provider by
  * name. Adding a real one is a case here plus a file under
- * `agent/src/providers/` — nothing above the seam changes.
+ * `agent/src/providers/` — nothing above the seam changes, and pl-39 added
+ * `anthropic` exactly that way.
+ *
+ * **A real provider with no key refuses to boot**, for `requiredEndpoint`'s
+ * reason: a service that starts healthy and then fails every specialist of its
+ * first run reports the failure as named gaps on somebody's plan, which is the
+ * shape of an honest answer. `AGENT_UNCONFIGURED` rather than `INTERNAL`,
+ * because the planner's taxonomy has a code for exactly this and its own
+ * definition names the case.
  */
-function createModelProvider(config: ApiConfig): ModelProvider {
+function createModelProvider(config: ApiConfig, logger: AppLogger): ModelProvider {
   switch (config.modelProvider) {
     case "scripted":
       return new ScriptedProvider();
+    case "anthropic":
+      return new AnthropicProvider({
+        apiKey: requiredKey(config.anthropicApiKey),
+        model: config.model,
+        effort: config.modelEffort,
+        timeoutMs: config.modelTimeoutMs,
+        logger,
+      });
   }
+}
+
+function requiredKey(value: string | undefined): string {
+  if (value === undefined) {
+    throw new AppError(
+      "AGENT_UNCONFIGURED",
+      'MODEL_PROVIDER is "anthropic" but ANTHROPIC_API_KEY is not set. It has no default on purpose: pass it as a secret, never in a compose file that is checked in.',
+      { details: { variable: "ANTHROPIC_API_KEY" } },
+    );
+  }
+  return value;
 }
 
 /**
@@ -163,6 +190,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   // storage directory and a database file exist for a service that was never
   // going to start.
   const backend = options.grounding ?? createGroundingProvider(config, now, logger);
+  // Beside it and for the same reason: `anthropic` with no key refuses here,
+  // before a database exists for a service that was never going to start.
+  const model = options.model ?? createModelProvider(config, logger);
 
   if (config.databasePath !== ":memory:") {
     // better-sqlite3 will not create the directory, and failing at boot with
@@ -172,7 +202,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<App> {
   const db = new Database(config.databasePath);
   migrate(db);
 
-  const model = options.model ?? createModelProvider(config);
+  // The provider's name and its model, and nothing else. `config` carries the
+  // key as a plain string, so it is never logged whole — `logging.test.ts`
+  // holds this line to exactly these two fields.
   logger.info("agent configured", { provider: model.name, model: model.model });
 
   // Wrapped, never threaded through: the cache is a `GroundingProvider` that

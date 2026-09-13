@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { DEFAULT_ERROR_MESSAGES, ROUTES } from "@planner/contract";
 import type { App } from "../src/server.ts";
 import { createApp } from "../src/server.ts";
@@ -32,6 +32,66 @@ describe("GET /api/health", () => {
     expect(body.agent).toEqual({ provider: "scripted", model: "scripted" });
     expect(body.database).toEqual({ path: ":memory:", open: true });
     expect(context.model.name).toBe("scripted");
+  });
+
+  test("boots on anthropic with a key, and names the provider and the model — nothing else", async () => {
+    // Constructing the provider makes no request, so this boots with no
+    // network and no bill (pl-39).
+    app = await createApp({
+      config: {
+        databasePath: ":memory:",
+        logLevel: "silent",
+        modelProvider: "anthropic",
+        anthropicApiKey: "sk-ant-health-test-key",
+      },
+    });
+
+    const body = (
+      await app.server.inject({ method: "GET", url: ROUTES.health })
+    ).json<HealthResponse>();
+
+    expect(body.agent).toEqual({ provider: "anthropic", model: "claude-opus-5" });
+    expect(JSON.stringify(body)).not.toContain("sk-ant-health-test-key");
+  });
+
+  test("refuses to boot anthropic without a key, naming the variable", async () => {
+    // A service that starts here reports healthy and then fails every
+    // specialist of its first run, into named gaps that look like honest ones.
+    const started = createApp({
+      config: {
+        databasePath: ":memory:",
+        logLevel: "silent",
+        modelProvider: "anthropic",
+        anthropicApiKey: undefined,
+      },
+    });
+
+    await expect(started).rejects.toThrow(/ANTHROPIC_API_KEY is not set/u);
+    await expect(started).rejects.toMatchObject({ code: "AGENT_UNCONFIGURED" });
+  });
+
+  test("refuses to boot anthropic when ANTHROPIC_CUSTOM_HEADERS is set in the environment", async () => {
+    // The owner's decision on pl-39, through the real boot path: `createApp`
+    // reads `process.env`, so the variable is stubbed there rather than passed.
+    vi.stubEnv("ANTHROPIC_CUSTOM_HEADERS", "x-api-key: sk-ant-STRAY-KEY-FROM-HOST");
+    try {
+      const started = createApp({
+        config: {
+          databasePath: ":memory:",
+          logLevel: "silent",
+          modelProvider: "anthropic",
+          anthropicApiKey: "sk-ant-health-test-key",
+        },
+      });
+
+      await expect(started).rejects.toThrow(/ANTHROPIC_CUSTOM_HEADERS is set/u);
+      await expect(started).rejects.toMatchObject({
+        code: "AGENT_UNCONFIGURED",
+        details: { variable: "ANTHROPIC_CUSTOM_HEADERS" },
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test("names the grounding provider too, and says nothing else about it", async () => {

@@ -3,7 +3,7 @@ id: pl-39
 tool: planner
 title: A real model behind the seam — Anthropic, structured replies, a bounded bill
 kind: work-package
-status: ready
+status: done
 milestone: P3
 depends_on: []
 difficulty: hard
@@ -295,6 +295,32 @@ Separately, pl-40's grooming found that the input figures were taken with no
 finds in the prompt. The table now says so, and that finding is
 [pl-41](./pl-41-every-find-reaches-the-prompt.md).
 
+## Review
+
+**Gate: CONCERNS** — 2026-09-13 · `origin/main...3841faf8e0d001b6690a5c8376edafbae2d95c9e` · defect hunt run directly (ticket-reviewer, no `code-review` delegation), across three rounds: initial hunt at `489bce9`, a fix-and-reverify round at `b4c934f`, and this owner-decided delta at `3841faf`
+
+| Done when                                                                                                  | Proof                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Boots with key, health reports anthropic/claude-opus-5; refuses without key, naming the variable           | `api/test/health.test.ts:37 "boots on anthropic with a key"` ✓, `:57 "refuses to boot anthropic without a key"` ✓                                                                                                                                                                                                                                                                                      |
+| Unrecognised `MODEL_PROVIDER` refuses to boot                                                              | `tools/planner/api/test/config.test.ts:38 "refuses an unknown model provider"` ✓                                                                                                                                                                                                                                                                                                                       |
+| `AnthropicProvider`: schema/thinking/effort/fallback/beta/key sent; every stop reason and error row mapped | `agent/test/anthropic-provider.test.ts:130 "the reply schema as output_config.format"` ✓, `:262 "is malformed, not a silent end"` ✓ (4 stop reasons incl. `compaction`), `:312 "with the catalog's retryability"` ✓ — all 7 `codeFor` branches and all 4 `stopReasonOf` cases individually mutation-confirmed red                                                                                      |
+| Reply passing sent JSON Schema but failing `costEstimateSchema`'s refine is refused and re-asked           | `agent/test/anthropic-provider.test.ts:396 "fails costEstimateSchema's refine is refused"` ✓                                                                                                                                                                                                                                                                                                           |
+| JSON Schema for `specialistReplySchema` snapshotted                                                        | `agent/test/anthropic-provider.test.ts:187 "is snapshotted, so a zod or SDK upgrade"` ✓                                                                                                                                                                                                                                                                                                                |
+| Thrown auth error through the real logger never contains the key                                           | `tools/planner/api/test/logging.test.ts:87 "does not contain the key"` ✓; the gate additionally ran 4 uncommitted sentinel-injection probes (custom header, body message, connection error, workspace-id header), 0 leaks                                                                                                                                                                              |
+| Scripted suites and e2e pass unchanged                                                                     | scripted: `agent/test/scripted-provider.test.ts` unchanged, 5/5 green ✓; e2e: **unproven (gate)** — `.github/workflows/planner.yml`                                                                                                                                                                                                                                                                    |
+| `MAX_OUTPUT_TOKENS` 8,000 in both places; `RUN_TOKEN_BUDGET` consequence documented                        | `tools/planner/api/test/config.test.ts:140 "defaults the reply ceiling to 8,000"` ✓; `docs/02-DEPLOYMENT.md`'s fallback-doubling paragraph closes the completeness gap found in round 1                                                                                                                                                                                                                |
+| Lockfile adds SDK and its own deps only                                                                    | verified — 6 new entries (SDK + 5 transitive, corrected from the Log's original miscount of "six"), one line removed (`@babel/runtime`'s `"dev": true`)                                                                                                                                                                                                                                                |
+| `ANTHROPIC_CUSTOM_HEADERS` cannot silently override the configured key (owner's decision, this delta)      | `tools/planner/api/test/config.test.ts:59 "refuses anthropic when ANTHROPIC_CUSTOM_HEADERS is set"` ✓, `:89 "a blank ANTHROPIC_CUSTOM_HEADERS is unset"` ✓ (verified against the real SDK independently), `:100 "does not stop the scripted default"` ✓, `api/test/health.test.ts:73 "refuses to boot anthropic when ANTHROPIC_CUSTOM_HEADERS is set in the environment"` ✓ through the real boot path |
+| `npm run check` and `npm test -- --project planner` pass; image builds                                     | verified green (891/891 tests, 54 files) ✓; image build **unproven (gate)** — `.github/workflows/planner.yml`, no Docker daemon here                                                                                                                                                                                                                                                                   |
+
+- **Resolved** (found in round 1, fixed and reverified in round 2) · `docs/02-DEPLOYMENT.md`'s `RUN_TOKEN_BUDGET` sizing didn't disclose that a refusal-fallback can double a single attempt's bill — now documented as a `med`-severity doc completeness gap, closed.
+- **Resolved** · `compaction` stop reason untested by name — fixture and test.each entry added, 30/30.
+- **Resolved** · ticket Log miscounted the lockfile's transitive packages ("six" → "five").
+- **Resolved this round** · `ANTHROPIC_CUSTOM_HEADERS` could silently override the configured API key — owner decided to refuse to boot (option c) rather than re-send the key per request (b) or leave it documented; implemented, tested at both the config and real-boot levels, and independently verified against the real SDK's blank-handling behavior.
+- **dropped** · none across all three rounds.
+- **findings** · 3 found round 1 (1 med, 2 low), all 3 carried and fixed; 2 open decisions raised round 1, both now decided by the owner — `ANTHROPIC_CUSTOM_HEADERS` (option c, refuse to boot, resolved this delta) and empty `MODEL_PROVIDER` (option A, keep blank = unset, decided 2026-09-13, no code change).
+- NFR: security ✓ (1 committed test plus 4 uncommitted gate probes across 5 paths total, 0 leaks; the new refusal message is a static string, so the raw env value structurally cannot reach it). performance n/a. reliability ✓. maintainability ✓ (both low findings closed).
+
 ## Log
 
 **2026-09-13 — filed.** From a roadmap review that found every planner ticket
@@ -303,3 +329,164 @@ enforcement, thinking and the split were put to the owner as options, with the
 measurement above, and the recommended option was taken on each. No code was
 written; the id was checked with `node scripts/next-id.mjs pl`, which reported
 `pl-39` free.
+
+**2026-09-13 — built.** Dispatched as a builder on Opus 5, branched from
+`origin/main` at `8849c14`. **No live Anthropic call was made, by design:** every
+test answers the SDK's `fetch` from `agent/test/fixtures/anthropic-messages.json`,
+which says in its header that it was written by hand from the documented shape.
+Whether the API really answers in that shape is pl-40's to measure.
+
+What landed, by step: `@anthropic-ai/sdk@0.125.0` in `@planner/agent`
+(1); `ModelRequest.replySchema` and `ModelReply.servedModel` on the seam (2);
+`askSpecialist` sends `specialistReplySchema` on every attempt, parsing and
+re-ask untouched (3); `AnthropicProvider` in `agent/src/providers/anthropic.ts`
+(4); `anthropic`, `ANTHROPIC_API_KEY`, `MODEL`, `MODEL_EFFORT` and
+`MODEL_TIMEOUT_MS` in `api/src/config.ts`, and 8,000 in both output-cap
+defaults (5); `case "anthropic"` refusing to boot with no key (6); an unknown
+`MODEL_PROVIDER` refusing to boot (7); health asserted (8); the deployment
+document and the architecture's env table (9). The scripted provider's suites
+and the planner e2e suite ran unchanged.
+
+**What the brief had wrong, or could not have known:**
+
+- **The zod helper is `betaZodOutputFormat` from
+  `@anthropic-ai/sdk/helpers/beta/zod`, not `helpers/zod`.** `fallbacks` is only
+  on the beta `messages` path, and the non-beta helper types the GA
+  `OutputConfig`. The scalar form is typed as the brief hoped —
+  `BetaFallbacksParam = Array<BetaFallbackParam> | 'default'`, and
+  `server-side-fallback-2026-07-01` is a literal in `AnthropicBeta` — so nothing
+  is cast.
+- **The `CONTEXT_LIMIT` row cannot fire from a `400`.** Its own rule was "only
+  when the error type says so", and the SDK's `ErrorType` union has no type that
+  does: a prompt too long for the window is an `invalid_request_error` like any
+  malformed request, distinguishable only by its message. So every `400` is
+  `INTERNAL`, and a test holds a context-naming `400` there. The typed signal the
+  API does have is the `model_context_window_exceeded` **stop reason**, which the
+  brief's stop-reason list did not name. It maps to `CONTEXT_LIMIT` — **the
+  owner's decision, 2026-09-13**, put as an open question with that option
+  recommended and taken over "malformed like the others". A test pins it.
+  `compaction` is a stop reason too, and is malformed like the other three.
+- **The discriminated unions do survive as `anyOf`, but looser.** The helper
+  rewrites each `z.literal` discriminant to `{"type":"string","description":"{const:
+\"at\"}"}`, because the API's schema subset has no `const`. So structured output
+  alone would accept `kind: "between"` carrying only a `place`. The snapshot pins
+  it and a test names it; it is one more reason `askSpecialist`'s zod validation
+  is the check that counts.
+- **The SDK reads more of the environment than the key.** It also reads
+  `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_LOG` and
+  `ANTHROPIC_WEBHOOK_SIGNING_KEY` for any option it is not given. All four are
+  passed explicitly — `authToken: null` matters, because a stray token on a host
+  would be sent beside the key and the API rejects both together.
+  `ANTHROPIC_CUSTOM_HEADERS` is read unconditionally and no option switches it
+  off; recorded, not worked around. **It can replace the key, not merely add a
+  header** — found by the gate and reproduced here: with
+  `ANTHROPIC_CUSTOM_HEADERS="x-api-key: OVERRIDE-FROM-ENV"` in the environment
+  and an explicit `apiKey`, the request went out with `x-api-key:
+OVERRIDE-FROM-ENV` (a probe against a stubbed `fetch`, no network). The SDK
+  merges env-derived default headers over its auth headers, and later keys
+  overwrite earlier ones. **Now refused: the owner's decision, 2026-09-13, and
+  it overrode the builder's recommendation.** The gate put two options: leave
+  it documented, or re-send `x-api-key` on every request (the builder
+  recommended this). The orchestrator added a third, refuse to boot while the
+  variable is set, and recommended it: re-sending the key still leaves a stray
+  `anthropic-beta` or any other header free to change what is billed, and
+  refusing matches how this ticket already treats a typo'd provider. All three
+  went to the owner, who chose the refusal. As built:
+  - **In `loadApiConfig`, raising `AGENT_UNCONFIGURED`**, right after
+    `MODEL_PROVIDER` is resolved — the same place and the same code as the
+    unknown-provider refusal, and `config.ts` is already the only file allowed to
+    read the environment. The provider constructor could not do it without
+    reading `process.env` itself. The message names the variable and never its
+    value, since a variable that carries headers may be carrying a key.
+  - **Only when the provider is `anthropic`.** No other provider constructs the
+    SDK, so under `scripted` the variable reaches nothing. Refusing there would
+    stop a developer whose shell exports it for other tools from running the
+    default.
+  - **Blank or whitespace-only counts as unset, and that was measured.** SDK
+    0.125.0's `readEnv` trims and treats an empty result as absent. A probe
+    against a stubbed `fetch` sent no extra header for `""`, `"   "`, `" \n "` or
+    `"\t"`, and one for `"x-extra: 1"`. The check trims the same way. A non-blank
+    value with no colon also adds no header in the SDK, but it refuses anyway,
+    because the rule is "set", not "parses".
+  - Proven by `api/test/config.test.ts` (refusal, blank, scripted) and
+    `api/test/health.test.ts` (through `createApp` with the variable stubbed in
+    `process.env`), and red-run once with the check removed.
+- **"Check the fixture, and say which it was" could not be settled by a fixture
+  written by hand.** The documented semantics are that top-level `usage` covers
+  only the attempt that produced the message and `usage.iterations` reports
+  every attempt, so output is summed over `iterations` whenever it is present; the
+  fallback test proves 970 billed where the top-level count says 850. Which one
+  a real fallback response carries is unverified until pl-40 captures one.
+- **The contract disagrees with the error table about a bad key.**
+  `contract/src/errors.ts` documents `AGENT_UNAVAILABLE` as "configured but
+  refused us: bad key, revoked, out of credit", and that code is retryable; the
+  brief maps a bad key to `AGENT_UNCONFIGURED`. **The owner's decision,
+  2026-09-13:** keep `AGENT_UNCONFIGURED`, because a bad key answers the same way
+  every time and is not worth a retry, and fix the contract's comment in this
+  change rather than in a follow-up. Both are done. The owner's answer lifted
+  the stop on `contract/` for that one doc comment only, while pl-42 was
+  building in the same file; nothing else there moved.
+- **The lockfile diff was not SDK-only on the first try.** `npm install
+--package-lock-only` also rewrote two workspace versions the lockfile had
+  fallen behind on (`@downloader/api` 0.2.0 → 0.4.0, `@planner/api` 0.4.0 →
+  0.5.1). Both were reverted by hand. What is left is the SDK, its five transitive
+  packages, and `@babel/runtime` losing `"dev": true`, which is correct: the
+  SDK's `json-schema-to-ts` makes it a production dependency now.
+
+**Decided here, and said out loud:**
+
+- **Step 7 — `groundingProvider` got the same treatment, in this commit.** It was
+  the same small change in the same file: a fallback became a refusal, and one
+  test flipped. The comment it replaced argued that a typo only costs a user a
+  plan with unmeasured legs. That is true of the user and misses the operator:
+  `GROUNDING_PROVIDER=valhala` is somebody who meant a routing engine, and
+  `createGroundingProvider` already refused a _recognised_ name with no endpoint,
+  which is the same mistake one character later. It raises `INTERNAL`, as
+  `requiredEndpoint` does. An unknown `MODEL_EFFORT` refuses the same way, for the
+  same reason. An empty value of any of the three is "unset" and takes the
+  default, as a commented-out `.env` line should. **For `MODEL_PROVIDER` that is
+  now the owner's decision, 2026-09-13.** The gate asked whether a
+  present-but-blank value, such as an unresolved compose variable, should
+  refuse instead, and recommended keeping it. The owner kept it: blank stays
+  unset, and no code changed. The answer reached this Log through the
+  orchestrator's relay after the builder's first account of it; until then the
+  sentence above stood as the builder's own choice.
+- **The missing key and the unknown `MODEL_PROVIDER` raise `AGENT_UNCONFIGURED`,
+  not `requiredEndpoint`'s `INTERNAL`.** The contract defines that code as "no
+  model provider is configured, or the one named does not exist", which is
+  exactly both cases. The model provider is also now built before the database
+  is opened, beside the grounding provider, so a refused boot leaves no storage
+  directory behind.
+- **`MODEL_TIMEOUT_MS` defaults to 120 000 ms, capped at 600 000, and is
+  unmeasured.** It applies per attempt, and the SDK retries a timeout, so one call
+  can hold a queue slot for three times it. pl-40 is where a real latency
+  distribution replaces the guess.
+- **A `404` — a `MODEL` the API has never heard of — is `AGENT_UNCONFIGURED`,
+  not `INTERNAL`.** The owner's decision, 2026-09-13, over the table's "anything
+  else": a model typo answers the same way on every request, like a bad key,
+  and that code's copy tells the user it is the server's configuration. The
+  test's red run: with the `NotFoundError` mapping replaced by `false`, the
+  `modelNotFound` row failed, and it passed again once the mapping was
+  restored.
+- **Retries are the SDK's alone, made explicit at `maxRetries: 2`.** Nothing
+  above the seam reads `AppError.retryable` today. Each mapped code's
+  retryability is asserted against `RETRYABLE_CODES` rather than restated.
+
+**Two ways a proof here could have been hollow, and were not.** "A reply that
+passes the JSON Schema sent" is checked by rebuilding that schema with
+`z.fromJSONSchema` and parsing the reply against it, not by assuming it — no JSON
+Schema validator is a declared dependency. And the test that `askSpecialist`
+sends the schema was run red: with the `replySchema` line deleted from `ask.ts`,
+that spec failed (1 failed, 28 passed), and it passed again once the line was
+restored.
+
+**Left out, deliberately.** Not fixed: the `RUN_TOKEN_BUDGET` arithmetic, which
+now buys a quarter as many specialists and still ignores input tokens. It is
+written into `docs/02-DEPLOYMENT.md` as the brief asked, and whether it needs
+fixing is pl-40's measurement. Not added: prompt caching. Not folded in: pl-41,
+which is unmerged — the deployment document still says nothing caps how many
+finds reach a prompt, because on this base nothing does.
+
+**Could not verify here:** the image build (this container has no Docker
+daemon), so `.github/workflows/planner.yml` is that gate; and any live
+behaviour of the API, which is pl-40.

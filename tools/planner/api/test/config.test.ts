@@ -1,4 +1,6 @@
 import path from "node:path";
+import { DEFAULT_RUN_BUDGET } from "@planner/agent";
+import { AppError } from "@planner/contract";
 import { describe, expect, test } from "vitest";
 import { API_DEFAULTS, loadApiConfig } from "../src/config.ts";
 
@@ -33,10 +35,114 @@ describe("loadApiConfig", () => {
     expect(config.logLevel).toBe("warn");
   });
 
-  test("falls back to the scripted provider when the name is unknown", () => {
-    // Visibly scripted is a safe failure — health reports it by name — so a
-    // typo should not stop the process the way a bad egress setting would.
-    expect(loadApiConfig({}, { MODEL_PROVIDER: "gpt-9" }).modelProvider).toBe("scripted");
+  test("refuses an unknown model provider rather than running the script", () => {
+    // pl-39. This used to fall back to `scripted`, which was safe while that
+    // was the only name. With a real provider beside it, a typo on a production
+    // host runs the script and bills nothing while looking configured.
+    expect(() => loadApiConfig({}, { MODEL_PROVIDER: "antropic" })).toThrow(
+      /MODEL_PROVIDER is "antropic", which this build does not know/u,
+    );
+    try {
+      loadApiConfig({}, { MODEL_PROVIDER: "gpt-9" });
+      expect.unreachable("an unknown provider booted");
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(AppError);
+      expect((error as AppError).code).toBe("AGENT_UNCONFIGURED");
+    }
+  });
+
+  test("an empty MODEL_PROVIDER is unset, not unknown", () => {
+    // What a commented-out `.env` line collapses into.
+    expect(loadApiConfig({}, { MODEL_PROVIDER: "  " }).modelProvider).toBe("scripted");
+  });
+
+  test("refuses anthropic when ANTHROPIC_CUSTOM_HEADERS is set, naming the variable and never its value", () => {
+    // The owner's decision on pl-39. The SDK applies this variable to every
+    // request, and a header in it can replace the configured key.
+    const secret = "x-api-key: sk-ant-STRAY-KEY-FROM-HOST";
+    for (const env of [
+      { MODEL_PROVIDER: "anthropic", ANTHROPIC_CUSTOM_HEADERS: secret },
+      // No colon adds no header in the SDK, but the rule is "set", not "parses".
+      { MODEL_PROVIDER: "anthropic", ANTHROPIC_CUSTOM_HEADERS: "garbage" },
+    ]) {
+      try {
+        loadApiConfig({}, env);
+        expect.unreachable("anthropic booted with ANTHROPIC_CUSTOM_HEADERS set");
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(AppError);
+        const appError = error as AppError;
+        expect(appError.code).toBe("AGENT_UNCONFIGURED");
+        expect(appError.message).toContain("ANTHROPIC_CUSTOM_HEADERS");
+        expect(appError.details).toEqual({ variable: "ANTHROPIC_CUSTOM_HEADERS" });
+        expect(
+          JSON.stringify({ message: appError.message, details: appError.details }),
+        ).not.toContain("STRAY-KEY");
+      }
+    }
+
+    // The provider named by override rather than by environment refuses too.
+    expect(() =>
+      loadApiConfig({ modelProvider: "anthropic" }, { ANTHROPIC_CUSTOM_HEADERS: secret }),
+    ).toThrow(/ANTHROPIC_CUSTOM_HEADERS is set/u);
+  });
+
+  test("a blank ANTHROPIC_CUSTOM_HEADERS is unset, because the SDK adds no header for one", () => {
+    // Measured against SDK 0.125.0: it trims the value and treats empty as
+    // absent, so these add no header and must not refuse.
+    for (const blank of ["", "   ", " \n ", "\t"]) {
+      expect(
+        loadApiConfig({}, { MODEL_PROVIDER: "anthropic", ANTHROPIC_CUSTOM_HEADERS: blank })
+          .modelProvider,
+      ).toBe("anthropic");
+    }
+  });
+
+  test("ANTHROPIC_CUSTOM_HEADERS does not stop the scripted default, which never builds the SDK", () => {
+    expect(loadApiConfig({}, { ANTHROPIC_CUSTOM_HEADERS: "x-extra: 1" }).modelProvider).toBe(
+      "scripted",
+    );
+  });
+
+  test("recognises anthropic, and reads its key, model and effort from their own variables", () => {
+    const config = loadApiConfig(
+      {},
+      {
+        MODEL_PROVIDER: "Anthropic",
+        ANTHROPIC_API_KEY: " sk-ant-test ",
+        MODEL: "claude-sonnet-5",
+        MODEL_EFFORT: "HIGH",
+        MODEL_TIMEOUT_MS: "45000",
+      },
+    );
+    expect(config.modelProvider).toBe("anthropic");
+    expect(config.anthropicApiKey).toBe("sk-ant-test");
+    expect(config.model).toBe("claude-sonnet-5");
+    expect(config.modelEffort).toBe("high");
+    expect(config.modelTimeoutMs).toBe(45_000);
+  });
+
+  test("defaults the model to claude-opus-5 at effort low, with no key", () => {
+    const config = loadApiConfig({}, {});
+    expect(config.model).toBe("claude-opus-5");
+    expect(config.modelEffort).toBe("low");
+    expect(config.modelTimeoutMs).toBe(120_000);
+    // No default key, ever, and an empty one is not a key.
+    expect(config.anthropicApiKey).toBeUndefined();
+    expect(loadApiConfig({}, { ANTHROPIC_API_KEY: "" }).anthropicApiKey).toBeUndefined();
+  });
+
+  test("refuses an effort level the API does not have", () => {
+    expect(() => loadApiConfig({}, { MODEL_EFFORT: "hgih" })).toThrow(
+      /MODEL_EFFORT is "hgih", which is not an effort level/u,
+    );
+  });
+
+  test("defaults the reply ceiling to 8,000, in both places it is written down", () => {
+    // pl-39: a model that thinks by default counts thinking against this, and
+    // 2,048 made an ordinary reply a `length` stop and a re-ask.
+    expect(API_DEFAULTS.maxOutputTokens).toBe(8_000);
+    expect(loadApiConfig({}, {}).maxOutputTokens).toBe(8_000);
+    expect(DEFAULT_RUN_BUDGET.maxOutputTokens).toBe(API_DEFAULTS.maxOutputTokens);
   });
 
   test("defaults grounding to the fixture provider, so a fresh clone needs no key", () => {
@@ -44,16 +150,16 @@ describe("loadApiConfig", () => {
     expect(loadApiConfig({}, {}).maxGroundingCalls).toBe(40);
   });
 
-  test("falls back to the fixture provider when the grounding name is unknown", () => {
-    // Beside the `MODEL_PROVIDER` case above and for the same reason: a typo
-    // here cannot send a request anywhere, so the worst case is a plan whose
-    // legs are unmeasured and which says so — reported by name at
-    // `/api/health`. Refusing to boot would trade that for no plan at all.
-    //
-    // The example used to be `valhalla`, which pl-28 made a real name. Anything
-    // this list does not hold does the same thing; the assertion is about the
-    // fallback, not about that word.
-    expect(loadApiConfig({}, { GROUNDING_PROVIDER: "osrm" }).groundingProvider).toBe("fixtures");
+  test("refuses an unknown grounding provider rather than answering from fixtures", () => {
+    // Folded into pl-39 beside `MODEL_PROVIDER`. It used to fall back, on the
+    // argument that a user sees unmeasured legs said out loud. The operator who
+    // typed `valhala` meant a routing engine, and `createGroundingProvider`
+    // already refuses a recognised name with no endpoint — the same mistake one
+    // character earlier.
+    expect(() => loadApiConfig({}, { GROUNDING_PROVIDER: "osrm" })).toThrow(
+      /GROUNDING_PROVIDER is "osrm", which this build does not know/u,
+    );
+    expect(loadApiConfig({}, { GROUNDING_PROVIDER: "" }).groundingProvider).toBe("fixtures");
   });
 
   test("recognises valhalla, and keeps its endpoints as written with no default", () => {

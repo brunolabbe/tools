@@ -151,6 +151,12 @@ export async function askSpecialist(input: AskInput): Promise<AskResult> {
       system,
       messages,
       maxOutputTokens: input.budget.maxOutputTokens,
+      // Sent ahead of the reply on every attempt, re-asks included (pl-39). It
+      // changes nothing below: a backend's structured output is a promise about
+      // the shape, and `parseReply` is still this tool's check of it — the only
+      // one that enforces `costEstimateSchema`'s refine, which JSON Schema
+      // cannot carry.
+      replySchema: specialistReplySchema,
       signal: input.signal,
     });
     replies.push(reply);

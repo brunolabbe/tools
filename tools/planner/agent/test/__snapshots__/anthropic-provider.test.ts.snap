@@ -1,0 +1,307 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the JSON Schema sent for a specialist reply > is snapshotted, so a zod or SDK upgrade that changes it shows up as a diff 1`] = `
+{
+  "$defs": {
+    "__schema0": {
+      "additionalProperties": false,
+      "properties": {
+        "bookingLeadTimeDays": {
+          "anyOf": [
+            {
+              "description": "{minimum: 0, maximum: 730}",
+              "type": "integer",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "cost": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "basis": {
+                  "$ref": "#/$defs/__schema5",
+                },
+                "currency": {
+                  "$ref": "#/$defs/__schema2",
+                },
+                "high": {
+                  "$ref": "#/$defs/__schema4",
+                },
+                "low": {
+                  "$ref": "#/$defs/__schema3",
+                },
+                "provenance": {
+                  "$ref": "#/$defs/__schema6",
+                },
+              },
+              "required": [
+                "currency",
+                "low",
+                "high",
+                "basis",
+                "provenance",
+              ],
+              "type": "object",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "durationMinutes": {
+          "anyOf": [
+            {
+              "description": "{exclusiveMinimum: 0, maximum: 1440}",
+              "type": "integer",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "location": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "description": "{const: "at"}",
+                  "type": "string",
+                },
+                "place": {
+                  "$ref": "#/$defs/__schema1",
+                },
+              },
+              "required": [
+                "kind",
+                "place",
+              ],
+              "type": "object",
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "from": {
+                  "$ref": "#/$defs/__schema1",
+                },
+                "kind": {
+                  "description": "{const: "between"}",
+                  "type": "string",
+                },
+                "to": {
+                  "$ref": "#/$defs/__schema1",
+                },
+              },
+              "required": [
+                "kind",
+                "from",
+                "to",
+              ],
+              "type": "object",
+            },
+          ],
+        },
+        "season": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "from": {
+                  "description": "{pattern: "^(?:0[13578]|1[02])-(?:0[1-9]|[12]\\\\d|3[01])$|^(?:0[469]|11)-(?:0[1-9]|[12]\\\\d|30)$|^02-(?:0[1-9]|1\\\\d|2[0-9])$"}",
+                  "type": "string",
+                },
+                "to": {
+                  "description": "{pattern: "^(?:0[13578]|1[02])-(?:0[1-9]|[12]\\\\d|3[01])$|^(?:0[469]|11)-(?:0[1-9]|[12]\\\\d|30)$|^02-(?:0[1-9]|1\\\\d|2[0-9])$"}",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "from",
+                "to",
+              ],
+              "type": "object",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "summary": {
+          "description": "{minLength: 1, maxLength: 1000}",
+          "type": "string",
+        },
+        "title": {
+          "description": "{minLength: 1, maxLength: 200}",
+          "type": "string",
+        },
+      },
+      "required": [
+        "title",
+        "summary",
+        "location",
+        "durationMinutes",
+        "cost",
+        "season",
+        "bookingLeadTimeDays",
+      ],
+      "type": "object",
+    },
+    "__schema1": {
+      "additionalProperties": false,
+      "properties": {
+        "coordinates": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "latitude": {
+                  "description": "{minimum: -90, maximum: 90}",
+                  "type": "number",
+                },
+                "longitude": {
+                  "description": "{minimum: -180, maximum: 180}",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "latitude",
+                "longitude",
+              ],
+              "type": "object",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "locality": {
+          "anyOf": [
+            {
+              "description": "{minLength: 1, maxLength: 200}",
+              "type": "string",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "name": {
+          "description": "{minLength: 1, maxLength: 200}",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+        "locality",
+        "coordinates",
+      ],
+      "type": "object",
+    },
+    "__schema2": {
+      "description": "{pattern: "^[A-Z]{3}$"}",
+      "type": "string",
+    },
+    "__schema3": {
+      "description": "{minimum: 0}",
+      "type": "number",
+    },
+    "__schema4": {
+      "description": "{minimum: 0}",
+      "type": "number",
+    },
+    "__schema5": {
+      "description": "{enum: ["per-person","per-party"]}",
+      "type": "string",
+    },
+    "__schema6": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "description": "{const: "grounded"}",
+              "type": "string",
+            },
+            "sources": {
+              "description": "{maxItems: 5}",
+              "items": {
+                "$ref": "#/$defs/__schema7",
+              },
+              "minItems": 1,
+              "type": "array",
+            },
+          },
+          "required": [
+            "kind",
+            "sources",
+          ],
+          "type": "object",
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "description": "{const: "model-asserted"}",
+              "type": "string",
+            },
+          },
+          "required": [
+            "kind",
+          ],
+          "type": "object",
+        },
+      ],
+    },
+    "__schema7": {
+      "additionalProperties": false,
+      "properties": {
+        "fetchedAt": {
+          "description": "{pattern: "^(?:(?:\\\\d\\\\d[2468][048]|\\\\d\\\\d[13579][26]|\\\\d\\\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\\\d|30)|(?:02)-(?:0[1-9]|1\\\\d|2[0-8])))T(?:(?:[01]\\\\d|2[0-3]):[0-5]\\\\d(?::[0-5]\\\\d(?:\\\\.\\\\d+)?)?(?:Z))$"}",
+          "format": "date-time",
+          "type": "string",
+        },
+        "title": {
+          "anyOf": [
+            {
+              "description": "{minLength: 1, maxLength: 300}",
+              "type": "string",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "url": {
+          "format": "uri",
+          "type": "string",
+        },
+      },
+      "required": [
+        "url",
+        "title",
+        "fetchedAt",
+      ],
+      "type": "object",
+    },
+  },
+  "additionalProperties": false,
+  "description": "{$schema: "https://json-schema.org/draft/2020-12/schema"}",
+  "properties": {
+    "candidates": {
+      "description": "{maxItems: 12}",
+      "items": {
+        "$ref": "#/$defs/__schema0",
+      },
+      "type": "array",
+    },
+  },
+  "required": [
+    "candidates",
+  ],
+  "type": "object",
+}
+`;

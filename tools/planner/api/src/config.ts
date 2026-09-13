@@ -8,6 +8,9 @@
 
 import path from "node:path";
 import process from "node:process";
+import { ANTHROPIC_EFFORTS } from "@planner/agent";
+import type { AnthropicEffort } from "@planner/agent";
+import { AppError } from "@planner/contract";
 // This tool's `trustProxy` was pl-38's deliberate duplicate of the
 // downloader's; repo-40 replaced it with the shared function below, the
 // planner being its second consumer. See that file for the parsing rules.
@@ -21,9 +24,10 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
  *
  * `scripted` is the default and answers from a fixed script — see
  * `ScriptedProvider`. It means a fresh clone runs with no key, no account and
- * no bill, and it is what CI uses. A real provider is a deliberate act.
+ * no bill, and it is what CI uses. A real provider is a deliberate act —
+ * `anthropic` is the first (pl-39), and it does not start without a key.
  */
-export const MODEL_PROVIDERS = ["scripted"] as const;
+export const MODEL_PROVIDERS = ["scripted", "anthropic"] as const;
 export type ModelProviderName = (typeof MODEL_PROVIDERS)[number];
 
 /**
@@ -88,7 +92,46 @@ export interface ApiConfig {
   databasePath: string;
 
   modelProvider: ModelProviderName;
-  /** Ceiling on one reply. See `ModelRequest.maxOutputTokens`. */
+  /**
+   * The key for `anthropic`. No default, and **never logged**: this object
+   * carries it as a plain string, which is why the boot line names the provider
+   * and the model and nothing else, and why nothing may log this config whole.
+   * `createModelProvider` refuses to boot `anthropic` without it.
+   */
+  anthropicApiKey: string | undefined;
+  /**
+   * Which model a real provider asks. Ignored under `scripted`, which reports
+   * `scripted` as its model whatever this says.
+   */
+  model: string;
+  /**
+   * How hard the model thinks, and so how much it spends. `low` by default,
+   * decided with pl-39: a specialist answers in a ≈909-token reply, and the
+   * top of the range earns its cost only on hard problems.
+   */
+  modelEffort: AnthropicEffort;
+  /**
+   * Per-attempt ceiling on one model call, in milliseconds.
+   *
+   * **Long, unlike `groundingTimeoutMs`, and for the opposite reason.** A
+   * routing matrix that is slow is an instance in trouble; a model reply that
+   * is slow is a model writing up to `maxOutputTokens` of thinking and JSON,
+   * which is the job. Two minutes is the ceiling on that, not the expectation.
+   * It still costs a queue slot while it runs, so it is not simply large — and
+   * the SDK retries a timeout, so a call can hold the slot for three times this
+   * before it becomes a named gap. **Unmeasured**: no key existed where it was
+   * chosen, and pl-40 is where a real latency distribution replaces the guess.
+   */
+  modelTimeoutMs: number;
+  /**
+   * Ceiling on one reply. See `ModelRequest.maxOutputTokens`.
+   *
+   * 8,000 since pl-39, up from 2,048. A model that thinks by default counts its
+   * thinking against this, so the old cap turned an ordinary reply into a
+   * `length` stop and a re-ask. **It is also the divisor `runBudgetFor` spends
+   * `RUN_TOKEN_BUDGET` with**, so raising it bought a quarter as many
+   * specialists for the same budget — see the deployment document.
+   */
   maxOutputTokens: number;
 
   groundingProvider: GroundingProviderName;
@@ -229,8 +272,17 @@ export const API_DEFAULTS = {
   dataDir: "./storage/planner",
   databaseFile: "planner.db",
   modelProvider: "scripted",
+  // The owner's choice for pl-39. Configurable per deployment, and ignored
+  // under `scripted`.
+  model: "claude-opus-5",
+  modelEffort: "low",
+  // Two minutes an attempt. See `ApiConfig.modelTimeoutMs`: unmeasured, and
+  // pl-40 is where a real latency replaces it.
+  modelTimeoutMs: 120_000,
   groundingProvider: "fixtures",
-  maxOutputTokens: 2_048,
+  // Duplicated as `DEFAULT_RUN_BUDGET.maxOutputTokens` in `agent/src/budget.ts`,
+  // on purpose — see that constant.
+  maxOutputTokens: 8_000,
   maxGroundingCalls: 40,
   // A year for a place and six months for a road. Coordinates do not move;
   // a driving time does — roadworks, a re-signed limit, a rebuilt interchange —
@@ -307,40 +359,104 @@ function logLevel(raw: string | undefined): LogLevel {
 }
 
 /**
- * An unknown provider name falls back to the scripted one rather than throwing.
+ * A name this build does not know refuses to boot.
  *
- * The opposite of how `PROXY_URL` is treated in the downloader, and for the
- * opposite reason: a typo there sends traffic out of the wrong address, while a
- * typo here can only mean the assistant is visibly scripted — which the health
- * endpoint reports, and which nobody will mistake for a working model.
+ * **It used to fall back to `scripted`**, on the argument that a typo could only
+ * mean a visibly scripted assistant. That was true while `scripted` was the only
+ * name, and pl-8's Log said when it would stop being true: the day a second
+ * provider exists. pl-39 is that day. `MODEL_PROVIDER=antropic` on a production
+ * host would run the script and bill nothing while its operator believes a real
+ * model is configured — and the operator is the one person who will not be
+ * reading `/api/health` to find out. An empty value is "not set", and takes the
+ * default, the same way `optionalText` treats a commented-out `.env` line.
  */
 function modelProvider(raw: string | undefined): ModelProviderName {
-  const value = (raw ?? API_DEFAULTS.modelProvider).trim().toLowerCase();
-  return (MODEL_PROVIDERS as readonly string[]).includes(value)
-    ? (value as ModelProviderName)
-    : API_DEFAULTS.modelProvider;
+  const value = (raw ?? "").trim().toLowerCase();
+  if (value === "") return API_DEFAULTS.modelProvider;
+  if ((MODEL_PROVIDERS as readonly string[]).includes(value)) return value as ModelProviderName;
+  throw new AppError(
+    "AGENT_UNCONFIGURED",
+    `MODEL_PROVIDER is "${value}", which this build does not know. It is one of: ${MODEL_PROVIDERS.join(", ")}.`,
+    { details: { variable: "MODEL_PROVIDER", value, known: [...MODEL_PROVIDERS] } },
+  );
 }
 
 /**
- * Same fallback, same argument, one seam over.
+ * Same refusal, one seam over — folded in with pl-39 rather than filed.
  *
- * A typo cannot send a request anywhere it should not go — the fixture provider
- * reaches nothing — so the worst case is a plan whose legs are unmeasured, said
- * out loud on every affected line and reported by name at `/api/health`. That
- * is a visible failure, and refusing to boot over it would trade a plan that
- * admits what it did not check for no plan at all.
+ * This used to fall back to `fixtures`, argued the way `MODEL_PROVIDER`'s was:
+ * the fixture provider reaches nothing, so a typo's worst case was a plan whose
+ * legs said they were unmeasured. That argument is about what a *user* sees, and
+ * it holds. What it missed is the operator: `GROUNDING_PROVIDER=valhala` is
+ * somebody who meant a real routing engine and got a service that boots healthy
+ * and never measures anything — the exact failure `createGroundingProvider`
+ * already refuses for a *recognised* name with no endpoint, which is the same
+ * mistake one character earlier. The two checks now agree.
  *
- * **A *recognised* name with no endpoint behind it is the opposite case**, and
- * it does refuse: an operator who typed `valhalla` said what they wanted, and
- * starting a service that will fail on its first run — silently, into a named
- * gap on somebody's plan — is worse than not starting. That check is in
- * `createGroundingProvider`, which is the file that knows what a backend needs.
+ * `INTERNAL` rather than `AGENT_UNCONFIGURED`: grounding is not the agent, and
+ * `requiredEndpoint` already names a grounding misconfiguration that way.
  */
 function groundingProvider(raw: string | undefined): GroundingProviderName {
-  const value = (raw ?? API_DEFAULTS.groundingProvider).trim().toLowerCase();
-  return (GROUNDING_PROVIDERS as readonly string[]).includes(value)
-    ? (value as GroundingProviderName)
-    : API_DEFAULTS.groundingProvider;
+  const value = (raw ?? "").trim().toLowerCase();
+  if (value === "") return API_DEFAULTS.groundingProvider;
+  if ((GROUNDING_PROVIDERS as readonly string[]).includes(value)) {
+    return value as GroundingProviderName;
+  }
+  throw new AppError(
+    "INTERNAL",
+    `GROUNDING_PROVIDER is "${value}", which this build does not know. It is one of: ${GROUNDING_PROVIDERS.join(", ")}.`,
+    { details: { variable: "GROUNDING_PROVIDER", value, known: [...GROUNDING_PROVIDERS] } },
+  );
+}
+
+/**
+ * An effort level the API accepts, or a refusal to boot.
+ *
+ * Not a fallback to `low`, for `modelProvider`'s reason: `MODEL_EFFORT=hgih` is
+ * an operator who asked for more thinking and would silently get the least.
+ */
+function modelEffort(raw: string | undefined): AnthropicEffort {
+  const value = (raw ?? "").trim().toLowerCase();
+  if (value === "") return API_DEFAULTS.modelEffort;
+  if ((ANTHROPIC_EFFORTS as readonly string[]).includes(value)) return value as AnthropicEffort;
+  throw new AppError(
+    "AGENT_UNCONFIGURED",
+    `MODEL_EFFORT is "${value}", which is not an effort level. It is one of: ${ANTHROPIC_EFFORTS.join(", ")}.`,
+    { details: { variable: "MODEL_EFFORT", value, known: [...ANTHROPIC_EFFORTS] } },
+  );
+}
+
+/**
+ * `ANTHROPIC_CUSTOM_HEADERS` refuses to boot a real model — the owner's
+ * decision on pl-39, taken over re-sending the key on every request.
+ *
+ * The SDK reads this variable unconditionally, no client option switches it
+ * off, and a header in it can replace the explicit key — reproduced with a
+ * stubbed `fetch`. Re-sending `x-api-key` per request would close the key, but
+ * not a stray `anthropic-beta` or any other header that changes what a request
+ * does or bills. Refusing closes all of them, the same way a typo'd
+ * `MODEL_PROVIDER` refuses above.
+ *
+ * **Only under `anthropic`.** No other provider constructs the SDK, so under
+ * `scripted` the variable reaches nothing, and refusing there would stop a
+ * developer whose shell exports it for other tooling from running the default.
+ *
+ * **Blank is unset**, and that is measured rather than assumed: SDK 0.125.0
+ * trims the value and treats an empty result as absent, so a blank or
+ * whitespace-only value adds no header. This trims the same way, so the two
+ * cannot disagree about what "set" means.
+ *
+ * **The value is never repeated** in the message or the details. A variable
+ * whose job is carrying headers may be carrying a key.
+ */
+function refuseCustomHeaders(provider: ModelProviderName, raw: string | undefined): void {
+  if (provider !== "anthropic") return;
+  if ((raw ?? "").trim() === "") return;
+  throw new AppError(
+    "AGENT_UNCONFIGURED",
+    'MODEL_PROVIDER is "anthropic" and ANTHROPIC_CUSTOM_HEADERS is set. The Anthropic SDK applies that variable to every request and it can replace the configured key, so this service refuses to start with it. Unset it.',
+    { details: { variable: "ANTHROPIC_CUSTOM_HEADERS" } },
+  );
 }
 
 export function loadApiConfig(
@@ -353,11 +469,24 @@ export function loadApiConfig(
       ? ":memory:"
       : (rawDatabase ?? path.resolve(API_DEFAULTS.dataDir, API_DEFAULTS.databaseFile));
 
+  const resolvedModelProvider = overrides.modelProvider ?? modelProvider(env["MODEL_PROVIDER"]);
+  refuseCustomHeaders(resolvedModelProvider, env["ANTHROPIC_CUSTOM_HEADERS"]);
+
   return {
     host: overrides.host ?? env["HOST"] ?? API_DEFAULTS.host,
     port: overrides.port ?? int(env["PORT"], API_DEFAULTS.port, { min: 0, max: 65_535 }),
     databasePath,
-    modelProvider: overrides.modelProvider ?? modelProvider(env["MODEL_PROVIDER"]),
+    modelProvider: resolvedModelProvider,
+    // Read here and nowhere else — the SDK would read it from `process.env`
+    // itself if it were not handed one. Not validated here: whether a missing
+    // key is a problem depends on which provider was named, which is
+    // `createModelProvider`'s question.
+    anthropicApiKey: overrides.anthropicApiKey ?? optionalText(env["ANTHROPIC_API_KEY"]),
+    model: overrides.model ?? optionalText(env["MODEL"]) ?? API_DEFAULTS.model,
+    modelEffort: overrides.modelEffort ?? modelEffort(env["MODEL_EFFORT"]),
+    modelTimeoutMs:
+      overrides.modelTimeoutMs ??
+      int(env["MODEL_TIMEOUT_MS"], API_DEFAULTS.modelTimeoutMs, { max: 600_000 }),
     groundingProvider: overrides.groundingProvider ?? groundingProvider(env["GROUNDING_PROVIDER"]),
     // Parsed, never defaulted, and not validated here: whether a missing one is
     // a problem depends on which provider was named, which is

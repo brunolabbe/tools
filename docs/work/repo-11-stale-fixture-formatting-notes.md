@@ -114,7 +114,7 @@ naming the reviewed commit instead would be naming a tree these line numbers wer
 not checked against. `repo-11` 9/9, `pl-15` 1/1, `pl-28` 23/24. One citation in
 pl-28 does not resolve and is deliberately left alone: its record line 154 cites
 a bare `logging.test.ts` with a line number, and both tools have a tracked file
-by that name. It means `tools/planner/api/test/logging.test.ts:53` "names the backend and never where it is". It is
+by that name. It means `tools/planner/api/test/logging.test.ts@8849c14:53` "names the backend and never where it is". It is
 pre-existing — the gate confirmed it at `origin/main` by extracting the file at
 that revision and running `citations.mjs --rev origin/main`, getting 22/23 with
 the identical ambiguity — and it sits inside gate 1's own acceptance table,

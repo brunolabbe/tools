@@ -1,0 +1,338 @@
+{
+  "header": "HAND-WRITTEN, NOT CAPTURED. Every response below was written by hand from the documented Messages API shape (the platform documentation and the typings of @anthropic-ai/sdk@0.125.0) while building pl-39, because no API key exists where that ticket was built. pl-28's rule is that fixtures come from real payloads; this file is the documented exception, and pl-40 is where captured responses replace or confirm it. Where a detail below is a guess about a real payload rather than a documented field, the case's _note says so.",
+  "responses": {
+    "ordinary": {
+      "status": 200,
+      "headers": { "request-id": "req_fixture_ordinary" },
+      "body": {
+        "id": "msg_fixture_ordinary",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-5",
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"candidates\":[{\"title\":\"A motel with showers\",\"summary\":\"Simple rooms and a kitchenette.\",\"location\":{\"kind\":\"at\",\"place\":{\"name\":\"Rimouski\",\"locality\":\"Québec, Canada\",\"coordinates\":null}},\"durationMinutes\":null,\"cost\":null,\"season\":null,\"bookingLeadTimeDays\":30}]}"
+          }
+        ],
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 780,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 210,
+          "iterations": null
+        }
+      }
+    },
+    "withThinking": {
+      "_note": "Adaptive thinking with the default display, which on Opus 5 is `omitted` and returns an empty `thinking` string. The second block carries text anyway, so a test can prove thinking is dropped rather than merely empty.",
+      "status": 200,
+      "headers": { "request-id": "req_fixture_thinking" },
+      "body": {
+        "id": "msg_fixture_thinking",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-5",
+        "content": [
+          { "type": "thinking", "thinking": "", "signature": "sig_fixture_omitted" },
+          {
+            "type": "thinking",
+            "thinking": "THINKING-MUST-NOT-REACH-CONTENT",
+            "signature": "sig_fixture_summarized"
+          },
+          { "type": "text", "text": "{\"candidates\":" },
+          { "type": "text", "text": "[]}" }
+        ],
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 700,
+          "cache_creation_input_tokens": 40,
+          "cache_read_input_tokens": 60,
+          "output_tokens": 1400,
+          "output_tokens_details": { "thinking_tokens": 1390 },
+          "iterations": [
+            {
+              "type": "message",
+              "model": "claude-opus-5",
+              "input_tokens": 700,
+              "cache_creation": null,
+              "cache_creation_input_tokens": 40,
+              "cache_read_input_tokens": 60,
+              "output_tokens": 1400
+            }
+          ]
+        }
+      }
+    },
+    "maxTokens": {
+      "status": 200,
+      "headers": { "request-id": "req_fixture_max_tokens" },
+      "body": {
+        "id": "msg_fixture_max_tokens",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-5",
+        "content": [{ "type": "text", "text": "{\"candidates\":[{\"title\":\"A motel" }],
+        "stop_reason": "max_tokens",
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 780,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 8000,
+          "iterations": null
+        }
+      }
+    },
+    "refusal": {
+      "_note": "The whole fallback chain declined. `stop_details.category` is an open set; `null` is a documented value.",
+      "status": 200,
+      "headers": { "request-id": "req_fixture_refusal" },
+      "body": {
+        "id": "msg_fixture_refusal",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-5",
+        "content": [],
+        "stop_reason": "refusal",
+        "stop_sequence": null,
+        "stop_details": {
+          "type": "refusal",
+          "category": null,
+          "explanation": null
+        },
+        "usage": {
+          "input_tokens": 780,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 0,
+          "iterations": null
+        }
+      }
+    },
+    "fallbackServed": {
+      "_note": "Opus 5 declined mid-reply after 120 output tokens and the default fallback served the whole reply. Documented: top-level `model` names the model that produced the message, top-level `usage` covers only that attempt, `usage.iterations` carries a `message` entry for the declined hop and a `fallback_message` entry for the serving one, and a `fallback` content block marks the switch. The fallback model's id and every number are guesses.",
+      "status": 200,
+      "headers": { "request-id": "req_fixture_fallback" },
+      "body": {
+        "id": "msg_fixture_fallback",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-4-8",
+        "content": [
+          {
+            "type": "fallback",
+            "from": { "model": "claude-opus-5" },
+            "to": { "model": "claude-opus-4-8" }
+          },
+          { "type": "text", "text": "{\"candidates\":[]}" }
+        ],
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 780,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 850,
+          "iterations": [
+            {
+              "type": "message",
+              "model": "claude-opus-5",
+              "input_tokens": 780,
+              "cache_creation": null,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "output_tokens": 120
+            },
+            {
+              "type": "fallback_message",
+              "model": "claude-opus-4-8",
+              "input_tokens": 780,
+              "cache_creation": null,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "output_tokens": 850
+            }
+          ]
+        }
+      }
+    },
+    "pauseTurn": {
+      "status": 200,
+      "headers": { "request-id": "req_fixture_pause_turn" },
+      "body": {
+        "id": "msg_fixture_pause_turn",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-5",
+        "content": [{ "type": "text", "text": "{\"candidates\":[]}" }],
+        "stop_reason": "pause_turn",
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 780,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 12,
+          "iterations": null
+        }
+      }
+    },
+    "toolUse": {
+      "status": 200,
+      "headers": { "request-id": "req_fixture_tool_use" },
+      "body": {
+        "id": "msg_fixture_tool_use",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-5",
+        "content": [{ "type": "text", "text": "{\"candidates\":[]}" }],
+        "stop_reason": "tool_use",
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 780,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 12,
+          "iterations": null
+        }
+      }
+    },
+    "stopSequence": {
+      "status": 200,
+      "headers": { "request-id": "req_fixture_stop_sequence" },
+      "body": {
+        "id": "msg_fixture_stop_sequence",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-5",
+        "content": [{ "type": "text", "text": "{\"candidates\":[]}" }],
+        "stop_reason": "stop_sequence",
+        "stop_sequence": "END",
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 780,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 12,
+          "iterations": null
+        }
+      }
+    },
+    "compaction": {
+      "_note": "Only a request carrying context management can stop this way, and this adapter sends none. The envelope is the ordinary one with the stop reason changed.",
+      "status": 200,
+      "headers": { "request-id": "req_fixture_compaction" },
+      "body": {
+        "id": "msg_fixture_compaction",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-5",
+        "content": [{ "type": "text", "text": "{\"candidates\":[]}" }],
+        "stop_reason": "compaction",
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 780,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 12,
+          "iterations": null
+        }
+      }
+    },
+    "contextWindowExceeded": {
+      "status": 200,
+      "headers": { "request-id": "req_fixture_context_window" },
+      "body": {
+        "id": "msg_fixture_context_window",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-5",
+        "content": [{ "type": "text", "text": "{\"candidates\":[" }],
+        "stop_reason": "model_context_window_exceeded",
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 999000,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 1000,
+          "iterations": null
+        }
+      }
+    },
+    "rateLimited": {
+      "status": 429,
+      "headers": { "request-id": "req_fixture_429", "retry-after-ms": "1" },
+      "body": {
+        "type": "error",
+        "error": { "type": "rate_limit_error", "message": "Number of request tokens has exceeded your per-minute rate limit." },
+        "request_id": "req_fixture_429"
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "headers": { "request-id": "req_fixture_401" },
+      "body": {
+        "type": "error",
+        "error": { "type": "authentication_error", "message": "invalid x-api-key" },
+        "request_id": "req_fixture_401"
+      }
+    },
+    "forbidden": {
+      "status": 403,
+      "headers": { "request-id": "req_fixture_403" },
+      "body": {
+        "type": "error",
+        "error": { "type": "permission_error", "message": "Your API key does not have permission to use the specified resource." },
+        "request_id": "req_fixture_403"
+      }
+    },
+    "internalError": {
+      "status": 500,
+      "headers": { "request-id": "req_fixture_500" },
+      "body": {
+        "type": "error",
+        "error": { "type": "api_error", "message": "Internal server error" },
+        "request_id": "req_fixture_500"
+      }
+    },
+    "overloaded": {
+      "status": 529,
+      "headers": { "request-id": "req_fixture_529" },
+      "body": {
+        "type": "error",
+        "error": { "type": "overloaded_error", "message": "Overloaded" },
+        "request_id": "req_fixture_529"
+      }
+    },
+    "promptTooLong": {
+      "_note": "A 400 whose message names the context window. Its error type is the ordinary `invalid_request_error`, which is the point of the case: nothing typed distinguishes it, so it must not become CONTEXT_LIMIT by a match on its text. The message wording is a guess.",
+      "status": 400,
+      "headers": { "request-id": "req_fixture_400_context" },
+      "body": {
+        "type": "error",
+        "error": { "type": "invalid_request_error", "message": "prompt is too long: 1048577 tokens > 1048576 maximum" },
+        "request_id": "req_fixture_400_context"
+      }
+    },
+    "modelNotFound": {
+      "status": 404,
+      "headers": { "request-id": "req_fixture_404" },
+      "body": {
+        "type": "error",
+        "error": { "type": "not_found_error", "message": "model: claude-opus-6" },
+        "request_id": "req_fixture_404"
+      }
+    }
+  }
+}

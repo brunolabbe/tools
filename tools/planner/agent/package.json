@@ -20,6 +20,7 @@
     "clean": "tsc --build --clean"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@planner/contract": "*",
     "@webtools/core": "*",
     "zod": "^4.4.3"

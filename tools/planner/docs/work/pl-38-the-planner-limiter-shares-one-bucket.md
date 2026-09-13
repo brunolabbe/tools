@@ -103,7 +103,7 @@ carrying two conflicting citations. Nothing was dropped from either report.
 | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Two clients behind the proxy get independent allowances, proved by a test that fails against `main`. | **proven** — `tools/planner/api/test/runs.test.ts:452` "expect(thirdA.statusCode).toBe(429)" (client A exhausts its own bucket) and `tools/planner/api/test/runs.test.ts:458` "expect(firstB.statusCode).toBe(202)" (client B unaffected). Fails against `main`: reviewer reproduced independently by stashing `config.ts`/`server.ts` back to `a5e31c7` — failed exactly at the second assertion, `expected 429 to be 202`. |
 | A client whose `X-Forwarded-For` arrives from outside the trusted CIDR cannot choose its own bucket. | **proven** — `tools/planner/api/test/runs.test.ts:497` "all three counted against the one real address" sits directly above the deciding assertion. Not vacuous: reviewer reproduced by setting that test's harness to `trustProxy: true` — the "obvious fix" the Traps section warns against — which failed it, `expected 429 to be 202`.                                                                                   |
-| `02-DEPLOYMENT.md` no longer tells an operator that this cannot be fixed.                            | **verified** — `docs/02-DEPLOYMENT.md:889` "Rate limiting is per-client the same way the downloader" replaces the old "no `TRUST_PROXY` to make it so" paragraph. Reviewer checked the arithmetic ("Three differences" now matches three bullets) and confirmed, from the merged compose config, that both `TRUST_PROXY` lines and the `edge` subnet are the identical string.                                               |
+| `02-DEPLOYMENT.md` no longer tells an operator that this cannot be fixed.                            | **verified** — `docs/02-DEPLOYMENT.md@8849c14:889` "Rate limiting is per-client the same way the downloader" replaces the old "no `TRUST_PROXY` to make it so" paragraph. Reviewer checked the arithmetic ("Three differences" now matches three bullets) and confirmed, from the merged compose config, that both `TRUST_PROXY` lines and the `edge` subnet are the identical string.                                       |
 
 Findings — 10 returned in the first round's defect hunt, 8 carried into this
 record, 2 dropped before write-up (reviewer's own count, not re-derived here):
@@ -126,7 +126,7 @@ record, 2 dropped before write-up (reviewer's own count, not re-derived here):
   (pre-existing staleness on `main`, not introduced by this branch — flagged
   by the reviewer regardless because the file was open). Repointed; `node
 scripts/citations.mjs` on this record now reports 0 moved.
-- **low** · `tools/planner/docs/01-ARCHITECTURE.md:230` "CIDR the above" —
+- **low** · `tools/planner/docs/01-ARCHITECTURE.md@8849c14:228` "CIDR the above" —
   repaired. The Configuration table omitted `TRUST_PROXY` among 13 of the
   tool's 22 env vars, not a rule violation on its own (several others were
   already absent, `CORS_ORIGINS` included) but a judgement call the reviewer

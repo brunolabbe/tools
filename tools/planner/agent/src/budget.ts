@@ -59,10 +59,15 @@ export interface RunBudget {
  * numbers rather than imported because `api` owns the environment and this
  * package owns no configuration at all — a default here is what a library test
  * uses, not what a deployment runs.
+ *
+ * `maxOutputTokens` went from 2,048 to 8,000 with pl-39, in both places. A model
+ * that thinks by default counts its thinking against this ceiling, and the
+ * largest measured specialist reply is ≈909 tokens with none — so 2,048 made an
+ * ordinary trip a `length` stop, a re-ask, and the worst case billed.
  */
 export const DEFAULT_RUN_BUDGET: RunBudget = {
   maxSpecialists: 5,
-  maxOutputTokens: 2_048,
+  maxOutputTokens: 8_000,
   maxAttemptsPerSpecialist: 2,
 };
 

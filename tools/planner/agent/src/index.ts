@@ -1,6 +1,7 @@
 export * from "./provider.ts";
 export * from "./providers/scripted.ts";
 export * from "./providers/scripted-fan-out.ts";
+export * from "./providers/anthropic.ts";
 export * from "./roster.ts";
 export * from "./budget.ts";
 export * from "./specialists.ts";

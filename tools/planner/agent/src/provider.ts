@@ -16,7 +16,18 @@
  * Streaming and tool use both matter for a planner and both will land here, but
  * their shapes depend on the caller above them, and an interface guessed at now
  * would be one more thing to unpick. Add them when the caller exists.
+ *
+ * **A reply schema is the first of those to land, because its caller did**
+ * (pl-39). `askSpecialist` already validated every reply against
+ * `specialistReplySchema`; `replySchema` sends the same schema ahead of the
+ * reply as well, to a backend that can constrain its output to it. It is the
+ * zod original rather than a JSON Schema object, because `agent` already speaks
+ * zod and a vendor's helper needs the original to derive its own wire format.
+ * A backend that cannot enforce a schema ignores the field — the scripted one
+ * does — and nothing about the caller's own validation changes either way.
  */
+
+import type { z } from "zod";
 
 export interface ModelMessage {
   role: "user" | "assistant";
@@ -33,6 +44,15 @@ export interface ModelRequest {
    * unbounded reply is an unbounded bill on a metered provider.
    */
   maxOutputTokens: number;
+  /**
+   * The shape the reply must take, for a backend that can hold it to one.
+   *
+   * **A promise about the shape, never the check of it.** A vendor's structured
+   * output cannot carry every constraint a zod schema can — a `.refine` does not
+   * survive JSON Schema at all — so the caller validates the reply against this
+   * same schema afterwards, and that validation is the one that counts.
+   */
+  replySchema?: z.ZodType | undefined;
   signal?: AbortSignal | undefined;
 }
 
@@ -51,6 +71,16 @@ export interface ModelReply {
    */
   stopReason: "end" | "length" | "refusal";
   usage: ModelUsage;
+  /**
+   * The model that actually produced this reply, where the backend says.
+   *
+   * Not always `ModelProvider.model`: a backend with server-side refusal
+   * fallbacks can answer one request on another model, and "which model
+   * answered" is the first question about a bad candidate. `model` is what was
+   * configured; this is what served. Absent where the backend does not report
+   * it — the scripted provider has nothing to report.
+   */
+  servedModel?: string | undefined;
 }
 
 export interface ModelProvider {
