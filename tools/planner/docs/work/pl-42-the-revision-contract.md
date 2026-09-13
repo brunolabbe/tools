@@ -89,6 +89,26 @@ Each was chosen from options:
   `PlanView` carries the diffs, derived on read, the way it already carries
   `unchecked`.
 
+### Step 7's ceiling, decided by the owner, 2026-09-13
+
+Raised by the build, after step 7's measurement (in the Log). Enforcing a
+revision ceiling means refusing a well-formed revise request, and no code in the
+planner's taxonomy or in `@webtools/core` means that. So step 7's own stop
+applied. The orchestrator put it to the owner with these options, in this order:
+
+- **A:** a new planner code, `REVISION_LIMIT_REACHED`, not retryable, mapped to
+  409 by pl-44, with `MAX_REVISIONS_PER_PLAN` in `plan.ts`.
+- **B:** a generic limit code in `@webtools/core`.
+- **C:** a window of revisions on `PlanView`, with no refusal.
+- **D:** no ceiling for now.
+
+**The owner chose A**, and, asked separately between 50, 20 and 100, **chose
+50**. The reason is the measurement: at 50 revisions every checked-in fixture's
+`PlanView` is under 100 KiB with worst-case diffs, while a plan at the schema's
+maximum reaches ~14 MiB. The contract carries the code and the constant. The
+check, its 409 and the re-check inside `persist` are pl-44's (its checks 6 and
+`persist`'s transaction).
+
 ## Build
 
 1. **`RevisionOperation` in `plan.ts`**, a discriminated union on `kind`, and
@@ -356,11 +376,13 @@ Facts checked against `origin/main` at filing:
 - `web` depends on `contract` alone, which is why the diff is served rather than
   imported.
 
-**2026-09-13 — built; step 7 held on an open decision, so this stays `ready`.**
-Branched from `origin/main` at `8849c14`, dispatched as Opus. Steps 1 to 6 are
-on the branch. Step 7's measurement is below. The ceiling itself is not: the
-owner's instruction for this build was that if enforcing it needs a new error
-code, no code, no constant and no refusal path are committed, and it does.
+**2026-09-13 — built; `ready` until the gate runs.** Branched from
+`origin/main` at `8849c14`, dispatched as Opus. Steps 1 to 6 landed in the first
+commit. Step 7 was held there: enforcing a ceiling needs a new error code, and
+the owner's instruction for this build was to commit no code, constant or
+refusal path in that case. The owner then chose option A with 50 (_Step 7's
+ceiling, decided by the owner_, under _Why_), and step 7 landed in a second
+commit on the same branch. See _Step 7_ below.
 
 What landed:
 
@@ -454,7 +476,7 @@ ascending; days non-empty; specialists unique; note bound; `restore >= 1`;
 backup afterwards. The `toPosition` bound, changed after that run, was run red
 on its own: restoring `MAX_ITEMS_PER_DAY - 1` fails the move test, 1 of 29.
 
-### Step 7 — the measurement, and why the ceiling is held
+### Step 7 — the measurement, the stop, and what landed
 
 Measured with a scratch script that is not checked in. For each checked-in trip
 fixture it runs `compose` with `NOTHING_MEASURED`, then appends _n_ copies of
@@ -515,7 +537,24 @@ taxonomy means that:
 - `INVALID_ANSWER` is about a malformed answer.
 - `RATE_LIMITED` is about time, and `PLAN_BUSY` clears on its own.
 
-So there is no `MAX_REVISIONS_PER_PLAN` on the branch. Where the constant
-lives, and whether it is a write ceiling at all, turns on the answer, and the
-decision went back to the orchestrator as options. pl-44's check 6 waits on it,
-as its own brief already provides.
+So the first commit had no `MAX_REVISIONS_PER_PLAN`, and the decision went back
+to the orchestrator as options. The owner chose A with 50.
+
+**Step 7, built** in the second commit:
+
+- `REVISION_LIMIT_REACHED` is in `PLANNER_ERROR_CODES`. It is not retryable,
+  because nothing makes a plan shorter. Its copy sends the user to a new plan
+  from the same trip, which `POST /api/plans` from the same intake already does.
+  Its comment argues each near-miss code, as above.
+- `MAX_REVISIONS_PER_PLAN = 50` is in `plan.ts`, beside the other bounds, with a
+  comment citing this measurement. It counts the first draft, so the request
+  refused is the one that would append revision 51. A restore appends too, so it
+  is refused the same way.
+- Tested in `contract/test/errors.test.ts`, in the same form as `REVISION_STALE`
+  and `PLAN_BUSY`. Run red by adding the code to `RETRYABLE_CODES`, which fails
+  that test.
+
+**Deliberately not built:** a `.max(MAX_REVISIONS_PER_PLAN)` on
+`planDetailSchema.revisions`. Step 7 specifies no schema check, and nothing
+reads a stored plan through that schema (_Traps_). The refusal is pl-44's check
+6 with its 409, plus the re-check inside `persist`.

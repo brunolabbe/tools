@@ -127,6 +127,22 @@ export const PLANNER_ERROR_CODES = [
    */
   "PLAN_BUSY",
   /**
+   * The plan already holds `MAX_REVISIONS_PER_PLAN` revisions, and a revise
+   * request would append another (pl-42).
+   *
+   * No existing code fits, and each near miss has the tell the root `CLAUDE.md`
+   * names: its copy would have to be re-worded where this is raised. Core's
+   * `SIZE_LIMIT_EXCEEDED` is an artifact's output cap; `PLAN_INFEASIBLE` is
+   * about the trip's constraints; `INVALID_ANSWER` is about a malformed answer,
+   * and this request is well formed; `RATE_LIMITED` is about time, and
+   * `PLAN_BUSY` clears on its own. About this tool's document, so not core's.
+   *
+   * **Not retryable**: nothing makes a plan shorter, because revisions append
+   * and are never deleted. Restoring an older version appends as well, so it is
+   * refused the same way. The next step is a new plan from the same trip.
+   */
+  "REVISION_LIMIT_REACHED",
+  /**
    * The plan's own constraints cannot all be satisfied: a day that cannot hold
    * its legs and its activities, a deal-breaker that nothing survives, a
    * budget no candidate set fits inside.
@@ -209,6 +225,8 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   ITEM_NOT_FOUND: "That item is no longer part of this plan — reload it to see the current draft.",
   REVISION_STALE: "This plan changed since you opened it — reload to see the current version.",
   PLAN_BUSY: "A change to this plan is already underway — wait for it to finish, then try again.",
+  REVISION_LIMIT_REACHED:
+    "This plan has reached its version limit — start a new plan from the same trip.",
   PLAN_INFEASIBLE: "This trip cannot be planned as described — something has to give.",
   BRIEF_INCOMPLETE: "There are still a few essentials to answer before this trip can be planned.",
   INVALID_ANSWER: "That answer does not fit the question.",

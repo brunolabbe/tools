@@ -61,6 +61,23 @@ export const MAX_REVISION_REASON_CHARS = 500;
 export const MAX_REVISION_NOTE_CHARS = 500;
 
 /**
+ * How many revisions one plan may hold, first draft included (pl-42 step 7).
+ *
+ * A ceiling at all because revisions append forever, and `PlanView` returns
+ * every one of them with a diff each. **Set from a measurement**, recorded in
+ * pl-42's Log with its command: at 50 revisions the `PlanView` for every
+ * checked-in trip fixture is under 100 KiB (96.4 KiB for the largest,
+ * `multi-city`, with worst-case diffs), while a revision at the schema's own
+ * maximum of 60 days × 12 items is ~0.15 MiB, and 50 of those is ~14 MiB before
+ * candidates or the brief. The owner chose 50 over 20 and 100.
+ *
+ * A revise request that would append revision 51 is refused with
+ * `REVISION_LIMIT_REACHED`. `api` enforces it (pl-44); nothing here does,
+ * because the contract has no write path to refuse on.
+ */
+export const MAX_REVISIONS_PER_PLAN = 50;
+
+/**
  * How many `reading` sources one revision may carry.
  *
  * One lookup per corridor endpoint is the shape the discovery pass has, so two
