@@ -5,16 +5,21 @@
  *
  * Opens the database **read-only**, in its own connection, so this can run
  * beside the live server without contending with its writer. Run inside the
- * built image:
+ * built image, with the full path from `/app` — the container's `WORKDIR`,
+ * which `docker compose exec` inherits since neither compose file sets its
+ * own `working_dir` — not `dist/report.js` alone, which resolves to a path
+ * that does not exist (`/app/dist/report.js`) and fails with `MODULE_NOT_FOUND`:
  *
- *     docker compose exec downloader node dist/report.js --days 7
+ *     docker compose exec downloader node tools/downloader/api/dist/report.js --days 7
  *
  * `buildReport` and `formatReport` are exported separately from `main` so a
  * test can exercise them against a database it seeded, without shelling out or
  * opening the real `DATABASE_PATH`.
  */
 
+import { realpathSync } from "node:fs";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import Database from "better-sqlite3";
 import { loadApiConfig } from "./config.ts";
 
@@ -122,11 +127,19 @@ function jobErrorCode(raw: string | null): string {
   }
 }
 
+/**
+ * The nearest-rank method: for `n` sorted values, the p-th percentile is the
+ * value at 1-indexed rank `ceil(p * n)`. Pinned explicitly because the
+ * alternative (an upper-rank index, `floor(p * n)`) reads the same for large
+ * `n` and disagrees at the sizes this report actually sees — p50 of two
+ * values is the *lower* one here, not the higher. `report.test.ts` asserts
+ * this on a seeded database rather than leaving it implicit.
+ */
 function percentile(values: readonly number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = values.toSorted((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.floor(p * sorted.length));
-  return sorted[index] as number;
+  const rank = Math.max(1, Math.ceil(p * sorted.length));
+  return sorted[rank - 1] as number;
 }
 
 /**
@@ -327,10 +340,34 @@ async function main(): Promise<void> {
   }
 }
 
+/**
+ * Whether this module was run directly, not imported.
+ *
+ * `import.meta.url` is already resolved through any symlink Node followed to
+ * load the module (this file is exactly such a symlink target once it is a
+ * workspace package); `process.argv[1]` is not, and comparing the raw string
+ * against a hand-built `file://${...}` silently fails whenever the two
+ * disagree — a symlink, or a path needing percent-encoding — and `main()`
+ * simply never runs, with no error at all. `realpathSync` plus `pathToFileURL`
+ * resolves both the same way before comparing.
+ */
+function isMainModule(): boolean {
+  const invoked = process.argv[1];
+  if (invoked === undefined) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(invoked)).href;
+  } catch {
+    // `realpathSync` throws for a target that does not exist on disk, which
+    // means this was not run as `node <that path>` — fail closed to "not the
+    // entry point" rather than let a symlink error look like a CLI crash.
+    return false;
+  }
+}
+
 // Only when invoked directly — `node dist/report.js` — so a test can import
 // `buildReport`/`formatReport` without executing the CLI or opening
 // `DATABASE_PATH`, which will not exist under a test runner.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule()) {
   main().catch((error: unknown) => {
     process.stderr.write(`${String(error)}\n`);
     process.exitCode = 1;

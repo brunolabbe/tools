@@ -255,6 +255,46 @@ describe("the attempts out-parameter (dl-57)", () => {
     const result = await new ResolverRegistry([resolver]).resolve(URL_UNDER_TEST, options());
     expect(result.resolver).toBe("browser");
   });
+
+  test("the tier the deadline cuts off is still named, with the code the timeout raises", async () => {
+    // Without pushing before the abort throws, this tier — the expensive one
+    // that ran out the clock, which is exactly the one a timed-out probe most
+    // needs named — is silently missing from `attempts`.
+    const miss = new StubResolver({ name: "direct", priority: 10, behaviour: "no-media" });
+    const hang = new StubResolver({ name: "browser", priority: 50, behaviour: "never-settles" });
+    const attempts: ResolverAttempt[] = [];
+
+    await expect(
+      new ResolverRegistry([miss, hang]).resolve(
+        URL_UNDER_TEST,
+        options({ timeoutMs: 60 }),
+        attempts,
+      ),
+    ).rejects.toMatchObject({ code: "TIMEOUT" });
+
+    expect(attempts).toEqual([
+      { resolver: "direct", code: "NO_MEDIA_FOUND", durationMs: expect.any(Number) },
+      { resolver: "browser", code: "TIMEOUT", durationMs: expect.any(Number) },
+    ]);
+  });
+
+  test("the tier a caller cancel cuts off is named with CANCELED", async () => {
+    const hang = new StubResolver({ name: "browser", priority: 50, behaviour: "never-settles" });
+    const controller = new AbortController();
+    const attempts: ResolverAttempt[] = [];
+
+    const pending = new ResolverRegistry([hang]).resolve(
+      URL_UNDER_TEST,
+      options({ signal: controller.signal }),
+      attempts,
+    );
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ code: "CANCELED" });
+    expect(attempts).toEqual([
+      { resolver: "browser", code: "CANCELED", durationMs: expect.any(Number) },
+    ]);
+  });
 });
 
 describe("the timeout is a budget for the whole chain", () => {

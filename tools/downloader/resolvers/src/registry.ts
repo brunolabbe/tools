@@ -113,15 +113,20 @@ export class ResolverRegistry {
         attempts.push({ resolver: resolver.name, code: null, durationMs: Date.now() - startedAt });
         return result;
       } catch (cause) {
+        const durationMs = Date.now() - startedAt;
         // An abort surfaces from inside a resolver in whatever shape its
-        // transport chose, so the signals are authoritative, not the error.
-        abortIfNeeded(options.signal, deadline);
+        // transport chose, so the signals are authoritative, not the error —
+        // and the attempt is pushed with the code this is about to throw,
+        // before it throws. Otherwise the tier the deadline or a caller's
+        // cancel cut off is silently missing from `attempts`, which is
+        // exactly the expensive one a timed-out probe most needs named (dl-57).
+        const abortError = abortReason(options.signal, deadline);
+        if (abortError !== null) {
+          attempts.push({ resolver: resolver.name, code: abortError.code, durationMs });
+          throw abortError;
+        }
         const error = AppError.from(cause);
-        attempts.push({
-          resolver: resolver.name,
-          code: error.code,
-          durationMs: Date.now() - startedAt,
-        });
+        attempts.push({ resolver: resolver.name, code: error.code, durationMs });
         if (error.code !== "NO_MEDIA_FOUND") throw error;
       }
     }
@@ -154,15 +159,26 @@ export class ResolverRegistry {
   }
 }
 
-function abortIfNeeded(caller: AbortSignal, deadline: AbortSignal): void {
+/**
+ * What `abortIfNeeded` would throw, without throwing it — so a caller can
+ * record the code an abort is about to raise before it actually unwinds the
+ * stack. Null when neither signal has fired.
+ */
+function abortReason(caller: AbortSignal, deadline: AbortSignal): AppError | null {
   if (deadline.aborted) {
-    throw new AppError("TIMEOUT", "Analysing that page took too long.");
+    return new AppError("TIMEOUT", "Analysing that page took too long.");
   }
   if (caller.aborted) {
-    if (caller.reason instanceof AppError) throw caller.reason;
+    if (caller.reason instanceof AppError) return caller.reason;
     // `CANCELED`, not `JOB_CANCELED`: resolvers know nothing about jobs, and a
     // registry embedded in a CLI or a test has no job to have canceled. The
     // orchestrator translates this into job vocabulary at its own layer.
-    throw new AppError("CANCELED");
+    return new AppError("CANCELED");
   }
+  return null;
+}
+
+function abortIfNeeded(caller: AbortSignal, deadline: AbortSignal): void {
+  const reason = abortReason(caller, deadline);
+  if (reason !== null) throw reason;
 }

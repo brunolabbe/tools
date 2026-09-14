@@ -6,7 +6,22 @@
 
 import { AppError, ROUTES } from "@downloader/contract";
 import { describe, expect, test } from "vitest";
+import { runRetentionSweep } from "../src/server.ts";
 import { createHarness, probeResult, SOURCE_URL, StubResolver } from "./helpers.ts";
+
+/** One `probe_outcomes` row, everything but `host` and `createdAt` fixed. */
+function outcome(host: string) {
+  return {
+    host,
+    outcome: "ok" as const,
+    resolver: "direct",
+    attempts: [],
+    durationMs: 1,
+    cached: false,
+    variants: 1,
+    drm: false,
+  };
+}
 
 describe("probe_outcomes", () => {
   test("a success records one row naming the winning resolver", async () => {
@@ -172,7 +187,7 @@ describe("probe_outcomes", () => {
     }
   });
 
-  test("a signed URL's path and query string never reach a probe_outcomes row", async () => {
+  test("a signed URL's path and query string, or the client address, never reach a probe_outcomes row", async () => {
     const resolver = new StubResolver(probeResult());
     const harness = await createHarness({ resolver });
     const signedUrl = `${SOURCE_URL}?sig=super-secret-credential`;
@@ -189,6 +204,9 @@ describe("probe_outcomes", () => {
       expect(serialized).not.toContain("sig=");
       expect(serialized).not.toContain("super-secret-credential");
       expect(serialized).not.toContain("/watch/42");
+      // `inject()`'s default remote address — `host` is computed from the
+      // source URL, never the caller's own address.
+      expect(serialized).not.toContain("127.0.0.1");
     } finally {
       await harness.dispose();
     }
@@ -238,6 +256,52 @@ describe("a job's stored host", () => {
       expect(host).toBe(new URL(SOURCE_URL).hostname);
       expect(host).not.toContain("sig=");
       expect(host).not.toContain("super-secret-credential");
+      // The clause this title actually claims: `inject()`'s default remote
+      // address is 127.0.0.1, and `host` is computed from the source URL, not
+      // the request — so it can never equal the caller's own address.
+      expect(host).not.toBe("127.0.0.1");
+    } finally {
+      await harness.dispose();
+    }
+  });
+});
+
+describe("probe_outcomes retention", () => {
+  test("a controlled clock prunes rows older than OUTCOME_RETENTION_DAYS and keeps newer ones", async () => {
+    let clock = new Date("2026-09-07T00:00:00.000Z");
+    const harness = await createHarness({
+      now: () => clock,
+      config: { outcomeRetentionDays: 90 },
+    });
+    try {
+      const store = harness.app.context.store;
+      const tooOld = new Date(clock.getTime() - 91 * 24 * 3_600_000).toISOString();
+      const stillGood = new Date(clock.getTime() - 89 * 24 * 3_600_000).toISOString();
+      store.recordProbeOutcome(outcome("old.example"), tooOld);
+      store.recordProbeOutcome(outcome("recent.example"), stillGood);
+
+      await runRetentionSweep(harness.app.context);
+
+      expect(store.probeOutcomes().map((row) => row.host)).toEqual(["recent.example"]);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("0 disables pruning entirely, like the rate limits' convention for off", async () => {
+    let clock = new Date("2026-09-07T00:00:00.000Z");
+    const harness = await createHarness({
+      now: () => clock,
+      config: { outcomeRetentionDays: 0 },
+    });
+    try {
+      const store = harness.app.context.store;
+      const veryOld = new Date(clock.getTime() - 400 * 24 * 3_600_000).toISOString();
+      store.recordProbeOutcome(outcome("ancient.example"), veryOld);
+
+      await runRetentionSweep(harness.app.context);
+
+      expect(store.probeOutcomes()).toHaveLength(1);
     } finally {
       await harness.dispose();
     }
