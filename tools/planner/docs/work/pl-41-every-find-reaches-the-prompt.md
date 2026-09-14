@@ -362,3 +362,16 @@ tools/planner/api/test/discovery-prompt-bound.test.ts` — 32/32. Every gate
   this round; the orchestrator's own check at `7e72ce5` found it moves
   citations in three other tickets' `## Review` records and said the repair
   (pinning to `95c6403`) happens when ship authority is given, not now.
+
+**2026-09-14 — transcription note for the `## Review` section above.** I
+transcribed both subsections (gate 1 and gate 2) verbatim from the
+ticket-reviewer's re-issued text at `9e4e522`, and changed nothing in them
+beyond the automatic `oxfmt` table-padding that ran on save (the Done-when
+table's column widths; no wording). The disclosure originally lived only in
+commit `5ab1633`'s message ("transcribed verbatim from the reviewer's
+re-issued section ... no changes on transcription beyond oxfmt's table
+padding"), which this repo squash-merges away — so it would not have
+survived onto `main` for a later reader checking the section against what
+the reviewer actually sent. Moved here per the gate's own catch, since
+`review-ticket` step 8 asks for the disclosure to live where it can be
+checked against the section later, and a branch commit is not that place.
