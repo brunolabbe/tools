@@ -622,3 +622,141 @@ The options as they were posed are kept below:
    - _(b)_ Refused with `PLAN_INFEASIBLE`.
    - _(c)_ Allowed and named, which needs a new `UncheckedConstraintKind` in the
      contract and a ticket of its own.
+
+**2026-09-14 — built; `ready` until the gate runs.** Branched from `origin/main` at
+`95c6403` (on the remote), dispatched as Opus. Built against pl-42 as merged.
+
+**Two commits, in the order step 0 requires.** `94e881b` holds the baseline
+alone: `test/fixtures/first-draft-baseline.json`, the case builder
+`test/first-draft-cases.ts` and the comparison `test/first-draft-baseline.test.ts`,
+with no `src` change. The refactor is its direct child on this branch. Both
+shas stop being reachable once the branch is squash-merged and deleted.
+
+- The JSON was written by a scratch script (not checked in) importing the case
+  builder, run with `node --import tsx` on the unmodified tree. Before running
+  it, `git diff --stat HEAD -- tools/planner/itinerary/src tools/planner/contract/src`
+  was empty. `npx vitest run tools/planner/itinerary/test/first-draft-baseline.test.ts`
+  then passed at 14 of 14: 13 cases plus a check that the case names match.
+- **The first mutation I chose did not go red, and that is recorded rather than
+  skipped.** `ACTIVITY_MINUTES_PER_DAY.moderate` 300 → 301 stayed at 14 of 14.
+  The transition case needs 360 minutes for its third activity, and no fixture
+  comes near the limit. At 360 the same command failed 3 of 14 (both
+  `multi-city` cases and the transition case). `limits.ts` was `cmp`-identical
+  to its backup afterwards, and the suite was 14 of 14 again.
+- After the refactor, the same command passes at 14 of 14. So `compose`, now
+  running through `packWithCritic`, `rekeyDays`, the critic's transition charge
+  and `fixed`, and `pack`'s `frozen`, still produces the first drafts the
+  unmodified package did.
+
+**What landed.**
+
+- `ids.ts`: `rekeyDays`, the one id scheme. It deep-copies each
+  `travelFromPrevious`.
+- `critic.ts`: `CritiqueInput.fixed`; transitions charged through
+  `transitionMinutes` exactly as `charge` does; `packed` narrowed to
+  `Pick<PackResult, "days">`.
+- `pack.ts`: `PackInput.frozen`.
+- `compose.ts`: `ComposeInput.previous` is gone, and the shared internals are
+  exported to the package but not from its index.
+- `replan.ts` (`replan`, `replanPool`), `edit.ts` (`applyEdit`,
+  `editTransitions`), `restore.ts` (`restoreRevision`) and `diff.ts`
+  (`diffRevisions`, `revisionDiffs`).
+- `preconditions.ts`: the `INTERNAL` checks, each naming itself in
+  `details.precondition`.
+- The `moved` rule on `RevisionDiff`'s doc comment, which is the only `contract`
+  change.
+- Tests: `replan`, `edit`, `restore`, `diff` and `critic` suites, a frozen-days
+  case in `pack.test.ts`, and the three `compose.test.ts` re-planning tests
+  (including pl-23's) moved to `replan` with every day named. Their assertions
+  are unchanged.
+
+**What the brief had wrong, or did not say.**
+
+- **Without `fixed`, the frozen hotel is not deleted — the re-plan is refused.**
+  Frozen days are emitted from `previous`, never from the pack, so no pack can
+  remove anything from them. The critic keeps naming an id the packer has no
+  way to exclude, the rounds stall, and `over-budget` survives as
+  `PLAN_INFEASIBLE`. That is still a broken promise, and the test still catches
+  it (mutation M7 below). It is just not the failure _Traps_ describes.
+- **`fixed` on a per-day drop candidate cannot be observed through `replan` or
+  `applyEdit`.** A re-plan discards per-day findings on frozen days, and an edit
+  refuses rather than dropping. So the brief's `replan` tests cannot prove
+  "the critic never names a frozen item". `critic.test.ts` asserts it on
+  `critique` directly, together with the transition charge.
+- **An edit has no `PackResult`**, which is why `CritiqueInput.packed` is
+  narrowed. The change is additive: every existing caller passes a
+  `PackResult`.
+- **`EditResult.unchecked` appends `previous.coverage`**, and `applyEdit` throws
+  `BRIEF_INCOMPLETE` for a brief with no dates. Both mirror
+  `uncheckedForRevision`; the brief specified neither.
+- **Which day counts as "in season" for an exclusion reason on a re-plan.** A
+  pool candidate is now `no-day-in-season` when no _named_ day is in season for
+  it, even if a frozen day is. That also chooses `gapsFor`'s wording. It is
+  reported to the orchestrator as a question, not settled here.
+- **pl-23's test composes a four-day brief over a one-day `previous`.** Through
+  `replan` the span is `previous`'s, so the test now packs one day where
+  `compose` packed four. Its assertions do not depend on the span, and they
+  pass unchanged.
+- **Row 9's entries are listed unordered in the table.** The test asserts them
+  in the sorted order the brief defines: `moved` C at (0,0), then `removed` B
+  at (0,1).
+- **One more precondition than the brief listed**: `applyEdit` and
+  `editTransitions` also refuse a `previous` that places one candidate twice,
+  because an operation that names a candidate means nothing if the name
+  matches two items.
+
+**Recorded as the brief asks.** A move onto a day outside the item's season
+window ships silently, as a pinned out-of-season item already does. An edit
+whose touched day already violates a limit edited since is refused, even
+though the edit did not cause it. That is rare and honest, and it is not
+special-cased.
+
+**Fold-in: nothing.** `readPlanView`'s `diffs: []` becoming `revisionDiffs`
+is pl-44's, and `api/src/runs/orchestrator.ts` is pl-49's this batch.
+
+**Environment, not repo:** this worktree had no `@anthropic-ai/sdk`, although
+the lock declares it (since pl-39). `npm run typecheck` failed with 8 errors,
+all in `agent/src/providers/anthropic.ts` and its test. The six packages it
+needs were extracted from the npm cache into this worktree's `node_modules`
+only, at the lock's versions. `npm run build` and `npm run check` then exited 0.
+
+### Verification
+
+**Unmutated.** `npx vitest run tools/planner/itinerary` passed at 13 files and
+229 tests.
+
+**Nineteen mutations**, each applied alone to `src` by a scratch script that
+runs that same command, restores the file and compares it byte for byte. All 19
+restores were identical. Each mutation failed the tests written for it:
+
+| Mutation                                                       | Failed   |
+| -------------------------------------------------------------- | -------- |
+| M1 critic sums durations without transitions                   | 4 of 229 |
+| M2 `over-budget` drop ignores `fixed`                          | 2        |
+| M3 `heaviestOn` ignores `fixed`                                | 1        |
+| M4 `replanPool` keeps frozen candidates                        | 7        |
+| M5 `pack` offers frozen days                                   | 5        |
+| M6 per-day findings on frozen days kept                        | 2        |
+| M7 `packWithCritic` passes no `fixed`                          | 1        |
+| M8, M9, M10 tie-breaks 3.1, 3.2, 3.3                           | 1, 1, 3  |
+| M11 diff accepts a non-child                                   | 1        |
+| M12 `revisionDiffs` keeps input order                          | 1        |
+| M13 `rekeyDays` shares stored travel                           | 1        |
+| M14 restore keeps the target's ids                             | 1        |
+| M15 edit refuses on the destination only                       | 3        |
+| M16 edit re-derives every transition on a touched day          | 3        |
+| M17, M18 gap rules (contradicted kept; not one per specialist) | 1, 1     |
+| M19 pins honoured on frozen days                               | 1        |
+
+- **M1 is step 2's proof.** Under a critic that does not count transitions, the
+  adjacent-pins re-plan ships instead of being refused. That is the brief's 360
+  of 300.
+- **M19 stayed green on its first run**, at 229 of 229. A pin on a frozen day
+  leaves no trace in days or exclusions, so the only thing that can show it is
+  `durationUnknown`, and the test's pin had a stated duration. The test now uses
+  a pin with no stated duration and asserts `durationUnknown` stays empty. Re-run,
+  M19 failed 1 of 229 and the unmutated run was 229 of 229.
+
+`npm run build` exited 0, and `npm run check` exited 0 with no `error TS`.
+`npm test -- --project planner` passed at 61 files and 1,014 tests, run once
+at the end.
