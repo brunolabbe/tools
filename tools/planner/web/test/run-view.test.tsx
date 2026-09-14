@@ -279,17 +279,21 @@ describe("attaching to a run with only its id", () => {
     fetched.mockResolvedValue(planView({ revisions: [revision([day(0, [])])] }));
     showAttaching();
 
-    // The exact probe from the gate: a snapshot naming a *draft* run, then done.
+    // `kind: "replan"`, deliberately **not** `"draft"` — the fallback
+    // `progress.kind ?? "draft"` reads as correct for a draft snapshot even
+    // if the reducer never copied `kind` at all, which is exactly the gap
+    // gate 2 found here. Only a kind the fallback disagrees with can prove
+    // the snapshot's own value was used.
     push({
       type: "snapshot",
       runId: "run-1",
-      run: run({ kind: "draft", status: "done" }),
+      run: run({ kind: "replan", status: "done" }),
       at: AT,
     });
     push({ type: "done", runId: "run-1", planId: "plan-1", revisionId: "rev-1", at: AT });
 
-    expect(await screen.findByText(/A first draft is ready/)).toBeTruthy();
-    expect(screen.queryByText(/This version is ready/)).toBeNull();
+    expect(await screen.findByText(/This version is ready/)).toBeTruthy();
+    expect(screen.queryByText(/A first draft is ready/)).toBeNull();
   });
 
   test("a snapshot replaces the attaching screen with the run's real status", () => {

@@ -940,6 +940,43 @@ describe("versions", () => {
     // when they asked for the edit — the restore case's own rule, extended.
     expect(await screen.findByText("Version 2 of 2 · Removed something.")).toBeDefined();
   });
+
+  /**
+   * The branch the test above cannot exercise: it starts and ends on the
+   * only revision, so `shownRevisionNumber` was already `null` (the latest)
+   * before the edit and stays that way regardless of whether anything reset
+   * it. Only a **restore from an older page** moves `shownRevisionNumber` to
+   * a concrete, non-latest number first, which is the one state the reset
+   * actually has to clear.
+   */
+  test("restoring from an older page moves the reader to the new latest, not back to the page they restored from", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const first = revision([day(0, [item({ candidateId: activity.id })])]);
+    const second = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      revision: 2,
+      reason: "Moved the hike to Thursday.",
+    });
+    const third = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      revision: 3,
+      reason: "Restored version 1.",
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [first, second] }));
+    edited.mockResolvedValue(
+      planView({ candidates: [activity], revisions: [first, second, third] }),
+    );
+
+    const user = userEvent.setup();
+    show();
+
+    await user.selectOptions(await screen.findByLabelText("Version"), "1");
+    expect(await screen.findByText("Version 1 of 2 · The first draft.")).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: "Restore this version" }));
+
+    // The new latest, not "Version 1 of 3" — restoring does not leave the
+    // reader on the old page they just asked to bring forward.
+    expect(await screen.findByText("Version 3 of 3 · Restored version 1.")).toBeDefined();
+  });
 });
 
 describe("the diff", () => {
@@ -1228,6 +1265,46 @@ describe("re-planning", () => {
       "plan-1",
       expect.objectContaining({ specialists: [], note: null }),
     );
+  });
+
+  /**
+   * The fix gate 1 named: a rejected `startReplan` used to reach the form's
+   * own `setSelectedDays([])` etc. regardless, wiping the day, specialist and
+   * note a reader had just chosen. `PLAN_BUSY` is retryable by design —
+   * losing the input is what makes the retry cost typing it all again.
+   */
+  test("a re-plan that fails keeps the form's own choices on screen, not just the banner", async () => {
+    const first = candidate({ title: "A viewpoint" });
+    const rev = revision([day(0, [item({ candidateId: first.id })])]);
+    fetched.mockResolvedValue(planView({ candidates: [first], revisions: [rev] }));
+    replanned.mockRejectedValue(
+      new AppError(
+        "PLAN_BUSY",
+        "A change to this plan is already underway — wait for it to finish, then try again.",
+      ),
+    );
+
+    const user = userEvent.setup();
+    show();
+
+    const dayOne = await screen.findByRole<HTMLInputElement>("checkbox", { name: "Day 1" });
+    const lodging = screen.getByRole<HTMLInputElement>("checkbox", { name: "lodging" });
+    const note = screen.getByLabelText<HTMLTextAreaElement>(
+      "Anything the specialists should know?",
+    );
+    await user.click(dayOne);
+    await user.click(lodging);
+    await user.type(note, "Keep it cheap.");
+    await user.click(screen.getByRole("button", { name: "Re-plan these days" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toMatch(/already underway/i);
+    });
+    // The rejection reached the banner — proving the catch is not swallowed —
+    // and the form the reader filled in is still exactly as they left it.
+    expect(dayOne.checked).toBe(true);
+    expect(lodging.checked).toBe(true);
+    expect(note.value).toBe("Keep it cheap.");
   });
 });
 

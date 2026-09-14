@@ -480,3 +480,37 @@ Left as found, on the reviewer's own read and not disputed here: the
 `Unchecked` function's two consecutive doc comments (pre-existing), and the
 zero-specialist `<progress value=0 max=0>` HTML-validity note (pre-existing
 code this ticket's own change to the _text_ beside it did not touch).
+
+**2026-09-14 — gate round two (Opus, `52bf582`): PASS, 3 lows.** All five med
+findings from round one held on re-verification, pinned by a test that goes
+red on revert; both pushbacks (the pre-existing zero-bar line, the
+pre-existing `Unchecked` comments) were accepted. Three lows named a test
+that did not actually pin its own fix; fixed all three rather than record
+them, since each was cheap once named:
+
+- **The attach-kind test's snapshot named `"draft"`, the same value as the
+  `?? "draft"` fallback**, so deleting `kind: event.run.kind` in the reducer
+  passed anyway. Changed the snapshot to name `"replan"` instead — a value
+  the fallback disagrees with — and reproduced the deletion red before
+  restoring.
+- **The reset-after-edit test started and ended on the only revision**,
+  where `shownRevisionNumber` was already `null` before the edit, so nothing
+  needed resetting and the assertion held with or without the fix. Added a
+  second test that restores from an explicitly-selected older revision
+  (`shownRevisionNumber` a concrete non-null number beforehand) and asserts
+  the crumb shows the _new_ latest afterward. Reproduced deleting the reset
+  red before restoring.
+- **No test rejected `startReplan`, so the re-plan form's fix from round one
+  was unpinned.** Added a test: fill the form, `startReplan` rejects with
+  `PLAN_BUSY`, assert the banner shows the message _and_ the day, specialist
+  and note the reader entered are still on screen. Reproduced both of the
+  gate's named mutations (putting the reset back; swallowing the rejection
+  with `void error`) red before restoring.
+
+Re-verified after these three fixes: `npm run check` exit 0; `npm test --
+project planner` 56 files, 962 tests, none failing; `npx vitest run
+tools/planner/web` 6 files, 91 tests. Every mutation reproduced above was
+restored and `diff`-confirmed identical to the pre-mutation file before the
+next one.
+
+No `## Review` section committed yet — ship authority has not been given.
