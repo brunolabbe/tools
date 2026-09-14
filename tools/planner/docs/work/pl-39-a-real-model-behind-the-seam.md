@@ -490,3 +490,9 @@ finds reach a prompt, because on this base nothing does.
 **Could not verify here:** the image build (this container has no Docker
 daemon), so `.github/workflows/planner.yml` is that gate; and any live
 behaviour of the API, which is pl-40.
+
+**2026-09-14 — usage split by pl-49.** The Build above sums `input_tokens`,
+`cache_read_input_tokens` and `cache_creation_input_tokens` into one input
+count. [pl-49](./pl-49-what-a-run-costs.md) changed `usage` to count uncached
+input, cache reads and cache writes separately, because the three bill at
+different prices. The Build is left as it was built.

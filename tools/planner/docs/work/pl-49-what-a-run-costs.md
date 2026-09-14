@@ -209,3 +209,17 @@ tools/planner/agent/test/fan-out-usage.test.ts`, exit 1, 5 failed of 5): a
   is another ticket's closed record, outside this batch, and the dispatch
   scoped edits to this ticket's files; it was raised with the orchestrator
   instead, beside whether pl-40 should `depends_on` this ticket.
+
+- 2026-09-14 — Two owner decisions, relayed by the orchestrator, which
+  verified the premises on `origin/main` first and put both to the owner with
+  AskUserQuestion. Both went the way the builder recommended.
+  - **Should pl-40 `depends_on` pl-49?** Options: add it in pl-49's pull
+    request (recommended), or leave pl-40 as it is. **Chosen: add it.**
+    pl-40's frontmatter is now `depends_on: [pl-39, pl-49]`, and nothing else
+    in pl-40 changed. Its harness sums the fan-out's `usage`, and its Log table
+    wants cache reads as a column of their own, which only this ticket's split
+    provides.
+  - **Should pl-49's pull request correct pl-39's stale usage text?** Options:
+    a dated one-line Log entry on pl-39 without rewriting its Build
+    (recommended), or leave pl-39 alone. **Chosen: the dated Log line.** pl-39's
+    Build is unchanged.
