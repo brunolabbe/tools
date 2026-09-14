@@ -39,7 +39,13 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { groundingBudget, runFanOut, type RunBudget } from "@planner/agent";
+import {
+  emptyRunUsage,
+  groundingBudget,
+  runFanOut,
+  type RunBudget,
+  type RunUsage,
+} from "@planner/agent";
 import {
   AppError,
   appendRevision,
@@ -82,6 +88,7 @@ import {
   updateRunProgress,
   updateRunRoster,
   updateRunStatus,
+  updateRunUsage,
 } from "../db/runs.ts";
 import { evictExpiredGrounding, groundingForRun } from "../grounding/cache.ts";
 import { intakeTitle } from "../intakes/title.ts";
@@ -289,6 +296,14 @@ interface RunInput {
 async function execute(context: AppContext, input: RunInput, signal: AbortSignal): Promise<void> {
   const { runId, planId, brief } = input;
 
+  // What the run has spent so far, kept current by the fan-out as each reply
+  // lands (pl-49). Held out here rather than read off the fan-out's result
+  // because a canceled run never gets a result: the cancellation rethrows, and
+  // the replies that finished before it were billed all the same. Empty until
+  // the fan-out starts, which is true of a run canceled during discovery — it
+  // asked no model anything.
+  let usage: RunUsage = emptyRunUsage();
+
   try {
     // One budget for the whole run's grounding, discovery and measuring alike
     // (pl-29) — `MAX_GROUNDING_CALLS` is a run-level ceiling (§9), and a
@@ -334,6 +349,9 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
       signal,
       onProgress: (event) => {
         record(context, runId, event);
+      },
+      onUsage: (next) => {
+        usage = next;
       },
     });
 
@@ -407,6 +425,8 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
     // to say what its days were packed against.
     const revisionId = persist(context, planId, composed.revision, timestamp);
 
+    // Before the status moves, so a reader that sees `done` sees what it cost.
+    recordUsage(context, runId, usage);
     if (!moveTo(context, runId, "done")) return;
     context.events.done(runId, planId, revisionId);
   } catch (error: unknown) {
@@ -415,6 +435,9 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
     // be mistaken for a completed one with holes; catching it here to write a
     // revision anyway would undo exactly that.
     if (isCancellation(error, signal)) {
+      // A canceled run wrote no revision, and it still spent what its finished
+      // replies cost. That is the case pl-49 exists for as much as the others.
+      recordUsage(context, runId, usage);
       const canceled = new AppError("JOB_CANCELED");
       if (moveTo(context, runId, "canceled", canceled)) {
         context.events.canceled(runId, canceled.toPayload());
@@ -424,9 +447,32 @@ async function execute(context: AppContext, input: RunInput, signal: AbortSignal
 
     const failure = AppError.from(error);
     context.logger.error("run failed", { run: runId, plan: planId, code: failure.code });
+    recordUsage(context, runId, usage);
     if (moveTo(context, runId, "failed", failure)) {
       context.events.failed(runId, failure.toPayload());
     }
+  }
+}
+
+/**
+ * Write down what the run spent — and never let that fail the run (pl-49).
+ *
+ * The plan is the product and the count is bookkeeping about it: a
+ * `SQLITE_BUSY` or a full disk on this UPDATE must not turn a finished draft
+ * into a failed run, or a canceled one into a logged task rejection. So the
+ * write is wrapped, a miss is a `warn` naming the cause, and the run carries
+ * on to whatever state it was already reaching. The line carries the run id
+ * and the error, never the counts' context — nothing a traveller wrote.
+ */
+function recordUsage(context: AppContext, runId: string, usage: RunUsage): void {
+  try {
+    updateRunUsage(context.db, { id: runId, model: context.model.model, usage });
+  } catch (error: unknown) {
+    context.logger.warn("run usage was not recorded", {
+      run: runId,
+      code: AppError.from(error).code,
+      cause: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

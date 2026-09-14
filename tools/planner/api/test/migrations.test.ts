@@ -18,6 +18,25 @@ function userVersion(db: Database.Database): number {
   return Number(db.pragma("user_version", { simple: true }));
 }
 
+/** What migration 9 added to `plan_runs` (pl-49), in the order it added them. */
+const USAGE_COLUMNS = [
+  "model",
+  "model_calls",
+  "input_tokens",
+  "cache_read_tokens",
+  "cache_write_tokens",
+  "output_tokens",
+  "fallback_calls",
+];
+
+/**
+ * Migration 9, undone — so a test can wind a current database back past it.
+ * Plain `DROP COLUMN`s: nothing references these from a trigger or an index.
+ */
+const UNDO_MIGRATION_9 = USAGE_COLUMNS.map(
+  (column) => `ALTER TABLE plan_runs DROP COLUMN ${column};`,
+).join("\n");
+
 describe("migrations", () => {
   test("a fresh database arrives at the current schema", () => {
     const db = new Database(":memory:");
@@ -34,7 +53,7 @@ describe("migrations", () => {
       "plan_runs",
       "plans",
     ]);
-    expect(userVersion(db)).toBe(8);
+    expect(userVersion(db)).toBe(9);
     db.close();
   });
 
@@ -56,11 +75,11 @@ describe("migrations", () => {
 
     expect(tables(db)).toContain("intakes");
     expect(tables(db)).not.toContain("conversations");
-    expect(userVersion(db)).toBe(8);
+    expect(userVersion(db)).toBe(9);
     db.close();
   });
 
-  test("migrations 5 through 8 apply to a database at user_version = 4", () => {
+  test("migrations 5 through 9 apply to a database at user_version = 4", () => {
     // The case that actually happens for pl-25, pl-27 and pl-29: a deployment
     // already carrying the run tables gets the grounding cache, the measured
     // transition and the discovery coverage column added under it, with
@@ -91,6 +110,7 @@ describe("migrations", () => {
       END;
       ALTER TABLE plan_revisions DROP COLUMN coverage_json;
       ALTER TABLE plan_revisions DROP COLUMN reading_json;
+      ${UNDO_MIGRATION_9}
       PRAGMA user_version = 4;
     `);
     db.prepare(
@@ -99,12 +119,52 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(8);
+    expect(userVersion(db)).toBe(9);
     expect(tables(db)).toContain("grounding_cache");
     expect(columns(db, "plan_items")).toContain("travel_json");
     expect(columns(db, "plan_revisions")).toContain("coverage_json");
     expect(columns(db, "plan_revisions")).toContain("reading_json");
+    expect(columns(db, "plan_runs")).toEqual(expect.arrayContaining(USAGE_COLUMNS));
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
+    db.close();
+  });
+
+  test("a fresh database's runs carry a column for each token kind (pl-49)", () => {
+    const db = new Database(":memory:");
+    migrate(db);
+
+    expect(userVersion(db)).toBe(9);
+    expect(columns(db, "plan_runs")).toEqual(expect.arrayContaining(USAGE_COLUMNS));
+    db.close();
+  });
+
+  test("migration 9 applies to a database at user_version = 8, and a run already there reads as unrecorded", () => {
+    // The case that actually happens for pl-49: a deployment already carrying
+    // runs gets the usage columns added under them. A run that finished before
+    // this migration spent something nobody recorded, so every column is NULL
+    // rather than a zero that would read as free.
+    const db = new Database(":memory:");
+    migrate(db);
+    db.exec(`
+      ${UNDO_MIGRATION_9}
+      PRAGMA user_version = 8;
+    `);
+    expect(columns(db, "plan_runs")).not.toContain("input_tokens");
+    db.prepare(
+      "INSERT INTO plans (id, title, brief_json, created_at, updated_at) VALUES (?,?,?,?,?)",
+    ).run("p", "A trip", "{}", "then", "then");
+    db.prepare(
+      "INSERT INTO plan_runs (id, plan_id, status, started_at, finished_at) VALUES (?,?,?,?,?)",
+    ).run("r", "p", "done", "then", "then");
+
+    migrate(db);
+
+    expect(userVersion(db)).toBe(9);
+    expect(columns(db, "plan_runs")).toEqual(expect.arrayContaining(USAGE_COLUMNS));
+    const row = db
+      .prepare(`SELECT ${USAGE_COLUMNS.join(", ")} FROM plan_runs WHERE id = ?`)
+      .get("r") as Record<string, unknown>;
+    expect(Object.values(row)).toEqual(USAGE_COLUMNS.map(() => null));
     db.close();
   });
 
@@ -131,7 +191,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(8);
+    expect(userVersion(db)).toBe(9);
     expect(db.prepare("SELECT COUNT(*) AS n FROM intakes").get()).toEqual({ n: 1 });
     db.close();
   });
@@ -155,6 +215,7 @@ describe("migrations", () => {
     db.exec(`
       ALTER TABLE plan_revisions DROP COLUMN coverage_json;
       ALTER TABLE plan_revisions DROP COLUMN reading_json;
+      ${UNDO_MIGRATION_9}
       PRAGMA user_version = 6;
     `);
     db.prepare(
@@ -168,7 +229,7 @@ describe("migrations", () => {
 
     migrate(db);
 
-    expect(userVersion(db)).toBe(8);
+    expect(userVersion(db)).toBe(9);
     const row = db
       .prepare("SELECT coverage_json, reading_json FROM plan_revisions WHERE id = ?")
       .get("r") as { coverage_json: string; reading_json: string };

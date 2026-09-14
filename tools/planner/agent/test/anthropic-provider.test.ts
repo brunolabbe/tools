@@ -234,18 +234,78 @@ describe("what the provider reads back", () => {
 
     expect(reply.stopReason).toBe("end");
     expect(JSON.parse(reply.content)).toHaveProperty("candidates");
-    expect(reply.usage).toEqual({ inputTokens: 780, outputTokens: 210 });
+    expect(reply.usage).toEqual({
+      inputTokens: 780,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      outputTokens: 210,
+    });
     expect(reply.servedModel).toBe("claude-opus-5");
   });
 
-  test("thinking blocks are dropped, text blocks are concatenated, and cached input counts as input", async () => {
+  test("thinking blocks are dropped, text blocks are concatenated, and each input kind is reported apart", async () => {
     const { fetch } = answering(fixture("withThinking"));
     const reply = await provider(fetch).send(REQUEST);
 
     expect(reply.content).toBe('{"candidates":[]}');
     expect(reply.content).not.toContain("THINKING");
-    // 700 uncached + 60 read + 40 written. Output already includes thinking.
-    expect(reply.usage).toEqual({ inputTokens: 800, outputTokens: 1_400 });
+    // 700 uncached, 60 read and 40 written — three prices, so three numbers
+    // (pl-49). Summed, as they were before, no rate could price them. Output
+    // already includes thinking.
+    expect(reply.usage).toEqual({
+      inputTokens: 700,
+      cacheReadTokens: 60,
+      cacheWriteTokens: 40,
+      outputTokens: 1_400,
+    });
+  });
+
+  test("each kind is summed across iterations on its own, not from the top-level count", async () => {
+    // pl-49. The fallback envelope, with cache traffic on both attempts and a
+    // top-level usage that — as the API documents — covers the serving attempt
+    // only. Every kind has to come from `iterations`, or the declined attempt's
+    // cache reads fall out of the bill the way its output once would have.
+    const served = fixture("fallbackServed");
+    const body = structuredClone(served.body) as {
+      usage: Record<string, unknown> & { iterations: Record<string, unknown>[] };
+    };
+    body.usage["cache_read_input_tokens"] = 200;
+    body.usage["cache_creation_input_tokens"] = 20;
+    Object.assign(body.usage.iterations[0] ?? {}, {
+      cache_read_input_tokens: 100,
+      cache_creation_input_tokens: 10,
+    });
+    Object.assign(body.usage.iterations[1] ?? {}, {
+      cache_read_input_tokens: 200,
+      cache_creation_input_tokens: 20,
+    });
+
+    const { fetch } = answering({ ...served, body });
+    const reply = await provider(fetch).send(REQUEST);
+
+    expect(reply.usage).toEqual({
+      inputTokens: 1_560,
+      cacheReadTokens: 300,
+      cacheWriteTokens: 30,
+      outputTokens: 970,
+    });
+  });
+
+  test("a cache kind the API did not report is null, not zero", async () => {
+    const ordinary = fixture("ordinary");
+    const body = structuredClone(ordinary.body) as { usage: Record<string, unknown> };
+    body.usage["cache_read_input_tokens"] = null;
+    body.usage["cache_creation_input_tokens"] = null;
+
+    const { fetch } = answering({ ...ordinary, body });
+    const reply = await provider(fetch).send(REQUEST);
+
+    expect(reply.usage).toEqual({
+      inputTokens: 780,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
+      outputTokens: 210,
+    });
   });
 
   test("max_tokens is a length stop", async () => {
@@ -290,7 +350,12 @@ describe("what the provider reads back", () => {
     // Top-level usage says 850 out: the serving attempt only. The declined
     // attempt's 120 partial tokens are billed too, and only `iterations`
     // reports them.
-    expect(reply.usage).toEqual({ inputTokens: 1_560, outputTokens: 970 });
+    expect(reply.usage).toEqual({
+      inputTokens: 1_560,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      outputTokens: 970,
+    });
     expect(warnings).toEqual([
       {
         message: "model reply served by another model",

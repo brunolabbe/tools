@@ -323,25 +323,34 @@ function stopReasonOf(message: BetaMessage): ModelReply["stopReason"] {
 /**
  * What this call billed, summed over every attempt the API reports.
  *
- * Input is uncached, cache-read and cache-written tokens together — all three
- * are input this call sent, at different prices. Output already includes
- * thinking. Where `iterations` is present it is the per-attempt source of
- * truth, and the top-level count covers only the attempt that produced the
- * message: after a fallback that is the fallback model alone, and the declined
- * model's partial output would silently fall out of the bill.
+ * **Each input kind is reported apart** (pl-49): uncached, cache-read and
+ * cache-written tokens are all input this call sent, at three different
+ * prices, and until pl-49 they were summed into one number no rate could price.
+ * Output already includes thinking. Where `iterations` is present it is the
+ * per-attempt source of truth, and the top-level count covers only the attempt
+ * that produced the message: after a fallback that is the fallback model alone,
+ * and the declined model's partial output would silently fall out of the bill.
+ *
+ * A cache kind no attempt reported stays `null` rather than becoming zero —
+ * the SDK types both as nullable, and "the API did not say" is not "none".
  */
 function usageOf(usage: BetaUsage): ModelUsage {
   const attempts =
     usage.iterations !== null && usage.iterations.length > 0 ? usage.iterations : [usage];
 
   let inputTokens = 0;
+  let cacheReadTokens: number | null = null;
+  let cacheWriteTokens: number | null = null;
   let outputTokens = 0;
   for (const attempt of attempts) {
-    inputTokens +=
-      attempt.input_tokens +
-      (attempt.cache_read_input_tokens ?? 0) +
-      (attempt.cache_creation_input_tokens ?? 0);
+    inputTokens += attempt.input_tokens;
+    if (attempt.cache_read_input_tokens !== null) {
+      cacheReadTokens = (cacheReadTokens ?? 0) + attempt.cache_read_input_tokens;
+    }
+    if (attempt.cache_creation_input_tokens !== null) {
+      cacheWriteTokens = (cacheWriteTokens ?? 0) + attempt.cache_creation_input_tokens;
+    }
     outputTokens += attempt.output_tokens;
   }
-  return { inputTokens, outputTokens };
+  return { inputTokens, cacheReadTokens, cacheWriteTokens, outputTokens };
 }

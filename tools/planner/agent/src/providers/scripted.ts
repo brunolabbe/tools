@@ -97,5 +97,9 @@ export class ScriptedProvider implements ModelProvider {
  * not a script. The pair of markers is the whole key, and it is stable.
  */
 function reply(content: string): ModelReply {
-  return { content, stopReason: "end", usage: { inputTokens: null, outputTokens: null } };
+  return {
+    content,
+    stopReason: "end",
+    usage: { inputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, outputTokens: null },
+  };
 }
