@@ -60,6 +60,13 @@ the allowlist is the only configuration in which its data model is coherent.
 4. **The owner deletes the downloader's Access application** on the dashboard.
    This is outward-facing and hard to take back quietly, so it is the owner's
    action, not an agent's. The ticket's Log records who did it and when.
+5. **The owner turns on Cloudflare Web Analytics for `downloader.oludoi.com`**
+   (automatic setup) on the dashboard, in the same sitting as step 4. It counts
+   visitors, and [dl-57](./dl-57-a-record-of-how-probes-and-downloads-end.md)
+   counts what they do. The beacon runs only because
+   [dl-50](./dl-50-a-human-check-without-an-account.md)'s CSP allows it, which
+   is one more reason this ticket waits on dl-50. A dashboard toggle, so the
+   owner's, for the same reason as step 4.
 
 ## Done when
 
@@ -74,8 +81,14 @@ the allowlist is the only configuration in which its data model is coherent.
 - `docs/02-DEPLOYMENT.md` and `SECURITY.md` no longer say the instance is private
   or that it needs a login.
 - `npm run check` and `npm test` are green.
+- Loading `https://downloader.oludoi.com/` in a browser, the document carries
+  the `static.cloudflareinsights.com` beacon, the console shows no CSP
+  violation, and the Web Analytics dashboard counts the visit.
 
 ## Log
 
 - 2026-09-13 — Filed with dl-50 through dl-54 as the plan to open the downloader
   without a login. Nothing is built.
+- 2026-09-14 — Added step 5 and its Done when line. The owner chose Cloudflare
+  Web Analytics for visitor counts, with its CSP half in dl-50. The owner also
+  ruled out ads on the downloader. The roadmap's Phase 5 says why.

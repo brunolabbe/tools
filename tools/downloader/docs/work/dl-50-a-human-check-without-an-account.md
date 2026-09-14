@@ -43,6 +43,16 @@ Three answers, each the recommendation, so nobody was overridden:
    down too. Failing open would let a script get past the check by waiting for
    an outage.
 
+**Added 2026-09-14, also the owner's:** Cloudflare Web Analytics counts the
+downloader's visitors once it is public, and **its CSP change is made here**
+rather than in a ticket of its own. Both widen the same `script-src` and the
+same `e2e/csp.spec.ts`, and two branches editing those lines would conflict.
+Offered beside it: a ticket of its own after this one, or folding it into
+[dl-57](./dl-57-a-record-of-how-probes-and-downloads-end.md), which counts what
+visitors do but never touches the CSP. Google Analytics was offered earlier and
+not chosen. The owner ruled out ads, so nothing needed its dashboards, and it
+would have widened `connect-src` to a third party.
+
 The options as they were put, so the choice is not re-opened as an oversight:
 
 **A — Cloudflare Turnstile on probe and job creation (chosen).** The UI renders
@@ -86,8 +96,20 @@ host for as long as it cares to.
    outcome record (dl-57, dl-58).
 4. **Web:** render the widget, send the token, and handle its expiry. A token
    is single-use, and one analysis makes two calls.
-5. **CSP:** widen `script-src` and `frame-src` for `challenges.cloudflare.com`
-   only. Record the reason beside the policy, and update `e2e/csp.spec.ts`.
+5. **CSP:** widen it for two origins and nothing else. Record each reason
+   beside the policy, and update `e2e/csp.spec.ts`.
+   - `challenges.cloudflare.com` in `script-src` and `frame-src`, for the
+     widget.
+   - `https://static.cloudflareinsights.com` in `script-src`, for Cloudflare
+     Web Analytics' beacon (added 2026-09-14, see the Decision). Cloudflare's
+     automatic setup appends a `<script>` for it at the edge. On a proxied
+     hostname the beacon reports to `/cdn-cgi/rum` on the same origin, which
+     `connect-src 'self'` already allows. **Measure that rather than trust
+     it.** If a browser refuses the report, add `cloudflareinsights.com` to
+     `connect-src` and record why. Do not widen `connect-src` in advance.
+   - **The document must never carry `Cache-Control: no-transform`.**
+     Cloudflare does not rewrite such a response, so the beacon would vanish
+     with no error. Today `routes/web.ts` sends `no-cache`.
 6. **Settings:** add them to `.env.example` and the architecture's settings
    table. Leaving the check unset keeps today's behaviour, for a self-hoster
    behind Access.
@@ -104,7 +126,12 @@ host for as long as it cares to.
 - No log line and no stored record contains the token. A test asserts this
   over captured logger output.
 - The CSP differs from dl-35's only by `challenges.cloudflare.com` in
-  `script-src` and `frame-src`, and `e2e/csp.spec.ts` asserts the new policy.
+  `script-src` and `frame-src`, and `https://static.cloudflareinsights.com` in
+  `script-src`. `e2e/csp.spec.ts` asserts the new policy.
+- `e2e/csp.spec.ts` loads a script from the beacon's URL, served by a
+  Playwright route because the suite reaches no network, and proves it runs
+  with no CSP violation. A script from any other origin is still refused.
+- A test proves the document's `Cache-Control` never carries `no-transform`.
 - In the browser, one analysis makes both calls (probe, then job) with a
   fresh token each time, and neither is refused.
 - `npm run check` and `npm test` are green.
@@ -116,3 +143,7 @@ host for as long as it cares to.
 - 2026-09-13 — The owner chose A, the error code in core, and failing closed.
   Moved to `ready`, and Build and Done when written. B's measurement was not
   taken, because it was not chosen.
+- 2026-09-14 — Cloudflare Web Analytics added to step 5 and to Done when, on
+  the owner's decision recorded above. Not measured: whether automatic setup is
+  already on for the zone. If it is, today's `script-src 'self'` is already
+  refusing the beacon on every page load, with no visible error.

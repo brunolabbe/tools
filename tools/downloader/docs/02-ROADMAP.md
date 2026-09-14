@@ -182,6 +182,12 @@ Streaming video over the tunnel is outside Cloudflare's terms for any plan
 short of Enterprise. The owner accepted that risk on 2026-09-14. dl-53 records
 what it costs and the relay to move to if a notice arrives.
 
+**No ads on the downloader** (the owner, 2026-09-14). Google's publisher
+policies refuse ads on a site that helps people download streaming video, and
+the networks that do accept one would make the tool worse. Usage is measured
+instead: dl-57 counts what visitors do, and Cloudflare Web Analytics counts
+visitors, its CSP half in dl-50 and its dashboard step in dl-49.
+
 ---
 
 ## Milestones
