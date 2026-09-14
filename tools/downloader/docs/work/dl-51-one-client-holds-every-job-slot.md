@@ -102,6 +102,23 @@ rather than being locked out for a minute. Say so in the setting's comment.
 - Invariants: codes from core ✓ · contract untouched ✓ · no new workspace dependency, so no Dockerfile edit ✓ · new spec registered by glob and counted ✓ · no `console` or `any` ✓ · the client key in the new warn lines is already logged by the existing rate-limit hook ✓. Skipped as untouched by the diff: shell, URL redaction, SSRF, progress.
 - NFR: security ✓ (identity above) · performance ✓ (the per-client map deletes a key at zero) · reliability — the med above · maintainability — the lows above.
 
+### Gate 2 — `d331300`
+
+**Gate: PASS** — 2026-09-14 · `04c2fb7...d331300`, whole branch `95c6403...d331300` · ticket-reviewer (Opus), repairs re-verified by source mutation
+
+**Disclosure:** transcribed verbatim from the reviewer's report by the builder (Sonnet 5); nothing altered or dropped.
+
+- Every Gate 1 Done-when row stands at `d331300`: its pinned citations resolve, and the completion row now waits on `tools/downloader/api/test/per-client-caps.test.ts:218-220 "job to complete"` alone.
+- **med, repaired** · `tools/downloader/api/src/routes/jobs.ts:122-123 "releaseJobSlot();"` releases the slot on any throw from `store.create` or `enqueue`, proven by `tools/downloader/api/test/per-client-caps.test.ts:235-261 "released when admission itself throws"` (`:260 "expect(third.statusCode).toBe(201)"`). Deleting that release turns the spec red, `expected 2 to be +0`.
+- **low, repaired** · the two waiting-path releases are now counted, not flagged: `tools/downloader/api/test/queue-and-shutdown.test.ts:332-365 "fires exactly once for a task canceled while it was still waiting"` and `tools/downloader/api/test/queue-and-shutdown.test.ts:399-421 "fires exactly once for every waiting task dropped at shutdown"`. Duplicating the cancel-waiting release, or the `close()` waiting-drop release, turns the matching spec red, `expected 2 to be 1`.
+- **low, repaired** · `tools/downloader/api/test/per-client-caps.test.ts:31-41 "releasing twice does not free two"` now runs at a limit of 2 with two acquisitions; deleting the gate idempotence guard turns it red, `expected +0 to be 1`.
+- **low, repaired** · the completion predicate is narrowed as above, and the Log count reads 6.
+- **low** · the repair-round Log entry at `d331300` gives the suite as 1290 tests with the same counts as before the round, and the citation gate as 80 records; measured 1291 tests and 81 records. To be corrected in the commit that records this gate.
+- **open decision** · the queue-full code from Gate 1 is unchanged on this branch and sits with the orchestrator, settled by neither builder nor reviewer. Not counted toward the verdict.
+- **verified** · at `d331300`: `npm run check` exit 0; downloader project 76 files / 1291 tests, exit 0 (1290 plus the admission-throw spec); `node scripts/citations-gate.mjs --against origin/main` exit 0, 81 records, 0 failing; `npm run status -- --json` exit 0. The `repo-33` and `pl-38` edits change only the moved citations, to `@95c6403`, line and anchor unchanged. The Gate 1 section as committed matches the reviewer text apart from table padding, the disclosure note and its `@04c2fb7` pins.
+- **findings** · this round returned 1 new; 1 carried, 0 dropped.
+- NFR: reliability ✓ now that the admission-time leak is closed; security, performance and maintainability as Gate 1.
+
 ## Log
 
 - 2026-09-13 — Filed from reading `jobs/queue.ts`, `rate-limit.ts` and
@@ -259,8 +276,9 @@ rather than being locked out for a minute. Say so in the setting's comment.
     `node scripts/citations.mjs <record> --section Review --rev origin/main`
     (0 moved, exit 0 on both), and
     `node scripts/citations-gate.mjs --against origin/main` now reports
-    **0 records failing** across all 80, where it reported 2 before this
-    round.
+    **0 records failing** — 81 records once this ticket's own `## Review`
+    section (below) is committed, where it reported 2 failing, across 80
+    records, before this round.
 
   **Argued, not repaired — relayed to the orchestrator as an open decision,
   not settled here:** whether the queue-full refusal (and, by the same
@@ -275,7 +293,9 @@ rather than being locked out for a minute. Say so in the setting's comment.
   it. Not acted on here.
 
   **Re-verification after the repair round:** `npm run check` exit 0;
-  `npx vitest run --project downloader` 76 files / 1290 tests, exit 0 (same
-  file and test counts as before the round — the repairs changed assertions
-  and added one test to an existing describe block, not the file count).
+  `npx vitest run --project downloader` 76 files / 1291 tests, exit 0 — the
+  same file count as before the round, and one more test than the 1290 at
+  `04c2fb7`: the new admission-throw spec, added to an existing describe
+  block. `node scripts/citations-gate.mjs --against origin/main` reports 81
+  records once this ticket's own `## Review` section is committed, 0 failing.
   Pushed at the tip named to the reviewer.
