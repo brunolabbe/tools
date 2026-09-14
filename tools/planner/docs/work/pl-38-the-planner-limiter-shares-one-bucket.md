@@ -21,7 +21,7 @@ enforced by an `onRequest` hook. The limiter is per-client by construction:
 **`request.ip` is not the client behind a reverse proxy, and nothing here makes
 it one.** `tools/planner/api/src/server.ts:243` "const server = Fastify({" never passes
 `trustProxy`. The downloader's equivalent,
-`tools/downloader/api/src/server.ts:506` "trustProxy: config.trustProxy", does, and `ApiConfig` here has no such field to pass.
+`tools/downloader/api/src/server.ts@95c6403:506` "trustProxy: config.trustProxy", does, and `ApiConfig` here has no such field to pass.
 
 So on the deployed shape — the planner behind `cloudflared`, which is the only
 shape `compose.planner.prod.yaml` describes — every request arrives from one
@@ -122,7 +122,7 @@ record, 2 dropped before write-up (reviewer's own count, not re-derived here):
   where an operator resolving a collision will actually be standing.
   Reviewer re-verified independently against `bdfc10b`.
 - **low, repaired** · this ticket's own citation had drifted: line 498 moved
-  to `tools/downloader/api/src/server.ts:506` "trustProxy: config.trustProxy"
+  to `tools/downloader/api/src/server.ts@95c6403:506` "trustProxy: config.trustProxy"
   (pre-existing staleness on `main`, not introduced by this branch — flagged
   by the reviewer regardless because the file was open). Repointed; `node
 scripts/citations.mjs` on this record now reports 0 moved.

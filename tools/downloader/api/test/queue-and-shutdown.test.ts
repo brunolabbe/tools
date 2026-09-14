@@ -329,11 +329,11 @@ describe("InProcessJobQueue", () => {
       await queue.close();
     });
 
-    test("fires for a task canceled while it was still waiting, which never runs at all", async () => {
+    test("fires exactly once for a task canceled while it was still waiting, which never runs at all", async () => {
       const queue = new InProcessJobQueue({ concurrency: 1 });
       const ran: string[] = [];
       const blocker = new Promise<void>((resolve) => setTimeout(resolve, 20));
-      let waitingSettled = false;
+      let settles = 0;
 
       queue.enqueue({
         jobId: "first",
@@ -348,16 +348,21 @@ describe("InProcessJobQueue", () => {
           ran.push("second");
         },
         onSettle: () => {
-          waitingSettled = true;
+          settles++;
         },
       });
 
       expect(queue.cancel("second")).toBe(true);
       // Synchronous, unlike the running-task case: `cancel` calls `onSettle`
       // itself before returning, because a waiting task never reaches `run`.
-      expect(waitingSettled).toBe(true);
+      // A count, not a boolean — a duplicate call here would leave a caller's
+      // own release idempotency as the only thing masking it.
+      expect(settles).toBe(1);
       await blocker;
       await queue.close();
+      // Already removed from the queue by `cancel`, so `close` must not call
+      // it again.
+      expect(settles).toBe(1);
       expect(ran).toEqual(["first"]);
     });
 
@@ -391,10 +396,10 @@ describe("InProcessJobQueue", () => {
       await queue.close();
     });
 
-    test("fires for every waiting task dropped at shutdown", async () => {
+    test("fires exactly once for every waiting task dropped at shutdown", async () => {
       const queue = new InProcessJobQueue({ concurrency: 1 });
       const blocker = new Promise<void>((resolve) => setTimeout(resolve, 20));
-      let waitingSettled = false;
+      let settles = 0;
 
       queue.enqueue({
         jobId: "first",
@@ -406,12 +411,14 @@ describe("InProcessJobQueue", () => {
         jobId: "second",
         run: async () => undefined,
         onSettle: () => {
-          waitingSettled = true;
+          settles++;
         },
       });
 
       await queue.close();
-      expect(waitingSettled).toBe(true);
+      // A count, not a boolean — a duplicate call at the drop site would be
+      // indistinguishable from a correct one otherwise.
+      expect(settles).toBe(1);
     });
 
     test("fires for a task still running at shutdown", async () => {

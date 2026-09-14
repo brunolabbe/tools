@@ -14,7 +14,7 @@
 import { AppError, ROUTES } from "@downloader/contract";
 import type { JobResponse } from "@downloader/contract";
 import { clientKey } from "@webtools/core/rate-limit";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { PerClientConcurrencyGate } from "../src/per-client-gate.ts";
 import type { Harness } from "./helpers.ts";
 import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
@@ -29,11 +29,16 @@ describe("PerClientConcurrencyGate", () => {
   });
 
   test("releasing frees a slot, and releasing twice does not free two", () => {
-    const gate = new PerClientConcurrencyGate(1);
-    const release = gate.tryAcquire("a");
-    release?.();
-    release?.();
-    expect(gate.count("a")).toBe(0);
+    // Limit 2, two acquisitions, so a double release of only one of them has
+    // somewhere to go wrong: at limit 1 the second release lands on the same
+    // zero floor a correct single release would, and the assertion cannot
+    // tell the two apart.
+    const gate = new PerClientConcurrencyGate(2);
+    const releaseFirst = gate.tryAcquire("a");
+    gate.tryAcquire("a");
+    releaseFirst?.();
+    releaseFirst?.();
+    expect(gate.count("a")).toBe(1);
     expect(gate.tryAcquire("a")).not.toBeNull();
     expect(gate.tryAcquire("a")).toBeNull();
   });
@@ -206,10 +211,13 @@ describe("job admission (dl-51)", () => {
     try {
       const clientA = "203.0.113.7";
       const created = (await createJob(harness, clientA)).json() as JobResponse;
+      // Only "completed", not "failed" too — this test is titled "completes",
+      // so a regression into failure must time this `waitFor` out rather than
+      // pass as a terminal state that happens to also release the slot.
       await waitFor(
         () => harness.app.context.store.get(created.job.id),
-        (job) => job.status === "completed" || job.status === "failed",
-        { label: "job to finish" },
+        (job) => job.status === "completed",
+        { label: "job to complete" },
       );
       await waitFor(
         () => harness.app.context.jobClientGate.count(clientKey(clientA)),
@@ -219,6 +227,37 @@ describe("job admission (dl-51)", () => {
       // The proof that matters to a caller: a second job from the same
       // client is admitted rather than refused.
       expect((await createJob(harness, clientA, `${SOURCE_URL}/2`)).statusCode).toBe(201);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("the per-client slot is released when admission itself throws, not just when the job later settles", async () => {
+    // The slot is acquired before `store.create` and `queue.enqueue` run
+    // (routes/jobs.ts); a throw from either must not leak it, since neither
+    // one ever reaches the `onSettle` that normally releases it.
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { maxConcurrentJobs: 2, maxJobsPerClient: 2, rateLimitJobsPerMinute: 0 },
+    });
+
+    try {
+      const clientA = "203.0.113.7";
+      const failing = vi.spyOn(harness.app.context.store, "create").mockImplementation(() => {
+        throw new AppError("DISK_FULL");
+      });
+
+      const first = await createJob(harness, clientA, `${SOURCE_URL}/1`);
+      const second = await createJob(harness, clientA, `${SOURCE_URL}/2`);
+      expect(first.statusCode).toBe(507);
+      expect(second.statusCode).toBe(507);
+      // Two throws against a cap of two: a leak here would show as a 429 on
+      // the next attempt rather than as a count directly.
+      expect(harness.app.context.jobClientGate.count(clientKey(clientA))).toBe(0);
+
+      failing.mockRestore();
+      const third = await createJob(harness, clientA, `${SOURCE_URL}/3`);
+      expect(third.statusCode).toBe(201);
     } finally {
       await harness.dispose();
     }

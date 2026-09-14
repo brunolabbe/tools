@@ -93,22 +93,36 @@ export function registerJobRoutes(app: FastifyInstance, context: AppContext): vo
     }
 
     const options = parsed.data.options ?? {};
-    const job = context.store.create({
-      id: randomUUID(),
-      sourceUrl: parsed.data.url,
-      options,
-      variantId: options.variantId ?? null,
-      createdAt: context.now().toISOString(),
-    });
+    // From here until `enqueue` hands `onSettle` its own responsibility for
+    // the slot, this route holds it itself: `store.create` can throw
+    // (`DISK_FULL`, say) and `enqueue` throws once shutdown has begun, which
+    // is reachable across the `assertAllowed` suspension above. Without this,
+    // either throw would leak the slot permanently — worse than no cap at
+    // all, the same failure step 5 warns against for every other exit path.
+    let job: Job;
+    try {
+      job = context.store.create({
+        id: randomUUID(),
+        sourceUrl: parsed.data.url,
+        options,
+        variantId: options.variantId ?? null,
+        createdAt: context.now().toISOString(),
+      });
 
-    context.queue.enqueue({
-      jobId: job.id,
-      run: (signal) => context.orchestrator.run(job.id, signal, { requestId: request.id }),
-      // Fires exactly once whenever this job leaves the queue — success,
-      // failure, cancel while running or waiting, timeout, or shutdown — which
-      // is what lets this release the slot on every exit path (dl-51).
-      onSettle: releaseJobSlot,
-    });
+      context.queue.enqueue({
+        jobId: job.id,
+        run: (signal) => context.orchestrator.run(job.id, signal, { requestId: request.id }),
+        // Fires exactly once whenever this job leaves the queue — success,
+        // failure, cancel while running or waiting, timeout, or shutdown —
+        // which is what lets this release the slot on every exit path
+        // (dl-51). Ownership of the slot passes to it only once `enqueue`
+        // itself has returned without throwing.
+        onSettle: releaseJobSlot,
+      });
+    } catch (error: unknown) {
+      releaseJobSlot();
+      throw error;
+    }
 
     request.logger.info("job accepted", { jobId: job.id, variantId: job.variantId });
     const body: JobResponse = { job };
