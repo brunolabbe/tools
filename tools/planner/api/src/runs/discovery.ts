@@ -80,14 +80,17 @@ export const DISCOVERY_RADIUS_METRES = 6_000;
  * pl-41.
  *
  * **Forty.** This file's own header, before this ticket, already reasoned
- * about "a corridor with forty finds" as its illustrative case — at pl-41's
- * measured ≈43 tokens per find that is ≈1.7k tokens added to a specialist's
- * system prompt, noticeable but nothing like the ×17.4 growth an uncapped
- * corridor produced (pl-41's reproduction: 276 finds, one specialist's prompt
- * from ≈732 to ≈12,721 tokens). It also matches `MAX_GROUNDING_CALLS`'s own
- * default: a corridor whose discovery pass would hand a specialist more
- * material than the run's whole call budget already reasons about is exactly
- * the corridor this ceiling is for.
+ * about "a corridor with forty finds" as its illustrative case. pl-41's
+ * reproduction measured ≈43 tokens per find **averaged over all 276** raw
+ * finds; the 40 that actually survive the ranking below skew toward the
+ * tag-heavier, notability-backed ones, and measured capped growth on the same
+ * corridor is ≈2.8k tokens (≈281 chars/find, against ≈174 across the full
+ * 276) — noticeably more than the flat average predicts, still nothing like
+ * the ×17.4 growth an uncapped corridor produced (pl-41's reproduction: 276
+ * finds, one specialist's prompt from ≈732 to ≈12,721 tokens). It also
+ * matches `MAX_GROUNDING_CALLS`'s own default: a corridor whose discovery
+ * pass would hand a specialist more material than the run's whole call
+ * budget already reasons about is exactly the corridor this ceiling is for.
  *
  * **One cap, applied once, here, before `detourCosts` builds its matrix** — a
  * cap applied only in `discoveryBlock` (`agent/src/prompt.ts`) would leave the
@@ -347,11 +350,25 @@ export async function discoverAlongCorridor(input: DiscoverInput): Promise<Disco
  * exactly the kind of number this pass's other coverage sentences deliberately
  * omit — "very little on the map" never says how little — but here the number
  * is the point, so it is named rather than gestured at.
+ *
+ * **The rule it states, not an outcome, and that distinction is the fix for a
+ * gate finding.** The first wording ("the closest, and any with independent
+ * editorial coverage, were kept") was true only while backed finds numbered at
+ * most the cap — over the real corridor with a real geosearch tier wired in,
+ * every survivor came out backed and the sentence overclaimed "the closest
+ * were kept" while the closest actual find, unbacked, had been dropped. This
+ * wording says what `rankFinds` always does rather than what it happened to
+ * produce on the fixtures written so far, so it stays true whether backed
+ * finds number 34 (map tags alone) or 84 (with geosearch) on the same
+ * corridor — `CLOSEST_RESERVED`'s own guarantee is what makes "the closest
+ * ... were kept" true unconditionally, and "where there was room" is what
+ * keeps the editorial-coverage clause honest once backing exceeds what is
+ * left.
  */
 function coverageForDropped(count: number): UncheckedConstraint {
   return unchecked(
     "coverage",
-    `${String(count)} more places were found along this route than could be shown to the planner. The closest, and any with independent editorial coverage, were kept — something worth stopping for may still be among the rest.`,
+    `${String(count)} more places were found along this route than could be shown to the planner. The closest ones were kept, and so were places with independent editorial coverage where there was room — something worth stopping for may still be among the rest.`,
   );
 }
 
@@ -592,10 +609,11 @@ async function locate(
 /**
  * A corridor's own coordinates, dropping any endpoint that never geocoded.
  *
- * One helper rather than the same filter written out at every call site —
- * `nearby`, `notability`, `corridorReading` and `rankFinds` all need exactly
- * this and disagreed about it nowhere, so pl-41 folded the four copies into
- * one.
+ * One helper rather than the same filter written out at every call site.
+ * `nearby`, `notability` and `corridorReading` each wrote it independently
+ * before pl-41, and disagreed about it nowhere, so pl-41 folded those three
+ * copies into this one function — which `rankFinds`, a new fourth caller
+ * pl-41 also added, then uses too rather than writing a fourth copy.
  */
 function corridorPoints(corridor: readonly Place[]): Coordinates[] {
   return corridor
@@ -604,48 +622,110 @@ function corridorPoints(corridor: readonly Place[]): Coordinates[] {
 }
 
 /**
+ * Half of `MAX_DISCOVERY_FINDS`, reserved for whatever is closest to the
+ * corridor **regardless of editorial backing** — pl-41 Build step 2, and an
+ * owner decision on 2026-09-14 that replaces this file's first answer.
+ *
+ * That first answer ranked backing first and closeness second with nothing
+ * reserved, on the reasoning still below: ranking by editorial coverage alone
+ * would launder back in the exact bias §5's amendment built this pass to
+ * correct. **That reasoning survives; the ranking it produced did not.** The
+ * gate measured it against the real corridor with a real geosearch tier
+ * wired in (pl-33's own `wikipedia-geosearch.json`, the Québec City tile) and
+ * found 84 of 276 finds backed — more than the cap — so every one of the 40
+ * survivors came out backed, and the closest unbacked find, 41 m off the
+ * line, did not survive. A ranking that can hand *every* slot to one signal
+ * is not "some coverage-backed, the rest by closeness" (Build step 2's own
+ * phrase); it is editorial coverage alone with extra steps, on exactly the
+ * corridors rich enough in backed places for the distinction to matter.
+ *
+ * Twenty of forty closes that gap without discarding the original argument:
+ * backing still gets first claim on the *other* half, so a corridor with
+ * plenty of both still surfaces more backed places than a pure-closest
+ * ranking would. What backing can no longer do is answer for the whole list.
+ * Half is not measured, and neither is any other split — it is the plainest
+ * way to say "neither signal outvotes the other outright," which is the
+ * property this reservation exists to guarantee.
+ */
+export const CLOSEST_RESERVED = Math.floor(MAX_DISCOVERY_FINDS / 2);
+
+/**
  * Which finds survive `MAX_DISCOVERY_FINDS`, and in what order — pl-41 Build
  * step 2.
  *
- * **Independent editorial backing first, then distance to the corridor,
- * closest first.** Not editorial coverage alone: §5's 2026-08-22 amendment
- * built this whole pass because a model asked for stops "returns the famous
- * ones", and ranking purely by what an encyclopedia already covers would
- * launder that exact bias back in through the ranking rather than the model.
- * So a corridor with fewer backed finds than the cap fills its remaining
- * slots with the closest unbacked ones — some coverage-backed, the rest by
- * closeness — instead of keeping whatever order Overpass happened to reply
- * in, which is arbitrary in a way a traveller would notice (nothing about a
- * node's id or its position in a reply says anything about whether it is
- * worth a detour).
+ * **The closest `CLOSEST_RESERVED` finds survive no matter what, backed or
+ * not.** Everything past that reservation is then ranked by independent
+ * editorial backing first, distance second — so the remaining slots still
+ * favour backing, and a corridor with fewer backed finds than the cap still
+ * fills what is left with the closest unbacked ones. See
+ * `CLOSEST_RESERVED`'s own comment for why the ranking has this shape rather
+ * than backing-first with nothing reserved, which is what pl-41 shipped
+ * first and what the gate found reduces to editorial-coverage-alone on a
+ * corridor rich enough in backed places.
  *
  * `kind` is the third signal this step has available and is used only to
- * break a tie that survives the first two, by its own position in
- * `DISCOVERY_KINDS` — deliberately not a ranking criterion of its own, since
- * nothing in §5's amendment argues one kind of place is worth more than
- * another. `name` breaks whatever tie is left. Two finds equally backed (or
- * unbacked), equidistant and of the same kind are two real places sitting on
- * top of each other, and something has to give them a stable order or the
- * "same capture renders the same prompt twice" guarantee below would not
- * hold.
+ * break a tie that survives the first two (or the first one, inside the
+ * reserved band), by its own position in `DISCOVERY_KINDS` — deliberately not
+ * a ranking criterion of its own, since nothing in §5's amendment argues one
+ * kind of place is worth more than another. `name` breaks whatever tie is
+ * left, by ordinary code-unit order (`<`/`>`), never `localeCompare` — a
+ * locale-aware compare reads the host's default locale, which this process
+ * does not pin, so the same two names could sort one way in development and
+ * another in whatever locale a gate or a deployed container happens to boot
+ * with. Two finds equidistant and of the same kind (backed alike or not) are
+ * two real places sitting on top of each other, and something has to give
+ * them a stable order or the "same capture renders the same prompt twice"
+ * guarantee below would not hold — and it has to be a stable order this
+ * *process* controls, not one the host's ICU data does.
  */
 function rankFinds(finds: readonly Find[], corridor: Corridor): Find[] {
   const kindOrder = new Map(DISCOVERY_KINDS.map((kind, index) => [kind, index]));
 
-  return finds
-    .map((find) => ({ find, distanceMetres: distanceToCorridorMetres(find.coordinates, corridor) }))
-    .toSorted((a, b) => {
-      const aBacked = a.find.notability.length > 0;
-      const bBacked = b.find.notability.length > 0;
-      if (aBacked !== bBacked) return aBacked ? -1 : 1;
-      if (a.distanceMetres !== b.distanceMetres) return a.distanceMetres - b.distanceMetres;
+  interface RankEntry {
+    find: Find;
+    distanceMetres: number;
+  }
 
-      const kindDiff = (kindOrder.get(a.find.kind) ?? 0) - (kindOrder.get(b.find.kind) ?? 0);
-      if (kindDiff !== 0) return kindDiff;
+  function compareTieBreak(a: RankEntry, b: RankEntry): number {
+    const kindDiff = (kindOrder.get(a.find.kind) ?? 0) - (kindOrder.get(b.find.kind) ?? 0);
+    if (kindDiff !== 0) return kindDiff;
+    if (a.find.name < b.find.name) return -1;
+    if (a.find.name > b.find.name) return 1;
+    return 0;
+  }
 
-      return a.find.name.localeCompare(b.find.name);
-    })
-    .map((entry) => entry.find);
+  function compareByDistance(a: RankEntry, b: RankEntry): number {
+    if (a.distanceMetres !== b.distanceMetres) return a.distanceMetres - b.distanceMetres;
+    return compareTieBreak(a, b);
+  }
+
+  function compareByBackingThenDistance(a: RankEntry, b: RankEntry): number {
+    const aBacked = a.find.notability.length > 0;
+    const bBacked = b.find.notability.length > 0;
+    if (aBacked !== bBacked) return aBacked ? -1 : 1;
+    return compareByDistance(a, b);
+  }
+
+  const withDistance: RankEntry[] = finds.map((find) => ({
+    find,
+    distanceMetres: distanceToCorridorMetres(find.coordinates, corridor),
+  }));
+
+  // The reservation is drawn from the closest overall, backed or not — this
+  // is the band that guarantees a close unbacked find a place regardless of
+  // how many backed finds the corridor has.
+  const closestOverall = withDistance.toSorted(compareByDistance);
+  const guaranteed = closestOverall.slice(0, CLOSEST_RESERVED);
+  const guaranteedFinds = new Set(guaranteed.map((entry) => entry.find));
+
+  // Everything not already guaranteed, ranked backing-first for the
+  // remaining slots `discoverAlongCorridor`'s `.slice(0, MAX_DISCOVERY_FINDS)`
+  // will draw from.
+  const remainder = closestOverall
+    .filter((entry) => !guaranteedFinds.has(entry.find))
+    .toSorted(compareByBackingThenDistance);
+
+  return [...guaranteed, ...remainder].map((entry) => entry.find);
 }
 
 async function nearby(

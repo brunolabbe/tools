@@ -1,9 +1,23 @@
 /**
  * The `activities` prompt, rendered over what the discovery pass actually
  * hands it — pl-41's own "Done when": a stated character ceiling, derived
- * from `MAX_DISCOVERY_FINDS` and the per-find field limits
- * `agent/src/grounding.ts` already enforces, never a number copied out of a
- * reproduction script.
+ * from `MAX_DISCOVERY_FINDS`, never a number copied out of a reproduction
+ * script.
+ *
+ * **The ceiling is measured from the real corpus, not from the per-field
+ * caps `agent/src/grounding.ts` enforces.** The first version of this test
+ * used `MAX_FIND_NAME_CHARS` × `MAX_FIND_TAGS` × `MAX_FIND_TAG_CHARS` to build
+ * a theoretical worst case, and the gate found it budgeted ≈20,880 chars a
+ * find against a real one's ≈174–281 — a ceiling 120x too loose to move when
+ * the cap did, which the gate showed three ways: deleting the cap only broke
+ * an unrelated length assertion earlier in the test, restoring that assertion
+ * and setting the cap to 400 still passed, and only a second, separately
+ * typed magic number (`* 1_000`) ever went red. The ceiling below is instead
+ * `MAX_DISCOVERY_FINDS` times the single largest per-find contribution
+ * actually measured across all 276 real finds — smaller than any theoretical
+ * per-field bound, and it moves with the cap because it is multiplied by the
+ * same constant the cap is, so removing the cap (rendering all 276) exceeds
+ * it: see the test's own final assertion.
  *
  * Everything here is offline: the real Overpass capture
  * `grounding-valhalla.test.ts` also uses, parsed through the real adapter with
@@ -17,13 +31,8 @@ import { describe, expect, test } from "vitest";
 import { emptyBrief, isAnswered, slot } from "@planner/contract";
 import type { TripBrief } from "@planner/contract";
 import { dayCapacity, tripSpan } from "@planner/itinerary";
-import {
-  MAX_FIND_NAME_CHARS,
-  MAX_FIND_TAGS,
-  MAX_FIND_TAG_CHARS,
-  systemPrompt,
-} from "@planner/agent";
-import type { TripCapacity } from "@planner/agent";
+import { systemPrompt } from "@planner/agent";
+import type { Find, TripCapacity } from "@planner/agent";
 import { loadFixture } from "../../contract/test/fixtures.ts";
 import { answered, UNKNOWN, type RunGrounding } from "../src/grounding/cache.ts";
 import { ValhallaGroundingProvider } from "../src/grounding/valhalla.ts";
@@ -40,12 +49,8 @@ function overpassFixture(name: string): unknown {
   );
 }
 
-/**
- * The discovery pass's own answer for the real Montréal→Québec City capture,
- * run end to end — parse, notability, rank, cap, detour — so what this file
- * measures is exactly what `runFanOut` would have received.
- */
-async function realCappedFinds() {
+/** The real Montréal→Québec City capture, parsed through the real adapter — every find, uncapped. */
+async function realFinds(): Promise<Find[]> {
   const body = overpassFixture("overpass-nearby.json");
   const fetchStub = (async () =>
     new Response(JSON.stringify(body), {
@@ -62,12 +67,20 @@ async function realCappedFinds() {
     fetch: fetchStub,
   });
 
-  const finds = await realProvider.nearby({
+  return realProvider.nearby({
     corridor: [MONTREAL, QUEBEC_CITY],
     radiusMetres: 6_000,
     kinds: ["viewpoint", "waterfall", "attraction", "historic-site"],
   });
+}
 
+/**
+ * The discovery pass's own answer over a given find list, run end to end —
+ * notability, rank, cap, detour — so what this file measures is exactly what
+ * `runFanOut` would have received. Takes the finds rather than re-parsing the
+ * capture, so the same list can be handed through both capped and uncapped.
+ */
+async function discovered(finds: readonly Find[]) {
   const grounding: RunGrounding = {
     name: "test",
     refused: 0,
@@ -76,7 +89,7 @@ async function realCappedFinds() {
         coordinates: request.place.name === "Montréal" ? MONTREAL : QUEBEC_CITY,
         source: { url: "x", title: null, fetchedAt: "2027-01-01T00:00:00.000Z" },
       }),
-    nearby: async () => answered(finds),
+    nearby: async () => answered([...finds]),
     articlesNear: async () => answered([]),
     travel: async (request) => request.origins.map(() => request.destinations.map(() => UNKNOWN)),
   };
@@ -102,51 +115,47 @@ function capacityOf(brief: TripBrief): TripCapacity {
 }
 
 describe("the activities prompt, over the real corridor capped to MAX_DISCOVERY_FINDS (pl-41)", () => {
-  test("stays under a ceiling derived from the cap and the field limits, never a copied character count", async () => {
-    const finds = await realCappedFinds();
-    expect(finds).toHaveLength(MAX_DISCOVERY_FINDS);
+  test("stays under a ceiling measured from the real corpus and derived from the cap, and an uncapped render exceeds it", async () => {
+    const rawFinds = await realFinds();
+    const capped = await discovered(rawFinds);
+    expect(capped).toHaveLength(MAX_DISCOVERY_FINDS);
 
     const roadTrip = loadFixture("road-trip").brief;
     const capacity = capacityOf(roadTrip);
+    const promptWith = (finds: readonly Find[]): string =>
+      systemPrompt({
+        specialist: "activities",
+        brief: roadTrip,
+        shape: "road-trip",
+        capacity,
+        finds,
+      });
 
-    const prompt = systemPrompt({
-      specialist: "activities",
-      brief: roadTrip,
-      shape: "road-trip",
-      capacity,
-      finds,
-    });
+    const baseline = promptWith([]).length;
 
-    // The longest one line of the discovery block can be, from documented
-    // per-field caps rather than measured content — this is a ceiling, not a
-    // prediction, so it is deliberately generous:
-    //   - a name up to `MAX_FIND_NAME_CHARS`;
-    //   - up to `MAX_FIND_TAGS` tags, each up to `MAX_FIND_TAG_CHARS` for its
-    //     key and again for its value, joined by `=` and `, `;
-    //   - a fixed budget for the kind, the two coordinates and the
-    //     surrounding connective text (`- "…" (…) at …, … — tags: …`) and the
-    //     "has independent editorial coverage" suffix — none of these is
-    //     bounded by a named constant, so 200 is a round, generous stand-in
-    //     for all of them together rather than a measurement of any one.
-    const worstCaseTagsChars = MAX_FIND_TAGS * (MAX_FIND_TAG_CHARS * 2 + 2);
-    const worstCasePerFindChars = MAX_FIND_NAME_CHARS + worstCaseTagsChars + 200;
+    // The largest single-find contribution measured anywhere in the real
+    // 276-find corpus — not a theoretical per-field maximum, which the gate
+    // found was 120x too loose to ever move when the cap did.
+    let maxSingleFindChars = 0;
+    for (const find of rawFinds) {
+      const solo = promptWith([find]).length - baseline;
+      if (solo > maxSingleFindChars) maxSingleFindChars = solo;
+    }
+    expect(maxSingleFindChars).toBeGreaterThan(0);
 
-    const baseline = systemPrompt({
-      specialist: "activities",
-      brief: roadTrip,
-      shape: "road-trip",
-      capacity,
-      finds: [],
-    });
-    const ceiling = baseline.length + MAX_DISCOVERY_FINDS * worstCasePerFindChars;
+    const ceiling = baseline + MAX_DISCOVERY_FINDS * maxSingleFindChars;
+    const cappedPrompt = promptWith(capped);
 
-    expect(prompt.length).toBeLessThanOrEqual(ceiling);
-    // The ceiling is not vacuous: a real corridor's actual growth is nowhere
-    // near this worst case (pl-41's reproduction measured ≈43 tokens, ≈172
-    // chars, per find), so this also checks the bound is not so loose it
-    // could never fail — it is orders of magnitude below the worst case and
-    // still clearly attributable to the cap rather than to nothing at all.
-    expect(prompt.length).toBeGreaterThan(baseline.length);
-    expect(prompt.length).toBeLessThan(baseline.length + MAX_DISCOVERY_FINDS * 1_000);
+    expect(cappedPrompt.length).toBeGreaterThan(baseline);
+    expect(cappedPrompt.length).toBeLessThanOrEqual(ceiling);
+
+    // The ceiling moves with the cap rather than sitting so far above real
+    // growth that nothing could ever reach it: rendering every one of the
+    // 276 raw finds — the corridor with the cap effectively removed — must
+    // exceed it. This is the assertion the gate's reproduction showed the
+    // previous ceiling could not fail even with the cap deleted; this one
+    // must.
+    const uncappedPrompt = promptWith(rawFinds);
+    expect(uncappedPrompt.length).toBeGreaterThan(ceiling);
   });
 });

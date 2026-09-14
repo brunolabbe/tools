@@ -238,3 +238,88 @@ off `origin/main` at `95c6403`.
   first to confirm). `npm test` (full repo) — 143 files, 2571 tests, all
   passing, run once after the `node_modules` fix above to confirm nothing else
   in the repo was disturbed by it.
+
+**2026-09-14 — gate round: ranking replaced, ceiling test rebuilt.** The
+ticket-reviewer (opus) gated `7e72ce5` as CONCERNS: 2 med, 4 low, all
+reproduced independently before acting on them.
+
+- **The open decision (OD-1).** The gate's MED 1 showed the shipped ranking
+  (backing first, nothing reserved) reduces to editorial-coverage-alone on a
+  corridor with more backed finds than the cap: over the real capture with a
+  real geosearch tier wired in (`wikipedia-geosearch.json`, the Québec City
+  tile), 84 of 276 finds came out backed, every one of the 40 survivors was
+  backed, and the closest actual find on the map — unbacked, 41 m off the
+  line — was dropped, while the coverage sentence said "the closest ... were
+  kept." The gate escalated the remedy rather than picking one. **The
+  orchestrator asked the owner**, `AskUserQuestion`, three options: (1) 40
+  with a mixed ranking that reserves a share of slots for the closest finds
+  regardless of backing (recommended), (2) 40 with the ranking as shipped and
+  a reworded sentence, (3) a higher cap with a mixed ranking. **The owner
+  chose (1).** This replaces the ranking pl-41 shipped first (backing first,
+  distance second, nothing reserved) and the gate's own option (a) (reword
+  only) as a sufficient fix — the reword still happened, but as a consequence
+  of the ranking changing, not as the fix on its own.
+- **What was built for (1).** `CLOSEST_RESERVED = Math.floor(MAX_DISCOVERY_FINDS / 2)`
+  (20 of 40) — the closest finds overall, backed or not, always survive up to
+  this count; the remaining slots still rank backing first, then distance.
+  Argued against the original reasoning in `rankFinds`'s own comment (and
+  `CLOSEST_RESERVED`'s): the bias argument for preferring backing still
+  holds, it just cannot be allowed to answer for every slot. Half was chosen
+  as the plainest way to say "neither signal outvotes the other outright,"
+  not measured against anything.
+- **The coverage sentence** now states the rule ("the closest ones were
+  kept, and so were places with independent editorial coverage where there
+  was room") rather than an outcome, so it stays true whether backed finds
+  number 34 (map tags alone) or 84 (with geosearch) on the same corridor.
+- **New tests**: a fixture with 50 backed finds (more than the cap) and 5
+  close unbacked ones, proving the unbacked ones survive; the real-capture
+  test re-run with `wikipedia-geosearch.json` wired into `articlesNear`,
+  reproducing the gate's own MED 1 scenario and asserting at least one
+  survivor is unbacked; a fixture fed in reversed order rather than
+  already-ranked order, closing the gate's LOW 3 (a fixture that arrives
+  pre-sorted cannot tell a working sorter from a bypassed one); a tie-break
+  test forcing the `kind` and `name` comparators to actually run, closing LOW 4.
+- **MED 2, fixed independently of OD-1.** The prompt-size ceiling
+  (`discovery-prompt-bound.test.ts`) used `MAX_FIND_NAME_CHARS` ×
+  `MAX_FIND_TAGS` × `MAX_FIND_TAG_CHARS` as a theoretical per-find worst case
+  (≈20,880 chars) against a real find's ≈174–281 — 120x too loose to move
+  when the cap did, which the gate showed three ways (deleting the cap broke
+  only an unrelated length assertion; the ceiling still passed at cap=400;
+  only a separately-typed `* 1_000` bound ever went red). Rebuilt to derive
+  the per-find budget from the single largest contribution actually measured
+  across all 276 real finds, so the ceiling is `MAX_DISCOVERY_FINDS × ` that
+  measured value — it moves with the cap because both are the same constant.
+  Verified directly: with the cap deleted in a scratch copy, this ceiling
+  itself now fails (`50099` not `<=` `43263`), even with the incidental
+  length assertion the gate used to catch the same mutation also removed.
+- **LOW 5 and LOW 6, fixed.** `MAX_DISCOVERY_FINDS`'s comment corrected —
+  survivors skew toward tag-heavier, notability-backed finds and measured
+  ≈281 chars/find against ≈174 across all 276, not the flat ≈43-tokens
+  average the comment previously implied. `corridorPoints`'s comment
+  corrected to say three copies folded plus a new fourth caller, not "the
+  four copies" (the Log already said three; only the code comment
+  overclaimed). `rankFinds`'s `name` tie-break now compares by plain
+  code-unit order (`<`/`>`) rather than `localeCompare`, which reads the
+  host's unpinned default locale.
+- **Not changed**: the gate's `corridorPoints` dead-code observation (the
+  null filter is unreachable from every current call site, since both
+  corridor endpoints are checked non-null before any caller is reached) is
+  accurate and left as is — it is a generic, reusable filter, and the
+  alternative (removing it) would make the function wrong the day some future
+  caller reaches it with an unlocated corridor. The gate's four dropped
+  findings (typed `6_000`/kind list, cross-package fixture import, a bare
+  `Error` in test code, an unreachable `RangeError`) were not touched — the
+  gate itself dropped them.
+- **Verification, after the ranking rewrite and all fixes above**:
+  `npx vitest run tools/planner/api/test/discovery-pass.test.ts
+tools/planner/api/test/discovery-prompt-bound.test.ts` — 32/32. Every gate
+  finding re-verified by mutation on this tree before and after the fix
+  (sorter bypass, kind-diff bypass, name-comparator inversion, cap-removal
+  against the new ceiling) — each mutation went red only after its matching
+  fix landed, restored from a file copy afterwards, `git status --porcelain`
+  clean. `npm run check` — exit 0. `npm test -- --project planner` — 56
+  files, 940 tests. Citations gate
+  (`node scripts/citations-gate.mjs --against origin/main`) — not re-run in
+  this round; the orchestrator's own check at `7e72ce5` found it moves
+  citations in three other tickets' `## Review` records and said the repair
+  (pinning to `95c6403`) happens when ship authority is given, not now.
