@@ -253,7 +253,16 @@ describe("what an edit refuses", () => {
     expect(() =>
       edit(previous, [a, b], { kind: "remove", candidateId: a.id, fromDayIndex: 1 }),
     ).toThrow(internal);
-    // A day the revision does not have.
+    // A source day the revision does not have, named as such: without the
+    // guard, the same input fails as a TypeError from reading an absent day.
+    const noSource = refusal(() =>
+      edit(previous, [a, b], { kind: "remove", candidateId: a.id, fromDayIndex: 9 }),
+    );
+    expect({ code: noSource.code, precondition: noSource.details?.["precondition"] }).toEqual({
+      code: "INTERNAL",
+      precondition: "day-not-in-revision",
+    });
+    // A destination day the revision does not have.
     expect(() =>
       edit(previous, [a, b], {
         kind: "move",

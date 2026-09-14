@@ -760,3 +760,37 @@ restores were identical. Each mutation failed the tests written for it:
 `npm run build` exited 0, and `npm run check` exited 0 with no `error TS`.
 `npm test -- --project planner` passed at 61 files and 1,014 tests, run once
 at the end.
+
+**2026-09-14 — the gate's one finding, reproduced and repaired.** The gate
+(dispatched as Sonnet) passed at `2f101f3` and found one low gap:
+`applyOperation`'s guard for a `fromDayIndex` the revision does not have had no
+test. Every `fromDayIndex` in `edit.test.ts` was valid.
+
+- **Reproduced first.** I replaced the guard with `if (false)` and ran
+  `npx vitest run tools/planner/itinerary`: 229 of 229 still passed, and the
+  file was byte-identical after its restore.
+- **Repaired.** The precondition test in `edit.test.ts` now removes from day 9
+  and asserts `details.precondition` is `day-not-in-revision`. It checks the
+  name and not only the code, because without the guard the same input fails as
+  a `TypeError`.
+- **The same command on the repaired tree** passed at 13 files and 229 tests.
+  With the guard disabled again it failed 1 of 229, the precondition test, and
+  the file was byte-identical after its restore.
+
+**Status stays `ready` until the gate record lands, settled by the
+orchestrator, not the owner.** It is a convention question, not a product one.
+`done` goes into the same commit as `## Review`, never one without the other,
+because `scripts/status.mjs`'s `reviewedButReady` fails CI on a ticket that is
+`ready` and carries a review.
+
+**Still open, and the owner's:** whether a re-plan's `no-day-in-season` reads
+named days only, as built, or every day of the plan. The gate measured both on
+one fixture:
+
+- **Named days only:** the reason is `no-day-in-season`, and the gap reads "out
+  of season for these dates".
+- **Every day:** the reason is `no-day-had-room`, and the gap reads "nothing it
+  found fitted the days this trip has".
+- **Placement:** identical under both.
+
+`pack.ts` is unchanged pending that answer.
