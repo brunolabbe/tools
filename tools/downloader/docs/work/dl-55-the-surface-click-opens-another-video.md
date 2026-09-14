@@ -379,3 +379,107 @@ four new manifest fixtures under `resolvers/test/fixtures/pages/`,
 
 No fold-in beyond the api logger wiring noted above — nothing else this branch
 touched made another already-specified item free.
+
+## 2026-09-14 — gate round 1, answered
+
+`ticket-reviewer` (Opus, agent `a0701174359ad2606`) gated `fc8be9e` FAIL: one
+unproven Done-when clause, three `med` findings, one `low`, three open
+decisions. Reproduced every finding before acting — see method below — then
+fixed what was mine to fix and left the three open decisions to the
+orchestrator, as the reviewer itself said to.
+
+**Finding 1 (med), confirmed, fixed.** All four of the reviewer's mutations
+reproduced exactly as reported against the original `related-card.html`
+fixture: deleting the link-ancestor check, replacing the largest-area
+comparison with first-qualifying, adding a no-candidate fallback to
+`document.querySelector('video')`, and deleting the `clickChosenVideo` call
+each left the fixture's one test green. The root cause was mine: the card was
+smaller than the player (so area alone already picked right), the page had
+only one unlinked candidate (so no-candidate never triggered), and the player
+started on its own `play` event listener — which `PLAY_SCRIPT`'s blanket
+`.play()` call fires regardless of whether anything was ever clicked, so the
+fixture's own comment claiming "only a surface click starts it" was wrong.
+**Fixed by replacing one fixture with three, each discriminating exactly one
+clause, all switched to a `click`-only start (never `play`) so `PLAY_SCRIPT`
+cannot substitute for the surface click**:
+
+- `related-card.html`, rewritten: an 800×450 linked card _larger_ than a
+  480×270 unlinked player — area alone now picks the wrong one, so this
+  isolates the link-ancestor exclusion.
+- `related-card-area.html`, new: a 150×100 unlinked, listener-less decoy
+  ahead of a 640×360 unlinked player — isolates the largest-area rule.
+- `related-card-only-linked.html`, new: the page's only video is a card, so
+  the chooser must find no candidate and click nothing; asserts the link
+  target is never requested.
+- Re-ran all four of the reviewer's mutations against the new set: each now
+  reddens exactly the test built to catch it (mutation 1: the link-exclusion
+  and no-candidate tests both went red, since the no-candidate fixture's one
+  video happens to be linked too; mutation 2: only the area test; mutation 3:
+  only the no-candidate test; mutation 4: the link-exclusion and area tests,
+  both now `click`-gated). Restored and reran the full `dl-55`-tagged set
+  clean (9/9) after each.
+
+**Finding 2 (med), confirmed, not fixed — open decision 2, the orchestrator's.**
+Reproduced with the reviewer's own scenario: a page whose body runs
+`window.addEventListener("load", () => setTimeout(() => location.replace(...),
+200))` to a page with its own `Play` button. Ran the exact same fixture and
+resolve call against this branch (`fc8be9e` plus my Finding-1/3/4 fixes) and
+against `origin/main`'s `provoke.ts`/`browser.ts` swapped in in place: branch
+throws `NO_MEDIA_FOUND` / `navigated-away`
+(`{"reason":"navigated-away","url":".../verify/redirect-after-load.html","departedTo":".../verify/redirect-target.html"}`);
+main returns the redirected page's own stream
+(`title: "Redirect target"`, `variants[0].url` the fake HLS master). Traced
+why main succeeds: `provokePlayback`'s second of its two passes
+(`provoke.ts`'s own docstring: "players are frequently lazy-mounted") runs
+~900 ms after the first, by which time the 200 ms-delayed `location.replace`
+has already landed — so pass two naturally re-provokes whatever page is
+current. The guard's `landingUrl`, captured once at `domcontentloaded` and
+compared for the rest of the probe, cannot tell that departure apart from the
+one this ticket exists to catch. Not resolved here: the reviewer copied this
+to the orchestrator as open decision 2 (recapture the landing URL later vs.
+count only departures that follow the tier's own clicks), and it is not mine
+or the reviewer's to settle.
+
+**Finding 3 (med), confirmed, comments fixed — open decision 3, the
+orchestrator's.** The claim in my own comments and in this Log's dl-56 note —
+that a cross-origin frame "has no evaluation context" — is false, and I
+should have measured before writing it rather than inferred it from
+`isScriptableFrame`'s name. Reproduced directly: two real HTTP servers on
+different loopback ports (genuinely cross-origin, confirmed by comparing
+`origin` strings), an iframe on the first embedding a page from the second,
+and `frame.evaluate("document.querySelectorAll('video').length")` on the
+inner frame returned `1` without error. `isScriptableFrame` is a _policy_ this
+file already applies to `SCROLL_SCRIPT` and `PLAY_SCRIPT`, not a technical
+wall — its own comment says so ("Frames we are willing to run script in").
+**Fixed:** both comments in `provoke.ts` (`NON_CARD_VIDEO_SELECTOR`'s
+docstring and `clickChosenVideo`'s) now say this is a policy choice, not a
+capability limit, and flag that the reason for the CSS fallback should be
+revisited given that. **Not fixed:** the underlying behaviour — whether to
+fold the cross-origin case into `CHOOSE_VIDEO_SCRIPT`'s own `evaluate` (one
+more round trip, dropping the policy for this read-only check), keep the CSS
+fallback as a narrower policy call, or drop the cross-origin surface click
+entirely — is open decision 3, the reviewer's own framing, correctly not
+settled here or by the reviewer.
+
+**Finding 4 (low), confirmed, fixed.** No test exercised
+`BrowserResolverOptions.logger`. Added "reports the departure to the injected
+logger, naming the step and both URLs" to the navigation-guard describe block:
+injects a capturing `BrowserResolverLogger`, asserts exactly one `warn` call,
+a message matching "left the landing page", `fields.step` is one of
+`provoke-playback`/`network-quiet` (the click that starts the navigation runs
+during the first, but `framenavigated` can fire either side of the stage
+boundary — asserting a single value was flaky, widened rather than pinned to
+one run's timing), and both `landingUrl`/`departedTo` through `redactUrl`.
+
+**Method.** Every mutation and reproduction applied to a saved copy of the
+committed file, run, then restored (`git diff` empty after each) — the same
+discipline as the original per-layer revert, never committed. Full gates
+re-run after the fixes: `npm run check` exit 0; `npm test -- --project
+downloader` — **76 files, 1274 tests** (1271 + 3 new); `npx vitest run
+.../browser-resolver.test.ts .../provoke.test.ts -t dl-55` — 9/9;
+`node scripts/citations-gate.mjs --against origin/main` — exit 0, 0 raised;
+`npm run format` — no unexpected diffs.
+
+**Not done:** open decisions 1–3 are the orchestrator's, not resolved on this
+branch. No code changed for Finding 2 or the cross-origin selection strategy
+in Finding 3 — only the false comments.

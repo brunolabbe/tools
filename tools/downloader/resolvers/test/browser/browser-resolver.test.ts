@@ -14,6 +14,7 @@ import type { ErrorCode, ProbeResult, ProbeStageEvent, ResolveOptions } from "@d
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { BrowserPool } from "../../src/browser/pool.ts";
 import { BrowserResolver } from "../../src/resolvers/browser.ts";
+import type { BrowserResolverLogger } from "../../src/resolvers/browser.ts";
 import {
   drmHlsParser,
   recordingDashParser,
@@ -278,6 +279,39 @@ describe("BrowserResolver", () => {
         expect(server.requests).not.toContain("/media/related-target/master.m3u8");
       },
     );
+
+    test(
+      "picks the largest visible candidate, not the first in document order",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        // A first-qualifying (rather than largest) chooser would land the
+        // click on the small, listener-less decoy, and the real player would
+        // never be clicked at all.
+        const result = await probe("/related-card-area.html", resolver);
+
+        expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+      },
+    );
+
+    test(
+      "makes no click, and never navigates, when the only video is a card",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        server.requests.length = 0;
+        const error = await probeError("/related-card-only-linked.html", resolver);
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        // Plain absence, not the guard catching a click that navigated: a
+        // chooser that fell back to "any video" when none qualified would
+        // have clicked the card, bubbled through its `<a href>`, navigated,
+        // and requested the target page — none of which may happen.
+        expect(error.details?.["reason"]).not.toBe("navigated-away");
+        expect(server.requests).not.toContain("/related-card-target.html");
+      },
+    );
   });
 
   describe("a navigation away from the landing page fails NO_MEDIA_FOUND (dl-55)", () => {
@@ -303,6 +337,30 @@ describe("BrowserResolver", () => {
 
         expectCode(error, "NO_MEDIA_FOUND");
         expect(error.details?.["reason"]).toBe("navigated-away");
+      },
+    );
+
+    test(
+      "reports the departure to the injected logger, naming the step and both URLs",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const warnings: { message: string; fields: Record<string, unknown> | undefined }[] = [];
+        const logger: BrowserResolverLogger = {
+          warn: (message, fields) => {
+            warnings.push({ message, fields });
+          },
+        };
+        const resolver = new BrowserResolver({ pool, quietMs: 1200, logger });
+        await probeError("/guard-assign.html", resolver);
+
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0]?.message).toMatch(/left the landing page/i);
+        // The click that starts the navigation runs during provoke-playback,
+        // but `framenavigated` fires once the navigation itself completes,
+        // which can land either side of the stage boundary.
+        expect(["provoke-playback", "network-quiet"]).toContain(warnings[0]?.fields?.["step"]);
+        expect(String(warnings[0]?.fields?.["landingUrl"])).toBe(server.url("/guard-assign.html"));
+        expect(String(warnings[0]?.fields?.["departedTo"])).toBe(server.url("/mse.html"));
       },
     );
 

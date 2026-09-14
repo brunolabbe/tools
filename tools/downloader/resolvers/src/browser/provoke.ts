@@ -211,13 +211,21 @@ const UNMARK_VIDEO_SCRIPT = `(() => {
 
 /**
  * The same rule as `CHOOSE_VIDEO_FN`, expressed as a CSS selector rather than a
- * script, for a cross-origin frame that has no evaluation context to mark an
- * element in. It is not the same choice: a per-candidate size comparison needs
- * a `boundingBox()` round trip per candidate, which is what `CHOOSE_VIDEO_FN`'s
+ * script, for a frame `isScriptableFrame` says no to. **This is a policy this
+ * file already enforces for `SCROLL_SCRIPT` and `PLAY_SCRIPT`, not a technical
+ * limit** — Playwright's `evaluate` runs in a frame's own isolated world over
+ * CDP and works in a cross-origin frame same as any other (measured: a gate on
+ * this ticket found the reviewer's own claim to the contrary false). This
+ * selector exists because a policy is still the policy, and because a
+ * per-candidate size comparison needs a `boundingBox()` round trip per
+ * candidate even where `evaluate` is allowed, which is what `CHOOSE_VIDEO_FN`'s
  * own docstring is warning a deadline away from — so this is the first visible
- * non-card video in document order, not the largest. Every page this project
- * has reproduced has at most one visible non-card video per cross-origin frame,
- * so the two choices coincide there (dl-55 Log).
+ * non-card video in document order, not the largest, in a frame this file has
+ * chosen not to run script in. Every page this project has reproduced has at
+ * most one visible non-card video per such frame, so the two choices coincide
+ * there. Open decision (dl-55 Log): whether to fold this frame's chooser into
+ * `CHOOSE_VIDEO_SCRIPT`'s own evaluate instead, now that the reason given here
+ * for not doing so is known to be wrong.
  */
 const NON_CARD_VIDEO_SELECTOR = "video:not(a[href] *):not([role='link'] *):visible";
 
@@ -504,8 +512,10 @@ async function confirmAgeGate(frame: Frame, timeoutMs: number): Promise<boolean>
  * Clicks the chosen player video, never the first `<video>` in the document
  * (dl-55). In a scriptable frame the choice is made once, in-page, by
  * `CHOOSE_VIDEO_FN`, and only the marked element is clicked, through the
- * locator API; a cross-origin frame has no evaluation context to mark an
- * element in, so it falls back to `NON_CARD_VIDEO_SELECTOR`.
+ * locator API; `isScriptableFrame` says no to running script in some frames as
+ * a policy, not because a non-scriptable frame is incapable of it (see
+ * `NON_CARD_VIDEO_SELECTOR`'s docstring), so that class of frame falls back to
+ * `NON_CARD_VIDEO_SELECTOR` instead.
  *
  * `force` is kept, and still with the same near-corner `position`: a
  * legitimate layer can still sit visually over the player itself — a custom
