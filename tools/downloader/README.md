@@ -69,9 +69,33 @@ interface by default would be handing out an open proxy.
 `compose.downloader.yaml` documents what to change before putting it behind
 anything.
 
-To reach it from outside the host,
-[docs/02-DEPLOYMENT.md](../../docs/02-DEPLOYMENT.md) puts it on a subdomain
-behind a Cloudflare Tunnel and a login, without opening a port on the router.
+### From the registry
+
+Every release publishes the image to GHCR, so running a version needs neither the
+toolchain nor the source. After the one-time registry login in the
+[root README](../../README.md#deploying-a-set-of-tools):
+
+```bash
+docker run --init --shm-size=1g \
+  -p 127.0.0.1:8080:8080 \
+  -v downloader-data:/data \
+  -e BROWSER_NO_SANDBOX=true \
+  ghcr.io/<owner>/downloader:0.4.0
+```
+
+Those are the three settings `compose.downloader.yaml` explains at length — an
+init to reap what ffmpeg and Chromium fork, shared memory for Chromium's
+renderers, and the container rather than Chromium's own sandbox as the boundary —
+and the loopback bind is there for the same reason as above.
+
+### Deploying it
+
+Beside the other tools, on one host behind one Cloudflare Tunnel — the
+[root README](../../README.md#deploying-a-set-of-tools) for the shape, and
+[docs/02-DEPLOYMENT.md](../../docs/02-DEPLOYMENT.md) for the walkthrough and
+[its downloader section](../../docs/02-DEPLOYMENT.md#the-downloader). Its login
+carries the one exception on that page — a Bypass on `/api/files/*`, so download
+links stay shareable — and it is an exception the planner's must not copy.
 
 ### From source
 

@@ -41,15 +41,15 @@ honest description of a young tool rather than a gap to fill with guesses.
 | [`CLAUDE.md`](../CLAUDE.md)            | The conventions every tool follows. The rules, not the plan       |
 | [`SECURITY.md`](../SECURITY.md)        | How to report a vulnerability, and what counts as one             |
 | [01-TICKETS.md](./01-TICKETS.md)       | How work is written down: the ticket format and its life          |
-| [02-DEPLOYMENT.md](./02-DEPLOYMENT.md) | Putting a tool on a public subdomain from a host behind a router  |
+| [02-DEPLOYMENT.md](./02-DEPLOYMENT.md) | Putting any set of the tools on one host, behind a router         |
 | [03-RELEASING.md](./03-RELEASING.md)   | Commit conventions, versions, changelogs, and the images they cut |
 | [adr/](./adr/)                         | Decisions binding more than one tool                              |
 | [work/](./work/)                       | Repo-wide tickets, `repo-` prefixed — the toolchain and the rules |
 
 Deployment and releasing are here rather than under a tool because the tunnel,
 the login policy, `compose.prod.yaml` and the version scheme are one story for
-whatever gets published; the downloader is their worked example, not their
-subject.
+whatever gets published, and one host runs whichever tools it merges, not
+one deployment per tool.
 
 A tool's generated `CHANGELOG.md` sits at the root of the tool rather than in
 its `docs/` spine — the spine is written by hand and read by agents, and a file
