@@ -16,8 +16,11 @@ import type { Database } from "better-sqlite3";
 /**
  * Each entry is one irreversible step. Never edit a shipped migration — append
  * a new one, or an existing database and a fresh one end up different shapes.
+ *
+ * Exported so a test can apply a prefix by hand — "a database already at
+ * migration N" — without duplicating the SQL.
  */
-const MIGRATIONS: readonly string[] = [
+export const MIGRATIONS: readonly string[] = [
   // 1 — jobs, plus the capability tokens that address their output files.
   `
   CREATE TABLE jobs (
@@ -90,6 +93,35 @@ const MIGRATIONS: readonly string[] = [
   ) STRICT;
 
   CREATE INDEX thumbnail_files_job ON thumbnail_files (job_id);
+  `,
+
+  // 5 — durable outcomes for `POST /api/probe`, and the hostname a job was
+  // created for (dl-57).
+  //
+  // Neither carries a path, a query string or an address. A signed URL keeps
+  // its credential in the query string (the redaction rule in the root
+  // `CLAUDE.md`), and a hostname is what every question this table answers
+  // needs — which sites fail, at which resolver, how long a probe takes.
+  // `jobs.host` is nullable because it is set at creation from here on; a row
+  // written before dl-57 reads back as no host, the same "older build, older
+  // shape" stance `thumbnail_path` already takes two migrations up.
+  `
+  CREATE TABLE probe_outcomes (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    host          TEXT NOT NULL,
+    outcome       TEXT NOT NULL,
+    resolver      TEXT,
+    attempts_json TEXT NOT NULL,
+    duration_ms   INTEGER NOT NULL,
+    cached        INTEGER NOT NULL DEFAULT 0,
+    variants      INTEGER,
+    drm           INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL
+  ) STRICT;
+
+  CREATE INDEX probe_outcomes_created_at ON probe_outcomes (created_at);
+
+  ALTER TABLE jobs ADD COLUMN host TEXT;
   `,
 ];
 

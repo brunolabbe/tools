@@ -16,11 +16,13 @@
 
 import { AppError, probeRequestSchema, ROUTES } from "@downloader/contract";
 import type { ProbeResponse, ProbeResult, ResolveOptions } from "@downloader/contract";
+import type { ResolverAttempt } from "@downloader/resolvers";
 import { clientKey } from "@webtools/core/rate-limit";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
 import { withoutEgressProxy } from "../egress-proxy.ts";
 import { probeForClient } from "../probe-out.ts";
+import { recordProbeOutcome } from "../probe-outcomes.ts";
 import { createRateLimitHook } from "../rate-limit.ts";
 import { urlsInProbeResult } from "../ssrf.ts";
 import { captureThumbnail, withThumbnailPath } from "../thumbnails.ts";
@@ -48,6 +50,10 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
     // request cached an answer for it under a different policy.
     const url = await context.guard.assertAllowed(rawUrl);
     const cacheKey = url.href;
+    // Hostname only, from here to every outcome row this handler writes — never
+    // the path or query string a signed URL carries its credential in. See
+    // dl-57.
+    const host = url.hostname;
 
     if (refresh !== true) {
       const cached = context.probeCache.get(cacheKey);
@@ -57,6 +63,16 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
         // rewrite the fresh path does. The cache deliberately holds the
         // credentials — nothing else reads it today, but a stored object that is
         // already stripped is one nothing *could* ever drive a download from.
+        recordProbeOutcome(context, {
+          host,
+          outcome: "ok",
+          resolver: cached.resolver,
+          attempts: [],
+          durationMs: 0,
+          cached: true,
+          variants: cached.variants.length,
+          drm: cached.drm.protected,
+        });
         const body: ProbeResponse = { probe: probeForClient(cached), cached: true };
         return await reply.send(body);
       }
@@ -93,9 +109,9 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
 
     // dl-43: every exit from here on terminates the stream, including the ones
     // that throw. A `finally` on the resolve alone would leave the channel open
-    // through the thumbnail capture — and the gate refusal below never gets
-    // that far at all, so a client whose probe was refused outright would sit
-    // watching a live stream that will never say anything again.
+    // through the thumbnail capture — and a refusal below never gets that far
+    // at all, so a client whose probe was refused outright would sit watching a
+    // live stream that will never say anything again.
     const finishNarration = (): void => {
       if (narrating && probeId !== undefined) context.probeStages.done(probeId);
     };
@@ -103,13 +119,19 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
     // Bounds one client's own share of the server-wide gate below — a client
     // inside its per-minute bucket but still holding a prior slow probe
     // otherwise gets to start another (dl-51). Same key `rateLimits.probe`
-    // buckets on, so `TRUST_PROXY` means the same thing for both.
+    // buckets on, so `TRUST_PROXY` means the same thing for both. Outside any
+    // try/finally: `null` means nothing was acquired, so there is nothing to
+    // release.
     const clientReleaseProbe = context.probeClientGate.tryAcquire(clientKey(request.ip));
     if (clientReleaseProbe === null) {
       finishNarration();
       context.logger.warn("probe refused: per-client cap reached", {
         limit: context.probeClientGate.limit,
       });
+      // Per-client, not tool-wide capacity — the same reasoning dl-57 gives for
+      // excluding the per-minute bucket below: this measures one client, not
+      // the server, so it gets no probe_outcomes row either (dl-51/dl-57
+      // agreement).
       reply.header("Retry-After", String(GATE_RETRY_AFTER_SEC));
       throw new AppError(
         "RATE_LIMITED",
@@ -119,14 +141,35 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
     }
 
     try {
-      // The per-IP bucket above bounds one caller. This bounds the whole server,
-      // which is the only thing that helps when the requests arrive from a
-      // thousand addresses that have each spent nothing.
+      // Filled by the registry as it tries each tier, win or lose, so it holds
+      // the full timeline whether `resolve()` returns or throws — see
+      // `ResolverRegistry.resolve()`.
+      const attempts: ResolverAttempt[] = [];
+      const startedAt = context.now().getTime();
+
+      // The per-client cap above bounds one caller. This bounds the whole
+      // server, which is the only thing that helps when the requests arrive
+      // from a thousand addresses that have each spent nothing.
       const release = context.probeGate.tryAcquire();
       if (release === null) {
         finishNarration();
         context.logger.warn("probe refused: concurrency gate full", {
           limit: context.probeGate.limit,
+        });
+        // A capacity signal, not a per-client one — dl-52's input. Distinct
+        // from the per-client rate-limit bucket above, which refuses in an
+        // `onRequest` hook this handler never reaches, and from the per-client
+        // probe cap above, which is excluded by the agreement noted there — no
+        // row here is ever either of those.
+        recordProbeOutcome(context, {
+          host,
+          outcome: "RATE_LIMITED",
+          resolver: null,
+          attempts: [],
+          durationMs: 0,
+          cached: false,
+          variants: null,
+          drm: false,
         });
         reply.header("Retry-After", String(GATE_RETRY_AFTER_SEC));
         throw new AppError(
@@ -141,7 +184,7 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
         try {
           // The resolvers echo the proxy they were given; that is this process's own
           // loopback port and no client's business.
-          probe = withoutEgressProxy(await context.registry.resolve(url, resolveOptions));
+          probe = withoutEgressProxy(await context.registry.resolve(url, resolveOptions, attempts));
         } finally {
           release();
         }
@@ -181,9 +224,34 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
           preview: thumbnailPath !== null,
           requestContext: probe.requestContext,
         });
+        recordProbeOutcome(context, {
+          host,
+          outcome: "ok",
+          resolver: probe.resolver,
+          attempts,
+          durationMs: context.now().getTime() - startedAt,
+          cached: false,
+          variants: probe.variants.length,
+          drm: probe.drm.protected,
+        });
 
         const body: ProbeResponse = { probe: probeForClient(clientProbe), cached: false };
         return await reply.send(body);
+      } catch (error: unknown) {
+        // Whatever stage failed — resolution, the SSRF vet on its output, the
+        // thumbnail capture — `attempts` already holds every tier the registry
+        // tried, so the row is as informative on a late failure as an early one.
+        recordProbeOutcome(context, {
+          host,
+          outcome: AppError.from(error).code,
+          resolver: null,
+          attempts,
+          durationMs: context.now().getTime() - startedAt,
+          cached: false,
+          variants: null,
+          drm: false,
+        });
+        throw error;
       } finally {
         finishNarration();
       }

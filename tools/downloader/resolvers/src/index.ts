@@ -8,6 +8,7 @@
  */
 
 export { ResolverRegistry } from "./registry.ts";
+export type { ResolverAttempt } from "./registry.ts";
 
 export { listMediaSegments, parseHls } from "./manifest/hls.ts";
 export type { MediaSegment } from "./manifest/hls.ts";

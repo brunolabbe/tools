@@ -3,7 +3,7 @@ id: dl-57
 tool: downloader
 title: Keep a record of how each probe and download ended, and a report that reads it
 kind: work-package
-status: ready
+status: done
 milestone: M5
 depends_on: []
 difficulty: standard
@@ -123,3 +123,103 @@ download success rate measures patience instead of the tool.
   `1835657`, not measured.
 - 2026-09-14 — Noted that dl-53's streaming makes a visitor's disconnect a
   download outcome of its own.
+- 2026-09-14 — Built. Branch `dl-57-outcome-record` off `origin/main` `95c6403`.
+  **dl-57 lands before dl-53.** Per the orchestrator's note at intake, the
+  obligation to distinguish a visitor's disconnect from a real failure falls on
+  whichever of dl-57 / dl-53 lands second — that is dl-53. This branch does not
+  build streaming or disconnect semantics; a download's outcome here is still
+  read straight off `jobs.status`/`error_json`, unchanged from today. The next
+  builder on dl-53 should read this note before assuming the split is settled
+  elsewhere.
+
+  **What the brief had wrong or left open:**
+  - `details` on `AppErrorPayload` (`@webtools/core`) is `Record<string,
+unknown>` — not typed in `@downloader/contract` — so step 3's "stop and
+    raise it" did not apply; proceeded without asking.
+  - "Time the winning attempt too" turned out to need more than adding
+    `durationMs` to the existing `details.attempts` entries (which only ever
+    covers the failed-then-fell-through case). Gave `ResolverRegistry.resolve()`
+    a new optional third parameter, `attempts?: ResolverAttempt[]` (mutated in
+    place, one entry per candidate tried — `code: null` for the winner) so a
+    caller has the full timeline on success and on failure alike, without
+    reaching into an error's `details`. `ResolverAttempt` is exported from
+    `@downloader/resolvers`, not `@downloader/contract` — the registry is not
+    part of that tool's contract package, so this is not the kind of change
+    step 3 was warning about. `resolvers/test/registry.test.ts` covers the
+    out-parameter directly; the existing "lists what was tried" test gained
+    `durationMs: expect.any(Number)` on each entry, which is the one place a
+    pre-existing assertion had to change shape.
+  - `docs/02-DEPLOYMENT.md` (repo-root, not a `tools/downloader/docs/` file) is
+    what the ticket's bare `docs/02-DEPLOYMENT.md` reference meant, distinct
+    from `01-ARCHITECTURE.md` a line above it, which is
+    `tools/downloader/docs/`-relative. Added a "Reading the downloader's
+    outcome report" subsection under its "## Operating it" heading, per the
+    Build step's instruction to document it there specifically.
+  - Scoping call, not a contract question: outcome recording in `routes/probe.ts`
+    starts once `context.guard.assertAllowed(rawUrl)` has returned a `URL` (so a
+    hostname exists to record). `INVALID_URL` (an unparseable body) and a
+    guard-blocked address before that point are not recorded — there is no
+    hostname to attach, and the four enumerated Done-when cases (success,
+    failure, cache hit, gate refusal) all sit after that point. If the report
+    should also see malformed/blocked-address attempts, that is a small,
+    separate follow-up rather than a rework of this branch.
+  - Report's "probe success rate, per winning resolver" reads as each
+    resolver's share of successful probes (successes by that resolver ÷ total
+    successes), not that resolver's own hit rate across every attempt —
+    `attempts_json` has the data for the latter if a future report wants it.
+    Duration percentiles per resolver exclude cache hits (recorded `durationMs:
+0`), which would otherwise deflate real resolve latency.
+
+  **dl-51 seam** (per-client job-slot cap, built concurrently by
+  `aaa591c7f4b3f67c7` on an unmerged branch): agreed directly with that builder
+  that its new per-client probes-in-flight refusal is per-client, not tool-wide
+  capacity, and — by the same reasoning my own ticket gives for excluding the
+  existing per-minute bucket — must not get a `probe_outcomes` row. On my
+  current `routes/probe.ts`, that refusal is thrown before my `attempts`/
+  `startedAt` declarations and outside the `try`/`catch` my recording lives in,
+  so it is excluded by construction; no defensive `scope` check was added
+  because nothing in my code currently reaches it. dl-51 flagged a real
+  file-overlap risk: its change wraps the whole existing handler body (probe
+  gate through `reply.send`) in a new outer `try`/`finally`, re-indenting the
+  span my recording calls sit in — whoever merges the two branches should
+  rebase/re-apply rather than line-merge that hunk. Not something either
+  branch needs to fix now.
+
+  **Citations gate.** `node scripts/citations-gate.mjs --against origin/main`
+  found 8 records with citations whose line numbers this branch's edits moved
+  (line-shifted, not wrong): `dl-19`, `dl-32`, `dl-34`, `dl-43`, `dl-44`,
+  `dl-45`, `dl-46`, and the repo-scoped `repo-33`. Pinned the 7 `dl-*` records'
+  moved citations to `origin/main`'s `95c6403` (`<file>@95c6403:<line>`, line
+  and anchor text unchanged), per `.claude/skills/orchestrate-tickets/reference/records.md:93-138`
+  and the repo-44 precedent. Left `repo-33` untouched — it is under
+  `docs/work/repo-*`, and the orchestrator said a peer session is pinning repo
+  records concurrently. Verified each pin resolves with
+  `node scripts/citations.mjs <record> --section Review --rev origin/main`
+  (`exit 0 — nothing to fix` on the ones checked). Gate before: 8 records
+  failed, 73 enforced. Gate after: 1 record failed (`repo-33`, left for the
+  peer session), 73 enforced.
+
+  **Fold-in:** nothing else in reach was small and already specified enough to
+  fold in beyond the ticket's own Build list.
+
+  **Files:** `tools/downloader/api/src/db/schema.ts` (migration 5),
+  `tools/downloader/api/src/db/job-store.ts` (`jobs.host`, `probe_outcomes`
+  read/write/prune), `tools/downloader/resolvers/src/registry.ts` +
+  `src/index.ts` (`ResolverAttempt`, the `attempts` out-parameter),
+  `tools/downloader/api/src/probe-outcomes.ts` (new — the never-fail wrapper),
+  `tools/downloader/api/src/routes/probe.ts` (records every outcome),
+  `tools/downloader/api/src/config.ts` + `.env.example` +
+  `tools/downloader/docs/01-ARCHITECTURE.md` (`OUTCOME_RETENTION_DAYS`),
+  `tools/downloader/api/src/server.ts` (prunes `probe_outcomes` in the
+  retention sweep), `tools/downloader/api/src/report.ts` (new — the read-only
+  report), `docs/02-DEPLOYMENT.md` (documents running it). Tests:
+  `tools/downloader/api/test/schema.test.ts` (new),
+  `tools/downloader/api/test/probe-outcomes.test.ts` (new), additions to
+  `tools/downloader/api/test/job-store.test.ts` (and its two migration-count
+  assertions updated from 4 to 5), `tools/downloader/resolvers/test/registry.test.ts`.
+
+  **Verification:** `npm run check` — clean. `npm test -- --project
+downloader` — 77 files, 1284 tests, all green (baseline before this branch:
+  75 files, 1265 tests). `docker compose exec downloader node dist/report.js`
+  is **unproven (gate)** — the container build did not run here, per the
+  ticket.

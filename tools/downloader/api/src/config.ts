@@ -74,6 +74,13 @@ export interface ApiConfig {
   /** How often the retention sweep runs. */
   gcIntervalMs: number;
   /**
+   * How long a `probe_outcomes` row survives before the retention sweep prunes
+   * it. Unlike `fileRetentionHours` this is about table size, not privacy — a
+   * row carries a hostname and resolver timings, never a path, a query string
+   * or an address (dl-57).
+   */
+  outcomeRetentionDays: number;
+  /**
    * Probe cache TTL. Capped hard at 60 s: long enough to spare a double-click,
    * short enough that the signed URLs inside a cached result are still alive
    * (analysis §5). A longer TTL would serve dead links with a straight face.
@@ -276,6 +283,7 @@ export const API_DEFAULTS = {
   maxTotalStorageGb: 50,
   fileRetentionHours: 6,
   gcIntervalMs: 15 * 60_000,
+  outcomeRetentionDays: 90,
   probeCacheTtlMs: 30_000,
   logLevel: "info",
   rateLimitProbePerMinute: 10,
@@ -467,6 +475,9 @@ export function loadApiConfig(
       overrides.fileRetentionHours ??
       int(env["FILE_RETENTION_HOURS"], API_DEFAULTS.fileRetentionHours),
     gcIntervalMs: overrides.gcIntervalMs ?? int(env["GC_INTERVAL_MS"], API_DEFAULTS.gcIntervalMs),
+    outcomeRetentionDays:
+      overrides.outcomeRetentionDays ??
+      int(env["OUTCOME_RETENTION_DAYS"], API_DEFAULTS.outcomeRetentionDays, { min: 0 }),
     probeCacheTtlMs: Math.min(
       PROBE_CACHE_TTL_CEILING_MS,
       overrides.probeCacheTtlMs ??

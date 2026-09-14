@@ -24,6 +24,18 @@ function byPriority(a: Resolver, b: Resolver): number {
   return a.priority - b.priority;
 }
 
+/**
+ * One resolver's turn in the chain, win or lose (dl-57).
+ *
+ * `code` is `null` for the attempt that returned a result — the only way to
+ * tell it apart from a `NO_MEDIA_FOUND` fall-through without a separate flag.
+ */
+export interface ResolverAttempt {
+  resolver: string;
+  code: string | null;
+  durationMs: number;
+}
+
 export class ResolverRegistry {
   #resolvers: readonly Resolver[];
 
@@ -46,8 +58,17 @@ export class ResolverRegistry {
    * `options.timeoutMs` is a budget for the *whole chain*, not per resolver: a
    * caller that waited 45 s does not care that three resolvers each stayed
    * under their own limit.
+   *
+   * `attempts`, when passed, is appended to in place with every resolver this
+   * call tries — losers and the eventual winner alike — so a caller building an
+   * outcome record has the full timeline whether `resolve()` returns or throws
+   * (dl-57). Optional and unused by every caller that predates it.
    */
-  async resolve(url: URL, options: ResolveOptions): Promise<ProbeResult> {
+  async resolve(
+    url: URL,
+    options: ResolveOptions,
+    attempts: ResolverAttempt[] = [],
+  ): Promise<ProbeResult> {
     const candidates = this.#resolvers.filter((resolver) => resolver.canHandle(url));
     if (candidates.length === 0) {
       throw new AppError("NO_MEDIA_FOUND", "No resolver can handle that address.", {
@@ -77,26 +98,31 @@ export class ResolverRegistry {
       signal,
       ...(onStage === undefined ? {} : { onStage }),
     };
-    const attempts: Array<{ resolver: string; code: string }> = [];
-
     for (const resolver of candidates) {
       abortIfNeeded(options.signal, deadline);
       // Before `resolve`, not after: firing on the way out would never announce
       // the tier that succeeds, which is the only one the user waits on.
       onStage?.({ stage: "resolver-start", resolver: resolver.name });
+      const startedAt = Date.now();
       try {
         // Sequential on purpose: the point of the chain is that the cheap tiers
         // spare us the expensive ones. Running them in parallel would pay for
         // a browser probe on every request.
         // oxlint-disable-next-line no-await-in-loop
-        return await resolver.resolve(url, chainOptions);
+        const result = await resolver.resolve(url, chainOptions);
+        attempts.push({ resolver: resolver.name, code: null, durationMs: Date.now() - startedAt });
+        return result;
       } catch (cause) {
         // An abort surfaces from inside a resolver in whatever shape its
         // transport chose, so the signals are authoritative, not the error.
         abortIfNeeded(options.signal, deadline);
         const error = AppError.from(cause);
+        attempts.push({
+          resolver: resolver.name,
+          code: error.code,
+          durationMs: Date.now() - startedAt,
+        });
         if (error.code !== "NO_MEDIA_FOUND") throw error;
-        attempts.push({ resolver: resolver.name, code: error.code });
       }
     }
 
