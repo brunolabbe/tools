@@ -70,3 +70,25 @@ Written with the decision.
 
 - 2026-09-13 — Filed as `needs-decision`. Cloudflare's current terms have not
   been read for this filing. That reading comes first.
+- 2026-09-13 — **Terms read, and they are stricter than the deployment doc
+  said.** WebFetch is blocked in the devcontainer, so this reading comes from
+  web search results that quote the pages, not from loading them directly:
+  - [Service-Specific Terms, CDN section](https://www.cloudflare.com/service-specific-terms-application-services/):
+    unless you are on Enterprise, video and other large files served through
+    the CDN must use a paid service such as Stream, Images or the Developer
+    Platform. Cloudflare may disable or limit the CDN for a customer serving
+    video, or a disproportionate share of large files, without one. It will
+    make reasonable efforts to give notice.
+  - [Cloudflare's 2023 terms update](https://blog.cloudflare.com/updated-tos/)
+    names content hosted on R2 as allowed.
+  - [Delivering Videos with Cloudflare](https://developers.cloudflare.com/fundamentals/reference/policies-compliances/delivering-videos-with-cloudflare/)
+    applies the rule to Tunnel public hostname routes on Free, Pro and
+    Business plans.
+
+  **What this changes.** Option A is not a gray area. It is the case the
+  terms name. The zone's plan was not checked, because `gh api` is denied and
+  the Cloudflare token lives in a `.env`. Anything short of Enterprise is
+  covered, though. The live instance behind Access already serves video this
+  way, at a scale nobody notices. Opening it to the public is the scale that
+  gets noticed. `docs/02-DEPLOYMENT.md` said "discouraged" and was corrected in
+  the same commit.

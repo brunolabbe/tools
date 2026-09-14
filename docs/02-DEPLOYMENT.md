@@ -313,10 +313,17 @@ URL and a couple of options — `MAX_BODY_BYTES` in
 [`server.ts`](../tools/downloader/api/src/server.ts) caps them at 64 KB. Files
 come back out and are not subject to it.
 
-**Bulk video through the proxy is discouraged by Cloudflare's self-serve terms.**
-At personal scale this is not something anyone notices. If you ever do get a
-notice, the fix is to move the file transfer off the tunnel — publish the LAN
-address for `/api/files/*` and keep the UI where it is — not to argue about it.
+**Video through the proxy is against Cloudflare's terms on any plan short of
+Enterprise.** The CDN section of the Service-Specific Terms lets Cloudflare
+disable or limit a zone that serves video, or a disproportionate share of large
+files, without a paid service (Stream, Images, or content hosted on R2). Its
+documentation applies that to Tunnel public hostnames. At personal scale nobody
+notices. If you ever do get a notice, the fix is to move the file transfer off
+the tunnel — publish the LAN address for `/api/files/*` and keep the UI where
+it is — not to argue about it. A public instance cannot use that fix, because
+its visitors are not on your LAN.
+[dl-53](../tools/downloader/docs/work/dl-53-finished-files-and-the-tunnel.md)
+decides what it does instead.
 
 ---
 

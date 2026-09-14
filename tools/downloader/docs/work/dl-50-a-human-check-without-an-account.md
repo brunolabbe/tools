@@ -3,7 +3,7 @@ id: dl-50
 tool: downloader
 title: Tell a person from a script before a probe runs, without asking for an account
 kind: work-package
-status: needs-decision
+status: ready
 milestone: M5
 depends_on: []
 difficulty: hard
@@ -11,8 +11,7 @@ difficulty: hard
 
 # dl-50 — A human check without an account
 
-**Packages:** depends on the option chosen. Option A touches `contract`, `api`
-and `web`, plus `packages/core` if the new error code belongs there.
+**Packages:** `packages/core` (the error code), `contract`, `api` and `web`.
 
 ## Why
 
@@ -28,60 +27,92 @@ A login was the defence against that, and the owner has ruled one out. **So this
 ticket decides what replaces it.** The question has more than one reasonable
 answer, and the costs differ a lot.
 
-## The decision
+## Decision — answered 2026-09-13 by the owner, not open
 
-**A — Cloudflare Turnstile on probe and job creation (recommended).** The UI
-renders the widget. `POST /api/probe` and `POST /api/jobs` carry its token, and
-the API verifies that token against Cloudflare's `siteverify` before any work
-starts. Mostly invisible to a person, and it costs a script a solved challenge
-per request. Costs:
+Three answers, each the recommendation, so nobody was overridden:
+
+1. **Option A, Cloudflare Turnstile**, on probe and job creation.
+2. **The failed-check error code goes in `@webtools/core`,** not the
+   downloader's contract. "Human check failed" means something to the planner,
+   which has never heard of the downloader. That is the root `CLAUDE.md` test
+   for core. The code is not retryable: an automatic retry sends the same spent
+   token. `HUMAN_CHECK_FAILED` is a suggested name, not part of the decision.
+3. **Fail closed.** When `siteverify` cannot be reached or does not answer in
+   time, the probe or job is refused. The site is itself served through
+   Cloudflare, so an outage that stops verification usually takes the page
+   down too. Failing open would let a script get past the check by waiting for
+   an outage.
+
+The options as they were put, so the choice is not re-opened as an oversight:
+
+**A — Cloudflare Turnstile on probe and job creation (chosen).** The UI renders
+the widget. `POST /api/probe` and `POST /api/jobs` carry its token, and the API
+verifies that token against Cloudflare's `siteverify` before any work starts.
+Mostly invisible to a person, and it costs a script a solved challenge per
+request. Costs:
 
 - **A contract change.** The request schemas gain a token field, and a failed
-  check needs an error code. By the root `CLAUDE.md` test, "human check failed"
-  would mean something to a tool that has never heard of this one, so the code
-  is probably `@webtools/core`'s. That is its own decision to raise, not to
-  make quietly.
+  check needs an error code.
 - **dl-35's CSP widens.** `routes/web.ts` enumerates `script-src 'self'`, and
   the widget needs `challenges.cloudflare.com` in `script-src` and `frame-src`.
   dl-35's comment says every widening is recorded there with its reason. So is
   `e2e/csp.spec.ts`, which measures the policy in a real browser.
 - **A new outbound call from the API to a fixed host.** It is not a
   user-influenced URL, so the SSRF rule does not apply to it. It still needs a
-  timeout and a decided behaviour when Cloudflare is unreachable: fail closed,
-  or let the rate limits stand alone.
+  timeout.
 - **Two secrets** (site key, secret key) in the host's `.env`, and a test
   seam: Cloudflare publishes always-pass and always-fail test keys.
 
 **B — A Cloudflare challenge in front of the page, and no code.** A WAF rule
-issues a managed challenge on the document. That costs nothing in the repo, but
-a challenge answers with HTML, and the UI's `fetch` and `EventSource` cannot
-solve one. It protects only the page, and a script calls `/api/probe` directly.
-**Measure before choosing it:** whether a rule this plan tier allows can require
-a passed challenge on `/api/` requests. If not, B protects nothing that matters.
+issues a managed challenge on the document. A challenge answers with HTML, and
+the UI's `fetch` and `EventSource` cannot solve one. So it protects only the
+page, and a script calls `/api/probe` directly. Not measured, because A was
+chosen.
 
-**C — Nothing beyond dl-51 and dl-52.** Rate limits and caps alone. It is the
-cheapest, and it accepts that a distributed script gets
-`MAX_CONCURRENT_BROWSERS` worth of your host for as long as it cares to.
+**C — Nothing beyond dl-51 and dl-52.** Rate limits and caps alone, which
+accepts that a distributed script gets `MAX_CONCURRENT_BROWSERS` worth of the
+host for as long as it cares to.
 
 ## Build
 
-Written once the decision is recorded here. For A, in order:
-
-1. Raise the error-code placement (core or tool) with the owner.
-2. Contract change: add the token field and the error code.
-3. API: verify the token before the probe gate and the job queue, not after.
-   A refused check must not hold a concurrency slot.
-4. Web: render the widget, send the token, and handle its expiry. A token is
-   single-use, and one analysis makes two calls.
-5. CSP widening with its reason, and the e2e CSP spec updated.
-6. Settings in `.env.example` and the architecture's settings table. Leaving
-   the check unset keeps today's behaviour for a self-hoster behind Access.
+1. **Core:** add the code to `CORE_ERROR_CODES` and `CORE_ERROR_MESSAGES` in
+   `packages/core/src/errors.ts`, and leave it out of `CORE_RETRYABLE_CODES`.
+   Check whether the downloader's catalog needs its own wording.
+2. **Contract:** add the token field to the probe and job request schemas.
+3. **API:** verify the token before the probe gate and the job queue, not
+   after. A refused check must not hold a concurrency slot. Give `siteverify` a
+   bounded timeout, and treat a timeout, a network error or a non-2xx answer as
+   a refusal. The token is a credential: it reaches no log line and no
+   outcome record (dl-57, dl-58).
+4. **Web:** render the widget, send the token, and handle its expiry. A token
+   is single-use, and one analysis makes two calls.
+5. **CSP:** widen `script-src` and `frame-src` for `challenges.cloudflare.com`
+   only. Record the reason beside the policy, and update `e2e/csp.spec.ts`.
+6. **Settings:** add them to `.env.example` and the architecture's settings
+   table. Leaving the check unset keeps today's behaviour, for a self-hoster
+   behind Access.
 
 ## Done when
 
-Written with the decision.
+- A probe or job with no token, or verified with Cloudflare's always-fail test
+  secret, is refused with the core code. A test proves no probe-gate or
+  job-queue slot was taken.
+- With the always-pass test keys, a probe and a job run as they do today.
+- A `siteverify` that times out or cannot be reached refuses the request. A
+  test stubs both cases.
+- With the settings unset, no token is required, and a test says so.
+- No log line and no stored record contains the token. A test asserts this
+  over captured logger output.
+- The CSP differs from dl-35's only by `challenges.cloudflare.com` in
+  `script-src` and `frame-src`, and `e2e/csp.spec.ts` asserts the new policy.
+- In the browser, one analysis makes both calls (probe, then job) with a
+  fresh token each time, and neither is refused.
+- `npm run check` and `npm test` are green.
 
 ## Log
 
 - 2026-09-13 — Filed as `needs-decision`. Nothing measured yet. Option B's
   plan-tier question is the one measurement to take before asking.
+- 2026-09-13 — The owner chose A, the error code in core, and failing closed.
+  Moved to `ready`, and Build and Done when written. B's measurement was not
+  taken, because it was not chosen.

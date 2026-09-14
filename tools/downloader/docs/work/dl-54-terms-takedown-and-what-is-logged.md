@@ -35,9 +35,26 @@ A public service is expected to say three things. Today it says none of them:
 This is not legal advice, and the ticket must not pretend otherwise. It records
 the owner's choices, and the build makes the service say them.
 
+## Decision 1 — answered 2026-09-13 by the owner, not open
+
+**Keep 14 days, option A below.** The client address and the probed page URL
+are kept for 14 days and then deleted, and the terms page says so. It was the
+recommendation, so nobody was overridden. **Parts 2 and 3 are still open**,
+which is why this ticket stays `needs-decision`.
+
+The answer covers the database as well as the logs. That makes two pieces of
+work the build owns:
+
+- **Job rows.** A sweep deletes job rows older than 14 days, or at least clears
+  their `source_url`. Nothing deletes a job row today.
+- **Docker logs.** Docker's default `json-file` logging driver rotates by size
+  (`max-size`, `max-file`), not by age. So "14 days" in the logs is a size
+  measured from a day's traffic, or a driver that can expire by time. It is not
+  one setting in `compose.downloader.prod.yaml`.
+
 ## The decision
 
-**1 — Logging retention.**
+**1 — Logging retention.** Answered above.
 
 - **A — Keep `ip` and the probed URL for a short, fixed period (recommended),**
   such as 14 days. That is long enough to answer "who asked for this", and it
