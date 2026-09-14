@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: location.assign</title>
+  </head>
+  <body>
+    <h1>Guard: location.assign</h1>
+    <!-- A document navigation this time, not a history-state change, to a page
+         that plays a stream of its own (dl-55: a plain visit plays it). -->
+    <button id="play" type="button">Play</button>
+
+    <script>
+      (function () {
+        document.getElementById("play").addEventListener("click", function () {
+          location.assign("/mse.html");
+        });
+      })();
+    </script>
+  </body>
+</html>

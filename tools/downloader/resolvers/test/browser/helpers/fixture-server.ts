@@ -69,6 +69,14 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         return;
       }
 
+      // dl-55: a redirect during load is legitimate — the landing URL is
+      // recorded only after navigation settles, so this must still probe.
+      if (pathname === "/guard-redirect") {
+        response.writeHead(302, { location: "/mse.html" });
+        response.end();
+        return;
+      }
+
       // Extensionless, signed manifest: only Content-Type identifies it.
       const filePath =
         pathname === "/media/dash/stream"

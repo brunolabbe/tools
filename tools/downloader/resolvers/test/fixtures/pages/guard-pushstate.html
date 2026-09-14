@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: history.pushState</title>
+  </head>
+  <body>
+    <h1>Guard: history.pushState</h1>
+    <!-- The play control navigates the top frame in place, the same as a
+         single-page video site swapping to a related item (dl-55): a new URL
+         by `pushState`, and a content swap, but no new document. -->
+    <button id="play" type="button">Play</button>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        document.getElementById("play").addEventListener("click", function () {
+          history.pushState({}, "", "/guard-pushstate-target.html");
+          document.body.innerHTML =
+            '<h1>Somewhere else now</h1><video id="v" muted playsinline autoplay></video>';
+          fetch("/media/related-target/master.m3u8").catch(function () {});
+        });
+      })();
+    </script>
+  </body>
+</html>

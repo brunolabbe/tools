@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Related-card trap</title>
+    <style>
+      /* The real player: no chrome, no play button, no text a click step
+         matches — only a click on its own surface starts it (dl-55). */
+      #player {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 640px;
+        height: 360px;
+      }
+      /* A related-video card, first in the DOM so a naive "first <video>"
+         pick lands on it, layered above the player's own bottom-right corner
+         — a common "up next" placement, and the shape dl-55 reproduced. */
+      #card {
+        position: absolute;
+        top: 300px;
+        left: 580px;
+        width: 150px;
+        height: 100px;
+        z-index: 5;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Related-card trap</h1>
+    <!-- No `src`: a hover-preview clip that never loaded, the same as most
+         "up next" cards before they are hovered. `PLAY_SCRIPT` calling
+         `play()` on it therefore never produces a request (dl-55 Log) — there
+         is nothing here for `PLAY_SCRIPT`'s own chooser to need. -->
+    <a id="card-link" href="/related-card-target.html">
+      <video id="card" muted playsinline></video>
+    </a>
+
+    <!-- A native click-to-toggle on a `controls` video, exactly like
+         dash.html's fixture: no button, no matching text, so only the
+         surface click reaches `start()`. -->
+    <video id="player" muted playsinline controls></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          document.getElementById("status").textContent = "loading";
+          fetch("/media/related/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/related/v720.m3u8");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        document.getElementById("player").addEventListener("play", start);
+      })();
+    </script>
+  </body>
+</html>

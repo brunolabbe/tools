@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Duration chooser</title>
+  </head>
+  <body>
+    <h1>Duration chooser</h1>
+    <!-- A related-video card, first in the DOM, with a longer `duration` than
+         the real player — so a first-match chooser would report the wrong
+         length (dl-55). `duration` is normally read-only; the script below
+         shadows it with an own property, which is all a fixture needs to
+         drive `METADATA_SCRIPT`'s duration fallback without a real decodable
+         media resource. -->
+    <a href="/related-card-target.html">
+      <video id="card" width="150" height="100" muted playsinline></video>
+    </a>
+    <video id="player" width="640" height="360" muted playsinline controls></video>
+
+    <script>
+      Object.defineProperty(document.getElementById("card"), "duration", {
+        value: 30,
+        configurable: true,
+      });
+      Object.defineProperty(document.getElementById("player"), "duration", {
+        value: 942,
+        configurable: true,
+      });
+    </script>
+  </body>
+</html>

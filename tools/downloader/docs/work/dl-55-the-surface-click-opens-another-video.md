@@ -3,7 +3,7 @@ id: dl-55
 tool: downloader
 title: The browser tier clicks the first video element on a page, and returns the stream of whatever page that click opened
 kind: fix
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -233,3 +233,149 @@ found all of them true. Its report is on the pull request thread.
 - **low, fixed** — `api/src/thumbnails.ts` said `probeTimeoutMs` defaults to
   30 s, and `api/src/config.ts` sets 45 s. The comment is corrected on this
   branch.
+
+## 2026-09-14 — built
+
+Branch `dl-55-surface-click-opens-another-video` off `origin/main` at `95c6403`
+(the head at intake).
+
+**Both layers landed, as the owner decided.**
+
+1. **Selection**, `resolvers/src/browser/provoke.ts`. `CHOOSE_VIDEO_FN` is one
+   in-page function shared, as a string, by two call sites: `CHOOSE_VIDEO_SCRIPT`
+   marks the chosen element (a visible `<video>` with no `a[href]` or
+   `[role='link']` ancestor, largest rendered area among those) with
+   `data-downloader-video`, so `clickChosenVideo` clicks it through the locator
+   API in a scriptable frame; and `METADATA_SCRIPT`'s duration fallback calls the
+   same function directly. A cross-origin frame has no evaluation context to mark
+   an element in, so it gets a CSS-only fallback, `NON_CARD_VIDEO_SELECTOR`
+   (`video:not(a[href] *):not([role='link'] *):visible`) — first visible
+   non-card video in document order, not the largest, documented as a
+   deliberate simplification (a per-candidate `boundingBox()` call is a round
+   trip each, and every fixture here has at most one qualifying video per
+   cross-origin frame). No candidate in either branch means no click, as the
+   ticket specifies.
+   - `force: true` and the `{ x: 5, y: 5 }` position are unchanged. Decided to
+     keep `force`: the chooser already keeps a related-video card from ever
+     being the _target_, which is what made `force` dangerous before, and a
+     legitimate layer (a controls bar, a click-to-unmute scrim) can still sit
+     over the player itself.
+   - `PLAY_SCRIPT`'s card-clip trap (Traps section) does not manifest here: the
+     related-card fixture's card `<video>` carries no `src`, so `PLAY_SCRIPT`
+     calling `.play()` on it produces no network request. `PLAY_SCRIPT` was
+     left unchanged; if a future page's card carries a real preview clip, the
+     same trap and the same fix apply there too.
+2. **Guard**, `resolvers/src/resolvers/browser.ts`. `landingUrl` is recorded
+   once `navigate()` settles (so a load-time redirect is never a departure).
+   `watchForDeparture` listens on `page.on("framenavigated", ...)`, filtered to
+   the main frame, from before `provokePlayback` runs; `sameDocument` compares
+   URLs with the fragment stripped, so a hash-only change is never a departure.
+   `waitForQuiet`'s `stop` now also fires on a recorded departure, per the
+   ticket's "nothing after it is worth waiting for". After the quiet wait
+   (`guard.stop()` unregisters the listener first), a recorded departure throws
+   `AppError("NO_MEDIA_FOUND", { details: { reason: "navigated-away", url,
+departedTo } })` even if hits exist, with both URLs through `redactUrl` —
+   **for dl-58's sweep: this is the only new `AppError` this ticket adds with a
+   URL in `details`, at `resolvers/src/resolvers/browser.ts`'s departure check
+   in `#run`, and both `url` and `departedTo` are already redacted.**
+   - **Logging.** `resolvers` has no logging facility today (no `Logger` type,
+     no dependency on `@downloader/engine` or a pino wrapper), so this adds a
+     small structural `BrowserResolverLogger` (`{ warn(message, fields?) }`) as
+     a `BrowserResolverOptions.logger`, defaulting to a no-op. `api/src/
+resolvers.ts` now passes its own `AppLogger` in when constructing
+     `BrowserResolver` — not in the ticket's Build steps verbatim, but without
+     it the required warn line would never reach a real log, which is the
+     acceptance criterion ("diagnosable from the log"). Small enough to fold in
+     rather than file separately.
+
+**The ticket's `redactUrl`/dependency instruction turned out to be
+unnecessary, and the code takes the simpler path instead of the stated one.**
+`resolvers/src/resolvers/browser.ts` already imports `AppError, redactUrl` from
+`@downloader/contract` (which re-exports both from `@webtools/core`), so the
+new `NO_MEDIA_FOUND` throw reuses that existing import rather than adding a
+second one from `@webtools/core` and a new dependency line. Verified against
+`packages/core/test/image-closure.test.ts`, which scans literal import
+specifiers per package (not the transitive dependency graph) — no
+`"@webtools/core"` string was added to `resolvers/src`, so no dependency was
+needed; `resolvers/package.json` is unchanged. The gate on the filing had
+already corrected the ticket text for this once (see above); this is a second,
+smaller correction to the same instruction, at build time rather than filing
+time.
+
+**For dl-56 (grabs a preview frame when the page names none), which depends on
+this ticket:** the chooser this ticket adds is `CHOOSE_VIDEO_FN` in
+`resolvers/src/browser/provoke.ts` — a plain function, not a class — chooses
+"the visible `<video>` with no link ancestor and the largest area", and is
+already shared between the surface click and the metadata duration fallback.
+If dl-56 needs "the element the tier decided is the player" for a frame grab,
+this is that element's selector logic; reusing `CHOOSE_VIDEO_FN` (or the
+`VIDEO_MARK` attribute it leaves on the DOM briefly during the click, in a
+scriptable frame only) keeps dl-56 from drifting from what this ticket chose,
+the same reason step 2 gives for sharing it with metadata in the first place.
+Note the non-scriptable-frame gap: in a cross-origin frame there is no marked
+element and no evaluation context, only `NON_CARD_VIDEO_SELECTOR`'s CSS
+fallback — dl-56 needs its own answer for a frame grab there if it needs one at
+all.
+
+**Fixtures**, all under `resolvers/test/fixtures/pages/`: `related-card.html` +
+`related-card-target.html` + `media/related/` + `media/related-target/` (the
+related-card fixture); `guard-pushstate.html`, `guard-assign.html`,
+`guard-fragment.html` (the guard fixture, its allowed fragment-only case) plus
+a `/guard-redirect` 302-to-`/mse.html` route added to
+`resolvers/test/browser/helpers/fixture-server.ts` (the allowed load-redirect
+case); `duration-chooser.html`, driving a new unit-style test in a new file,
+`resolvers/test/browser/provoke.test.ts`, that calls `readMetadata` directly —
+added because a full probe's `ProbeOutcome.durationSec` (from the parsed
+manifest) always wins over `readMetadata`'s fallback, so the fallback cannot be
+isolated through `browser-resolver.test.ts`'s end-to-end probes. `duration-
+chooser.html` shadows the read-only `duration` IDL property with
+`Object.defineProperty` on each `<video>`, since driving a real value needs a
+real decodable media resource this fixture has no reason to carry.
+
+**Each layer's test verified red with that layer alone reverted, then restored
+— temporary edits only, never committed:**
+
+- Selection reverted (`clickChosenVideo` back to
+  `frame.locator("video").first()`, guard left in place): "starts the real
+  player and never reaches the card's own page or stream"
+  (`browser-resolver.test.ts`) went red — `AppError: No downloadable video
+stream was found on that page.` (`NO_MEDIA_FOUND` / `navigated-away`, from
+  the guard catching the misclick's navigation; the ticket's own prediction —
+  "a guard alone would make this page return no video at all" — is exactly
+  what happened).
+- Metadata's chooser reverted (`METADATA_SCRIPT` back to
+  `document.querySelector('video, audio')`): "reads the chosen player's
+  duration, not a related card's" (`provoke.test.ts`) went red — `expected 30
+to be 942`.
+- Guard reverted (the departure check and throw removed from `#run`, selection
+  left in place): both guard-fixture tests in `browser-resolver.test.ts` went
+  red — `expected undefined to be an instance of AppError` (no error at all;
+  the wrong page's own content, having nothing this reproduction bothered to
+  make probeable, simply timed out to nothing worth asserting further on).
+
+**Verification.** Narrowest spec while iterating:
+`npx vitest run tools/downloader/resolvers/test/browser/browser-resolver.test.ts
+tools/downloader/resolvers/test/browser/provoke.test.ts` — 34 tests, all
+passing (33 in the first file, 1 in the second). Then the full gates:
+`npm run check` (lint + format:check + typecheck) exits 0 across every
+workspace; `npm test -- --project downloader` — **76 files, 1271 tests, all
+passing**. `npx vitest run packages/core/test/image-closure.test.ts` — 7 tests,
+all passing, confirming the `redactUrl` deviation above needs no dependency
+change. `npm run format` run once after touching `docs/00-ANALYSIS.md`, which
+reflowed the new table row's column widths; no other file changed by it.
+
+**Not done, and not in Done-when:** the live-page check
+(`ENABLE_YTDLP_RESOLVER=false` against the original page) — this container's
+firewall blocks the outbound reach, and the ticket already marks that check
+optional.
+
+**Files touched:** `resolvers/src/browser/provoke.ts`,
+`resolvers/src/resolvers/browser.ts`, `api/src/resolvers.ts`,
+`resolvers/test/browser/browser-resolver.test.ts` (new describe blocks),
+`resolvers/test/browser/helpers/fixture-server.ts` (`/guard-redirect` route),
+`resolvers/test/browser/provoke.test.ts` (new), seven new fixture pages and
+four new manifest fixtures under `resolvers/test/fixtures/pages/`,
+`docs/00-ANALYSIS.md` §7.
+
+No fold-in beyond the api logger wiring noted above — nothing else this branch
+touched made another already-specified item free.

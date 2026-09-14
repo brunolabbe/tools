@@ -21,7 +21,7 @@ import type {
   Resolver,
   SubtitleTrack,
 } from "@downloader/contract";
-import type { Browser, BrowserContext, Page, Response } from "playwright";
+import type { Browser, BrowserContext, Frame, Page, Response } from "playwright";
 import { budget, remaining, throwIfAborted, withTimeout } from "../browser/abort.ts";
 import { classifyFailure, classifyNavigationError } from "../browser/classify.ts";
 import { DRM_BINDING_NAME, DrmObserver, drmInitScript, drmReadbackScript } from "../browser/drm.ts";
@@ -74,6 +74,20 @@ const CONTEXT_CLOSE_TIMEOUT_MS = 5000;
 const OVERLAY_REVISIT_EVERY_MS = 1000;
 const MAX_OVERLAY_REVISITS = 4;
 
+/**
+ * The one line this resolver ever needs to write: a departure from the
+ * landing URL is diagnosable only if the log says which step was running
+ * when it happened (dl-55). Structural rather than `@downloader/engine`'s
+ * `Logger` — `resolvers` does not depend on `engine`, and the two tiers sit
+ * as siblings under `api` — but any logger with a `warn` method satisfies it,
+ * `AppLogger` included.
+ */
+export interface BrowserResolverLogger {
+  warn(message: string, fields?: Record<string, unknown>): void;
+}
+
+const NOOP_LOGGER: BrowserResolverLogger = { warn: () => {} };
+
 export interface BrowserResolverOptions {
   /** Defaults to `MAX_CONCURRENT_BROWSERS`, then 2. Each context costs ~300 MB. */
   maxConcurrentBrowsers?: number;
@@ -104,6 +118,8 @@ export interface BrowserResolverOptions {
    * `AGE_CONFIRMATION_REQUIRED` rather than `NO_MEDIA_FOUND`.
    */
   confirmAge?: boolean;
+  /** Where a detected departure from the landing URL is reported (dl-55). Defaults to a no-op. */
+  logger?: BrowserResolverLogger;
 }
 
 interface ProbeOutcome {
@@ -124,6 +140,7 @@ export class BrowserResolver implements Resolver {
   readonly #dashParser: DashParser;
   readonly #quietMs: number;
   readonly #confirmAge: boolean;
+  readonly #logger: BrowserResolverLogger;
 
   constructor(options: BrowserResolverOptions = {}) {
     this.#ownsPool = options.pool === undefined;
@@ -142,6 +159,7 @@ export class BrowserResolver implements Resolver {
     this.#dashParser = options.dashParser ?? parseDash;
     this.#quietMs = options.quietMs ?? DEFAULT_QUIET_MS;
     this.#confirmAge = options.confirmAge ?? false;
+    this.#logger = options.logger ?? NOOP_LOGGER;
   }
 
   /** Whether this tier presses an age confirmation, for the boot log. */
@@ -260,6 +278,15 @@ export class BrowserResolver implements Resolver {
     // is nothing worth waiting for once it is established.
     if (drm.detected) throw drm.toError();
 
+    // dl-55: the landing URL, recorded once navigation has settled — a
+    // redirect during load is legitimate and never counts against it. From
+    // here on, a top-frame navigation away from it is a click that opened
+    // something else, and every hit collected after it belongs to that other
+    // page.
+    const landingUrl = page.url();
+    let lastStep: "provoke-playback" | "network-quiet" = "provoke-playback";
+    const guard = watchForDeparture(page, landingUrl);
+
     this.#stage(options, "provoke-playback");
     await provokePlayback(page, {
       deadline: deadline - TEARDOWN_RESERVE_MS,
@@ -268,6 +295,7 @@ export class BrowserResolver implements Resolver {
     });
 
     this.#stage(options, "network-quiet");
+    lastStep = "network-quiet";
     let revisits = 0;
     let lastRevisitAt = Date.now();
     const quietReached = await waitForQuiet({
@@ -276,7 +304,8 @@ export class BrowserResolver implements Resolver {
       quietMs: this.#quietMs,
       minWaitMs: MIN_WAIT_MS,
       signal: options.signal,
-      stop: () => drm.detected,
+      // Nothing after a departure is worth waiting for (dl-55).
+      stop: () => drm.detected || guard.departure() !== undefined,
       revisit: async () => {
         if (collector.hits.length > 0 || revisits >= MAX_OVERLAY_REVISITS) return;
         if (Date.now() - lastRevisitAt < OVERLAY_REVISIT_EVERY_MS) return;
@@ -290,10 +319,30 @@ export class BrowserResolver implements Resolver {
     });
 
     this.#stage(options, "settle-requests");
+    guard.stop();
     await collector.settle(Math.min(SETTLE_TIMEOUT_MS, remaining(deadline)));
     await readBackDrm(page, drm);
     if (drm.detected) throw drm.toError();
     throwIfAborted(options.signal);
+
+    // dl-55: this holds even if hits exist — a hit collected before the
+    // departure could still be a preview clip belonging to the page that was
+    // left, not the one that was reached.
+    const departure = guard.departure();
+    if (departure !== undefined) {
+      this.#logger.warn("browser tier left the landing page during provocation", {
+        step: lastStep,
+        landingUrl: redactUrl(landingUrl),
+        departedTo: redactUrl(departure),
+      });
+      throw new AppError("NO_MEDIA_FOUND", undefined, {
+        details: {
+          reason: "navigated-away",
+          url: redactUrl(landingUrl),
+          departedTo: redactUrl(departure),
+        },
+      });
+    }
 
     const finalUrl = page.url();
     const ranked = rankHits(collector.hits, finalUrl);
@@ -489,6 +538,60 @@ async function navigate(
     throwIfAborted(options.signal);
     throw classifyNavigationError(error, url.toString());
   }
+}
+
+/**
+ * Same URL, ignoring the fragment: a page that only changes its hash on play
+ * (a timestamp, a tab) has not left, and the guard must not trip on it
+ * (dl-55). Query strings are compared as-is — a video id routinely lives
+ * there (`watch?v=`), and a page that rewrites its own query on play is a
+ * fixture and a narrow exception, not a looser comparison here.
+ */
+function sameDocument(a: string, b: string): boolean {
+  try {
+    const left = new URL(a);
+    const right = new URL(b);
+    left.hash = "";
+    right.hash = "";
+    return left.toString() === right.toString();
+  } catch {
+    return a === b;
+  }
+}
+
+interface NavigationGuard {
+  /** The URL the top frame first left the landing URL for, once seen. */
+  departure(): string | undefined;
+  /** Stops listening. Safe to call more than once. */
+  stop(): void;
+}
+
+/**
+ * Watches the top frame for a navigation away from `landingUrl`, from the
+ * moment it is created (dl-55).
+ *
+ * **`framenavigated`, not a before/after read of `page.url()`.** Playwright
+ * fires it for same-document history changes too — `history.pushState` and a
+ * same-document content swap included — which is how dl-55's reproduction
+ * navigated: no new document, so nothing that only watched for a load would
+ * have caught it.
+ *
+ * Only the first departure is kept: once the page has left, later navigations
+ * (back to the landing URL, onward again) do not change the verdict.
+ */
+function watchForDeparture(page: Page, landingUrl: string): NavigationGuard {
+  let departedTo: string | undefined;
+  const onNavigated = (frame: Frame): void => {
+    if (frame !== page.mainFrame() || departedTo !== undefined) return;
+    const url = frame.url();
+    if (sameDocument(url, landingUrl)) return;
+    departedTo = url;
+  };
+  page.on("framenavigated", onNavigated);
+  return {
+    departure: () => departedTo,
+    stop: () => page.off("framenavigated", onNavigated),
+  };
 }
 
 async function readBackDrm(page: Page, drm: DrmObserver): Promise<void> {

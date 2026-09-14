@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A different video entirely</title>
+  </head>
+  <body>
+    <h1>A different video entirely</h1>
+    <!-- Reached only by the bug this ticket fixes: a plain visit plays this
+         video immediately, the same as dl-55's reproduction described. -->
+    <video id="v" width="640" height="360" muted playsinline autoplay></video>
+    <script>
+      (function () {
+        fetch("/media/related-target/master.m3u8")
+          .then(function (r) {
+            return r.text();
+          })
+          .then(function () {
+            return fetch("/media/related-target/v480.m3u8");
+          })
+          .catch(function () {});
+      })();
+    </script>
+  </body>
+</html>

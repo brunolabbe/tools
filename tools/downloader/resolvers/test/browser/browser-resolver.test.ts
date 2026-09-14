@@ -259,6 +259,76 @@ describe("BrowserResolver", () => {
     },
   );
 
+  describe("the surface click chooses the player, not a related-video card (dl-55)", () => {
+    test(
+      "starts the real player and never reaches the card's own page or stream",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        server.requests.length = 0;
+        const result = await probe("/related-card.html", resolver);
+
+        expect(result.variants[0]?.url).toBe(server.url("/media/related/master.m3u8"));
+        expect(server.requests).toContain("/media/related/master.m3u8");
+        // A click that bubbled through the card's `<a href>` would have left
+        // this page entirely; neither the card's target nor its stream is ever
+        // requested.
+        expect(server.requests).not.toContain("/related-card-target.html");
+        expect(server.requests).not.toContain("/media/related-target/master.m3u8");
+      },
+    );
+  });
+
+  describe("a navigation away from the landing page fails NO_MEDIA_FOUND (dl-55)", () => {
+    test(
+      "a same-document navigation (history.pushState) never returns the other page's stream",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        server.requests.length = 0;
+        const error = await probeError("/guard-pushstate.html", resolver);
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(error.details?.["reason"]).toBe("navigated-away");
+      },
+    );
+
+    test(
+      "a document navigation (location.assign) never returns the other page's stream",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        const error = await probeError("/guard-assign.html", resolver);
+
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(error.details?.["reason"]).toBe("navigated-away");
+      },
+    );
+
+    test(
+      "a redirect during load is not a departure, and the page still probes",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-redirect", resolver);
+        expect(result.title).toContain("[blob]");
+      },
+    );
+
+    test(
+      "a fragment-only change on play is not a departure, and the page still probes",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-fragment.html", resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
+  });
+
   describe("a modal over an age gate (dl-48)", () => {
     const PROMO_PATH = "/age-gate-promo.html";
 

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: fragment only</title>
+  </head>
+  <body>
+    <h1>Guard: fragment only</h1>
+    <!-- The allowed case: play changes only the fragment, the way a player
+         that stamps a timestamp into the URL does. The guard must not trip on
+         it (dl-55). -->
+    <button id="play" type="button">Play</button>
+    <video id="v" width="640" height="360" muted playsinline controls></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          location.hash = "#t=0";
+          fetch("/media/hls/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/hls/v720.m3u8");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        document.getElementById("play").addEventListener("click", start);
+      })();
+    </script>
+  </body>
+</html>
