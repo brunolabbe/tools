@@ -82,15 +82,20 @@ export const DISCOVERY_RADIUS_METRES = 6_000;
  * **Forty.** This file's own header, before this ticket, already reasoned
  * about "a corridor with forty finds" as its illustrative case. pl-41's
  * reproduction measured ≈43 tokens per find **averaged over all 276** raw
- * finds; the 40 that actually survive the ranking below skew toward the
- * tag-heavier, notability-backed ones, and measured capped growth on the same
- * corridor is ≈2.8k tokens (≈281 chars/find, against ≈174 across the full
- * 276) — noticeably more than the flat average predicts, still nothing like
- * the ×17.4 growth an uncapped corridor produced (pl-41's reproduction: 276
- * finds, one specialist's prompt from ≈732 to ≈12,721 tokens). It also
- * matches `MAX_GROUNDING_CALLS`'s own default: a corridor whose discovery
- * pass would hand a specialist more material than the run's whole call
- * budget already reasons about is exactly the corridor this ceiling is for.
+ * finds — nothing like the ×17.4 growth an uncapped corridor produced
+ * (pl-41's reproduction: 276 finds, one specialist's prompt from ≈732 to
+ * ≈12,721 tokens). Measured again after the owner's 2026-09-14 ranking
+ * decision (`CLOSEST_RESERVED`, below) — the figure this comment reasoned
+ * from before that decision belonged to a ranking that no longer ships — the
+ * capped `activities` prompt over this same corridor grows ≈2.3k tokens
+ * (≈229 chars/find), 22 of the 40 survivors backed with tag-only notability
+ * and 29 of 40 with a geosearch tier wired in. Close to the flat average
+ * rather than skewed above it, because the reservation now guarantees a
+ * genuine mix rather than letting backing crowd the list with tag-heavy
+ * finds. It also matches `MAX_GROUNDING_CALLS`'s own default: a corridor
+ * whose discovery pass would hand a specialist more material than the run's
+ * whole call budget already reasons about is exactly the corridor this
+ * ceiling is for.
  *
  * **One cap, applied once, here, before `detourCosts` builds its matrix** — a
  * cap applied only in `discoveryBlock` (`agent/src/prompt.ts`) would leave the

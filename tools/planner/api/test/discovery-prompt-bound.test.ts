@@ -133,9 +133,17 @@ describe("the activities prompt, over the real corridor capped to MAX_DISCOVERY_
 
     const baseline = promptWith([]).length;
 
-    // The largest single-find contribution measured anywhere in the real
-    // 276-find corpus — not a theoretical per-field maximum, which the gate
-    // found was 120x too loose to ever move when the cap did.
+    // The largest whole one-find discovery block measured anywhere in the
+    // real 276-find corpus — not a theoretical per-field maximum, which the
+    // gate found was 120x too loose to ever move when the cap did. This is
+    // not one find's own line: it is the header, the footer and the joining
+    // newlines that render once around it too (measured ≈388 of the ≈1,028
+    // chars this budgets per find on the current capture), so multiplying it
+    // by the cap is looser than the tightest possible bound — a real 41-find
+    // render would not add another full header and footer. It is still tight
+    // enough to move when the cap does: this ceiling fails when the cap is
+    // removed, and again if the cap is raised past the point (≈46 on this
+    // capture) where 40 of these blocks would have covered the real growth.
     let maxSingleFindChars = 0;
     for (const find of rawFinds) {
       const solo = promptWith([find]).length - baseline;

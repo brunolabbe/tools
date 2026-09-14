@@ -857,8 +857,14 @@ describe("discoverAlongCorridor, capping the finds that reach the fan-out (pl-41
   test("kind, then name, break a tie backing and distance leave — deterministically, not by input order", async () => {
     // Same backing, same distance (identical coordinates): only `kind`
     // decides between these two. "viewpoint" sits before "waterfall" in
-    // `DISCOVERY_KINDS`.
-    const laterKind = findAtKind("A waterfall", 0.02, true, "waterfall");
+    // `DISCOVERY_KINDS` — and the name is chosen so it disagrees with kind
+    // ("A cascade waterfall" < "A viewpoint" by code unit, 'c' < 'v'), so a
+    // comparator that dropped the kind tie-break and fell through to name
+    // would put the waterfall first. A name that happened to agree with kind
+    // (e.g. "A waterfall") cannot tell a working tie-break from a deleted
+    // one — the gate found exactly that gap in the first version of this
+    // test.
+    const laterKind = findAtKind("A cascade waterfall", 0.02, true, "waterfall");
     const earlierKind = findAtKind("A viewpoint", 0.02, true, "viewpoint");
     // Same backing, same distance, same kind: only `name` is left, and it
     // must be plain code-unit order — never `localeCompare`, whose result
