@@ -6,7 +6,8 @@
  * database would be a second one, empty.
  *
  * **The seed is varied on purpose.** Four metered runs whose counts differ by
- * run, inserted out of order, so p50, p95 and the mean are three different
+ * run, inserted and finished in an order that is not their size order, so p50,
+ * p95 and the mean are three different
  * numbers and an unsorted percentile or a mean passed off as a median prints
  * the wrong one. A scripted run with no counts, a run outside the window and a
  * run still queued are each there to be left out.
@@ -47,11 +48,23 @@ interface SeedRun {
  * Run k (1–4) spends 100,000k input, 1,000,000k cache read, 40,000k cache write
  * and 20,000k output — $1.75k at `ALL_PRICES`.
  */
+/**
+ * When run k finished — deliberately not in k order. `selectFinishedRuns` sorts
+ * by `finished_at`, so dates that rose with k would hand the percentile its
+ * values already sorted, and a missing sort would pass every report test here.
+ */
+const FINISHED: Record<number, string> = {
+  1: "2026-09-13T08:00:00.000Z",
+  2: "2026-09-11T08:00:00.000Z",
+  3: "2026-09-14T08:00:00.000Z",
+  4: "2026-09-12T08:00:00.000Z",
+};
+
 function metered(k: number, status: string, fallbackCalls = 0): SeedRun {
   return {
     id: `metered-${String(k)}`,
     status,
-    finishedAt: `2026-09-1${String(k)}T08:00:00.000Z`,
+    finishedAt: FINISHED[k] ?? null,
     model: "claude-opus-5",
     calls: 5,
     tokens: [100_000 * k, 1_000_000 * k, 40_000 * k, 20_000 * k],

@@ -3,7 +3,7 @@ id: pl-49
 tool: planner
 title: Record what each run spent, token kind by token kind, and a report that prices it
 kind: work-package
-status: ready
+status: done
 milestone: null
 depends_on: []
 difficulty: hard
@@ -127,3 +127,85 @@ that comparison.
   whether ads could pay for hosting. The owner chose this ticket over waiting
   until the planner goes public. The Why was read on `origin/main` `804aecc`,
   and nothing was run.
+- 2026-09-14 — Built on `origin/main` `95c6403`. The Why's four premises all
+  held against the code. What the brief had wrong or left out:
+  - **A failed specialist's replies were dropped too, not only a canceled
+    run's.** `runFanOut` returned `replies: []` for any specialist that threw,
+    so a refused reply or two malformed attempts were billed and never counted.
+    Measured by running the new `agent/test/fan-out-usage.test.ts` against the
+    `95c6403` orchestrator (`npx vitest run --project planner
+tools/planner/agent/test/fan-out-usage.test.ts`, exit 1, 5 failed of 5): a
+    fan-out with one refused reply counted `calls: 5, inputTokens: 500` where 6
+    replies and 501 tokens were billed. The fix counts every reply at the seam,
+    by wrapping `send` inside `runFanOut`, so this and cancellation are one
+    mechanism.
+  - **Step 2's first option needs a contract change.** `onProgress` carries
+    `@planner/contract`'s `RunProgress`, which is forwarded to the browser, so a
+    usage frame on it would widen the contract. Step 2 left the choice to the
+    builder, so the running total goes through `FanOutInput.onUsage`, a
+    callback beside `onProgress`. Nothing in `@planner/contract` carries usage
+    before or after: checked with `grep -rni "usage\|token" contract/src`, no
+    match.
+  - **`inputTokens` changes meaning, and nothing depended on the old one.** It
+    is now uncached input only, the Messages API's own `input_tokens`. Its only
+    reader was `tally`; `budget.ts` and `runBudgetFor` count output tokens only
+    and read no usage.
+  - **A `failed` run with spend happens only after the fan-out.** `runFanOut`
+    throws nothing but cancellation once a call has gone out, so the failed-run
+    test fails the revision write with a trigger, after every specialist
+    answered.
+  - **`api/test/schema.test.ts` also pins the schema version**, not only
+    `migrations.test.ts`. Both now expect 9.
+  - **A price that is not a price refuses with `INTERNAL`, not
+    `AGENT_UNCONFIGURED`.** That code's message is "No planning assistant is
+    configured", which a price does not configure. `requiredEndpoint` in
+    `server.ts` already uses `INTERNAL` for a deployment misconfiguration.
+  - **Fallback detection is the provider's own rule.** A reply counts as a
+    fallback when `servedModel` differs from the configured model: the
+    comparison `AnthropicProvider` already logs, so the column and the log line
+    cannot disagree.
+
+  **Every new or changed spec was run unmutated, then red.** Each command is
+  `npx vitest run --project planner <spec>`. Every one exited 0 unmutated,
+  every red run exited 1, and each file was restored from `HEAD` afterwards.
+
+  | Spec                         | Unmutated | Red run                                      | Failed                         |
+  | ---------------------------- | --------- | -------------------------------------------- | ------------------------------ |
+  | `run-usage.test.ts`          | 5 passed  | api orchestrator from `95c6403`              | 4 of 5                         |
+  |                              |           | no `recordUsage` on cancel                   | 1 of 5, canceled               |
+  |                              |           | no `recordUsage` on failure                  | 1 of 5, failed                 |
+  |                              |           | `throw` inserted before the warn             | 1 of 5, failing write          |
+  |                              |           | no `recordUsage` on done                     | 2 of 5, done and failing write |
+  | `anthropic-provider.test.ts` | 32 passed | `anthropic.ts` from `95c6403`                | 5 of 32                        |
+  |                              |           | cache kinds summed back into input           | 2 of 32                        |
+  | `fan-out-usage.test.ts`      | 5 passed  | orchestrator from `95c6403`                  | 5 of 5                         |
+  |                              |           | `askSpecialist` given the unwrapped provider | 5 of 5                         |
+  | `cost-report.test.ts`        | 13 passed | percentile without its sort                  | 3 of 13                        |
+  | `config-prices.test.ts`      | 9 passed  | the price check disabled                     | 6 of 9                         |
+  | `migrations.test.ts`         | 9 passed  | `cache_read_tokens` dropped from migration 9 | 4 of 9                         |
+
+  **The cost report's first fixture could not fail, and the red run caught
+  it.** With the percentile's sort removed, only the pure `percentile` test
+  failed (1 of 13). The seed was inserted out of order, but
+  `selectFinishedRuns` sorts by `finished_at` and the seed's finish dates rose
+  with run size, so the query handed the percentile sorted values. The finish
+  dates are now out of size order; the same red run then failed 3 of 13, the
+  token percentiles and the dollars included.
+
+  **Gates, on the tree this entry was committed with.** `npm run check` exited 0. `npm test -- --project planner` exited 0 with 59 files and 967 tests; on
+  `95c6403` before any edit the same command was 55 files and 931 tests.
+
+  **Not done.** The Done-when line "the report runs inside the built image with
+  `--days 1`" is `unproven (gate)`. No image was built here. The path
+  `tools/planner/api/dist/report.js` was checked by reading the `Dockerfile`
+  (`WORKDIR /app`, `CMD ["node", "tools/planner/api/dist/main.js"]`), not by
+  running it. The rest of the report path was never run against a real model.
+  Every count here came from test providers. The scripted provider reports
+  none, and the Anthropic fixtures are pl-39's, written by hand.
+
+  **Could have folded in, and did not.** pl-39's Build step still says
+  `usage` is `input_tokens` plus both cache kinds, which this ticket replaced.
+  A dated line on pl-39 would have been free. It was left alone because pl-39
+  is another ticket's closed record, outside this batch, and the dispatch
+  scoped edits to this ticket's files; it was raised with the orchestrator
+  instead, beside whether pl-40 should `depends_on` this ticket.
