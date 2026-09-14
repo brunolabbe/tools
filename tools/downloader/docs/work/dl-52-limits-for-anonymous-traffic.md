@@ -35,20 +35,24 @@ two measurements on the host before asking:
 - `docker stats` while one browser probe and one HLS download run together:
   peak memory and CPU.
 - The free disk under the `/data` volume.
+- **The home connection's upload speed.** Added 2026-09-14: under
+  [dl-53](./dl-53-finished-files-and-the-tunnel.md), every finished file streams
+  to its visitor as it is produced, so this caps how many downloads can run at
+  a useful rate. It probably binds harder than CPU or memory.
 
 A starting profile to put against those numbers, not a recommendation made
 without them:
 
-| Setting                       | Today | Proposed                           |
-| ----------------------------- | ----- | ---------------------------------- |
-| `MAX_CONCURRENT_BROWSERS`     | 2     | what memory allows at ~300 MB each |
-| `MAX_CONCURRENT_JOBS`         | 2     | 2                                  |
-| `MAX_FILE_SIZE_MB`            | 4096  | 1024                               |
-| `MAX_TOTAL_STORAGE_GB`        | 50    | at most half the free disk         |
-| `FILE_RETENTION_HOURS`        | 6     | 2                                  |
-| `RATE_LIMIT_PROBE_PER_MINUTE` | 10    | 4                                  |
-| `RATE_LIMIT_JOBS_PER_MINUTE`  | 5     | 2                                  |
-| `MAX_JOBS_PER_CLIENT` (dl-51) | —     | 1                                  |
+| Setting                       | Today | Proposed                                                          |
+| ----------------------------- | ----- | ----------------------------------------------------------------- |
+| `MAX_CONCURRENT_BROWSERS`     | 2     | what memory allows at ~300 MB each                                |
+| `MAX_CONCURRENT_JOBS`         | 2     | upload speed ÷ one stream's bitrate, and no more than 2           |
+| `MAX_FILE_SIZE_MB`            | 4096  | 1024; refused on the estimate, and a longer stream is cut (dl-53) |
+| `MAX_TOTAL_STORAGE_GB`        | 50    | removed by dl-53, which stores no files                           |
+| `FILE_RETENTION_HOURS`        | 6     | removed by dl-53                                                  |
+| `RATE_LIMIT_PROBE_PER_MINUTE` | 10    | 4                                                                 |
+| `RATE_LIMIT_JOBS_PER_MINUTE`  | 5     | 2                                                                 |
+| `MAX_JOBS_PER_CLIENT` (dl-51) | —     | 1                                                                 |
 
 **2 — Where the edge rule lives.**
 
@@ -77,3 +81,7 @@ Written with the decision.
 
 - 2026-09-13 — Filed as `needs-decision`. The table is a starting point.
   Neither host measurement has been taken.
+- 2026-09-14 — dl-53 chose streaming with no stored files. Added the upload
+  speed measurement, and marked `MAX_TOTAL_STORAGE_GB` and
+  `FILE_RETENTION_HOURS` as removed by it. Still `needs-decision`: no host
+  measurement has been taken.

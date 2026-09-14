@@ -167,8 +167,8 @@ not asked to log in. Access has been the only login, so removing it
 human check ([dl-50](./work/dl-50-a-human-check-without-an-account.md)), a
 per-client cap ([dl-51](./work/dl-51-one-client-holds-every-job-slot.md)),
 limits sized for strangers
-([dl-52](./work/dl-52-limits-for-anonymous-traffic.md)), a way to serve files
-that the tunnel's terms allow
+([dl-52](./work/dl-52-limits-for-anonymous-traffic.md)), finished files
+streamed to the visitor with no copy kept
 ([dl-53](./work/dl-53-finished-files-and-the-tunnel.md)), and terms, a takedown
 contact and a logging policy
 ([dl-54](./work/dl-54-terms-takedown-and-what-is-logged.md)). Opening also waits
@@ -176,9 +176,11 @@ on a record of how probes and downloads turn out
 ([dl-57](./work/dl-57-a-record-of-how-probes-and-downloads-end.md)), so the
 first public traffic shows which sites fail, and on a fix that stops a failed
 probe logging the page URL with its credentials
-([dl-58](./work/dl-58-a-failed-probe-logs-the-page-url-unredacted.md)). Four of
-those
-pose a question first.
+([dl-58](./work/dl-58-a-failed-probe-logs-the-page-url-unredacted.md)).
+
+Streaming video over the tunnel is outside Cloudflare's terms for any plan
+short of Enterprise. The owner accepted that risk on 2026-09-14. dl-53 records
+what it costs and the relay to move to if a notice arrives.
 
 ---
 

@@ -48,6 +48,13 @@ What exists, read on `origin/main` `1835657`:
   nothing. None of it is timed, and none of it outlives the container's log
   buffer.
 
+**[dl-53](./dl-53-finished-files-and-the-tunnel.md) changes what a finished
+download is.** On 2026-09-14 the owner chose to stream files to the visitor
+with no copy kept. A download then ends when the stream reaches its end, or
+when the visitor abandons it. Whichever of the two tickets lands second counts
+a visitor who disconnects as its own outcome, not as a failure. Otherwise the
+download success rate measures patience instead of the tool.
+
 ## Build
 
 1. **Migration 5: a `probe_outcomes` table.** Columns: `id`, `host` (hostname
@@ -114,3 +121,5 @@ What exists, read on `origin/main` `1835657`:
 
 - 2026-09-13 — Filed. The facts under Why were read on `origin/main`
   `1835657`, not measured.
+- 2026-09-14 — Noted that dl-53's streaming makes a visitor's disconnect a
+  download outcome of its own.

@@ -320,10 +320,11 @@ files, without a paid service (Stream, Images, or content hosted on R2). Its
 documentation applies that to Tunnel public hostnames. At personal scale nobody
 notices. If you ever do get a notice, the fix is to move the file transfer off
 the tunnel — publish the LAN address for `/api/files/*` and keep the UI where
-it is — not to argue about it. A public instance cannot use that fix, because
-its visitors are not on your LAN.
-[dl-53](../tools/downloader/docs/work/dl-53-finished-files-and-the-tunnel.md)
-decides what it does instead.
+it is — not to argue about it. A public instance cannot use that fix, because its visitors are not on your
+LAN. `downloader.oludoi.com` streams files over the tunnel anyway, keeping no
+copy, and its owner accepted the risk in
+[dl-53](../tools/downloader/docs/work/dl-53-finished-files-and-the-tunnel.md),
+which also describes the relay to move to if a notice arrives.
 
 ---
 

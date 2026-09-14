@@ -25,13 +25,14 @@ download links stay shareable.
 [02-DEPLOYMENT.md](../../../../docs/02-DEPLOYMENT.md) makes the app's own
 authentication the precondition for removing that application ("When you want it
 genuinely public"). That precondition is the one this decision rejects, so it is
-replaced rather than met: the five tickets this depends on are what stands in
+replaced rather than met: dl-50 through dl-54 are what stands in
 for a login. Each answers one way an anonymous visitor could spend the host —
 automation ([dl-50](./dl-50-a-human-check-without-an-account.md)), one client
 holding every slot ([dl-51](./dl-51-one-client-holds-every-job-slot.md)),
 limits sized for one trusted user
-([dl-52](./dl-52-limits-for-anonymous-traffic.md)), bulk video through the
-tunnel ([dl-53](./dl-53-finished-files-and-the-tunnel.md)), and what the
+([dl-52](./dl-52-limits-for-anonymous-traffic.md)), copies of unchecked video
+kept on the host ([dl-53](./dl-53-finished-files-and-the-tunnel.md), which
+streams instead and accepts Cloudflare's terms risk), and what the
 operator owes when someone points it at something they should not
 ([dl-54](./dl-54-terms-takedown-and-what-is-logged.md)).
 

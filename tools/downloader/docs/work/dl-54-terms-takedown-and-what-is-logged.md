@@ -87,7 +87,10 @@ Written with the decision. It will include:
 
 - A first step that measures exactly which fields reach a log line during one
   probe and one download.
-- A terms page served same-origin, which dl-35's CSP needs no change for.
+- A terms page served same-origin, which dl-35's CSP needs no change for. It
+  says that no video is stored: dl-53 streams each file to its visitor and
+  keeps no copy. That is true only once dl-53 has landed, so the page ships
+  after it.
 - The retention made explicit in `compose.downloader.prod.yaml`'s logging
   options.
 
@@ -100,3 +103,8 @@ Written with the decision.
 - 2026-09-13 — Filed as `needs-decision`. The log fields named above were read
   from `request-log.ts` on `origin/main` `1835657`. The per-probe fields have
   not been measured.
+- 2026-09-13 — Decision 1 answered: keep 14 days. Parts 2 and 3 are open.
+  The Docker `json-file` size-not-age point comes from that driver's options,
+  not from a measurement on the host.
+- 2026-09-14 — The terms page will say that no video is stored, which follows
+  from dl-53's decision.
