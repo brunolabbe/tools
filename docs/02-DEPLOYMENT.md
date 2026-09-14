@@ -500,7 +500,11 @@ legitimately go minutes without a progress frame; the planner's
 [`routes/events.ts`](../tools/planner/api/src/routes/events.ts) sends one every
 15 s too, because a fan-out can go as long between stages. So this already
 works — but it is the reason it works, and it is worth knowing before changing
-either, or before streaming anything new.
+either. **The planner's model replies do not stream yet**, and
+[`agent/src/provider.ts`](../tools/planner/agent/src/provider.ts) says streaming
+will land there. When it does, a stream of model tokens meets the same
+100-second limit, and it needs a keep-alive built in with it rather than
+diagnosed after it; the run-event heartbeat above does not cover it.
 
 **Leave Rocket Loader off** for every tool's hostname (Speed → Optimization). It
 rewrites script loading and has no business near a React bundle, and every UI

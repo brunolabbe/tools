@@ -27,8 +27,9 @@ Full reasoning in [docs/00-ANALYSIS.md](./docs/00-ANALYSIS.md).
   TypeScript with ordinary tests.
 - **A plan names its gaps.** A specialist that failed leaves a plan that says so,
   and every plan lists the constraints nothing was able to check.
-- **A plan is a document, revised by operations rather than by utterances.** Pin
-  an item and it survives the next draft.
+- **A plan is a document, revised by operations rather than by utterances.**
+  Pinning an item is built today; re-planning named days around the pins, and
+  reading the diff, is the phase in progress.
 - **It never books, never pays, and never claims a safety clearance.** It plans
   and hands off, and for backcountry, marine and winter trips it points at the
   authoritative local source.
