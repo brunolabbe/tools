@@ -944,6 +944,26 @@ lists `--remove-orphans` for exactly that reason, and it is not the flag you
 want here, because it removes the container rather than shutting the service
 down as part of the stack. Naming the files is.
 
+**If you have already pulled**, `compose.yaml` is gone and the commands above
+fail. The usual sign is an `up -d` that stopped at
+`failed to create network webtools_edge: … Pool overlaps with other one on this address space`:
+the `edge` subnet is pinned, and `${OLD}_edge` still holds it because the old
+stack is still running. Nothing started — compose creates the network before any
+container — so the `webtools_*` volumes that the same `up` reported as `Created`
+are empty and unused. Step 4's `docker volume create` is a no-op on them, and its
+copy fills them. Stop the old project by its label instead, which reaches every
+tool in it with no file set to get wrong:
+
+```bash
+docker ps -q --filter "label=com.docker.compose.project=${OLD}" | xargs -r docker stop
+docker ps -aq --filter "label=com.docker.compose.project=${OLD}" | xargs -r docker rm
+docker network rm "${OLD}_edge"
+```
+
+`docker stop` gives each container the same SIGTERM and grace period `down`
+does, `docker rm` without `-v` leaves named volumes alone, and removing the
+network is what frees the subnet for `webtools_edge`.
+
 Check it actually stopped before going on — this should print nothing:
 
 ```bash
