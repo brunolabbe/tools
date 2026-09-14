@@ -1,8 +1,8 @@
 /**
  * The Cloudflare half of a deployment, as calls instead of dashboard clicks.
  *
- * `docs/02-DEPLOYMENT.md` steps 2 and 4 — the public hostname and the Access
- * application — were a screenshot walkthrough, once per tool per host, and the
+ * `docs/02-DEPLOYMENT.md` steps 2 and 3 — the Access application and the public
+ * hostname — were a screenshot walkthrough, once per tool per host, and the
  * second tool's walkthrough is a delta on the first that says "not a copy of
  * the downloader's" three times. That is a procedure with a correctness
  * argument in it, which is the kind that should be executable.

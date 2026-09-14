@@ -132,7 +132,7 @@ scripts/citations.mjs` on this record now reports 0 moved.
   already absent, `CORS_ORIGINS` included) but a judgement call the reviewer
   flagged as the first place they would look. Added, beside
   `RATE_LIMIT_RUNS_PER_MINUTE`.
-- **low, declined** · `02-DEPLOYMENT.md:283` "Rate limits silently" —
+- **low, declined** · `02-DEPLOYMENT.md@1835657:283` "Rate limits silently" —
   undersells the malformed-value case: reviewer measured that a malformed
   `TRUST_PROXY` actually refuses the boot (`TypeError: invalid IP address:
 <x>`) rather than failing silently, only a valid-but-wrong value is silent.

@@ -32,7 +32,7 @@
 #
 # The hostname and the Access application live in the dashboard and no file in
 # this repo can hold them. `docs/02-DEPLOYMENT.md` writes them out anyway, so
-# they are reviewable. **Read `## Adding the second tool` before this file is
+# they are reviewable. **Read its step 2 and `## The planner` before this file is
 # useful** — in particular, the downloader's Access policy is not a template for
 # this one, and copying it is the single most damaging mistake available here.
 

@@ -35,7 +35,11 @@ the ones that fail silently if skipped.
    is listed here.
 
 4. `tools/<name>/CLAUDE.md` — what the tool is, and only the rules specific to
-   it. Do not restate anything on this page.
+   it. Do not restate anything on this page. Beside it, `tools/<name>/README.md`: what the
+   tool does, how to run it on its own and how it deploys, with a table of its
+   docs — the shape `tools/planner/README.md` has — plus a row in the root
+   `README.md`'s tool table. The root README is what the tools share; a tool's own
+   story never goes there.
 5. `tools/<name>/docs/02-ROADMAP.md` and an empty `work/`, plus a row in
    [docs/00-TOOLS.md](../../../docs/00-TOOLS.md). The rest of the spine arrives when
    there is something true to put in it — a young tool with two documents is an
