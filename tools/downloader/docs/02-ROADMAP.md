@@ -159,6 +159,29 @@ changes elsewhere. If a new site ever forces an edit to the engine or the API,
 the abstraction has sprung a leak — fix the abstraction rather than
 special-casing, and say so in the ticket.
 
+### Phase 5 — Public, without a login
+
+The owner's decision (2026-09-13): the downloader goes public and visitors are
+not asked to log in. Access has been the only login, so removing it
+([dl-49](./work/dl-49-open-without-a-login.md)) waits on what replaces it: a
+human check ([dl-50](./work/dl-50-a-human-check-without-an-account.md)), a
+per-client cap ([dl-51](./work/dl-51-one-client-holds-every-job-slot.md)),
+limits sized for strangers
+([dl-52](./work/dl-52-limits-for-anonymous-traffic.md)), finished files
+streamed to the visitor with no copy kept
+([dl-53](./work/dl-53-finished-files-and-the-tunnel.md)), and terms, a takedown
+contact and a logging policy
+([dl-54](./work/dl-54-terms-takedown-and-what-is-logged.md)). Opening also waits
+on a record of how probes and downloads turn out
+([dl-57](./work/dl-57-a-record-of-how-probes-and-downloads-end.md)), so the
+first public traffic shows which sites fail, and on a fix that stops a failed
+probe logging the page URL with its credentials
+([dl-58](./work/dl-58-a-failed-probe-logs-the-page-url-unredacted.md)).
+
+Streaming video over the tunnel is outside Cloudflare's terms for any plan
+short of Enterprise. The owner accepted that risk on 2026-09-14. dl-53 records
+what it costs and the relay to move to if a notice arrives.
+
 ---
 
 ## Milestones
@@ -177,6 +200,8 @@ special-casing, and say so in the ticket.
   container serves the UI and the API on one origin, Chromium launches inside
   it, and a real HLS stream downloads through it to a fast-start MP4 that
   re-decodes with no errors.
+- **M5 — Public.** `downloader.oludoi.com` answers anyone, with no login, and
+  one visitor cannot spend the host out from under the rest. _After dl-49._
 
 ---
 
