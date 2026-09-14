@@ -764,7 +764,10 @@ describe("concurrency", () => {
     const gate = new Promise<void>((resolve) => setTimeout(resolve, 30));
 
     harness = await createHarness({
-      config: { maxConcurrentJobs: 2 },
+      // dl-51's per-client cap is a different concern from this test's — every
+      // job here comes from the same simulated address, so it is disabled
+      // rather than sized around.
+      config: { maxConcurrentJobs: 2, maxJobsPerClient: 0 },
       resolver: new StubResolver(async () => {
         inFlight++;
         peak = Math.max(peak, inFlight);

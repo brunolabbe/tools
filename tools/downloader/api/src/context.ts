@@ -18,6 +18,7 @@ import type { ProbeCache } from "./jobs/probe-cache.ts";
 import type { ProbeStageHub } from "./probe-stages.ts";
 import type { JobQueue } from "./jobs/queue.ts";
 import type { AppLogger } from "./logger.ts";
+import type { PerClientConcurrencyGate } from "./per-client-gate.ts";
 import type { SsrfGuard } from "./ssrf.ts";
 import type { ThumbnailStore } from "./thumbnails.ts";
 
@@ -92,6 +93,16 @@ export interface AppContext {
   };
   /** Global cap on simultaneous probes, which no per-IP limit can provide. */
   probeGate: ConcurrencyGate;
+  /**
+   * Per-client caps on jobs and probes in flight (running and waiting
+   * counted together for jobs; see dl-51). Keyed the same way as
+   * `rateLimits.jobs` / `rateLimits.probe` — `clientKey(request.ip)` — so
+   * `TRUST_PROXY` means the same thing everywhere a client is identified.
+   * Compose with, rather than replace, `probeGate`: that bounds the server as
+   * a whole, this bounds one caller's share of it.
+   */
+  jobClientGate: PerClientConcurrencyGate;
+  probeClientGate: PerClientConcurrencyGate;
   now: () => Date;
   /** Flips during shutdown so intake can be refused before the sockets close. */
   isShuttingDown: () => boolean;

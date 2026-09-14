@@ -169,8 +169,8 @@ unchanged through `76076ac`) · manual defect hunt at medium, self-run (no
   `probeEvents` that the `probe` bucket was not already refusing in the same
   breath; the narration is refused alongside an analysis that is itself being
   refused and told properly. (b) confirmed via
-  `grep -rn probeGate tools/downloader/api/src/` (`tools/downloader/api/src/server.ts:493 "probeGate: new ConcurrencyGate(config.maxConcurrentProbes)"`,
-  `routes/probe.ts:105 "const release = context.probeGate.tryAcquire();"`, `routes/probe.ts:109 "limit: context.probeGate.limit,"`) — nothing gates the SSE hub globally, so two
+  `grep -rn probeGate tools/downloader/api/src/` (`tools/downloader/api/src/server.ts@95c6403:493 "probeGate: new ConcurrencyGate(config.maxConcurrentProbes)"`,
+  `routes/probe.ts@95c6403:105 "const release = context.probeGate.tryAcquire();"`, `routes/probe.ts@95c6403:109 "limit: context.probeGate.limit,"`) — nothing gates the SSE hub globally, so two
   distinct addresses suffice to fill all 64 channels between them, each
   individually under its own ~40-channel ceiling. Both inherent to the owner's
   per-IP decision and the ticket's own scope; not this branch's to fix.

@@ -30,6 +30,39 @@ export interface ApiConfig {
    * passes every per-IP bucket by definition.
    */
   maxConcurrentProbes: number;
+  /**
+   * Jobs one client may have in flight at once — running and waiting counted
+   * together, so a client cannot dodge the cap just by getting there first and
+   * filling the wait line instead of the running slots. `RATE_LIMIT_JOBS_PER_MINUTE`
+   * bounds how fast a client *starts* jobs; this bounds how many it *holds*,
+   * which a per-minute bucket cannot: a client that started five jobs a minute
+   * ago and let none finish is still within its rate and would otherwise own
+   * every slot indefinitely (dl-51). Zero disables it.
+   *
+   * **CGNAT and shared offices put many people behind one address.** This caps
+   * jobs *in flight*, not per minute, so a busy shared address is refused for a
+   * moment — as long as its next job takes to finish — rather than locked out
+   * for a whole rate-limit window.
+   */
+  maxJobsPerClient: number;
+  /**
+   * Jobs allowed to be waiting at once, across every client. Bounds the queue
+   * itself rather than any one client's share of it: `maxJobsPerClient` stops
+   * one address from holding every slot, but a flood spread across many
+   * addresses — each comfortably under its own cap — could still queue without
+   * limit behind `maxConcurrentJobs`' two running slots, each job then waiting
+   * up to `JOB_TIMEOUT_MS`. Past this cap a new job is refused immediately
+   * rather than accepted to wait an hour. Zero disables it.
+   */
+  maxQueuedJobs: number;
+  /**
+   * Probes one client may have in flight at once, the same shape as
+   * `maxJobsPerClient` for the same reason: `RATE_LIMIT_PROBE_PER_MINUTE`
+   * bounds how fast a client *starts* probes, not how many of the ~15 s,
+   * ~300 MB browser probes it *holds* against `maxConcurrentProbes`. Zero
+   * disables it. Same CGNAT caveat as `maxJobsPerClient`.
+   */
+  maxProbesPerClient: number;
   /** Budget for one resolution chain, across every tier it tries. */
   probeTimeoutMs: number;
   /** Ceiling on a single ffmpeg invocation. */
@@ -251,6 +284,10 @@ export const API_DEFAULTS = {
   rateLimitJobsPerMinute: 5,
   rateLimitFilesPerMinute: 600,
   rateLimitThumbnailPerMinute: 60,
+  // One client should not be able to hold both of the default two running
+  // slots, or an unrelated caller's job never starts. See dl-51.
+  maxJobsPerClient: 2,
+  maxProbesPerClient: 2,
 } as const;
 
 /**
@@ -261,6 +298,14 @@ export const API_DEFAULTS = {
  * `probeTimeoutMs`.
  */
 const PROBES_PER_BROWSER_SLOT = 4;
+
+/**
+ * `maxQueuedJobs`'s default, as a multiple of `maxConcurrentJobs` rather than a
+ * flat number — the same derivation `maxConcurrentProbes` uses from
+ * `maxConcurrentBrowsers`. A queue exists to smooth a burst behind the running
+ * slots, not to become a standing backlog measured in `JOB_TIMEOUT_MS`s.
+ */
+const QUEUED_JOBS_PER_CONCURRENCY_SLOT = 4;
 
 /** The brief's cap. A cache that outlives the URLs it holds is worse than none. */
 export const PROBE_CACHE_TTL_CEILING_MS = 60_000;
@@ -376,21 +421,35 @@ export function loadApiConfig(
   const maxConcurrentBrowsers =
     overrides.maxConcurrentBrowsers ??
     int(env["MAX_CONCURRENT_BROWSERS"], API_DEFAULTS.maxConcurrentBrowsers, { max: 16 });
+  // Hoisted because the default queue depth is derived from it.
+  const maxConcurrentJobs =
+    overrides.maxConcurrentJobs ??
+    int(env["MAX_CONCURRENT_JOBS"], API_DEFAULTS.maxConcurrentJobs, { max: 64 });
 
   const config: ApiConfig = {
     host: overrides.host ?? env["HOST"] ?? API_DEFAULTS.host,
     port: overrides.port ?? int(env["PORT"], API_DEFAULTS.port, { min: 0, max: 65_535 }),
     storageDir,
     databasePath,
-    maxConcurrentJobs:
-      overrides.maxConcurrentJobs ??
-      int(env["MAX_CONCURRENT_JOBS"], API_DEFAULTS.maxConcurrentJobs, { max: 64 }),
+    maxConcurrentJobs,
     maxConcurrentBrowsers,
     maxConcurrentProbes:
       overrides.maxConcurrentProbes ??
       int(env["MAX_CONCURRENT_PROBES"], maxConcurrentBrowsers * PROBES_PER_BROWSER_SLOT, {
         max: 256,
       }),
+    maxJobsPerClient:
+      overrides.maxJobsPerClient ??
+      int(env["MAX_JOBS_PER_CLIENT"], API_DEFAULTS.maxJobsPerClient, { min: 0, max: 64 }),
+    maxQueuedJobs:
+      overrides.maxQueuedJobs ??
+      int(env["MAX_QUEUED_JOBS"], maxConcurrentJobs * QUEUED_JOBS_PER_CONCURRENCY_SLOT, {
+        min: 0,
+        max: 10_000,
+      }),
+    maxProbesPerClient:
+      overrides.maxProbesPerClient ??
+      int(env["MAX_PROBES_PER_CLIENT"], API_DEFAULTS.maxProbesPerClient, { min: 0, max: 64 }),
     probeTimeoutMs:
       overrides.probeTimeoutMs ?? int(env["PROBE_TIMEOUT_MS"], API_DEFAULTS.probeTimeoutMs),
     stageTimeoutMs:
