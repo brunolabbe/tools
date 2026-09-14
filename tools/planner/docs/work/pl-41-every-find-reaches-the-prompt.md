@@ -3,7 +3,7 @@ id: pl-41
 tool: planner
 title: Every find a corridor returns reaches the prompt and the detour matrix, uncapped
 kind: fix
-status: ready
+status: done
 milestone: P3
 depends_on: []
 difficulty: standard
@@ -162,3 +162,79 @@ request as pl-39 and pl-40, over leaving it for pl-40's input-share rule to
 catch. pl-40 does not depend on it, but its live run is better spent after this
 lands. The id was checked against `node scripts/next-id.mjs pl` and the ticket
 Logs: pl-39 and pl-40 are this branch's own, and nothing names pl-41.
+
+**2026-09-14 — built, dispatched as `sonnet`.** Branch `pl-41-cap-corridor-finds`
+off `origin/main` at `95c6403`.
+
+- **`MAX_DISCOVERY_FINDS = 40`**, declared beside `DISCOVERY_RADIUS_METRES` in
+  `api/src/runs/discovery.ts`. Chosen rather than derived from a formula: it is
+  the same number this file's own header already used as its illustrative case
+  before this ticket ("a corridor with forty finds"), and it matches
+  `MAX_GROUNDING_CALLS`'s own default of 40 — a corridor whose discovery pass
+  would hand a specialist more material than the run's whole call budget
+  already reasons about is exactly the corridor this ceiling is for. **This is
+  a judgement call, not a measurement, and the brief said so explicitly** ("one
+  candidate shape, not a mandate"); it is flagged as such in the build report
+  rather than settled quietly, since it is a limit a user would notice (see the
+  `coverage` entry it now produces).
+- **Ranking, in `rankFinds`**: independent editorial backing first
+  (`Find.notability.length > 0`), then distance to the corridor ascending, then
+  `kind` (by its position in `DISCOVERY_KINDS`) and `name` as pure
+  determinism tie-breaks with no ranking weight of their own. Argued in the
+  function's own comment: editorial coverage alone would launder back in
+  exactly the bias §5's amendment built this pass to correct, so a corridor
+  with fewer backed finds than the cap fills its remaining slots by closeness
+  rather than staying in whatever order Overpass replied in. This is the
+  "some coverage-backed, the rest by closeness" shape the brief named as one
+  candidate, not a mandate — also flagged, for the same reason as the cap.
+- **Coverage entry** (`coverageForDropped`) fires only when the ranked list is
+  longer than the cap, and names the exact count left out — the brief's own
+  point that the number is not the kind this pass usually omits.
+- **`reading` (Wikivoyage) is computed from the full backed list, before the
+  cap**, not after: capping first would have shrunk the language-detection
+  signal on a long corridor for no reason connected to what `reading` is even
+  about (the corridor's own ends, not its finds).
+- **Folded in, free**: `nearby`, `notability` and `corridorReading` each
+  independently re-wrote "a corridor's own coordinates, dropping any endpoint
+  that never geocoded" — now one `corridorPoints` helper, used by all three
+  plus `rankFinds`. Small and within the "work this branch already makes free"
+  clause rather than a separate ticket.
+- **Environment gap, unrelated to this ticket's code**: this worktree's
+  `node_modules` (farmed from the shared checkout) was missing
+  `@anthropic-ai/sdk` and three of its own dependencies
+  (`json-schema-to-ts`, `standardwebhooks` and `fast-sha256`, plus
+  `@stablelib/base64`), even though `agent/package.json`
+  and the root `package-lock.json` both already declare them (from pl-39,
+  already on `main` at this branch's base). The shared checkout's own
+  `node_modules` lacks them too, so this is not specific to this worktree —
+  nobody has run `npm install` there since pl-39 landed. Fixed locally for this
+  build only, without a workspace-wide `npm install` (which the farm script's
+  own header warns against): extracted each package's tarball from the local
+  npm cache (`npm pack <pkg>@<version> --offline`, `@anthropic-ai/sdk` itself
+  needed network since it was not cached) directly into `node_modules`,
+  verified `npm run build` and the full repo `npm test` both stayed green
+  afterwards. **This is a repo-wide gap, not a pl-41 one** — every worktree
+  farmed from the shared checkout after pl-39 merged and before someone runs
+  `npm install` there will hit the same `TS2307` on
+  `agent/src/providers/anthropic.ts`. Filing it is the reviewer's or the
+  orchestrator's call; flagged in the build report rather than filed as
+  `pl-50` unilaterally, since it is infrastructure rather than a planner
+  ticket.
+- **Valhalla `service_limits.sources_to_targets` for the uncapped 277×277
+  matrix — not verified.** This is a fact about the deployed host's
+  `valhalla.json`, which this environment has no access to (no repo file
+  configures it, and nothing here can reach the deployed instance). Per the
+  ticket's own "Reproduction" section, this should be checked against the host
+  rather than assumed either way; it was not checked, and is recorded here as
+  unmeasured rather than guessed at. The cap this ticket adds makes the
+  question moot for the shipped code path (at most 41×41 now), but the
+  uncapped-matrix question itself remains open for whoever has host access.
+- **Verification**: `npx vitest run tools/planner/api/test/discovery-pass.test.ts`
+  — 28/28 (23 pre-existing + 5 new) before formatting, unchanged after.
+  `npx vitest run tools/planner/api/test/discovery-prompt-bound.test.ts` — 1/1.
+  `npm run check` — clean (lint, format, typecheck across the whole repo).
+  `npm test -- --project planner` — 56 files, 937 tests, all passing (baseline
+  before this ticket's changes: 55 files, 931 tests, run on the unmutated tree
+  first to confirm). `npm test` (full repo) — 143 files, 2571 tests, all
+  passing, run once after the `node_modules` fix above to confirm nothing else
+  in the repo was disturbed by it.

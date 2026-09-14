@@ -5,9 +5,13 @@
  * drives the pass through every branch — no corridor, both ends located, one
  * end that will not locate, a corridor with nothing on it, a corridor the
  * budget refuses, and a corridor with something to measure a detour against.
- * Nothing here goes near the database or a network socket.
+ * Nothing here goes near a network socket — the one place a real payload
+ * appears (pl-41's capping tests, below) parses it with a stubbed `fetch`, the
+ * same offline pattern `grounding-valhalla.test.ts` uses.
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { emptyBrief, slot } from "@planner/contract";
 import type { RunProgress, TripBrief } from "@planner/contract";
@@ -26,8 +30,14 @@ import {
   type GroundingOutcome,
   type RunGrounding,
 } from "../src/grounding/cache.ts";
+import { ValhallaGroundingProvider } from "../src/grounding/valhalla.ts";
 import { createLogger } from "../src/logger.ts";
-import { discoverAlongCorridor, hasCorridor, tripContextFor } from "../src/runs/discovery.ts";
+import {
+  discoverAlongCorridor,
+  hasCorridor,
+  MAX_DISCOVERY_FINDS,
+  tripContextFor,
+} from "../src/runs/discovery.ts";
 
 const logger = createLogger({ level: "silent" });
 
@@ -669,5 +679,217 @@ describe("discoverAlongCorridor, attaching notability", () => {
     expect(urls).not.toContain("https://fr.wikipedia.org/wiki/Loin");
     // The tag the map already carried is still first and is not duplicated.
     expect(urls[0]).toBe(TAGGED_FR.url);
+  });
+});
+
+/**
+ * Capping and ranking the finds — pl-41.
+ *
+ * `MAX_DISCOVERY_FINDS` is asserted, never re-typed as a number: a test that
+ * wrote `40` in its own assertions would keep passing the day the constant
+ * changed and the pass silently disagreed with the tests that read it.
+ */
+describe("discoverAlongCorridor, capping the finds that reach the fan-out (pl-41)", () => {
+  const AT = "2027-01-01T00:00:00.000Z";
+
+  /** One find at a controlled distance from Montréal, backed or not. */
+  function findAt(name: string, deltaLatDegrees: number, notable: boolean): Find {
+    return find({
+      name,
+      coordinates: { latitude: MONTREAL.latitude + deltaLatDegrees, longitude: MONTREAL.longitude },
+      notability: notable
+        ? [{ url: `https://fr.wikipedia.org/wiki/${name}`, title: name, fetchedAt: AT }]
+        : [],
+    });
+  }
+
+  // Ten places an encyclopedia has written about, each placed *farther* from
+  // the corridor than every one of the thirty-five below — so "coverage-backed
+  // first" and "closest first" disagree about the order, and a test can tell
+  // which one this pass actually does.
+  const backed = Array.from({ length: 10 }, (_, i) =>
+    findAt(`Backed ${String(i)}`, (i + 1) * 0.05, true),
+  );
+  // Thirty-five unbacked places, all closer than any backed one. A ranking
+  // that preferred closeness over backing would put every one of these ahead
+  // of the ten above — the exact bias §5's 2026-08-22 amendment built this
+  // pass to correct, restated as a ranking rather than a proposal.
+  const unbacked = Array.from({ length: 35 }, (_, i) =>
+    findAt(`Unbacked ${String(i)}`, (i + 1) * 0.001, false),
+  );
+  const fortyFive = [...backed, ...unbacked];
+
+  test("keeps every backed find, fills the rest by closeness, and a coverage entry names what did not survive", async () => {
+    const result = await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Québec City"),
+      provider: provider({ nearby: async () => answered(fortyFive) }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    expect(result.finds).toHaveLength(MAX_DISCOVERY_FINDS);
+    // All ten backed finds, then the closest of the unbacked ones, filling
+    // whatever the cap leaves — "some coverage-backed, the rest by
+    // closeness" (Build step 2), not whichever order they were handed in.
+    const expectedNames = [
+      ...backed.map((f) => f.name),
+      ...unbacked.slice(0, MAX_DISCOVERY_FINDS - backed.length).map((f) => f.name),
+    ];
+    expect(result.finds.map((f) => f.name)).toEqual(expectedNames);
+
+    const droppedCount = fortyFive.length - MAX_DISCOVERY_FINDS;
+    expect(result.coverage).toHaveLength(1);
+    expect(result.coverage[0]?.kind).toBe("coverage");
+    // The number is the point, per the repo's "never fake progress" rule
+    // applied to a list — see `coverageForDropped`'s own doc comment.
+    expect(result.coverage[0]?.detail).toContain(String(droppedCount));
+  });
+
+  test("the same finds rank the same way twice — the cap is deterministic, not order-of-arrival", async () => {
+    async function run(): Promise<string[]> {
+      const result = await discoverAlongCorridor({
+        brief: briefWith("Montréal", "Québec City"),
+        provider: provider({ nearby: async () => answered(fortyFive) }),
+        logger,
+        signal: new AbortController().signal,
+        onProgress: () => {},
+      });
+      return result.finds.map((f) => f.name);
+    }
+
+    expect(await run()).toEqual(await run());
+  });
+
+  test("the detour matrix is bounded to cap + 1 origins and destinations, not one row per find", async () => {
+    let sizes: { origins: number; destinations: number } | null = null;
+    await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Québec City"),
+      provider: provider({
+        nearby: async () => answered(fortyFive),
+        travel: async (request) => {
+          sizes = { origins: request.origins.length, destinations: request.destinations.length };
+          return request.origins.map(() => request.destinations.map(() => UNKNOWN));
+        },
+      }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    expect(sizes).toEqual({
+      origins: MAX_DISCOVERY_FINDS + 1,
+      destinations: MAX_DISCOVERY_FINDS + 1,
+    });
+  });
+
+  test("a corridor with exactly the cap's worth of finds gets no coverage entry", async () => {
+    const exactlyTheCap = fortyFive.slice(0, MAX_DISCOVERY_FINDS);
+    const result = await discoverAlongCorridor({
+      brief: briefWith("Montréal", "Québec City"),
+      provider: provider({ nearby: async () => answered(exactlyTheCap) }),
+      logger,
+      signal: new AbortController().signal,
+      onProgress: () => {},
+    });
+
+    expect(result.finds).toHaveLength(MAX_DISCOVERY_FINDS);
+    expect(result.coverage).toEqual([]);
+  });
+});
+
+/**
+ * The same cap, over the one real corridor capture this repo has —
+ * `grounding-valhalla.test.ts`'s own deliverable, parsed the same offline way
+ * it parses it: a stubbed `fetch` answering the checked-in Overpass reply, no
+ * socket anywhere.
+ *
+ * This is pl-41's own reproduction, turned into a test: 657 Overpass elements
+ * become 276 `Find`s (pinned independently in `grounding-valhalla.test.ts`),
+ * and this pass must cap that to `MAX_DISCOVERY_FINDS` before it ever reaches
+ * `runFanOut`.
+ */
+function overpassFixture(name: string): unknown {
+  return JSON.parse(
+    readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), "utf8"),
+  );
+}
+
+describe("discoverAlongCorridor, over the real Montréal→Québec City capture (pl-41)", () => {
+  const QUEBEC_CITY = { latitude: 46.8139, longitude: -71.208 };
+
+  async function capturedFinds(): Promise<Find[]> {
+    const body = overpassFixture("overpass-nearby.json");
+    const fetchStub = (async () =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof globalThis.fetch;
+
+    const realProvider = new ValhallaGroundingProvider({
+      routingUrl: "http://valhalla.internal:8002",
+      geocoderUrl: "http://nominatim.internal:8080",
+      overpassUrl: "http://overpass.internal:8090",
+      timeoutMs: 5_000,
+      now: () => new Date("2027-01-01T00:00:00.000Z"),
+      fetch: fetchStub,
+    });
+
+    return realProvider.nearby({
+      corridor: [MONTREAL, QUEBEC_CITY],
+      radiusMetres: 6_000,
+      kinds: ["viewpoint", "waterfall", "attraction", "historic-site"],
+    });
+  }
+
+  test("276 real finds are capped to MAX_DISCOVERY_FINDS, in a stable order, with a coverage entry naming the rest", async () => {
+    const finds = await capturedFinds();
+    // Pins the same number `grounding-valhalla.test.ts` does, independently —
+    // if that number ever moves, this fixture moved with it and every
+    // assertion below that is derived from it should be re-read.
+    expect(finds).toHaveLength(276);
+
+    async function run(): Promise<{
+      names: string[];
+      coverage: readonly { detail: string }[];
+      sizes: { origins: number; destinations: number } | null;
+    }> {
+      let sizes: { origins: number; destinations: number } | null = null;
+      const result = await discoverAlongCorridor({
+        brief: briefWith("Montréal", "Québec City"),
+        provider: provider({
+          locate: async (request) =>
+            answered({
+              coordinates: request.place.name === "Montréal" ? MONTREAL : QUEBEC_CITY,
+              source: { url: "x", title: null, fetchedAt: "2027-01-01T00:00:00.000Z" },
+            }),
+          nearby: async () => answered(finds),
+          travel: async (request) => {
+            sizes = { origins: request.origins.length, destinations: request.destinations.length };
+            return request.origins.map(() => request.destinations.map(() => UNKNOWN));
+          },
+        }),
+        logger,
+        signal: new AbortController().signal,
+        onProgress: () => {},
+      });
+      return { names: result.finds.map((f) => f.name), coverage: result.coverage, sizes };
+    }
+
+    const first = await run();
+    const second = await run();
+
+    expect(first.names).toHaveLength(MAX_DISCOVERY_FINDS);
+    // Two runs over the identical capture produce the identical list, in the
+    // identical order — the stability the ticket's "Done when" asks for.
+    expect(second.names).toEqual(first.names);
+    expect(first.sizes).toEqual({
+      origins: MAX_DISCOVERY_FINDS + 1,
+      destinations: MAX_DISCOVERY_FINDS + 1,
+    });
+
+    const droppedCount = finds.length - MAX_DISCOVERY_FINDS;
+    expect(first.coverage).toHaveLength(1);
+    expect(first.coverage[0]?.detail).toContain(String(droppedCount));
   });
 });

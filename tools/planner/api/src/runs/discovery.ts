@@ -63,7 +63,7 @@ import type { Corridor, Find, NearbyArticle, TripContext } from "@planner/agent"
 import { DISCOVERY_KINDS } from "@planner/agent";
 import { unchecked } from "@planner/itinerary";
 import type { GroundingOutcome, RunGrounding, TravelOutcomeMatrix } from "../grounding/cache.ts";
-import { haversineMetres } from "../grounding/geometry.ts";
+import { distanceToCorridorMetres, haversineMetres } from "../grounding/geometry.ts";
 import type { AppLogger } from "../logger.ts";
 
 /**
@@ -74,6 +74,33 @@ import type { AppLogger } from "../logger.ts";
  * changes what "still basically on the road" means.
  */
 export const DISCOVERY_RADIUS_METRES = 6_000;
+
+/**
+ * How many finds may reach a specialist's prompt, and `detourCosts`'s matrix —
+ * pl-41.
+ *
+ * **Forty.** This file's own header, before this ticket, already reasoned
+ * about "a corridor with forty finds" as its illustrative case — at pl-41's
+ * measured ≈43 tokens per find that is ≈1.7k tokens added to a specialist's
+ * system prompt, noticeable but nothing like the ×17.4 growth an uncapped
+ * corridor produced (pl-41's reproduction: 276 finds, one specialist's prompt
+ * from ≈732 to ≈12,721 tokens). It also matches `MAX_GROUNDING_CALLS`'s own
+ * default: a corridor whose discovery pass would hand a specialist more
+ * material than the run's whole call budget already reasons about is exactly
+ * the corridor this ceiling is for.
+ *
+ * **One cap, applied once, here, before `detourCosts` builds its matrix** — a
+ * cap applied only in `discoveryBlock` (`agent/src/prompt.ts`) would leave the
+ * matrix at n² and store a detour cost for every one of the 276, nobody ever
+ * reading most of them. A corridor with 276 finds would otherwise cost a
+ * 277×277 `travel` request, and whether the deployed Valhalla's
+ * `service_limits.sources_to_targets` even accepts a matrix that size is not
+ * verified — see this ticket's Log.
+ *
+ * Not configurable, for the same reason `DISCOVERY_RADIUS_METRES` is not: this
+ * is content, not a deployment knob.
+ */
+export const MAX_DISCOVERY_FINDS = 40;
 
 /**
  * Wikipedia's geosearch ceiling, and the tile size that follows from it.
@@ -291,11 +318,41 @@ export async function discoverAlongCorridor(input: DiscoverInput): Promise<Disco
   }
 
   const backed = await notability(provider, corridor, finds, signal, logger);
+  // Reading is asked over the *full* backed list, before the cap below drops
+  // anything — a long corridor's language signal should not shrink because
+  // most of its finds did not survive to the detour matrix.
   const reading = await corridorReading(provider, corridor, backed, signal, logger);
-  const withDetours = await detourCosts(provider, origin, destination, backed, signal, logger);
+
+  const ranked = rankFinds(backed, corridorPoints(corridor));
+  const survivors = ranked.slice(0, MAX_DISCOVERY_FINDS);
+  const droppedCount = ranked.length - survivors.length;
+
+  const withDetours = await detourCosts(provider, origin, destination, survivors, signal, logger);
   finished();
 
-  return { finds: withDetours, coverage: [], reading };
+  return {
+    finds: withDetours,
+    coverage: droppedCount > 0 ? [coverageForDropped(droppedCount)] : [],
+    reading,
+  };
+}
+
+/**
+ * "`${count}` more places ... than could be shown to the planner" — pl-41
+ * Build step 3.
+ *
+ * The repo's "never fake progress" rule applies to a list as much as to a
+ * percentage: a plan built from `MAX_DISCOVERY_FINDS` of `ranked.length` finds
+ * must not read as though the corridor held only the ones it saw. The count is
+ * exactly the kind of number this pass's other coverage sentences deliberately
+ * omit — "very little on the map" never says how little — but here the number
+ * is the point, so it is named rather than gestured at.
+ */
+function coverageForDropped(count: number): UncheckedConstraint {
+  return unchecked(
+    "coverage",
+    `${String(count)} more places were found along this route than could be shown to the planner. The closest, and any with independent editorial coverage, were kept — something worth stopping for may still be among the rest.`,
+  );
 }
 
 /**
@@ -336,11 +393,7 @@ async function notability(
   const language = dominantLanguage(finds);
   if (language === null) return [...finds];
 
-  // Same narrowing `nearby` does: a corridor endpoint that never geocoded has
-  // no coordinates and cannot be asked about.
-  const points = corridor
-    .map((place) => place.coordinates)
-    .filter((point): point is Coordinates => point !== null);
+  const points = corridorPoints(corridor);
 
   const articles: NearbyArticle[] = [];
   for (const point of notabilityTiles(points)) {
@@ -410,9 +463,7 @@ async function corridorReading(
   const language = dominantLanguage(finds);
   if (language === null) return [];
 
-  const ends = corridor
-    .map((place) => place.coordinates)
-    .filter((point): point is Coordinates => point !== null);
+  const ends = corridorPoints(corridor);
 
   const reading: Source[] = [];
   const seen = new Set<string>();
@@ -538,15 +589,72 @@ async function locate(
   }
 }
 
+/**
+ * A corridor's own coordinates, dropping any endpoint that never geocoded.
+ *
+ * One helper rather than the same filter written out at every call site —
+ * `nearby`, `notability`, `corridorReading` and `rankFinds` all need exactly
+ * this and disagreed about it nowhere, so pl-41 folded the four copies into
+ * one.
+ */
+function corridorPoints(corridor: readonly Place[]): Coordinates[] {
+  return corridor
+    .map((place) => place.coordinates)
+    .filter((point): point is Coordinates => point !== null);
+}
+
+/**
+ * Which finds survive `MAX_DISCOVERY_FINDS`, and in what order — pl-41 Build
+ * step 2.
+ *
+ * **Independent editorial backing first, then distance to the corridor,
+ * closest first.** Not editorial coverage alone: §5's 2026-08-22 amendment
+ * built this whole pass because a model asked for stops "returns the famous
+ * ones", and ranking purely by what an encyclopedia already covers would
+ * launder that exact bias back in through the ranking rather than the model.
+ * So a corridor with fewer backed finds than the cap fills its remaining
+ * slots with the closest unbacked ones — some coverage-backed, the rest by
+ * closeness — instead of keeping whatever order Overpass happened to reply
+ * in, which is arbitrary in a way a traveller would notice (nothing about a
+ * node's id or its position in a reply says anything about whether it is
+ * worth a detour).
+ *
+ * `kind` is the third signal this step has available and is used only to
+ * break a tie that survives the first two, by its own position in
+ * `DISCOVERY_KINDS` — deliberately not a ranking criterion of its own, since
+ * nothing in §5's amendment argues one kind of place is worth more than
+ * another. `name` breaks whatever tie is left. Two finds equally backed (or
+ * unbacked), equidistant and of the same kind are two real places sitting on
+ * top of each other, and something has to give them a stable order or the
+ * "same capture renders the same prompt twice" guarantee below would not
+ * hold.
+ */
+function rankFinds(finds: readonly Find[], corridor: Corridor): Find[] {
+  const kindOrder = new Map(DISCOVERY_KINDS.map((kind, index) => [kind, index]));
+
+  return finds
+    .map((find) => ({ find, distanceMetres: distanceToCorridorMetres(find.coordinates, corridor) }))
+    .toSorted((a, b) => {
+      const aBacked = a.find.notability.length > 0;
+      const bBacked = b.find.notability.length > 0;
+      if (aBacked !== bBacked) return aBacked ? -1 : 1;
+      if (a.distanceMetres !== b.distanceMetres) return a.distanceMetres - b.distanceMetres;
+
+      const kindDiff = (kindOrder.get(a.find.kind) ?? 0) - (kindOrder.get(b.find.kind) ?? 0);
+      if (kindDiff !== 0) return kindDiff;
+
+      return a.find.name.localeCompare(b.find.name);
+    })
+    .map((entry) => entry.find);
+}
+
 async function nearby(
   provider: RunGrounding,
   corridor: readonly Place[],
   signal: AbortSignal,
   logger: AppLogger,
 ): Promise<GroundingOutcome<Find[]>> {
-  const points = corridor
-    .map((place) => place.coordinates)
-    .filter((point): point is NonNullable<typeof point> => point !== null);
+  const points = corridorPoints(corridor);
 
   try {
     return await provider.nearby({
