@@ -3,7 +3,7 @@ id: pl-45
 tool: planner
 title: Revise a plan, pick a version, and read the diff
 kind: work-package
-status: ready
+status: done
 milestone: P4
 depends_on: [pl-42]
 difficulty: standard
@@ -28,11 +28,11 @@ reachable by a person rather than only by a test.
 
 [pl-42](./pl-42-the-revision-contract.md) is the seam this builds against:
 `RevisionOperation`, `RevisionDiff`, `ReviseRequest`/`ReviseResponse`,
-`ROUTES.planRevisions`, `REVISION_STALE` and `PLAN_BUSY`. It has not been built
-in this worktree yet — only filed — so everything below is written against its
-**Build** section as a specification, the same way pl-43 and pl-44 are. If
-anything here disagrees with pl-42's text, that is this ticket's problem to
-raise, not to paper over.
+`ROUTES.planRevisions`, `REVISION_STALE` and `PLAN_BUSY`. **It merged to `main`
+as PR #228 (`caeeb44`) before this ticket was built** — the line that used to
+stand here said it had not been, which was true only at filing time. Every
+claim below was checked against the merged code rather than against pl-42's
+Build section as a specification, and held.
 
 ## Build
 
@@ -321,3 +321,74 @@ The four other code facts the brief rests on held: the hard-coded
 `"A first draft is ready"`, `progressLine`'s `of … specialists done.`, `LABELS`
 typed over every `RunStatus`, and `RunView`'s `failed` branch rendering the
 error's message.
+
+**2026-09-14 — built (dispatched as Sonnet).** Branched from `origin/main` at
+`95c6403`. pl-42 merged to `main` as PR #228 (`caeeb44`) before this ticket was
+picked up; the Why section's "has not been built in this worktree yet" line
+was stale and is now corrected in place, citing the merge.
+
+Every Build claim about pl-42's actual shape held against `caeeb44`'s code:
+`ReviseRequest`/`ReviseResponse`'s discriminated shape, `RevisionOperation`'s
+five members, `RevisionDiff`/`DiffEntry`/`DiffPlacement`, `ROUTES.planRevisions`
+and `planRevisionsUrl`, `REVISION_STALE`/`PLAN_BUSY` (with `details: { run }`
+on the latter), `MAX_REVISION_NOTE_CHARS`, and `PlanView.unchecked`'s
+latest-only doc comment.
+
+**What the brief did not fully specify, decided here and recorded rather than
+asked, because neither touches `contract`/`api`/`agent`:**
+
+- **`PLAN_BUSY`'s "Watch it" button** has no route to fetch a `Run` by id —
+  pl-42 added none, and none is this ticket's to add. It opens `RunView` with a
+  placeholder `Run` (`status: "queued"`, `rosterSize: null`), exactly the shape
+  `RunEvent.snapshot`'s own doc comment already describes for a late attacher:
+  the first frame off the SSE connection corrects it before `status` could ever
+  reach `"done"` on stale data. Built in `App.tsx`'s new `watch` callback.
+- **The version picker's `<option>` text is `Version N · reason`, not the
+  crumb's `Version N of M · reason`.** Repeating the crumb's exact sentence in
+  an `<option>` collided with the crumb `<p>` itself whenever the selected
+  option was the one shown — `screen.findByText` found two elements with
+  identical text, caught by the version-picker test below. The crumb keeps the
+  literal string pl-19's e2e depends on; the picker says less.
+- **Two pre-existing `plan-view.test.tsx` tests became ambiguous, not wrong.**
+  `dayHeading(day)` is reused on the re-plan form's own day checkboxes (the
+  ticket's own instruction), so a bare `findByText("Day 1")` /
+  `findByText("Day 1 · 2027-07-05")` started matching both the day's `<h3>` and
+  a checkbox label once that form was on the page. Changed to
+  `findByRole("heading", { name, level: 3 })`, which is what those two tests
+  were actually asserting about.
+
+**Fold-in considered and declined.** The brief's own fold-in instruction (the
+stale pl-42 line) is done above. No other already-specified, already-free work
+surfaced while building this.
+
+**Verification**, each figure from the command beside it:
+
+- `npx vitest run tools/planner/web` on the unmutated tree at the start:
+  5 files, 60 tests, all passing (baseline).
+- Same command after the change: 5 files, **79 tests**, all passing — 19 new
+  (`plan-view.test.tsx` 24 → 40, `run-view.test.tsx` 8 → 11).
+- `npx tsc --build tools/planner/web tools/planner/web/test`: clean, no output.
+- `npx oxlint tools/planner/web/src tools/planner/web/test`: clean, no output.
+- `npx oxfmt --check tools/planner/web/src tools/planner/web/test`: "All
+  matched files use the correct format."
+- `npm run check`: exits 2, solely on `tools/planner/agent`'s
+  `Cannot find module '@anthropic-ai/sdk'` — reproduced on the unmutated tree
+  before any edit in this worktree (same error, same package, `npm install`
+  never reaches the network here), and outside this ticket's `web`-only
+  Packages line.
+- `npm test -- --project planner`: 25 test files fail and 30 pass, identical
+  set on the unmutated tree and after the change (all 25 are `agent`/`api`,
+  all the same missing-dependency error); **501 tests pass**, up from the
+  unmutated tree's 482 — the same 19 new tests, none newly failing.
+- Not run: e2e (`e2e/pin.spec.ts`, `e2e/revise.spec.ts`) — out of scope per
+  this ticket's `Done when` and [pl-46](./pl-46-revise-through-the-browser.md);
+  not runnable from this worktree regardless.
+
+Files: `web/src/api/plan.ts` (`startReplan`, `editPlan`), `web/src/plan/PlanView.tsx`
+(version picker, move/remove controls, the re-plan form, the diff, error
+banners), `web/src/plan/RunView.tsx` (`progressLine`'s zero-specialist case,
+`Finished`'s `run.kind` branch), `web/src/App.tsx` (`onReplan`, `onWatchRun`
+wiring), `web/src/styles.css` (minimal rules for the above), `web/test/plan-fixtures.ts`
+(multi-revision `revision()` overrides, `diffPlacement`/`addedEntry`/`removedEntry`/`movedEntry`/`revisionDiff`
+builders), `web/test/plan-view.test.tsx` and `web/test/run-view.test.tsx` (new
+coverage, two ambiguity fixes).

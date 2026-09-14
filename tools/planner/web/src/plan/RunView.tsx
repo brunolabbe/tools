@@ -73,6 +73,13 @@ function name(specialist: string): string {
  * above that would contradict it.
  */
 function progressLine(progress: Progress): string {
+  // A re-plan naming no specialists re-packs with `rosterSize: 0` — real and
+  // reachable (pl-42), and the arithmetic below would otherwise render the
+  // technically-true, useless "0 of 0 specialists done." Checked before the
+  // status branches, because the sentence is wrong under either label.
+  if (progress.total === 0) {
+    return "Re-packing the existing days…";
+  }
   if (progress.status === "grounding") {
     return progress.total === null
       ? "Checking what the specialists proposed…"
@@ -207,7 +214,12 @@ export function RunView({
       <h2>{LABELS[progress.status]}</h2>
 
       {progress.status === "done" ? (
-        <Finished revision={revision} onExit={onExit} onOpenPlan={() => onOpenPlan(run.planId)} />
+        <Finished
+          kind={run.kind}
+          revision={revision}
+          onExit={onExit}
+          onOpenPlan={() => onOpenPlan(run.planId)}
+        />
       ) : progress.status === "failed" || progress.status === "canceled" ? (
         <>
           <p className="bad">{progress.message ?? "The run did not finish."}</p>
@@ -243,10 +255,12 @@ export function RunView({
 }
 
 function Finished({
+  kind,
   revision,
   onExit,
   onOpenPlan,
 }: {
+  kind: Run["kind"];
   revision: ReturnType<typeof latestRevision>;
   onExit: () => void;
   onOpenPlan: () => void;
@@ -260,13 +274,15 @@ function Finished({
   }
 
   const items = revision.days.reduce((total, day) => total + day.items.length, 0);
+  // A re-plan is not a first draft, and the copy has to say so — `run.kind`
+  // (pl-42) is the one thing this component could not tell apart before.
+  const lead = kind === "replan" ? "This version is ready" : "A first draft is ready";
 
   return (
     <>
       <p>
-        A first draft is ready — {revision.days.length}{" "}
-        {revision.days.length === 1 ? "day" : "days"}, {String(items)}{" "}
-        {items === 1 ? "thing" : "things"} on them.
+        {lead} — {revision.days.length} {revision.days.length === 1 ? "day" : "days"},{" "}
+        {String(items)} {items === 1 ? "thing" : "things"} on them.
       </p>
 
       {/*

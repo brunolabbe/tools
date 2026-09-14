@@ -89,6 +89,46 @@ export function App(): React.ReactElement {
     setReading(planId);
   }, []);
 
+  /**
+   * A re-plan started from inside the plan view: control leaves it entirely
+   * (pl-45 Build step 5), the same handoff a draft's own `onDraft` makes.
+   * `setReading(null)` first, because `App` renders `PlanView` for as long as
+   * `reading` is set and the run would otherwise never be shown.
+   */
+  const replan = useCallback((run: Run): void => {
+    setReading(null);
+    setWatching(run);
+  }, []);
+
+  /**
+   * `PLAN_BUSY`'s "Watch it": open the run already in progress on this plan.
+   *
+   * There is no route to fetch a `Run` by id (pl-42 added none), so this
+   * builds the same kind of placeholder `RunEvent.snapshot`'s own doc comment
+   * already describes for a late attacher: a client that connects mid-run has
+   * no honest number to start from, and the first real frame corrects it
+   * immediately. `kind: "replan"` is a guess rather than a fabrication in
+   * practice — a plan reaches this banner only once it already has a
+   * revision, and a first-draft run finishes before that is possible — and it
+   * cannot leak into `Finished`'s copy before a `snapshot` or `status` frame
+   * has replaced it, because `status` starts at `"queued"` and only an event
+   * can move it to `"done"`.
+   */
+  const watch = useCallback((runId: string, planId: string): void => {
+    setReading(null);
+    setWatching({
+      id: runId,
+      planId,
+      kind: "replan",
+      status: "queued",
+      rosterSize: null,
+      specialistsDone: 0,
+      error: null,
+      startedAt: new Date(0).toISOString(),
+      finishedAt: null,
+    });
+  }, []);
+
   return (
     <main className="shell">
       <h1>Planner</h1>
@@ -103,7 +143,12 @@ export function App(): React.ReactElement {
               ← Back
             </button>
           </p>
-          <PlanView planId={reading} onExit={() => setReading(null)} />
+          <PlanView
+            planId={reading}
+            onExit={() => setReading(null)}
+            onReplan={replan}
+            onWatchRun={watch}
+          />
         </>
       ) : openIntake === null ? (
         <>

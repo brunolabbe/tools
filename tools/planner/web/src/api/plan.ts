@@ -9,6 +9,7 @@
 
 import {
   planItemPinUrl,
+  planRevisionsUrl,
   planUrl,
   ROUTES,
   runCancelUrl,
@@ -18,6 +19,8 @@ import {
   type Plan,
   type PlanListResponse,
   type PlanView,
+  type ReviseRequest,
+  type ReviseResponse,
   type Run,
   type RunEvent,
 } from "@planner/contract";
@@ -62,6 +65,47 @@ export async function pinItem(planId: string, itemId: string, pinned: boolean): 
     method: "POST",
     body: { pinned } satisfies PinItemRequest,
   });
+}
+
+/**
+ * Re-plan some days. Always a run — pl-42's step 6 rule that re-packing with
+ * no specialists is still work that needs somewhere to report to and a cancel
+ * button beside it.
+ *
+ * Typed to the one response kind it can honestly return, rather than to the
+ * whole `ReviseResponse`: a `replan` request answers `{ kind: "run" }` and
+ * never `{ kind: "revision" }`, so a caller that tried to route this through
+ * `RunView`'s counterpart would be a type error here rather than a runtime
+ * surprise.
+ */
+export async function startReplan(
+  planId: string,
+  request: Extract<ReviseRequest, { kind: "replan" }>,
+): Promise<Run> {
+  const response = await requestJson<Extract<ReviseResponse, { kind: "run" }>>(
+    planRevisionsUrl(planId),
+    { method: "POST", body: request },
+  );
+  return response.run;
+}
+
+/**
+ * Move, remove or restore. Synchronous, and the whole view comes back — the
+ * pin route's own shape — so an open tab holds the document the next reader
+ * gets.
+ *
+ * Typed to `{ kind: "revision" }`, the mirror of `startReplan`'s narrowing and
+ * for the same reason.
+ */
+export async function editPlan(
+  planId: string,
+  request: Exclude<ReviseRequest, { kind: "replan" }>,
+): Promise<PlanView> {
+  const response = await requestJson<Extract<ReviseResponse, { kind: "revision" }>>(
+    planRevisionsUrl(planId),
+    { method: "POST", body: request },
+  );
+  return response.view;
 }
 
 export async function cancelRun(id: string): Promise<Run> {

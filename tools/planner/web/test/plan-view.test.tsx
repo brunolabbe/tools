@@ -29,20 +29,37 @@ import {
   location,
   uncheckedConstraintKey,
   type Provenance,
+  type Run,
   type UncheckedConstraint,
 } from "@planner/contract";
-import { fetchPlan, pinItem } from "../src/api/plan.ts";
+import { editPlan, fetchPlan, pinItem, startReplan } from "../src/api/plan.ts";
 import { PlanView } from "../src/plan/PlanView.tsx";
-import { brief, candidate, day, item, planView, revision } from "./plan-fixtures.ts";
+import {
+  addedEntry,
+  brief,
+  candidate,
+  day,
+  diffPlacement,
+  item,
+  movedEntry,
+  planView,
+  removedEntry,
+  revision,
+  revisionDiff,
+} from "./plan-fixtures.ts";
 
 vi.mock("../src/api/plan.ts", () => ({
   fetchPlan: vi.fn(),
   pinItem: vi.fn(),
   fetchPlans: vi.fn(),
+  editPlan: vi.fn(),
+  startReplan: vi.fn(),
 }));
 
 const fetched = vi.mocked(fetchPlan);
 const pinned = vi.mocked(pinItem);
+const edited = vi.mocked(editPlan);
+const replanned = vi.mocked(startReplan);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -62,8 +79,20 @@ const GROUNDED: Provenance = {
   ],
 };
 
-function show(): ReturnType<typeof render> {
-  return render(<PlanView planId="plan-1" onExit={() => undefined} />);
+function show(
+  options: {
+    onReplan?: (run: Run) => void;
+    onWatchRun?: (runId: string, planId: string) => void;
+  } = {},
+): ReturnType<typeof render> {
+  return render(
+    <PlanView
+      planId="plan-1"
+      onExit={() => undefined}
+      onReplan={options.onReplan ?? (() => undefined)}
+      onWatchRun={options.onWatchRun ?? (() => undefined)}
+    />,
+  );
 }
 
 describe("the days", () => {
@@ -84,7 +113,10 @@ describe("the days", () => {
 
     show();
 
-    expect(await screen.findByText("Day 1")).toBeDefined();
+    // A heading, not a bare text match: pl-45's re-plan form names its own
+    // day checkbox the same way (`dayHeading`, reused on purpose), so a plain
+    // `findByText` is ambiguous the moment that control is on the page too.
+    expect(await screen.findByRole("heading", { name: "Day 1", level: 3 })).toBeDefined();
     // Nothing that looks like a date is on the page.
     expect(screen.queryByText(/\d{4}-\d{2}-\d{2}/)).toBeNull();
   });
@@ -100,7 +132,9 @@ describe("the days", () => {
 
     show();
 
-    expect(await screen.findByText("Day 1 · 2027-07-05")).toBeDefined();
+    expect(
+      await screen.findByRole("heading", { name: "Day 1 · 2027-07-05", level: 3 }),
+    ).toBeDefined();
   });
 
   /**
@@ -782,5 +816,438 @@ describe("travel sources", () => {
     } finally {
       warned.mockRestore();
     }
+  });
+});
+
+/**
+ * pl-45: revise, pick a version, and read the diff.
+ *
+ * The fake is the API client module here too — `editPlan` and `startReplan`
+ * beside `pinItem`, never `fetch`.
+ */
+describe("versions", () => {
+  test("the picker moves between revisions, and the crumb's text at the latest is unchanged", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const first = revision([day(0, [item({ candidateId: activity.id })])]);
+    const second = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      revision: 2,
+      reason: "Moved the hike to Thursday.",
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [first, second] }));
+
+    const user = userEvent.setup();
+    show();
+
+    // Literal-string, not a substring: this is the text pl-19's e2e checks.
+    expect(await screen.findByText("Version 2 of 2 · Moved the hike to Thursday.")).toBeDefined();
+
+    await user.selectOptions(screen.getByLabelText("Version"), "1");
+
+    expect(await screen.findByText("Version 1 of 2 · The first draft.")).toBeDefined();
+  });
+
+  test("restoring an older version sends baseRevisionId from the latest revision, not the one on screen", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const first = revision([day(0, [item({ candidateId: activity.id })])]);
+    const second = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      revision: 2,
+      reason: "Moved the hike to Thursday.",
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [first, second] }));
+    edited.mockResolvedValue(planView({ candidates: [activity], revisions: [first, second] }));
+
+    const user = userEvent.setup();
+    show();
+
+    await user.selectOptions(await screen.findByLabelText("Version"), "1");
+    await user.click(screen.getByRole("button", { name: "Restore this version" }));
+
+    expect(edited).toHaveBeenCalledWith("plan-1", {
+      kind: "restore",
+      baseRevisionId: second.id,
+      revision: 1,
+    });
+  });
+
+  test("what was not checked only ever describes the latest revision", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const first = revision([day(0, [item({ candidateId: activity.id })])]);
+    const second = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      revision: 2,
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [first, second] }));
+
+    const user = userEvent.setup();
+    show();
+
+    expect(await screen.findByText(/What was not checked/i)).toBeDefined();
+
+    await user.selectOptions(screen.getByLabelText("Version"), "1");
+
+    expect(screen.queryByText(/What was not checked/i)).toBeNull();
+  });
+
+  test("move, remove and re-plan are absent on an older revision, with copy saying why", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const first = revision([day(0, [item({ candidateId: activity.id })])]);
+    const second = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      revision: 2,
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [first, second] }));
+
+    const user = userEvent.setup();
+    show();
+
+    await user.selectOptions(await screen.findByLabelText("Version"), "1");
+
+    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Move" })).toBeNull();
+    expect(screen.queryByText("Re-plan some days")).toBeNull();
+    expect(await screen.findByText(/Editing works on the latest version/i)).toBeDefined();
+  });
+});
+
+describe("the diff", () => {
+  test("resolves by revisionId, not by array index", async () => {
+    const first = candidate({ title: "A viewpoint" });
+    const second = candidate({ title: "A lighthouse" });
+    const rev1 = revision([day(0, [item({ candidateId: first.id })])]);
+    const rev2 = revision(
+      [day(0, [item({ candidateId: first.id }), item({ candidateId: second.id, position: 1 })])],
+      [],
+      [],
+      [],
+      { revision: 2, reason: "Added the lighthouse." },
+    );
+    const rev3 = revision(
+      [day(0, [item({ candidateId: first.id }), item({ candidateId: second.id, position: 1 })])],
+      [],
+      [],
+      [],
+      { revision: 3, reason: "Nothing changed here." },
+    );
+    const diffForRev2 = revisionDiff(rev2.id, rev1.id, [
+      addedEntry(second.id, diffPlacement(0, 1)),
+    ]);
+    // Nothing this revision changed — a real and empty diff.
+    const diffForRev3 = revisionDiff(rev3.id, rev2.id, []);
+
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [first, second],
+        revisions: [rev1, rev2, rev3],
+        // Deliberately out of step with `revisions`' order: a lookup by index
+        // would read `diffs[1]` for revision 2, which is `diffForRev3`.
+        diffs: [diffForRev3, diffForRev2],
+      }),
+    );
+
+    const user = userEvent.setup();
+    show();
+
+    await user.selectOptions(await screen.findByLabelText("Version"), "2");
+
+    expect(await screen.findByText("A lighthouse — Day 1")).toBeDefined();
+  });
+
+  test("renders added, removed and moved entries as three short lists, never as prose", async () => {
+    const first = candidate({ title: "A viewpoint" });
+    const second = candidate({ title: "A lighthouse" });
+    const third = candidate({ title: "A diner" });
+    const rev1 = revision([
+      day(0, [item({ candidateId: first.id }), item({ candidateId: second.id, position: 1 })]),
+      day(1, []),
+    ]);
+    const rev2 = revision(
+      [day(0, [item({ candidateId: third.id })]), day(1, [item({ candidateId: second.id })])],
+      [],
+      [],
+      [],
+      { revision: 2, reason: "Moved the lighthouse, dropped the viewpoint, added a diner." },
+    );
+    const diff = revisionDiff(rev2.id, rev1.id, [
+      addedEntry(third.id, diffPlacement(0, 0)),
+      removedEntry(first.id, diffPlacement(0, 0)),
+      movedEntry(second.id, diffPlacement(0, 1), diffPlacement(1, 0)),
+    ]);
+
+    fetched.mockResolvedValue(
+      planView({ candidates: [first, second, third], revisions: [rev1, rev2], diffs: [diff] }),
+    );
+
+    show();
+
+    expect(await screen.findByText("What changed")).toBeDefined();
+    expect(screen.getByText("A diner — Day 1")).toBeDefined();
+    expect(screen.getByText("A viewpoint — Day 1")).toBeDefined();
+    expect(screen.getByText("A lighthouse — Day 1 → Day 2")).toBeDefined();
+  });
+
+  test("a re-plan's note is shown, marked as what the user wrote", async () => {
+    const first = candidate({ title: "A viewpoint" });
+    const rev1 = revision([day(0, [item({ candidateId: first.id })])]);
+    const rev2 = revision([day(0, [item({ candidateId: first.id })])], [], [], [], {
+      revision: 2,
+      reason: "Re-planned day 1.",
+      operation: { kind: "replan", days: [0], specialists: [], note: "Keep it cheap." },
+    });
+    const diff = revisionDiff(rev2.id, rev1.id, []);
+    fetched.mockResolvedValue(
+      planView({ candidates: [first], revisions: [rev1, rev2], diffs: [diff] }),
+    );
+
+    show();
+
+    expect(await screen.findByText(/Keep it cheap\./)).toBeDefined();
+    expect(screen.getByText("What was asked")).toBeDefined();
+  });
+
+  test("no diff is rendered for the first revision", async () => {
+    const first = candidate({ title: "A viewpoint" });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [first],
+        revisions: [revision([day(0, [item({ candidateId: first.id })])])],
+      }),
+    );
+
+    show();
+
+    await screen.findByText("A viewpoint");
+    expect(screen.queryByText("What changed")).toBeNull();
+  });
+});
+
+describe("moving and removing", () => {
+  test("moving an item sends the destination and the latest baseRevisionId", async () => {
+    const first = candidate({ title: "A viewpoint" });
+    const placed = item({ candidateId: first.id });
+    const rev = revision([day(0, [placed]), day(1, [])]);
+    fetched.mockResolvedValue(planView({ candidates: [first], revisions: [rev] }));
+    edited.mockResolvedValue(planView({ candidates: [first], revisions: [rev] }));
+
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Move" }));
+    await user.selectOptions(screen.getByLabelText("Day"), "1");
+    await user.click(screen.getByRole("button", { name: "Move here" }));
+
+    expect(edited).toHaveBeenCalledWith("plan-1", {
+      kind: "move",
+      baseRevisionId: rev.id,
+      itemId: placed.id,
+      toDayIndex: 1,
+      toPosition: 0,
+    });
+  });
+
+  test("removing an item sends the latest baseRevisionId", async () => {
+    const first = candidate({ title: "A viewpoint" });
+    const placed = item({ candidateId: first.id });
+    const rev = revision([day(0, [placed])]);
+    fetched.mockResolvedValue(planView({ candidates: [first], revisions: [rev] }));
+    edited.mockResolvedValue(planView({ candidates: [first], revisions: [rev] }));
+
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Remove" }));
+
+    expect(edited).toHaveBeenCalledWith("plan-1", {
+      kind: "remove",
+      baseRevisionId: rev.id,
+      itemId: placed.id,
+    });
+  });
+});
+
+describe("re-planning", () => {
+  test("submits the chosen days, specialists and note, and hands the run to onReplan", async () => {
+    const first = candidate({ title: "A viewpoint" });
+    const rev = revision([day(0, [item({ candidateId: first.id })]), day(1, [])]);
+    fetched.mockResolvedValue(planView({ candidates: [first], revisions: [rev] }));
+    const run: Run = {
+      id: "run-9",
+      planId: "plan-1",
+      kind: "replan",
+      status: "queued",
+      rosterSize: null,
+      specialistsDone: 0,
+      error: null,
+      startedAt: "2027-01-01T00:00:00.000Z",
+      finishedAt: null,
+    };
+    replanned.mockResolvedValue(run);
+    const onReplan = vi.fn();
+
+    const user = userEvent.setup();
+    show({ onReplan });
+
+    await user.click(await screen.findByRole("checkbox", { name: "Day 1" }));
+    await user.click(screen.getByRole("checkbox", { name: "lodging" }));
+    await user.type(
+      screen.getByLabelText("Anything the specialists should know?"),
+      "Keep it cheap.",
+    );
+    await user.click(screen.getByRole("button", { name: "Re-plan these days" }));
+
+    expect(replanned).toHaveBeenCalledWith("plan-1", {
+      kind: "replan",
+      baseRevisionId: rev.id,
+      days: [0],
+      specialists: ["lodging"],
+      note: "Keep it cheap.",
+    });
+    await waitFor(() => {
+      expect(onReplan).toHaveBeenCalledWith(run);
+    });
+  });
+
+  /**
+   * The empty state named in this ticket's brief: leaving every specialist
+   * box unchecked is one of the two choices, not a forgotten step, and the
+   * submit button must not treat it as incomplete.
+   */
+  test("submits with no specialists named — the free re-pack, not an error state", async () => {
+    const first = candidate({ title: "A viewpoint" });
+    const rev = revision([day(0, [item({ candidateId: first.id })])]);
+    fetched.mockResolvedValue(planView({ candidates: [first], revisions: [rev] }));
+    replanned.mockResolvedValue({
+      id: "run-10",
+      planId: "plan-1",
+      kind: "replan",
+      status: "queued",
+      rosterSize: null,
+      specialistsDone: 0,
+      error: null,
+      startedAt: "2027-01-01T00:00:00.000Z",
+      finishedAt: null,
+    });
+
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("checkbox", { name: "Day 1" }));
+    const button = screen.getByRole("button", { name: "Re-plan these days" });
+    expect(button).not.toHaveProperty("disabled", true);
+    await user.click(button);
+
+    expect(replanned).toHaveBeenCalledWith(
+      "plan-1",
+      expect.objectContaining({ specialists: [], note: null }),
+    );
+  });
+});
+
+describe("revise errors", () => {
+  test("REVISION_STALE offers a reload, which replaces the loaded plan", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const placed = item({ candidateId: activity.id });
+    fetched.mockResolvedValueOnce(
+      planView({ candidates: [activity], revisions: [revision([day(0, [placed])])] }),
+    );
+    edited.mockRejectedValueOnce(
+      new AppError(
+        "REVISION_STALE",
+        "This plan changed since you opened it — reload to see the current version.",
+      ),
+    );
+    fetched.mockResolvedValueOnce(
+      planView({
+        candidates: [activity],
+        revisions: [
+          revision([day(0, [placed])], [], [], [], {
+            revision: 2,
+            reason: "Someone else changed it.",
+          }),
+        ],
+      }),
+    );
+
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Remove" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toMatch(/reload to see the current version/i);
+    });
+    await user.click(screen.getByRole("button", { name: "Reload the plan" }));
+
+    expect(await screen.findByText(/Someone else changed it\./)).toBeDefined();
+  });
+
+  test("PLAN_BUSY offers Watch it, and does not force a reload", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const placed = item({ candidateId: activity.id });
+    fetched.mockResolvedValue(
+      planView({ candidates: [activity], revisions: [revision([day(0, [placed])])] }),
+    );
+    edited.mockRejectedValue(
+      new AppError(
+        "PLAN_BUSY",
+        "A change to this plan is already underway — wait for it to finish, then try again.",
+        { details: { run: "run-42" } },
+      ),
+    );
+
+    const onWatchRun = vi.fn();
+    const user = userEvent.setup();
+    show({ onWatchRun });
+
+    await user.click(await screen.findByRole("button", { name: "Remove" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toMatch(/already underway/i);
+    });
+    expect(screen.queryByRole("button", { name: "Reload the plan" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Watch it" }));
+    expect(onWatchRun).toHaveBeenCalledWith("run-42", "plan-1");
+  });
+
+  test("PLAN_INFEASIBLE renders its message", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const placed = item({ candidateId: activity.id });
+    fetched.mockResolvedValue(
+      planView({
+        candidates: [activity],
+        revisions: [revision([day(0, [placed]), day(1, [])])],
+      }),
+    );
+    edited.mockRejectedValue(
+      new AppError("PLAN_INFEASIBLE", "This trip cannot be planned as described."),
+    );
+
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Move" }));
+    await user.click(screen.getByRole("button", { name: "Move here" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toMatch(/cannot be planned as described/i);
+    });
+  });
+
+  test("ITEM_NOT_FOUND renders its message on the revise route too", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const placed = item({ candidateId: activity.id });
+    fetched.mockResolvedValue(
+      planView({ candidates: [activity], revisions: [revision([day(0, [placed])])] }),
+    );
+    edited.mockRejectedValue(
+      new AppError("ITEM_NOT_FOUND", "That item is no longer part of this plan."),
+    );
+
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Remove" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toMatch(/no longer part of this plan/i);
+    });
   });
 });

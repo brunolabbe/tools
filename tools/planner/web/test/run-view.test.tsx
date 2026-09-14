@@ -22,6 +22,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import type { Run, RunEvent, RunStatus } from "@planner/contract";
 import { cancelRun, fetchPlan, watchRun } from "../src/api/plan.ts";
 import { RunView } from "../src/plan/RunView.tsx";
+import { day, planView, revision } from "./plan-fixtures.ts";
 
 vi.mock("../src/api/plan.ts", () => ({
   watchRun: vi.fn(),
@@ -191,5 +192,60 @@ describe("the run screen while it is grounding", () => {
     // answer is a bar with no position — never a number that moves.
     expect(document.querySelector("progress")?.hasAttribute("value")).toBe(false);
     expect(screen.queryByText(/of null/)).toBeNull();
+  });
+
+  /**
+   * pl-42's own real and reachable case: a re-plan naming no specialists
+   * re-packs with `rosterSize: 0`, and the fan-out's arithmetic would
+   * otherwise render "0 of 0 specialists done." — technically true and the
+   * repo's _never fake progress_ rule broken by omission (pl-45).
+   */
+  test("renders an honest sentence for zero specialists, never zero of zero", () => {
+    show("fanning-out");
+    push({
+      type: "progress",
+      runId: "run-1",
+      progress: { type: "roster", running: [], droppedForBudget: [], total: 0 },
+      at: AT,
+    });
+
+    expect(screen.getByText("Re-packing the existing days…")).toBeTruthy();
+    expect(screen.queryByText(/of 0/)).toBeNull();
+  });
+});
+
+describe("when it finishes", () => {
+  /**
+   * `run.kind` (pl-42) distinguishes a first draft from a re-plan, and the
+   * copy has to say which: "a first draft is ready" is wrong once a plan
+   * already existed before this run.
+   */
+  test("says a first draft is ready for a draft run", async () => {
+    fetched.mockResolvedValue(planView({ revisions: [revision([day(0, [])])] }));
+    render(
+      <RunView
+        run={run({ status: "composing", kind: "draft" })}
+        onExit={() => undefined}
+        onOpenPlan={() => undefined}
+      />,
+    );
+    push({ type: "done", runId: "run-1", planId: "plan-1", revisionId: "rev-1", at: AT });
+
+    expect(await screen.findByText(/A first draft is ready/)).toBeTruthy();
+  });
+
+  test("says this version is ready for a re-plan, never that a first draft is", async () => {
+    fetched.mockResolvedValue(planView({ revisions: [revision([day(0, [])])] }));
+    render(
+      <RunView
+        run={run({ status: "composing", kind: "replan" })}
+        onExit={() => undefined}
+        onOpenPlan={() => undefined}
+      />,
+    );
+    push({ type: "done", runId: "run-1", planId: "plan-1", revisionId: "rev-1", at: AT });
+
+    expect(await screen.findByText(/This version is ready/)).toBeTruthy();
+    expect(screen.queryByText(/A first draft is ready/)).toBeNull();
   });
 });
