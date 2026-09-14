@@ -223,3 +223,19 @@ tools/planner/agent/test/fan-out-usage.test.ts`, exit 1, 5 failed of 5): a
     a dated one-line Log entry on pl-39 without rewriting its Build
     (recommended), or leave pl-39 alone. **Chosen: the dated Log line.** pl-39's
     Build is unchanged.
+- 2026-09-14 — **Migration 9, settled by the orchestrator, not the owner.** The
+  gate found that pl-44 and pl-47, both unbuilt, still named migration 9 as
+  theirs, and it declined to choose between patching them now and leaving a
+  note. The orchestrator settled it: root `CLAUDE.md` says a sentence the
+  change at hand makes stale is fixed in that change, not filed, and this
+  branch is what took 9.
+  - **pl-44:** the Build step 7 heading, its "Today's last is" sentence, the
+    unique-index bullet, the migrations-tests bullet and the Done-when now say
+    10 and `user_version = 9`. Each says pl-49 took 9 and the real number is
+    whatever is next free at build time. "Take the next free number at build
+    time" is kept as the rule. The heading, the unique-index bullet and the
+    Done-when are the three lines the orchestrator named. The other two stated
+    the same number, and were fixed so they would not contradict the heading.
+  - **pl-47:** step 1's parenthetical only. Its dated filing Log, which
+    recorded 9 as free on 2026-09-13, is left as it was, because it was true
+    then.
