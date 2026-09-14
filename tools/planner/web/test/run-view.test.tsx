@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { Run, RunEvent, RunStatus } from "@planner/contract";
 import { cancelRun, fetchPlan, watchRun } from "../src/api/plan.ts";
-import { RunView } from "../src/plan/RunView.tsx";
+import { RunView, type AttachTarget } from "../src/plan/RunView.tsx";
 import { day, planView, revision } from "./plan-fixtures.ts";
 
 vi.mock("../src/api/plan.ts", () => ({
@@ -247,5 +247,102 @@ describe("when it finishes", () => {
 
     expect(await screen.findByText(/This version is ready/)).toBeTruthy();
     expect(screen.queryByText(/A first draft is ready/)).toBeNull();
+  });
+});
+
+/**
+ * pl-45's gate: "Watch it" has only a run id (pl-42 added no route to fetch a
+ * `Run` by one), and the placeholder this screen used to be handed — a
+ * guessed `status: "queued"` and `kind: "replan"` — was neither corrected by
+ * a `snapshot` (the reducer copied status and counts only) nor an honest
+ * render in the meantime. The owner's decision, 2026-09-14: an attach with no
+ * `Run` gets an honest "not known yet" screen instead.
+ */
+describe("attaching to a run with only its id", () => {
+  const TARGET: AttachTarget = { id: "run-1", planId: "plan-1" };
+
+  function showAttaching(): void {
+    render(<RunView run={TARGET} onExit={() => undefined} onOpenPlan={() => undefined} />);
+  }
+
+  test("says nothing a RunStatus would own, and shows an indeterminate bar", () => {
+    showAttaching();
+
+    expect(screen.getByText("Connecting…")).toBeTruthy();
+    // None of the real statuses' labels, and no fabricated count.
+    expect(screen.queryByText("Waiting for a slot")).toBeNull();
+    expect(screen.queryByText(/specialists done|details checked/)).toBeNull();
+    expect(document.querySelector("progress")?.hasAttribute("value")).toBe(false);
+  });
+
+  test("the finish screen's wording comes from the snapshot's real kind, never a guess", async () => {
+    fetched.mockResolvedValue(planView({ revisions: [revision([day(0, [])])] }));
+    showAttaching();
+
+    // The exact probe from the gate: a snapshot naming a *draft* run, then done.
+    push({
+      type: "snapshot",
+      runId: "run-1",
+      run: run({ kind: "draft", status: "done" }),
+      at: AT,
+    });
+    push({ type: "done", runId: "run-1", planId: "plan-1", revisionId: "rev-1", at: AT });
+
+    expect(await screen.findByText(/A first draft is ready/)).toBeTruthy();
+    expect(screen.queryByText(/This version is ready/)).toBeNull();
+  });
+
+  test("a snapshot replaces the attaching screen with the run's real status", () => {
+    showAttaching();
+    push({
+      type: "snapshot",
+      runId: "run-1",
+      run: run({ status: "fanning-out" }),
+      at: AT,
+    });
+
+    expect(screen.getByText("Asking the specialists")).toBeTruthy();
+    expect(screen.queryByText("Connecting…")).toBeNull();
+  });
+
+  test("a stream that never delivers a frame stops attaching and offers a way out", () => {
+    vi.useFakeTimers();
+    try {
+      showAttaching();
+      expect(screen.getByText("Connecting…")).toBeTruthy();
+
+      act(() => {
+        vi.advanceTimersByTime(15_000);
+      });
+
+      expect(screen.queryByText("Connecting…")).toBeNull();
+      expect(screen.getByText(/Could not reach this run/)).toBeTruthy();
+      // The way out this ticket's requirement names.
+      expect(screen.getByRole("button", { name: "Back to the trip" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("a frame that arrives before the timeout cancels it — no false failure after", () => {
+    vi.useFakeTimers();
+    try {
+      showAttaching();
+      push({
+        type: "snapshot",
+        runId: "run-1",
+        run: run({ status: "fanning-out" }),
+        at: AT,
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(15_000);
+      });
+
+      expect(screen.getByText("Asking the specialists")).toBeTruthy();
+      expect(screen.queryByText(/Could not reach this run/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

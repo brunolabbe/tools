@@ -118,11 +118,82 @@ interface ActionError {
   code: ErrorCode;
   /** `PLAN_BUSY` only — the run already in progress on this plan. */
   runId: string | null;
+  /** Whatever the server sent, for `PLAN_INFEASIBLE` and `ITEM_NOT_FOUND` (step 9). */
+  details: Record<string, unknown> | undefined;
 }
 
 function runIdFrom(error: AppError): string | null {
   const run = error.details?.["run"];
   return typeof run === "string" ? run : null;
+}
+
+/** One place that turns a rejection into the banner's state, for every write. */
+function toActionError(error: unknown): ActionError {
+  const appError = AppError.from(error);
+  return {
+    message: appError.message,
+    code: appError.code,
+    runId: appError.code === "PLAN_BUSY" ? runIdFrom(appError) : null,
+    details: appError.details,
+  };
+}
+
+/**
+ * The one shape of `PLAN_INFEASIBLE.details` this file knows: the composer's
+ * `findings` (`@planner/itinerary`'s `compose.ts`), each already a sentence in
+ * the user's terms plus the day it names.
+ */
+interface InfeasibleFinding {
+  dayIndex: number;
+  detail: string;
+}
+
+function infeasibleFindings(details: Record<string, unknown> | undefined): InfeasibleFinding[] {
+  const raw = details?.["findings"];
+  if (!Array.isArray(raw)) return [];
+  const findings: InfeasibleFinding[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const dayIndex = (entry as Record<string, unknown>)["dayIndex"];
+    const detail = (entry as Record<string, unknown>)["detail"];
+    if (typeof dayIndex === "number" && typeof detail === "string") {
+      findings.push({ dayIndex, detail });
+    }
+  }
+  return findings;
+}
+
+/**
+ * What `details` adds beside the message, per step 9 — **only for the codes
+ * this file has an actual shape for.** `ITEM_NOT_FOUND.details` is `{ item:
+ * <id> }` (`api`'s orchestrator), an id nobody typed and not a sentence for a
+ * reader, so it degrades to the message alone exactly as step 9 asks for a
+ * `details` that is "not the shape expected" — here, not a shape worth
+ * rendering at all. `REVISION_STALE` and `PLAN_BUSY` have their own buttons,
+ * built beside this rather than through it.
+ */
+function ActionErrorDetails({
+  code,
+  details,
+}: {
+  code: ErrorCode;
+  details: Record<string, unknown> | undefined;
+}): React.ReactElement | null {
+  if (code !== "PLAN_INFEASIBLE") return null;
+  const findings = infeasibleFindings(details);
+  if (findings.length === 0) return null;
+
+  return (
+    <ul className="action-error-details">
+      {findings.map((finding) => (
+        // No stable id on a finding — it is not stored, only ever the shape of
+        // one failed attempt — so its content is the only handle there is.
+        <li key={`${String(finding.dayIndex)}-${finding.detail}`}>
+          Day {String(finding.dayIndex + 1)}: {finding.detail}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export function PlanView({
@@ -195,8 +266,7 @@ export function PlanView({
       pinItem(planId, item.id, !item.pinned)
         .then((view) => setState({ kind: "ready", view }))
         .catch((error: unknown) => {
-          const appError = AppError.from(error);
-          setActionError({ message: appError.message, code: appError.code, runId: null });
+          setActionError(toActionError(error));
         })
         .finally(() => setBusy(null));
     },
@@ -219,12 +289,7 @@ export function PlanView({
           return undefined;
         })
         .catch((error: unknown) => {
-          const appError = AppError.from(error);
-          setActionError({
-            message: appError.message,
-            code: appError.code,
-            runId: appError.code === "PLAN_BUSY" ? runIdFrom(appError) : null,
-          });
+          setActionError(toActionError(error));
         })
         .finally(() => setWriteBusy(false));
     },
@@ -238,12 +303,7 @@ export function PlanView({
       startReplan(planId, request)
         .then((run) => onReplan(run))
         .catch((error: unknown) => {
-          const appError = AppError.from(error);
-          setActionError({
-            message: appError.message,
-            code: appError.code,
-            runId: appError.code === "PLAN_BUSY" ? runIdFrom(appError) : null,
-          });
+          setActionError(toActionError(error));
         })
         .finally(() => setWriteBusy(false));
     },
@@ -388,6 +448,7 @@ function Document({
       {actionError !== null && (
         <div className="bad" role="alert">
           <p>{actionError.message}</p>
+          <ActionErrorDetails code={actionError.code} details={actionError.details} />
           <div className="actions">
             {actionError.code === "REVISION_STALE" && (
               <button type="button" onClick={onReload}>
@@ -1037,16 +1098,8 @@ function DiffList({
   );
 }
 
-/** Titles a user would recognise, for the re-plan form's checkboxes. */
-const SPECIALIST_LABELS: Record<Specialist, string> = {
-  "route-and-logistics": "routes and legs",
-  lodging: "lodging",
-  activities: "things to do",
-  "conditions-and-gear": "conditions and gear",
-  food: "food",
-  practicalities: "permits and paperwork",
-  budget: "budget",
-};
+/** What this form can honestly build; `Document` supplies `baseRevisionId`. */
+type ReplanDraft = Omit<Extract<ReviseRequest, { kind: "replan" }>, "baseRevisionId">;
 
 /**
  * Re-plan named days, on the latest revision only.
@@ -1057,9 +1110,6 @@ const SPECIALIST_LABELS: Record<Specialist, string> = {
  * checkboxes says so, so the empty state does not read as "you forgot
  * something".
  */
-/** What this form can honestly build; `Document` supplies `baseRevisionId`. */
-type ReplanDraft = Omit<Extract<ReviseRequest, { kind: "replan" }>, "baseRevisionId">;
-
 function ReplanForm({
   days,
   busy,
@@ -1089,6 +1139,15 @@ function ReplanForm({
     );
   };
 
+  /**
+   * Nothing here clears the form on submit. A successful re-plan is a `Run`,
+   * and control leaves `PlanView` entirely (Build step 5) — this component
+   * unmounts, so there is no state left to reset. A failed one — `PLAN_BUSY`
+   * above all, since it is retryable — leaves `PlanView` on screen, and
+   * clearing the days, specialists and note the reader just chose would mean
+   * typing the whole thing again to retry the one request that is actually
+   * meant to be retried.
+   */
   const submit = (): void => {
     onSubmit({
       kind: "replan",
@@ -1096,9 +1155,6 @@ function ReplanForm({
       specialists: selectedSpecialists,
       note: note.trim() === "" ? null : note,
     });
-    setSelectedDays([]);
-    setSelectedSpecialists([]);
-    setNote("");
   };
 
   return (
@@ -1133,7 +1189,7 @@ function ReplanForm({
               checked={selectedSpecialists.includes(specialist)}
               onChange={() => toggleSpecialist(specialist)}
             />
-            <span>{SPECIALIST_LABELS[specialist]}</span>
+            <span>{specialistName(specialist)}</span>
           </label>
         ))}
       </div>

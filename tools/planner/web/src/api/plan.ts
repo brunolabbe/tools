@@ -74,9 +74,14 @@ export async function pinItem(planId: string, itemId: string, pinned: boolean): 
  *
  * Typed to the one response kind it can honestly return, rather than to the
  * whole `ReviseResponse`: a `replan` request answers `{ kind: "run" }` and
- * never `{ kind: "revision" }`, so a caller that tried to route this through
- * `RunView`'s counterpart would be a type error here rather than a runtime
- * surprise.
+ * never `{ kind: "revision" }`. **This is a compile-time narrowing only**,
+ * the same as every other function in this file — `requestJson` casts the
+ * parsed body to the type given it (`client.ts`) rather than validating it —
+ * so a server that broke the contract and sent the other kind would still
+ * reach a caller here as this function's declared return type, silently
+ * wrong at runtime. What this buys is a caller that tries to route this
+ * through `RunView`'s counterpart failing at `npm run check`, not a shape
+ * this file cannot express at all.
  */
 export async function startReplan(
   planId: string,

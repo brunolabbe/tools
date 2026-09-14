@@ -392,3 +392,91 @@ wiring), `web/src/styles.css` (minimal rules for the above), `web/test/plan-fixt
 (multi-revision `revision()` overrides, `diffPlacement`/`addedEntry`/`removedEntry`/`movedEntry`/`revisionDiff`
 builders), `web/test/plan-view.test.tsx` and `web/test/run-view.test.tsx` (new
 coverage, two ambiguity fixes).
+
+**2026-09-14 — gate round one (Opus, `f796e8b`): FAIL, 2 Done-when clauses
+unproven, 5 med, 7 low.** Full findings and reproductions are in the gate's
+message to the orchestrator; not duplicated here. Fixed in this round:
+
+- **The Log's own verification was wrong.** `npm run check`/`npm test` had
+  been run in a worktree missing `@anthropic-ai/sdk` (a farm-then-network-block
+  gap, not a branch defect), and the figures above described that tree, not
+  this branch. Re-run with the SDK unpacked into this worktree (see below):
+  `npm run check` exits 0; `npm test -- --project planner` is 56 files, 960
+  tests, none failing (55/950 before this round's own new tests); `npx vitest
+run tools/planner/web` is 6 files, 89 tests.
+- **Re-plan and Watch it were unreachable from a plan opened off the Plans
+  list (med).** `App.tsx` rendered `RunView` only inside its open-intake
+  branch; a plan opened from the list has none, so clearing `reading` fell
+  through to the trips-and-plans list with the run going on unseen. Fixed by
+  checking `watching !== null` before `openIntake === null`. New
+  `web/test/app.test.tsx`, mocking `api/plan.ts` rather than any component,
+  proves both paths reach the run screen.
+- **The "Watch it" placeholder (med, open decision) — resolved by the owner,
+  not by this session: an honest attaching state.** `RunView` now accepts a
+  `Run` (a freshly started run — unchanged) **or** an `AttachTarget` (`{id,
+planId}`, all "Watch it" has, pl-42 having added no route to fetch a `Run`
+  by id). `Progress.status`/`kind` are nullable; before the first `snapshot`
+  the screen says "Connecting…" with an indeterminate bar and no fabricated
+  status or count, and `Finished`'s wording now reads `progress.kind` (set
+  only by a `snapshot`) rather than a prop that could never be corrected. A
+  15 s timeout with no frame renders the existing failed-state screen, so an
+  attach that never resolves has a way out. `App.tsx`'s comment claiming the
+  old placeholder "cannot leak into `Finished`'s copy" is removed — it did,
+  and the gate's own probe (a `snapshot` naming `kind: "draft"`, then `done`)
+  is now `run-view.test.tsx`'s own test, alongside the timeout and a
+  no-false-failure case. Stayed `web`-only throughout.
+- **`PLAN_INFEASIBLE` and `ITEM_NOT_FOUND` rendered the same banner and
+  dropped `details` (med).** Step 9 asked for `details`, gracefully degraded.
+  Added `ActionErrorDetails`, which renders `PLAN_INFEASIBLE.details.findings`
+  (`@planner/itinerary`'s `compose.ts` shape) as a list; `ITEM_NOT_FOUND`'s
+  `{ item: <id> }` has no reader-facing shape and degrades to the message
+  alone, which is now itself a real branch rather than the absence of one.
+  Both tests now use the identical message text on purpose, so a passing
+  assertion cannot be message-text coincidence.
+- **The re-plan form cleared itself before the request answered (med).**
+  `ReplanForm.submit` cleared its own state unconditionally; on `PLAN_BUSY` —
+  retryable by design — that meant retyping the whole form. A successful
+  re-plan already unmounts `PlanView` entirely (control leaves it, Build step
+  5), so the reset was never needed on success and only harmful on failure.
+  Removed.
+- **The revisionId-diff test proved less than its comment claimed (low).**
+  `diffs[1]` in the old fixture was `diffForRev2`, not `diffForRev3` as
+  written, so `diffs[revisions.indexOf(shown)]` passed it by coincidence.
+  Rebuilt around `shown = rev3` (the latest) so every plausible positional
+  scheme — raw index, `revision - 2`, `indexOf - 1` — lands on the wrong
+  entry or out of bounds; only a `revisionId` lookup is right. Reproduced
+  both wrong mutations red before restoring the real code.
+- **The three-lists Done-when clause was unasserted (med).** The test read
+  each `<li>`'s text, which does not depend on which group renders it (the
+  text comes from the entry's own `kind`, not its list). Added a structural
+  check: exactly three `<h4>`s reading "Added", "Removed", "Moved", each
+  scoped with `within` to assert it owns exactly one `<li>`. Reproduced the
+  gate's two mutations (everything through one group; headings deleted) red
+  before restoring.
+- **`SPECIALIST_LABELS` duplicated the file's own `SPECIALISTS` map (low).**
+  Step 5 said to label through the existing map; now it does.
+- **`ReplanForm`'s doc comment sat above `type ReplanDraft`, not the function
+  it describes (low).** Reordered. (`Unchecked`'s own two-comment layout
+  predates this ticket — see the reply to the gate.)
+- **Four branches had no assertion (low):** added tests for the reset to the
+  new latest after a successful edit, `Restore this version` absent on the
+  latest, the submit button disabled with no day ticked, and a ticked day
+  being untickable.
+- **The `startReplan`/`editPlan` doc comment overstated compile-time
+  narrowing as "rather than a runtime surprise" (low).** `requestJson` casts
+  rather than validates a successful response, same as every function in the
+  file; the comment now says so.
+
+**Getting the SDK into this worktree** (the farm ran before
+`@anthropic-ai/sdk` reached the shared checkout, 22:46 UTC): `npm pack
+--offline @anthropic-ai/sdk@0.125.0 json-schema-to-ts@3.1.1
+standardwebhooks@1.1.1 ts-algebra@2.0.0 @stablelib/base64@1.0.1
+fast-sha256@1.3.0` in a scratch dir, then `mkdir -p node_modules/<name>` and
+`tar -xzf <tgz> -C node_modules/<name> --strip-components=1` per package,
+confirmed with `readlink -f` to resolve inside this worktree, then `npm run
+build`.
+
+Left as found, on the reviewer's own read and not disputed here: the
+`Unchecked` function's two consecutive doc comments (pre-existing), and the
+zero-specialist `<progress value=0 max=0>` HTML-validity note (pre-existing
+code this ticket's own change to the _text_ beside it did not touch).

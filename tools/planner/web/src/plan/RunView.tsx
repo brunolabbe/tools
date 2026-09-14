@@ -15,6 +15,16 @@
  * The finished plan is deliberately barely rendered. [pl-10] owns the plan view,
  * its provenance and its diff; what this shows is the run's own outcome — it is
  * done, this is how many days it made, and here is what it could not cover.
+ *
+ * **Two ways in, and only one of them has a `Run` to start from (pl-45).** A
+ * freshly started run (`Wizard`'s `onDraft`, `PlanView`'s `onReplan`) hands
+ * this component the exact object the server just answered with, seconds old
+ * and trustworthy. `PLAN_BUSY`'s "Watch it" has only a run id — pl-42 added no
+ * route to fetch a `Run` by one — so it cannot honestly start from anything
+ * but *not knowing*. `AttachTarget` is that second case, and the whole point
+ * of `Progress.status` being nullable is to give it an honest screen: no
+ * status label a `RunStatus` would own, no count nothing has measured, and an
+ * indeterminate bar, until the first real `snapshot` says otherwise.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -27,9 +37,32 @@ import {
 } from "@planner/contract";
 import { cancelRun, fetchPlan, watchRun } from "../api/plan.ts";
 
+/** What "Watch it" has: an id to attach to, and nothing this screen can trust yet. */
+export interface AttachTarget {
+  id: string;
+  planId: string;
+}
+
+function isKnownRun(run: Run | AttachTarget): run is Run {
+  return "status" in run;
+}
+
+/**
+ * How long an attach may sit with no frame at all before this screen says so.
+ *
+ * Not a retry budget — `EventSource` retries the connection on its own — but a
+ * bound on how long "attaching" may honestly go on meaning nothing, per this
+ * ticket's own requirement that a stream which never delivers a frame must not
+ * leave the reader on that screen forever.
+ */
+const ATTACH_TIMEOUT_MS = 15_000;
+
 /** What the page knows about the run right now. */
 interface Progress {
-  status: Run["status"];
+  /** `null` before the first `snapshot` or `status` frame — attaching, not queued. */
+  status: Run["status"] | null;
+  /** `null` until a `snapshot` names it. Only `Finished` needs this. */
+  kind: Run["kind"] | null;
   /** Null until the roster is decided — the state an indeterminate bar is for. */
   total: number | null;
   done: number;
@@ -116,7 +149,14 @@ function countsFrom(run: Run): { total: number | null; done: number } {
 function reduce(current: Progress, event: RunEvent): Progress {
   switch (event.type) {
     case "snapshot":
-      return { ...current, status: event.run.status, ...countsFrom(event.run) };
+      // The one frame that can correct `kind`. An attach starts with neither,
+      // and this is where "not knowing" ends.
+      return {
+        ...current,
+        kind: event.run.kind,
+        status: event.run.status,
+        ...countsFrom(event.run),
+      };
     case "status":
       return { ...current, status: event.status };
     case "progress":
@@ -164,16 +204,15 @@ export function RunView({
   onExit,
   onOpenPlan,
 }: {
-  run: Run;
+  run: Run | AttachTarget;
   onExit: () => void;
   onOpenPlan: (planId: string) => void;
 }): React.ReactElement {
-  const [progress, setProgress] = useState<Progress>({
-    status: run.status,
-    ...countsFrom(run),
-    running: [],
-    message: null,
-  });
+  const [progress, setProgress] = useState<Progress>(() =>
+    isKnownRun(run)
+      ? { kind: run.kind, status: run.status, ...countsFrom(run), running: [], message: null }
+      : { kind: null, status: null, total: null, done: 0, running: [], message: null },
+  );
   const [plan, setPlan] = useState<PlanDetail | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -182,6 +221,24 @@ export function RunView({
       setProgress((current) => reduce(current, event));
     });
   }, [run.id]);
+
+  useEffect(() => {
+    // Only an attach starts not knowing anything; a freshly started run's own
+    // `status` is never `null`, so this timer has nothing to do for it.
+    if (isKnownRun(run)) return;
+    const timer = setTimeout(() => {
+      setProgress((current) =>
+        current.status === null
+          ? {
+              ...current,
+              status: "failed",
+              message: "Could not reach this run — it may already be finished.",
+            }
+          : current,
+      );
+    }, ATTACH_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [run]);
 
   const finished = progress.status === "done";
 
@@ -211,11 +268,26 @@ export function RunView({
 
   return (
     <section className="panel run">
-      <h2>{LABELS[progress.status]}</h2>
+      <h2>{progress.status === null ? "Connecting…" : LABELS[progress.status]}</h2>
 
-      {progress.status === "done" ? (
+      {progress.status === null ? (
+        <>
+          {/* No status label a `RunStatus` would own, and no count nothing has
+              measured — the honest render of an attach with no frame yet. */}
+          <progress className="run-progress" />
+          <p aria-live="polite">Connecting to this run…</p>
+          <div className="actions">
+            <button type="button" onClick={stop} disabled={busy}>
+              Stop
+            </button>
+          </div>
+        </>
+      ) : progress.status === "done" ? (
         <Finished
-          kind={run.kind}
+          // The snapshot names it; a run started fresh already carried it.
+          // Never the placeholder this screen started from, since an attach
+          // has no `kind` to start with at all.
+          kind={progress.kind ?? "draft"}
           revision={revision}
           onExit={onExit}
           onOpenPlan={() => onOpenPlan(run.planId)}

@@ -22,7 +22,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   AppError,
@@ -905,47 +905,90 @@ describe("versions", () => {
     expect(screen.queryByText("Re-plan some days")).toBeNull();
     expect(await screen.findByText(/Editing works on the latest version/i)).toBeDefined();
   });
+
+  test("Restore this version is absent when the latest revision is shown", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const first = revision([day(0, [item({ candidateId: activity.id })])]);
+    const second = revision([day(0, [item({ candidateId: activity.id })])], [], [], [], {
+      revision: 2,
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [first, second] }));
+
+    show();
+
+    await screen.findByText("A long walk");
+    expect(screen.queryByRole("button", { name: "Restore this version" })).toBeNull();
+  });
+
+  test("a successful edit returns the reader to the new latest, not the page they were on", async () => {
+    const activity = candidate({ title: "A long walk" });
+    const placed = item({ candidateId: activity.id });
+    const first = revision([day(0, [placed])]);
+    const second = revision([day(0, [{ ...placed, position: 0 }])], [], [], [], {
+      revision: 2,
+      reason: "Removed something.",
+    });
+    fetched.mockResolvedValue(planView({ candidates: [activity], revisions: [first] }));
+    edited.mockResolvedValue(planView({ candidates: [activity], revisions: [first, second] }));
+
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: "Remove" }));
+
+    // The new latest is on screen, not the revision the reader was looking at
+    // when they asked for the edit — the restore case's own rule, extended.
+    expect(await screen.findByText("Version 2 of 2 · Removed something.")).toBeDefined();
+  });
 });
 
 describe("the diff", () => {
+  /**
+   * `rev3` is shown (the latest, the default — no picker interaction needed),
+   * and `diffs` is ordered so that **every** plausible positional scheme
+   * lands on the wrong entry, not just a raw `diffs[i]`:
+   *
+   * - `diffs[revisions.indexOf(shown)]` is `diffs[2]` — out of bounds on this
+   *   two-element array, so it renders nothing rather than the real diff.
+   * - `diffs[shown.revision - 2]` (diffs start at revision 2) and
+   *   `diffs[revisions.indexOf(shown) - 1]` both land on `diffs[1]`, which is
+   *   `diffForRev2` — a different revision's diff, wrong on its face.
+   *
+   * Only a lookup by `revisionId` finds `diffForRev3`, wherever it sits in
+   * the array.
+   */
   test("resolves by revisionId, not by array index", async () => {
     const first = candidate({ title: "A viewpoint" });
     const second = candidate({ title: "A lighthouse" });
     const rev1 = revision([day(0, [item({ candidateId: first.id })])]);
-    const rev2 = revision(
-      [day(0, [item({ candidateId: first.id }), item({ candidateId: second.id, position: 1 })])],
-      [],
-      [],
-      [],
-      { revision: 2, reason: "Added the lighthouse." },
-    );
+    const rev2 = revision([day(0, [item({ candidateId: first.id })])], [], [], [], {
+      revision: 2,
+      reason: "Nothing changed here.",
+    });
     const rev3 = revision(
       [day(0, [item({ candidateId: first.id }), item({ candidateId: second.id, position: 1 })])],
       [],
       [],
       [],
-      { revision: 3, reason: "Nothing changed here." },
+      { revision: 3, reason: "Added the lighthouse." },
     );
-    const diffForRev2 = revisionDiff(rev2.id, rev1.id, [
+    // A real and empty diff — rev2 changed nothing from rev1.
+    const diffForRev2 = revisionDiff(rev2.id, rev1.id, []);
+    const diffForRev3 = revisionDiff(rev3.id, rev2.id, [
       addedEntry(second.id, diffPlacement(0, 1)),
     ]);
-    // Nothing this revision changed — a real and empty diff.
-    const diffForRev3 = revisionDiff(rev3.id, rev2.id, []);
 
     fetched.mockResolvedValue(
       planView({
         candidates: [first, second],
         revisions: [rev1, rev2, rev3],
-        // Deliberately out of step with `revisions`' order: a lookup by index
-        // would read `diffs[1]` for revision 2, which is `diffForRev3`.
+        // See the block comment above for why this exact order and this exact
+        // shown revision defeat every index-based scheme at once.
         diffs: [diffForRev3, diffForRev2],
       }),
     );
 
-    const user = userEvent.setup();
     show();
-
-    await user.selectOptions(await screen.findByLabelText("Version"), "2");
 
     expect(await screen.findByText("A lighthouse — Day 1")).toBeDefined();
   });
@@ -977,10 +1020,35 @@ describe("the diff", () => {
 
     show();
 
-    expect(await screen.findByText("What changed")).toBeDefined();
-    expect(screen.getByText("A diner — Day 1")).toBeDefined();
-    expect(screen.getByText("A viewpoint — Day 1")).toBeDefined();
-    expect(screen.getByText("A lighthouse — Day 1 → Day 2")).toBeDefined();
+    const changed = await screen.findByText("What changed");
+    // Scoped to the diff section alone: a placed item's own title is also an
+    // `<h4>` (`Item` in `PlanView.tsx`), so an unscoped query for level-4
+    // headings counts those too.
+    const section = within(changed.closest("section")!);
+
+    // Three headings, in this order, each owning exactly its own list — not
+    // one list carrying every entry, and not a heading rendered over nothing.
+    // A mutation that routed every entry through one group, or dropped the
+    // group headings outright, changes this and only this assertion: the
+    // per-item text below is the same whichever group an entry ends up in,
+    // since it comes from the entry's own `kind`.
+    const headings = section.getAllByRole("heading", { level: 4 }).map((node) => node.textContent);
+    expect(headings).toEqual(["Added", "Removed", "Moved"]);
+
+    const added = within(section.getByRole("heading", { name: "Added", level: 4 }).parentElement!);
+    const removed = within(
+      section.getByRole("heading", { name: "Removed", level: 4 }).parentElement!,
+    );
+    const moved = within(section.getByRole("heading", { name: "Moved", level: 4 }).parentElement!);
+
+    expect(added.getByText("A diner — Day 1")).toBeDefined();
+    expect(added.getAllByRole("listitem")).toHaveLength(1);
+
+    expect(removed.getByText("A viewpoint — Day 1")).toBeDefined();
+    expect(removed.getAllByRole("listitem")).toHaveLength(1);
+
+    expect(moved.getByText("A lighthouse — Day 1 → Day 2")).toBeDefined();
+    expect(moved.getAllByRole("listitem")).toHaveLength(1);
   });
 
   test("a re-plan's note is shown, marked as what the user wrote", async () => {
@@ -1063,6 +1131,29 @@ describe("moving and removing", () => {
 });
 
 describe("re-planning", () => {
+  test("the submit button is disabled with no day ticked, and stays that way after ticking and unticking one", async () => {
+    const first = candidate({ title: "A viewpoint" });
+    const rev = revision([day(0, [item({ candidateId: first.id })])]);
+    fetched.mockResolvedValue(planView({ candidates: [first], revisions: [rev] }));
+
+    const user = userEvent.setup();
+    show();
+
+    const button = await screen.findByRole<HTMLButtonElement>("button", {
+      name: "Re-plan these days",
+    });
+    expect(button.disabled).toBe(true);
+
+    const dayOne = screen.getByRole("checkbox", { name: "Day 1" });
+    await user.click(dayOne);
+    expect(button.disabled).toBe(false);
+
+    // Unticking it is the other half: a day checkbox is a toggle, not a
+    // one-way switch, and the button must go back to disabled with it.
+    await user.click(dayOne);
+    expect(button.disabled).toBe(true);
+  });
+
   test("submits the chosen days, specialists and note, and hands the run to onReplan", async () => {
     const first = candidate({ title: "A viewpoint" });
     const rev = revision([day(0, [item({ candidateId: first.id })]), day(1, [])]);
@@ -1207,7 +1298,17 @@ describe("revise errors", () => {
     expect(onWatchRun).toHaveBeenCalledWith("run-42", "plan-1");
   });
 
-  test("PLAN_INFEASIBLE renders its message", async () => {
+  /**
+   * `PLAN_INFEASIBLE` and `ITEM_NOT_FOUND` are given **the same message on
+   * purpose**, so a passing assertion cannot be the message text coincidence
+   * doing the work. What must differ is whether `details.findings` — the
+   * composer's own shape (`@planner/itinerary`'s `compose.ts`) — reaches the
+   * page: `PLAN_INFEASIBLE` renders it, `ITEM_NOT_FOUND`'s `{ item: <id> }`
+   * degrades to the message alone, per Build step 9.
+   */
+  const SAME_WORDS = "Same words.";
+
+  test("PLAN_INFEASIBLE renders its message and the composer's findings", async () => {
     const activity = candidate({ title: "A long walk" });
     const placed = item({ candidateId: activity.id });
     fetched.mockResolvedValue(
@@ -1217,7 +1318,9 @@ describe("revise errors", () => {
       }),
     );
     edited.mockRejectedValue(
-      new AppError("PLAN_INFEASIBLE", "This trip cannot be planned as described."),
+      new AppError("PLAN_INFEASIBLE", SAME_WORDS, {
+        details: { findings: [{ kind: "day-overfull", dayIndex: 0, detail: "Over capacity." }] },
+      }),
     );
 
     const user = userEvent.setup();
@@ -1226,19 +1329,19 @@ describe("revise errors", () => {
     await user.click(await screen.findByRole("button", { name: "Move" }));
     await user.click(screen.getByRole("button", { name: "Move here" }));
 
-    await waitFor(() => {
-      expect(screen.getByRole("alert").textContent).toMatch(/cannot be planned as described/i);
-    });
+    const alert = await waitFor(() => screen.getByRole("alert"));
+    expect(alert.textContent).toMatch(/Same words\./);
+    expect(within(alert).getByText("Day 1: Over capacity.")).toBeDefined();
   });
 
-  test("ITEM_NOT_FOUND renders its message on the revise route too", async () => {
+  test("ITEM_NOT_FOUND renders its message alone — an id is not a shape worth rendering", async () => {
     const activity = candidate({ title: "A long walk" });
     const placed = item({ candidateId: activity.id });
     fetched.mockResolvedValue(
       planView({ candidates: [activity], revisions: [revision([day(0, [placed])])] }),
     );
     edited.mockRejectedValue(
-      new AppError("ITEM_NOT_FOUND", "That item is no longer part of this plan."),
+      new AppError("ITEM_NOT_FOUND", SAME_WORDS, { details: { item: "item-1" } }),
     );
 
     const user = userEvent.setup();
@@ -1246,8 +1349,11 @@ describe("revise errors", () => {
 
     await user.click(await screen.findByRole("button", { name: "Remove" }));
 
-    await waitFor(() => {
-      expect(screen.getByRole("alert").textContent).toMatch(/no longer part of this plan/i);
-    });
+    const alert = await waitFor(() => screen.getByRole("alert"));
+    expect(alert.textContent).toMatch(/Same words\./);
+    // Distinct from `PLAN_INFEASIBLE` above despite the identical message:
+    // no findings list, and the raw id is never shown to a reader.
+    expect(within(alert).queryByRole("listitem")).toBeNull();
+    expect(within(alert).queryByText(/item-1/)).toBeNull();
   });
 });
