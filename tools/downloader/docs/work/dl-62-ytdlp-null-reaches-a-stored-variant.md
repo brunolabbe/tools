@@ -70,7 +70,7 @@ and to fix the audio claim in the same change.
 4. A `null` in any field the mapper copies, including unmeasured ones, still
    maps to a valid probe.
 5. `optional()` drops `null` and keeps `0`, `""` and `false`.
-6. With the fix reverted, the tests for 1, 3, 4 and 5 fail.
+6. With the fix reverted, the tests for 1 to 5 fail.
 7. A real job against the reported page completes with both video and audio.
 8. `npm run check` and the downloader suite pass.
 
