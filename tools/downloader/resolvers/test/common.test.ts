@@ -1,5 +1,18 @@
 import { describe, expect, test } from "vitest";
-import { subtitleFormat } from "../src/common.ts";
+import { optional, subtitleFormat } from "../src/common.ts";
+
+describe("optional", () => {
+  test("drops null as well as undefined, and keeps every other falsy value", () => {
+    // `null` is the one dl-62 added: absent is the only spelling of "not known"
+    // a contract schema accepts, and yt-dlp writes `null` as readily as it
+    // omits a key.
+    expect(optional({ fps: null, width: undefined, height: 0, label: "", audio: false })).toEqual({
+      height: 0,
+      label: "",
+      audio: false,
+    });
+  });
+});
 
 type Format = "vtt" | "srt" | "ttml" | "unknown";
 

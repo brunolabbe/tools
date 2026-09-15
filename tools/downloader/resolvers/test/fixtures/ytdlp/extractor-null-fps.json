@@ -1,0 +1,278 @@
+{
+  "id": "clip",
+  "title": "Example clip",
+  "duration": 803.0,
+  "thumbnail": "https://vod.example.com/clip.jpg",
+  "webpage_url": "https://vod.example.com/watch/clip",
+  "url": "https://media.example.com/clip/av1-2160p_4K__HD.mp4",
+  "ext": "mp4",
+  "protocol": "https",
+  "formats": [
+    {
+      "format_id": "240p",
+      "url": "https://media.example.com/clip/240p.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "height": 240,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "av1-240p",
+      "url": "https://media.example.com/clip/av1-240p.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "vcodec": "av1",
+      "height": 240,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "360p",
+      "url": "https://media.example.com/clip/360p.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "height": 360,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "av1-360p",
+      "url": "https://media.example.com/clip/av1-360p.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "vcodec": "av1",
+      "height": 360,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "480p",
+      "url": "https://media.example.com/clip/480p.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "height": 480,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "av1-480p",
+      "url": "https://media.example.com/clip/av1-480p.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "vcodec": "av1",
+      "height": 480,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "720p_HD",
+      "url": "https://media.example.com/clip/720p_HD.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "height": 720,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "av1-720p_HD",
+      "url": "https://media.example.com/clip/av1-720p_HD.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "vcodec": "av1",
+      "height": 720,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "1080p_HD",
+      "url": "https://media.example.com/clip/1080p_HD.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "height": 1080,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "av1-1080p_HD",
+      "url": "https://media.example.com/clip/av1-1080p_HD.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "vcodec": "av1",
+      "height": 1080,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "1440p_2K__HD",
+      "url": "https://media.example.com/clip/1440p_2K__HD.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "height": 1440,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "av1-1440p_2K__HD",
+      "url": "https://media.example.com/clip/av1-1440p_2K__HD.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "vcodec": "av1",
+      "height": 1440,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "2160p_4K__HD",
+      "url": "https://media.example.com/clip/2160p_4K__HD.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "height": 2160,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    },
+    {
+      "format_id": "av1-2160p_4K__HD",
+      "url": "https://media.example.com/clip/av1-2160p_4K__HD.mp4",
+      "ext": "mp4",
+      "protocol": "https",
+      "vcodec": "av1",
+      "height": 2160,
+      "fps": null,
+      "tbr": null,
+      "vbr": null,
+      "abr": null,
+      "filesize_approx": null,
+      "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate"
+      }
+    }
+  ],
+  "http_headers": {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-us,en;q=0.5",
+    "Sec-Fetch-Mode": "navigate"
+  },
+  "_type": "video"
+}

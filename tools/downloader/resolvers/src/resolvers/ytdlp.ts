@@ -70,6 +70,16 @@ const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
  * or a string — so it is not widened here, and `realCodec` accepts `null`
  * regardless because it is the same call. Widening on symmetry rather than on a
  * measurement is how this list stops meaning anything.
+ *
+ * dl-62 added `fps`, from a fourth shape: a site-specific extractor whose
+ * progressive ladder reported `fps` null on every format, beside the four
+ * already listed.
+ *
+ * **The list records what has been seen; it is not what keeps a variant
+ * valid.** The next `null` will arrive in a field nobody has measured, so
+ * nothing copied from here into a `ProbeResult` relies on this list being
+ * complete: `optional()` drops a `null`, and the values read outside it go
+ * through `reportedNumber`, `stringValues` or a `typeof` check.
  */
 export interface YtDlpFormat {
   format_id?: string;
@@ -80,7 +90,7 @@ export interface YtDlpFormat {
   acodec?: string;
   width?: number;
   height?: number;
-  fps?: number;
+  fps?: number | null;
   tbr?: number | null;
   vbr?: number | null;
   abr?: number | null;
@@ -371,6 +381,38 @@ function realCodec(codec: string | null | undefined): string | undefined {
   return codec;
 }
 
+/** A number yt-dlp actually reported; `null` and a missing key both mean it did not. */
+function reportedNumber(value: number | null | undefined): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
+
+/** Header values that are strings; one `null` would fail `requestContextSchema`. */
+function stringValues(record: Record<string, unknown>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(record).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+}
+
+/**
+ * Whether a format carries sound, in `MediaVariant.hasAudio`'s three states.
+ *
+ * `false` only when yt-dlp says so with `"none"`. An absent or `null` `acodec`
+ * is yt-dlp saying nothing: dl-62's extractor names no codec at all for
+ * progressive files that carry AAC, and reading that as `false` made the picker
+ * say "no audio" about a file with sound in it. Unknown stays `undefined`, which
+ * the engine maps as optional audio (dl-42).
+ */
+function audioClaim(
+  audioCodec: string | undefined,
+  acodec: string | null | undefined,
+): boolean | undefined {
+  if (audioCodec !== undefined) return true;
+  if (acodec === "none") return false;
+  return undefined;
+}
+
 export function mapProtocol(protocol: string | undefined): StreamProtocol {
   const value = (protocol ?? "").toLowerCase();
   if (value.startsWith("m3u8")) return "hls";
@@ -419,7 +461,7 @@ function mapSubtitles(
       entries.find((entry) => entry.ext === "srt") ??
       entries.find((entry) => entry.ext === "ttml") ??
       entries[0];
-    if (chosen?.url === undefined || chosen.url === "") continue;
+    if (typeof chosen?.url !== "string" || chosen.url === "") continue;
     tracks.push({
       id: `${prefix}-${language}`,
       url: chosen.url,
@@ -623,12 +665,11 @@ export function mapYtDlpInfo(
       protocol: mapProtocol(format.protocol),
       url: format.url ?? "",
       hasVideo,
-      hasAudio: audioCodec !== undefined,
       label: buildLabel({
         hasVideo,
-        height: format.height,
-        width: format.width,
-        fps: format.fps,
+        height: reportedNumber(format.height),
+        width: reportedNumber(format.width),
+        fps: reportedNumber(format.fps),
         videoCodec,
         audioCodec,
         bitrateBps,
@@ -638,6 +679,7 @@ export function mapYtDlpInfo(
         fallback: format.format_note ?? format.format_id ?? "Stream",
       }),
       ...optional({
+        hasAudio: audioClaim(audioCodec, format.acodec),
         audioUrl: pairedAudio?.url,
         container: format.container ?? format.ext,
         videoCodec,
@@ -662,10 +704,10 @@ export function mapYtDlpInfo(
   // exists to avoid. Deduplicate first, group what is left, sort last.
   const variants = groupMirrors(dropDuplicateFormats(unsorted)).toSorted(compareVariantQuality);
 
-  const headers: Record<string, string> = {
+  const headers = stringValues({
     ...info.http_headers,
     ...rawFormats.find((format) => format.http_headers !== undefined)?.http_headers,
-  };
+  });
   if (options.locale !== undefined && options.locale !== "") {
     headers["Accept-Language"] = sanitiseHeaderValue(options.locale);
   }
