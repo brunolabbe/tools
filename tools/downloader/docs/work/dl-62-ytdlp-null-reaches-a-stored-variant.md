@@ -3,7 +3,7 @@ id: dl-62
 tool: downloader
 title: A null that yt-dlp reports passes the probe and fails every job at its first read back
 kind: fix
-status: in-flight
+status: done
 milestone: null
 depends_on: []
 difficulty: standard
@@ -73,6 +73,40 @@ and to fix the audio claim in the same change.
 6. With the fix reverted, the tests for 1 to 5 fail.
 7. A real job against the reported page completes with both video and audio.
 8. `npm run check` and the downloader suite pass.
+
+## Review
+
+Gated at `202fca7` by `ticket-reviewer`, on a different model from the one that
+wrote the change. **PASS.**
+
+| #   | Proof                                                                                                              | Verdict                                                                          |
+| --- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| 1   | `ytdlp.test.ts` › "every variant passes the schema a stored job is read back through"                              | proven                                                                           |
+| 2   | `ytdlp.test.ts` › "a null fps is absent from the variant and from its label"                                       | proven                                                                           |
+| 3   | `ytdlp.test.ts` › "a format that names no audio codec is unverified, not silent" and "`none` is still the answer…" | proven                                                                           |
+| 4   | `ytdlp.test.ts` › "a null in any field the mapper copies still maps to a valid probe"                              | proven                                                                           |
+| 5   | `common.test.ts` › "drops null as well as undefined, and keeps every other falsy value"                            | proven                                                                           |
+| 6   | Reviewer reverted both source files and reran: exactly the tests for 1 to 5 failed                                 | verified                                                                         |
+| 7   | Log, end-to-end run                                                                                                | accepted from the Log; the reviewer was barred from touching the page on purpose |
+| 8   | Reviewer reran `npm run check` (exit 0) and the downloader suite (1,271 passed)                                    | verified                                                                         |
+
+The reviewer mutation-tested each guard. Removing `stringValues`, the subtitle
+`typeof` check, `audioClaim` or `optional()`'s `null` drop each breaks a named
+test.
+
+- **low**: `reportedNumber` on the label's `height` and `width` can be removed
+  without any test failing. **No change.** `buildLabel` only prints a height or
+  width when it is `> 0`, and `null > 0` is false, so `null` and absent take the
+  same path. No assertion could tell the guard from its absence; it is there so
+  the label's inputs match their declared types.
+- `optional()` dropping `null` is safe for the HLS, DASH and direct callers:
+  every contract field they fill is `.optional()`, none `.nullable()`. No
+  change.
+- `hasAudio` going from `false` to absent was traced through variant
+  selection, the engine's audio mapping, the size estimate and the web label.
+  All four already handle dl-42's three states, so nothing regresses. No change.
+- The fixture was read in full; nothing identifies the reported page. No
+  change.
 
 ## Log
 
