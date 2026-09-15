@@ -84,6 +84,33 @@ export interface GroundingCacheTtlHours {
   travel: number;
 }
 
+/**
+ * What the model charges, in dollars per million tokens, one rate per kind
+ * (pl-49).
+ *
+ * **Settings, never a table in code**: prices change, and they differ by model
+ * and by platform, so the only honest source is the operator who pays the bill.
+ * Each is `undefined` unless set, and `cost-report.ts` prints no dollar figure
+ * while any one of them is — it names the unset ones instead of guessing a
+ * rate. The server reads none of them; they are parsed here so that a bad one
+ * refuses the boot, where an operator will see it, rather than surfacing only
+ * the day somebody runs the report.
+ */
+export interface ModelPrices {
+  inputPerMTok: number | undefined;
+  outputPerMTok: number | undefined;
+  cacheReadPerMTok: number | undefined;
+  cacheWritePerMTok: number | undefined;
+}
+
+/** Which variable sets which price. The report names these when one is unset. */
+export const MODEL_PRICE_VARIABLES = {
+  inputPerMTok: "MODEL_PRICE_INPUT_PER_MTOK",
+  outputPerMTok: "MODEL_PRICE_OUTPUT_PER_MTOK",
+  cacheReadPerMTok: "MODEL_PRICE_CACHE_READ_PER_MTOK",
+  cacheWritePerMTok: "MODEL_PRICE_CACHE_WRITE_PER_MTOK",
+} as const satisfies Record<keyof ModelPrices, string>;
+
 export interface ApiConfig {
   host: string;
   port: number;
@@ -133,6 +160,8 @@ export interface ApiConfig {
    * specialists for the same budget — see the deployment document.
    */
   maxOutputTokens: number;
+  /** What each token kind costs, for the report. See `ModelPrices`. */
+  modelPrices: ModelPrices;
 
   groundingProvider: GroundingProviderName;
   /**
@@ -427,6 +456,35 @@ function modelEffort(raw: string | undefined): AnthropicEffort {
 }
 
 /**
+ * A price per million tokens, unset, or a refusal to boot (pl-49).
+ *
+ * Not `int`'s clamp-and-fall-back, for `modelEffort`'s reason:
+ * `MODEL_PRICE_OUTPUT_PER_MTOK=25$` is an operator who meant a rate, and
+ * silently treating it as unset turns every dollar figure into "unknown" with
+ * nothing to say why. A negative rate and a non-finite one refuse too — the
+ * first is a typo and the second prices every run at infinity. Blank is unset,
+ * as a commented-out `.env` line collapses into.
+ *
+ * `INTERNAL` rather than `AGENT_UNCONFIGURED`: a price configures no assistant,
+ * and that code's sentence is "no planning assistant is configured". The
+ * refusal is a deployment's misconfiguration, which is what `requiredEndpoint`
+ * in `server.ts` raises `INTERNAL` for.
+ */
+function price(raw: string | undefined, variable: string): number | undefined {
+  const value = (raw ?? "").trim();
+  if (value === "") return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new AppError(
+      "INTERNAL",
+      `${variable} is "${value}", which is not a price. It is a non-negative number of dollars per million tokens, or unset.`,
+      { details: { variable, value } },
+    );
+  }
+  return parsed;
+}
+
+/**
  * `ANTHROPIC_CUSTOM_HEADERS` refuses to boot a real model — the owner's
  * decision on pl-39, taken over re-sending the key on every request.
  *
@@ -507,6 +565,24 @@ export function loadApiConfig(
     maxOutputTokens:
       overrides.maxOutputTokens ??
       int(env["MAX_OUTPUT_TOKENS"], API_DEFAULTS.maxOutputTokens, { max: 32_000 }),
+    modelPrices: overrides.modelPrices ?? {
+      inputPerMTok: price(
+        env[MODEL_PRICE_VARIABLES.inputPerMTok],
+        MODEL_PRICE_VARIABLES.inputPerMTok,
+      ),
+      outputPerMTok: price(
+        env[MODEL_PRICE_VARIABLES.outputPerMTok],
+        MODEL_PRICE_VARIABLES.outputPerMTok,
+      ),
+      cacheReadPerMTok: price(
+        env[MODEL_PRICE_VARIABLES.cacheReadPerMTok],
+        MODEL_PRICE_VARIABLES.cacheReadPerMTok,
+      ),
+      cacheWritePerMTok: price(
+        env[MODEL_PRICE_VARIABLES.cacheWritePerMTok],
+        MODEL_PRICE_VARIABLES.cacheWritePerMTok,
+      ),
+    },
     maxSpecialists:
       overrides.maxSpecialists ?? int(env["MAX_SPECIALISTS"], API_DEFAULTS.maxSpecialists),
     maxGroundingCalls:

@@ -23,6 +23,13 @@
  *  NewRevision + the gaps it has + what was never checked
  * ```
  *
+ * **`compose` is exactly the first draft.** Every later revision has an entry
+ * point of its own: `replan` re-packs named days (`replan.ts`), `applyEdit`
+ * moves or removes one item (`edit.ts`), and `restoreRevision` copies an older
+ * revision (`restore.ts`). pl-43 split them because `compose` can only stamp
+ * `first-draft`, which the contract accepts on revision 1 alone. The stages
+ * above are shared with `replan` through `packWithCritic`, not copied.
+ *
  * **It reads the brief and the candidates, and nothing else.** Not the answers,
  * not the tree, not a specialist's prompt. That is what makes it testable from
  * a checked-in fixture, and it is the same indirection that let the intake stop
@@ -32,8 +39,7 @@
  * timestamp are all arguments — a `Date.now()` here is a booking deadline that
  * changes answer at midnight, and a random id is a plan that cannot be
  * re-derived from its own inputs. Day and item ids are derived from the
- * revision's, which is unique per revision and is what `plan_days.id` and
- * `plan_items.id` require.
+ * revision's, in `ids.ts`, which every entry point shares.
  */
 
 import {
@@ -42,19 +48,28 @@ import {
   missingRequiredSlots,
   type Candidate,
   type NewRevision,
-  type PlanDay,
   type PlanGap,
-  type PlanItem,
   type PlanRevision,
   type Source,
   type Specialist,
   type TripBrief,
+  type TripDates,
 } from "@planner/contract";
-import { daysUntilDeparture, tripSpan } from "./dates.ts";
+import { daysUntilDeparture, tripSpan, type TripSpan } from "./dates.ts";
 import { filterBySeason } from "./season.ts";
-import { BUCKET_OF, pack, type PackResult, type PinnedPlacement } from "./pack.ts";
+import {
+  BUCKET_OF,
+  pack,
+  type Excluded,
+  type PackedDay,
+  type PackedItem,
+  type PackResult,
+  type PinnedPlacement,
+} from "./pack.ts";
 import { critique, isHard, type CriticFinding } from "./critic.ts";
+import { rekeyDays, type UnkeyedDay, type UnkeyedItem } from "./ids.ts";
 import { MAX_CRITIC_ROUNDS } from "./limits.ts";
+import { candidateOf } from "./preconditions.ts";
 import type { TravelTable } from "./travel.ts";
 import { uncheckedFor, type UncheckedConstraint } from "./unchecked.ts";
 
@@ -62,11 +77,6 @@ export interface ComposeInput {
   brief: TripBrief;
   /** Everything the fan-out proposed, placed or not. */
   candidates: readonly Candidate[];
-  /**
-   * The draft this one is derived from, when this is a re-plan. Its pinned
-   * items keep their day, and the packer works around them (§6).
-   */
-  previous?: PlanRevision | null;
   /**
    * The gaps the orchestrator already knows about — a specialist that failed,
    * was dropped for budget, or was never on the roster. The composer cannot
@@ -136,7 +146,7 @@ export interface ComposeResult {
   excluded: PackResult["excluded"];
 }
 
-/** Where a previous revision put each pinned item — the packer's fixed points. */
+/** Where a revision put each pinned item — the packer's fixed points on a re-plan. */
 export function pinnedPlacements(revision: PlanRevision): PinnedPlacement[] {
   return revision.days.flatMap((day) =>
     day.items
@@ -150,7 +160,7 @@ export function pinnedPlacements(revision: PlanRevision): PinnedPlacement[] {
 }
 
 /**
- * Build a revision from a brief and a candidate set.
+ * Build the first draft from a brief and a candidate set.
  *
  * Throws `BRIEF_INCOMPLETE` when the brief is too thin to draft from, and
  * `PLAN_INFEASIBLE` when nothing can satisfy the constraints — the two are
@@ -159,8 +169,62 @@ export function pinnedPlacements(revision: PlanRevision): PinnedPlacement[] {
  * neither; it ships, with the holes named.
  */
 export function compose(input: ComposeInput): ComposeResult {
-  const { brief, now } = input;
+  const { brief } = input;
+  const dates = draftableDates(brief);
 
+  const packing = packWithCritic({
+    brief,
+    dates,
+    candidates: input.candidates,
+    pool: input.candidates,
+    span: tripSpan(dates),
+    pinned: [],
+    frozen: new Map(),
+    travel: input.travel,
+    now: input.now,
+    rounds: input.maxCriticRounds ?? MAX_CRITIC_ROUNDS,
+  });
+
+  refuseHardFindings(packing.findings);
+
+  // The days as they will be stored, built once. `uncheckedFor` then reads the
+  // very same structure a reader of the revision hands it, which is what makes
+  // the two agree by construction rather than by two implementations being
+  // careful — including about which transitions were measured.
+  const days = rekeyDays(planDaysOf(packing.packed.days), input.revision.id);
+  const coverage = [...(input.coverage ?? [])];
+  const reading = [...(input.reading ?? [])];
+
+  return {
+    revision: {
+      id: input.revision.id,
+      reason: input.revision.reason,
+      operation: { kind: "first-draft" },
+      createdAt: input.revision.createdAt,
+      days,
+      gaps: [...(input.gaps ?? []), ...gapsFor(input.candidates, packing.packed)],
+      coverage,
+      reading,
+    },
+    // Derived from what was placed, not from the pack — so a reader of the
+    // stored revision gets the identical list without re-composing. See
+    // `unchecked.ts`. `coverage` rides on top rather than through it, because
+    // it is not derivable from days at all — see the note on `ComposeInput`.
+    unchecked: [...uncheckedFor({ brief, dates, candidates: input.candidates, days }), ...coverage],
+    findings: packing.findings.filter((finding) => !isHard(finding)),
+    excluded: packing.excluded,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Shared with `replan` and `applyEdit`. Not exported from the package.
+// ---------------------------------------------------------------------------
+
+/**
+ * The trip's dates, or `BRIEF_INCOMPLETE` for a brief that cannot be drafted
+ * from.
+ */
+export function draftableDates(brief: TripBrief): TripDates {
   const missing = missingRequiredSlots(brief);
   if (missing.length > 0) {
     throw new AppError("BRIEF_INCOMPLETE", undefined, { details: { missing } });
@@ -173,38 +237,88 @@ export function compose(input: ComposeInput): ComposeResult {
   if (!isAnswered(brief.dates)) {
     throw new AppError("BRIEF_INCOMPLETE", undefined, { details: { missing: ["dates"] } });
   }
-  const dates = brief.dates.value;
+  return brief.dates.value;
+}
 
-  const span = tripSpan(dates);
-  const pinned =
-    input.previous === null || input.previous === undefined ? [] : pinnedPlacements(input.previous);
+export interface PackingInput {
+  brief: TripBrief;
+  dates: TripDates;
+  /**
+   * Every candidate the revision draws on. The critic reads a placed item's
+   * duration and cost from here — a frozen item's included, which is why this
+   * is not `pool`.
+   */
+  candidates: readonly Candidate[];
+  /** What may be placed: all of `candidates` for a first draft, `replanPool` for a re-plan. */
+  pool: readonly Candidate[];
+  span: TripSpan;
+  pinned: readonly PinnedPlacement[];
+  /** Days a re-plan may not touch. Empty for a first draft. */
+  frozen: ReadonlyMap<number, readonly PackedItem[]>;
+  travel: TravelTable;
+  now: Date;
+  rounds: number;
+}
 
-  const season = filterBySeason(input.candidates, dates);
+export interface Packing {
+  packed: PackResult;
+  /** What survived the rounds, with per-day findings on frozen days already discarded. */
+  findings: CriticFinding[];
+  /** The pool's exclusions, out-of-season ones last. */
+  excluded: Excluded[];
+}
+
+/** Season filter, pack, and the critic rounds — every stage between the guards and the revision. */
+export function packWithCritic(input: PackingInput): Packing {
+  const { brief, dates, span, pinned, frozen } = input;
+
+  const season = filterBySeason(input.pool, dates);
 
   // A pinned candidate is the user's decision and outranks the season filter:
   // they may know something the window does not say, and a re-plan that
   // silently deleted a pin would be the worst possible answer to a pin.
   const pinnedIds = new Set(pinned.map((placement) => placement.candidateId));
   const droppedByFilter = season.outOfSeason.filter((id) => !pinnedIds.has(id));
-  const forPacking = input.candidates.filter(
+  const forPacking = input.pool.filter(
     (candidate) => !season.outOfSeason.includes(candidate.id) || pinnedIds.has(candidate.id),
   );
 
-  const untilDeparture = daysUntilDeparture(dates, now);
-  const rounds = input.maxCriticRounds ?? MAX_CRITIC_ROUNDS;
+  const untilDeparture = daysUntilDeparture(dates, input.now);
+
+  // Everything on a frozen day is fixed: `over-budget` names the dearest
+  // unpinned line anywhere, and that is usually a lodging on a day this
+  // revision may not touch.
+  const fixed = new Set(
+    [...frozen.values()].flatMap((items) => items.map((item) => item.candidateId)),
+  );
+
+  const judge = (packed: PackResult): CriticFinding[] =>
+    critique({ brief, candidates: input.candidates, packed, fixed }).filter(
+      // This revision did not judge a frozen day and may not change it, so a
+      // finding there — hard or soft — is not its to report. A hard one could
+      // only ever refuse an operation that was never allowed to fix it: the
+      // limits in `limits.ts` are content, and a day that met yesterday's
+      // numbers can fail today's. Plan-wide findings stand.
+      (finding) => finding.dayIndex === null || !frozen.has(finding.dayIndex),
+    );
+
+  const packOnce = (excluded: ReadonlySet<string>): PackResult =>
+    pack({
+      brief,
+      candidates: forPacking,
+      span,
+      travel: input.travel,
+      daysUntilDeparture: untilDeparture,
+      pinned,
+      frozen,
+      excluded,
+    });
 
   const dropped = new Set<string>();
-  let packed = pack({
-    brief,
-    candidates: forPacking,
-    span,
-    travel: input.travel,
-    daysUntilDeparture: untilDeparture,
-    pinned,
-  });
-  let findings = critique({ brief, candidates: forPacking, packed });
+  let packed = packOnce(dropped);
+  let findings = judge(packed);
 
-  for (let round = 0; round < rounds; round += 1) {
+  for (let round = 0; round < input.rounds; round += 1) {
     const actionable = findings
       .filter((finding) => finding.dropCandidateId !== null)
       .map((finding) => finding.dropCandidateId ?? "")
@@ -213,18 +327,22 @@ export function compose(input: ComposeInput): ComposeResult {
     if (actionable.length === 0) break;
 
     for (const id of actionable) dropped.add(id);
-    packed = pack({
-      brief,
-      candidates: forPacking,
-      span,
-      travel: input.travel,
-      daysUntilDeparture: untilDeparture,
-      pinned,
-      excluded: dropped,
-    });
-    findings = critique({ brief, candidates: forPacking, packed });
+    packed = packOnce(dropped);
+    findings = judge(packed);
   }
 
+  return {
+    packed,
+    findings,
+    excluded: [
+      ...packed.excluded,
+      ...droppedByFilter.map((candidateId) => ({ candidateId, reason: "out-of-season" as const })),
+    ],
+  };
+}
+
+/** `PLAN_INFEASIBLE` when any finding is hard, with the hard ones in `details`. */
+export function refuseHardFindings(findings: readonly CriticFinding[]): void {
   const hard = findings.filter(isHard);
   if (hard.length > 0) {
     throw new AppError("PLAN_INFEASIBLE", undefined, {
@@ -237,58 +355,14 @@ export function compose(input: ComposeInput): ComposeResult {
       },
     });
   }
-
-  const excluded = [
-    ...packed.excluded,
-    ...droppedByFilter.map((candidateId) => ({ candidateId, reason: "out-of-season" as const })),
-  ];
-
-  // The days as they will be stored, built once. `uncheckedFor` then reads the
-  // very same structure a reader of the revision hands it, which is what makes
-  // the two agree by construction rather than by two implementations being
-  // careful — including about which transitions were measured.
-  const days = toPlanDays(packed, input.revision.id);
-  const coverage = [...(input.coverage ?? [])];
-  const reading = [...(input.reading ?? [])];
-
-  return {
-    revision: {
-      id: input.revision.id,
-      reason: input.revision.reason,
-      // The only revision this composer writes today. pl-43 gives the re-plan
-      // its own entry point, which stamps a `replan` operation.
-      operation: { kind: "first-draft" },
-      createdAt: input.revision.createdAt,
-      days,
-      gaps: [...(input.gaps ?? []), ...gapsFor(input.candidates, packed)],
-      coverage,
-      reading,
-    },
-    // Derived from what was placed, not from the pack — so a reader of the
-    // stored revision gets the identical list without re-composing. See
-    // `unchecked.ts`. `coverage` rides on top rather than through it, because
-    // it is not derivable from days at all — see the note on `ComposeInput`.
-    unchecked: [...uncheckedFor({ brief, dates, candidates: input.candidates, days }), ...coverage],
-    findings: findings.filter((finding) => !isHard(finding)),
-    excluded,
-  };
 }
 
-/**
- * Ids are derived rather than generated: `plan_days.id` and `plan_items.id` are
- * global primary keys, and a revision's id is already unique, so
- * `<revision>-day-3` cannot collide across revisions and stays the same if the
- * same inputs are composed twice. An item is keyed by its candidate rather than
- * by its position, so an item that moved between revisions is recognisably the
- * same thing — which is what makes the diff in §6 a diff.
- */
-function toPlanDays(packed: PackResult, revisionId: string): PlanDay[] {
-  return packed.days.map((day) => ({
-    id: `${revisionId}-day-${day.dayIndex}`,
+/** Packed days as they will be stored, before `rekeyDays` gives them this revision's ids. */
+export function planDaysOf(days: readonly PackedDay[]): UnkeyedDay[] {
+  return days.map((day) => ({
     dayIndex: day.dayIndex,
     date: day.date,
-    items: day.items.map((item, position): PlanItem => ({
-      id: `${revisionId}-item-${item.candidateId}`,
+    items: day.items.map((item, position): UnkeyedItem => ({
       candidateId: item.candidateId,
       position,
       // Always null in Phase 2: a wall-clock start is a claim that something
@@ -305,6 +379,28 @@ function toPlanDays(packed: PackResult, revisionId: string): PlanDay[] {
 }
 
 /**
+ * A stored day as the packer and the critic read one: in position order, with
+ * each item's bucket and its stored transition.
+ *
+ * Throws `INTERNAL` for an item whose candidate is not in `byId`.
+ */
+export function packedDayOf(day: UnkeyedDay, byId: ReadonlyMap<string, Candidate>): PackedDay {
+  return {
+    dayIndex: day.dayIndex,
+    date: day.date,
+    items: day.items
+      .toSorted((left, right) => left.position - right.position)
+      .map((item) => ({
+        candidateId: item.candidateId,
+        bucket: BUCKET_OF[candidateOf(byId, item.candidateId).specialist],
+        pinned: item.pinned,
+        note: item.note,
+        travelFromPrevious: item.travelFromPrevious,
+      })),
+  };
+}
+
+/**
  * The gaps the composer can see for itself.
  *
  * Only for a specialist that actually returned candidates and got none of them
@@ -313,7 +409,7 @@ function toPlanDays(packed: PackResult, revisionId: string): PlanDay[] {
  * the composer's to explain, because it cannot tell "never on the roster" from
  * "failed", and the orchestrator passes those in.
  */
-function gapsFor(candidates: readonly Candidate[], packed: PackResult): PlanGap[] {
+export function gapsFor(candidates: readonly Candidate[], packed: PackResult): PlanGap[] {
   const placedIds = new Set(
     packed.days.flatMap((day) => day.items.map((item) => item.candidateId)),
   );

@@ -547,10 +547,26 @@ export type DiffEntry =
  * **Items only.** A gap that opened or closed is not an entry here, and neither
  * is a changed `travelFromPrevious` or pin; this says where candidates went.
  *
- * **What counts as `moved` is pl-43's to define and test**, and the definition
- * goes in this comment when it lands. The trap it has to avoid: a `position`
- * that shifted only because a neighbour was removed is not a move a reader
- * cares about, and a diff reporting it makes every edit look like a reshuffle.
+ * **What counts as `moved`** (pl-43): a position is not a placement, and
+ * relative order is. A candidate in the child and not the parent is `added`,
+ * one in the parent and not the child is `removed`, and one in both is:
+ *
+ * 1. **`moved` when its `dayIndex` differs.**
+ * 2. **Otherwise `moved` only if the order among the items that stayed on its
+ *    day changed.** A day's stayers are the candidates on it in both revisions;
+ *    a kept set is a largest subset whose child order agrees with its parent
+ *    order, and every stayer outside it is `moved`. An item added, removed or
+ *    moved to another day is not a stayer, so it never makes a neighbour look
+ *    moved: removing B from `[A, B, C]` reports B alone, not C.
+ * 3. **Ties between largest kept sets break in order**, because an adjacent
+ *    swap is both "A moved down one" and "B moved up one": when the child's
+ *    `operation` is a `move`, the set without its candidate, so the diff agrees
+ *    with the caption; then the set keeping more items pinned in the child;
+ *    then the lexicographically smallest list of parent positions.
+ *
+ * `from` and `to` are the raw positions in each revision. Entries are ordered
+ * by `(dayIndex, position)` — `to` for `added` and `moved`, `from` for
+ * `removed` — then `removed`, `moved`, `added`, then `candidateId` by code unit.
  */
 export interface RevisionDiff {
   revisionId: string;

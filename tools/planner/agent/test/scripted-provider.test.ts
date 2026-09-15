@@ -40,7 +40,12 @@ describe("the scripted provider", () => {
 
   test("reports no usage rather than inventing token counts", async () => {
     const reply = await new ScriptedProvider({ replies: ["hello"] }).send(request());
-    expect(reply.usage).toEqual({ inputTokens: null, outputTokens: null });
+    expect(reply.usage).toEqual({
+      inputTokens: null,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
+      outputTokens: null,
+    });
     expect(reply.stopReason).toBe("end");
   });
 });

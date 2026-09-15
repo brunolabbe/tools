@@ -201,7 +201,7 @@ latest revision at a time.** A non-terminal run is how `api` detects it.
   synchronous, and the architecture has one process owning the database and
   its in-process queue, so no other handler can run between the check and the
   insert. `startRun` already writes its plan and run together this way.
-- **The database backstops it.** Migration 9 adds
+- **The database backstops it.** Migration 10 adds
   `CREATE UNIQUE INDEX plan_runs_one_live ON plan_runs (plan_id) WHERE finished_at IS NULL`,
   the same move `UNIQUE (plan_id, revision)` makes for `appendRevision`.
   - The rule holds even against a writer that forgets the check.
@@ -409,10 +409,11 @@ An edit emits no SSE frame and creates no run.
 - Say "version", matching `REVISION_NOT_FOUND`'s copy and the plan page's
   crumb line.
 
-### 7. Persistence — migration 9
+### 7. Persistence — migration 10
 
 Take the next free number at build time, and never renumber a shipped one.
-Today's last is 8.
+Today's last is 9, which pl-49 took, so this is 10 at the time of writing (or
+whatever is next free when pl-44 is built).
 
 ```sql
 ALTER TABLE plan_revisions ADD COLUMN operation_json TEXT NOT NULL DEFAULT '{"kind":"first-draft"}';
@@ -452,7 +453,7 @@ CREATE UNIQUE INDEX plan_runs_one_live ON plan_runs (plan_id) WHERE finished_at 
   It ignores the new columns, its inserts take the defaults (true of every
   revision 1 and every draft it could write), and it never creates a second
   live run for a plan.
-- **The migrations tests** move their `user_version` expectations from 8 to 9
+- **The migrations tests** move their `user_version` expectations from 9 to 10
   (`api/test/migrations.test.ts`), and gain the cases in _Done when_.
 
 ### 8. `PlanView.diffs`
@@ -636,7 +637,8 @@ bucket the kind selects.
   `restoreRevision`'s.
 - **`PlanView.diffs`** equals `revisionDiffs(plan.revisions)` on a plan with
   at least three revisions, and is empty on a plan with one.
-- **Migration 9, from `user_version = 8`:**
+- **Migration 10, from `user_version = 9`** (pl-49 took 9; the next free
+  number when pl-44 is built)**:**
   - A database holding a revision and a run reads back `operation:
 first-draft` and `kind: draft`.
   - The append-only trigger does not fire.

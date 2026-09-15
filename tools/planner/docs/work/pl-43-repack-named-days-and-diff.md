@@ -3,7 +3,7 @@ id: pl-43
 tool: planner
 title: A re-plan re-packs only its named days, an edit never packs, and a diff is derived by candidate
 kind: work-package
-status: ready
+status: done
 milestone: P4
 depends_on: [pl-42]
 difficulty: hard
@@ -552,6 +552,45 @@ revision is a read that visibly stalls.
 - `itinerary/test/purity.test.ts` passes unchanged. `npm run check` and
   `npm test -- --project planner` pass.
 
+## Review
+
+**Gate: PASS** — 2026-09-14 · `origin/main...1a9ffff` · defect hunt run directly by the reviewer (ticket-reviewer, sonnet; the builder ran opus), to code-review's medium depth, plus 7 independent mutation reproductions
+
+| Done when                                                                                                                                                             | Proof                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `compose`'s first drafts are byte-identical: baseline commit, six shapes x two tables plus the transition case                                                        | `itinerary/test/first-draft-baseline.test.ts:32 "test.each(Object.keys(RESULTS))"` (proven)                                                                                                                      |
+| `ComposeInput.previous` is gone; existing re-planning and pl-23 tests pass through `replan` with unchanged assertions                                                 | `itinerary/test/compose.test.ts:34 "function everyDay(previous: PlanRevision)"`, `itinerary/test/compose.test.ts:681 "toContain(winterOnly.id)"` (proven)                                                        |
+| Naming every day of a pin-free plan in `replan` packs the same days as `compose` over the same pool, table and `now`                                                  | `itinerary/test/replan.test.ts:108 "withoutIds(again.revision.days)"` (proven)                                                                                                                                   |
+| `replan`: frozen days identical apart from ids, stored `travelFromPrevious` included                                                                                  | `itinerary/test/replan.test.ts:117 "come back as previous holds them"` (proven)                                                                                                                                  |
+| `replan`: a spy `TravelTable` is only ever asked about pairs within `replanPool`                                                                                      | `itinerary/test/replan.test.ts:187 "keeps pins and released items on named days"` (proven)                                                                                                                       |
+| `replan`: a candidate on a frozen day is never placed again                                                                                                           | `itinerary/test/replan.test.ts:175 "candidate on a frozen day that would fit"` (proven)                                                                                                                          |
+| `replan`: the critic never drops a frozen or pinned item                                                                                                              | `itinerary/test/replan.test.ts:217 "never drops a frozen or a pinned item"` (proven)                                                                                                                             |
+| `replan`: a pin on a named day keeps its day and leads it                                                                                                             | `itinerary/test/replan.test.ts:271 "keep their day and lead it"` (proven)                                                                                                                                        |
+| `replan`: capacity on a named day counts its pins                                                                                                                     | `itinerary/test/replan.test.ts:287 "count against the day"` (proven)                                                                                                                                             |
+| `replan`: adjacent pins over capacity are `PLAN_INFEASIBLE`                                                                                                           | `itinerary/test/replan.test.ts:239 "adjacent pins whose new transition"` (proven)                                                                                                                                |
+| `replan`: an empty named day ships with `empty-day`                                                                                                                   | `itinerary/test/replan.test.ts:303 "an empty named day ships with empty-day"` (proven)                                                                                                                           |
+| `replan`: a booking deadline passed since the draft excludes a released item                                                                                          | `itinerary/test/replan.test.ts:312 "a booking deadline that passed since the draft"` (proven)                                                                                                                    |
+| `replan`: gaps are at most one per specialist, one contradicted by the days is dropped                                                                                | `itinerary/test/replan.test.ts:335 "at most one per specialist, incoming before derived"` (proven)                                                                                                               |
+| `replan`: `note` and `specialists` change nothing                                                                                                                     | `itinerary/test/replan.test.ts:369 "note and specialists change nothing"` (proven)                                                                                                                               |
+| `applyEdit`: move across days, and within a day                                                                                                                       | `itinerary/test/edit.test.ts:61 "a move across days lands at the position"` (proven)                                                                                                                             |
+| `applyEdit`: a moved pin stays pinned                                                                                                                                 | `itinerary/test/edit.test.ts:114 "a moved pin stays pinned"` (proven)                                                                                                                                            |
+| `applyEdit`: a move onto a full day and an over-effort day are `PLAN_INFEASIBLE`                                                                                      | `itinerary/test/edit.test.ts:168 "a move onto a day that already holds MAX_ITEMS_PER_DAY"`, `itinerary/test/edit.test.ts:194 "a move onto a day with too little effort left"` (proven)                           |
+| `applyEdit`: a remove creating a transition that over-fills its own day is `PLAN_INFEASIBLE`                                                                          | `itinerary/test/edit.test.ts:215 "a remove whose new transition over-fills"` (proven)                                                                                                                            |
+| `applyEdit`: unchanged transitions keep their stored value                                                                                                            | `itinerary/test/edit.test.ts:293 "unchanged transitions keep their stored value"` (proven)                                                                                                                       |
+| `applyEdit`: `gaps`, `coverage` and `reading` are carried untouched                                                                                                   | `itinerary/test/edit.test.ts:333 "gaps, coverage and reading are carried untouched"` (proven)                                                                                                                    |
+| `editTransitions`: at most one pair for a remove, three for a move; a spy proves exact calls                                                                          | `itinerary/test/edit.test.ts:398 "a remove in the middle returns the one pair"`, `itinerary/test/edit.test.ts:421 "over every edit this plan admits"` (proven)                                                   |
+| `restoreRevision`: copies days, pins, `travelFromPrevious`, re-keys every id, stamps `restore`                                                                        | `itinerary/test/restore.test.ts:39 "copies days, pins, notes, start times"`, `itinerary/test/restore.test.ts:48 "re-keys every id"`, `itinerary/test/restore.test.ts:56 "stamps the restore operation"` (proven) |
+| `diffRevisions` passes the twelve-row table; `revisionDiffs` pairs by `parentRevisionId`, oldest first                                                                | `itinerary/test/diff.test.ts:101 "a removal and a move on one day"`, `itinerary/test/diff.test.ts:191 "returns one diff per revision after the first"` (proven)                                                  |
+| The `moved` rule is on `RevisionDiff`'s doc comment, the only `contract` change                                                                                       | `contract/src/plan.ts:550 "What counts as"` (verified — `git diff 95c6403 1a9ffff -- tools/planner/contract` is comment-only)                                                                                    |
+| Package index exports `replan`, `replanPool`, `applyEdit`, `editTransitions`, `restoreRevision`, `diffRevisions`, `revisionDiffs`; usage block shows the re-plan path | `itinerary/src/index.ts:59 "replan, replanPool, type ReplanInput"` (verified by reading, not test-asserted)                                                                                                      |
+| `purity.test.ts` passes unchanged; `npm run check` and `npm test -- --project planner` pass                                                                           | verified — `npm run check` exit 0; `npm test -- --project planner` 61 files / 1014 tests                                                                                                                         |
+
+- **low, repaired at `1a9ffff`** · `edit.ts`'s `applyOperation` threw `day-not-in-revision` when `operation.fromDayIndex` (the _source_ day) was not on the revision, with no test exercising that branch — every `fromDayIndex` in `edit.test.ts` at `2f101f3` was `0` or `1`, both valid. Reproduction (`2f101f3`): guard replaced with `if (false)`, `npx vitest run --project planner tools/planner/itinerary` — 229 of 229 still passed, file restored byte-identical. The builder's fix adds a case at `itinerary/test/edit.test.ts:258 "const noSource = refusal"` that edits from day 9 and asserts `details.precondition` is `day-not-in-revision` by name, not just the `AppError` code — needed because without the guard the same input throws a bare `TypeError` instead. I re-ran the same mutation against `1a9ffff`: 1 of 229 now fails, that new case; restored byte-identical afterwards. Repair confirmed.
+- **dropped** · none — the defect hunt (conditionals in `replan.ts`, `edit.ts`, `restore.ts`, `diff.ts`, `preconditions.ts`; the repo invariants list; the four NFRs) turned up nothing else worth carrying.
+- **findings** · 1 returned, 1 carried, 0 dropped.
+- **scope** · the conditional/`??` enumeration across `replan.ts`, `edit.ts`, `restore.ts`, `diff.ts` and `preconditions.ts` found about 55 sites (replan 8, edit 14, restore 0, diff 29, preconditions 4). Only 2 were flipped individually — `diff.ts:171 "child.parentRevisionId !== parent.id"` and `edit.ts:135 "source === undefined"` (the low finding above, now repaired) — the remaining roughly 53 were not mutated. A scope limit of this gate, disclosed rather than a defect found; it does not change the verdict.
+- NFR: security n/a (no credentials or URLs touched) - performance proven-in-place (`diff.ts`'s kept-set search is the documented O(n^2)-per-day dynamic programme, not the exponential subset enumeration the ticket warns against) - reliability see the `low` finding above - maintainability proven-in-place (the dense `diff.ts` tie-break logic is exercised by the twelve-row table plus three extra rule tests, and every new file still passes `purity.test.ts`).
+
 ## Log
 
 **2026-09-13 — filed**, in the pl-42 grooming batch, beside pl-44 and pl-45.
@@ -622,3 +661,193 @@ The options as they were posed are kept below:
    - _(b)_ Refused with `PLAN_INFEASIBLE`.
    - _(c)_ Allowed and named, which needs a new `UncheckedConstraintKind` in the
      contract and a ticket of its own.
+
+**2026-09-14 — built; `ready` until the gate runs.** Branched from `origin/main` at
+`95c6403` (on the remote), dispatched as Opus. Built against pl-42 as merged.
+
+**Two commits, in the order step 0 requires.** `94e881b` holds the baseline
+alone: `test/fixtures/first-draft-baseline.json`, the case builder
+`test/first-draft-cases.ts` and the comparison `test/first-draft-baseline.test.ts`,
+with no `src` change. The refactor is its direct child on this branch. Both
+shas stop being reachable once the branch is squash-merged and deleted.
+
+- The JSON was written by a scratch script (not checked in) importing the case
+  builder, run with `node --import tsx` on the unmodified tree. Before running
+  it, `git diff --stat HEAD -- tools/planner/itinerary/src tools/planner/contract/src`
+  was empty. `npx vitest run tools/planner/itinerary/test/first-draft-baseline.test.ts`
+  then passed at 14 of 14: 13 cases plus a check that the case names match.
+- **The first mutation I chose did not go red, and that is recorded rather than
+  skipped.** `ACTIVITY_MINUTES_PER_DAY.moderate` 300 → 301 stayed at 14 of 14.
+  The transition case needs 360 minutes for its third activity, and no fixture
+  comes near the limit. At 360 the same command failed 3 of 14 (both
+  `multi-city` cases and the transition case). `limits.ts` was `cmp`-identical
+  to its backup afterwards, and the suite was 14 of 14 again.
+- After the refactor, the same command passes at 14 of 14. So `compose`, now
+  running through `packWithCritic`, `rekeyDays`, the critic's transition charge
+  and `fixed`, and `pack`'s `frozen`, still produces the first drafts the
+  unmodified package did.
+
+**What landed.**
+
+- `ids.ts`: `rekeyDays`, the one id scheme. It deep-copies each
+  `travelFromPrevious`.
+- `critic.ts`: `CritiqueInput.fixed`; transitions charged through
+  `transitionMinutes` exactly as `charge` does; `packed` narrowed to
+  `Pick<PackResult, "days">`.
+- `pack.ts`: `PackInput.frozen`.
+- `compose.ts`: `ComposeInput.previous` is gone, and the shared internals are
+  exported to the package but not from its index.
+- `replan.ts` (`replan`, `replanPool`), `edit.ts` (`applyEdit`,
+  `editTransitions`), `restore.ts` (`restoreRevision`) and `diff.ts`
+  (`diffRevisions`, `revisionDiffs`).
+- `preconditions.ts`: the `INTERNAL` checks, each naming itself in
+  `details.precondition`.
+- The `moved` rule on `RevisionDiff`'s doc comment, which is the only `contract`
+  change.
+- Tests: `replan`, `edit`, `restore`, `diff` and `critic` suites, a frozen-days
+  case in `pack.test.ts`, and the three `compose.test.ts` re-planning tests
+  (including pl-23's) moved to `replan` with every day named. Their assertions
+  are unchanged.
+
+**What the brief had wrong, or did not say.**
+
+- **Without `fixed`, the frozen hotel is not deleted — the re-plan is refused.**
+  Frozen days are emitted from `previous`, never from the pack, so no pack can
+  remove anything from them. The critic keeps naming an id the packer has no
+  way to exclude, the rounds stall, and `over-budget` survives as
+  `PLAN_INFEASIBLE`. That is still a broken promise, and the test still catches
+  it (mutation M7 below). It is just not the failure _Traps_ describes.
+- **`fixed` on a per-day drop candidate cannot be observed through `replan` or
+  `applyEdit`.** A re-plan discards per-day findings on frozen days, and an edit
+  refuses rather than dropping. So the brief's `replan` tests cannot prove
+  "the critic never names a frozen item". `critic.test.ts` asserts it on
+  `critique` directly, together with the transition charge.
+- **An edit has no `PackResult`**, which is why `CritiqueInput.packed` is
+  narrowed. The change is additive: every existing caller passes a
+  `PackResult`.
+- **`EditResult.unchecked` appends `previous.coverage`**, and `applyEdit` throws
+  `BRIEF_INCOMPLETE` for a brief with no dates. Both mirror
+  `uncheckedForRevision`; the brief specified neither.
+- **Which day counts as "in season" for an exclusion reason on a re-plan.** A
+  pool candidate is now `no-day-in-season` when no _named_ day is in season for
+  it, even if a frozen day is. That also chooses `gapsFor`'s wording. It is
+  reported to the orchestrator as a question, not settled here.
+- **pl-23's test composes a four-day brief over a one-day `previous`.** Through
+  `replan` the span is `previous`'s, so the test now packs one day where
+  `compose` packed four. Its assertions do not depend on the span, and they
+  pass unchanged.
+- **Row 9's entries are listed unordered in the table.** The test asserts them
+  in the sorted order the brief defines: `moved` C at (0,0), then `removed` B
+  at (0,1).
+- **One more precondition than the brief listed**: `applyEdit` and
+  `editTransitions` also refuse a `previous` that places one candidate twice,
+  because an operation that names a candidate means nothing if the name
+  matches two items.
+
+**Recorded as the brief asks.** A move onto a day outside the item's season
+window ships silently, as a pinned out-of-season item already does. An edit
+whose touched day already violates a limit edited since is refused, even
+though the edit did not cause it. That is rare and honest, and it is not
+special-cased.
+
+**Fold-in: nothing.** `readPlanView`'s `diffs: []` becoming `revisionDiffs`
+is pl-44's, and `api/src/runs/orchestrator.ts` is pl-49's this batch.
+
+**Environment, not repo:** this worktree had no `@anthropic-ai/sdk`, although
+the lock declares it (since pl-39). `npm run typecheck` failed with 8 errors,
+all in `agent/src/providers/anthropic.ts` and its test. The six packages it
+needs were extracted from the npm cache into this worktree's `node_modules`
+only, at the lock's versions. `npm run build` and `npm run check` then exited 0.
+
+### Verification
+
+**Unmutated.** `npx vitest run tools/planner/itinerary` passed at 13 files and
+229 tests.
+
+**Nineteen mutations**, each applied alone to `src` by a scratch script that
+runs that same command, restores the file and compares it byte for byte. All 19
+restores were identical. Each mutation failed the tests written for it:
+
+| Mutation                                                       | Failed   |
+| -------------------------------------------------------------- | -------- |
+| M1 critic sums durations without transitions                   | 4 of 229 |
+| M2 `over-budget` drop ignores `fixed`                          | 2        |
+| M3 `heaviestOn` ignores `fixed`                                | 1        |
+| M4 `replanPool` keeps frozen candidates                        | 7        |
+| M5 `pack` offers frozen days                                   | 5        |
+| M6 per-day findings on frozen days kept                        | 2        |
+| M7 `packWithCritic` passes no `fixed`                          | 1        |
+| M8, M9, M10 tie-breaks 3.1, 3.2, 3.3                           | 1, 1, 3  |
+| M11 diff accepts a non-child                                   | 1        |
+| M12 `revisionDiffs` keeps input order                          | 1        |
+| M13 `rekeyDays` shares stored travel                           | 1        |
+| M14 restore keeps the target's ids                             | 1        |
+| M15 edit refuses on the destination only                       | 3        |
+| M16 edit re-derives every transition on a touched day          | 3        |
+| M17, M18 gap rules (contradicted kept; not one per specialist) | 1, 1     |
+| M19 pins honoured on frozen days                               | 1        |
+
+- **M1 is step 2's proof.** Under a critic that does not count transitions, the
+  adjacent-pins re-plan ships instead of being refused. That is the brief's 360
+  of 300.
+- **M19 stayed green on its first run**, at 229 of 229. A pin on a frozen day
+  leaves no trace in days or exclusions, so the only thing that can show it is
+  `durationUnknown`, and the test's pin had a stated duration. The test now uses
+  a pin with no stated duration and asserts `durationUnknown` stays empty. Re-run,
+  M19 failed 1 of 229 and the unmutated run was 229 of 229.
+
+`npm run build` exited 0, and `npm run check` exited 0 with no `error TS`.
+`npm test -- --project planner` passed at 61 files and 1,014 tests, run once
+at the end.
+
+**2026-09-14 — the gate's one finding, reproduced and repaired.** The gate
+(dispatched as Sonnet) passed at `2f101f3` and found one low gap:
+`applyOperation`'s guard for a `fromDayIndex` the revision does not have had no
+test. Every `fromDayIndex` in `edit.test.ts` was valid.
+
+- **Reproduced first.** I replaced the guard with `if (false)` and ran
+  `npx vitest run tools/planner/itinerary`: 229 of 229 still passed, and the
+  file was byte-identical after its restore.
+- **Repaired.** The precondition test in `edit.test.ts` now removes from day 9
+  and asserts `details.precondition` is `day-not-in-revision`. It checks the
+  name and not only the code, because without the guard the same input fails as
+  a `TypeError`.
+- **The same command on the repaired tree** passed at 13 files and 229 tests.
+  With the guard disabled again it failed 1 of 229, the precondition test, and
+  the file was byte-identical after its restore.
+
+**Status stays `ready` until the gate record lands, settled by the
+orchestrator, not the owner.** It is a convention question, not a product one.
+`done` goes into the same commit as `## Review`, never one without the other,
+because `scripts/status.mjs`'s `reviewedButReady` fails CI on a ticket that is
+`ready` and carries a review.
+
+**The out-of-season scope, decided by the owner on 2026-09-14.** The question:
+when a re-plan cannot place a pool candidate, does "in season" read the named
+days only, or every day of the plan? The gate measured both on a fixture where
+the candidate is in season only on a frozen day. Placement is identical under
+both; only the reason and the gap text differ.
+
+- **Named days only** (as built; recommended): `no-day-in-season`, and the gap
+  reads "…everything it found is out of season for these dates."
+- **Every day of the plan:** `no-day-had-room`, and the gap reads "…nothing it
+  found fitted the days this trip has."
+
+The orchestrator put both options to the owner, who chose **named days only**,
+matching the recommendation. `pack.ts` is unchanged. The Build's "When nothing
+fits" paragraph does not decide this, so the question was a real one.
+
+**2026-09-14 — gated, and done.** The gate (dispatched as Sonnet) passed at
+`1a9ffff`. Its record is `## Review` above, transcribed from its message with
+nothing altered by me; `npm run format` then padded its table and rewrote its one `*source*` emphasis as `_source_`, and changed nothing else (compared with whitespace ignored).
+`status: done` lands in the same commit, as the orchestrator settled. The same
+commit pins pl-42 record line 370 to `contract/src/plan.ts@95c6403:555`, because
+this branch's doc comment moved `export interface RevisionDiff {` from line 555
+to 571.
+
+**2026-09-15 — rebased onto `8894b75`** after #242 (pl-49) merged. The one
+conflict was pl-42's record: resolved by taking `origin/main`'s version and
+re-applying this branch's pin (`contract/src/plan.ts@95c6403:555`) on top of
+#242's three pins, then `npm run format`. No other file conflicted. The shas
+named above are the pre-rebase ones: `94e881b`, `2f101f3` and `1a9ffff` are now
+`b3c2b87`, `c45af0a` and `d4ad64e`, and the gate record's commit is `a575878`.

@@ -221,6 +221,7 @@ which nothing loads.
 | `MODEL_EFFORT`               | `low`           | `low` to `max`. Thinking stays adaptive; effort is the lever                           |
 | `MODEL_TIMEOUT_MS`           | `120000`        | Per attempt. The SDK retries, so a call can hold a slot 3× this                        |
 | `MAX_OUTPUT_TOKENS`          | `8000`          | Thinking counts against it, and it divides `RUN_TOKEN_BUDGET`                          |
+| `MODEL_PRICE_*_PER_MTOK`     | —               | Input, output, cache read, cache write. The cost report never guesses one (pl-49)      |
 | `GROUNDING_PROVIDER`         | `fixtures`      | Same seam, same default: a fresh clone plans with no key. Unknown names refuse to boot |
 | `VALHALLA_URL`               | —               | Routing endpoint. No default: an endpoint is a deployment fact                         |
 | `GEOCODER_URL`               | —               | A router does not geocode. Both required, or the boot refuses                          |
