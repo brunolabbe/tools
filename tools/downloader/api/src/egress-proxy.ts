@@ -82,7 +82,7 @@ import type { AddressInfo } from "node:net";
 import tls from "node:tls";
 import { AppError } from "@downloader/contract";
 import type { ProbeResult } from "@downloader/contract";
-import { createPinningLookup, systemResolve } from "./dispatcher.ts";
+import { blockedLiteral, createPinningLookup, systemResolve } from "./dispatcher.ts";
 import type { AddressResolver } from "./dispatcher.ts";
 import type { AppLogger } from "./logger.ts";
 import type { SsrfGuard } from "./ssrf.ts";
@@ -476,6 +476,23 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
         return;
       }
 
+      // dl-60, the plain-HTTP twin of the CONNECT path's literal check:
+      // `http.request` reaches `net.connect`, which skips `lookup` for a literal.
+      if (upstream === null) {
+        let literalRefusal: AppError | null;
+        try {
+          literalRefusal = blockedLiteral(guard, new URL(target).hostname);
+        } catch {
+          response.writeHead(400).end();
+          return;
+        }
+        if (literalRefusal !== null) {
+          refused(target, literalRefusal);
+          response.writeHead(403).end();
+          return;
+        }
+      }
+
       const forward =
         upstream === null
           ? { url: target, options: { ...connectOptions } }
@@ -537,6 +554,17 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
         await guard.assertAllowed(`https://${target}`);
       } catch (error) {
         refused(target, error);
+        options.onOtherConnectFailure?.(host, port);
+        refuse(clientSocket, 403, "Blocked by egress policy");
+        return;
+      }
+
+      // dl-60. `net.connect` skips `lookup` for an IP literal, so the pinning
+      // lookup in `connectOptions` never sees one. This is its literal half,
+      // and it holds even when the check above has been fooled.
+      const literalRefusal = upstream === null ? blockedLiteral(guard, host) : null;
+      if (literalRefusal !== null) {
+        refused(target, literalRefusal);
         options.onOtherConnectFailure?.(host, port);
         refuse(clientSocket, 403, "Blocked by egress policy");
         return;

@@ -101,63 +101,117 @@ function v4ToInt(address: string): number {
   );
 }
 
-function isBlockedV4(address: string): boolean {
-  const value = v4ToInt(address);
-  if (value < 0) return true;
+function isBlockedV4Value(value: number): boolean {
   return BLOCKED_V4.some(([network, bits]) => {
     const mask = bits === 0 ? 0 : (0xffff_ffff << (32 - bits)) >>> 0;
     return (value & mask) === (v4ToInt(network) & mask);
   });
 }
 
-/** Expands `::` and returns the eight 16-bit groups, or null if unparsable. */
+function isBlockedV4(address: string): boolean {
+  const value = v4ToInt(address);
+  return value < 0 || isBlockedV4Value(value);
+}
+
+const HEX_GROUP = /^[0-9a-f]{1,4}$/u;
+
+/**
+ * The eight 16-bit groups of an IPv6 address, or null if it does not parse.
+ *
+ * Every spelling of one address comes out as the same eight numbers — hex or
+ * dotted tail, compressed or expanded, any case, with or without a zone id —
+ * which is the point: dl-60 was a rule written against one spelling, while
+ * `URL` hands the guard another.
+ */
 function v6Groups(address: string): number[] | null {
   const zone = address.indexOf("%");
-  const bare = zone === -1 ? address : address.slice(0, zone);
-  const [head = "", tail] = bare.split("::");
+  let bare = (zone === -1 ? address : address.slice(0, zone)).toLowerCase();
+
+  // A dotted tail is the last 32 bits written as IPv4. Rewrite it as the two
+  // hex groups it stands for, so the rest of this parses one grammar.
+  const dotted = /(?:^|:)(\d{1,3}(?:\.\d{1,3}){3})$/u.exec(bare);
+  if (dotted?.[1] !== undefined) {
+    const value = v4ToInt(dotted[1]);
+    if (value < 0) return null;
+    const hex = `${(value >>> 16).toString(16)}:${(value & 0xffff).toString(16)}`;
+    bare = bare.slice(0, bare.length - dotted[1].length) + hex;
+  }
+
+  const halves = bare.split("::");
+  if (halves.length > 2) return null;
+  const [head = "", tail] = halves;
   const headParts = head === "" ? [] : head.split(":");
   const tailParts = tail === undefined || tail === "" ? [] : tail.split(":");
-  const parts =
-    tail === undefined
-      ? headParts
-      : [...headParts, ...Array(8 - headParts.length - tailParts.length).fill("0"), ...tailParts];
-  if (parts.length !== 8) return null;
-  const groups = parts.map((part) => Number.parseInt(part, 16));
-  return groups.some((group) => !Number.isInteger(group) || group < 0 || group > 0xffff)
-    ? null
-    : groups;
+  let parts: string[];
+  if (tail === undefined) {
+    parts = headParts;
+  } else {
+    const missing = 8 - headParts.length - tailParts.length;
+    if (missing < 1) return null;
+    parts = [...headParts, ...Array<string>(missing).fill("0"), ...tailParts];
+  }
+  if (parts.length !== 8 || parts.some((part) => !HEX_GROUP.test(part))) return null;
+  return parts.map((part) => Number.parseInt(part, 16));
+}
+
+/**
+ * The IPv4 address an IPv6 address stands for, or null when it embeds none.
+ *
+ * Judged on the parsed value, never on a textual pattern. Each of these is IPv6
+ * on the wire to this process and IPv4 somewhere on the path — in the kernel
+ * itself for a mapped address on a dual-stack socket, which is the one measured
+ * reachable (dl-60), or in a NAT64 translator.
+ */
+function embeddedV4(groups: readonly number[]): number | null {
+  const g = (index: number): number => groups[index] ?? 0;
+  const low32 = ((g(6) << 16) | g(7)) >>> 0;
+  const zeroes = (from: number, to: number): boolean =>
+    groups.slice(from, to).every((group) => group === 0);
+
+  // ::ffff:0:0/96, IPv4-mapped.
+  if (zeroes(0, 5) && g(5) === 0xffff) return low32;
+  // ::ffff:0:0:0/96, SIIT IPv4-translated (RFC 2765).
+  if (zeroes(0, 4) && g(4) === 0xffff && g(5) === 0) return low32;
+  // ::/96, IPv4-compatible. Deprecated, and `::` and `::1` live here too; both
+  // come out as 0.0.0.x, inside the blocked 0.0.0.0/8, so they stay refused.
+  if (zeroes(0, 6)) return low32;
+  // 64:ff9b::/96, well-known NAT64. Read as /96 across the rest of
+  // 64:ff9b::/32 too, which is the rule this file applied before dl-60; the
+  // local-use /48 inside it is refused outright before this is reached.
+  if (g(0) === 0x0064 && g(1) === 0xff9b) return low32;
+  return null;
+}
+
+/**
+ * Transition ranges refused whatever they embed — the owner's decision on dl-60.
+ *
+ * Each can carry an IPv4 address, but where it lands depends on a relay or an
+ * operator's translator this process cannot see: Teredo stores its client
+ * bit-inverted beside a server, 6to4 goes through whichever relay answers, and
+ * local-use NAT64 may embed the address at any offset. The accepted cost is
+ * that a public site reachable only over Teredo or 6to4 is refused.
+ */
+function isRefusedTransitionRange(groups: readonly number[]): boolean {
+  const [first = 0, second = 0, third = 0] = groups;
+  if (first === 0x2001 && second === 0) return true; // 2001::/32 Teredo
+  if (first === 0x2002) return true; // 2002::/16 6to4
+  return first === 0x0064 && second === 0xff9b && third === 0x0001; // 64:ff9b:1::/48 local-use NAT64
 }
 
 function isBlockedV6(address: string): boolean {
-  const lower = address.toLowerCase();
-  const zoneless = lower.split("%")[0] ?? lower;
-
-  // IPv4-mapped (::ffff:127.0.0.1) and IPv4-compatible forms are the classic
-  // bypass: they are IPv6 syntactically and IPv4 in effect.
-  const mapped = /^::(?:ffff:(?:0:)?)?(\d+\.\d+\.\d+\.\d+)$/u.exec(zoneless);
-  if (mapped?.[1] !== undefined) return isBlockedV4(mapped[1]);
-
-  const groups = v6Groups(zoneless);
+  const groups = v6Groups(address);
   if (groups === null) return true;
-  const [first = 0, second = 0] = groups;
+  if (isRefusedTransitionRange(groups)) return true;
 
-  if (groups.every((group) => group === 0)) return true; // ::
-  if (groups.slice(0, 7).every((group) => group === 0) && groups[7] === 1) return true; // ::1
+  // Before the native rules, because these are not native addresses: an
+  // IPv4-mapped loopback is loopback, whatever its first group says.
+  const embedded = embeddedV4(groups);
+  if (embedded !== null) return isBlockedV4Value(embedded);
+
+  const [first = 0] = groups;
   if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
   if ((first & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
   if ((first & 0xff00) === 0xff00) return true; // ff00::/8 multicast
-  // 64:ff9b::/96 NAT64 and 2002::/16 6to4 embed an IPv4 address; check it.
-  if (first === 0x0064 && second === 0xff9b) {
-    const embedded = [groups[6] ?? 0, groups[7] ?? 0];
-    return isBlockedV4(
-      [
-        ((embedded[0] ?? 0) >> 8) & 0xff,
-        (embedded[0] ?? 0) & 0xff,
-        ((embedded[1] ?? 0) >> 8) & 0xff,
-        (embedded[1] ?? 0) & 0xff,
-      ].join("."),
-    );
-  }
   return false;
 }
 
