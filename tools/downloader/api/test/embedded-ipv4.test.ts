@@ -162,6 +162,7 @@ describe("isBlockedAddress judges the embedded IPv4 address, in every spelling",
       "::ffff:8.8.8.8",
       "::FFFF:808:808",
       "0:0:0:0:0:ffff:808:808",
+      "::ffff:808:808%eth0",
       "::ffff:5db8:d822", // 93.184.216.34
       "::808:808",
       "::ffff:0:808:808",
