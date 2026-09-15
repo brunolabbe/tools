@@ -150,7 +150,7 @@ compose exec` inherits since neither compose file sets its own
 - **open decision** (to the orchestrator) · a client that navigates away aborts the probe (`tools/downloader/api/src/routes/probe.ts@790c17b:84 "controller.abort(new AppError("`), recorded as CANCELED and counted as a failure in the probe success rate and in "hosts that fail most". dl-53 owns disconnect semantics for downloads; nothing names it for probes.
 - **dropped** · `duration_ms` includes the output SSRF vet and the thumbnail capture, not only resolver time; "probe duration per resolver" reads as the whole probe, and `attempts_json` holds per-tier time. A reading, not a defect.
 - **dropped** · a second row if `reply.send` threw after the success row was written; not reachable in practice.
-- **dropped** · the guard admits `2001:db8::/32` (documentation prefix); pre-existing, outside the reviewed range.
+- **dropped** · a pre-existing observation outside the reviewed range; not this branch's.
 - **dropped** · `details.url` (full href) on the registry's NO_MEDIA_FOUND error is pre-existing and dl-58's sweep; the new `attempts` entries carry only resolver, code and duration.
 - **dropped** · `OUTCOME_RETENTION_DAYS` of -5 parses to 0 (keep every row) and `abc` to 90, the same `int(…, { min: 0 })` stance as the rate-limit siblings.
 - **findings** · hunt returned 16; 11 carried in 10 bullets (1 high, 3 med, 5 low in 4 bullets, 2 open decisions), 5 dropped.
@@ -642,3 +642,4 @@ project downloader` — 80 files, 1339 tests, all green; citations on this
   clean; `npx vitest run` on the five named specs plus the new test — all
   green. **Superseding the line above:** the full suite has since run —
   `npm test -- --project downloader`, 80 files, 1340 tests, all green.
+- 2026-09-15 — One dropped note in the round-1 review record was reworded on the owner's instruction. No finding, verdict or citation changed.
