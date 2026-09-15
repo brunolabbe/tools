@@ -258,3 +258,16 @@ tools/planner/agent/test/fan-out-usage.test.ts`, exit 1, 5 failed of 5): a
   - **pl-47:** step 1's parenthetical only. Its dated filing Log, which
     recorded 9 as free on 2026-09-13, is left as it was, because it was true
     then.
+- 2026-09-15 — **The `## Review` section above was transcribed by the builder,
+  verbatim, from the gate's own text.** The gate (`ticket-reviewer`, dispatched
+  as `sonnet`) sent it as a message and did not write it into this file. Three
+  things differ from the text the gate sent:
+  - **One header sentence.** The orchestrator directed it: `a4bd8a6` is a
+    pre-squash branch sha, kept because it is the tree the citations were
+    reviewed against.
+  - **An anchor on `run-usage.test.ts:206`** in the reliability line. The
+    orchestrator directed it as a mechanical repair, using the anchor the
+    gate's own table row already carries.
+  - **oxfmt's table padding.**
+
+  No verdict, row, finding or severity changed.
