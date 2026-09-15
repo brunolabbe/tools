@@ -844,3 +844,10 @@ nothing altered by me; `npm run format` then padded its table and rewrote its on
 commit pins pl-42 record line 370 to `contract/src/plan.ts@95c6403:555`, because
 this branch's doc comment moved `export interface RevisionDiff {` from line 555
 to 571.
+
+**2026-09-15 — rebased onto `8894b75`** after #242 (pl-49) merged. The one
+conflict was pl-42's record: resolved by taking `origin/main`'s version and
+re-applying this branch's pin (`contract/src/plan.ts@95c6403:555`) on top of
+#242's three pins, then `npm run format`. No other file conflicted. The shas
+named above are the pre-rebase ones: `94e881b`, `2f101f3` and `1a9ffff` are now
+`b3c2b87`, `c45af0a` and `d4ad64e`, and the gate record's commit is `a575878`.
