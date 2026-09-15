@@ -225,7 +225,7 @@ All line numbers below are against this tree.
 - `discoveryBlock` in `agent/src/prompt.ts:229-243 "function discoveryBlock"` renders name, kind, coordinates
   and tags, never a URL — confirms the premise behind leaving discovery-derived
   provenance `model-asserted`.
-- The corridor-endpoint `locate` at `api/src/runs/discovery.ts:520-530 "coordinates: outcome.value.coordinates"` does still
+- The corridor-endpoint `locate` at `api/src/runs/discovery.ts@95c6403:520-530 "coordinates: outcome.value.coordinates"` does still
   discard `outcome.value.source` — the disclosed deferral is accurately described.
 - The PR title passes `node scripts/commit-message.mjs --text`.
 
