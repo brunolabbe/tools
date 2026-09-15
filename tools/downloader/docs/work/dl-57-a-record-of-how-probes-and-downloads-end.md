@@ -260,12 +260,16 @@ New sha and the P3 finding reported to the reviewer directly.
 - **findings** · phase 2 returned 6; 2 carried, 3 dropped, 1 escalated as a pre-existing defect outside the range.
 - NFR: security ✓ (no IP literal, path, query or client address reaches a row by any spelling tried) · performance ✓ · reliability ✓ (slot released on every path, write failure included) · maintainability — the med above.
 
-**Disclosure note (builder, 2026-09-15, after phase 2):** committed with one
-class of edit beyond the reviewer's own text — on the orchestrator's
+**Disclosure note (builder, 2026-09-15, after phase 2):** committed with two
+classes of edit beyond the reviewer's own text. First, on the orchestrator's
 instruction, relayed by the reviewer, every reference to the pre-existing
 issue escalated below was reduced to the single acknowledgement line the
 block now carries; this note does not describe that issue either, by the
-same instruction. Reproduced the med finding first: mutated the `host` field
+same instruction. Second, unrelated to that instruction: the reviewer's
+`config.ts` citation named no path, only a pinned line number, which is
+ambiguous against the other tracked files of that same bare name — qualified
+to the full path it now reads at, immediately below. Reproduced the med
+finding first: mutated the `host` field
 the med bullet above cites to `new URL(input.sourceUrl).hostname`, ran the
 five specs named
 (`probe-outcomes.test.ts`, `report.test.ts`, `host.test.ts`,
@@ -276,6 +280,22 @@ URL's host, dl-57 decision C" — reproduced the same mutation against it
 before restoring: 1 red. Took the low's recommendation (b): the UNREACHABLE
 spec keeps its live DNS query rather than widening `CreateAppOptions` with a
 lookup seam only one spec would use.
+
+### Phase 2, round 2 — `2c26f18`
+
+**Gate: PASS** — 2026-09-15 · `c64defb...2c26f18` · defect hunt run by the gate itself (ticket-reviewer, Opus) at medium · scoped to the phase-2 med and to the record edits made since `c64defb`
+
+| Phase-2 check                                                                              | Proof                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision C: `jobs.host` stores the marker for an IP-literal source URL                     | `tools/downloader/api/test/job-store.test.ts:435 "masks an IP-literal source URL"` ✓. Replacing the masked host with `new URL(input.sourceUrl).hostname` turns it red (1 of 86); unmutated, 86/86 green |
+| `npm run check` and `npm test -- --project downloader`                                     | **verified** — `npm run check` exit 0; suite exit 0, 80 files / 1340 tests (+1 over `c64defb`, this test)                                                                                               |
+| Citations                                                                                  | `citations.mjs` on this record, anchors required and distinct: 62/62, exit 0; `citations-gate.mjs --against origin/main` exit 0, 75 enforced, 0 failing — **verified**                                  |
+| Every phase-1 and phase-2 Done-when line proven or verified, apart from the container line | as recorded in the rounds above; the report command inside the built image stays **unproven (gate)** until the container build runs, and on its own does not withhold PASS                              |
+
+- **resolved from phase 2** · the med: `jobs.host` masking is now tested. The low on the live DNS query in the UNREACHABLE spec is kept by the builder's choice, as recommended, and noted in the Log.
+- **low** · the builder's phase-2 disclosure note named one class of edit but not its qualifying of a bare `config.ts` citation, and its round-3 Log entry reported the full suite as pending; both are corrected in the commit that carries this subsection.
+- **findings** · this round returned 2; 2 carried in 1 bullet, 0 dropped.
+- NFR: security ✓ · performance ✓ · reliability ✓ · maintainability ✓.
 
 ## Decisions — answered 2026-09-15, not open
 
@@ -620,5 +640,5 @@ project downloader` — 80 files, 1339 tests, all green; citations on this
   built here; on the orchestrator's instruction, relayed by the reviewer,
   it is not described further in this ticket. Verified: `npm run check`
   clean; `npx vitest run` on the five named specs plus the new test — all
-  green; full `npm test -- --project downloader` still pending this round's
-  push.
+  green. **Superseding the line above:** the full suite has since run —
+  `npm test -- --project downloader`, 80 files, 1340 tests, all green.
