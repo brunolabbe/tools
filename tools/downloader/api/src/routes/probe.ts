@@ -21,6 +21,7 @@ import { clientKey } from "@webtools/core/rate-limit";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.ts";
 import { withoutEgressProxy } from "../egress-proxy.ts";
+import { hostnameOrNull, normalizeHost } from "../host.ts";
 import { probeForClient } from "../probe-out.ts";
 import { recordProbeOutcome } from "../probe-outcomes.ts";
 import { createRateLimitHook } from "../rate-limit.ts";
@@ -48,12 +49,41 @@ export function registerProbeRoute(app: FastifyInstance, context: AppContext): v
 
     // Before the cache, so a blocked address is rejected even if a previous
     // request cached an answer for it under a different policy.
-    const url = await context.guard.assertAllowed(rawUrl);
+    let url: URL;
+    try {
+      url = await context.guard.assertAllowed(rawUrl);
+    } catch (error: unknown) {
+      // dl-57 owner decision A: UNREACHABLE and BLOCKED_TARGET get a row —
+      // the guard got far enough to have a hostname, even though it then
+      // refused the address that hostname resolved to. An unparseable
+      // INVALID_URL gets none: there is no hostname to attach one to. The
+      // guard's own `new URL(rawUrl)` succeeded for both UNREACHABLE and
+      // BLOCKED_TARGET (they are thrown after it), so re-parsing here is
+      // never the `null` branch in practice — kept defensive rather than
+      // assumed.
+      const appError = AppError.from(error);
+      if (appError.code === "UNREACHABLE" || appError.code === "BLOCKED_TARGET") {
+        const guardHost = hostnameOrNull(rawUrl);
+        if (guardHost !== null) {
+          recordProbeOutcome(context, {
+            host: guardHost,
+            outcome: appError.code,
+            resolver: null,
+            attempts: [],
+            durationMs: 0,
+            cached: false,
+            variants: null,
+            drm: false,
+          });
+        }
+      }
+      throw error;
+    }
     const cacheKey = url.href;
-    // Hostname only, from here to every outcome row this handler writes — never
-    // the path or query string a signed URL carries its credential in. See
-    // dl-57.
-    const host = url.hostname;
+    // Hostname only, from here to every outcome row this handler writes —
+    // never the path or query string a signed URL carries its credential in,
+    // and never a bare IP literal (dl-57, decision C).
+    const host = normalizeHost(url.hostname);
 
     if (refresh !== true) {
       const cached = context.probeCache.get(cacheKey);

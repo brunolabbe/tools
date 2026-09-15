@@ -187,20 +187,20 @@ exchange in front of them.
 
 **Gate: CONCERNS** — 2026-09-14 · `95c6403...7b0cdcb` (fixes in `790c17b..7b0cdcb`) · defect hunt run by the gate itself (ticket-reviewer, Opus) at medium · still phase 1; the rebase onto dl-51 is gated separately
 
-| Done when                                                                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Migration test takes a fresh database and one at migration 4 to migration 5; both have the table and `jobs.host`                                                | `tools/downloader/api/test/schema.test.ts:27 "gets probe_outcomes and jobs.host from one migrate() pass"` ✓ · `tools/downloader/api/test/schema.test.ts:50 "gets the same table and column from the remaining migrate() pass"` ✓ — unchanged since round 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| One `probe_outcomes` row each for success, failure (each attempt's resolver, code, duration), cache hit, gate refusal; none for a per-client rate-limit refusal | success `tools/downloader/api/test/probe-outcomes.test.ts:39-49 "toBeGreaterThanOrEqual(0)"` ✓ · failure `tools/downloader/api/test/probe-outcomes.test.ts:85 "expect(rows[0]?.attempts).toEqual(["` ✓ · cache `tools/downloader/api/test/probe-outcomes.test.ts:111 "cached: true, durationMs: 0"` ✓ · gate `tools/downloader/api/test/probe-outcomes.test.ts:156 "const refusal = rows.find((row) =>"` ✓ · none per-client `tools/downloader/api/test/probe-outcomes.test.ts:178 "expect(refused.statusCode).toBe(429)"` ✓. A tier cut off by the deadline or a cancel is now named: `tools/downloader/resolvers/test/registry.test.ts:259 "the tier the deadline cuts off is still named"` ✓ · `tools/downloader/resolvers/test/registry.test.ts:281 "the tier a caller cancel cuts off is named with CANCELED"` ✓; removing the abort-branch push turns both red |
-| Path + `?sig=` never in `probe_outcomes` or `jobs.host`, nor the client address                                                                                 | `tools/downloader/api/test/probe-outcomes.test.ts:203 "const serialized = JSON.stringify(row);"` ✓ · client address now asserted: `tools/downloader/api/test/probe-outcomes.test.ts:207 "default remote address — `host` is computed from the"` ✓ and `tools/downloader/api/test/probe-outcomes.test.ts:262 "expect(host).not.toBe("` ✓. `host = request.ip` turns the signed-URL spec red                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| A failing outcome write leaves the probe's response unchanged                                                                                                   | `tools/downloader/api/test/probe-outcomes.test.ts:232 "expect((response.json() as { cached: boolean }).cached).toBe(false)"` ✓ — unchanged since round 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Retention test with a controlled clock prunes rows older than `OUTCOME_RETENTION_DAYS` and keeps newer ones                                                     | `tools/downloader/api/test/probe-outcomes.test.ts:270 "a controlled clock prunes rows older than OUTCOME_RETENTION_DAYS"` ✓ · `tools/downloader/api/test/probe-outcomes.test.ts:291 "0 disables pruning entirely"` ✓. Days→hours, never-prune and the inverted zero guard each turn a spec red (1, 1, 2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Report test against a seeded database prints the expected rates and percentiles                                                                                 | `tools/downloader/api/test/report.test.ts@7b0cdcb:203 "expect(report.probes.total).toBe(9)"` ✓ · `tools/downloader/api/test/report.test.ts@7b0cdcb:229 "cache hits excluded, nearest-rank"` ✓ · `tools/downloader/api/test/report.test.ts@7b0cdcb:252 "expect(report.downloads.p50DurationMs).toBe(60_000)"` ✓ · probe window `tools/downloader/api/test/report.test.ts@7b0cdcb:258 "expect(withoutFilter?.successes).toBe(5)"` ✓ · text `tools/downloader/api/test/report.test.ts@7b0cdcb:269 "success rate: 75.0% (6/8 attempted"` ✓. Eight report mutations red (window with its parameter kept, percentile rank, gate string, cache exclusion, gate-in-failing-hosts, rate precision); the job-side window is not pinned — low below                                                                                                                             |
-| `npm run check` and `npm test -- --project downloader` green                                                                                                    | **verified** — `npm run check` exit 0; `npm test -- --project downloader` exit 0, 78 files / 1297 tests; +13 over round 1 reconciles against report.test.ts 9 + retention 2 + registry 2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `docker compose exec downloader node tools/downloader/api/dist/report.js --days 1` runs inside the built image                                                  | **unproven (gate)** — command now matches the image layout (`docs/02-DEPLOYMENT.md:494 "docker compose exec downloader node tools/downloader/api/dist/report.js --days 7"`); its node half run from the repo root prints the report, exit 0. No Docker daemon here                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Done when                                                                                                                                                       | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Migration test takes a fresh database and one at migration 4 to migration 5; both have the table and `jobs.host`                                                | `tools/downloader/api/test/schema.test.ts:27 "gets probe_outcomes and jobs.host from one migrate() pass"` ✓ · `tools/downloader/api/test/schema.test.ts:50 "gets the same table and column from the remaining migrate() pass"` ✓ — unchanged since round 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| One `probe_outcomes` row each for success, failure (each attempt's resolver, code, duration), cache hit, gate refusal; none for a per-client rate-limit refusal | success `tools/downloader/api/test/probe-outcomes.test.ts@7b0cdcb:39-49 "toBeGreaterThanOrEqual(0)"` ✓ · failure `tools/downloader/api/test/probe-outcomes.test.ts@7b0cdcb:85 "expect(rows[0]?.attempts).toEqual(["` ✓ · cache `tools/downloader/api/test/probe-outcomes.test.ts@7b0cdcb:111 "cached: true, durationMs: 0"` ✓ · gate `tools/downloader/api/test/probe-outcomes.test.ts@7b0cdcb:156 "const refusal = rows.find((row) =>"` ✓ · none per-client `tools/downloader/api/test/probe-outcomes.test.ts@7b0cdcb:178 "expect(refused.statusCode).toBe(429)"` ✓. A tier cut off by the deadline or a cancel is now named: `tools/downloader/resolvers/test/registry.test.ts:259 "the tier the deadline cuts off is still named"` ✓ · `tools/downloader/resolvers/test/registry.test.ts:281 "the tier a caller cancel cuts off is named with CANCELED"` ✓; removing the abort-branch push turns both red |
+| Path + `?sig=` never in `probe_outcomes` or `jobs.host`, nor the client address                                                                                 | `tools/downloader/api/test/probe-outcomes.test.ts@7b0cdcb:203 "const serialized = JSON.stringify(row);"` ✓ · client address now asserted: `tools/downloader/api/test/probe-outcomes.test.ts@7b0cdcb:207 "default remote address — `host` is computed from the"` ✓ and `tools/downloader/api/test/probe-outcomes.test.ts@7b0cdcb:262 "expect(host).not.toBe("` ✓. `host = request.ip` turns the signed-URL spec red                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| A failing outcome write leaves the probe's response unchanged                                                                                                   | `tools/downloader/api/test/probe-outcomes.test.ts@7b0cdcb:232 "expect((response.json() as { cached: boolean }).cached).toBe(false)"` ✓ — unchanged since round 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Retention test with a controlled clock prunes rows older than `OUTCOME_RETENTION_DAYS` and keeps newer ones                                                     | `tools/downloader/api/test/probe-outcomes.test.ts@7b0cdcb:270 "a controlled clock prunes rows older than OUTCOME_RETENTION_DAYS"` ✓ · `tools/downloader/api/test/probe-outcomes.test.ts@7b0cdcb:291 "0 disables pruning entirely"` ✓. Days→hours, never-prune and the inverted zero guard each turn a spec red (1, 1, 2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Report test against a seeded database prints the expected rates and percentiles                                                                                 | `tools/downloader/api/test/report.test.ts@7b0cdcb:203 "expect(report.probes.total).toBe(9)"` ✓ · `tools/downloader/api/test/report.test.ts@7b0cdcb:229 "cache hits excluded, nearest-rank"` ✓ · `tools/downloader/api/test/report.test.ts@7b0cdcb:252 "expect(report.downloads.p50DurationMs).toBe(60_000)"` ✓ · probe window `tools/downloader/api/test/report.test.ts@7b0cdcb:258 "expect(withoutFilter?.successes).toBe(5)"` ✓ · text `tools/downloader/api/test/report.test.ts@7b0cdcb:269 "success rate: 75.0% (6/8 attempted"` ✓. Eight report mutations red (window with its parameter kept, percentile rank, gate string, cache exclusion, gate-in-failing-hosts, rate precision); the job-side window is not pinned — low below                                                                                                                                                                     |
+| `npm run check` and `npm test -- --project downloader` green                                                                                                    | **verified** — `npm run check` exit 0; `npm test -- --project downloader` exit 0, 78 files / 1297 tests; +13 over round 1 reconciles against report.test.ts 9 + retention 2 + registry 2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `docker compose exec downloader node tools/downloader/api/dist/report.js --days 1` runs inside the built image                                                  | **unproven (gate)** — command now matches the image layout (`docs/02-DEPLOYMENT.md:494 "docker compose exec downloader node tools/downloader/api/dist/report.js --days 7"`); its node half run from the repo root prints the report, exit 0. No Docker daemon here                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
-- **resolved from round 1** · the high (report path), all three med (retention, report test, attempts on abort), and three low findings (percentile now nearest-rank at `tools/downloader/api/src/report.ts:141 "const rank = Math.max(1, Math.ceil(p * sorted.length));"`, direct-invocation check at `tools/downloader/api/src/report.ts:354 "function isMainModule(): boolean"` now prints through a symlink, the client-address clause now asserted). Each is re-run above, not taken from the builder's report.
+- **resolved from round 1** · the high (report path), all three med (retention, report test, attempts on abort), and three low findings (percentile now nearest-rank at `tools/downloader/api/src/report.ts@7b0cdcb:141 "const rank = Math.max(1, Math.ceil(p * sorted.length));"`, direct-invocation check at `tools/downloader/api/src/report.ts@7b0cdcb:354 "function isMainModule(): boolean"` now prints through a symlink, the client-address clause now asserted). Each is re-run above, not taken from the builder's report.
 - **held from round 1** · finding 7 (IP-literal page URL stores an address; `site.example.` groups apart) and both open decisions (guard-stage exits get no row; CANCELED probes counted as failures) — on the orchestrator's hold, pending the owner.
-- **low** · two findings, one mechanism: the report's job window at `tools/downloader/api/src/report.ts:222 "WHERE finished_at IS NOT NULL AND finished_at >= ?"` is unpinned. Ignoring the window with its parameter kept, or admitting unfinished jobs, leaves all 104 specs green, because every seeded job is finished and inside the window.
+- **low** · two findings, one mechanism: the report's job window at `tools/downloader/api/src/report.ts@7b0cdcb:222 "WHERE finished_at IS NOT NULL AND finished_at >= ?"` is unpinned. Ignoring the window with its parameter kept, or admitting unfinished jobs, leaves all 104 specs green, because every seeded job is finished and inside the window.
 - **low** · the builder's disclosure note calls the round-1 block "committed unedited", but every citation in it was re-pinned to `@790c17b`. The re-pin is right; the note has to name it.
 - **low** · the disclosure note ("all four med") and the Log's gate-round-1 entry ("1 high + 4 med") miscount round 1: the gate carried 1 high and 3 med. The note's own list names three.
 - **dropped** · `let clock` in both retention specs is never reassigned; style only, `npm run check` passes.
@@ -219,19 +219,140 @@ lows it offered:
   `finished_at` at all), plus a new test,
   `tools/downloader/api/test/report.test.ts:285 "a job outside the window, or still unfinished, is never counted"`.
   Reproduced the reviewer's P2 (window ignored, bound parameter kept) against
-  this new seed: 3 red. **P3 (dropping `finished_at IS NOT NULL`) reproduces
-  as a no-op, not a fix** — SQLite's `NULL >= <anything>` is `NULL`, never
-  true, so a `finished_at IS NULL` row already fails the plain `finished_at
-  > = ?` comparison with no explicit null check at all. No seed and no
-  > assertion can turn that mutation red; the clause is worth keeping for what
-  > it tells a reader, not for behaviour a test can pin. Flagging this back to
-  > the reviewer rather than claiming a fix that does not exist.
+  this new seed: 3 red. **P3 (dropping `finished_at IS NOT NULL`) is verified
+  unobservable, not fixed** — SQLite treats a NULL compared with the
+  greater-or-equal operator as NULL, never true, so a `finished_at IS NULL`
+  row already fails the plain comparison with no explicit null check at all.
+  No seed and no assertion can turn that mutation red; the clause is worth
+  keeping for what it tells a reader, not for behaviour a test can pin. The
+  reviewer confirmed this reading independently on the round-2 gate; recorded
+  here as "verified unobservable" rather than claimed fixed.
 - **Wording, both corrected in place** (not as new prose here, since the
   wrong words were already committed): the round-1 disclosure note above now
   says "Altered" and names the re-pin explicitly, and both the note and the
   Log's gate-round-1 entry now say "1 high + 3 med".
 
 New sha and the P3 finding reported to the reviewer directly.
+
+## Decisions — answered 2026-09-15, not open
+
+Three questions the phase-1 gate raised as open decisions, put to the owner by
+the orchestrator quoting this ticket (Build step 4 at line 74, the Why at line
+28, Build step 2 at line 67). All three are answered and built on this branch;
+the reasoning below is what the next agent should read instead of re-opening
+any of them.
+
+### A — do guard-stage exits (before a resolver ever runs) get a row?
+
+**The question:** `INVALID_URL`, `UNREACHABLE` and `BLOCKED_TARGET` can all be
+thrown by `context.guard.assertAllowed(rawUrl)`, before `routes/probe.ts` had
+declared `host` at all — so none of them got a `probe_outcomes` row as
+originally built, even though Build step 4 says "every way out" and the Why
+asks "which sites fail".
+
+**Options the gate put forward:** (1) record `UNREACHABLE` and
+`BLOCKED_TARGET` with the guard's parsed hostname, and leave an unparseable
+`INVALID_URL` with none — the gate's recommendation; (2) keep the built
+behaviour, no row for any of the three; (3) record all three, with an empty
+host on the unparseable case.
+
+**The owner took (1).** `UNREACHABLE` and `BLOCKED_TARGET` are thrown only
+after the guard's own `new URL(rawUrl)` succeeded, so a hostname genuinely
+exists to attach a row to; `INVALID_URL` from a schema-rejected body has none.
+**Accepted cost:** a `BLOCKED_TARGET` row can hold an internal hostname a page
+pointed at (`internal.corp`, say) — decision C is the part of the answer that
+keeps a literal address out of it, not this one.
+
+**Built:** `routes/probe.ts` wraps `context.guard.assertAllowed(rawUrl)` in a
+`try`/`catch` that records a row for exactly those two codes, using
+`hostnameOrNull(rawUrl)` (`host.ts`) to re-derive the hostname the guard must
+already have parsed. In practice `INVALID_URL` never reaches this route at
+all — `probeRequestSchema`'s `sourceUrlSchema` already runs `new URL()` and
+checks the scheme before the handler is entered, so the guard's own
+`INVALID_URL` branches are unreachable from here and exist for its other
+callers (the orchestrator's re-probe, resolver-output vetting). Tests:
+`tools/downloader/api/test/probe-outcomes.test.ts`'s "guard-stage exits"
+block — one spec each for `BLOCKED_TARGET` (a literal blocked IP, no DNS
+needed), `UNREACHABLE` (a real lookup against a `.invalid` hostname, which
+RFC 2606 guarantees never resolves), and the unparseable case (asserts zero
+rows, proving the schema catches it first).
+
+### B — do CANCELED probes count as a failure?
+
+**The question:** a client navigating away aborts the probe
+(`routes/probe.ts`'s `close` listener), which the registry records as
+`CANCELED`. Built, this was an ordinary row: counted in `attempted`, and
+counted against a host in "hosts that fail most" if it had run past resolving.
+
+**Options:** (1) keep the row, but exclude `CANCELED` from the probe
+success-rate denominator and from "hosts that fail most" — the same treatment
+`RATE_LIMITED` gate refusals already get, and the gate's recommendation; (2)
+count it as a failure, and leave the distinction to dl-53 (which owns
+disconnect semantics for downloads, not probes).
+
+**The owner took (1).** A visitor's own choice to leave is not evidence the
+tool failed, and dl-53 does not cover probes at all — nothing else was going
+to draw this line for the probe case.
+
+**Built:** `report.ts`'s `Report.probes` gained a `canceled` count alongside
+`gateRefusals`; `attempted = total - gateRefusals - canceled`; `CANCELED` is
+excluded from `topFailingHosts` the same way `RATE_LIMITED` already was;
+`formatReport` prints the count ("N canceled by the visitor"). The row itself
+is unchanged — a `CANCELED` outcome still carries whatever tier the registry
+had reached, per the round-1 med fix. Test:
+`tools/downloader/api/test/report.test.ts`'s "CANCELED probes (dl-57 owner
+decision B)" block.
+
+### C — what does a probe_outcomes or jobs.host row store for an IP-literal page URL?
+
+**The question:** `url.hostname` is stored verbatim. For a page URL whose
+host is itself an IP literal — `http://93.184.215.14/`, an IPv6 literal, or a
+numeric form the WHATWG URL parser canonicalises into one of those two before
+`.hostname` is ever read — the stored value is an address, which is exactly
+what Build step 2 and every piece of documentation this ticket touched say
+never happens. A trailing FQDN dot (`site.example.`) was a related, smaller
+finding: it groups a host apart from the same host written without one.
+
+**Options:** the gate made no recommendation. (1) store the address and
+correct the "never an address" wording everywhere it appears instead; (2)
+store a fixed marker in place of any IP-literal host, on every row —
+`BLOCKED_TARGET` included, since decision A now lets that code carry a host
+at all; (3) mask only rows that are already `BLOCKED_TARGET`, leaving a
+successful IP-literal probe to store the real address.
+
+**The owner took (2).** It is the only option that keeps Build step 2's
+"never store an address" literally true, which is what every downstream
+document (`.env.example`, `01-ARCHITECTURE.md`, `docs/02-DEPLOYMENT.md`)
+already asserts on the strength of that step — (1) would mean rewriting all
+of them, and (3) leaves the successful case exposed, which is the more common
+one, not the rarer one.
+
+**Marker spelling — my choice, not the owner's or the gate's:** one constant,
+`"ip-literal"` (`host.ts`'s `IP_LITERAL_HOST`), rather than separate
+`ip-literal-v4`/`ip-literal-v6` markers. The report already groups this
+bucket as "not a real hostname", and an operator who wants the IP-version
+split for the few rows that land here has `probe_outcomes.attempts_json` and
+the raw address logs `redactUrl` already covers elsewhere — a second marker
+pair would buy a distinction the report never surfaces today, for a cost paid
+on every row. If a future ticket wants the split, it is a report-level
+grouping change, not a storage-format one, since nothing here is lost.
+
+**Built:** `host.ts` (new) exports `normalizeHost(hostname)` — masks any
+`net.isIP`-recognised literal (v4 or bracketed v6) to `IP_LITERAL_HOST`, and
+strips exactly one trailing FQDN dot — and `hostnameOrNull(rawUrl)`, which
+parses and normalises in one step, returning null only when `rawUrl` will not
+parse as a URL at all. Both `routes/probe.ts` (the `host` a `probe_outcomes`
+row carries, and decision A's guard-stage catch) and
+`db/job-store.ts`'s job creation (`jobs.host`) now go through it — `job-store.ts`'s
+previous private `hostnameOf` helper was deleted in favour of the shared one,
+since the two had become the same function with the same gap. Tests:
+`tools/downloader/api/test/host.test.ts` (unit-level: ordinary hostnames,
+IPv4, bracketed IPv6, the already-canonicalised numeric-form case, the
+trailing dot, and the unparseable-string case) and
+`tools/downloader/api/test/probe-outcomes.test.ts`'s "IP-literal hosts never
+reach a row as themselves" block (route-level: a successful probe against a
+literal-IP page URL stores the marker and never the address anywhere in the
+row; a trailing-dot host normalises to the same string as without one).
 
 ## Log
 
@@ -365,3 +486,78 @@ tools/downloader/api/dist/report.js` is **unproven (gate)** — the container
   `npm test -- --project downloader` — 78 files, 1297 tests, all green;
   `node scripts/citations-gate.mjs --against origin/main` — unchanged at 1
   failing record (`repo-33`, not mine to touch).
+- 2026-09-14 — Gate round 2 (`a2c458af8634d9e1b`, phase 1 of 2): **CONCERNS**,
+  every round-1 fix reproduced independently, 3 lows remaining (the report's
+  job-side window unpinned; the round-1 disclosure note undercounting its own
+  re-pin as "unedited"; the same note and the Log miscounting round 1 as
+  "four med" against the gate's own "three med"). Took all three: `report.test.ts`
+  now seeds a job finished outside the window and one still running, with a
+  test pinning both are excluded — the reviewer's window-ignored mutation
+  reproduces 3 red, and its NULL-check-dropped mutation reproduces as a
+  genuine no-op (recorded as such, not claimed fixed); both wording errors
+  corrected in place. Verified: `npm run check` clean; `npm test -- --project
+downloader` — 78 files, 1298 tests; citations 46/46 verified,
+  `citations-gate.mjs` unchanged (`repo-33` only).
+- 2026-09-15 — Phase 2. The owner answered all three of gate round 1's held
+  items (see `## Decisions` above), and dl-51 settled at `6045f80`
+  (`origin/dl-51-per-client-job-cap`). In order:
+  1. **Rebased** onto `origin/dl-51-per-client-job-cap` (`git rebase`, not a
+     merge). One real conflict, in `routes/probe.ts`: dl-51 wraps the whole
+     handler body in an outer `try`/`finally` for its per-client probe cap,
+     and dl-57 had restructured the same region into a `try`/`catch`/`finally`
+     with a `catch` clause dl-51's tree never had. Resolved by nesting dl-57's
+     structure inside dl-51's outer `try`/`finally`, with the per-client cap
+     check (and its own refusal, which throws before either `try` and so
+     needs no release) ahead of everything dl-57 added. Two more conflicts
+     were citation pins in `dl-32-the-job-list-has-no-caller.md` and
+     `dl-46-rate-limit-the-probe-stage-channel.md`, where each branch had
+     independently pinned a different one of two citations on the same
+     line — resolved by taking the union, both pinned. Re-ran
+     `probe-outcomes.test.ts` and `per-client-caps.test.ts` immediately after,
+     before anything else: both green (30 tests). Added a new test —
+     `probe-outcomes.test.ts`'s "the dl-51/dl-57 agreement" block — proving
+     the agreement holds in the merged code: a per-client probe-cap refusal
+     gets no `probe_outcomes` row and still releases its slot. Force-pushed
+     with `--force-with-lease`.
+  2. **Built the three owner decisions**, each recorded in full under
+     `## Decisions` above with its question, options, choice and who
+     recommended it. Summary: (A) `UNREACHABLE`/`BLOCKED_TARGET` now record a
+     row via a `try`/`catch` around `context.guard.assertAllowed` in
+     `routes/probe.ts`, using a re-derived hostname (`host.ts`'s
+     `hostnameOrNull`) since the guard does not hand one back on failure;
+     `INVALID_URL` provably never reaches that catch, because
+     `probeRequestSchema` already rejects an unparseable or wrong-scheme URL
+     before the route handler runs. (B) `report.ts` gained a `canceled` count,
+     excluded from `attempted`, `successRate` and `topFailingHosts` exactly
+     like `gateRefusals`. (C) new module `host.ts` (`normalizeHost`,
+     `hostnameOrNull`) masks any IP-literal hostname to a single marker,
+     `"ip-literal"`, and strips a trailing FQDN dot; wired into both
+     `routes/probe.ts` and `db/job-store.ts`, which lost its own private
+     `hostnameOf` in favour of the shared one. New tests: `host.test.ts`
+     (unit), and three new blocks in `probe-outcomes.test.ts` and one in
+     `report.test.ts`.
+  3. **Gate round 2's three lows** were already fixed in the prior commit
+     (`a6e9096`), and stayed fixed across the rebase — re-verified rather
+     than re-done.
+  4. **A citations-gate regression the rebase introduced, fixed the same
+     way as the round-1 pins**: `OUTCOME_RETENTION_DAYS`'s addition to
+     `config.ts` (unrelated to dl-51) shifted a pre-existing line dl-51's own
+     `## Review` cited (a `TRUST_PROXY` warning, not a dl-51 defect per that
+     record's own words). Pinned to `origin/main`'s `95c6403` at the line that
+     text actually sits at there (`215`, not the record's un-pinned `248`,
+     which was dl-51's own tip and not main) — verified with
+     `node scripts/citations.mjs <record> --section Review --require-anchors
+--require-distinct-anchors`, exit 0, before trusting it.
+  5. **Also folded in**, per the reviewer's ask on the prior round's commit:
+     a markdown blockquote artefact in the round-2 disclosure note (oxfmt read
+     a wrapped line starting with `>= ?` as a blockquote marker) — rephrased
+     to avoid the symbol at a line start, confirmed gone with
+     `grep -n "^  > "`.
+
+  Verified after all of the above: `npm run check` clean; `npm test --
+project downloader` — 80 files, 1339 tests, all green; citations on this
+  record 46/46 verified (`--require-anchors --require-distinct-anchors`);
+  `node scripts/citations-gate.mjs --against origin/main` — exit 0, `repo-33`
+  no longer failing (its pin arrived with dl-51). Sent the new sha to the
+  reviewer and said phase 2 is ready. Ship authority: none — stopped before
+  the pull request, as instructed.

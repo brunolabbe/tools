@@ -299,7 +299,7 @@ describe("formatReport against the same seed", () => {
 
     expect(text).toContain("last 7 day(s)");
     expect(text).toContain(
-      "success rate: 75.0% (6/8 attempted, 1 refused by the concurrency gate)",
+      "success rate: 75.0% (6/8 attempted, 1 refused by the concurrency gate, 0 canceled by the visitor)",
     );
     expect(text).toContain("direct: 5 (83.3%)");
     expect(text).toContain("browser: 1 (16.7%)");
@@ -315,12 +315,63 @@ describe("formatReport against the same seed", () => {
 
   test("an empty window prints honest 'n/a' and 'none' rather than fabricating a rate", () => {
     const text = formatReport(buildReport(db, WINDOW_START, 7));
-    expect(text).toContain("success rate: n/a (0/0 attempted, 0 refused by the concurrency gate)");
+    expect(text).toContain(
+      "success rate: n/a (0/0 attempted, 0 refused by the concurrency gate, 0 canceled by the visitor)",
+    );
     expect(text).toContain("no successful probe in this window");
     expect(text).toContain("hosts that fail most:\n    none");
     expect(text).toContain("no timed probe in this window");
     expect(text).toContain("success rate: n/a (0/0)");
     expect(text).toContain("no failed download in this window");
     expect(text).toContain("p50 download duration: n/a");
+  });
+});
+
+describe("CANCELED probes (dl-57 owner decision B)", () => {
+  test("are counted separately, and excluded from attempted, successRate and topFailingHosts", () => {
+    store.recordProbeOutcome(
+      {
+        host: "direct.example",
+        outcome: "ok",
+        resolver: "direct",
+        attempts: [{ resolver: "direct", code: null, durationMs: 100 }],
+        durationMs: 100,
+        cached: false,
+        variants: 1,
+        drm: false,
+      },
+      WINDOW_START,
+    );
+    // A visitor navigating away mid-probe: the registry gets to name the tier
+    // it aborted (see the round-1 med fix), so this carries an attempt even
+    // though the overall outcome is CANCELED, not a failure.
+    store.recordProbeOutcome(
+      {
+        host: "abandoned.example",
+        outcome: "CANCELED",
+        resolver: null,
+        attempts: [{ resolver: "browser", code: "CANCELED", durationMs: 4000 }],
+        durationMs: 4000,
+        cached: false,
+        variants: null,
+        drm: false,
+      },
+      WINDOW_START,
+    );
+
+    const report = buildReport(db, WINDOW_START, 7);
+
+    expect(report.probes.total).toBe(2);
+    expect(report.probes.canceled).toBe(1);
+    // Only the direct.example success is "attempted": a canceled probe is
+    // excluded exactly like a gate refusal, not counted as a failed attempt.
+    expect(report.probes.attempted).toBe(1);
+    expect(report.probes.successes).toBe(1);
+    expect(report.probes.successRate).toBe(1);
+    // abandoned.example must not appear as a failing host.
+    expect(report.probes.topFailingHosts).toEqual([]);
+
+    const text = formatReport(report);
+    expect(text).toContain("1 canceled by the visitor");
   });
 });

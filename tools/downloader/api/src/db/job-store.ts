@@ -22,6 +22,7 @@ import type {
   MediaVariant,
 } from "@downloader/contract";
 import type { Database, Statement } from "better-sqlite3";
+import { hostnameOrNull } from "../host.ts";
 
 export interface FileToken {
   token: string;
@@ -161,15 +162,6 @@ function parseJson<T>(raw: string | null): T | null {
   }
 }
 
-/** `new URL(raw).hostname`, or null for a string that will not parse. */
-function hostnameOf(raw: string): string | null {
-  try {
-    return new URL(raw).hostname;
-  } catch {
-    return null;
-  }
-}
-
 function probeOutcomeRow(row: ProbeOutcomeSqlRow): ProbeOutcomeRow {
   return {
     id: row.id,
@@ -304,10 +296,11 @@ export class JobStore {
       options_json: JSON.stringify(input.options),
       created_at: input.createdAt,
       // Hostname only, never the path or query string a signed URL carries its
-      // credential in (dl-57). The route already validated `sourceUrl` with the
-      // SSRF guard before calling here, so this should never fail to parse —
-      // `null` is the honest answer on the day that stops being true.
-      host: hostnameOf(input.sourceUrl),
+      // credential in (dl-57), and never a bare IP literal (dl-57 decision C).
+      // The route already validated `sourceUrl` with the SSRF guard before
+      // calling here, so this should never fail to parse — `null` is the
+      // honest answer on the day that stops being true.
+      host: hostnameOrNull(input.sourceUrl),
     });
     const created = this.find(input.id);
     if (created === null)

@@ -89,6 +89,13 @@ export interface Report {
     total: number;
     attempted: number;
     gateRefusals: number;
+    /**
+     * A visitor navigating away mid-probe, not the tool failing (dl-57 owner
+     * decision B). Excluded from `attempted` and `successRate`'s denominator
+     * and from `topFailingHosts`, the same treatment `gateRefusals` gets and
+     * for the same reason: neither measures whether the tool works.
+     */
+    canceled: number;
     successes: number;
     /** Null when nothing was attempted in the window — no divide-by-zero rate. */
     successRate: number | null;
@@ -146,9 +153,12 @@ function percentile(values: readonly number[], p: number): number {
  * Reads `probe_outcomes` and `jobs` since `sinceIso` and computes the report.
  *
  * A `RATE_LIMITED` outcome is always the concurrency gate here, never the
- * per-client bucket — `probe.ts` never records that bucket's refusals, so
- * every such row is a capacity signal and is excluded from the success rate's
- * denominator rather than counted as a failed attempt.
+ * per-client bucket or dl-51's per-client probe cap — neither of those
+ * refusals ever reaches the code that records a row, by construction, so
+ * every `RATE_LIMITED` row here is a capacity signal and is excluded from the
+ * success rate's denominator rather than counted as a failed attempt.
+ * `CANCELED` gets the same exclusion, on the owner's decision B: a visitor
+ * navigating away mid-probe is not the tool failing.
  */
 export function buildReport(db: Database.Database, sinceIso: string, windowDays: number): Report {
   const outcomes = db
@@ -156,7 +166,8 @@ export function buildReport(db: Database.Database, sinceIso: string, windowDays:
     .all(sinceIso) as ProbeOutcomeSqlRow[];
 
   const gateRefusals = outcomes.filter((row) => row.outcome === "RATE_LIMITED").length;
-  const attempted = outcomes.length - gateRefusals;
+  const canceled = outcomes.filter((row) => row.outcome === "CANCELED").length;
+  const attempted = outcomes.length - gateRefusals - canceled;
   const successes = outcomes.filter((row) => row.outcome === "ok").length;
 
   const successesByResolver = new Map<string, number>();
@@ -177,7 +188,8 @@ export function buildReport(db: Database.Database, sinceIso: string, windowDays:
     { failures: number; codes: Set<string>; tiers: Set<string> }
   >();
   for (const row of outcomes) {
-    if (row.outcome === "ok" || row.outcome === "RATE_LIMITED") continue;
+    if (row.outcome === "ok" || row.outcome === "RATE_LIMITED" || row.outcome === "CANCELED")
+      continue;
     const entry = hostFailures.get(row.host) ?? {
       failures: 0,
       codes: new Set<string>(),
@@ -246,6 +258,7 @@ export function buildReport(db: Database.Database, sinceIso: string, windowDays:
       total: outcomes.length,
       attempted,
       gateRefusals,
+      canceled,
       successes,
       successRate: attempted === 0 ? null : successes / attempted,
       byResolver,
@@ -275,7 +288,8 @@ export function formatReport(report: Report): string {
   lines.push(
     `  success rate: ${formatRate(report.probes.successRate)}` +
       ` (${report.probes.successes}/${report.probes.attempted} attempted,` +
-      ` ${report.probes.gateRefusals} refused by the concurrency gate)`,
+      ` ${report.probes.gateRefusals} refused by the concurrency gate,` +
+      ` ${report.probes.canceled} canceled by the visitor)`,
   );
   if (report.probes.byResolver.length === 0) {
     lines.push("  no successful probe in this window");

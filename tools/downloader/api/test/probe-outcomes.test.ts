@@ -1,13 +1,17 @@
 /**
  * dl-57: one `probe_outcomes` row for every way `POST /api/probe` can end,
  * except the per-client rate-limit bucket, which never reaches the code that
- * records one.
+ * records one — and, since the dl-51 rebase, dl-51's per-client probe cap
+ * (`probeClientGate`), which is per-client capacity by the same reasoning and
+ * is excluded by construction: it refuses before `routes/probe.ts` declares
+ * `attempts`/`startedAt` or enters the `try` any recording call lives in.
  */
 
 import { AppError, ROUTES } from "@downloader/contract";
+import { clientKey } from "@webtools/core/rate-limit";
 import { describe, expect, test } from "vitest";
 import { runRetentionSweep } from "../src/server.ts";
-import { createHarness, probeResult, SOURCE_URL, StubResolver } from "./helpers.ts";
+import { createHarness, probeResult, SOURCE_URL, StubResolver, waitFor } from "./helpers.ts";
 
 /** One `probe_outcomes` row, everything but `host` and `createdAt` fixed. */
 function outcome(host: string) {
@@ -302,6 +306,182 @@ describe("probe_outcomes retention", () => {
       await runRetentionSweep(harness.app.context);
 
       expect(store.probeOutcomes()).toHaveLength(1);
+    } finally {
+      await harness.dispose();
+    }
+  });
+});
+
+describe("the dl-51/dl-57 agreement: a per-client probe-cap refusal", () => {
+  test("records no probe_outcomes row, and still releases its client slot", async () => {
+    let release: (() => void) | undefined;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const resolver = new StubResolver(async (call) => {
+      if (call === 0) await blocked;
+      return probeResult();
+    });
+    const harness = await createHarness({
+      resolver,
+      config: { maxConcurrentProbes: 4, maxProbesPerClient: 1, rateLimitProbePerMinute: 0 },
+    });
+    const clientA = "203.0.113.7";
+
+    try {
+      const first = harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.probe,
+        payload: { url: `${SOURCE_URL}/1` },
+        remoteAddress: clientA,
+      });
+      await waitFor(
+        () => harness.app.context.probeClientGate.count(clientKey(clientA)),
+        (count) => count === 1,
+        { label: "first probe to hold its client slot" },
+      );
+
+      const refused = await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.probe,
+        payload: { url: `${SOURCE_URL}/2` },
+        remoteAddress: clientA,
+      });
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json().error.code).toBe("RATE_LIMITED");
+
+      release?.();
+      await first;
+
+      // One row — the first probe's success — never two: the refusal in
+      // between recorded nothing.
+      const rows = harness.app.context.store.probeOutcomes();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.outcome).toBe("ok");
+
+      // And the refusal did not leak the slot it never held.
+      expect(harness.app.context.probeClientGate.count(clientKey(clientA))).toBe(0);
+    } finally {
+      release?.();
+      await harness.dispose();
+    }
+  });
+});
+
+describe("guard-stage exits (dl-57 owner decision A)", () => {
+  test("BLOCKED_TARGET records a row, host masked as an IP literal", async () => {
+    // A literal IP in the URL never reaches DNS at all — `net.isIP` catches
+    // it directly in the guard — so this needs no lookup stub, only the
+    // address check turned on.
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { ssrfAllowPrivateAddresses: false },
+    });
+    try {
+      const response = await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.probe,
+        payload: { url: "http://127.0.0.1/admin" },
+      });
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe("BLOCKED_TARGET");
+
+      const rows = harness.app.context.store.probeOutcomes();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        host: "ip-literal",
+        outcome: "BLOCKED_TARGET",
+        resolver: null,
+        cached: false,
+      });
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("UNREACHABLE records a row with the guard's parsed hostname", async () => {
+    // `.invalid` is IANA-reserved (RFC 2606) and will never resolve; real DNS
+    // lookup, not a stub, matching how the route actually reaches the guard.
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      config: { ssrfAllowPrivateAddresses: false },
+    });
+    try {
+      const response = await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.probe,
+        payload: { url: "http://this-host-should-not-resolve.invalid/x" },
+      });
+      expect(response.statusCode).toBe(502);
+      expect(response.json().error.code).toBe("UNREACHABLE");
+
+      const rows = harness.app.context.store.probeOutcomes();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        host: "this-host-should-not-resolve.invalid",
+        outcome: "UNREACHABLE",
+        resolver: null,
+        cached: false,
+      });
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("an unparseable URL never reaches the guard, so it gets no row — the schema refuses it first", async () => {
+    const harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    try {
+      const response = await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.probe,
+        payload: { url: "not a url at all" },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe("INVALID_URL");
+      expect(harness.app.context.store.probeOutcomes()).toHaveLength(0);
+    } finally {
+      await harness.dispose();
+    }
+  });
+});
+
+describe("IP-literal hosts never reach a row as themselves (dl-57 owner decision C)", () => {
+  test("a successful probe against an IP-literal page URL stores the marker, not the address", async () => {
+    const harness = await createHarness({
+      resolver: new StubResolver(probeResult()),
+      // The default: an IP literal is allowed through the address check, so
+      // resolution proceeds and this is the success path, not BLOCKED_TARGET.
+    });
+    try {
+      const response = await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.probe,
+        payload: { url: "http://93.184.215.14/watch" },
+      });
+      expect(response.statusCode).toBe(200);
+
+      const rows = harness.app.context.store.probeOutcomes();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.host).toBe("ip-literal");
+      expect(JSON.stringify(rows[0])).not.toContain("93.184.215.14");
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  test("a trailing FQDN dot does not group a host apart from itself", async () => {
+    const harness = await createHarness({ resolver: new StubResolver(probeResult()) });
+    try {
+      const response = await harness.app.server.inject({
+        method: "POST",
+        url: ROUTES.probe,
+        payload: { url: "http://site.example./watch" },
+      });
+      expect(response.statusCode).toBe(200);
+
+      const rows = harness.app.context.store.probeOutcomes();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.host).toBe("site.example");
     } finally {
       await harness.dispose();
     }
