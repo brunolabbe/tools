@@ -375,3 +375,13 @@ survived onto `main` for a later reader checking the section against what
 the reviewer actually sent. Moved here per the gate's own catch, since
 `review-ticket` step 8 asks for the disclosure to live where it can be
 checked against the section later, and a branch commit is not that place.
+
+**2026-09-15 — rebased onto `8894b75`.** pl-49 (#242) squash-merged first and
+also pinned a citation in pl-37's own `## Review` record
+(`orchestrator.ts:362`, to `95c6403`), landing in the same bullet this
+ticket's `discovery.ts:225` pin sits in. `git rebase origin/main` conflicted
+on that one file only, as `git merge-tree` had predicted; resolved by taking
+`origin/main`'s version of the bullet (carrying pl-49's `orchestrator.ts`
+pin) and re-applying this ticket's own `discovery.ts@95c6403:225` pin
+alongside it, so the bullet now carries both pins rather than either
+replacing the other. No other file conflicted.
