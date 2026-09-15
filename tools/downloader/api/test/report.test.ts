@@ -177,6 +177,30 @@ function seed(): void {
     { error: { code: "JOB_CANCELED", message: "x", retryable: false } },
     WINDOW_START,
   );
+  // Finished, but ten days before the window — must not be counted, and pins
+  // the job-side window the way old.example above pins the probe-side one.
+  const beforeWindow = new Date(
+    new Date(WINDOW_START).getTime() - 10 * 24 * 3_600_000,
+  ).toISOString();
+  store.create({
+    id: "job-old",
+    sourceUrl: "https://site.example/c",
+    options: {},
+    variantId: null,
+    createdAt: beforeWindow,
+  });
+  store.transition("job-old", "probing", {}, beforeWindow);
+  store.transition("job-old", "downloading", {}, beforeWindow);
+  store.transition("job-old", "completed", {}, beforeWindow);
+  // Still running — no `finished_at` at all — must not be counted either.
+  store.create({
+    id: "job-unfinished",
+    sourceUrl: "https://site.example/d",
+    options: {},
+    variantId: null,
+    createdAt: WINDOW_START,
+  });
+  store.transition("job-unfinished", "probing", {}, WINDOW_START);
 }
 
 describe("parseReportArgs", () => {
@@ -252,10 +276,19 @@ describe("buildReport against a seeded database", () => {
     expect(report.downloads.p50DurationMs).toBe(60_000);
   });
 
-  test("a row outside the window is never counted", () => {
+  test("a probe row outside the window is never counted", () => {
     // old.example would be a seventh direct success if it leaked in.
     const withoutFilter = report.probes.byResolver.find((r) => r.resolver === "direct");
     expect(withoutFilter?.successes).toBe(5);
+  });
+
+  test("a job outside the window, or still unfinished, is never counted", () => {
+    // job-old finished ten days before WINDOW_START; job-unfinished has no
+    // finished_at at all. Both would push total past 4 if the WHERE clause's
+    // window or its NULL check were dropped while keeping the bound
+    // parameter — the mutation a naive "no rows leaked" check would miss.
+    expect(report.downloads.total).toBe(4);
+    expect(report.downloads.successes).toBe(2);
   });
 });
 
