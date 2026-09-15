@@ -214,18 +214,18 @@ const UNMARK_VIDEO_SCRIPT = `(() => {
  * script, for a frame `isScriptableFrame` says no to. **This is a policy this
  * file already enforces for `SCROLL_SCRIPT` and `PLAY_SCRIPT`, not a technical
  * limit** — Playwright's `evaluate` runs in a frame's own isolated world over
- * CDP and works in a cross-origin frame same as any other (measured: a gate on
- * this ticket found the reviewer's own claim to the contrary false). This
- * selector exists because a policy is still the policy, and because a
- * per-candidate size comparison needs a `boundingBox()` round trip per
- * candidate even where `evaluate` is allowed, which is what `CHOOSE_VIDEO_FN`'s
- * own docstring is warning a deadline away from — so this is the first visible
- * non-card video in document order, not the largest, in a frame this file has
- * chosen not to run script in. Every page this project has reproduced has at
- * most one visible non-card video per such frame, so the two choices coincide
- * there. Open decision (dl-55 Log): whether to fold this frame's chooser into
- * `CHOOSE_VIDEO_SCRIPT`'s own evaluate instead, now that the reason given here
- * for not doing so is known to be wrong.
+ * CDP and works in a cross-origin frame same as any other. The builder's first
+ * comment here claimed otherwise; the reviewer measured that claim false. This
+ * selector exists because a policy is still the policy, not because a size
+ * comparison there needs one round trip per candidate — `locator.evaluateAll`
+ * returns every candidate's size in a single round trip, so that cost is not
+ * the reason either. This is the first visible non-card video in document
+ * order, not the largest, in a frame this file has chosen not to run script
+ * in. Every page this project has reproduced has at most one visible
+ * non-card video per such frame, so the two choices coincide there. Open
+ * decision (dl-55 Log): whether to fold this frame's chooser into
+ * `CHOOSE_VIDEO_SCRIPT`'s own evaluate instead, now that neither reason given
+ * here for not doing so holds.
  */
 const NON_CARD_VIDEO_SELECTOR = "video:not(a[href] *):not([role='link'] *):visible";
 
