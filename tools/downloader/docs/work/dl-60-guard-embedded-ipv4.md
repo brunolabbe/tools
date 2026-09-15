@@ -97,6 +97,38 @@ Both answered by the owner on 2026-09-15, through the dispatching session.
    Teredo or 6to4 is refused. Well-known NAT64 `64:ff9b::/96` was not part of
    the question and is still judged by its embedded address.
 
+## Review
+
+### Gate 1 — `f43135f`
+
+**Gate: CONCERNS** — 2026-09-15 · `95c6403...f43135f` · defect hunt run directly (ticket-reviewer subagent, no `code-review` delegate)
+
+| Done when                                                                               | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The spec fails on `origin/main` and passes on the branch, and the Log records both runs | verified — reran `embedded-ipv4.test.ts` at `95c6403`: 14 failed / 5 passed of 19 (matches Log); at `f43135f`: 19 passed of 19.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Every spelling in step 2 is covered, including public controls                          | proven — `embedded-ipv4.test.ts:146 "IPv4-mapped (::ffff:0:0/96)"`, `embedded-ipv4.test.ts:182 "SIIT IPv4-translated"`, `embedded-ipv4.test.ts@f43135f:133 "NAT64 (64:ff9b::/96 and 64:ff9b:1::/48)"`, `embedded-ipv4.test.ts:236 "a public embedded address stays allowed"` ✓, plus verified independently — see the report above.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| A test through each entry point in step 3 refuses the mapped-loopback URL               | proven for `probe.ts:48` "const url = await context.guard.assertAllowed(rawUrl);", `probe.ts:134` "await context.guard.assertAllAllowed(urlsInProbeResult(probe).mustPass);", `jobs.ts:53` "await context.guard.assertAllowed(parsed.data.url);", `guarded-fetch.ts:152` "await guard.assertAllowed(currentUrl);", `egress-proxy.ts:472` "await guard.assertAllowed(target);", `egress-proxy.ts:554` "await guard.assertAllowed(`https://${target}`);", `thumbnails.ts:249` "await guard.assertAllowed(url);", `jobs/orchestrator.ts:347` "const url = await guard.assertAllowed(sourceUrl);" — each isolated by deletion. **`jobs/orchestrator.ts:220` "await guard.assertAllAllowed(urlsInProbeResult(probe).mustPass);" is not exercised by any test** — see med finding. |
+| Reverting each part of the fix turns a named test red                                   | verified for the 8 entry-point deletions above plus 2 core mutations (ignoring `embeddedV4`'s result, dropping the Teredo inversion); the remaining ~11 branch-removal mutations the Log claims were not individually re-run.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `npm run check` and `npm test -- --project downloader` are green                        | verified — `npm run check` exit 0; `npm test -- --project downloader` → 76 files, 1284 tests, all passed, matching the Log.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+
+- **med** · `jobs/orchestrator.ts:220` "await guard.assertAllAllowed(urlsInProbeResult(probe).mustPass);" — a live SSRF check on the resolver's own output, dl-60's stated second attack surface — has no test anywhere in the repo. Commenting it out and running `npm test -- --project downloader` still passes all 76 files / 1284 tests, 0 failures. The Log's claim "Each call site has its own test in the spec, and each test was proven by deleting that call site" is false for this file: it has two call sites, `:220` "await guard.assertAllAllowed(urlsInProbeResult(probe).mustPass);" and `jobs/orchestrator.ts:347` "const url = await guard.assertAllowed(sourceUrl);" (the `sourceUrl` re-check, which _is_ tested by `embedded-ipv4.test.ts:461 "the orchestrator's re-check, for a row that never went through the route"`), and only one is covered. Not a live hole — a probe (benign `sourceUrl`, a `StubResolver` whose variant is the mapped-loopback literal, run through `context.orchestrator.run`) shows the guard refuses it correctly (`status: "failed"`, `error.code: "BLOCKED_TARGET"`, resolver called once, engine never called), because the call delegates to the same fixed, exhaustively-verified `isBlockedAddress`. The defect is in the ticket's own audit trail overstating its coverage, not in the guard.
+- **findings** · 1 returned, 1 carried, 0 dropped.
+- NFR: security — see above; the judging function itself is exhaustively re-verified (299 generated spellings, 0 mismatches, both directions, both commits). performance n/a — a handful of integer comparisons per check. reliability n/a — no change to timeouts or retries. maintainability ✓ — `embeddedV4` is one small function, each branch commented with its RFC citation.
+
+**Disposition.** Fixed in `faebe96`. The test "the orchestrator's check on the
+re-probe's own output" covers the orchestrator's `assertAllAllowed` call. The
+builder reproduced the gap first: with that call a no-op and the spec excluded,
+75 files and 1265 tests passed.
+
+**Transcription note (builder).** Transcribed from the gate's message on
+`f43135f`. What was altered: every line number was re-resolved against the tip.
+The spec citations moved from lines 86, 122, 157 and 319 to 146, 182, 236 and
+461, and the CONNECT call in the egress proxy from line 537 to 554. The NAT64
+test was renamed in round 2, so its citation is pinned to `f43135f`. Citations
+that had no anchor now carry the text of the line they cite. Bare file names
+and one shorthand became qualified paths, so the citation gate can check them.
+No finding, verdict or figure was changed.
+
 ## Log
 
 - 2026-09-15 — Filed and fixed in one branch, `dl-60-guard-embedded-ipv4`, off
@@ -110,10 +142,24 @@ Both answered by the owner on 2026-09-15, through the dispatching session.
   fix passed 19 of 19.
 
   **Round 2**, after the owner answered both decisions and the gate returned one
-  finding, grew the spec to 28 tests. It was not run against `origin/main`,
-  because it imports `blockedLiteral`, which does not exist there, so the file
-  would fail to load rather than fail on an assertion. The round-1 red above and
-  the mutations below stand in for that run.
+  finding, grew the spec to 28 tests. Run against `origin/main`'s `ssrf.ts`,
+  `dispatcher.ts` and `egress-proxy.ts`, it gave **22 failed, 6 passed of 28**.
+  - **The 22 failures.** One is a `TypeError`: "blockedLiteral refuses a
+    blocked literal and nothing else" calls a function that does not exist
+    there. The file still loads, because Vitest leaves a missing named export
+    `undefined`. Twenty are assertions that the old guard allowed something it
+    must refuse. The last is "well-known NAT64 (64:ff9b::/96) is judged by what
+    it embeds": the old parser read `64:ff9b::8.8.8.8` as unparsable and
+    wrongly blocked it.
+  - **The 6 passes are all controls:** "`URL` canonicalises an embedded IPv4
+    address into hex groups", "a zone id cannot reach the guard through a URL
+    at all", "allows an IPv6 literal embedding a public IPv4 address", "the
+    neighbours of those ranges are not caught by them", "the native IPv6 rules
+    are unchanged", and "a public embedded address stays allowed".
+
+  With the fix, all 28 pass. An earlier draft of this entry said the file would
+  not load, and that the round-1 run stood in for this one. That was a guess,
+  not a measurement, and the gate disproved it by running the spec.
 
   **The address rule.** `v6Groups` parses every spelling to eight numbers. It
   rewrites a dotted tail as two hex groups, strips a zone id, folds case, and
