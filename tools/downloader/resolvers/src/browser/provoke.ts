@@ -161,10 +161,10 @@ const VIDEO_MARK = "data-downloader-video";
  *
  * Takes the candidate list as a parameter rather than querying the document
  * itself, so the identical rule runs two ways without drifting apart: as the
- * body of `CHOOSE_VIDEO_FN` below, evaluated once in a scriptable frame, and
- * directly as a `locator("video").evaluateAll(...)` callback in a frame this
- * file otherwise avoids running script in (dl-55, decision 3) — Playwright
- * passes the matched elements in as this same first argument either way.
+ * body of `CHOOSE_VIDEO_FN` below, and as `CHOOSE_VIDEO_INDEX_SCRIPT`, run
+ * through `frame.evaluate` regardless of frame origin (dl-55, decision 3) —
+ * both wrap this same function around one `document.querySelectorAll('video')`
+ * call; only what the caller does with the result differs.
  */
 const CHOOSE_VIDEO_INDEX_FN = `function (videos) {
   var best = -1;

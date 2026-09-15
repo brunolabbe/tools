@@ -124,6 +124,44 @@ so dl-56's builder does not reopen any of them.
    call; **C** — skip the surface click in a cross-origin frame entirely. **The
    owner chose A.**
 
+### Decided by the owner, 2026-09-15 (answering the round-3 gate's two open decisions)
+
+Two more decisions, from the round-3 gate (`d8aced1`) built on the answers
+above. Recorded here for the same reason: so a later builder does not reopen
+either.
+
+4. **The shadow-DOM regression.** Question: round 3's gate found that a
+   player inside an open shadow root gets no surface click on this branch,
+   where `origin/main` (before dl-55) reached it — `CHOOSE_VIDEO_INDEX_FN`'s
+   `document.querySelectorAll('video')` does not pierce a shadow root, and
+   the `frame.locator("video").first()` it replaced did. Never a wrong
+   video: the probe falls through to `NO_MEDIA_FOUND`. Fix here, with a
+   narrow round 4, or file and ship? Options: **A**, the reviewer's
+   recommendation — file a follow-up ticket and ship; a correct fix needs its
+   own fixtures to keep the chosen index aligned with Playwright's own
+   shadow-piercing locator order, real scope rather than a quick patch; **B**
+   — fix it on this branch now. **The owner chose A.** The orchestrator told
+   the owner plainly that dl-55 introduces the regression and that it is a
+   coverage loss, never a wrong stream. Filed as
+   [dl-61](./dl-61-shadow-dom-player-gets-no-surface-click.md),
+   `depends_on: [dl-55]`.
+5. **Reordered query parameters.** Question: `sameDocument` sorts both sides'
+   query parameters before comparing, so `?v=abc&list=PL1` and
+   `?list=PL1&v=abc` compare equal — not a deliberate choice, just how
+   `URLSearchParams.sort()` happens to behave, and not separately called out
+   when decision 1 was built. The round-2 gate's open-decision text (as the
+   orchestrator relayed it) listed "any query change" as a departure; the
+   owner's actual words, decision 1 above, named only `t`, `start` and
+   `autoplay` as allowed to differ and said nothing about order. Accept the
+   current behaviour, or drop the sort (a narrow round 4, a new fixture)?
+   Options: **A**, the reviewer's recommendation — accept: a reorder changes
+   no parameter's value, so it reads as within the owner's own framing of
+   decision 1 rather than outside it; **B** — treat a reorder as a departure.
+   **The owner chose A.** The orchestrator told the owner that "any query
+   change must depart" was its own assumption relaying the round-2 finding,
+   not the owner's wording. A spec pins this: reordering
+   `?v=abc&list=PL1` still returns the stream (Log).
+
 ## Build
 
 1. **Choose the player, not the first video, in
@@ -267,6 +305,41 @@ Defect hunt over `fc8be9e...16084d2` run by the reviewer itself (Opus), at mediu
 
 **Transcription disclosure:** the block above was drafted by `ticket-reviewer` (agent `a0701174359ad2606`) and relayed to the builder by message; the reviewer could not write to this file directly ("file writes were refused here") and asked the builder to commit it verbatim. Committed unedited except for this note and the low finding's "addressed after the gate" sentence, added by the builder per the reviewer's own instruction. The builder also fixed the low (the `NON_CARD_VIDEO_SELECTOR` docstring's attribution and round-trip claim) after this block was drafted, keeping the docstring's line count unchanged so the citations above still resolve — see the Log's "gate round 2" entry.
 
+**Second edit, 2026-09-15 (round-3 gate, low finding):** round 3's own diff moved or deleted three of this block's citations. The `provoke.ts` duration-fallback citation in the second Done-when row was content-unchanged but moved a few lines down by round 3's own refactor above it, so its line number was updated to match. The two citations naming `browser.ts`'s old landing-URL read and `provoke.ts`'s deleted `NON_CARD_VIDEO_SELECTOR` constant, in the two "med" bullets, now describe code that no longer exists or no longer reads that way on the current tip, so each was pinned to the commit it was true of (`@16084d2`) instead. The two round-2 "med" bullets each gained one bold sentence naming that pin and pointing at the Log. The low bullet describing the `NON_CARD_VIDEO_SELECTOR` docstring had its tense corrected, past instead of present, since round 3 deleted that docstring along with the constant. None of this changed what the reviewer found or concluded; each edit keeps a citation true to the commit it describes, disclosed here as the reviewer's round-3 low finding asked.
+
+### Gate round 3 — CONCERNS, 2026-09-15, `95c6403...d8aced1`
+
+Defect hunt over `16084d2...d8aced1` run by the reviewer (Opus), narrowed to the owner's three decisions plus one shadow-DOM check; rounds 1 and 2 not re-swept.
+
+| Done when                                                                                                                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The surface click never targets a video inside a link, picks the largest visible candidate, and makes no click when there is none                                 | proven — `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:271 "/related-card.html"`, `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:292 "/related-card-area.html"`, `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:304 "/related-card-only-linked.html"` (per-clause reverts red at `16084d2`; these tests and fixtures are unchanged since)                                                                                                                                                                                                                                                                                                                                                                                    |
+| The duration fallback in `readMetadata` uses the same chooser                                                                                                     | proven — `tools/downloader/resolvers/test/browser/provoke.test.ts:51 "expect(durationSec).toBe(942)"`; `tools/downloader/resolvers/src/browser/provoke.ts:328 "var media = chooseVideo()"` (revert red at `fc8be9e`; content unchanged)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Navigation away fails `NO_MEDIA_FOUND` / `navigated-away` for pushState and a document navigation; a load-time redirect and a fragment-only change do not trip it | proven — `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:319 "a same-document navigation (history.pushState)"`, `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:332 "a document navigation (location.assign) never returns"`, `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:384 "/guard-fragment.html"`; load-time redirects `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:395 "/guard-script-redirect.html"` and `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:406 "/guard-router-rewrite.html"` (load wait removed: both red) and `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:421 "/guard-redirect-then-fragment"` (landing URL set to the requested URL: red) |
+| Each layer's test fails with that layer reverted, recorded in the Log                                                                                             | verified — re-run by the reviewer at `d8aced1` for every round-3 layer (below); the Log records them                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| The analysis §7 table carries the new row                                                                                                                         | verified — `tools/downloader/docs/00-ANALYSIS.md:291 "Click opens other content"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `npm run check` and `npm test -- --project downloader` pass                                                                                                       | verified — at `d8aced1`: check exit 0; 76 files / 1282 tests, exit 0; citations-gate against origin/main exit 0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+
+| Owner's decision, 2026-09-15                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Only `t`, `start`, `autoplay` (and the fragment) may differ       | proven — `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:429 "adding ?%s= on play is not a departure"` (key deletion disabled: 3 red) and `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:440 "a query key outside the exception is still a departure"` (widened to any query change: red), against `tools/downloader/resolvers/src/resolvers/browser.ts:613 "const PLAY_TIME_QUERY_EXCEPTIONS"`. Reviewer attacks, each `navigated-away`: `v`, `id` and `list` changed; `t` added with `v` changed; path changed; cross-origin same path; `T=0`. Adding `t`, removing `autoplay`, changing `start`: right stream. Reordering is not a departure: open decision 5 |
+| 2. The landing URL is read later                                     | proven — `tools/downloader/resolvers/src/resolvers/browser.ts:316 "await waitForPageLoad(page, deadline, options.signal);"`, tested at rows above. Bounded by `tools/downloader/resolvers/src/resolvers/browser.ts:82 "const LANDING_URL_LOAD_BUDGET_MS = 1500;"` and `tools/downloader/resolvers/src/resolvers/browser.ts:93 "const LANDING_URL_SETTLE_MS = 500;"`. Measured by the reviewer only, not asserted by a spec: a page whose `load` never fires returns the stream in 7505 ms, against 6005 ms for a fast page and 5520 ms on main                                                                                                                                                        |
+| 3. The cross-origin chooser uses the same rule in one read-only call | proven — `tools/downloader/resolvers/src/browser/provoke.ts:570 "const index = await frame.evaluate<number>(CHOOSE_VIDEO_INDEX_SCRIPT);"`, tested by `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:475 "/cross-origin-card.html"` (CSS first-in-order restored: red, card's stream). Read-only per `tools/downloader/resolvers/src/browser/provoke.ts:169 "const CHOOSE_VIDEO_INDEX_FN ="`: geometry, computed style and attributes. `frame.evaluate`, not `evaluateAll`; the builder's reason is not verified by the reviewer. A click-started player alone in a cross-origin frame returns its stream (reviewer)                                                                |
+
+- **med** · **A player inside an open shadow root gets no surface click: a regression from round 1, missed by rounds 1 and 2.** `tools/downloader/resolvers/src/browser/provoke.ts:208 "var videos = document.querySelectorAll('video');"` does not enter shadow roots; main's `frame.locator("video").first()` did. A page holding only a click-started 640 by 360 `<video>` inside an open shadow root returns its stream on main, same-origin and in a cross-origin frame, and `NO_MEDIA_FOUND` on `d8aced1` for both. Never a wrong video. The remedy is open decision 4.
+- **low** · the Log's round-1 note for dl-56 still says a cross-origin frame has no evaluation context and points at `NON_CARD_VIDEO_SELECTOR`, which round 3 deleted.
+- **low** · two stale comments, one mechanism: the `CHOOSE_VIDEO_INDEX_FN` docstring says it runs as a `locator.evaluateAll` callback while the code calls `frame.evaluate`; and the `PLAY_TIME_QUERY_EXCEPTIONS` docstring cites ticket lines that have already moved.
+- **low** · the round-2 transcription disclosure note does not name the `d8aced1` edits to the round-2 bullets (pins, added sentences, a tense change, two repointed citations). The edits themselves are sound: 13 verified, 2 pinned.
+- **open decision 4** · the shadow-DOM regression. A (recommended) file a follow-up ticket and ship: the failure is `NO_MEDIA_FOUND` falling through to the next tier, and a fix has to walk shadow roots and keep the index aligned with the locator's own order, which deserves its own fixtures. B fix it on this branch, with a narrow round 4.
+- **open decision 5** · a reordered query string is not a departure (`tools/downloader/resolvers/src/resolvers/browser.ts:635 "leftParams.sort();"`). The orchestrator's scope listed it as one, while the owner's words were that only the three parameters may differ. A (recommended) accept: reordering changes no parameter. B treat it as a departure: drop the sort, add a fixture, and a narrow round 4.
+- **resolved from round 2** · the script-redirect med (owner's decision 2) and the cross-origin-chooser med (owner's decision 3).
+- **dropped** · a shadow-root JS card ahead of a light-DOM player in a cross-origin frame, tried for an index mismatch between the in-page list and Playwright's shadow-piercing locator: it returned the player's stream.
+- **findings** · 7 returned: 1 med (with open decision 4), 4 lows in 3 bullets, 1 carried as open decision 5, 1 dropped.
+- Invariants: existing `AppError` code, redaction, contract untouched, diff under `tools/downloader/`. Skipped as untouched: shell and process trees, SSRF, cross-tool imports.
+- NFR: security ✓ (the cross-origin evaluation is read-only) · performance — about 500 ms per probe, about 2000 ms when `load` never fires, both bounded · reliability — the med · maintainability — the lows.
+
+**Owner's answer, 2026-09-15:** open decision 4 — **A**, file and ship. Filed as [dl-61](./dl-61-shadow-dom-player-gets-no-surface-click.md). Open decision 5 — **A**, accept as built; a spec now pins it (Log). Both the reviewer's recommendation. With A on both the reviewer called the remaining items non-blocking and no round 4 needed — see the Log for what landed after this record.
+
 ## Log
 
 **2026-09-13 — filed** from a reproduction the owner asked for, while
@@ -387,6 +460,16 @@ Note the non-scriptable-frame gap: in a cross-origin frame there is no marked
 element and no evaluation context, only `NON_CARD_VIDEO_SELECTOR`'s CSS
 fallback — dl-56 needs its own answer for a frame grab there if it needs one at
 all.
+
+**Correction, 2026-09-15 (round-3 gate, low finding):** the paragraph above is
+stale on two counts. "No evaluation context" was never true — round 2's gate
+measured it false, and round 3's decision 3 acted on that: a cross-origin
+frame now runs `CHOOSE_VIDEO_INDEX_SCRIPT` through `frame.evaluate`, one
+round trip, same as everywhere else. `NON_CARD_VIDEO_SELECTOR` is deleted.
+For dl-56: there is no non-scriptable-frame gap left to answer — every frame
+now goes through the same chooser, `CHOOSE_VIDEO_INDEX_FN`, whose current
+form and its one open item (dl-61, shadow-piercing) are described in the
+round-3 Log entry below.
 
 **Fixtures**, all under `resolvers/test/fixtures/pages/`: `related-card.html` +
 `related-card-target.html` + `media/related/` + `media/related-target/` (the

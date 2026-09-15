@@ -446,6 +446,22 @@ describe("BrowserResolver", () => {
         expect(error.details?.["reason"]).toBe("navigated-away");
       },
     );
+
+    test(
+      "a reordered query string is not a departure (dl-55, decision 5)",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        // No parameter's value changes, only the order the same two appear
+        // in — the owner's answer named only t/start/autoplay as allowed to
+        // differ and said nothing about order, so this pins the current
+        // behaviour (URLSearchParams sorted before comparison) as intended
+        // rather than incidental.
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-query.html?rewrite=reorder&v=abc&list=PL1", resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
   });
 
   describe("the cross-origin chooser picks the player, not a JS-click card (dl-55, decision 3)", () => {

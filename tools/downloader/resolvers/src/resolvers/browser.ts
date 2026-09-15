@@ -601,9 +601,9 @@ async function waitForPageLoad(page: Page, deadline: number, signal: AbortSignal
 /**
  * Play-time query parameters a narrow exception covers (dl-55, decision 1 —
  * the owner's answer, overriding the reviewer's "keep it strict" recommendation:
- * ticket lines 171-172 already named the shape this had to take, "a fixture
- * and a narrow exception with a Log entry, never a looser comparison", and the
- * owner named these three keys rather than widen the comparison generally).
+ * the ticket's own Traps section already named the shape this had to take —
+ * "the answer is a fixture and a narrow exception with a Log entry, never a
+ * looser comparison" — and the owner named these three keys rather than widen it).
  * Adding, changing or removing any of these three does not count as leaving
  * the page. Every other query key must still match exactly, and so must the
  * origin and the path — an SPA that rewrites its own *path* for the same clip
