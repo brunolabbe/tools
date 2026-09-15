@@ -177,7 +177,7 @@ migration 7.
   `UncheckedConstraintKind`, `UncheckedConstraint`, every literal kind string,
   plus `assertNever`/`satisfies never`/`: never`. Zero switches, exhaustiveness
   checks or per-kind mappings outside `unchecked.ts`'s own producing
-  if-chain. The one display site, `web/src/plan/PlanView.tsx:426-428 "uncheckedConstraintKey(constraint)"`, keys
+  if-chain. The one display site, `web/src/plan/PlanView.tsx@95c6403:426-428 "uncheckedConstraintKey(constraint)"`, keys
   by `uncheckedConstraintKey` (content-based since pl-27) and labels via a
   generic `humanise()` (`replaceAll("-", " ")`) — a new kind renders with zero
   code changes. Zero instances, across all four packages, of the defect class
@@ -469,7 +469,7 @@ component, its dedup, its tests) and the ticket file itself.
   the Log's account of it: confirmed that salting the map key defeats
   deduplication and fails the **count** assertion —
   `expected [...] to have a length of 1 but got 2` at
-  `web/test/plan-view.test.tsx:638-642 "One link, not two, for the two legs"` — and not merely the incidental React
+  `web/test/plan-view.test.tsx@95c6403:638-642 "One link, not two, for the two legs"` — and not merely the incidental React
   duplicate-key warning that mutation also produces as a side effect. A test
   that only watched the console for that warning would have been checking a
   symptom rather than the behaviour.

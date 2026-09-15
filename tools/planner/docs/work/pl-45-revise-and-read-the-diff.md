@@ -301,6 +301,95 @@ when`. Options:
      Recommendation: **A**, for the same reason pl-19 exists rather than being a
      forgotten line in pl-10's `Done when`.
 
+## Review
+
+### Gate 3 — PASS
+
+**Gate: PASS** — 2026-09-14 · `95c6403...c8d46ee` · reviewer (Opus) re-ran the
+gates and the four mutations named by gate 2 over `52bf582...c8d46ee`, which
+changes tests and the ticket only; builder was Sonnet
+
+| Done when                                                                                                    | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A reader moves through every revision, read-only past the latest, and restores an older one                  | proven — `planner/web/test/plan-view.test.tsx:906 "Editing works on the latest version"`, `planner/web/test/plan-view.test.tsx:867 "baseRevisionId: second.id,"`, `planner/web/test/plan-view.test.tsx:909 "Restore this version is absent when the latest"`, `planner/web/test/plan-view.test.tsx:952 "restoring from an older page moves the reader to the new latest"`                                                                                                                                                                                                                                                                                                                                    |
+| Crumb text unchanged at the latest, literal string                                                           | proven — `planner/web/test/plan-view.test.tsx:842 "Version 2 of 2 · Moved the hike to Thursday."`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Re-plan, move and remove reachable, keyboard-only, absent with copy on older revisions                       | proven — `planner/web/test/plan-view.test.tsx:1145 "toDayIndex: 1,"`, `planner/web/test/plan-view.test.tsx:1150 "removing an item sends the latest baseRevisionId"`, `planner/web/test/plan-view.test.tsx:1194 "submits the chosen days, specialists and note"`, `planner/web/test/plan-view.test.tsx:1266 "objectContaining({ specialists: [], note: null })"`, `planner/web/test/plan-view.test.tsx:905 "Re-plan some days"`, `planner/web/test/app.test.tsx:91 "a re-plan shows the run screen, not the list"`, `planner/web/test/app.test.tsx:116 "Watch it shows the run screen too"`. Keyboard-only is verified by reading: native controls, no pointer handler or tabIndex, and no test presses a key |
+| A re-plan with no specialists renders an honest sentence                                                     | proven — `planner/web/test/run-view.test.tsx:212 "Re-packing the existing days…"`, `planner/web/test/run-view.test.tsx:213 "queryByText(/of 0/)"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Diff as three short lists, captioned by reason and note, resolved by revisionId against disagreeing order    | proven — `planner/web/test/plan-view.test.tsx:1073 "expect(headings).toEqual("`, `planner/web/test/plan-view.test.tsx:1107 "What was asked"`, `planner/web/test/plan-view.test.tsx:1024 "diffs: [diffForRev3, diffForRev2],"` under `planner/web/test/plan-view.test.tsx:997 "resolves by revisionId, not by array index"`                                                                                                                                                                                                                                                                                                                                                                                   |
+| `REVISION_STALE`, `PLAN_BUSY`, `PLAN_INFEASIBLE`, `ITEM_NOT_FOUND` each render distinctly, asserted per code | proven — `planner/web/test/plan-view.test.tsx:1346 "findByText(/Someone else changed it"`, `planner/web/test/plan-view.test.tsx:1375 "expect(onWatchRun).toHaveBeenCalledWith("`, `planner/web/test/plan-view.test.tsx:1411 "Day 1: Over capacity."`, `planner/web/test/plan-view.test.tsx:1434 "queryByText(/item-1/)"`, rendered by `planner/web/src/plan/PlanView.tsx:175 "function ActionErrorDetails("`                                                                                                                                                                                                                                                                                                 |
+| `npm run check` and `npm test -- --project planner` pass                                                     | verified — reviewer run at `c8d46ee`: check exit 0; planner 56 files and 962 tests, none failing (931 at `95c6403`); web 6 files and 91 tests                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| The e2e spec is out of scope                                                                                 | n/a — `e2e/pin.spec.ts` not run; its selectors read against the new DOM in gate 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+
+- The three gate-2 lows are closed, each by a test that goes red when its fix
+  is reverted: deleting `planner/web/src/plan/RunView.tsx:156 "kind: event.run.kind,"`
+  reddens `planner/web/test/run-view.test.tsx:278 "real kind, never a guess"`;
+  deleting the reset in `submitEdit` reddens the restore-from-an-older-page
+  test; putting the form reset back, or swallowing the `startReplan`
+  rejection, each redden `planner/web/test/plan-view.test.tsx:1276 "a re-plan that fails keeps the form"`.
+- **findings** · gate 3 returned 0: 0 carried, 0 dropped.
+- NFR: security n/a · performance n/a · reliability ✓ · maintainability ✓.
+
+### Gate 2 — PASS
+
+**Gate: PASS** — 2026-09-14 · `95c6403...52bf582` · reviewer (Opus) defect
+hunt at medium over the fix round, plus 20 single-file source mutations,
+each restored. Coordinates from this gate were superseded by gate 3's
+lines, so it is recorded by test name.
+
+- Every gate-1 med fixed and pinned: the run screen is reachable from a plan
+  opened off the list; the diff is three lists; `PLAN_INFEASIBLE` renders its
+  findings and `ITEM_NOT_FOUND` its message alone; Watch it opens an honest
+  attaching state with a bounded timeout, the option the owner chose; the
+  re-plan form keeps its input on failure.
+- **low** · The attach-kind test named the same kind as the fallback, so it
+  could not see a missing copy (closed in gate 3).
+- **low** · The reset-after-edit test never left the latest revision (closed
+  in gate 3).
+- **low** · No test rejected `startReplan`, leaving the form fix unpinned
+  (closed in gate 3).
+- **dropped** · The draft fallback for `kind` is unreachable in practice: the
+  events route writes the snapshot synchronously right after subscribing.
+- **withdrawn from gate 1** · The zero-specialist progress bar and the
+  doubled comment above `Unchecked` both predate this ticket (identical on
+  `origin/main` and at `95c6403`); both builder objections reproduced.
+- **findings** · gate 2 returned 4: 3 carried, 1 dropped; 2 gate-1 lows
+  withdrawn.
+- The Watch it decision was settled by the owner, as relayed by the builder
+  and the orchestrator; the reviewer did not see the ruling itself.
+
+### Gate 1 — FAIL
+
+**Gate: FAIL** — 2026-09-14 · `95c6403...f796e8b` · reviewer (Opus) defect
+hunt at medium, plus 30 single-file source mutations and five render
+probes. Coordinates from this gate were superseded, so it is recorded by
+finding.
+
+- **med** · **unproven** · Three short lists: every entry under Added, or
+  the group headings deleted, left plan-view green.
+- **med** · **unproven** · `PLAN_INFEASIBLE` and `ITEM_NOT_FOUND` rendered
+  byte-identical banners and dropped `details`, against Build step 9.
+- **med** · Re-plan and Watch it never reached the run screen from a plan
+  opened off the plans list.
+- **med** · **open decision** · The Watch it placeholder run showed a status
+  nothing measured, and its guessed `kind` was never corrected.
+- **med** · The re-plan form cleared on submit, before a `PLAN_BUSY` answer.
+- **low** · The revisionId test comment named the wrong diff, and its
+  fixture did not defeat the index mapping the brief names.
+- **low** · The zero-specialist progress bar rendered `max=0` (withdrawn in
+  gate 2).
+- **low** · Doc comments on `startReplan` and `editPlan` overstated a
+  compile-time narrowing.
+- **low** · Four new branches were unasserted.
+- **low** · A second, identical specialist label map.
+- **low** · Two doc comments above the wrong declaration (the `Unchecked`
+  half withdrawn in gate 2).
+- **low** · The Log verification figures described a worktree without
+  `@anthropic-ai/sdk`.
+- **dropped** · `e2e/pin.spec.ts` locator collisions (none, by reading);
+  heading tests losing assertions (none); the option-text collision (real);
+  the placeholder epoch `startedAt` (rendered nowhere).
+- **findings** · gate 1 returned 16: 12 carried (5 med, 7 low), 4 dropped.
+
 ## Log
 
 **2026-09-13 — filed.** Groomed by a subagent against pl-42's Build section,
@@ -513,4 +602,51 @@ tools/planner/web` 6 files, 91 tests. Every mutation reproduced above was
 restored and `diff`-confirmed identical to the pre-mutation file before the
 next one.
 
-No `## Review` section committed yet — ship authority has not been given.
+**2026-09-15 — the `## Review` section above was transcribed verbatim from
+the reviewer's own text at `c8d46ee` (its final, corrected Gate 1 block, sent
+after an earlier muddled correction that this session was told to ignore).**
+Nothing in it was altered beyond what `npm run format` did to the tables'
+padding — no wording, no citation, no finding count. Committed on the
+orchestrator's ship authority, given after both sessions agreed gate 3 was a
+PASS with no open findings.
+
+**The owner's decision on the "Watch it" placeholder, recorded here because
+it is the one open decision this ticket raised.** Gate 1 found that the
+placeholder `Run` `App.tsx` built for "Watch it" showed a status nothing had
+measured and a guessed `kind` no `snapshot` could correct, and put it to the
+orchestrator as an open decision rather than settling it. The orchestrator
+checked the gate's premises against the code at `f796e8b` — the snapshot
+reducer copying only `status` and counts, `Finished` reading `kind` from the
+original prop, `App.tsx`'s hard-coded `kind: "replan"`, `RunView` mounted
+only inside the open-intake branch, `watchRun` with no error listener — then
+put four options to the owner through `AskUserQuestion`:
+
+1. An honest attaching state: no status label and no fabricated count until
+   the first real `snapshot`, `kind` read from that frame and never guessed
+   (marked recommended).
+2. Drop "Watch it" for now.
+3. An attaching state, plus a ticket for a route that fetches a `Run` by id.
+4. Keep the placeholder and only fix the comment that claimed it was safe.
+
+The owner chose **option 1**, matching the recommendation. Built as
+`RunView`'s `AttachTarget` and the nullable `Progress.status`/`kind`
+described in the 2026-09-14 gate-round-one entry above, with a bounded
+timeout so an attach that never resolves still has a way out.
+
+**2026-09-15 — dl-15's citation fix split into its own pull request, and this
+branch rebased onto it.** Committing the `## Review` section added
+`tools/planner/web/test/app.test.tsx`, which collides with the downloader's
+own `tools/downloader/web/test/app.test.tsx` and made ten of dl-15's bare
+`app.test.tsx` citations ambiguous. This PR (#246) squash-merges as one
+`feat(planner): …` commit, and release-please routes a merged commit to a
+tool by the files it touched rather than its scope — so a `feat`-typed
+commit touching a path under `tools/downloader/` would have cut a
+downloader minor release headed by a planner feature line. The orchestrator
+put three options to the owner: split the dl-15 fix into its own `docs`
+pull request (recommended), rename the new planner test so nothing
+collides, or accept the false downloader release. The owner chose the
+split. It landed first as `#247` (`a9d2617`), ahead of `#242`'s merge
+(`8894b75`); this branch was then rebased onto `8894b75`, `dl-15` dropped
+out of its diff with no further edit, and pl-36's citation pins (moved by
+this ticket's own tip) were re-applied over `#242`'s own pins on the same
+record.
