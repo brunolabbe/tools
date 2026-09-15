@@ -129,7 +129,12 @@ describe("when a reply cannot be used", () => {
           reply: {
             content: "",
             stopReason: "refusal",
-            usage: { inputTokens: null, outputTokens: null },
+            usage: {
+              inputTokens: null,
+              cacheReadTokens: null,
+              cacheWriteTokens: null,
+              outputTokens: null,
+            },
           },
         },
       ],
@@ -147,7 +152,12 @@ describe("when a reply cannot be used", () => {
           reply: {
             content: '{"candidates":[{"title":"A motel wi',
             stopReason: "length",
-            usage: { inputTokens: null, outputTokens: null },
+            usage: {
+              inputTokens: null,
+              cacheReadTokens: null,
+              cacheWriteTokens: null,
+              outputTokens: null,
+            },
           },
         },
         candidates(HOTEL),

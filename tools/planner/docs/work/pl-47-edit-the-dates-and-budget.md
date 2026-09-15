@@ -218,7 +218,8 @@ budget?: TripBudget }`**, with a refine that at least one is present. The
 
 ### 3. `api`
 
-1. **Migration: take the next free number** (pl-44 takes 9).
+1. **Migration: take the next free number** (pl-49 took 9; pl-44 takes the
+   next, 10 at the time of writing).
 
    ```sql
    ALTER TABLE plan_revisions ADD COLUMN brief_json TEXT;
