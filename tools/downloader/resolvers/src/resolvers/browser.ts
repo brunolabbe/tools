@@ -22,7 +22,7 @@ import type {
   SubtitleTrack,
 } from "@downloader/contract";
 import type { Browser, BrowserContext, Frame, Page, Response } from "playwright";
-import { budget, remaining, throwIfAborted, withTimeout } from "../browser/abort.ts";
+import { budget, remaining, sleep, throwIfAborted, withTimeout } from "../browser/abort.ts";
 import { classifyFailure, classifyNavigationError } from "../browser/classify.ts";
 import { DRM_BINDING_NAME, DrmObserver, drmInitScript, drmReadbackScript } from "../browser/drm.ts";
 import { HitCollector } from "../browser/intercept.ts";
@@ -73,6 +73,24 @@ const CONTEXT_CLOSE_TIMEOUT_MS = 5000;
  */
 const OVERLAY_REVISIT_EVERY_MS = 1000;
 const MAX_OVERLAY_REVISITS = 4;
+/**
+ * dl-55, decision 2: longest we wait, past `domcontentloaded`, for a page to
+ * reach its own `load` state before the landing URL is read. Capped, so a
+ * page whose `load` never settles — an ad, a tracker, a script that keeps the
+ * load event pending — cannot spend the whole deadline waiting for it.
+ */
+const LANDING_URL_LOAD_BUDGET_MS = 1500;
+/**
+ * dl-55, decision 2: a further, budgeted grace period *after* `load`, before
+ * the landing URL is read. `load` alone is not enough — the reproduction this
+ * decision answers ran its own redirect ~200 ms after `load` fired, and a
+ * router's `history.replaceState` in the wild ran ~300 ms after parse, both
+ * well before this tier had done anything a person would call a click. Paid
+ * on every probe, not only ones that redirect: the alternative is a guard
+ * that catches a page's own lifecycle churn instead of a click that opened
+ * something else, which is the regression this decision exists to close.
+ */
+const LANDING_URL_SETTLE_MS = 500;
 
 /**
  * The one line this resolver ever needs to write: a departure from the
@@ -278,11 +296,30 @@ export class BrowserResolver implements Resolver {
     // is nothing worth waiting for once it is established.
     if (drm.detected) throw drm.toError();
 
-    // dl-55: the landing URL, recorded once navigation has settled — a
-    // redirect during load is legitimate and never counts against it. From
-    // here on, a top-frame navigation away from it is a click that opened
-    // something else, and every hit collected after it belongs to that other
-    // page.
+    // dl-55, decision 2 (the reviewer's recommendation, chosen over counting a
+    // departure only when it follows one of this tier's own clicks — see the
+    // Log for why): give the page a budgeted chance to reach `load`, plus a
+    // further budgeted grace period, before the landing URL is read.
+    // `domcontentloaded`, which `navigate` waits for, fires well before a
+    // page's own script has necessarily run, and `load` alone was still too
+    // early — the reproduction this decision answers ran its own redirect
+    // ~200 ms *after* `load`, and a router's `history.replaceState` stripping
+    // a tracking parameter ran ~300 ms after parse. Both landed on the
+    // requested URL at `domcontentloaded` (or even at `load`) and were gone by
+    // the time this file's own two-pass provocation design (see
+    // `provokePlayback`'s docstring) got to them anyway — so reading the
+    // landing URL that early made the guard catch page lifecycle churn nobody
+    // clicked. Reading it after `load` plus the grace period means "the
+    // landing URL" is whatever the page had already decided it was before
+    // this tier touched anything, which is what the guard is supposed to
+    // measure departures *from*.
+    await waitForPageLoad(page, deadline, options.signal);
+
+    // The landing URL, recorded once navigation, `load` and the grace period
+    // above have all settled. A redirect during load is legitimate and never
+    // counts against it. From here on, a top-frame navigation away from it is
+    // a click that opened something else, and every hit collected after it
+    // belongs to that other page.
     const landingUrl = page.url();
     let lastStep: "provoke-playback" | "network-quiet" = "provoke-playback";
     const guard = watchForDeparture(page, landingUrl);
@@ -541,19 +578,63 @@ async function navigate(
 }
 
 /**
- * Same URL, ignoring the fragment: a page that only changes its hash on play
- * (a timestamp, a tab) has not left, and the guard must not trip on it
- * (dl-55). Query strings are compared as-is — a video id routinely lives
- * there (`watch?v=`), and a page that rewrites its own query on play is a
- * fixture and a narrow exception, not a looser comparison here.
+ * Gives the page a budgeted chance to reach `load`, and then a further
+ * budgeted grace period, before the caller reads `page.url()` (dl-55,
+ * decision 2). Resolves immediately if `load` already fired. A `load` timeout
+ * here is not fatal — nothing about the page changes because this wait gave
+ * up, so the caller reads whatever URL is current either way; the grace sleep
+ * still runs; an abort during either propagates, same as any other wait in
+ * this file.
+ */
+async function waitForPageLoad(page: Page, deadline: number, signal: AbortSignal): Promise<void> {
+  const loadTimeout = budget(deadline, LANDING_URL_LOAD_BUDGET_MS);
+  if (loadTimeout > 0) {
+    try {
+      await page.waitForLoadState("load", { timeout: loadTimeout });
+    } catch {
+      // Never settled inside the budget.
+    }
+  }
+  await sleep(budget(deadline, LANDING_URL_SETTLE_MS), signal);
+}
+
+/**
+ * Play-time query parameters a narrow exception covers (dl-55, decision 1 —
+ * the owner's answer, overriding the reviewer's "keep it strict" recommendation:
+ * ticket lines 171-172 already named the shape this had to take, "a fixture
+ * and a narrow exception with a Log entry, never a looser comparison", and the
+ * owner named these three keys rather than widen the comparison generally).
+ * Adding, changing or removing any of these three does not count as leaving
+ * the page. Every other query key must still match exactly, and so must the
+ * origin and the path — an SPA that rewrites its own *path* for the same clip
+ * is not covered by this exception and still counts as a departure; that cost
+ * is recorded in the Log rather than answered here.
+ */
+const PLAY_TIME_QUERY_EXCEPTIONS: ReadonlySet<string> = new Set(["t", "start", "autoplay"]);
+
+/**
+ * Same URL, ignoring the fragment (a page that only changes its hash on play —
+ * a timestamp, a tab — has not left) and ignoring
+ * `PLAY_TIME_QUERY_EXCEPTIONS` in the query string. Origin and path must match
+ * exactly regardless: a video id routinely lives in the query
+ * (`watch?v=`), so every key outside the exception set is compared as-is, and
+ * a page that rewrites its own query on play with some other key, or its own
+ * path, has still left (dl-55).
  */
 function sameDocument(a: string, b: string): boolean {
   try {
     const left = new URL(a);
     const right = new URL(b);
-    left.hash = "";
-    right.hash = "";
-    return left.toString() === right.toString();
+    if (left.origin !== right.origin || left.pathname !== right.pathname) return false;
+    const leftParams = new URLSearchParams(left.search);
+    const rightParams = new URLSearchParams(right.search);
+    for (const key of PLAY_TIME_QUERY_EXCEPTIONS) {
+      leftParams.delete(key);
+      rightParams.delete(key);
+    }
+    leftParams.sort();
+    rightParams.sort();
+    return leftParams.toString() === rightParams.toString();
   } catch {
     return a === b;
   }

@@ -86,6 +86,44 @@ Chosen from options:
   A retry loop would spend a deadline that `provokePlayback` already shares
   between four steps.
 
+### Decided by the owner, 2026-09-15 (answering the round-2 gate's open decisions)
+
+Three decisions the round-2 gate (`38df521`) sent to the orchestrator, put to
+the owner quoting this ticket's own lines 111, 116 and 171-172. Recorded here
+so dl-56's builder does not reopen any of them.
+
+1. **Play-time URL rewrites.** Question: should a page that adds, changes or
+   removes a query parameter on play (the Traps section's own example, `&t=0`)
+   count as leaving the page? Options: **A**, the reviewer's recommendation —
+   keep the comparison strict and record the cost in the Log; **B** — narrow
+   exceptions now for named play-time parameters; **C** — ignore same-path
+   query changes generally, which the Traps section (lines 171-172) already
+   forbids ("never a looser comparison"). **The owner chose B**, overriding the
+   reviewer's recommendation, narrowed to exactly `t`, `start` and `autoplay`:
+   same origin, same path, and only those three query keys (plus the fragment,
+   as before) may differ. An SPA rewriting its own _path_ for the same clip is
+   explicitly **not** covered and still counts as a departure — that cost is
+   paid, not answered, by this decision; see the Log for the number.
+2. **The landing-URL remedy.** Question: when should the landing URL be read,
+   so a page's own post-load lifecycle (a script redirect, a router stripping
+   a tracking parameter) is not mistaken for a click that opened something
+   else? Options: **A**, the reviewer's recommendation — read it later, at
+   `load` (budgeted) or just before the first provocation click; **B** — count
+   a departure only when it follows one of the tier's own clicks. **The owner
+   chose A**, and left which of the two readings of "later" to the builder,
+   to be justified in the Log. The builder chose "at `load`, budgeted" — see
+   the Log for why `load` alone was not sufficient either, and what was built
+   instead.
+3. **The cross-origin chooser.** Question: now that "a cross-origin frame has
+   no evaluation context" is known to be false (round-2 gate, low finding),
+   should the surface click's chooser in such a frame use the same
+   visible/no-link-ancestor/largest-area rule as everywhere else? Options:
+   **A**, the reviewer's recommendation — yes, through one read-only round
+   trip, relaxing the scriptable-frame policy for this one check; **B** — keep
+   the CSS-selector fallback (first-in-document-order) as a narrower policy
+   call; **C** — skip the surface click in a cross-origin frame entirely. **The
+   owner chose A.**
+
 ## Build
 
 1. **Choose the player, not the first video, in
@@ -206,17 +244,17 @@ Defect hunt run by the reviewer itself (Opus; builder Sonnet), at medium. Findin
 
 Defect hunt over `fc8be9e...16084d2` run by the reviewer itself (Opus), at medium; every round-1 finding re-checked at the new tip.
 
-| Done when                                                                                                                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The surface click never targets a video inside a link, picks the largest visible candidate, and makes no click when there is none                                 | proven — link: `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:271 "/related-card.html"` (link check deleted: red); largest: `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:292 "/related-card-area.html"` (first-qualifying instead: red); no click: `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:304 "/related-card-only-linked.html"` (fall back to any video: red). Both click-started fixtures go red with the surface click deleted                                                                                                                                                                |
-| The duration fallback in `readMetadata` uses the same chooser                                                                                                     | proven — `tools/downloader/resolvers/test/browser/provoke.test.ts:51 "expect(durationSec).toBe(942)"`; reverting `tools/downloader/resolvers/src/browser/provoke.ts:321 "var media = chooseVideo()"` gave expected 30 to be 942 (run at `fc8be9e`; the line is unchanged since)                                                                                                                                                                                                                                                                                                                                                                                    |
-| Navigation away fails `NO_MEDIA_FOUND` / `navigated-away` for pushState and a document navigation; a load-time redirect and a fragment-only change do not trip it | proven, with a finding — `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:319 "a same-document navigation (history.pushState)"` and `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:332 "a document navigation (location.assign) never returns"` (guard disabled: both red); `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:384 "/guard-fragment.html"` (fragment kept in the comparison: red); `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:373 "/guard-redirect"` covers the server 302 that Build step 4 names. A script redirect after DOMContentLoaded does trip it: first finding |
-| Each layer's test fails with that layer reverted, recorded in the Log                                                                                             | verified — re-run by the reviewer at both tips; at `16084d2` every chooser revert and the warn revert are red (see above). The Log records them                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| The analysis §7 table carries the new row                                                                                                                         | verified — `tools/downloader/docs/00-ANALYSIS.md:291 "Click opens other content"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `npm run check` and `npm test -- --project downloader` pass                                                                                                       | verified — at `16084d2`: check exit 0; 76 files / 1274 tests, exit 0; citations-gate against origin/main exit 0. No existing test assertion deleted or reworded. Live probe not attempted: the page is not named in the repo                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Done when                                                                                                                                                         | Proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The surface click never targets a video inside a link, picks the largest visible candidate, and makes no click when there is none                                 | proven — link: `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:271 "/related-card.html"` (link check deleted: red); largest: `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:292 "/related-card-area.html"` (first-qualifying instead: red); no click: `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:304 "/related-card-only-linked.html"` (fall back to any video: red). Both click-started fixtures go red with the surface click deleted                                                                                                                                                                                                                     |
+| The duration fallback in `readMetadata` uses the same chooser                                                                                                     | proven — `tools/downloader/resolvers/test/browser/provoke.test.ts:51 "expect(durationSec).toBe(942)"`; reverting `tools/downloader/resolvers/src/browser/provoke.ts:328 "var media = chooseVideo()"` gave expected 30 to be 942 (run at `fc8be9e`; the anchor is the same line's content, moved to 328 by the round-3 decision-3 refactor above it)                                                                                                                                                                                                                                                                                                                                                                     |
+| Navigation away fails `NO_MEDIA_FOUND` / `navigated-away` for pushState and a document navigation; a load-time redirect and a fragment-only change do not trip it | proven, with a finding — `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:319 "a same-document navigation (history.pushState)"` and `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:332 "a document navigation (location.assign) never returns"` (guard disabled: both red); `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:384 "/guard-fragment.html"` (fragment kept in the comparison: red); `tools/downloader/resolvers/test/browser/browser-resolver.test.ts:368 "a redirect during load is not a departure, and the page still probes"` covers the server 302 that Build step 4 names. A script redirect after DOMContentLoaded does trip it: first finding |
+| Each layer's test fails with that layer reverted, recorded in the Log                                                                                             | verified — re-run by the reviewer at both tips; at `16084d2` every chooser revert and the warn revert are red (see above). The Log records them                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| The analysis §7 table carries the new row                                                                                                                         | verified — `tools/downloader/docs/00-ANALYSIS.md:291 "Click opens other content"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `npm run check` and `npm test -- --project downloader` pass                                                                                                       | verified — at `16084d2`: check exit 0; 76 files / 1274 tests, exit 0; citations-gate against origin/main exit 0. No existing test assertion deleted or reworded. Live probe not attempted: the page is not named in the repo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
-- **med** · **A script redirect or router rewrite after DOMContentLoaded trips the guard.** `tools/downloader/resolvers/src/resolvers/browser.ts:286 "const landingUrl = page.url();"` is read as soon as goto resolves at domcontentloaded. A `location.replace` 200 ms after `load`, and a `history.replaceState` stripping `utm_source` 300 ms after parse, each give `navigated-away` here; with main's resolver files swapped in, the same pages return the stream. Reproduced independently by the builder, who traced main's success to the second provocation pass landing on the redirected page. Build step 3 says "Redirects during load are legitimate and stay allowed." The server-302 test also passes with the landing URL set to the requested URL, so it does not test the landing choice. Remedy: open decision 2.
-- **med** · **In a cross-origin frame the chooser still clicks the first video, not the largest.** `tools/downloader/resolvers/src/browser/provoke.ts:230 "const NON_CARD_VIDEO_SELECTOR ="`. A cross-origin frame with a JS-click card (a div with an onclick) ahead of a larger click-started player returns the card's stream here and on main, and the top-frame guard does not see a subframe navigation. The same markup same-origin returns the right stream here. Not a regression and not acceptance-covered. The false claim of no evaluation context is corrected in `16084d2`; the choice of behaviour is open decision 3.
+- **med** · **A script redirect or router rewrite after DOMContentLoaded trips the guard.** `tools/downloader/resolvers/src/resolvers/browser.ts@16084d2:286 "const landingUrl = page.url();"` is read as soon as goto resolves at domcontentloaded. A `location.replace` 200 ms after `load`, and a `history.replaceState` stripping `utm_source` 300 ms after parse, each give `navigated-away` here; with main's resolver files swapped in, the same pages return the stream. Reproduced independently by the builder, who traced main's success to the second provocation pass landing on the redirected page. Build step 3 says "Redirects during load are legitimate and stay allowed." The server-302 test also passes with the landing URL set to the requested URL, so it does not test the landing choice. Remedy: open decision 2. **Pinned to `16084d2`: round 3 fixed this — see the Log — and the line no longer reads this way on the current tip.**
+- **med** · **In a cross-origin frame the chooser still clicks the first video, not the largest.** `tools/downloader/resolvers/src/browser/provoke.ts@16084d2:230 "const NON_CARD_VIDEO_SELECTOR ="`. A cross-origin frame with a JS-click card (a div with an onclick) ahead of a larger click-started player returns the card's stream here and on main, and the top-frame guard does not see a subframe navigation. The same markup same-origin returns the right stream here. Not a regression and not acceptance-covered. The false claim of no evaluation context is corrected in `16084d2`; the choice of behaviour is open decision 3. **Pinned to `16084d2`: round 3 fixed this — the constant is gone — see the Log.**
 - **low** · the `NON_CARD_VIDEO_SELECTOR` docstring says the gate found the reviewer's own claim false. The false claim was the builder's, and the reviewer measured it. The docstring also still said a size comparison needs a round trip per candidate where evaluate is allowed; `locator.evaluateAll` returned both widths in one call. Addressed after the gate, in the commit that carries this record — see the Log.
 - **open decision 1** · players that rewrite their own URL on play (pushState `?t=0`, replaceState `?autoplay=1`, an SPA path rewrite) returned the right stream on main and give `navigated-away` here. Build step 3 and the Traps section mandate it; the owner's Decided section does not. A (recommended) keep and record the cost in the Log; B narrow exceptions now for named play-time parameters; C ignore same-path query changes, which the Traps section forbids.
 - **open decision 2** · the landing-URL remedy. A (recommended) take the landing URL at `load` (budgeted) or just before the first provocation click, and add a script-redirect fixture; B count a departure only when it follows one of the tier's own clicks.
@@ -550,3 +588,112 @@ Re-ran the full gates after the docstring fix: `npm run check` exit 0;
 (one new Review section), 0 failing, 0 raised.
 
 **Not done:** open decisions 1–3 remain the orchestrator's.
+
+## 2026-09-15 — round 3: the three decisions built
+
+The owner answered all three open decisions (recorded above, under "Why", as
+"Decided by the owner, 2026-09-15"). This round builds each.
+
+**Decision 1 — play-time query exceptions**, `sameDocument` in
+`resolvers/src/resolvers/browser.ts`. Rewritten to compare origin and pathname
+exactly, then the query string with `PLAY_TIME_QUERY_EXCEPTIONS` (`t`,
+`start`, `autoplay`) deleted from both sides before comparing — any other key,
+or the path, still counts as a departure. New fixture `guard-query.html`,
+`?rewrite=` picking which key its play control adds via `history.replaceState`
+(`t`, `start`, `autoplay`, or `other`). Tests: `test.each` over the three
+exception keys, each asserting the probe succeeds; one more asserting
+`?rewrite=other` still fails `navigated-away`. **Revert-red:** disabling the
+exception-deletion loop reddened exactly the three exception-key tests
+(`AppError: No downloadable video stream was found on that page.`) and left
+the `other` test green, restored after (`git diff` empty).
+
+**Decision 2 — landing URL read later**, `waitForPageLoad` in
+`resolvers/src/resolvers/browser.ts`, called right after the DRM check and
+before `landingUrl` is read. Chose "at `load`, budgeted" over "just before the
+first provocation click": the latter is ambiguous in this file (`provokeFrame`
+attempts several clicks — a modal, consent, an age gate, `PLAY_SELECTORS`, the
+surface click — and "the first" would mean rewriting where the guard commits
+its baseline into that loop, a materially bigger and riskier change) and,
+concretely, `load` fires almost immediately for a fixture with no heavy
+resources, so a bare "wait for `load`" alone does **not** cover a redirect
+timed _relative to_ `load` (the reproduction's own ~200 ms case) — measured
+directly: waiting only for `load` still let the guard catch the
+`guard-script-redirect.html` and `guard-router-rewrite.html` fixtures below as
+departures. Built as two budgeted waits: `page.waitForLoadState("load", ...)`
+capped at `LANDING_URL_LOAD_BUDGET_MS` (1500 ms), then a further
+`sleep(...)` capped at `LANDING_URL_SETTLE_MS` (500 ms) — paid on every probe,
+not only ones that redirect, which is the cost this decision accepts in
+exchange for not mistaking page lifecycle churn for a click. New fixtures:
+`guard-script-redirect.html` (+ `-target.html`), a `location.replace` 200 ms
+after `load`; `guard-router-rewrite.html`, a `history.replaceState` stripping
+`?utm_source` 300 ms after parse, on the same page (no navigation at all —
+this one exercises `sameDocument`'s ordinary comparison once the URL it's
+compared against is itself already post-rewrite); `guard-redirect-fragment-
+target.html` + the `/guard-redirect-then-fragment` server route (302 to it) —
+a fragment-only play on the _post-redirect_ page, which only passes if
+`landingUrl` is the page reached, not the one requested. Three tests, one per
+fixture, all asserting the probe succeeds with the expected stream.
+**Revert-red, two mutations because the fix has two parts:** (a) removing
+`waitForPageLoad`'s call entirely reddened the script-redirect and
+router-rewrite tests (2 of 3) — the third (`guard-redirect-then-fragment`)
+stayed green, because `navigate()`'s own `page.goto()` already follows the
+redirect before `landingUrl` is ever read, so a missing _wait_ does not
+reproduce the shape that test is for. (b) Changing `landingUrl` to the raw
+requested `url.toString()` (the reviewer's own framing: "if `landingUrl` is
+set back to the requested URL") reddened exactly the
+`guard-redirect-then-fragment` test and none of the others. Both restored
+after (`git diff` empty).
+
+**Decision 3 — the cross-origin chooser**, `resolvers/src/browser/provoke.ts`.
+`NON_CARD_VIDEO_SELECTOR` is gone. `CHOOSE_VIDEO_FN`'s body is now split out
+as `CHOOSE_VIDEO_INDEX_FN` (takes a candidate list, returns an index, not an
+element — so both the scriptable path and the new one below can share it
+without drift), and a new `CHOOSE_VIDEO_INDEX_SCRIPT` runs it against
+`document.querySelectorAll('video')` as a full script. `clickChosenVideo`'s
+non-scriptable branch now calls `frame.evaluate<number>
+(CHOOSE_VIDEO_INDEX_SCRIPT)` — one round trip, read-only, regardless of frame
+origin — and clicks `frame.locator("video").nth(index)`.
+**`Locator.evaluateAll` was tried first, per the owner's exact wording ("one
+read-only `locator.evaluateAll` call"), and dropped**: passed a string page
+function against a genuinely cross-origin frame (two real servers, different
+loopback ports, confirmed different `origin`s), it resolved with `undefined`
+and no error, while the identical logic passed as a real function reference
+worked, and `frame.evaluate` with the _same string_ also worked. Rather than
+chase a Playwright-version-specific string-vs-function gap in a locator API,
+this uses `frame.evaluate`, which this file already knew worked cross-origin
+(that was the whole premise decision 3 answers), on the same script shape the
+rest of the file already uses everywhere else. New fixture-server capability:
+`FixtureServer.secondaryOrigin`/`secondaryUrl`, a second `http.createServer`
+on the same static root but a different loopback port — genuinely
+cross-origin, not same-origin-by-convention, needed because every existing
+"iframe" fixture here (`iframe-parent.html`) is same-origin. New route
+`/cross-origin-card.html`, generated at request time (a static file cannot
+know an ephemeral port), embedding `<iframe src="{secondaryOrigin}/cross-
+origin-card-inner.html">`. New fixture `cross-origin-card-inner.html`: a
+150×100 `<div onclick="location.assign(...)">`-wrapped video (a card wired by
+JS, not `<a href>` — the link-ancestor rule does not exclude it, only the
+largest-area rule does) first in the DOM, ahead of a 640×360 click-started
+player. Test asserts the probe returns the player's stream from the secondary
+origin and the card's own target page is never requested. **Revert-red:**
+hardcoding the chosen index to `0` (first-in-document-order, the pre-decision-
+3 CSS selector's own effective behaviour) reddened the test — the probe
+returned the card's own stream (`/media/related-target/master.m3u8`) via the
+subframe's `location.assign`, exactly the finding's own reproduction, since
+the top-frame guard cannot see a subframe navigation either way (out of
+scope for this decision, as the finding said). Restored after (`git diff`
+empty).
+
+**Method**, as before: every mutation applied to the actual committed file,
+run, then restored from a saved copy — `git diff` empty after each, checked
+before moving to the next.
+
+**Gates**, run once at the end per the orchestrator's instruction: `npm run
+check` — exit 0; `npm test -- --project downloader` — **76 files, 1282 tests**
+(1274 + 8 new: 4 decision-1, 3 decision-2, 1 decision-3), all passing;
+`node scripts/citations-gate.mjs --against origin/main` — 81 records, 0
+failing, 0 raised, after repointing the three citations round 3's own edits
+moved (two pinned to `@16084d2`, since the code they described was fixed by
+this round; one updated to its new line, since the fact it names is still
+true today) and disambiguating one indistinct anchor
+(`node scripts/citations.mjs <this file> --section Review --require-anchors
+--require-distinct-anchors` — 13/13 verified, 0 moved, exit 0).

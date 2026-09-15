@@ -8,7 +8,7 @@
 
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import type { Server } from "node:http";
+import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,12 +33,21 @@ const STATUS_OVERRIDES: Record<string, number> = {
 export interface FixtureServer {
   origin: string;
   /**
-   * Every pathname requested, in order. A fixture that must prove a control was
-   * or was not pressed reports it to a `/beacon/` path, and a test clears this
-   * before the probe it asserts on.
+   * A second origin, serving the same fixture directory on a different
+   * loopback port — genuinely cross-origin, not same-origin-by-convention.
+   * dl-55, decision 3's cross-origin chooser fixture needs a frame
+   * `isScriptableFrame` really does say no to, which two ports on the same
+   * primary server cannot give it.
+   */
+  secondaryOrigin: string;
+  /**
+   * Every pathname requested, in order, across *both* origins. A fixture that
+   * must prove a control was or was not pressed reports it to a `/beacon/`
+   * path, and a test clears this before the probe it asserts on.
    */
   requests: string[];
   url(pathname: string): string;
+  secondaryUrl(pathname: string): string;
   close(): Promise<void>;
 }
 
@@ -49,9 +58,35 @@ function resolveWithin(pathname: string): string | undefined {
   return resolved === ROOT || resolved.startsWith(ROOT + path.sep) ? resolved : undefined;
 }
 
-export async function startFixtureServer(): Promise<FixtureServer> {
-  const requests: string[] = [];
-  const server: Server = createServer((request, response) => {
+/**
+ * The parent page for dl-55, decision 3's cross-origin chooser fixture:
+ * an `<iframe>` pointing at the *secondary* origin, injected at request time
+ * since a static file cannot know an ephemeral port in advance.
+ */
+function crossOriginCardHtml(secondaryOrigin: string): string {
+  return `<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Cross-origin card: outer</title></head>
+  <body>
+    <h1>Cross-origin card: outer</h1>
+    <iframe
+      id="embed"
+      src="${secondaryOrigin}/cross-origin-card-inner.html"
+      width="640"
+      height="360"
+      title="Embedded"
+    ></iframe>
+  </body>
+</html>
+`;
+}
+
+/** Shared by both origins: same static root, same redirect/beacon rules. */
+function makeHandler(
+  requests: string[],
+  secondaryOrigin: () => string,
+): (request: IncomingMessage, response: ServerResponse) => void {
+  return (request, response) => {
     void (async () => {
       const requestUrl = new URL(request.url ?? "/", "http://localhost");
       const pathname = requestUrl.pathname;
@@ -74,6 +109,29 @@ export async function startFixtureServer(): Promise<FixtureServer> {
       if (pathname === "/guard-redirect") {
         response.writeHead(302, { location: "/mse.html" });
         response.end();
+        return;
+      }
+
+      // dl-55, decision 2: proves the landing URL is the page reached after
+      // the redirect, not the one first requested — a wrong `landingUrl`
+      // would flag the target's own fragment-only play as a departure, and
+      // `/guard-redirect` alone cannot tell the two apart.
+      if (pathname === "/guard-redirect-then-fragment") {
+        response.writeHead(302, { location: "/guard-redirect-fragment-target.html" });
+        response.end();
+        return;
+      }
+
+      // dl-55, decision 3: a genuinely cross-origin frame, not same-origin by
+      // convention — the port is injected at request time.
+      if (pathname === "/cross-origin-card.html") {
+        const body = crossOriginCardHtml(secondaryOrigin());
+        response.writeHead(200, {
+          "content-type": "text/html; charset=utf-8",
+          "content-length": String(Buffer.byteLength(body)),
+          "cache-control": "no-store",
+        });
+        response.end(body);
         return;
       }
 
@@ -101,26 +159,47 @@ export async function startFixtureServer(): Promise<FixtureServer> {
         response.writeHead(404, { "content-type": "text/plain" }).end("not found");
       }
     })();
-  });
+  };
+}
 
+async function listen(server: Server): Promise<string> {
   await new Promise<void>((resolve) => {
     server.listen(0, "127.0.0.1", resolve);
   });
-
   const address = server.address() as AddressInfo;
-  const origin = `http://127.0.0.1:${address.port}`;
+  return `http://127.0.0.1:${address.port}`;
+}
+
+export async function startFixtureServer(): Promise<FixtureServer> {
+  const requests: string[] = [];
+  // Read lazily by the primary handler: the secondary server has not been
+  // assigned a port yet when the primary one starts listening.
+  let secondaryOrigin = "";
+
+  const primary: Server = createServer(makeHandler(requests, () => secondaryOrigin));
+  const secondary: Server = createServer(makeHandler(requests, () => secondaryOrigin));
+
+  const origin = await listen(primary);
+  secondaryOrigin = await listen(secondary);
 
   return {
     origin,
+    secondaryOrigin,
     requests,
     url: (pathname: string) => new URL(pathname, origin).toString(),
+    secondaryUrl: (pathname: string) => new URL(pathname, secondaryOrigin).toString(),
     close: async () => {
-      await new Promise<void>((resolve, reject) => {
-        server.close((error) => {
-          if (error) reject(error);
-          else resolve();
-        });
-      });
+      await Promise.all(
+        [primary, secondary].map(
+          (server) =>
+            new Promise<void>((resolve, reject) => {
+              server.close((error) => {
+                if (error) reject(error);
+                else resolve();
+              });
+            }),
+        ),
+      );
     },
   };
 }

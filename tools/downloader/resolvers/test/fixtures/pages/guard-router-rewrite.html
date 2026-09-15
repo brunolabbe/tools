@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: router rewrite after parse</title>
+  </head>
+  <body>
+    <h1>Guard: router rewrite after parse</h1>
+    <!-- A router-style history.replaceState stripping a tracking parameter,
+         ~300 ms after parse — same document, no navigation a person caused,
+         and gone by the time this tier has clicked anything (dl-55, decision
+         2). The player itself starts only on a `click` DOM event. -->
+    <video id="player" width="640" height="360" muted playsinline></video>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        setTimeout(function () {
+          history.replaceState(null, "", location.pathname);
+        }, 300);
+
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          document.getElementById("status").textContent = "loading";
+          fetch("/media/hls/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/hls/v720.m3u8");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        document.getElementById("player").addEventListener("click", start);
+      })();
+    </script>
+  </body>
+</html>

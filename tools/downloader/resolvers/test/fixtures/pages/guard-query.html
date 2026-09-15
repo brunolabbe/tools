@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Guard: query rewrite on play</title>
+  </head>
+  <body>
+    <h1>Guard: query rewrite on play</h1>
+    <!-- ?rewrite= picks which query key the play control adds on play,
+         through a same-document history.replaceState — never a real
+         navigation. `t`, `start` and `autoplay` are the narrow exception
+         (dl-55, decision 1); anything else, `other` here, still counts as a
+         departure. -->
+    <button id="play" type="button">Play</button>
+    <p id="status">idle</p>
+
+    <script>
+      (function () {
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          var params = new URLSearchParams(location.search);
+          var mode = params.get("rewrite");
+          if (mode === "t") params.set("t", "5");
+          else if (mode === "start") params.set("start", "10");
+          else if (mode === "autoplay") params.set("autoplay", "1");
+          else if (mode === "other") params.set("v", "other");
+          history.replaceState(null, "", location.pathname + "?" + params.toString());
+          document.getElementById("status").textContent = "loading";
+          fetch("/media/hls/master.m3u8")
+            .then(function (r) {
+              return r.text();
+            })
+            .then(function () {
+              return fetch("/media/hls/v720.m3u8");
+            })
+            .then(function () {
+              document.getElementById("status").textContent = "playing";
+            })
+            .catch(function () {});
+        }
+        document.getElementById("play").addEventListener("click", start);
+      })();
+    </script>
+  </body>
+</html>

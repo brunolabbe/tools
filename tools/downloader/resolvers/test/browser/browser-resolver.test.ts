@@ -385,6 +385,89 @@ describe("BrowserResolver", () => {
         expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
       },
     );
+
+    test(
+      "a script redirect ~200ms after load is not a departure (dl-55, decision 2)",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-script-redirect.html", resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
+
+    test(
+      "a router history.replaceState ~300ms in is not a departure (dl-55, decision 2)",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-router-rewrite.html?utm_source=newsletter", resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
+
+    test(
+      "the landing URL is the page reached after a redirect, not the one requested (dl-55, decision 2)",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        // A `landingUrl` wrongly set to the requested URL would flag this
+        // target's own fragment-only play as a departure — `/guard-redirect`
+        // alone cannot tell the two apart, since nothing navigates again
+        // after it (see the Log).
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe("/guard-redirect-then-fragment", resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
+  });
+
+  describe("play-time query rewrites are not a departure, within a narrow exception (dl-55, decision 1)", () => {
+    test.each(["t", "start", "autoplay"])(
+      "adding ?%s= on play is not a departure",
+      { timeout: TEST_TIMEOUT_MS },
+      async (param) => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        const result = await probe(`/guard-query.html?rewrite=${param}`, resolver);
+        expect(result.variants[0]?.url).toBe(server.url("/media/hls/master.m3u8"));
+      },
+    );
+
+    test(
+      "a query key outside the exception is still a departure",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const resolver = new BrowserResolver({ pool, quietMs: 1200 });
+        const error = await probeError("/guard-query.html?rewrite=other", resolver);
+        expectCode(error, "NO_MEDIA_FOUND");
+        expect(error.details?.["reason"]).toBe("navigated-away");
+      },
+    );
+  });
+
+  describe("the cross-origin chooser picks the player, not a JS-click card (dl-55, decision 3)", () => {
+    test(
+      "starts the real player in a genuinely cross-origin frame, never the card",
+      { timeout: TEST_TIMEOUT_MS },
+      async () => {
+        const hls = recordingHlsParser();
+        const resolver = new BrowserResolver({ pool, hlsParser: hls.parser, quietMs: 1200 });
+        server.requests.length = 0;
+        const result = await probe("/cross-origin-card.html", resolver);
+
+        // The player lives in the secondary (cross-origin) frame, so its
+        // request is made against that origin, not the primary one.
+        expect(result.variants[0]?.url).toBe(server.secondaryUrl("/media/related/master.m3u8"));
+        expect(server.requests).toContain("/media/related/master.m3u8");
+        // A click that landed on the card would have navigated the subframe
+        // to its target — which the top-frame guard cannot even see — so the
+        // only proof this never happened is that it was never requested.
+        expect(server.requests).not.toContain("/related-card-target.html");
+      },
+    );
   });
 
   describe("a modal over an age gate (dl-48)", () => {
