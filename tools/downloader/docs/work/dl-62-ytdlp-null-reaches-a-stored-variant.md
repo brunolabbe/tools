@@ -97,3 +97,21 @@ warns about this; it cost one restart.
 only the declared fields, rewrites the id, title, host and URLs, and was checked
 for no trace of the original page before it was saved. The raw capture was
 never written to disk.
+
+**Fail first.** With `common.ts` and `ytdlp.ts` restored from `main` and the
+new tests left in place, the five tests for Done when 1 to 5 failed and 113
+others passed. With the fix back, all 118 passed. The sixth new test, `"none"`
+still meaning no audio, guards against a regression and passes either way, as
+it should.
+
+**End to end on the finished code**, rebuilt into `dist`. The reported page's
+job went `probing` → `downloading` → `completed` in 6 s. The stored variant had
+neither an `fps` nor a `hasAudio` key, and the 30,570,115-byte file holds `h264`
+video and `aac` audio. The file and every scratch file naming the page were
+deleted afterwards.
+
+**Gates.** `npm run check` passes. `npm test -- --project downloader` passed
+75 files and 1,271 tests, which includes the HLS, DASH and direct suites that
+also call `optional()`. That run came before a lint fix moved one test helper
+to module scope; the two changed test files were re-run after it, and all 118
+tests passed.
