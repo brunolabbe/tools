@@ -324,3 +324,13 @@ rather than being locked out for a minute. Say so in the setting's comment.
   (`:389 "...toBe(0)"`, ambiguous rather than moved), were rewritten as prose
   naming the reviewed commit instead of guessed at. No finding, verdict or
   anchor text changed.
+
+- 2026-09-15 — Merged `origin/main` (bringing in dl-60's own citation repair,
+  #255) to add four pins of its own: this branch's code adds lines to
+  `probe.ts`, `jobs.ts` and `config.ts`, which dl-60's merged Review section
+  cites unpinned at the lines those files held before this branch. Same
+  practice this ticket already used for six citations pinned to `@95c6403`
+  — a branch that moves a cited line pins that citation. The four were
+  pinned to `@cbfdbba` (#252's merge commit on main, where the cited lines
+  and anchors are exact), in `dl-60-guard-embedded-ipv4.md`, not this
+  ticket's own record.
