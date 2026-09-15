@@ -503,3 +503,47 @@ describe("what it costs to get from one thing to the next", () => {
     expect(measuredOrNull(result.days[0]?.items[1]?.travelFromPrevious ?? null)).not.toBeNull();
   });
 });
+
+/**
+ * Frozen days (pl-43): what a re-plan may not touch, as the packer sees it.
+ */
+describe("frozen days", () => {
+  test("are emitted as given, offered nothing, asked nothing, and a pin on one is not honoured", () => {
+    const held = {
+      candidateId: "held-on-day-0",
+      bucket: "activity" as const,
+      pinned: false,
+      note: "As it was stored.",
+      travelFromPrevious: null,
+    };
+    const first = candidate({ specialist: "activities", durationMinutes: 30 });
+    const second = candidate({ specialist: "activities", durationMinutes: 30 });
+    // No stated duration, so honouring it would also record it as placed with
+    // an unknown one — the only trace a skipped pin could leave on the result.
+    const pinnedOnFrozen = candidate({ specialist: "activities", durationMinutes: null });
+    const asked: string[] = [];
+
+    const result = pack({
+      brief: briefFor({}),
+      candidates: [first, second, pinnedOnFrozen],
+      span: tripSpan({ kind: "exact", departure: "2027-07-05", return: "2027-07-06" }),
+      travel: {
+        between: (from, to) => {
+          asked.push(`${from.id} -> ${to.id}`);
+          return OVER_BUDGET;
+        },
+      },
+      daysUntilDeparture: 100,
+      pinned: [{ candidateId: pinnedOnFrozen.id, dayIndex: 0, position: 0 }],
+      frozen: new Map([[0, [held]]]),
+    });
+
+    // Day 0 holds nothing the packer charged, so it is the least loaded and the
+    // earlier day: without the freeze, `first` would land there.
+    expect(result.days[0]?.items).toEqual([held]);
+    expect(result.days[1]?.items.map((item) => item.candidateId)).toEqual([first.id, second.id]);
+    expect(asked).toEqual([`${first.id} -> ${second.id}`]);
+    expect(placedIds(result.days)).not.toContain(pinnedOnFrozen.id);
+    expect(result.durationUnknown).toEqual([]);
+  });
+});

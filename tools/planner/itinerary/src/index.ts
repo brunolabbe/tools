@@ -16,11 +16,32 @@
  * the same plan twice. `test/purity.test.ts` scans for it rather than trusting
  * this paragraph.
  *
- * The one call most callers want is `compose`:
+ * A plan's first draft is `compose`:
  *
  * ```
  * const { revision, unchecked } = compose({ brief, candidates, travel, revision: {...}, now })
  * const plan = appendRevision(existing, revision)
+ * ```
+ *
+ * Every later revision starts from the latest one, and never goes through
+ * `compose` (pl-43):
+ *
+ * ```
+ * const previous = latestRevision(plan)
+ *
+ * // Re-plan named days: measure over the pool, then re-pack those days alone.
+ * const pool = replanPool({ candidates, previous, days: operation.days })
+ * const { revision } = replan({ brief, candidates, previous, operation, travel, revision: {...}, now })
+ *
+ * // Move or remove one item: measure exactly the transitions it creates.
+ * const pairs = editTransitions(previous, edit)
+ * const { revision } = applyEdit({ brief, candidates, previous, operation: edit, travel, revision: {...} })
+ *
+ * // Restore revision n as a new revision.
+ * const revision = restoreRevision(target, {...})
+ *
+ * // On every read: one diff per revision after the first.
+ * const diffs = revisionDiffs(plan.revisions)
  * ```
  *
  * `travel` is what something outside this process measured between the
@@ -35,6 +56,17 @@
  */
 
 export { compose, pinnedPlacements, type ComposeInput, type ComposeResult } from "./compose.ts";
+export { replan, replanPool, type ReplanInput } from "./replan.ts";
+export {
+  applyEdit,
+  editTransitions,
+  type EditInput,
+  type EditOperation,
+  type EditResult,
+  type TransitionPair,
+} from "./edit.ts";
+export { restoreRevision } from "./restore.ts";
+export { diffRevisions, revisionDiffs } from "./diff.ts";
 export {
   critique,
   isHard,
