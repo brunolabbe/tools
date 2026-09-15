@@ -299,3 +299,16 @@ rather than being locked out for a minute. Say so in the setting's comment.
   block. `node scripts/citations-gate.mjs --against origin/main` reports 81
   records once this ticket's own `## Review` section is committed, 0 failing.
   Pushed at the tip named to the reviewer.
+
+- 2026-09-15 — **The open decision, answered by the owner.** Put to them as:
+  the queue-full refusal (`routes/jobs.ts`) raises core `RATE_LIMITED` with
+  its copy rewritten, the same shape the pre-existing `probe-gate` refusal
+  already has on `main` (`probe.ts:112-115`) — tool-wide capacity, not one
+  client going too fast, and the web UI titles every `RATE_LIMITED`
+  "Too many requests / Slow down" (`web/src/lib/error-presentation.ts:157-161`).
+  Options: **(a)** keep `RATE_LIMITED` for both refusals, consistent with the
+  existing `probe-gate` precedent; **(b)** keep it for now and file a ticket
+  for a new core capacity code covering both. Both builder and reviewer
+  recommended (a). **The owner chose (a).** No code change and no ticket
+  filed; the "Slow down" title on a capacity refusal is an accepted cost,
+  not a defect to fix here.
