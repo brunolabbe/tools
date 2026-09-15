@@ -22,6 +22,11 @@
  * survivors straight to the socket. There is no second resolution to disagree
  * with the first, which is what makes it a fix rather than a narrower window.
  *
+ * **A `lookup` never sees an IP literal**: `net.connect` skips it when the host
+ * is already an address. So the connector also checks a literal itself, before
+ * the socket exists (dl-60). Without that, `http://[::ffff:127.0.0.1]/` reached
+ * loopback through this file with only the pre-flight check in the way.
+ *
  * `ssrf.ts` stays where it is. It answers before a socket is opened, with a
  * typed error naming a reason, and it is the only check that can cover the URLs
  * ffmpeg fetches through its own HTTP stack. This file is what makes the answer
@@ -46,9 +51,10 @@
  */
 
 import dns from "node:dns/promises";
+import { isIP } from "node:net";
 import type { LookupFunction } from "node:net";
 import { AppError } from "@downloader/contract";
-import { Agent, ProxyAgent } from "undici";
+import { Agent, buildConnector, ProxyAgent } from "undici";
 import { isBlockedAddress } from "./ssrf.ts";
 import type { SsrfGuard } from "./ssrf.ts";
 
@@ -198,6 +204,43 @@ export function createPinningLookup(guard: SsrfGuard, resolve: AddressResolver):
   };
 }
 
+/**
+ * The refusal for a host that is a blocked IP literal, or null for anything else.
+ *
+ * The literal half of the connect-time check, shared by the connector below and
+ * by `egress-proxy.ts`, which connects with `net.connect` and has the same
+ * blind spot. A name returns null here and is judged by `createPinningLookup`.
+ * The reason differs from that path's so a log says which of the two fired.
+ */
+export function blockedLiteral(guard: SsrfGuard, host: string): AppError | null {
+  const bare = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+  if (isIP(bare) === 0 || guard.isExemptHost(bare) || !isBlockedAddress(bare)) return null;
+  return new AppError("BLOCKED_TARGET", undefined, {
+    details: { host: bare, address: bare, reason: "blocked-literal-at-connect" },
+  });
+}
+
+/**
+ * undici's own connector, with a blocked literal refused before it runs.
+ *
+ * `options` go to `buildConnector` unchanged, so every default an `Agent` would
+ * have applied — timeout, session cache, ALPN — stays what it was.
+ */
+export function createPinningConnector(
+  guard: SsrfGuard,
+  options: buildConnector.BuildOptions,
+): buildConnector.connector {
+  const connect = buildConnector(options);
+  return function pinningConnector(target, callback) {
+    const refusal = blockedLiteral(guard, target.hostname);
+    if (refusal !== null) {
+      callback(refusal, null);
+      return;
+    }
+    connect(target, callback);
+  };
+}
+
 export function createEgressDispatcher(options: EgressDispatcherOptions): EgressDispatcher {
   const proxyUrl = options.proxyUrl;
 
@@ -225,14 +268,14 @@ export function createEgressDispatcher(options: EgressDispatcherOptions): Egress
   // it must stay that way — `guarded-fetch.ts` follows them by hand precisely
   // so each hop can be re-checked before it is taken.
   const agent = new Agent({
-    connect: {
+    connect: createPinningConnector(options.guard, {
       lookup: createPinningLookup(options.guard, options.resolve ?? systemResolve),
       // Spread rather than `ca: options.originTls?.ca`: an explicit `ca:
       // undefined` is not the same as no `ca` to every option-merging layer
       // between here and `tls.connect`, and "unset" has to stay byte-for-byte
       // the system store.
       ...(options.originTls === undefined ? {} : { ca: options.originTls.ca }),
-    },
+    }),
   });
 
   return {

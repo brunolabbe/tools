@@ -155,45 +155,58 @@ function v6Groups(address: string): number[] | null {
 }
 
 /**
- * The IPv4 addresses an IPv6 address stands for, or null when it embeds none.
+ * The IPv4 address an IPv6 address stands for, or null when it embeds none.
  *
  * Judged on the parsed value, never on a textual pattern. Each of these is IPv6
  * on the wire to this process and IPv4 somewhere on the path — in the kernel
  * itself for a mapped address on a dual-stack socket, which is the one measured
- * reachable (dl-60), or in a translator or relay for the rest.
+ * reachable (dl-60), or in a NAT64 translator.
  */
-function embeddedV4(groups: readonly number[]): number[] | null {
+function embeddedV4(groups: readonly number[]): number | null {
   const g = (index: number): number => groups[index] ?? 0;
   const low32 = ((g(6) << 16) | g(7)) >>> 0;
   const zeroes = (from: number, to: number): boolean =>
     groups.slice(from, to).every((group) => group === 0);
 
   // ::ffff:0:0/96, IPv4-mapped.
-  if (zeroes(0, 5) && g(5) === 0xffff) return [low32];
+  if (zeroes(0, 5) && g(5) === 0xffff) return low32;
   // ::ffff:0:0:0/96, SIIT IPv4-translated (RFC 2765).
-  if (zeroes(0, 4) && g(4) === 0xffff && g(5) === 0) return [low32];
+  if (zeroes(0, 4) && g(4) === 0xffff && g(5) === 0) return low32;
   // ::/96, IPv4-compatible. Deprecated, and `::` and `::1` live here too; both
   // come out as 0.0.0.x, inside the blocked 0.0.0.0/8, so they stay refused.
-  if (zeroes(0, 6)) return [low32];
-  // 64:ff9b::/96 NAT64, and 64:ff9b:1::/48 local-use NAT64 read with the same
-  // /96 layout — which is the rule this file applied before dl-60.
-  if (g(0) === 0x0064 && g(1) === 0xff9b) return [low32];
-  // 2002::/16, 6to4: the IPv4 address is the 32 bits after the prefix.
-  if (g(0) === 0x2002) return [((g(1) << 16) | g(2)) >>> 0];
-  // 2001::/32, Teredo: the server's address in the clear, and the client's —
-  // the one a relay actually sends to — stored bit-inverted. Either refuses.
-  if (g(0) === 0x2001 && g(1) === 0) return [((g(2) << 16) | g(3)) >>> 0, ~low32 >>> 0];
+  if (zeroes(0, 6)) return low32;
+  // 64:ff9b::/96, well-known NAT64. Read as /96 across the rest of
+  // 64:ff9b::/32 too, which is the rule this file applied before dl-60; the
+  // local-use /48 inside it is refused outright before this is reached.
+  if (g(0) === 0x0064 && g(1) === 0xff9b) return low32;
   return null;
+}
+
+/**
+ * Transition ranges refused whatever they embed — the owner's decision on dl-60.
+ *
+ * Each can carry an IPv4 address, but where it lands depends on a relay or an
+ * operator's translator this process cannot see: Teredo stores its client
+ * bit-inverted beside a server, 6to4 goes through whichever relay answers, and
+ * local-use NAT64 may embed the address at any offset. The accepted cost is
+ * that a public site reachable only over Teredo or 6to4 is refused.
+ */
+function isRefusedTransitionRange(groups: readonly number[]): boolean {
+  const [first = 0, second = 0, third = 0] = groups;
+  if (first === 0x2001 && second === 0) return true; // 2001::/32 Teredo
+  if (first === 0x2002) return true; // 2002::/16 6to4
+  return first === 0x0064 && second === 0xff9b && third === 0x0001; // 64:ff9b:1::/48 local-use NAT64
 }
 
 function isBlockedV6(address: string): boolean {
   const groups = v6Groups(address);
   if (groups === null) return true;
+  if (isRefusedTransitionRange(groups)) return true;
 
   // Before the native rules, because these are not native addresses: an
   // IPv4-mapped loopback is loopback, whatever its first group says.
   const embedded = embeddedV4(groups);
-  if (embedded !== null) return embedded.some((value) => isBlockedV4Value(value));
+  if (embedded !== null) return isBlockedV4Value(embedded);
 
   const [first = 0] = groups;
   if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
