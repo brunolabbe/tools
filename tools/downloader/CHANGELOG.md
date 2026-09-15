@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/brunolabbe/tools/compare/downloader-v0.4.0...downloader-v0.5.0) (2026-09-15)
+
+
+### Features
+
+* **downloader:** close modals over the player, and confirm age gates only on opt-in (dl-48) ([#227](https://github.com/brunolabbe/tools/issues/227)) ([6bedb1b](https://github.com/brunolabbe/tools/commit/6bedb1b6984323f4246d87db9e609bf1df960818))
+
+
+### Fixes
+
+* **downloader:** judge an IPv6 literal that embeds an IPv4 address by that address (dl-60) ([#252](https://github.com/brunolabbe/tools/issues/252)) ([cbfdbba](https://github.com/brunolabbe/tools/commit/cbfdbba35a45d52951dc2e7dd8ad165f407d7c39))
+
 ## [0.4.0](https://github.com/brunolabbe/tools/compare/downloader-v0.3.0...downloader-v0.4.0) (2026-09-09)
 
 
