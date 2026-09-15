@@ -176,7 +176,7 @@ records nothing.
 | `canRunTransition` accepts `fanning-out→grounding`, `grounding→composing`, `fanning-out→composing`; rejects `grounding→done` | `tools/planner/contract/test/run.test.ts:63` "lets the fan-out reach grounding, and grounding reach the composer", `:73` "lets `fanning-out` reach `composing` without passing through `grounding`" ✓                                                                                                                                   |
 | `npm run check` and `npm test -- --project planner` pass; suite count up; no existing test changes meaning                   | verified directly: `npm run check` exit 0; `npm test -- --project planner` → 566/566, 42 files; baseline at `origin/main` → 532/40 files (confirmed by running the suite there); the only pre-existing test files touched (`config.test.ts`, `health.test.ts`, `run.test.ts`) received insertions only, no deleted/altered assertions ✓ |
 
-- **med · fixed** · `web/src/plan/RunView.tsx:111-112 "countsFrom(event.run)"` — the `snapshot` reducer case
+- **med · fixed** · `web/src/plan/RunView.tsx@95c6403:111-112 "countsFrom(event.run)"` — the `snapshot` reducer case
   set `total`/`done` from `run.rosterSize`/`run.specialistsDone`, the fan-out's
   counters and the only ones a `Run` carries. A client landing via `snapshot`
   while `status === "grounding"` therefore rendered "5 of 5 details checked"

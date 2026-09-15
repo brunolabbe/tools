@@ -21,7 +21,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { Run, RunEvent, RunStatus } from "@planner/contract";
 import { cancelRun, fetchPlan, watchRun } from "../src/api/plan.ts";
-import { RunView } from "../src/plan/RunView.tsx";
+import { RunView, type AttachTarget } from "../src/plan/RunView.tsx";
+import { day, planView, revision } from "./plan-fixtures.ts";
 
 vi.mock("../src/api/plan.ts", () => ({
   watchRun: vi.fn(),
@@ -191,5 +192,161 @@ describe("the run screen while it is grounding", () => {
     // answer is a bar with no position — never a number that moves.
     expect(document.querySelector("progress")?.hasAttribute("value")).toBe(false);
     expect(screen.queryByText(/of null/)).toBeNull();
+  });
+
+  /**
+   * pl-42's own real and reachable case: a re-plan naming no specialists
+   * re-packs with `rosterSize: 0`, and the fan-out's arithmetic would
+   * otherwise render "0 of 0 specialists done." — technically true and the
+   * repo's _never fake progress_ rule broken by omission (pl-45).
+   */
+  test("renders an honest sentence for zero specialists, never zero of zero", () => {
+    show("fanning-out");
+    push({
+      type: "progress",
+      runId: "run-1",
+      progress: { type: "roster", running: [], droppedForBudget: [], total: 0 },
+      at: AT,
+    });
+
+    expect(screen.getByText("Re-packing the existing days…")).toBeTruthy();
+    expect(screen.queryByText(/of 0/)).toBeNull();
+  });
+});
+
+describe("when it finishes", () => {
+  /**
+   * `run.kind` (pl-42) distinguishes a first draft from a re-plan, and the
+   * copy has to say which: "a first draft is ready" is wrong once a plan
+   * already existed before this run.
+   */
+  test("says a first draft is ready for a draft run", async () => {
+    fetched.mockResolvedValue(planView({ revisions: [revision([day(0, [])])] }));
+    render(
+      <RunView
+        run={run({ status: "composing", kind: "draft" })}
+        onExit={() => undefined}
+        onOpenPlan={() => undefined}
+      />,
+    );
+    push({ type: "done", runId: "run-1", planId: "plan-1", revisionId: "rev-1", at: AT });
+
+    expect(await screen.findByText(/A first draft is ready/)).toBeTruthy();
+  });
+
+  test("says this version is ready for a re-plan, never that a first draft is", async () => {
+    fetched.mockResolvedValue(planView({ revisions: [revision([day(0, [])])] }));
+    render(
+      <RunView
+        run={run({ status: "composing", kind: "replan" })}
+        onExit={() => undefined}
+        onOpenPlan={() => undefined}
+      />,
+    );
+    push({ type: "done", runId: "run-1", planId: "plan-1", revisionId: "rev-1", at: AT });
+
+    expect(await screen.findByText(/This version is ready/)).toBeTruthy();
+    expect(screen.queryByText(/A first draft is ready/)).toBeNull();
+  });
+});
+
+/**
+ * pl-45's gate: "Watch it" has only a run id (pl-42 added no route to fetch a
+ * `Run` by one), and the placeholder this screen used to be handed — a
+ * guessed `status: "queued"` and `kind: "replan"` — was neither corrected by
+ * a `snapshot` (the reducer copied status and counts only) nor an honest
+ * render in the meantime. The owner's decision, 2026-09-14: an attach with no
+ * `Run` gets an honest "not known yet" screen instead.
+ */
+describe("attaching to a run with only its id", () => {
+  const TARGET: AttachTarget = { id: "run-1", planId: "plan-1" };
+
+  function showAttaching(): void {
+    render(<RunView run={TARGET} onExit={() => undefined} onOpenPlan={() => undefined} />);
+  }
+
+  test("says nothing a RunStatus would own, and shows an indeterminate bar", () => {
+    showAttaching();
+
+    expect(screen.getByText("Connecting…")).toBeTruthy();
+    // None of the real statuses' labels, and no fabricated count.
+    expect(screen.queryByText("Waiting for a slot")).toBeNull();
+    expect(screen.queryByText(/specialists done|details checked/)).toBeNull();
+    expect(document.querySelector("progress")?.hasAttribute("value")).toBe(false);
+  });
+
+  test("the finish screen's wording comes from the snapshot's real kind, never a guess", async () => {
+    fetched.mockResolvedValue(planView({ revisions: [revision([day(0, [])])] }));
+    showAttaching();
+
+    // `kind: "replan"`, deliberately **not** `"draft"` — the fallback
+    // `progress.kind ?? "draft"` reads as correct for a draft snapshot even
+    // if the reducer never copied `kind` at all, which is exactly the gap
+    // gate 2 found here. Only a kind the fallback disagrees with can prove
+    // the snapshot's own value was used.
+    push({
+      type: "snapshot",
+      runId: "run-1",
+      run: run({ kind: "replan", status: "done" }),
+      at: AT,
+    });
+    push({ type: "done", runId: "run-1", planId: "plan-1", revisionId: "rev-1", at: AT });
+
+    expect(await screen.findByText(/This version is ready/)).toBeTruthy();
+    expect(screen.queryByText(/A first draft is ready/)).toBeNull();
+  });
+
+  test("a snapshot replaces the attaching screen with the run's real status", () => {
+    showAttaching();
+    push({
+      type: "snapshot",
+      runId: "run-1",
+      run: run({ status: "fanning-out" }),
+      at: AT,
+    });
+
+    expect(screen.getByText("Asking the specialists")).toBeTruthy();
+    expect(screen.queryByText("Connecting…")).toBeNull();
+  });
+
+  test("a stream that never delivers a frame stops attaching and offers a way out", () => {
+    vi.useFakeTimers();
+    try {
+      showAttaching();
+      expect(screen.getByText("Connecting…")).toBeTruthy();
+
+      act(() => {
+        vi.advanceTimersByTime(15_000);
+      });
+
+      expect(screen.queryByText("Connecting…")).toBeNull();
+      expect(screen.getByText(/Could not reach this run/)).toBeTruthy();
+      // The way out this ticket's requirement names.
+      expect(screen.getByRole("button", { name: "Back to the trip" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("a frame that arrives before the timeout cancels it — no false failure after", () => {
+    vi.useFakeTimers();
+    try {
+      showAttaching();
+      push({
+        type: "snapshot",
+        runId: "run-1",
+        run: run({ status: "fanning-out" }),
+        at: AT,
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(15_000);
+      });
+
+      expect(screen.getByText("Asking the specialists")).toBeTruthy();
+      expect(screen.queryByText(/Could not reach this run/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

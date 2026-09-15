@@ -19,7 +19,7 @@ import { fetchHealth } from "./api/health.ts";
 import type { HealthSummary } from "./api/health.ts";
 import { PlanView } from "./plan/PlanView.tsx";
 import { Plans } from "./plan/Plans.tsx";
-import { RunView } from "./plan/RunView.tsx";
+import { RunView, type AttachTarget } from "./plan/RunView.tsx";
 import { Trips } from "./wizard/Trips.tsx";
 import { Wizard } from "./wizard/Wizard.tsx";
 
@@ -56,7 +56,7 @@ export function App(): React.ReactElement {
    * that may have finished, failed or never existed on this server. Coming back
    * to a finished plan is a plan-list problem, which is pl-10's.
    */
-  const [watching, setWatching] = useState<Run | null>(null);
+  const [watching, setWatching] = useState<Run | AttachTarget | null>(null);
   /**
    * The plan being read, if any.
    *
@@ -89,6 +89,33 @@ export function App(): React.ReactElement {
     setReading(planId);
   }, []);
 
+  /**
+   * A re-plan started from inside the plan view: control leaves it entirely
+   * (pl-45 Build step 5), the same handoff a draft's own `onDraft` makes.
+   * `setReading(null)` first, because `App` renders `PlanView` for as long as
+   * `reading` is set and the run would otherwise never be shown.
+   */
+  const replan = useCallback((run: Run): void => {
+    setReading(null);
+    setWatching(run);
+  }, []);
+
+  /**
+   * `PLAN_BUSY`'s "Watch it": open the run already in progress on this plan.
+   *
+   * There is no route to fetch a `Run` by id (pl-42 added none), so `RunView`
+   * gets only what this handler actually has — an id and a plan, not a
+   * fabricated `Run`. `RunView`'s own `AttachTarget` is exactly that case: no
+   * status label, no count, until the first real `snapshot` frame says what
+   * this run actually is. Settled by the owner, 2026-09-14, after the gate on
+   * this ticket found an earlier version of this handler that guessed a
+   * status and a `kind` neither frame nor comment could actually back up.
+   */
+  const watch = useCallback((runId: string, planId: string): void => {
+    setReading(null);
+    setWatching({ id: runId, planId });
+  }, []);
+
   return (
     <main className="shell">
       <h1>Planner</h1>
@@ -103,7 +130,31 @@ export function App(): React.ReactElement {
               ← Back
             </button>
           </p>
-          <PlanView planId={reading} onExit={() => setReading(null)} />
+          <PlanView
+            planId={reading}
+            onExit={() => setReading(null)}
+            onReplan={replan}
+            onWatchRun={watch}
+          />
+        </>
+      ) : watching !== null ? (
+        // Checked before `openIntake`, and deliberately: a re-plan or a
+        // "Watch it" started from `PlanView` reaches here with no intake
+        // open at all — the plan was opened from the list, not from the
+        // wizard — and a `watching !== null` branch nested only inside the
+        // open-intake branch left that run's own screen unreachable, falling
+        // straight through to the trips-and-plans list instead.
+        <>
+          <p className="crumb">
+            <button
+              type="button"
+              className="link inline"
+              onClick={() => (openIntake === null ? setWatching(null) : open(null))}
+            >
+              ← {openIntake === null ? "Back" : "All trips"}
+            </button>
+          </p>
+          <RunView run={watching} onExit={() => setWatching(null)} onOpenPlan={read} />
         </>
       ) : openIntake === null ? (
         <>
@@ -120,15 +171,11 @@ export function App(): React.ReactElement {
               ← All trips
             </button>
           </p>
-          {watching === null ? (
-            <Wizard
-              intakeId={openIntake}
-              onExit={() => open(null)}
-              onDraft={(run) => setWatching(run)}
-            />
-          ) : (
-            <RunView run={watching} onExit={() => setWatching(null)} onOpenPlan={read} />
-          )}
+          <Wizard
+            intakeId={openIntake}
+            onExit={() => open(null)}
+            onDraft={(run) => setWatching(run)}
+          />
         </>
       )}
 
