@@ -431,6 +431,19 @@ describe("jobs.host (dl-57)", () => {
   test("is null for an id with no row, rather than throwing", () => {
     expect(store.jobHost("nope")).toBeNull();
   });
+
+  test("masks an IP-literal source URL's host, dl-57 decision C", () => {
+    store.create({
+      id: "job-3",
+      sourceUrl: "http://93.184.215.14/x",
+      options: {},
+      variantId: null,
+      createdAt: "2026-08-06T10:00:00.000Z",
+    });
+    const host = store.jobHost("job-3");
+    expect(host).toBe("ip-literal");
+    expect(host).not.toContain("93.184.215.14");
+  });
 });
 
 describe("probe_outcomes (dl-57)", () => {
